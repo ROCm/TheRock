@@ -235,6 +235,18 @@ def write_project_include_fixture(source_dir: Path) -> None:
     write_file(source_dir / "main.c", "int main(void) { return 0; }\n")
 
 
+def write_legacy_policy_fixture(source_dir: Path) -> None:
+    """Writes a project whose policy version predates the IN_LIST operator."""
+    write_file(
+        source_dir / "CMakeLists.txt",
+        """
+        cmake_minimum_required(VERSION 3.2)
+        project(therock_hardening_legacy_policy_fixture NONE)
+        therock_initialize_hardening_policy()
+        """,
+    )
+
+
 def write_child_language_fixture(source_dir: Path, language: str) -> None:
     """Writes a child with its own language and optional compiler flags."""
     suffix = {"C": "c", "CXX": "cpp", "HIP": "hip"}[language]
@@ -1022,6 +1034,16 @@ class HardeningPolicyTest(TemporaryProjectTest):
         self._configure_policy()
         cache = (self.build_dir / "CMakeCache.txt").read_text(encoding="utf-8")
         self.assertIn("THEROCK_HARDENING_POLICY:STRING=OFF", cache)
+
+    def test_module_sets_policy_required_by_legacy_subproject(self) -> None:
+        """The module must not inherit an old subproject's policy settings."""
+        write_legacy_policy_fixture(self.source_dir)
+        configure(
+            self.source_dir,
+            self.build_dir,
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+            f"-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={HARDENING_MODULE}",
+        )
 
     def test_compiler_subproject_exclusions_are_exact(self) -> None:
         self._configure_policy("-DHARDENING_EXCLUSION_PROBE=ON")

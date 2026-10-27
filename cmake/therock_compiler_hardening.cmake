@@ -8,6 +8,9 @@
 # defined their targets. Independent inner builds either use the command flag
 # helper below or opt into the deferred CMAKE_PROJECT_INCLUDE path at the end.
 
+cmake_policy(PUSH)
+cmake_policy(SET CMP0057 NEW)
+
 set(_THEROCK_HARDENING_POLICIES OFF BASELINE STRICT)
 # These producer subprojects are deferred to a separately reviewed compiler
 # hardening effort. Consumers built with amd-llvm remain in scope.
@@ -530,3 +533,5 @@ if(THEROCK_COMPILER_HARDENING_PROJECT_INCLUDE)
   therock_initialize_hardening_policy()
   therock_schedule_hardening()
 endif()
+
+cmake_policy(POP)
