@@ -184,6 +184,7 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
         "-xhip",
         "--rocm-path=" + str(rocm),
         "--hip-path=" + str(rocm),
+        "--hip-device-lib-path=" + str(rocm / "lib/llvm/amdgcn/bitcode"),
         "-isystem",
         str(rocm / "include"),
     ]
