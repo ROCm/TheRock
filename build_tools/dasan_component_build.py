@@ -254,7 +254,8 @@ def unsupported_device_fixture(command: str) -> bool:
     """Only explicitly targeted SPIR-V fixtures cannot use DASan."""
     return bool(
         re.search(
-            r"(?:--offload-arch[= ]spirv|--target[= ]spirv|-target\s+spirv)", command
+            r"(?:--offload-arch[= ](?:amdgcnspirv|spirv)|--target[= ]spirv|-target\s+spirv)",
+            command,
         )
     )
 

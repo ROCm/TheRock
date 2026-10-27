@@ -124,6 +124,11 @@ class AuditTest(unittest.TestCase):
                 "clang --offload-arch=spirv64 -x hip fixture.cpp"
             )
         )
+        self.assertTrue(
+            unsupported_device_fixture(
+                "clang --offload-arch=amdgcnspirv -x hip fixture.cpp"
+            )
+        )
         self.assertFalse(
             unsupported_device_fixture(
                 "clang --offload-arch=gfx950 -x hip spirv_named.cpp"
