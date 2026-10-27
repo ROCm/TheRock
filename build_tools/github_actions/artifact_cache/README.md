@@ -7,8 +7,9 @@ CLI to the revision-6 SQLite schema. It does not create the original
 ## Data contract
 
 The default CLI reuse unit is **one artifact/target bundle**, containing its
-requested components. A bundle lookup uses **epoch + bundle identity + raw CMake
-fingerprint + the sorted component list**, for example:
+requested components. Its lookup object is an **`ArtifactKey`**, containing
+**epoch + artifact identity + raw CMake fingerprint + the sorted component
+list**. Bundle describes the grouping, not a separate key type. For example:
 
 ```python
 ArtifactKey(
@@ -36,7 +37,14 @@ identity, key ID and productions. `--granularity component` selects the previous
 behavior. Package `cache`, `keys`, `plan`, `publish` and `restore` CLIs default to
 bundle mode. The lower-level Python APIs and `build_tools/github_actions/artifact_cache/collector.py`
 entry points keep their component default for compatibility; Python callers
-select bundles with `granularity="bundle"`. Commits/run labels are provenance.
+select bundles with `granularity="bundle"`.
+
+The Python cache records commits and run labels as provenance. CMake's default
+Git-based source identity can still include the repository's `HEAD` commit.
+Consequently, a commit affecting one monorepo project can change fingerprints
+for other projects in that repository, followed by their consumers. Narrowing
+this source identity remains deferred work; dependency-impact reporting does
+not change the fingerprint algorithm.
 
 `CACHE_EPOCH` in `cache_key.py` sets the default epoch. Increase it deliberately
 when existing entries must no longer satisfy new requests, never per build or
@@ -201,7 +209,10 @@ configure-output behavior.
 
 This fixes the configure-only publication problem: old export directories
 cannot be stored under newly configured keys without a successful managed build.
-A failed build does not create ready entries. A warm run does not launch a build.
+A failed build does not create ready entries. When every cacheable request has
+a verified candidate, the command does not invoke a build. Outputs without
+usable fingerprints remain cache-skipped and do not independently trigger
+a build.
 **This command is not connected to CMake target skipping.** Verified hits do not
 suppress targets when the incremental build runs for other misses.
 
@@ -255,10 +266,60 @@ locally before managed build/restore commands. They need not be pushed.
 A cold cache starts with a new database and a new object directory. Its normal
 CMake build can still be incremental. The warm run uses that same database,
 object directory, build and inputs. A new log filename alone does not make a
-cache cold. The update package includes `cold-warm.sh` to initialize both paths
-and run the commands without relying on shell variables from an earlier session.
-It selects configured/observed bundles, checks cold/warm member lists, and
-writes separate detailed logs and JSON reports.
+cache cold. The commands below initialize isolated storage and run both phases.
+They require an already configured single-config Ninja build and a clean tracked
+source tree, including initialized submodules. Commit intended tracked changes
+locally before running; no push is required. Keep sources, build configuration,
+epoch, and component selection unchanged between phases.
+
+Run from the repository root. The subshell stops on failure and prints the new
+experiment directory before starting. `--log-file` retains detailed events while
+the terminal keeps normal configure/build output and the compact final report.
+
+```bash
+(
+  set -eu
+  test -f build/CMakeCache.txt
+  mkdir -p /home/master/erman/cache-test
+  THEROCK_COLD_WARM_RUN="$(mktemp -d /home/master/erman/cache-test/cold-warm-XXXXXX)"
+  printf 'Experiment: %s\n' "$THEROCK_COLD_WARM_RUN"
+
+  sqlite3 -bail "$THEROCK_COLD_WARM_RUN/cache.db" < build_tools/therock_fingerprint_cache.sql
+
+  for phase in cold warm; do
+    python3 -m build_tools.github_actions.artifact_cache.local_cache cache \
+      --build build \
+      --db "$THEROCK_COLD_WARM_RUN/cache.db" \
+      --cache "$THEROCK_COLD_WARM_RUN/objects" \
+      --granularity bundle \
+      --variant release \
+      --log-file "$THEROCK_COLD_WARM_RUN/$phase.log" \
+      > "$THEROCK_COLD_WARM_RUN/$phase.json"
+  done
+
+  python3 - "$THEROCK_COLD_WARM_RUN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for phase in ("cold", "warm"):
+    report = json.loads((root / f"{phase}.json").read_text())
+    print(f"{phase}: epoch={report['epoch']} "
+          f"build_executed={report['build_executed']} "
+          f"summary={report['summary']}")
+print(f"Reports and cached outputs: {root}")
+PY
+)
+```
+
+With at least one cacheable bundle, the cold run should have `verified_cached=0`,
+`stored>0`, and `build_executed=true`. The unchanged warm run should have
+`stored=0`, `verified_cached` equal to the cold stored count, and
+`build_executed=false`. Compare artifact identities, component membership, and
+entry IDs in both JSON files to confirm the same saved productions were used.
+Cache-skipped outputs remain reported in both phases; they are not verified hits.
+An all-skipped run does not validate a working cold/warm cache.
 
 Several immutable productions can share one key, including productions migrated
 from old experiment namespaces. Local cache verification and restore select
@@ -324,21 +385,28 @@ package CLI, and `build_tools/github_actions/artifact_cache/collector.py` subcom
 
 Keep the database, object-store directory and expected list from your
 existing experiment. Changing the log location does not make a cache cold.
-For example, when the earlier `THEROCK_CACHE_RUN` experiment variables are set:
+For example, using the database and object directory from the one-command
+workflow above, run this block from the repository root. If testing a different
+experiment, replace both `--db` and `--cache` with that experiment's existing
+paths; this example does not create a new cache database:
 
 ```bash
-cd /home/master/erman/TheRock
-mkdir -p /home/master/erman/cache-test
-THEROCK_DIAGNOSTIC_RUN="$(mktemp -d /home/master/erman/cache-test/logging-XXXXXX)"
+(
+  set -eu
+  mkdir -p /home/master/erman/cache-test
+  THEROCK_DIAGNOSTIC_RUN="$(mktemp -d /home/master/erman/cache-test/logging-XXXXXX)"
 
-python3 -m build_tools.github_actions.artifact_cache.local_cache cache \
-  --build build \
-  --db /home/master/erman/cache.db \
-  --cache "${THEROCK_CACHE_RUN:?Use the existing experiment directory}/objects" \
-  --variant release \
-  --verbose \
-  --log-file "$THEROCK_DIAGNOSTIC_RUN/cache.log" \
-  > "$THEROCK_DIAGNOSTIC_RUN/report.json"
+  python3 -m build_tools.github_actions.artifact_cache.local_cache cache \
+    --build build \
+    --db /home/master/erman/cache.db \
+    --cache /home/master/erman/cache-test/managed-objects \
+    --variant release \
+    --verbose \
+    --log-file "$THEROCK_DIAGNOSTIC_RUN/cache.log" \
+    > "$THEROCK_DIAGNOSTIC_RUN/report.json"
+
+  printf 'Logs and report: %s\n' "$THEROCK_DIAGNOSTIC_RUN"
+)
 ```
 
 Omitting `--expected` combines declared Ninja outputs and observed directories/sidecars.
@@ -359,7 +427,7 @@ neither flag is supplied.
 | `RUN_START`, `RUN_END`, `OPERATION_FAILED` | Selected paths/operation and final exit status |
 | `BUILD_LOCK_*`, `SOURCE_CHECK_*`, `SOURCE_STATE` | Managed lock, clean tracked source checks, repository count and root commit |
 | `COMMAND*`, `CONFIGURE_LOG` | Executed argument list, elapsed time/failure and the retained configure-log path |
-| `DISCOVERY`, `FINGERPRINT`, `KEY`, `BUNDLE_KEY`, `BUNDLE_SKIPPED`, `BUNDLE_OUTPUTS_DECLARED` | Explicit vs observed inventory, sidecar path, validity/reason, raw hash and key scope |
+| `DISCOVERY`, `FINGERPRINT`, `KEY`, `ARTIFACT_KEY` (legacy label: `BUNDLE_KEY`), `BUNDLE_SKIPPED`, `BUNDLE_OUTPUTS_DECLARED` | Explicit vs observed inventory, sidecar path, validity/reason, raw hash and `ArtifactKey` scope |
 | `DB_LOOKUP`, `DB_LOOKUP_RESULT`, `CACHE_DECISION` | Metadata lookup size, effective read policy, selected candidate or miss; no physical reuse claim |
 | `CANDIDATE_CHECK`, `OBJECT_CHECK`, `OBJECT_VERIFIED`, `INVENTORY_VERIFIED` | Entry ID, actual object paths, expected and verified SHA-256/sizes, inventory member counts |
 | `CANDIDATE_REJECTED`, `ENTRY_INVALIDATED`, `CANDIDATE_CHANGED` | Corruption or changed eligibility and retry of another candidate |
@@ -368,6 +436,10 @@ neither flag is supplied.
 | `PRODUCER_RECORD_COMMITTED`, `DB_TRANSACTION_*`, `ENTRY_COMMITTED` | Producer observation commit and separate ready-entry transaction; rollback is explicit |
 | `PLAN_SCOPE`, `PLAN_ARTIFACT` | Topology/changed-path scope, stage mapping and metadata-only decisions |
 | `RESTORE_DESTINATION_READY` | Explicit restore has installed verified exports at the requested new destination |
+
+`ARTIFACT_KEY` is the key-creation event name after the logging rename in
+`bundles.py`; code without that rename emits `BUNDLE_KEY`. Both describe an
+`ArtifactKey`. This diagnostic label does not change the database contract.
 
 `OBJECT_SAVED` does not mean that a ready database entry exists.
 `ENTRY_COMMITTED` reports the actual database commit; a later final input check
@@ -404,21 +476,64 @@ python3 -m build_tools.github_actions.artifact_cache plan \
 
 python3 -m build_tools.github_actions.artifact_cache lookup \
   --db /home/master/erman/cache.db \
-  --artifact core-amdsmi/bundle/generic --fingerprint <raw-64-hex-fingerprint> \
+  --artifact core-amdsmi/bundle/generic --fingerprint '<raw-64-hex-fingerprint>' \
   --components core-amdsmi_dev_generic,core-amdsmi_lib_generic
 ```
+
+Replace the quoted fingerprint placeholder with an actual emitted 64-hex value.
 
 The planner consumes current CMake fingerprints; dependency fingerprint
 propagation stays in CMake. `TopologyAdapter` uses TheRock's existing parser to
 map component or bundle identities to stages. Unknown identities remain visible under
-`unmapped`. Optional `--changed path1,path2` conservatively forces affected
-units to rebuild. Optional `--targets` filters emitted family suffixes and
-rejects requested families with no configured outputs.
+`unmapped`. Optional `--changed path1,path2` conservatively marks affected
+cacheable units as misses in the plan. It does not execute a build or select
+targets for `local_cache cache`. Optional `--targets` filters emitted family
+suffixes and rejects requested families with no configured outputs.
 
 Plans report **candidate**, **miss**, or **uncacheable**, not verified hits.
 `all_requested_candidates` is useful for planning, but `can_skip` remains false:
 complete stage inventories, restoration and scheduler wiring are needed before
 skipping jobs. Test selection is independent of cache availability.
+
+### Configured dependency impact
+
+Use `--changed-subproject` to explain downstream relationships in the enabled
+CMake configuration. For example:
+
+```bash
+python3 -m build_tools.github_actions.artifact_cache plan \
+  --db /home/master/erman/cache.db \
+  --build build \
+  --topology BUILD_TOPOLOGY.toml \
+  --changed-subproject amdsmi \
+  > /home/master/erman/amdsmi-plan.json
+```
+
+The option accepts a CMake subproject target name, not a file path or artifact
+name. Repeat it to report multiple changed subprojects. The command refreshes
+configuration before `dependency_impact.py` reads these files from the selected
+build directory:
+
+- `therock_consumer_graph.json`: configured subproject-to-consumer edges.
+- `artifact_subprojects.json`: subprojects contributing to each artifact group.
+
+The `dependency_impact` section reports changed roots, transitive consumers,
+affected artifact groups, and one shortest explanation path per root/artifact.
+For example, a configured `amdsmi -> rocshmem` edge explains why rocSHMEM is a
+consumer even if the static topology does not record that relationship.
+`affected_requested_outputs` intersects affected groups with the current output
+selection and family filter. Groups without usable fingerprints still appear in
+the dependency report. Unmapped subprojects are listed separately.
+
+Missing or inconsistent configured graph metadata causes an error; it is not
+silently replaced by static topology. The result has
+`build_selection_changed=false`. It explains dependencies but does not change
+fingerprints, select build targets, restore files, or authorize stage skipping.
+Actual compilation is determined by the incremental build. Repository-wide
+source identities may still cause broader fingerprint changes. See
+[configured-impact.md](configured-impact.md) for details.
+
+### Read policy
 
 CLI policy defaults are suitable for a local cache: untrusted-or-better,
 build-passed, ready entries. `--min-trust trusted`,
@@ -507,10 +622,12 @@ source fingerprint implementation or GPU builds.
 | --- | --- |
 | `cache_db.py` | Schema validation, batched full-key reads, policy, provenance, publication metadata, retirement and history evidence |
 | `manifest.py` | `ArtifactKey`, `ArtifactFile`, `LocalManifest`; legacy model types retained for isolated simulations |
-| `cache_key.py` | Marked fallback/history key helpers; not the real production key contract |
+| `cache_key.py` | `CACHE_EPOCH`, epoch validation, and retained derived-key/history helpers |
+| `bundles.py` | Component grouping, exact membership validation, and bundle `ArtifactKey` construction |
 | `inventory.py` | Current output inventory, component parsing and `TopologyAdapter` |
 | `diagnostics.py`, `reporting.py` | Optional timestamped diagnostics and the final artifact report; stdout remains JSON |
-| `planner.py` | Component candidates and stage mapping; no unverified stage skipping |
+| `planner.py` | Component or bundle candidates and stage mapping; no unverified stage skipping |
+| `dependency_impact.py` | Configured CMake consumer traversal and affected-artifact explanations; no build-target selection |
 | `local_store.py` | Immutable archives/inventories and safe extraction; compatibility loose-object storage |
 | `publish.py` | Managed configure/build/input checks before ready publication |
 | `restore.py` | Physical verification, fallback from bad candidates and extraction |
@@ -518,34 +635,27 @@ source fingerprint implementation or GPU builds.
 | `history_ingest.py` | Offline/live history evidence, with no fabricated ready outputs |
 | `replay.py` | Completion-aware reuse estimates and same-commit comparison |
 | `cli.py`, `__main__.py`, `__init__.py` | Root/module commands and lazy Python API |
-| `build_tools/github_actions/artifact_cache/collector.py` | Existing collection and explicit build/restore entry points |
+| `collector.py` | Component observations and explicit managed build/restore entry points |
+| `migrate_schema.py` | Explicit schema upgrades, backups, reference remapping, and integrity checks |
+| `build_tools/therock_fingerprint_cache.sql` | Fresh revision-6 schema; existing databases use the migration command |
 
 The original `topology_view.py` is not required by this path; the new adapter
 uses the real topology parser directly. Legacy APIs that accepted derived
 string keys or arbitrary output lists are intentionally not interchangeable
 with safe production operations. `publish_build_outputs` now forwards to the
-managed build API. Tests for the original standalone `manifests` database must
-be ported to this contract; they are not this integration's validation suite.
+managed build API. Original test cases have been adapted to the relational
+contract in the suite below; obsolete standalone `manifests` tests should not
+remain as duplicate test files. See [per_file_details.md](per_file_details.md)
+for descriptions of every package file, the schema, and test coverage.
 
 This is local publication/restoration plus CI planning/history tooling. It does
 not implement GitHub Actions job skipping, remote object publication/restoration,
 ClickHouse, split-artifact fingerprints, cross-machine compatibility or test
-selection. Those were not completed in the original package either.
+selection.
 
 ## Tests
 
-```bash
-THEROCK_CACHE_SCHEMA="$PWD/build_tools/therock_fingerprint_cache.sql" \
-  python3 -m unittest discover -s build_tools/github_actions/tests -p 'artifact_cache_*_test.py' -v
-```
-
-The suite uses the supplied schema in temporary databases. Managed-workflow tests
-use miniature Git/CMake projects; they need Git, CMake and Ninja and otherwise
-skip explicitly. No tests touch your real DB, build or object store.
-
-## Cache tests
-
-All 16 cache test files live in `build_tools/github_actions/tests/` and use the
+All 17 cache test files live in `build_tools/github_actions/tests/` and use the
 `artifact_cache_*_test.py` naming pattern. `_artifact_cache_fixtures.py` supplies
 shared test data and is not itself a test suite. The collector fixture is in
 `artifact_cache_collector_test.py`; the SQL schema remains at
@@ -557,15 +667,22 @@ are covered there once. The incomplete-publication check lives in
 `artifact_cache_publish_restore_test.py`, including assertions that no entry
 or file rows remain. Managed build, command-line workflow and diagnostic tests
 retain their separate coverage because they exercise different boundaries.
+`artifact_cache_dependency_impact_test.py` covers configured consumer traversal,
+artifact mapping, explanation paths, invalid metadata, and reporting without
+build-target selection.
 
 Run all cache tests from the repository root:
 
 ```bash
-python3 -m unittest discover -s build_tools/github_actions/tests -p 'artifact_cache_*_test.py' -v
+THEROCK_CACHE_SCHEMA="$PWD/build_tools/therock_fingerprint_cache.sql" \
+  python3 -m unittest discover \
+    -s build_tools/github_actions/tests \
+    -p 'artifact_cache_*_test.py' -v
 ```
 
 The tests create isolated temporary databases. No real cache database is used.
-The miniature build tests require CMake, Ninja and Git; they do not build ROCm
-or require a GPU. Old cache-test copies should not remain in `build_tools/tests`
+The miniature build tests require CMake, Ninja and Git; they skip explicitly
+when these tools are unavailable and do not build ROCm or require a GPU.
+Old cache-test copies should not remain in `build_tools/tests`
 or under `fingerprint_cache_*_test.py` names, to avoid duplicate discovery.
 Unrelated test files stay in their original locations.
