@@ -20,6 +20,10 @@ on:
         type: boolean
         description: "Run the experimental DASan compiler/runtime build and lit tests for gfx942 and gfx950"
         default: false
+      dasan_math_libraries:
+        type: boolean
+        description: "Build gfx950 math libraries with DASan using the installation from baseline_run_id"
+        default: false
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
@@ -35,7 +39,7 @@ on:
       baseline_run_id:
         type: string
         default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+        description: "Workflow run ID to reuse; required for prebuilt_stages or dasan_math_libraries"
   workflow_call:
     inputs:
       linux_amdgpu_families:
@@ -74,11 +78,18 @@ concurrency:
 
 jobs:
   dasan:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_dasan }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
     uses: ./.github/workflows/multi_arch_ci_dasan.yml
+    with:
+      math_libraries: ${{ inputs.dasan_math_libraries }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
 
   setup:
-    if: ${{ !inputs.enable_dasan }}
+    if: ${{ !inputs.enable_dasan && !inputs.dasan_math_libraries }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
@@ -112,7 +123,7 @@ jobs:
 
   ci_asan_summary:
     name: CI ASAN Summary
-    if: ${{ always() && !inputs.enable_dasan }}
+    if: ${{ always() && !inputs.enable_dasan && !inputs.dasan_math_libraries }}
     needs:
       - setup
       - linux_build_and_test

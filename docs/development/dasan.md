@@ -32,12 +32,12 @@ The pinned image is
 `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb`,
 matching `.github/workflows/multi_arch_build_portable_linux_artifacts.yml`.
 
-| Source | Requested branch/revision | Pinned commit |
+| Source                     | Requested branch/revision | Pinned commit                              |
 | -------------------------- | ------------------------- | ------------------------------------------ |
-| ROCm/llvm-project | `amd/dev/msearles/dasan` | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
-| ROCm/HIPIFY | `d364ef4` | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
-| ROCm/SPIRV-LLVM-Translator | `5817038` | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
-| jhuber6/rocm-systems | `loader_va` | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
+| ROCm/llvm-project          | `amd/dev/msearles/dasan`  | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
+| ROCm/HIPIFY                | `d364ef4`                 | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
+| ROCm/SPIRV-LLVM-Translator | `5817038`                 | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
+| jhuber6/rocm-systems       | `loader_va`               | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
 
 ## Build and resume
 
@@ -46,8 +46,8 @@ matching `.github/workflows/multi_arch_build_portable_linux_artifacts.yml`.
 The experimental branch adds an `enable_dasan` manual-dispatch input to
 `multi_arch_ci_asan.yml`. It selects a dedicated DASan compiler/runtime path
 using the same pinned CI container. The normal ASan path remains the default.
-DASan always builds both `gfx942` and `gfx950`; the ASan family, label, and
-prebuilt-stage inputs do not apply to this experimental path.
+The compiler/runtime mode builds both `gfx942` and `gfx950`. The math mode
+below reuses its installation and targets `gfx950`.
 
 ```bash
 gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
@@ -62,6 +62,26 @@ and the multi-device test. The test jobs use the installed artifacts and do
 not set `fast_unwind_on_malloc=0`. Each architecture uploads its own results;
 a failed or unsupported required test fails that job. Artifacts are retained
 for 14 days. This workflow does not publish a ROCm release.
+
+### Math libraries using an existing DASan installation
+
+Use the same branch and provide the successful compiler/runtime run as the
+baseline. This downloads `dasan-installation-gfx942-gfx950` from that run and
+builds the math artifact group for `gfx950` with `THEROCK_SANITIZER=DASAN`.
+The compiler spelling is `-fsanitize=daddress`, including HIP language
+compilation. GPU targets retain their normal spelling without `:xnack+`.
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-ci-fix-01a17b04 \
+  -f enable_dasan=true -f dasan_math_libraries=true \
+  -f baseline_run_id=40443090683
+```
+
+The reused compiler and runtime retain the instrumentation of the baseline
+run. Math libraries are newly instrumented. The math mode excludes ML libraries
+and uploads build and configuration logs even on failure to
+`s3://therock-ci-artifacts/<run-id>-linux/logs/math-libs/gfx950/`.
 
 ### Local or remote build
 

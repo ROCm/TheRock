@@ -128,7 +128,7 @@ option(THEROCK_ENABLE_DASAN "Builds experimental device address sanitizer runtim
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
-set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (ASAN, HOST_ASAN, TSAN, DASAN)")
 
 # Options to control the concurrency for building LLVM.
 set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")
@@ -284,8 +284,8 @@ if(THEROCK_ENABLE_DASAN)
   if(NOT THEROCK_ENABLE_COMPILER)
     message(FATAL_ERROR "THEROCK_ENABLE_DASAN requires THEROCK_ENABLE_COMPILER=ON")
   endif()
-  if(THEROCK_SANITIZER)
-    message(FATAL_ERROR "THEROCK_ENABLE_DASAN cannot be combined with THEROCK_SANITIZER")
+  if(THEROCK_SANITIZER AND NOT THEROCK_SANITIZER STREQUAL "DASAN")
+    message(FATAL_ERROR "THEROCK_ENABLE_DASAN can only be combined with THEROCK_SANITIZER=DASAN")
   endif()
 endif()
 

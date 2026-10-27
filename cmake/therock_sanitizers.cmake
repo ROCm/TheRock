@@ -23,7 +23,7 @@ function(therock_sanitizer_configure
   endif()
 
   # Enabled.
-  if(NOT compiler_toolchain)
+  if(NOT compiler_toolchain AND NOT (_sanitizer STREQUAL "DASAN" AND cxx_compiler MATCHES "clang"))
     message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")
     return()
   endif()
@@ -32,14 +32,22 @@ function(therock_sanitizer_configure
   # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx942, gfx950)
   # HOST_ASAN: Host-only address sanitizer (no device-side instrumentation)
   # TSAN: Thread sanitizer.
+  # DASAN: Device address sanitizer, without requiring xnack+.
   set(_stanza)
-  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN")
+  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN" OR _sanitizer STREQUAL "DASAN")
     string(APPEND _stanza "set(THEROCK_SANITIZER \"${_sanitizer}\")\n")
 
     # Set the compiler sanitizer string for the command line.
     set(_sanitizer_string "address")
     if(_sanitizer STREQUAL "TSAN")
       set(_sanitizer_string "thread")
+    elseif(_sanitizer STREQUAL "DASAN")
+      set(_sanitizer_string "daddress")
+    endif()
+
+    if(_sanitizer STREQUAL "DASAN")
+      # HIP language targets do not inherit CMAKE_CXX_FLAGS_INIT.
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" -fsanitize=daddress -fno-omit-frame-pointer\")\n")
     endif()
 
     if(_sanitizer STREQUAL "HOST_ASAN")
@@ -98,8 +106,7 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
-      # HOST_ASAN.
-      string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
+      string(APPEND _stanza "message(STATUS \"${_sanitizer} enabled - GPU_TARGETS unchanged\")\n")
     endif()
 
     # Action at a distance: Signal that the sub-project should extend its build and install
