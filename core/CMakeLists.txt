@@ -309,6 +309,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       "-DCLR_BUILD_HIP=ON"
       "-DROCM_KPACK_ENABLED=ON"
       "-DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}"
+      "-DTHEROCK_ENABLE_DASAN=${THEROCK_ENABLE_DASAN}"
       ${_clr_comgr_dll_name_cmake_args}
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
