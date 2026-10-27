@@ -61,7 +61,7 @@ DEPENDENCIES: dict[str, DependencyPolicy] = {
     "tomli": DependencyPolicy(project="jax", versions=("latest",)),
     "sympy": DependencyPolicy(project="torch", versions=("latest",)),
     "mpmath": DependencyPolicy(project="torch", versions=("1.3.0",)),
-    "pillow": DependencyPolicy(project="torch", versions=("latest",)),
+    "pillow": DependencyPolicy(project="torch", versions=("12.3.0", "latest")),
     # 3.4.2 supports Python 3.10; latest supports newer Python versions.
     "networkx": DependencyPolicy(project="torch", versions=("3.4.2", "latest")),
     # 2.2.6 supports Python 3.10 and 3.11; latest supports newer versions.
@@ -74,6 +74,14 @@ DEPENDENCIES: dict[str, DependencyPolicy] = {
     "rocm-bootstrap": DependencyPolicy(project="rocm", versions=("latest",)),
     # Required by the rocprof_trace_decoder Python API in rocm-profiler.
     "pyelftools": DependencyPolicy(project="rocm", versions=("latest",)),
+    "pandas": DependencyPolicy(project="rocm", versions=("2.3.3", "latest")),
+    "python-dateutil": DependencyPolicy(project="rocm", versions=("latest",)),
+    "pytz": DependencyPolicy(project="rocm", versions=("latest",)),
+    "tzdata": DependencyPolicy(project="rocm", versions=("latest",)),
+    "six": DependencyPolicy(project="rocm", versions=("latest",)),
+    "otf2": DependencyPolicy(project="rocm", versions=("latest",)),
+    "reportlab": DependencyPolicy(project="rocm", versions=("latest",)),
+    "charset-normalizer": DependencyPolicy(project="rocm", versions=("latest",)),
     "setuptools": DependencyPolicy(project="rocm", versions=("81.0.0",)),
 }
 
@@ -164,7 +172,7 @@ def is_wheel_allowed(filename: str) -> bool:
     if not filename.endswith(".whl") or len(filename_parts) != 4:
         return False
     python_tag = filename_parts[1]
-    if python_tag not in _ALLOWED_CPYTHON_TAGS and python_tag != "py3":
+    if python_tag not in _ALLOWED_CPYTHON_TAGS and python_tag not in {"py3", "py2.py3"}:
         return False
 
     try:
