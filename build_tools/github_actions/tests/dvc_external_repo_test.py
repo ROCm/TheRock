@@ -36,11 +36,13 @@ class TestDVCProjectsConfiguration(unittest.TestCase):
             "rocm-systems config must have dvc_projects for wsl-rocdxg builds",
         )
 
-        # Verify it contains external-rocm-systems
+        # "rocm-libraries" is required for the rocSPARSE/hipSPARSE test matrices:
+        # --dvc-projects replaces fetch_sources.py's default list rather than
+        # extending it, so dropping it breaks the math-libs stage.
         self.assertEqual(
             config["dvc_projects"],
-            ["external-rocm-systems"],
-            "dvc_projects should contain external-rocm-systems path",
+            ["external-rocm-systems", "rocm-libraries"],
+            "dvc_projects should contain external-rocm-systems and rocm-libraries",
         )
 
     def test_rocm_systems_has_all_required_keys(self):
