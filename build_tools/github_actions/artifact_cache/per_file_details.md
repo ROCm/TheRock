@@ -68,8 +68,8 @@ cache-skipped outputs; they do not independently trigger a build.
 
 ### `cache_key.py`
 
-**High level:** defines the cache compatibility version and retains helpers for
-the earlier derived-key design and historical simulations.
+**High level:** defines the cache compatibility version, artifact identities,
+and fingerprint/key helpers.
 
 **Technical:** `CACHE_EPOCH`, `current_cache_epoch()`, and
 `validate_cache_epoch()` supply and validate the epoch used by `ArtifactKey`.
@@ -80,9 +80,9 @@ delete rows, erase files, or change raw fingerprints or output digests.
 ingestion. The `srcfp1:` fallback identifies commit-derived historical evidence;
 it must not be passed to `CacheDB.lookup()` as a real artifact key.
 
-`CacheKey` and `compute_cache_key()` remain available as compatibility helpers.
-Their derived string form `e{epoch}:{variant}:{hash}` is not the relational
-production lookup key. The local `--variant` option checks the configured build
+`CacheKey` and `compute_cache_key()` produce derived strings in the form
+`e{epoch}:{variant}:{hash}`. Database lookups require `ArtifactKey` with the raw
+CMake fingerprint. The local `--variant` option checks the configured build
 type; it does not add a separate variant column to the relational key.
 
 ### `manifest.py`
@@ -102,10 +102,10 @@ inventory and file records agree.
 
 `TrustLevel` and `ValidationState` are used by current eligibility policies.
 `OutputObject` also represents archive references during history ingestion.
-`Manifest`, `Provenance`, and `PublicationState` remain for legacy APIs.
-The legacy manifest's `pending/published/revoked` enum must not be confused with
-the relational entry states `pending/ready/invalid`. There is no `manifests`
-database table and no serialized legacy manifest column replacing the tables.
+`Manifest` groups output references, `Provenance`, and a `PublicationState`
+(`pending`, `published`, or `revoked`) for object-reference operations. Managed
+database operations use `LocalManifest` and the relational entry states
+`pending`, `ready`, and `invalid`.
 
 ### `cache_db.py`
 
@@ -143,8 +143,7 @@ also defaults to `untrusted`; a supplied trust label is not authentication.
 `record_observations()` records collection results. `register_local_outputs()`
 requires managed-build evidence and observations for the exact keys, inserts
 object metadata, and commits the complete set of ready transitions together.
-Builds and filesystem packaging occur outside this transaction. The legacy
-`publish(Manifest)` API is explicitly rejected.
+Builds and filesystem packaging occur outside this transaction.
 
 `invalidate_local_output()`, `evict_before()`, and `evict_where_missing()` retire
 metadata. Eviction does not delete payload files or observation history.
@@ -234,7 +233,7 @@ Subcommands are `cache`, `keys`, `stats`, and `synth`. `keys` reconfigures and
 therefore writes build metadata, but does not publish payloads or write the
 cache database. `synth` creates a small isolated CMake/Git fixture for testing;
 it is not a real ROCm build. CLI `cache` and `keys` default to bundle granularity;
-lower-level Python defaults retain component compatibility.
+lower-level Python APIs default to component granularity.
 
 ### `local_store.py`
 
@@ -265,14 +264,14 @@ The database's `artifact_files` rows describe the two stored objects. The
 inventory inside `inventory.json` describes their unpacked members. Neither
 kind of output digest is the source/configuration fingerprint.
 
-`LocalObjectStore` and `sha256_file()` remain available for the generic
-object-store helpers and their tests. This local implementation does not make
-historical S3 archive references reusable automatically.
+`LocalObjectStore` provides individual object upload, download and inspection;
+`sha256_file()` computes file digests. These helpers also support object-store
+tests. Using an S3 archive reference requires a verified remote import path.
 
 ### `publish.py`
 
-**High level:** ensures a successful managed build precedes publication, so
-new fingerprints cannot simply be paired with old files after configuration.
+**High level:** requires a successful managed build and input checks before
+saving artifacts under their configured fingerprints.
 
 **Technical:** `build_and_publish()` owns configuration, build execution,
 post-build configuration/input checks, packaging, producer recording, and ready
@@ -294,10 +293,9 @@ an observation alone does not imply a ready payload. Readiness is committed
 only after all requested saved copies have been validated. A build or input
 check failure does not publish those outputs.
 
-`publish_build_outputs()` delegates to managed publication. It no longer
-accepts an arbitrary list of existing archive URLs as proof of a successful
-build. Correctness still depends on CMake tracking build inputs and the raw
-fingerprint covering the environment needed for compatible reuse.
+`publish_build_outputs()` delegates to managed publication and requires
+managed-build evidence. Correctness depends on CMake tracking build inputs and
+the raw fingerprint covering the environment needed for compatible reuse.
 
 ### `restore.py`
 
@@ -320,10 +318,10 @@ The `cache` workflow discards its temporary verification output. Explicit
 `restore` keeps the resulting export tree. Neither operation writes `.prebuilt`
 markers or tells CI to skip a stage.
 
-The legacy `ObjectStore`, `InMemoryObjectStore`, `RestoreResult`, and
-`restore_manifest()` helpers remain. Their object-store check is distinct from
-the relational extraction path; a successful legacy check does not itself
-materialize files into a consumer build.
+`ObjectStore` defines the interface for checking referenced objects, and
+`InMemoryObjectStore` supplies a test implementation. `restore_manifest()`
+checks those references and returns a `RestoreResult`; it does not extract
+files into a consumer build.
 
 ### `planner.py`
 
@@ -369,13 +367,15 @@ fix broad invalidation caused by a shared repository commit.
 
 ### `topology_view.py`
 
-**High level:** retains the topology adapters from the earlier planner design.
+**High level:** provides topology views for describing build stages, artifacts
+and source-path relationships.
 
-**Technical:** the earlier `BuildTopologyView` and `DictTopologyView` describe
-stage/artifact and path/artifact relationships. They remain separate from the
-current production planner path, which uses `inventory.TopologyAdapter` and
-the configured CMake metadata described above. Do not infer current stage-skip
-behavior from the earlier adapter API or its original tests.
+**Technical:** `BuildTopologyView` and `DictTopologyView` describe stage/artifact
+and path/artifact relationships. `DictTopologyView` supplies a dictionary-backed
+view for tests. Production planning uses
+`inventory.TopologyAdapter`; configured dependency-impact reporting uses the
+CMake metadata described above. Topology relationships alone do not authorize
+stage skipping.
 
 ### `history_ingest.py`
 
@@ -455,15 +455,15 @@ log. Normal JSON stdout and final-report semantics are preserved.
 
 ### `migrate_schema.py`
 
-**High level:** upgrades a recognized older database while preserving its
+**High level:** upgrades a supported database while preserving its
 saved productions and history.
 
-**Technical:** validates supported older database schemas, creates a backup
+**Technical:** validates the database schema, creates a backup
 using SQLite's backup API, and upgrades the database to the current schema.
 It preserves artifact records, producing runs and their references.
 
-Existing component entries retain empty component membership and are not
-converted into verified bundles.
+Component entries keep empty component membership. Verified bundles require
+publication of a complete requested component set.
 
 Foreign-key and integrity checks run before commit. Failures roll back the
 migration; unrecognized layouts or incompatible custom schema objects are
@@ -507,9 +507,9 @@ loading every subsystem.
 
 **Technical:** lazy exports load the defining module when an attribute is
 requested. This keeps basic collection independent of planner and optional
-network helper imports. Public names include the relational types and managed
-operations, along with explicitly retained legacy helpers. Exporting a legacy
-type does not make it valid for the relational database API.
+network helper imports. Public names include relational types, managed
+operations, object metadata and key helpers. Each operation accepts its
+documented input types; database lookups require `ArtifactKey`.
 
 ### `README.md`
 
@@ -543,8 +543,8 @@ publication, and the reporting-only dependency-impact feature.
 **High level:** explains the purpose of every package file and its connection
 to the overall flow.
 
-**Technical:** this guide distinguishes the active relational APIs from retained
-legacy helpers and documents the corresponding schema and test locations.
+**Technical:** documents each module's responsibilities, APIs and integration
+boundaries, along with the database schema and test locations.
 It does not alter runtime behavior or migrate data.
 
 ## SQL schema outside the package
@@ -579,12 +579,12 @@ payload bytes themselves are not stored in SQLite.
 ## Tests and fixtures
 
 Tests live under `build_tools/github_actions/tests/` and use the naming pattern
-`artifact_cache_*_test.py`. The following files cover both the relational
-implementation and adapted regressions from the original implementation:
+`artifact_cache_*_test.py`. The following files cover the relational database,
+cache workflows, helper APIs and their integration boundaries:
 
 | File | Coverage |
 | --- | --- |
-| `artifact_cache_adaptation_test.py` | Policy/ranking behavior, planner boundaries, history evidence, replay, and adapted CLI/API behavior. |
+| `artifact_cache_adaptation_test.py` | Policy/ranking behavior, planner boundaries, history evidence, replay, and CLI/API behavior. |
 | `artifact_cache_bundle_test.py` | Grouping, exact membership, equal fingerprints, missing-member rejection, discovery completeness, and bundle publication/restoration. |
 | `artifact_cache_collector_test.py` | Expected lists, fingerprint validation, missing outputs, observation persistence, repeated keys, and metadata-only reports. |
 | `artifact_cache_db_test.py` | Schema validation, foreign keys, transactions, batched lookup, object-store filtering before candidate ranking, read policy, and joined manifests. |
@@ -592,7 +592,7 @@ implementation and adapted regressions from the original implementation:
 | `artifact_cache_diagnostics_test.py` | Detailed events, scoped logging, JSON preservation, progress, and failure diagnostics. |
 | `artifact_cache_epoch_test.py` | Epoch validation, separation/coexistence of keys, stored-epoch preservation, and migration behavior. |
 | `artifact_cache_history_ingest_test.py` | Archive parsing, main push/schedule trust classification, run validation, and evidence-only ingestion. |
-| `artifact_cache_key_test.py` | Retained derived-key helpers and raw relational-key regression coverage. |
+| `artifact_cache_key_test.py` | Derived-key helpers and raw relational-key validation and behavior. |
 | `artifact_cache_local_test.py` | Immutable generations, inventories, safe extraction, real miniature builds, stale-output rejection, and failures. |
 | `artifact_cache_logging_test.py` | Compact final status wording, configure/build visibility, JSON stdout, and absence of false success/reuse claims. |
 | `artifact_cache_manifest_test.py` | Metadata types, trust/validation ordering, serialization, and relational manifest invariants. |
