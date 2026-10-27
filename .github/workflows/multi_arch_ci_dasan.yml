@@ -94,7 +94,23 @@ jobs:
             runner: linux-gfx950-8gpu-ccs-ossci-rocm
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
-      options: --device=/dev/kfd --device=/dev/dri --group-add=video --ipc=host --security-opt seccomp=unconfined
+      # Match the base/GPU options in fetch_test_configurations.py, including
+      # the OSSCI and ARC runner GPU isolation settings.
+      options: >-
+        --user 0:0
+        --ulimit memlock=-1:-1
+        --ulimit nofile=1048576:1048576
+        --ipc=host
+        --security-opt seccomp=unconfined
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 993
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e ROCR_VISIBLE_DEVICES
+        -e KUBE_CPU_REQUEST
     defaults:
       run:
         shell: bash
@@ -124,7 +140,25 @@ jobs:
 
       - name: Run all 27 DASan tests including OpenMP and multiple GPUs
         run: |
-          GPU_COUNT="$(python3 -c 'from pathlib import Path; print(sum(int(p.read_text()) != 0 for p in Path("/sys/class/kfd/kfd/topology/nodes").glob("*/gpu_id")))')"
+          export ROCM_ROOT="$PWD/dasan-test/rocm"
+          export LD_LIBRARY_PATH="$ROCM_ROOT/lib:$ROCM_ROOT/lib/llvm/lib:$ROCM_ROOT/lib/rocm_sysdeps/lib"
+          GPU_COUNT="$(python3 - <<'PY'
+          import ctypes
+          import os
+          from pathlib import Path
+
+          runtime = ctypes.CDLL(str(Path(os.environ["ROCM_ROOT"]) / "lib/libamdhip64.so"))
+          runtime.hipGetDeviceCount.argtypes = [ctypes.POINTER(ctypes.c_int)]
+          runtime.hipGetDeviceCount.restype = ctypes.c_int
+          count = ctypes.c_int()
+          status = runtime.hipGetDeviceCount(ctypes.byref(count))
+          if status != 0:
+              raise SystemExit(f"Packaged hipGetDeviceCount failed with status {status}")
+          if count.value < 1:
+              raise SystemExit("No GPUs visible to the packaged HIP runtime")
+          print(count.value)
+          PY
+          )"
           python3 test_tools/dasan_smoke.py \
             --rocm-path dasan-test/rocm \
             --llvm-lit dasan-test/dasan-lit-bundle/llvm-lit.py \

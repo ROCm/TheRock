@@ -107,6 +107,12 @@ def configure_paths(config, lit_config, bundle, target_triple):
     config.environment["PATH"] = environment["PATH"]
     config.environment["CLANG_NO_DEFAULT_CONFIG"] = "1"
     config.environment["LLVM_SYMBOLIZER_PATH"] = str(bindir / "llvm-symbolizer")
+    # lit's default environment omits the runner's GPU visibility restrictions.
+    # Preserve even empty values: those can intentionally hide all devices.
+    for name in ("ROCR_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES",
+                 "CUDA_VISIBLE_DEVICES", "GPU_DEVICE_ORDINAL"):
+        if name in os.environ:
+            config.environment[name] = os.environ[name]
     work = bundle / "work"
     work.mkdir(exist_ok=True)
     config.test_exec_root = str(work)
