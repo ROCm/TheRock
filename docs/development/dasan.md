@@ -32,12 +32,12 @@ The pinned image is
 `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb`,
 matching `.github/workflows/multi_arch_build_portable_linux_artifacts.yml`.
 
-| Source                     | Requested branch/revision | Pinned commit                              |
+| Source | Requested branch/revision | Pinned commit |
 | -------------------------- | ------------------------- | ------------------------------------------ |
-| ROCm/llvm-project          | `amd/dev/msearles/dasan`  | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
-| ROCm/HIPIFY                | `d364ef4`                 | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
-| ROCm/SPIRV-LLVM-Translator | `5817038`                 | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
-| jhuber6/rocm-systems       | `loader_va`               | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
+| ROCm/llvm-project | `amd/dev/msearles/dasan` | `b07aa864f5b2bf648e6a61e2902cbfde83192481` |
+| ROCm/HIPIFY | `d364ef4` | `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c` |
+| ROCm/SPIRV-LLVM-Translator | `5817038` | `5817038657a5d3166f753389ff7f4740bd8d7c16` |
+| jhuber6/rocm-systems | `loader_va` | `f535db62a0dc73f2d56d4b93d9bbd4f3155e113b` |
 
 ## Build and resume
 
@@ -84,6 +84,12 @@ The first patch updates both the call site and fallback enum definition. The
 second requests executable permission explicitly when mapping the reserved
 address space; allocating executable-capable memory alone does not make the
 KFD mapping executable.
+
+The third patch makes `hsa-missing.c` portable to the CI image's older glibc:
+it enables `_GNU_SOURCE` before including `dlfcn.h` and explicitly links
+`libdl`. Both static and shared sanitizer executions and their FileCheck
+expectations remain intact. The bundle copies and hashes these patched test
+sources without further edits.
 
 The launcher detects an already applied ordered prefix and applies only the
 remaining patches with TheRock's normal `git am` identity and fixed committer

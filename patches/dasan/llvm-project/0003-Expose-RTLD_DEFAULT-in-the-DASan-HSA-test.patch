@@ -1,0 +1,32 @@
+From: Sahil Faizal <safaizal@amd.com>
+Subject: [PATCH] Make the DASan HSA test portable to older glibc
+
+The manylinux CI image uses glibc headers that expose RTLD_DEFAULT only
+when GNU extensions are enabled. Request those extensions before including
+dlfcn.h so hsa-missing.c compiles on both the CI image and newer GPU hosts.
+Also link libdl explicitly: older glibc keeps dlsym there, and the shared
+sanitizer link does not supply this dependency for the test executable.
+Keep both runtime executions and FileCheck expectations intact.
+
+LLVM base: b07aa864f5b2bf648e6a61e2902cbfde83192481.
+
+diff --git a/compiler-rt/test/dasan/hsa-missing.c b/compiler-rt/test/dasan/hsa-missing.c
+--- a/compiler-rt/test/dasan/hsa-missing.c
++++ b/compiler-rt/test/dasan/hsa-missing.c
+@@ -1,11 +1,14 @@
+-// RUN: %clang_dasan %s -o %t
++// RUN: %clang_dasan %s -ldl -o %t
+ // RUN: %run %t 2>&1 | FileCheck %s
+-// RUN: %clang_dasan -shared-libsan %s -o %t
++// RUN: %clang_dasan -shared-libsan %s -ldl -o %t
+ // RUN: %run %t 2>&1 | FileCheck %s
+ 
+ // The runtime exports the HSA wrappers to every program. Without HSA loaded
+ // they must report failure rather than kill the process.
+ 
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE 1
++#endif
+ #include <dlfcn.h>
+ #include <stdio.h>
+ 
