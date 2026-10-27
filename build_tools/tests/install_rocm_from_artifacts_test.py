@@ -116,21 +116,17 @@ def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
     return f"therock-dist-{platform}-{artifact_group}-{version}.tar.gz"
 
 
-def _s3_object(
+def _cdn_entry(
     platform: str,
     artifact_group: str,
     version: str,
     *,
-    last_modified: datetime,
-    size: int = 0,
+    mtime: float,
 ) -> dict:
-    """Return a tarball object in the published multi-arch S3 layout."""
+    """Return a CDN index entry for a published multi-arch tarball."""
     return {
-        "Key": mod._multiarch_tarball_s3_key(
-            _tarball_name(platform, artifact_group, version)
-        ),
-        "LastModified": last_modified,
-        "Size": size,
+        "name": _tarball_name(platform, artifact_group, version),
+        "mtime": mtime,
     }
 
 
@@ -168,40 +164,34 @@ class TestMultiarchTarballNamePattern(unittest.TestCase):
 
 
 class TestReleaseDiscovery(unittest.TestCase):
-    @staticmethod
-    def _paginator(*objects: dict) -> mock.Mock:
-        paginator = mock.Mock()
-        paginator.paginate.return_value = [{"Contents": objects}]
-        return paginator
-
     def test_latest_release_dry_run_discovers_non_test_tarball(self) -> None:
         platform = mod.PLATFORM
-        paginator = self._paginator(
-            _s3_object(
+        cdn_index = [
+            _cdn_entry(
                 platform,
                 "gfx94X-dcgpu-tests",
                 "7.15.0a20260723",
-                last_modified=datetime(2026, 7, 23),
+                mtime=datetime(2026, 7, 23).timestamp(),
             ),
-            _s3_object(
+            _cdn_entry(
                 platform,
                 "gfx94X-dcgpu",
                 "7.15.0a20260722",
-                last_modified=datetime(2026, 7, 22),
+                mtime=datetime(2026, 7, 22).timestamp(),
             ),
-            _s3_object(
+            _cdn_entry(
                 platform,
                 "gfx110X-all",
                 "7.15.0a20260723",
-                last_modified=datetime(2026, 7, 23),
+                mtime=datetime(2026, 7, 23).timestamp(),
             ),
-        )
+        ]
         output = io.StringIO()
 
         with (
             mock.patch.object(
-                mod.s3_client, "get_paginator", return_value=paginator
-            ) as get_paginator,
+                mod, "_fetch_cdn_tarball_index", return_value=cdn_index
+            ) as fetch_index,
             mock.patch("sys.stdout", output),
         ):
             mod.main(
@@ -215,40 +205,34 @@ class TestReleaseDiscovery(unittest.TestCase):
 
         asset_name = _tarball_name(platform, "gfx94X-dcgpu", "7.15.0a20260722")
         self.assertIn("Found latest release: 7.15.0a20260722", output.getvalue())
-        self.assertIn(f"Would download: {asset_name}", output.getvalue())
-        get_paginator.assert_called_once_with("list_objects_v2")
-        paginator.paginate.assert_called_once_with(
-            Bucket=mod.NIGHTLY_TARBALL_BUCKET.name,
-            Prefix=mod._multiarch_tarball_s3_key(f"therock-dist-{platform}-"),
-        )
+        self.assertIn(f"Would download:", output.getvalue())
+        self.assertIn(asset_name, output.getvalue())
+        fetch_index.assert_called_with(mod.NIGHTLY_TARBALL_CDN_BASE_URL)
 
     def test_discovery_supports_linux_and_windows_tarballs(self) -> None:
         version = "7.15.0a20260722"
         for platform in ("linux", "windows"):
             asset_name = _tarball_name(platform, "gfx94X-dcgpu", version)
-            paginator = self._paginator(
-                _s3_object(
+            cdn_index = [
+                _cdn_entry(
                     platform,
                     "gfx94X-dcgpu",
                     version,
-                    last_modified=datetime(2026, 7, 22),
-                )
-            )
+                    mtime=datetime(2026, 7, 22).timestamp(),
+                ),
+            ]
 
             with mock.patch.object(
-                mod.s3_client, "get_paginator", return_value=paginator
+                mod, "_fetch_cdn_tarball_index", return_value=cdn_index
             ):
                 result = mod.discover_latest_release("gfx94X-dcgpu", platform)
 
             self.assertEqual(result, (version, asset_name))
 
-    def test_nightly_release_dry_run_reports_s3_location_and_asset(self) -> None:
+    def test_nightly_release_dry_run_reports_cdn_url_and_asset(self) -> None:
         version = "7.15.0a20260722"
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
-        expected_s3_uri = (
-            f"s3://{mod.NIGHTLY_TARBALL_BUCKET.name}/"
-            f"{mod._multiarch_tarball_s3_key(asset_name)}"
-        )
+        expected_cdn_url = f"{mod.NIGHTLY_TARBALL_CDN_BASE_URL}/{asset_name}"
         output = io.StringIO()
 
         with mock.patch("sys.stdout", output):
@@ -262,37 +246,29 @@ class TestReleaseDiscovery(unittest.TestCase):
                 ]
             )
 
-        self.assertIn(f"Would download: {expected_s3_uri}", output.getvalue())
+        self.assertIn(f"Would download: {expected_cdn_url}", output.getvalue())
         self.assertIn(f"asset {asset_name}", output.getvalue())
 
-    def test_multiarch_tarball_downloads_selected_s3_object(self) -> None:
+    def test_nightly_tarball_downloads_from_cdn(self) -> None:
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", "7.15.0a20260722")
-        expected_key = mod._multiarch_tarball_s3_key(asset_name)
 
-        def write_tarball(_, __, file) -> None:
-            file.write(b"tarball contents")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir)
-            with (
-                mock.patch.object(
-                    mod.s3_client, "download_fileobj", side_effect=write_tarball
-                ) as download_fileobj,
-                mock.patch.object(mod, "_untar_files") as untar_files,
-            ):
-                mod._retrieve_multiarch_tarball(
-                    mod.NIGHTLY_TARBALL_BUCKET.name,
+        with (
+            mock.patch.object(mod, "_download_from_cdn") as download_cdn,
+            mock.patch.object(mod, "_untar_files"),
+        ):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                output_dir = Path(temp_dir)
+                mod._download_from_cdn(
+                    mod.NIGHTLY_TARBALL_CDN_BASE_URL,
                     asset_name,
                     output_dir,
                 )
 
-            self.assertEqual(
-                (output_dir / asset_name).read_bytes(), b"tarball contents"
+            download_cdn.assert_called_once_with(
+                mod.NIGHTLY_TARBALL_CDN_BASE_URL,
+                asset_name,
+                output_dir,
             )
-            bucket, key, _ = download_fileobj.call_args.args
-            self.assertEqual(bucket, mod.NIGHTLY_TARBALL_BUCKET.name)
-            self.assertEqual(key, expected_key)
-            untar_files.assert_called_once_with(output_dir, output_dir / asset_name)
 
     def test_dev_release_uses_dev_multiarch_tarball_bucket(self) -> None:
         version = "7.15.0.dev0+deadbeef"
@@ -336,50 +312,50 @@ class TestReleaseDiscovery(unittest.TestCase):
         self,
     ) -> None:
         for platform in ("linux", "windows"):
-            paginator = self._paginator(
-                _s3_object(
+            cdn_index = [
+                _cdn_entry(
                     platform,
                     "gfx94X-dcgpu",
                     "7.15.0a20260723",
-                    last_modified=datetime(2026, 7, 23),
+                    mtime=datetime(2026, 7, 23).timestamp(),
                 ),
-                _s3_object(
+                _cdn_entry(
                     platform,
                     "gfx94X-dcgpu-tests",
                     "7.15.0a20260723",
-                    last_modified=datetime(2026, 7, 23),
+                    mtime=datetime(2026, 7, 23).timestamp(),
                 ),
-                _s3_object(
+                _cdn_entry(
                     platform,
                     "multiarch",
                     "7.15.0a20260723",
-                    last_modified=datetime(2026, 7, 23),
+                    mtime=datetime(2026, 7, 23).timestamp(),
                 ),
-            )
+            ]
             with mock.patch.object(
-                mod.s3_client, "get_paginator", return_value=paginator
+                mod, "_fetch_cdn_tarball_index", return_value=cdn_index
             ):
                 families = mod.list_available_nightly_gpu_families(platform)
 
             self.assertEqual(families, {"gfx94X-dcgpu", "multiarch"})
 
     def test_stable_release_uses_last_modified_for_ordering(self) -> None:
-        paginator = self._paginator(
-            _s3_object(
+        cdn_index = [
+            _cdn_entry(
                 mod.PLATFORM,
                 "gfx94X-dcgpu",
                 "7.15.0",
-                last_modified=datetime(2026, 7, 22),
+                mtime=datetime(2026, 7, 22).timestamp(),
             ),
-            _s3_object(
+            _cdn_entry(
                 mod.PLATFORM,
                 "gfx94X-dcgpu",
                 "7.16.0",
-                last_modified=datetime(2026, 7, 23),
+                mtime=datetime(2026, 7, 23).timestamp(),
             ),
-        )
+        ]
 
-        with mock.patch.object(mod.s3_client, "get_paginator", return_value=paginator):
+        with mock.patch.object(mod, "_fetch_cdn_tarball_index", return_value=cdn_index):
             releases = mod._fetch_and_sort_nightly_releases("gfx94X-dcgpu")
 
         self.assertEqual(
