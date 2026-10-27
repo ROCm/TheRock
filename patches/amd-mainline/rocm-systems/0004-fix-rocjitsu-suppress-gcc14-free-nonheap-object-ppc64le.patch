@@ -1,0 +1,39 @@
+From 2fc2092a84b0ea1d6b1416d7418e2e8cabcd70eb Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Mon, 26 Oct 2026 18:26:31 +0000
+Subject: [PATCH] fix(rocjitsu): suppress GCC 14 -Wfree-nonheap-object false
+ positive on ppc64le
+
+GCC 14 on ppc64le emits a spurious -Wfree-nonheap-object warning in
+std::vector::_M_realloc_append inlining, which -Werror promotes to an
+error. Add -Wno-error=free-nonheap-object for GCC >= 14, matching the
+existing GCC >= 15 -Wno-error=maybe-uninitialized pattern.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ emulation/rocjitsu/cmake/rj_configure_target.cmake | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/emulation/rocjitsu/cmake/rj_configure_target.cmake b/emulation/rocjitsu/cmake/rj_configure_target.cmake
+index 9b92e95380..737854e7f3 100644
+--- a/emulation/rocjitsu/cmake/rj_configure_target.cmake
++++ b/emulation/rocjitsu/cmake/rj_configure_target.cmake
+@@ -91,6 +91,15 @@ function(rj_configure_target target)
+                     PRIVATE -Wno-error=maybe-uninitialized
+                 )
+             endif()
++            if(
++                CMAKE_CXX_COMPILER_ID MATCHES "GNU"
++                AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14
++            )
++                target_compile_options(
++                    ${target}
++                    PRIVATE -Wno-error=free-nonheap-object
++                )
++            endif()
+         endif()
+     endif()
+     if(ARG_HIDDEN)
+-- 
+2.52.0
+
