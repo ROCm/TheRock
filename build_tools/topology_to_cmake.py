@@ -343,6 +343,11 @@ def generate_validation_metadata(topology: BuildTopology, f: TextIO):
     f.write("# Artifact type and split database metadata for kpack splitting\n")
     for artifact in topology.get_artifacts():
         f.write(f'set(THEROCK_ARTIFACT_TYPE_{artifact.name} "{artifact.type}")\n')
+        if artifact.target_specific_host_components:
+            f.write(
+                f"set(THEROCK_ARTIFACT_TARGET_SPECIFIC_HOST_COMPONENTS_{artifact.name} "
+                f'"{";".join(artifact.target_specific_host_components)}")\n'
+            )
         if artifact.split_databases:
             # Use semicolon separator for proper CMake list handling
             f.write(

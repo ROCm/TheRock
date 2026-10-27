@@ -54,6 +54,7 @@ from packaging_utils import *
 from runpath_to_rpath import *
 
 from _therock_utils.artifacts import ArtifactCatalog
+from _therock_utils.build_topology import BuildTopology
 from _therock_utils.log_utils import (
     configure_logging,
     TheRockLogger,
@@ -79,19 +80,39 @@ class BuildTask(NamedTuple):
     logs_dir: Path
 
 
-def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
-    """Detect kpack mode by scanning therock_manifest.json files in artifact directory.
-
-    Returns True if any manifest has KPACK_SPLIT_ARTIFACTS set to True.
-    """
+def load_flag_from_manifest(artifacts_dir: Path, name: str) -> bool:
+    """Read a build flag from the staged build manifests."""
     for manifest_path in artifacts_dir.rglob("therock_manifest.json"):
         try:
             manifest = json.loads(manifest_path.read_text())
-            if manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False):
+            if manifest.get("flags", {}).get(name, False):
                 return True
         except (json.JSONDecodeError, OSError):
             pass
     return False
+
+
+def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
+    return load_flag_from_manifest(artifacts_dir, "KPACK_SPLIT_ARTIFACTS")
+
+
+def validate_native_host_components(pkg_info: dict, artifacts_dir: Path) -> None:
+    if not load_flag_from_manifest(artifacts_dir, "KPACK_TARGET_SPECIFIC_HOSTS"):
+        return
+    topology = BuildTopology(str(SCRIPT_DIR.parents[2] / "BUILD_TOPOLOGY.toml"))
+    for entry in pkg_info.get("Artifactory", []):
+        artifact = topology.artifacts.get(entry["Artifact"])
+        if artifact is None:
+            continue
+        for subdir in entry.get("Artifact_Subdir", []):
+            if set(subdir.get("Components", [])) & set(
+                artifact.target_specific_host_components
+            ):
+                raise ValueError(
+                    f"Native packages cannot install configuration-dependent host components "
+                    f"of {artifact.name} at a shared path. Use per-selection test tarballs "
+                    "or rebuild with THEROCK_FLAG_KPACK_TARGET_SPECIFIC_HOSTS=OFF."
+                )
 
 
 def get_all_target_families(artifact_dir):
@@ -116,7 +137,12 @@ def get_all_target_families(artifact_dir):
         raise ValueError(f"Artifact directory does not exist: {artifact_dir}")
 
     # Use ArtifactCatalog from _therock_utils to get all target families
-    catalog = ArtifactCatalog(artifact_dir)
+    separate_hosts = load_flag_from_manifest(
+        artifact_dir, "KPACK_TARGET_SPECIFIC_HOSTS"
+    )
+    catalog = ArtifactCatalog(
+        artifact_dir, filter=lambda an: not separate_hosts or an.component != "test"
+    )
     # Strip xnack suffixes (e.g., gfx942:xnack+ -> gfx942)
     targets = {t.split(":", 1)[0] for t in catalog.all_target_families}
     return sorted(targets)
@@ -155,6 +181,7 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
             - Non-versioned package with arch suffix (e.g., amdrocm-fft-gfx1100)
     """
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
+    validate_native_host_components(pkg_info, config.artifacts_dir)
 
     if config.enable_kpack:
         if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):

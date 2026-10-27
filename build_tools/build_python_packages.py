@@ -252,7 +252,10 @@ def run(args: argparse.Namespace):
             family_map = amdgpu_family_map()
         windows_targets = expand_families(args.windows_amdgpu_families, family_map)
 
-    artifacts = ArtifactCatalog(args.artifact_dir)
+    # Test host bundles are not device targets and do not ship in split wheels.
+    artifacts = ArtifactCatalog(
+        args.artifact_dir, filter=lambda an: not kpack_split or an.component != "test"
+    )
     validate_kpack_split_target_completeness(
         kpack_split=kpack_split,
         artifact_dir=args.artifact_dir,

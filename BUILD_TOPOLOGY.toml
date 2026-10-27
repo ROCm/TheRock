@@ -715,6 +715,7 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
 split_databases = ["miopen"]
+target_specific_host_components = ["test"]
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"

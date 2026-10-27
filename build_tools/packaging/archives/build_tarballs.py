@@ -23,7 +23,9 @@ retain their family names.
 
 By default, generated tarballs exclude test artifacts and fftw3. Pass
 ``--include-test-tarballs`` to also generate full tarballs, named with a
-``-tests`` suffix, that include test artifacts.
+``-tests`` suffix, that include test artifacts. When topology declares test hosts
+that depend on the build selection, these remain separate per selection and no
+combined multiarch test tarball is emitted.
 
 Tarball naming follows the existing release convention:
     therock-dist-{platform}-{family}-{version}.tar.gz
@@ -183,13 +185,12 @@ def fetch_and_flatten(
     )
 
 
-def is_kpack_split(flatten_dir: Path) -> bool:
-    """Check if KPACK_SPLIT_ARTIFACTS is enabled from the build manifest."""
+def _build_flag_enabled(flatten_dir: Path, name: str) -> bool:
     manifest_path = flatten_dir / "share" / "therock" / "therock_manifest.json"
     if not manifest_path.exists():
         return False
     manifest = json.loads(manifest_path.read_text())
-    return manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False)
+    return manifest.get("flags", {}).get(name, False)
 
 
 def compress_with_zlib_ng(
@@ -302,6 +303,14 @@ def determine_compress_workers(
     return min(task_count, max(1, available_cpu_count() // cpus_per_archive))
 
 
+def is_kpack_split(flatten_dir: Path) -> bool:
+    return _build_flag_enabled(flatten_dir, "KPACK_SPLIT_ARTIFACTS")
+
+
+def has_target_specific_test_hosts(flatten_dir: Path) -> bool:
+    return _build_flag_enabled(flatten_dir, "KPACK_TARGET_SPECIFIC_HOSTS")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Fetch multi-arch artifacts and package into per-family tarballs"
@@ -395,6 +404,7 @@ def main(argv: list[str] | None = None) -> None:
     # Phase 1: Fetch and flatten sequentially so generic (host) artifacts can
     # reuse both their downloaded archives and extracted contents across the
     # family and multiarch staging trees.
+    separate_test_hosts = False
     family_dirs = []
     compress_tasks: list[CompressionTask] = []
     for family, members in group_package_targets(families).items():
@@ -410,6 +420,7 @@ def main(argv: list[str] | None = None) -> None:
             exclude_components=DEFAULT_EXCLUDED_COMPONENTS,
             exclude_artifacts=DEFAULT_EXCLUDED_ARTIFACTS,
         )
+        separate_test_hosts |= has_target_specific_test_hosts(flatten_dir)
         family_dirs.append(flatten_dir)
         tarball_name = (
             f"therock-dist-{args.platform}-{family}-{args.package_version}.tar.gz"
@@ -422,27 +433,33 @@ def main(argv: list[str] | None = None) -> None:
             )
         )
         if args.include_test_tarballs:
-            tests_dir = work_dir / "tests" / family
-            fetch_and_flatten(
-                run_id=args.run_id,
-                amdgpu_families=members,
-                platform=args.platform,
-                output_dir=tests_dir,
-                download_cache_dir=download_cache_dir,
-                extraction_cache_dir=extraction_cache_dir,
-                run_github_repo=args.run_github_repo,
+            test_groups = (
+                {member: [member] for member in members}
+                if separate_test_hosts
+                else {family: members}
             )
-            tests_tarball_name = (
-                f"therock-dist-{args.platform}-{family}-tests-"
-                f"{args.package_version}.tar.gz"
-            )
-            compress_tasks.append(
-                CompressionTask(
-                    source_dir=tests_dir,
-                    tarball_path=args.output_dir / tests_tarball_name,
-                    priority=FAMILY_TESTS_TARBALL_PRIORITY,
+            for test_family, test_members in test_groups.items():
+                tests_dir = work_dir / "tests" / test_family
+                fetch_and_flatten(
+                    run_id=args.run_id,
+                    amdgpu_families=test_members,
+                    platform=args.platform,
+                    output_dir=tests_dir,
+                    download_cache_dir=download_cache_dir,
+                    extraction_cache_dir=extraction_cache_dir,
+                    run_github_repo=args.run_github_repo,
                 )
-            )
+                tests_tarball_name = (
+                    f"therock-dist-{args.platform}-{test_family}-tests-"
+                    f"{args.package_version}.tar.gz"
+                )
+                compress_tasks.append(
+                    CompressionTask(
+                        source_dir=tests_dir,
+                        tarball_path=args.output_dir / tests_tarball_name,
+                        priority=FAMILY_TESTS_TARBALL_PRIORITY,
+                    )
+                )
 
     # Phase 1.5: If KPACK_SPLIT_ARTIFACTS is enabled, fetch all families
     # into a single combined directory. With KPACK split, device-specific
@@ -473,7 +490,7 @@ def main(argv: list[str] | None = None) -> None:
                 priority=MULTIARCH_TARBALL_PRIORITY,
             )
         )
-        if args.include_test_tarballs:
+        if args.include_test_tarballs and not separate_test_hosts:
             tests_multiarch_dir = work_dir / "tests" / "multiarch"
             fetch_and_flatten(
                 run_id=args.run_id,

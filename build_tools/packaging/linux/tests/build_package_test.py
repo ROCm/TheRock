@@ -963,6 +963,35 @@ class CreateVersionedRpmPackageTest(BuildPackageTestCase):
 class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
     """Top-level routing using real ``is_gfxarch_package`` / staged artifacts."""
 
+    def test_configuration_dependent_test_hosts_require_separate_layout(self) -> None:
+        cfg = _kpack_config(self.temp_dir)
+        _stage_fft_kpack_tree(cfg.artifacts_dir)
+        manifest = cfg.artifacts_dir / "therock_manifest.json"
+        host = cfg.artifacts_dir / "miopen_test_gfx94X-dcgpu"
+        (host / "stage").mkdir(parents=True)
+        (host / "artifact_manifest.txt").write_text("stage\n")
+        (host / "stage/test_gemm").write_text("host")
+        manifest.write_text(
+            json.dumps({"flags": {"KPACK_TARGET_SPECIFIC_HOSTS": True}})
+        )
+        self.assertNotIn(
+            "gfx94X-dcgpu", build_package.get_all_target_families(cfg.artifacts_dir)
+        )
+        build_package.validate_native_host_components(
+            get_package_info(PKG_FFT), cfg.artifacts_dir
+        )
+        with self.assertRaisesRegex(ValueError, "Use per-selection test tarballs"):
+            build_package.build_package_variants("amdrocm-dnn-test", cfg)
+        manifest.write_text(
+            json.dumps({"flags": {"KPACK_TARGET_SPECIFIC_HOSTS": False}})
+        )
+        self.assertIn(
+            "gfx94X-dcgpu", build_package.get_all_target_families(cfg.artifacts_dir)
+        )
+        build_package.validate_native_host_components(
+            get_package_info("amdrocm-dnn-test"), cfg.artifacts_dir
+        )
+
     @patch.object(build_package, "build_gfxarch_package_variants", return_value=[])
     @patch.object(build_package, "build_simple_package_variants")
     def test_fft_with_staged_artifacts_routes_to_gfxarch(

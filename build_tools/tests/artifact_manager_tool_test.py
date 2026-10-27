@@ -846,6 +846,9 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
         self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
         self._create_staged_artifact("test-artifact", "lib", "gfx942")
 
+        for target in ["gfx94X-dcgpu", "gfx942", "gfx950-dcgpu", "gfx950"]:
+            self._create_staged_artifact("test-artifact", "test", target)
+
         extract_calls = []
 
         def mock_extract(request):
@@ -888,6 +891,12 @@ class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
             any("gfx942" in k for k in fetched_keys),
             f"Should fetch target archive, got: {fetched_keys}",
         )
+
+        for target in ["gfx94X-dcgpu", "gfx942"]:
+            self.assertTrue(
+                any(f"_test_{target}." in k for k in fetched_keys), fetched_keys
+            )
+        self.assertFalse(any("gfx950" in k for k in fetched_keys), fetched_keys)
 
     def test_fetch_with_semicolon_separated_families(self):
         """Test that --amdgpu-families accepts semicolon-separated values."""

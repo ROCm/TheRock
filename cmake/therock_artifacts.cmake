@@ -248,11 +248,26 @@ function(therock_provide_artifact slice_name)
       set(_unsplit_manifest "${_unsplit_component_dir}/artifact_manifest.txt")
       set(_artifact_prefix "${slice_name}_${_component}")
 
-      # The split output generic manifest (used as dependency tracking output)
-      set(_split_generic_dir "${THEROCK_BINARY_DIR}/artifacts/${_artifact_prefix}_generic")
-      set(_split_manifest "${_split_generic_dir}/artifact_manifest.txt")
+      set(_host_target "generic")
+      set(_remove_stale_host_command)
+      if(THEROCK_FLAG_KPACK_TARGET_SPECIFIC_HOSTS AND
+         _component IN_LIST THEROCK_ARTIFACT_TARGET_SPECIFIC_HOST_COMPONENTS_${slice_name})
+        set(_host_target "${THEROCK_AMDGPU_DIST_BUNDLE_NAME}")
+        if(NOT _host_target OR _host_target STREQUAL "generic")
+          message(FATAL_ERROR "${_artifact_prefix} requires a GPU distribution bundle for its host files")
+        endif()
+        # A reused build tree may still contain the former generic host output.
+        set(_stale_host "${THEROCK_BINARY_DIR}/artifacts/${_artifact_prefix}_generic")
+        set(_remove_stale_host_command
+          COMMAND "${CMAKE_COMMAND}" -E rm -rf
+            "${_stale_host}" "${_stale_host}.tar.xz" "${_stale_host}.tar.zst"
+            "${_stale_host}.tar.xz.sha256sum" "${_stale_host}.tar.zst.sha256sum"
+        )
+      endif()
+      set(_split_host_dir "${THEROCK_BINARY_DIR}/artifacts/${_artifact_prefix}_${_host_target}")
+      set(_split_manifest "${_split_host_dir}/artifact_manifest.txt")
       list(APPEND _split_manifest_files "${_split_manifest}")
-      list(APPEND _split_component_dirs "${_split_generic_dir}")
+      list(APPEND _split_component_dirs "${_split_host_dir}")
 
       # Build split command arguments
       set(_split_command_args
@@ -261,6 +276,9 @@ function(therock_provide_artifact slice_name)
         --artifact-prefix "${_artifact_prefix}"
         --clang-offload-bundler "${_bundler_path}"
       )
+      if(NOT _host_target STREQUAL "generic")
+        list(APPEND _split_command_args --host-artifact-target "${_host_target}")
+      endif()
       if(_split_databases)
         list(APPEND _split_command_args --split-databases ${_split_databases})
       endif()
@@ -270,12 +288,14 @@ function(therock_provide_artifact slice_name)
 
       add_custom_command(
         OUTPUT "${_split_manifest}"
-        COMMENT "Splitting ${_artifact_prefix} into generic and arch-specific artifacts"
+        COMMENT "Splitting ${_artifact_prefix} into host and device artifacts"
         COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
           "${Python3_EXECUTABLE}" "${_split_tool}" ${_split_command_args}
+        ${_remove_stale_host_command}
         DEPENDS
           "${_unsplit_manifest}"
           "${_split_tool}"
+          "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/artifact_splitter.py"
           "${_split_database_handlers}"
         VERBATIM
       )
@@ -315,11 +335,11 @@ function(therock_provide_artifact slice_name)
     # The split command depends on the unsplit manifest, preserving the
     # dependency chain: stage.stamp -> unsplit manifest -> split manifest.
     #
-    # The splitter produces multiple outputs (generic + per-arch artifacts)
-    # but only the generic manifest is tracked here. This means:
+    # The splitter produces multiple outputs (host + per-arch artifacts)
+    # but only the host manifest is tracked here. This means:
     # - Ninja will rebuild split artifacts when source changes
     # - If someone deletes an arch-specific artifact, ninja won't notice
-    #   (the generic manifest still exists)
+    #   (the host manifest still exists)
     # - This is acceptable since arch-specific artifacts are derived outputs
     set(_manifest_files ${_split_manifest_files})
     set(_component_dirs ${_split_component_dirs})

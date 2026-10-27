@@ -75,6 +75,16 @@ class TestIsKpackSplit(unittest.TestCase):
             self._write_manifest(tmpdir, {"KPACK_SPLIT_ARTIFACTS": False})
             self.assertFalse(is_kpack_split(tmpdir))
 
+    def test_host_policy_comes_from_build_manifest(self):
+        from build_tarballs import has_target_specific_test_hosts
+
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as tmpdir:
+                self._write_manifest(
+                    Path(tmpdir), {"KPACK_TARGET_SPECIFIC_HOSTS": enabled}
+                )
+                self.assertEqual(has_target_specific_test_hosts(Path(tmpdir)), enabled)
+
     def test_no_manifest(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.assertFalse(is_kpack_split(Path(tmpdir)))
@@ -155,6 +165,7 @@ class TestMain(unittest.TestCase):
         argv: list[str],
         *,
         kpack_split: bool = False,
+        separate_test_hosts: bool = False,
     ) -> MainMocks:
         patches = [
             mock.patch("build_tarballs.fetch_and_flatten"),
@@ -165,7 +176,10 @@ class TestMain(unittest.TestCase):
         with patches[0] as fetch_mock:
             with patches[1] as compress_mock:
                 with patches[2] as kpack_mock:
-                    with patches[3]:
+                    with patches[3], mock.patch(
+                        "build_tarballs.has_target_specific_test_hosts",
+                        return_value=separate_test_hosts,
+                    ):
                         main(argv)
         return MainMocks(fetch_mock, compress_mock, kpack_mock)
 
@@ -209,6 +223,48 @@ class TestMain(unittest.TestCase):
                         "therock-dist-linux-multiarch-tests-7.13.0.tar.gz",
                     ],
                 )
+
+    def test_target_specific_hosts_keep_test_packages_separate(self) -> None:
+        for selected in (["gfx1250", "gfx1250-strict"], ["gfx1250-strict", "gfx1250"]):
+            with self.subTest(
+                selected=selected
+            ), tempfile.TemporaryDirectory() as tmpdir:
+                families = [*selected, "gfx94X-dcgpu", "gfx950-dcgpu", selected[0]]
+                fetch, compress, _ = self._run_main_with_mocks(
+                    [
+                        "--run-id=123",
+                        f"--dist-amdgpu-families={';'.join(families)}",
+                        "--platform=linux",
+                        "--package-version=7.13.0",
+                        f"--output-dir={tmpdir}",
+                        "--include-test-tarballs",
+                    ],
+                    kpack_split=True,
+                    separate_test_hosts=True,
+                )
+                test_fetches = [
+                    c.kwargs["amdgpu_families"]
+                    for c in fetch.call_args_list
+                    if "exclude_components" not in c.kwargs
+                ]
+                self.assertCountEqual(
+                    test_fetches, [[f] for f in dict.fromkeys(families)]
+                )
+                runtime_fetches = [
+                    c.kwargs["amdgpu_families"]
+                    for c in fetch.call_args_list
+                    if "exclude_components" in c.kwargs
+                ]
+                self.assertEqual(runtime_fetches[0], selected)
+                names = [c.kwargs["tarball_path"].name for c in compress.call_args_list]
+                self.assertNotIn(
+                    "therock-dist-linux-multiarch-tests-7.13.0.tar.gz", names
+                )
+                self.assertIn("therock-dist-linux-multiarch-7.13.0.tar.gz", names)
+                for family in dict.fromkeys(families):
+                    self.assertIn(
+                        f"therock-dist-linux-{family}-tests-7.13.0.tar.gz", names
+                    )
 
     def test_default_builds_tarballs_without_tests_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

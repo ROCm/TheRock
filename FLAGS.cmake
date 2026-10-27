@@ -47,6 +47,12 @@ therock_declare_flag(
 )
 
 therock_declare_flag(
+  NAME KPACK_TARGET_SPECIFIC_HOSTS
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Experimental: retain build bundles for configuration-dependent host artifacts (CI and test tarballs only)"
+)
+
+therock_declare_flag(
   NAME HIPDNN_ENABLE_SDPA
   DEFAULT_VALUE ON
   DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"

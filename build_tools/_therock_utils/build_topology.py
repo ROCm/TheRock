@@ -128,6 +128,7 @@ class Artifact:
     split_databases: List[str] = field(
         default_factory=list
     )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
+    target_specific_host_components: List[str] = field(default_factory=list)
     test_artifacts: List[str] = field(
         default_factory=list
     )  # Artifacts needed for testing this artifact (e.g., ["core-hiptests"])
@@ -244,6 +245,9 @@ class BuildTopology:
                 disable_processors=artifact_data.get("disable_processors", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
+                target_specific_host_components=artifact_data.get(
+                    "target_specific_host_components", []
+                ),
                 test_artifacts=artifact_data.get("test_artifacts", []),
                 source_paths=artifact_data.get("source_paths") or [artifact_name],
             )
@@ -464,6 +468,18 @@ class BuildTopology:
                 errors.append(
                     f"Artifact '{artifact_name}' has invalid type '{artifact.type}' "
                     f"(expected: {valid_artifact_types})"
+                )
+            host_components = artifact.target_specific_host_components
+            if not isinstance(host_components, list) or any(
+                c not in ("lib", "run", "dev", "dbg", "doc", "test")
+                for c in host_components
+            ):
+                errors.append(
+                    f"Artifact '{artifact_name}' has invalid target_specific_host_components"
+                )
+            if host_components and artifact.type != "target-specific":
+                errors.append(
+                    f"Artifact '{artifact_name}' target_specific_host_components requires target-specific type"
                 )
             if artifact.feature_name and not feature_pattern.match(
                 artifact.feature_name

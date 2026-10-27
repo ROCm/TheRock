@@ -30,6 +30,7 @@ from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, Popula
 from build_python_packages import (
     _artifact_catalog_has_matches,
     _run_kpack_split,
+    run,
     PROFILER_WHEEL_INCLUDES,
     profiler_artifact_filter,
     validate_kpack_split_target_completeness,
@@ -973,6 +974,44 @@ class KpackSplitCompletenessTest(TmpDirTestCase):
             windows_targets=windows_targets,
             platform_name=platform_name,
         )
+
+    def test_test_hosts_do_not_create_device_targets(self):
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "miopen", "lib", "gfx942")
+        self._add_artifact(artifact_dir, "miopen", "test", "gfx94X-dcgpu")
+        self._add_artifact(artifact_dir, "miopen", "test", "gfx950")
+        args = argparse.Namespace(
+            artifact_dir=artifact_dir,
+            dest_dir=self.temp_dir / "packages",
+            linux_amdgpu_families=None,
+            windows_amdgpu_families=None,
+            version="7.13.0",
+            version_suffix="",
+        )
+        for split in (False, True):
+            with self.subTest(split=split), mock.patch(
+                "build_python_packages.load_therock_manifest",
+                return_value={"flags": {"KPACK_SPLIT_ARTIFACTS": split}},
+            ), mock.patch(
+                "build_python_packages.Parameters",
+                side_effect=RuntimeError("captured parameters"),
+            ) as params:
+                with self.assertRaisesRegex(RuntimeError, "captured parameters"):
+                    run(args)
+                catalog = params.call_args.kwargs["artifacts"]
+                expected = {"gfx942"} if split else {"gfx942", "gfx94X-dcgpu", "gfx950"}
+                self.assertEqual(catalog.all_target_families, expected)
+                if split:
+                    with self.assertRaisesRegex(
+                        RuntimeError, "missing fetched artifact targets: gfx950"
+                    ):
+                        self._validate_completeness(
+                            kpack_split=True,
+                            artifacts=catalog,
+                            linux_targets=["gfx942", "gfx950"],
+                            windows_targets=None,
+                            platform_name="linux",
+                        )
 
     def test_linux_completeness_passes_when_targets_match(self):
         artifacts = self._make_artifact_catalog(["gfx1100", "gfx1101"])
