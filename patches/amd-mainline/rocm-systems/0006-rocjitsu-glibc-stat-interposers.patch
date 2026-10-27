@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <safaizal@amd.com>
+Date: Tue, 27 Oct 2026 20:52:26 +0000
+Subject: [PATCH] Avoid competing glibc inline stat definitions in interposers
+
+Disable glibc extern-inline definitions in the two translation units that supply stat-family interposers. Preserve exported ABI and forwarding behavior. Adapt the developer-host fix to the pinned source without importing unrelated runtime changes.
+---
+ .../lib/rocjitsu/src/rocjitsu/kmd/linux/interposer.cpp       | 5 +++++
+ emulation/rocjitsu/tests/host_drm_preload_test.cpp           | 5 +++++
+ 2 files changed, 10 insertions(+)
+
+diff --git a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/interposer.cpp b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/interposer.cpp
+index 693d3983..dbdfd721 100644
+--- a/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/interposer.cpp
++++ b/emulation/rocjitsu/lib/rocjitsu/src/rocjitsu/kmd/linux/interposer.cpp
+@@ -15,6 +15,11 @@
+ /// render-node discovery, GEM buffers, contexts, syncobj fences, and PM4 compute
+ /// submission for the Vulkan userspace driver.
+ 
++// This translation unit defines out-of-line stat-family interposers.
++// Older glibc extern-inline definitions conflict with them when using Clang.
++#include <features.h>
++#undef __USE_EXTERN_INLINES
++
+ #include "rocjitsu/base/rj_compiler.h"
+ #include "rocjitsu/config/dbt_guest_config.h"
+ #include "rocjitsu/kmd/linux/amdgpu_properties.h"
+diff --git a/emulation/rocjitsu/tests/host_drm_preload_test.cpp b/emulation/rocjitsu/tests/host_drm_preload_test.cpp
+index df95499d..f8a4f8ea 100644
+--- a/emulation/rocjitsu/tests/host_drm_preload_test.cpp
++++ b/emulation/rocjitsu/tests/host_drm_preload_test.cpp
+@@ -5,6 +5,11 @@
+ /// @brief Supply a host DRM descriptor identity without requiring a physical GPU.
+ /// @details Loaded after rocjitsu so its RTLD_NEXT stat calls see this identity.
+ 
++// This translation unit defines out-of-line stat-family interposers.
++// Older glibc extern-inline definitions conflict with them when using Clang.
++#include <features.h>
++#undef __USE_EXTERN_INLINES
++
+ #include <dlfcn.h>
+ #include <sys/stat.h>
+ 
+-- 
+2.43.0
+

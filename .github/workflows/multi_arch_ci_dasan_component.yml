@@ -1,0 +1,165 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Experimental DASan component stage
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        type: string
+        required: true
+      baseline_run_id:
+        type: string
+        required: true
+      dependencies_run_id:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  component:
+    name: Build DASan ${{ inputs.stage }} (gfx950)
+    runs-on: aws-linux-scale-rocm-large
+    timeout-minutes: 720
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+      BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+      DEPENDENCIES_RUN_ID: ${{ inputs.dependencies_run_id }}
+      DASAN_STAGE: ${{ inputs.stage }}
+    steps:
+      - name: Checkout DASan branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 10
+        with:
+          persist-credentials: false
+
+      - name: Validate stage and baseline
+        run: |
+          mkdir -p dasan-component-output/build/logs
+          case "${DASAN_STAGE}" in
+            emulation|runtime-tests|comm-libs|cv-libs|storage-libs|debug-tools|dctools-core|profiler-apps|media-libs|hipdnn) ;;
+            *) echo "Unsupported DASan component stage"; exit 1 ;;
+          esac
+          if [[ ! "${BASELINE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "A numeric compiler/runtime baseline_run_id is required"
+            exit 1
+          fi
+          if [[ -n "${DEPENDENCIES_RUN_ID}" && ! "${DEPENDENCIES_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "dependencies_run_id must be empty or numeric"
+            exit 1
+          fi
+          printf 'Stage %s reuses DASan installation from run %s\n' "${DASAN_STAGE}" "${BASELINE_RUN_ID}" \
+            | tee dasan-component-output/build/logs/reuse.log
+          printf 'Optional dependency artifacts from run %s\n' "${DEPENDENCIES_RUN_ID}" \
+            | tee -a dasan-component-output/build/logs/reuse.log
+
+      - name: Install build and upload dependencies
+        run: python -m pip install -r requirements.txt 2>&1 | tee dasan-component-output/build/logs/dependencies.log
+
+      - name: Download baseline DASan installation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        timeout-minutes: 15
+        with:
+          name: dasan-installation-gfx942-gfx950
+          path: dasan-prebuilt
+          run-id: ${{ inputs.baseline_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract baseline DASan installation
+        run: |
+          tar -xJf dasan-prebuilt/therock-dasan-gfx942-gfx950.tar.xz -C dasan-prebuilt \
+            2>&1 | tee dasan-component-output/build/logs/extract.log
+
+      - name: Download reusable DASan dependencies
+        if: ${{ inputs.dependencies_run_id != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        timeout-minutes: 30
+        with:
+          name: dasan-math-libraries-gfx950
+          path: dasan-dependencies
+          run-id: ${{ inputs.dependencies_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Extract dependency artifacts
+        if: ${{ inputs.dependencies_run_id != '' }}
+        run: |
+          tar -xzf dasan-dependencies/dasan-math-artifacts-gfx950.tar.gz -C dasan-dependencies \
+            2>&1 | tee dasan-component-output/build/logs/dependencies-extract.log
+
+      - name: Upload initial component logs to S3
+        run: |
+          python build_tools/github_actions/upload_dasan_logs.py \
+            --output-dir dasan-component-output --stage "${DASAN_STAGE}" --amdgpu-family gfx950
+
+      - name: Build component stage with DASan
+        run: |
+          setsid bash -c '
+            while sleep 60; do
+              python build_tools/github_actions/upload_dasan_logs.py \
+                --output-dir dasan-component-output --stage "${DASAN_STAGE}" --amdgpu-family gfx950 || true
+            done
+          ' > dasan-periodic-upload.log 2>&1 &
+          upload_pid=$!
+          trap 'build_status=$?; trap - EXIT; kill -- "-${upload_pid}" 2>/dev/null || true; wait "${upload_pid}" 2>/dev/null || true; exit "${build_status}"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          dependency_args=()
+          if [[ -n "${DEPENDENCIES_RUN_ID}" ]]; then
+            dependency_args+=(--dependency-artifacts dasan-dependencies/artifacts)
+          fi
+          python build_tools/dasan_component_build.py \
+            --stage "${DASAN_STAGE}" --rocm-path dasan-prebuilt/rocm \
+            --output-dir dasan-component-output --jobs "$(nproc)" --prepare-sources "${dependency_args[@]}"
+
+      - name: Upload component artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-${{ inputs.stage }}-gfx950
+          path: dasan-component-output/dasan-*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Collect component diagnostics
+        if: always()
+        run: |
+          python build_tools/github_actions/collect_dasan_logs.py --output-dir dasan-component-output
+          if [[ -f dasan-periodic-upload.log ]]; then
+            cp dasan-periodic-upload.log dasan-component-output/build/logs/periodic-upload.log
+          fi
+
+      - name: Configure AWS credentials for final log upload
+        if: always()
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      - name: Upload final component logs to S3
+        if: always()
+        run: |
+          python build_tools/github_actions/post_stage_upload.py \
+            --run-id "${GITHUB_RUN_ID}" --stage "${DASAN_STAGE}" \
+            --build-dir dasan-component-output/build --amdgpu-family gfx950
+
+      - name: Upload component logs and provenance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-${{ inputs.stage }}-logs-gfx950
+          path: dasan-component-output/build/logs/
+          if-no-files-found: error
+          retention-days: 14

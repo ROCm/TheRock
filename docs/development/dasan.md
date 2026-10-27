@@ -230,3 +230,38 @@ default fast-unwinder configuration works.
 Expect iterations at source compatibility, compiler-rt installation/packaging,
 and GPU validation boundaries. Preserve source pins, logs, and caches so each
 iteration can target the failing component instead of repeating a full build.
+
+## Additional component stages in cloud CI
+
+Dispatch `multi_arch_ci_asan.yml` on the DASan branch with
+`dasan_component_stage` and a `baseline_run_id` providing
+`dasan-installation-gfx942-gfx950`. Supported stages are `emulation`,
+`runtime-tests`, `comm-libs`, `cv-libs`, `storage-libs`, `debug-tools`,
+`dctools-core`, `profiler-apps`, `media-libs`, and `hipdnn`.
+For example:
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-ci-fix-01a17b04 \
+  -f dasan_component_stage=comm-libs -f baseline_run_id=40443090683 \
+  -f dasan_dependencies_run_id=40545400942
+```
+
+Each stage runs on `aws-linux-scale-rocm-large` in the pinned manylinux image,
+imports the compiler/runtime SDK, and builds missing dependencies for gfx950
+with `THEROCK_SANITIZER=DASAN` (`-fsanitize=daddress`). The SDK probe checks
+host and device links and instrumented device IR before the stage starts.
+The optional `dasan_dependencies_run_id` reuses available dependency artifacts
+from a successful DASan math run. Imports are restricted to the selected stage's
+dependencies; the requested components are built from source.
+These jobs build and package components; they do not execute GPU tests.
+The `runtime-tests` stage compiles its test binaries.
+
+The job uploads merged and split installation archives as
+`dasan-<stage>-gfx950`, with diagnostics in `dasan-<stage>-logs-gfx950`.
+S3 logs are under
+`<run-id>-linux/logs/<stage>/gfx950/` in `therock-ci-artifacts`.
+Periodic uploads obtain fresh short-lived credentials through the job's
+GitHub OIDC identity, and a final upload runs after success or failure.
+Source revisions, configuration, SDK probe results, sanitizer command evidence,
+and final status accompany the build log.

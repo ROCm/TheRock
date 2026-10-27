@@ -8,6 +8,7 @@
 #     used to forward credentials for Quartz notifications.
 
 name: Multi-Arch CI ASAN
+run-name: ${{ inputs.dasan_component_stage && format('DASan {0} (gfx950)', inputs.dasan_component_stage) || github.event.pull_request.title || github.workflow }}
 
 on:
   # TODO: Enable postsubmit ASAN once we have capacity
@@ -24,6 +25,14 @@ on:
         type: boolean
         description: "Build gfx950 math libraries with DASan using the installation from baseline_run_id"
         default: false
+      dasan_component_stage:
+        type: string
+        description: "Additional gfx950 DASan stage: emulation, runtime-tests, comm-libs, cv-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs, or hipdnn"
+        default: ""
+      dasan_dependencies_run_id:
+        type: string
+        description: "Optional successful DASan math run providing reusable dependency artifacts for a component stage"
+        default: ""
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
@@ -77,8 +86,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dasan_component:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_component_stage != '' }}
+    uses: ./.github/workflows/multi_arch_ci_dasan_component.yml
+    with:
+      stage: ${{ inputs.dasan_component_stage }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
+      dependencies_run_id: ${{ inputs.dasan_dependencies_run_id }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
   dasan:
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_component_stage == '' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
     uses: ./.github/workflows/multi_arch_ci_dasan.yml
     with:
       math_libraries: ${{ inputs.dasan_math_libraries }}
@@ -89,7 +110,7 @@ jobs:
       id-token: write
 
   setup:
-    if: ${{ !inputs.enable_dasan && !inputs.dasan_math_libraries }}
+    if: ${{ !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
@@ -123,7 +144,7 @@ jobs:
 
   ci_asan_summary:
     name: CI ASAN Summary
-    if: ${{ always() && !inputs.enable_dasan && !inputs.dasan_math_libraries }}
+    if: ${{ always() && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
     needs:
       - setup
       - linux_build_and_test

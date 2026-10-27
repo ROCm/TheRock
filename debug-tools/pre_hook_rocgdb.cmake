@@ -7,10 +7,13 @@
 # flags into CMAKE_*_LINKER_FLAGS here so sanitizer runs work end-to-end.
 if(THEROCK_SANITIZER STREQUAL "ASAN" OR
    THEROCK_SANITIZER STREQUAL "HOST_ASAN" OR
-   THEROCK_SANITIZER STREQUAL "TSAN")
+   THEROCK_SANITIZER STREQUAL "TSAN" OR
+   THEROCK_SANITIZER STREQUAL "DASAN")
   set(_sanitizer_string "address")
   if(THEROCK_SANITIZER STREQUAL "TSAN")
     set(_sanitizer_string "thread")
+  elseif(THEROCK_SANITIZER STREQUAL "DASAN")
+    set(_sanitizer_string "daddress")
   endif()
   foreach(_var CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
     string(APPEND ${_var} " -fsanitize=${_sanitizer_string} -shared-libsan")

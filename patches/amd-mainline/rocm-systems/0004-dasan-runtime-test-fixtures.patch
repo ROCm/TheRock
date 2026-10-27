@@ -1,0 +1,163 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <safaizal@amd.com>
+Date: Tue, 27 Oct 2026 20:52:26 +0000
+Subject: [PATCH] Instrument custom HIP runtime and debug-agent test fixtures
+
+Forward DASan to custom compiler commands and use compatible code-object v6 for ordinary module fixtures. SPIR-V fixtures explicitly remain uninstrumented because the compiler does not support daddress for that target. No test assertions or deliberate old-ABI conformance fixtures are removed.
+---
+ projects/hip-tests/catch/CMakeLists.txt         |  5 +++++
+ .../catch/unit/c_compilation/CMakeLists.txt     |  8 ++++++--
+ .../hip-tests/catch/unit/module/CMakeLists.txt  | 17 ++++++++++++-----
+ .../hip-tests/catch/unit/oob/CMakeLists.txt     |  9 ++++++++-
+ projects/rocr-debug-agent/test/CMakeLists.txt   |  4 ++++
+ 5 files changed, 35 insertions(+), 8 deletions(-)
+
+diff --git a/projects/hip-tests/catch/CMakeLists.txt b/projects/hip-tests/catch/CMakeLists.txt
+index 3d248ba9..5844243e 100644
+--- a/projects/hip-tests/catch/CMakeLists.txt
++++ b/projects/hip-tests/catch/CMakeLists.txt
+@@ -306,6 +306,11 @@ list(FILTER HIP_DEVICE_BUILD_FLAGS_NO_ARCH EXCLUDE REGEX "--offload-arch=")
+ 
+ # SPIR-V does not support ASan, so the ASan-related flags have to be removed.
+ set(HIP_DEVICE_BUILD_FLAGS_NO_ARCH_NO_ASAN ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH})
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  # Clang ignores daddress for SPIR-V: these fixtures are explicitly uninstrumented.
++  list(FILTER HIP_DEVICE_BUILD_FLAGS_NO_ARCH_NO_ASAN EXCLUDE REGEX "^-fsanitize=daddress$")
++  message(STATUS "DASAN: SPIR-V device fixtures are built without instrumentation")
++endif()
+ if(NOT ENABLE_SANITIZER STREQUAL "OFF")
+   hip_tests_sanitizer_drop_device_flags(HIP_DEVICE_BUILD_FLAGS_NO_ARCH_NO_ASAN)
+ endif()
+diff --git a/projects/hip-tests/catch/unit/c_compilation/CMakeLists.txt b/projects/hip-tests/catch/unit/c_compilation/CMakeLists.txt
+index b6c522e8..0ec8d30d 100644
+--- a/projects/hip-tests/catch/unit/c_compilation/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/c_compilation/CMakeLists.txt
+@@ -16,9 +16,13 @@ else()
+ endif()
+ 
+ # Creating Custom object file
++set(_devprop_sanitizer_flags)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  list(APPEND _devprop_sanitizer_flags -fsanitize=daddress -fno-omit-frame-pointer)
++endif()
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(devprop_c_custom
+-    COMMAND ${CMAKE_C_COMPILER}
++    COMMAND ${CMAKE_C_COMPILER} ${_devprop_sanitizer_flags}
+             -c -Wno-deprecated-declarations -x c ${CMAKE_CURRENT_SOURCE_DIR}/hipGetDeviceProp.c
+             -I${HIP_INCLUDE_DIR}
+             -D${PLATFORM_DEFINE}
+@@ -27,7 +31,7 @@ if (HIP_PLATFORM MATCHES "amd")
+ )
+ else()
+   add_custom_target(devprop_c_custom
+-    COMMAND ${CMAKE_C_COMPILER}
++    COMMAND ${CMAKE_C_COMPILER} ${_devprop_sanitizer_flags}
+             -c -Wno-deprecated-declarations -x c ${CMAKE_CURRENT_SOURCE_DIR}/hipGetDeviceProp.c
+             -D${PLATFORM_DEFINE}
+             -I${HIP_INCLUDE_DIR}
+diff --git a/projects/hip-tests/catch/unit/module/CMakeLists.txt b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+index b3fa9d7d..307b4407 100644
+--- a/projects/hip-tests/catch/unit/module/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+@@ -2,6 +2,13 @@
+ #
+ # SPDX-License-Identifier: MIT
+ 
++# Ordinary module-loading fixtures use the DASan runtime's ABI when instrumented.
++# This configuration does not exercise compatibility with code object v5.
++set(HIP_TEST_CODE_OBJECT_VERSION 5)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  set(HIP_TEST_CODE_OBJECT_VERSION 6)
++endif()
++
+ # Common Tests - Test independent of all platforms
+ set(TEST_SRC
+     hip_module_common.cc
+@@ -202,7 +209,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   endif()
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -221,7 +228,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     list(GET OFFLOAD_ARCH_LIST 0 COPYKERNEL_S_OFFLOAD_ARCH)
+   endif()
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${COPYKERNEL_S_OFFLOAD_ARCH} -mcode-object-version=5 --cuda-device-only -S -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${COPYKERNEL_S_OFFLOAD_ARCH} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --cuda-device-only -S -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                   -I${CMAKE_CURRENT_SOURCE_DIR}/../../include
+@@ -230,7 +237,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   add_custom_target(copyKernel_s DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/addKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only -x hip
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --cuda-device-only -x hip
+                   ${CMAKE_CURRENT_SOURCE_DIR}/addKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/addKernel.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -268,7 +275,7 @@ if(HIP_PLATFORM MATCHES "amd")
+ 
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernelCompressed.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --offload-compress --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --offload-compress --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernelCompressed.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -312,7 +319,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   add_custom_target(copyKernelGenericTargetCompressed_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTargetCompressed.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/anyOrderLaunch.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/anyOrderLaunch.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/anyOrderLaunch.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/oob/CMakeLists.txt b/projects/hip-tests/catch/unit/oob/CMakeLists.txt
+index 4057db57..61062374 100644
+--- a/projects/hip-tests/catch/unit/oob/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/oob/CMakeLists.txt
+@@ -1,3 +1,10 @@
++# Ordinary module-loading fixtures use the DASan runtime's ABI when instrumented.
++# This configuration does not exercise compatibility with code object v5.
++set(HIP_TEST_CODE_OBJECT_VERSION 5)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  set(HIP_TEST_CODE_OBJECT_VERSION 6)
++endif()
++
+ set(TEST_SRC
+     oob_module.cc)
+ 
+@@ -23,7 +30,7 @@ add_custom_target(gen_oob_kernel DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/oob_kernel.
+ # All fixtures install flat into one directory (see packaging/CMakeLists.txt), so
+ # the oob-prefixed name avoids colliding with module's copyKernelCompressed.code.
+ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/oob_copyKernelCompressed.code
+-                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --offload-compress --cuda-device-only
++                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=${HIP_TEST_CODE_OBJECT_VERSION} --offload-compress --cuda-device-only
+                 -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                 -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                 -o ${CMAKE_CURRENT_BINARY_DIR}/oob_copyKernelCompressed.code
+diff --git a/projects/rocr-debug-agent/test/CMakeLists.txt b/projects/rocr-debug-agent/test/CMakeLists.txt
+index 041d76d0..22b0b710 100644
+--- a/projects/rocr-debug-agent/test/CMakeLists.txt
++++ b/projects/rocr-debug-agent/test/CMakeLists.txt
+@@ -142,6 +142,10 @@ set(HIP_FLAGS
+     -O3
+     --cuda-device-only
+ )
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++    # Custom HIP fatbinary commands do not inherit CMAKE_HIP_FLAGS.
++    list(APPEND HIP_FLAGS -fsanitize=daddress -g -mcode-object-version=6)
++endif()
+ 
+ # This is needed because some debug agent tests rely on looking up the source
+ # files through DWARF entries. Since the test files and executable may be
+-- 
+2.43.0
+

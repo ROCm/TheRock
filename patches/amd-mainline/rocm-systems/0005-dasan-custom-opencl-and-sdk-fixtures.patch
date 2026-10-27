@@ -1,0 +1,239 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <safaizal@amd.com>
+Date: Tue, 27 Oct 2026 20:52:26 +0000
+Subject: [PATCH] Propagate DASan into custom OpenCL and profiler fixture
+ builds
+
+Custom commands bypass CMake language flags. Propagate instrumentation with the compatible device ABI under DASAN, and forward HIP toolchain flags to the SDK DWARF fixture while emitting its GPU ELF directly. This fixes the compiler bundle-triple mismatch without changing the fixture assertions.
+---
+ projects/aqlprofile/test/CMakeLists.txt       |  4 +++
+ .../counters/tests/CMakeLists.txt             |  4 +++
+ .../source/lib/tests/codeobj/CMakeLists.txt   | 25 ++++++-------------
+ .../tests/bin/hsa-code-object/CMakeLists.txt  |  4 +++
+ .../bin/hsa-queue-dependency/CMakeLists.txt   |  4 +++
+ projects/rocprofiler/test/CMakeLists.txt      |  4 +++
+ .../featuretests/profiler/CMakeLists.txt      |  4 +++
+ .../rocrtst/suites/test_common/CMakeLists.txt | 10 ++++++++
+ .../hsa-runtime/image/blit_src/CMakeLists.txt |  4 +++
+ projects/roctracer/test/CMakeLists.txt        | 13 ++++++++++
+ 10 files changed, 59 insertions(+), 17 deletions(-)
+
+diff --git a/projects/aqlprofile/test/CMakeLists.txt b/projects/aqlprofile/test/CMakeLists.txt
+index b7ded020..cfe6f3d0 100644
+--- a/projects/aqlprofile/test/CMakeLists.txt
++++ b/projects/aqlprofile/test/CMakeLists.txt
+@@ -56,6 +56,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
+     "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++  # Custom OpenCL commands do not inherit the CMake language flags.
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++  endif()
+   add_custom_command(OUTPUT ${TEST_BINARY_DIR}/${OUTPUT_FILE}
+     COMMAND clang ${CLANG_ARG_LIST}
+     WORKING_DIRECTORY ${TEST_BINARY_DIR}
+diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/counters/tests/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/counters/tests/CMakeLists.txt
+index 68c52a44..7232425f 100644
+--- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/counters/tests/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/counters/tests/CMakeLists.txt
+@@ -17,6 +17,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+         UNIX_COMMAND
+         "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++    # Custom OpenCL commands do not inherit CMake's C/CXX sanitizer flags.
++    if(THEROCK_SANITIZER STREQUAL "DASAN")
++        list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++    endif()
+     add_custom_command(
+         OUTPUT ${PROJECT_BINARY_DIR}/${OUTPUT_FILE}
+         COMMAND ${amdclangpp_EXECUTABLE} ${CLANG_ARG_LIST}
+diff --git a/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt
+index 71428c38..a932725b 100644
+--- a/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt
+@@ -20,8 +20,8 @@ target_compile_definitions(
+ configure_file(smallkernel.bin smallkernel.bin COPYONLY)
+ configure_file(hipcc_output.s hipcc_output.s COPYONLY)
+ 
+-# Compile a HIP kernel with debug info to test DWARF inline annotation. Two-step: compile
+-# to offload bundle, then unbundle to get the GPU ELF.
++# Compile a HIP kernel with debug info to test DWARF inline annotation. Emit
++# the GPU ELF directly so this is independent of the offload bundle triple.
+ find_program(
+     CODEOBJ_AMDCLANGPP REQUIRED
+     NAMES amdclang++
+@@ -29,30 +29,21 @@ find_program(
+     PATHS ${ROCM_PATH} ENV ROCM_PATH /opt/rocm
+     PATH_SUFFIXES bin llvm/bin NO_CACHE)
+ 
+-find_program(
+-    CODEOBJ_OFFLOAD_BUNDLER REQUIRED
+-    NAMES clang-offload-bundler
+-    HINTS ${ROCM_PATH} ENV ROCM_PATH /opt/rocm
+-    PATHS ${ROCM_PATH} ENV ROCM_PATH /opt/rocm
+-    PATH_SUFFIXES bin llvm/bin NO_CACHE)
+-
+ # The arch only matters for compilation, not execution -- the test only parses DWARF debug
+ # info from the resulting ELF.  Any valid arch works here.
+ set(_SYNCKERNEL_ARCH "gfx90a")
+ set(_SYNCKERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/syncthreads_kernel.hip")
+-set(_SYNCKERNEL_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/syncthreads_kernel_bundle.o")
+ set(_SYNCKERNEL_BIN "${CMAKE_CURRENT_BINARY_DIR}/syncthreads_kernel.bin")
++# Include toolchain options such as --hip-path and sanitizer instrumentation.
++# Custom commands do not inherit the CMake language flags automatically.
++separate_arguments(_SYNCKERNEL_CXX_FLAGS NATIVE_COMMAND "${CMAKE_CXX_FLAGS}")
+ 
+ add_custom_command(
+     OUTPUT "${_SYNCKERNEL_BIN}"
+     COMMAND
+-        ${CODEOBJ_AMDCLANGPP} -x hip -ggdb --offload-arch=${_SYNCKERNEL_ARCH}
+-        --offload-device-only -c -fno-gpu-rdc -o "${_SYNCKERNEL_BUNDLE}"
+-        "${_SYNCKERNEL_SRC}"
+-    COMMAND
+-        ${CODEOBJ_OFFLOAD_BUNDLER} --type=o --input=${_SYNCKERNEL_BUNDLE}
+-        --output=${_SYNCKERNEL_BIN} --unbundle
+-        --targets=hipv4-amdgcn-amd-amdhsa--${_SYNCKERNEL_ARCH}
++        ${CODEOBJ_AMDCLANGPP} ${_SYNCKERNEL_CXX_FLAGS} -x hip -ggdb
++        --offload-arch=${_SYNCKERNEL_ARCH} --offload-device-only -c -fno-gpu-rdc
++        --no-gpu-bundle-output -o "${_SYNCKERNEL_BIN}" "${_SYNCKERNEL_SRC}"
+     DEPENDS "${_SYNCKERNEL_SRC}"
+     COMMENT
+         "Compiling syncthreads_kernel.hip -> syncthreads_kernel.bin (${_SYNCKERNEL_ARCH})"
+diff --git a/projects/rocprofiler-sdk/tests/bin/hsa-code-object/CMakeLists.txt b/projects/rocprofiler-sdk/tests/bin/hsa-code-object/CMakeLists.txt
+index 117bffc0..77e55f64 100644
+--- a/projects/rocprofiler-sdk/tests/bin/hsa-code-object/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/tests/bin/hsa-code-object/CMakeLists.txt
+@@ -44,6 +44,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+         UNIX_COMMAND
+         "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++    # Custom OpenCL commands do not inherit the CMake language flags.
++    if(THEROCK_SANITIZER STREQUAL "DASAN")
++        list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++    endif()
+     add_custom_command(
+         OUTPUT ${PROJECT_BINARY_DIR}/${OUTPUT_FILE}
+         COMMAND ${amdclangpp_EXECUTABLE} ${CLANG_ARG_LIST}
+diff --git a/projects/rocprofiler-sdk/tests/bin/hsa-queue-dependency/CMakeLists.txt b/projects/rocprofiler-sdk/tests/bin/hsa-queue-dependency/CMakeLists.txt
+index 1c81e89b..7a753b4f 100644
+--- a/projects/rocprofiler-sdk/tests/bin/hsa-queue-dependency/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/tests/bin/hsa-queue-dependency/CMakeLists.txt
+@@ -23,6 +23,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+         UNIX_COMMAND
+         "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++    # Custom OpenCL commands do not inherit the CMake language flags.
++    if(THEROCK_SANITIZER STREQUAL "DASAN")
++        list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++    endif()
+     add_custom_command(
+         OUTPUT ${PROJECT_BINARY_DIR}/${OUTPUT_FILE}
+         COMMAND ${amdclangpp_EXECUTABLE} ${CLANG_ARG_LIST}
+diff --git a/projects/rocprofiler/test/CMakeLists.txt b/projects/rocprofiler/test/CMakeLists.txt
+index 33d92f90..b3b6b40a 100644
+--- a/projects/rocprofiler/test/CMakeLists.txt
++++ b/projects/rocprofiler/test/CMakeLists.txt
+@@ -120,6 +120,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+         "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 --hip-device-lib-path=${ROCM_ROOT_DIR}/amdgcn/bitcode
+     -Wl,--build-id=sha1 -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -mcode-object-version=4 -o ${OUTPUT_FILE} ${INPUT_FILE}"
+         )
++    # Custom OpenCL commands do not inherit the CMake language flags.
++    if(THEROCK_SANITIZER STREQUAL "DASAN")
++        list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++    endif()
+     add_custom_command(
+         OUTPUT ${PROJECT_BINARY_DIR}/${OUTPUT_FILE}
+         COMMAND clang ${CLANG_ARG_LIST}
+diff --git a/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt b/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
+index e78f1e53..092c8dac 100644
+--- a/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
++++ b/projects/rocprofiler/tests-v2/featuretests/profiler/CMakeLists.txt
+@@ -292,6 +292,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+         UNIX_COMMAND
+         "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++    # Custom OpenCL commands do not inherit the CMake language flags.
++    if(THEROCK_SANITIZER STREQUAL "DASAN")
++        list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++    endif()
+     add_custom_command(
+         OUTPUT ${PROJECT_BINARY_DIR}/tests-v2/featuretests/profiler/${OUTPUT_FILE}
+         COMMAND clang ${CLANG_ARG_LIST}
+diff --git a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
+index d1c8b96a..edf3eefa 100644
+--- a/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
++++ b/projects/rocr-runtime/rocrtst/suites/test_common/CMakeLists.txt
+@@ -476,6 +476,11 @@ function(build_kernel S_NAME TARG_DEV)
+   string(SUBSTRING ${TARG_DEV} 3 -1 gfxNum)
+   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
+     "-D ROCRTST_GPU=0x${gfxNum} -x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}/opencl-c.h -mcpu=${TARG_DEV} ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} -mcode-object-version=4 ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
++  # The DASan device runtime uses code object v6; custom OpenCL commands
++  # do not otherwise inherit the CMake language flags.
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++  endif()
+   add_custom_command(OUTPUT "${KERNEL_DIR}/${SNAME_KERNEL}" COMMAND ${CLANG} ${CLANG_ARG_LIST} DEPENDS ${CL_FILE_LIST} ${CLANG} COMMENT "BUILDING ${KERNEL_DIR}/${SNAME_KERNEL}" VERBATIM)
+ endfunction(build_kernel)
+ 
+@@ -495,6 +500,11 @@ function(build_kernel_kernarg_preload S_NAME TARG_DEV)
+   string(SUBSTRING ${TARG_DEV} 3 -1 gfxNum)
+   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
+     "-D ROCRTST_GPU=0x${gfxNum} -x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}/opencl-c.h -mcpu=${TARG_DEV} ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} -mcode-object-version=4 -mllvm -amdgpu-kernarg-preload-count=16 ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
++  # The DASan device runtime uses code object v6; custom OpenCL commands
++  # do not otherwise inherit the CMake language flags.
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++  endif()
+   add_custom_command(OUTPUT "${KERNEL_DIR}/${SNAME_KERNEL}" COMMAND ${CLANG} ${CLANG_ARG_LIST} DEPENDS ${CL_FILE_LIST} ${CLANG} COMMENT "BUILDING ${KERNEL_DIR}/${SNAME_KERNEL}" VERBATIM)
+ endfunction(build_kernel_kernarg_preload)
+ 
+diff --git a/projects/rocr-runtime/runtime/hsa-runtime/image/blit_src/CMakeLists.txt b/projects/rocr-runtime/runtime/hsa-runtime/image/blit_src/CMakeLists.txt
+index c9430146..06092960 100644
+--- a/projects/rocr-runtime/runtime/hsa-runtime/image/blit_src/CMakeLists.txt
++++ b/projects/rocr-runtime/runtime/hsa-runtime/image/blit_src/CMakeLists.txt
+@@ -76,6 +76,10 @@ function(gen_kernel_bc TARGET_ID INPUT_FILE OUTPUT_FILE)
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -mcode-object-version=4 ${WIN_CL_COMPILE_OPTION}
+     -o ${OUTPUT_FILE} ${INPUT_FILE}")
+ 
++  # Custom OpenCL commands do not inherit the CMake language flags.
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++  endif()
+   ## Add custom command to produce a code object file.
+   ## This depends on the kernel source file & compiler.
+   add_custom_command(OUTPUT ${OUTPUT_FILE} COMMAND clang ${CLANG_ARG_LIST}
+diff --git a/projects/roctracer/test/CMakeLists.txt b/projects/roctracer/test/CMakeLists.txt
+index 95563d5b..6fb20d44 100644
+--- a/projects/roctracer/test/CMakeLists.txt
++++ b/projects/roctracer/test/CMakeLists.txt
+@@ -33,6 +33,15 @@ if(DEFINED ROCM_PATH)
+     set(HIP_ROOT_DIR "${ROCM_PATH}/bin")
+ endif()
+ find_package(HIP REQUIRED MODULE)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  # FindHIP's generated hipcc scripts do not inherit CMAKE_CXX/HIP_FLAGS.
++  list(APPEND HIP_HIPCC_FLAGS -fsanitize=daddress -g)
++  string(REPLACE "," ";" _dasan_gpu_targets "${GPU_TARGETS}")
++  string(REPLACE " " ";" _dasan_gpu_targets "${_dasan_gpu_targets}")
++  foreach(_target IN LISTS _dasan_gpu_targets)
++    list(APPEND HIP_HIPCC_FLAGS "--offload-arch=${_target}")
++  endforeach()
++endif()
+ 
+ find_package(Clang REQUIRED CONFIG
+              PATHS "${ROCM_PATH}"
+@@ -91,6 +100,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
+     "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
+     -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
++  # Custom OpenCL commands do not inherit the CMake language flags.
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND CLANG_ARG_LIST -fsanitize=daddress -g -mcode-object-version=6)
++  endif()
+   add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${OUTPUT_FILE}
+     COMMAND clang ${CLANG_ARG_LIST}
+     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+-- 
+2.43.0
+

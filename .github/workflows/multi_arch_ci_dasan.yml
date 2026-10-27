@@ -179,10 +179,8 @@ jobs:
           # in-flight upload before the final, blocking log upload runs.
           setsid bash -c '
             while sleep 60; do
-              python build_tools/github_actions/collect_dasan_logs.py --output-dir dasan-math-output &&
-                python build_tools/github_actions/post_stage_upload.py \
-                  --run-id "${GITHUB_RUN_ID}" --stage math-libs \
-                  --build-dir dasan-math-output/build --amdgpu-family gfx950 || true
+              python build_tools/github_actions/upload_dasan_logs.py \
+                --output-dir dasan-math-output --stage math-libs --amdgpu-family gfx950 || true
             done
           ' > dasan-periodic-upload.log 2>&1 &
           upload_pid=$!

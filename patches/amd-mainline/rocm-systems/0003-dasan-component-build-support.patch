@@ -1,0 +1,304 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <safaizal@amd.com>
+Date: Tue, 27 Oct 2026 20:52:26 +0000
+Subject: [PATCH] Preserve DASan instrumentation in component build paths
+
+Use the compiler-managed RCCL device link, preserve RDC toolchain flags and rebuild selected RDC kernels, instrument rocSHMEM exported device bitcode, and accept DASAN in rocprofiler-compute. Device and debug workarounds are scoped to DASAN; existing modes retain their paths. Ported from recorded developer-host build fixes.
+---
+ projects/rccl/CMakeLists.txt                  | 10 ++++++
+ projects/rdc/CMakeLists.txt                   | 11 +++---
+ projects/rdc/rdc_libs/CMakeLists.txt          | 34 ++++++++++++++++++-
+ projects/rocprofiler-compute/README.md        |  2 +-
+ .../cmake/sanitizers.cmake                    |  9 +++--
+ .../docs/install/source-install.rst           |  6 +++-
+ projects/rocshmem/cmake/DeviceBitcode.cmake   |  8 ++++-
+ .../CMakeDeviceBitcodeTester.cmake            | 33 ++++++++++++++++--
+ .../tests/functional_tests/CMakeLists.txt     |  8 +++++
+ 9 files changed, 106 insertions(+), 15 deletions(-)
+
+diff --git a/projects/rccl/CMakeLists.txt b/projects/rccl/CMakeLists.txt
+index 5573beb0..cd6892f0 100644
+--- a/projects/rccl/CMakeLists.txt
++++ b/projects/rccl/CMakeLists.txt
+@@ -103,6 +103,16 @@ endif()
+ option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
+ option(ENABLE_NET_PROFILING                    "Emit NET_IB/NET_SOCK profiler events"          OFF)
+ option(ENABLE_DEVICE_LINKER                    "Build with assembly-extract device linker"     ON)
++# The assembly-extract pipeline bypasses the Clang device link, including its
++# DASan runtime library and kernel metadata handling. Use the compiler-managed
++# relocatable-device-code pipeline so every device unit retains instrumentation.
++if(THEROCK_SANITIZER STREQUAL "DASAN" OR CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*daddress")
++  if(ENABLE_DEVICE_LINKER)
++    message(STATUS "DASAN: disabling assembly-extract device linker; using Clang -fgpu-rdc")
++    # Preserve the user's cached preference for subsequent non-DASan builds.
++    set(ENABLE_DEVICE_LINKER OFF)
++  endif()
++endif()
+ option(EMIT_LLVM_IR                            "Emit LLVM IR/bitcode for nccl_device APIs"     OFF)
+ option(DISABLE_KERNARG_PRELOAD                 "Disable amdgpu-kernarg-preload-count compile/link flag" OFF)
+ option(BUILD_NCCL4PY                           "Build the nccl4py Python bindings wheel"       OFF)
+diff --git a/projects/rdc/CMakeLists.txt b/projects/rdc/CMakeLists.txt
+index a9f87840..9181d25b 100755
+--- a/projects/rdc/CMakeLists.txt
++++ b/projects/rdc/CMakeLists.txt
+@@ -59,11 +59,6 @@ set_property(
+     PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel"
+ )
+ 
+-# Set compile flags
+-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+-    string(APPEND CMAKE_CXX_FLAGS " -m64 -msse -msse2")
+-endif()
+ set(CMAKE_CXX_FLAGS_DEBUG
+     "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -DDEBUG"
+     CACHE STRING
+@@ -162,6 +157,12 @@ set(CMAKE_INSTALL_MESSAGE LAZY)
+ # this must go after some CMAKE_* variables
+ project(${RDC} VERSION "${VERSION_STRING}" HOMEPAGE_URL "https://github.com/RadeonOpenCompute/rdc")
+ 
++# Append project warnings after project() initializes toolchain flags and the target processor.
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
++    string(APPEND CMAKE_CXX_FLAGS " -m64 -msse -msse2")
++endif()
++
+ # Include CMAKE_INSTALL_* variables
+ # this must go after project()
+ include(GNUInstallDirs)
+diff --git a/projects/rdc/rdc_libs/CMakeLists.txt b/projects/rdc/rdc_libs/CMakeLists.txt
+index 8a46669b..2e20ad5b 100755
+--- a/projects/rdc/rdc_libs/CMakeLists.txt
++++ b/projects/rdc/rdc_libs/CMakeLists.txt
+@@ -132,9 +132,41 @@ install(
+ # Don't print kernel install because it floods the terminal
+ set(OLD_CMAKE_INSTALL_MESSAGE ${CMAKE_INSTALL_MESSAGE})
+ set(CMAKE_INSTALL_MESSAGE NEVER)
++# Prebuilt kernels cannot acquire sanitizer instrumentation at install time.
++# Rebuild only the selected GPU targets for DASan instead of shipping unsanitized
++# code objects for architectures outside this build.
++set(RDC_KERNEL_INSTALL_DIR "${SRC_DIR}/rdc_modules/kernels/hsaco")
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++    if(NOT GPU_TARGETS)
++        message(FATAL_ERROR "DASAN RDC kernel builds require GPU_TARGETS")
++    endif()
++    find_package(AMDDeviceLibs REQUIRED CONFIG)
++    set(RDC_KERNEL_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/hsaco")
++    set(_rdc_kernel_outputs)
++    foreach(_gpu IN LISTS GPU_TARGETS)
++        foreach(_kernel binary_search_kernels gpuReadWrite_kernels)
++            set(_source "${SRC_DIR}/rdc_modules/kernels/${_kernel}.cl")
++            set(_output "${RDC_KERNEL_INSTALL_DIR}/${_gpu}/${_kernel}.hsaco")
++            add_custom_command(
++                OUTPUT "${_output}"
++                COMMAND ${CMAKE_COMMAND} -E make_directory "${RDC_KERNEL_INSTALL_DIR}/${_gpu}"
++                COMMAND "${CMAKE_CXX_COMPILER}" -x cl -target amdgcn-amd-amdhsa
++                        "-mcpu=${_gpu}" -cl-std=CL2.0 -O2 -g
++                        "--hip-device-lib-path=${AMD_DEVICE_LIBS_PREFIX}/amdgcn/bitcode"
++                        -fsanitize=daddress -mcode-object-version=6
++                        "${_source}" -o "${_output}"
++                DEPENDS "${_source}" "${CMAKE_CXX_COMPILER}"
++                COMMENT "Building DASan RDC kernel ${_kernel} for ${_gpu}"
++                VERBATIM
++            )
++            list(APPEND _rdc_kernel_outputs "${_output}")
++        endforeach()
++    endforeach()
++    add_custom_target(rdc_dasan_kernels ALL DEPENDS ${_rdc_kernel_outputs})
++endif()
+ # Install the kernel files
+ install(
+-    DIRECTORY ${SRC_DIR}/rdc_modules/kernels/hsaco
++    DIRECTORY "${RDC_KERNEL_INSTALL_DIR}"
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}/${RDC}
+     COMPONENT ${CLIENT_COMPONENT}
+ )
+diff --git a/projects/rocprofiler-compute/README.md b/projects/rocprofiler-compute/README.md
+index 4e034b0e..2e96dc44 100644
+--- a/projects/rocprofiler-compute/README.md
++++ b/projects/rocprofiler-compute/README.md
+@@ -78,7 +78,7 @@ Common CMake options:
+ - `-D INSTALL_TESTS=ON` - Install test files and test suite
+ - `-D ENABLE_COVERAGE=ON` - Enable code coverage reporting
+ - `-D TEST_FROM_INSTALL=ON` - Enable testing from installation directory instead of build directory
+-- `-D ENABLE_SANITIZER=ASAN|HOST_ASAN|TSAN` - Build with sanitizer instrumentation for development (default OFF)
++- `-D ENABLE_SANITIZER=ASAN|DASAN|HOST_ASAN|TSAN` - Build with sanitizer instrumentation for development (default OFF)
+ 
+ Note that per the above command, build assets will be stored under `build` directory and installed assets will be stored under `install` directory.
+ 
+diff --git a/projects/rocprofiler-compute/cmake/sanitizers.cmake b/projects/rocprofiler-compute/cmake/sanitizers.cmake
+index aadce0dd..d7573d66 100644
+--- a/projects/rocprofiler-compute/cmake/sanitizers.cmake
++++ b/projects/rocprofiler-compute/cmake/sanitizers.cmake
+@@ -11,6 +11,7 @@ function(resolve_sanitizer)
+         ""
+         "OFF"
+         "ASAN"
++        "DASAN"
+         "HOST_ASAN"
+         "TSAN"
+     )
+@@ -65,7 +66,7 @@ function(resolve_sanitizer)
+         set(ENABLE_SANITIZER
+             ""
+             CACHE STRING
+-            "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, or UBSAN"
++            "Sanitizer for the native tool library: OFF, ASAN, DASAN, HOST_ASAN, TSAN, or UBSAN"
+             FORCE
+         )
+     endif()
+@@ -97,6 +98,8 @@ function(enable_sanitizer)
+ 
+     if(ENABLE_SANITIZER STREQUAL "ASAN" OR ENABLE_SANITIZER STREQUAL "HOST_ASAN")
+         set(_flag "address")
++    elseif(ENABLE_SANITIZER STREQUAL "DASAN")
++        set(_flag "daddress")
+     elseif(ENABLE_SANITIZER STREQUAL "TSAN")
+         set(_flag "thread")
+     elseif(ENABLE_SANITIZER STREQUAL "UBSAN")
+@@ -180,11 +183,11 @@ endfunction()
+ set(ENABLE_SANITIZER
+     "OFF"
+     CACHE STRING
+-    "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, or UBSAN"
++    "Sanitizer for the native tool library: OFF, ASAN, DASAN, HOST_ASAN, TSAN, or UBSAN"
+ )
+ set_property(
+     CACHE ENABLE_SANITIZER
+-    PROPERTY STRINGS OFF ASAN HOST_ASAN TSAN UBSAN
++    PROPERTY STRINGS OFF ASAN DASAN HOST_ASAN TSAN UBSAN
+ )
+ 
+ # Drive all three side effects at include time: resolve the selection, rewrite GPU
+diff --git a/projects/rocprofiler-compute/docs/install/source-install.rst b/projects/rocprofiler-compute/docs/install/source-install.rst
+index 3b2337b3..26591252 100644
+--- a/projects/rocprofiler-compute/docs/install/source-install.rst
++++ b/projects/rocprofiler-compute/docs/install/source-install.rst
+@@ -78,7 +78,7 @@ follows.
+ 
+     * - ``ENABLE_SANITIZER``
+       - Builds with sanitizer instrumentation for development.
+-        One of ``OFF`` (default), ``ASAN``, ``HOST_ASAN``, ``TSAN``, or ``UBSAN``. See
++        One of ``OFF`` (default), ``ASAN``, ``DASAN``, ``HOST_ASAN``, ``TSAN``, or ``UBSAN``. See
+         :ref:`sanitizer builds <source-install-sanitizers>`.
+ 
+ .. _core-install-steps:
+@@ -163,6 +163,10 @@ off by default; set ``ENABLE_SANITIZER`` at configure time to one of the followi
+     * - ``ASAN``
+       - AddressSanitizer on both host and device code.
+ 
++    * - ``DASAN``
++      - Device AddressSanitizer using ``-fsanitize=daddress``; requires a DASan-enabled
++        Clang compiler. GPU targets are left unchanged.
++
+     * - ``HOST_ASAN``
+       - AddressSanitizer on host code only; GPU targets are left unchanged.
+ 
+diff --git a/projects/rocshmem/cmake/DeviceBitcode.cmake b/projects/rocshmem/cmake/DeviceBitcode.cmake
+index 1f2c245f..d91f6bcb 100644
+--- a/projects/rocshmem/cmake/DeviceBitcode.cmake
++++ b/projects/rocshmem/cmake/DeviceBitcode.cmake
+@@ -110,7 +110,13 @@ endif()
+ # CMAKE_CXX_FLAGS. The compile below skips the pass pipeline, so this only
+ # marks functions sanitize_address; the asan pass runs in the opt step.
+ set(_BITCODE_OPT_PASSES -O3)
+-if(ASAN)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  # Clang emits sanitize_device_address attributes while passes are disabled.
++  # Run DASan after linking and optimizing to retain instrumentation in the
++  # exported device library. Consumers must also link with -fsanitize=daddress.
++  list(APPEND BITCODE_COMPILE_FLAGS_BASE -fsanitize=daddress -g)
++  set(_BITCODE_OPT_PASSES "-passes=default<O3>,dasan")
++elseif(ASAN)
+   list(APPEND BITCODE_COMPILE_FLAGS_BASE -fsanitize=address)
+   set(_BITCODE_OPT_PASSES "-passes=default<O3>,asan")
+ endif()
+diff --git a/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake b/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
+index 3f305fe9..0fd44ac6 100644
+--- a/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
++++ b/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
+@@ -38,6 +38,26 @@ endif()
+ 
+ set(ALL_TESTER_HSACOS "")
+ 
++set(_TESTER_CODEGEN_FLAGS)
++set(_TESTER_OPT_FLAGS -O3)
++set(_TESTER_DASAN_RUNTIME)
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  # The input IR already carries DASan instrumentation. The raw object/link
++  # steps must preserve its ABI and resolve the device reporting functions.
++  list(APPEND _TESTER_CODEGEN_FLAGS -mcode-object-version=6)
++  # The pinned AMDGPU backend asserts in SILowerSGPRSpills on variable debug
++  # metadata in this merged module. Keep O3 and source line diagnostics while
++  # dropping variable locations only for the custom tester code object.
++  set(_TESTER_OPT_FLAGS "-passes=default<O3>,strip-nonlinetable-debuginfo")
++  execute_process(
++    COMMAND ${LLVM_CLANG} --target=amdgcn-amd-amdhsa --print-file-name=libclang_rt.dasan.a
++    OUTPUT_VARIABLE _TESTER_DASAN_RUNTIME OUTPUT_STRIP_TRAILING_WHITESPACE
++    COMMAND_ERROR_IS_FATAL ANY)
++  if(NOT IS_ABSOLUTE "${_TESTER_DASAN_RUNTIME}" OR NOT EXISTS "${_TESTER_DASAN_RUNTIME}")
++    message(FATAL_ERROR "device_bitcode_tester: DASan device runtime not found")
++  endif()
++endif()
++
+ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+   set(KERNEL_BC  ${CMAKE_CURRENT_BINARY_DIR}/device_bitcode_tester_kernel_${GPU_ARCH}.bc)
+   set(LINKED_BC  ${CMAKE_CURRENT_BINARY_DIR}/device_bitcode_tester_kernel_${GPU_ARCH}_linked.bc)
+@@ -101,7 +121,7 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+   add_custom_command(
+     OUTPUT ${LINKED_BC}
+     COMMAND ${LLVM_OPT}
+-      -O3
++      ${_TESTER_OPT_FLAGS}
+       -mtriple=amdgcn-amd-amdhsa
+       -mcpu=${GPU_ARCH}
+       ${_UNOPT_BC}
+@@ -118,6 +138,7 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+       -mcpu=${GPU_ARCH}
+       -mllvm -amdgpu-internalize-symbols=false
+       -x ir
++      ${_TESTER_CODEGEN_FLAGS}
+       -c ${LINKED_BC}
+       -o ${OBJ_FILE}
+ 
+@@ -126,10 +147,16 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+     VERBATIM
+   )
+ 
++  set(_TESTER_LINK_FLAGS)
++  if(THEROCK_SANITIZER STREQUAL "DASAN")
++    list(APPEND _TESTER_LINK_FLAGS --no-undefined "--plugin-opt=mcpu=${GPU_ARCH}"
++      --whole-archive "${_TESTER_DASAN_RUNTIME}" --no-whole-archive)
++  endif()
++
+   add_custom_command(
+     OUTPUT ${HSACO_FILE}
+-    COMMAND ${LLVM_LLD} -shared ${OBJ_FILE} -o ${HSACO_FILE}
+-    DEPENDS ${OBJ_FILE}
++    COMMAND ${LLVM_LLD} -shared ${OBJ_FILE} ${_TESTER_LINK_FLAGS} -o ${HSACO_FILE}
++    DEPENDS ${OBJ_FILE} ${_TESTER_DASAN_RUNTIME}
+     COMMENT "device_bitcode_tester: linking HSACO for ${GPU_ARCH}"
+     VERBATIM
+   )
+diff --git a/projects/rocshmem/tests/functional_tests/CMakeLists.txt b/projects/rocshmem/tests/functional_tests/CMakeLists.txt
+index 848b4921..25545e2f 100644
+--- a/projects/rocshmem/tests/functional_tests/CMakeLists.txt
++++ b/projects/rocshmem/tests/functional_tests/CMakeLists.txt
+@@ -141,6 +141,14 @@ target_link_options(
+     $<$<BOOL:${ASAN}>:-fsanitize=address -g -shared-libsan>
+ )
+ 
++# The pinned DASan compiler can assert in instruction-reference LiveDebugValues
++# while linking the gfx950 TileRMATest kernels. Keep full debug information and
++# instrumentation, but use legacy variable-location tracking for this test link.
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++  target_link_options(${PROJECT_NAME} PRIVATE
++    "SHELL:-Xoffload-linker -plugin-opt=-experimental-debug-variable-locations=false")
++endif()
++
+ ###############################################################################
+ # DEVICE BITCODE TESTER (put/get via HSACO + rocshmem_hipmodule_init)
+ ###############################################################################
+-- 
+2.43.0
+
