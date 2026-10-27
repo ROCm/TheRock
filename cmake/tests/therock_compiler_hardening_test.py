@@ -15,6 +15,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -522,7 +523,7 @@ class HardeningBuildTest(TemporaryProjectTest):
                     f"-DTHEROCK_HARDENING_EXCLUDED={excluded}",
                     f"-DSOURCE_DIR={self.source_dir}",
                     "-DPATCHELF=patchelf",
-                    f"-DPython3_EXECUTABLE={shutil.which('python3')}",
+                    f"-DPython3_EXECUTABLE={sys.executable}",
                     "-DEXTRA_CPPFLAGS=-U_FORTIFY_SOURCE -DEXTRA=1",
                 )
                 ninja = (build_dir / "build.ninja").read_text(encoding="utf-8")
