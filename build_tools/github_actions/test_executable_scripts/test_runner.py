@@ -360,7 +360,10 @@ def _prepend_env_paths(env, base_path, additional_paths_dict):
     for env_key, path_parts_list in additional_paths_dict.items():
         new_paths = [str(base_path.joinpath(*parts)) for parts in path_parts_list]
         existing_path = env.get(env_key, "")
-        env[env_key] = ":".join(filter(None, new_paths + [existing_path]))
+        # Use os.pathsep (";" on Windows, ":" elsewhere); a hardcoded ":"
+        # corrupts PATH on Windows, where entries also contain drive-letter
+        # colons (e.g. C:\...), so prepended DLL dirs would never resolve.
+        env[env_key] = os.pathsep.join(filter(None, new_paths + [existing_path]))
 
 
 def apply_component_overrides(
