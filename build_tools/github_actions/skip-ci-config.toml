@@ -74,6 +74,7 @@ filenames = [
     "build_windows_python_packages.yml",
     "manifest-diff.yml",
     "multi_arch_build_native_linux_packages.yml",
+    "multi_arch_build_native_windows_packages.yml",
     "multi_arch_build_portable_linux_artifacts.yml",
     "multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
     "multi_arch_build_linux_jax_wheels_ci.yml",

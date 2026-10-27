@@ -42,6 +42,11 @@ ______________________________________________________________________
 Consult and cite these when reviewing build-repo PRs:
 
 - Build system overview: `docs/development/build_system.md`.
+- Testing strategy: [`TESTING.md`](../../TESTING.md), the repo-root `TESTING.md` the base skill
+  discovers first. Its per-feature-area "Limitations and known gaps" sections name what CI cannot
+  cover on every PR. As of this writing, only `pre-commit` and `Unit Tests Summary` are required
+  checks; the full TheRock CI build/test lanes are not, because of their long time to signal and
+  flaky GPU-runner tests. Confirm the current set with `gh pr checks <PR> --required`.
 - Style guides: `docs/development/style_guides/` —
   [python](../../docs/development/style_guides/python_style_guide.md),
   [cmake](../../docs/development/style_guides/cmake_style_guide.md),

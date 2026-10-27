@@ -580,7 +580,7 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests | ${{ inputs.test_level }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -656,7 +656,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels]
     name: "Quartz - completed - build PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

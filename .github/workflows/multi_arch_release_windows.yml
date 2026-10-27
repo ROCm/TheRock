@@ -50,7 +50,7 @@ jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - release Windows"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
@@ -127,7 +127,7 @@ jobs:
   publish_to_release_buckets:
     needs: [build_tarballs, build_python_packages]
     name: Publish to Release Buckets
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       id-token: write
@@ -171,7 +171,7 @@ jobs:
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
     name: Trigger Test Artifacts (${{ matrix.family_info.amdgpu_family }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: write
     strategy:
@@ -206,7 +206,7 @@ jobs:
     needs: [build_python_packages, publish_to_release_buckets]
     name: Trigger Release PyTorch Wheels
     if: ${{ inputs.build_pytorch != false && fromJSON(inputs.build_config).build_pytorch == true }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: write
     steps:
@@ -229,7 +229,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_artifacts, build_tarballs, build_python_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels]
     name: "Quartz - completed - release Windows"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
