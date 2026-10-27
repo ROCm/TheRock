@@ -260,6 +260,8 @@ class FakeS3Client:
         "numpy-2.0.0-cp315-cp315-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-win_amd64.whl",
         "sympy-1.13.0-py3-none-any.whl",
+        "six-1.17.0-py2.py3-none-any.whl",
+        "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
     ],
 )
 def test_is_wheel_allowed(filename: str) -> None:
@@ -274,12 +276,28 @@ def test_is_wheel_allowed(filename: str) -> None:
         "numpy-2.0.0-cp315-cp315t-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-manylinux_2_28_aarch64.whl",
         "numpy-2.0.0-cp312-cp312-macosx_14_0_x86_64.whl",
-        "six-1.0.0-py2.py3-none-any.whl",
+        "six-1.0.0-py2-none-any.whl",
         "numpy-2.0.0.tar.gz",
     ],
 )
 def test_is_wheel_rejected(filename: str) -> None:
     assert not mirror.is_wheel_allowed(filename)
+
+
+def test_rocpd_dependencies_are_mirrored() -> None:
+    dependencies = mirror.select_dependencies(project="rocm")
+    assert {
+        "pandas",
+        "python-dateutil",
+        "pytz",
+        "tzdata",
+        "six",
+        "otf2",
+        "reportlab",
+        "charset-normalizer",
+    } <= dependencies.keys()
+    assert "2.3.3" in dependencies["pandas"].versions
+    assert "12.3.0" in mirror.DEPENDENCIES["pillow"].versions
 
 
 def test_latest_selects_highest_non_yanked_stable_release() -> None:

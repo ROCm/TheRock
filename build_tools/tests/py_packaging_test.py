@@ -18,8 +18,11 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
+from email import message_from_bytes
 from pathlib import Path
 from unittest import mock
+
+from packaging.requirements import Requirement
 
 import sys
 
@@ -336,6 +339,71 @@ class MultiArchPackagingTest(TmpDirTestCase):
             )
             metadata = zf.read(metadata_name).decode()
             self.assertIn("Requires-Dist: pyelftools", metadata)
+
+    def test_core_setup_builds_wheel_with_rocpd_dependencies(self):
+        if importlib.util.find_spec("wheel") is None:
+            self.skipTest("wheel package is not available")
+
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir()
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir()
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.dev0",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+        core = PopulatedDistPackage(params, logical_name="core")
+        (core.platform_dir / "__init__.py").write_text("")
+        wheel_dir = self.temp_dir / "wheels"
+        wheel_dir.mkdir()
+        subprocess.run(
+            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
+            cwd=core.path,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        wheel_path = next(wheel_dir.glob("rocm_sdk_core-*.whl"))
+        with zipfile.ZipFile(wheel_path) as archive:
+            metadata_name = next(
+                name
+                for name in archive.namelist()
+                if name.endswith(".dist-info/METADATA")
+            )
+            metadata = message_from_bytes(archive.read(metadata_name))
+
+        self.assertEqual(metadata["Name"], "rocm-sdk-core")
+        self.assertEqual(metadata["Version"], "0.0.1.dev0")
+        extras = {
+            "rocpd-dashboard": "jinja2",
+            "rocpd-otf2": "otf2",
+            "rocpd-pdf": "reportlab",
+        }
+        self.assertEqual(set(metadata.get_all("Provides-Extra", [])), set(extras))
+        requirements = [
+            Requirement(value) for value in metadata.get_all("Requires-Dist", [])
+        ]
+        for sys_platform in ("linux", "win32", "darwin"):
+            for extra in ("", *extras):
+                with self.subTest(sys_platform=sys_platform, extra=extra):
+                    active = {
+                        requirement.name
+                        for requirement in requirements
+                        if requirement.marker is None
+                        or requirement.marker.evaluate(
+                            {"sys_platform": sys_platform, "extra": extra}
+                        )
+                    }
+                    expected = set()
+                    if sys_platform == "linux":
+                        expected.add("pandas")
+                        if extra:
+                            expected.add(extras[extra])
+                    self.assertEqual(active, expected)
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""

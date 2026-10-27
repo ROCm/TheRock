@@ -244,6 +244,31 @@ skip existing objects because it has no lifecycle expiration. If a stream
 fails, rerun the complete workflow. Each run is idempotent, and older versions
 remain subject to their normal retention policy.
 
+## ROCpd Dependencies
+
+The Linux `rocm-sdk-core` wheel includes `rocpd` and declares pandas as a runtime
+dependency for CSV conversion and summaries. Both `rocm` and `rocm[profiler]`
+install this core wheel. Windows installations do not acquire these dependencies.
+
+The `rocm-sdk-core[rocpd-dashboard]`, `rocm-sdk-core[rocpd-otf2]`, and
+`rocm-sdk-core[rocpd-pdf]` extras add `jinja2`, `otf2`, and `reportlab`, respectively.
+Request each extra at the same version as the installed `rocm-sdk-core`, using
+the same package index as the ROCm installation. These exporters are not required
+for CSV conversion, summaries, or Perfetto output.
+
+Upstream OTF2 3.2 currently provides supported Linux wheels for Python 3.10 and
+3.11. OTF2 on newer interpreters requires a compatible wheel to be built and
+published separately. Keeping the extras independent lets dashboard and PDF
+users install their dependencies without requiring an OTF2 wheel.
+
+The dependency mirror retains pandas 2.3.3 and Pillow 12.3.0 for Python 3.10
+alongside the latest releases for newer Python versions. Before publishing wheels
+with new dependency metadata, publish the configured dependencies and deploy their aggregate-index
+ownership routes following the
+[index ownership procedure](/build_tools/packaging/python/README.md). Bundling a
+requirements file in the wheel does not install those dependencies or expose them
+through the package index.
+
 ## rocm-profiler
 
 The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
