@@ -175,10 +175,18 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
 
     hip_source = output / "device-smoke.hip"
     hip_source.write_text(
-        "__attribute__((global)) void write_element(int *p, int i) { p[i] = 1; }\n"
+        "#include <hip/hip_runtime.h>\n"
+        "__global__ void write_element(int *p, int i) { p[i] = 1; }\n"
         "int main() { return 0; }\n",
         encoding="utf-8",
     )
+    hip_flags = [
+        "-xhip",
+        "--rocm-path=" + str(rocm),
+        "--hip-path=" + str(rocm),
+        "-isystem",
+        str(rocm / "include"),
+    ]
     compiled_architectures: list[str] = []
     summary["compile_link_architectures"] = compiled_architectures
     for arch in args.compile_arch:
@@ -186,9 +194,9 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
         run_command(
             [
                 str(clang),
-                "-xhip",
-                "-nogpuinc",
-                "-nogpulib",
+            ]
+            + hip_flags
+            + [
                 f"--offload-arch={arch}",
                 "-fsanitize=daddress",
                 "-O1",
@@ -204,22 +212,24 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
         )
         if "__dasan_report_store" not in ir_path.read_text(encoding="utf-8"):
             raise RuntimeError(f"No DASan store instrumentation for {arch}: {ir_path}")
-        command = [
-            str(clang),
-            "-xhip",
-            "-nogpuinc",
-            "-nogpulib",
-            f"--offload-arch={arch}",
-            "-fsanitize=daddress",
-            "-O1",
-            "-g",
-            str(hip_source),
-            "-L" + str(rocm / "lib"),
-            "-lamdhip64",
-            "-Wl,-rpath," + str(rocm / "lib"),
-            "-o",
-            str(output / f"smoke-{arch}"),
-        ]
+        command = (
+            [
+                str(clang),
+            ]
+            + hip_flags
+            + [
+                f"--offload-arch={arch}",
+                "-fsanitize=daddress",
+                "-O1",
+                "-g",
+                str(hip_source),
+                "-L" + str(rocm / "lib"),
+                "-lamdhip64",
+                "-Wl,-rpath," + str(rocm / "lib"),
+                "-o",
+                str(output / f"smoke-{arch}"),
+            ]
+        )
         run_command(command, output / f"compile-link-{arch}.log", env)
         compiled_architectures.append(arch)
 
