@@ -6,7 +6,7 @@
 
 The source inventory is pinned to llvm-project b07aa864f5b2bf648e6a61e2902cbfde83192481:
 3 host tests, 21 HIP tests, and 3 OpenMP tests. This script runs the host tests,
-optionally runs HIP tests, and reports OpenMP as untested. Run after building both
+optionally runs HIP and OpenMP tests. Run after building both
 compiler-rt runtime targets and HIP. A successful host run is not GPU validation.
 """
 
@@ -46,6 +46,11 @@ HIP_TESTS = {
     )
 }
 DEVICE_TRIPLES = {"amdgpu-amd-amdhsa", "amdgcn-amd-amdhsa"}
+OPENMP_TESTS = {
+    "AMDGPU/openmp-device-alloc.cpp",
+    "AMDGPU/openmp-overflow.cpp",
+    "AMDGPU/openmp-section-map.c",
+}
 
 
 def run_command(
@@ -222,15 +227,48 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
     if args.llvm_lit.suffix == ".py":
         lit_command.insert(0, sys.executable)
     lit_command += ["-sv"]
+    lit_suite = args.lit_suite.resolve()
+    if args.openmp or args.gpu_device_count is not None:
+        # The branch probes GPU access during CMake configuration. A build-only
+        # container may see no GPUs even when the tests later run on a GPU host.
+        # Its configured fields use set_default(), so an explicit site overlay
+        # can supply the execution host's capabilities without editing sources.
+        sites = list(lit_suite.rglob("lit.site.cfg.py"))
+        if len(sites) != 1:
+            raise RuntimeError(
+                "Expected exactly one host lit.site.cfg.py under --lit-suite; "
+                f"found {len(sites)}"
+            )
+        overlay = output / "lit-overlay"
+        overlay.mkdir(exist_ok=True)
+        settings = []
+        if args.openmp:
+            settings.append("config.can_run_openmp_offload = True")
+        if args.gpu_device_count is not None:
+            settings.append(f"config.gpu_device_count = {args.gpu_device_count}")
+        settings.append(f"lit_config.load_config(config, {str(sites[0])!r})")
+        (overlay / "lit.site.cfg.py").write_text(
+            "\n".join(settings) + "\n", encoding="utf-8"
+        )
+        lit_suite = overlay
+    gpu_parameters = []
+    if args.gpu_arch:
+        gpu_parameters = [
+            "-D",
+            "amdgpu_arch=" + args.gpu_arch,
+            "-D",
+            "hip_lib_path=" + str(rocm / "lib"),
+        ]
     host_report = output / "host-lit.json"
     host_result = run_command(
         lit_command
+        + gpu_parameters
         + [
             "--filter",
             r":: (hsa-load-order|hsa-missing|initialize)\.c$",
             "-o",
             str(host_report),
-            str(args.lit_suite.resolve()),
+            str(lit_suite),
         ],
         output / "host-lit.log",
         env,
@@ -244,16 +282,13 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
         gpu_report = output / "gpu-lit.json"
         gpu_result = run_command(
             lit_command
+            + gpu_parameters
             + [
-                "-D",
-                "amdgpu_arch=" + args.gpu_arch,
-                "-D",
-                "hip_lib_path=" + str(rocm / "lib"),
                 "--filter",
                 r":: AMDGPU/.*\.hip$",
                 "-o",
                 str(gpu_report),
-                str(args.lit_suite.resolve()),
+                str(lit_suite),
             ],
             output / "gpu-lit.log",
             env,
@@ -263,6 +298,25 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
         summary["gpu_tests"] = check_lit_results(gpu_report, HIP_TESTS, allowed)
         if gpu_result.returncode:
             raise RuntimeError("GPU lit returned nonzero; see gpu-lit.log")
+    if args.openmp:
+        openmp_report = output / "openmp-lit.json"
+        openmp_result = run_command(
+            lit_command
+            + gpu_parameters
+            + [
+                "--filter",
+                r":: AMDGPU/openmp-.*\.(c|cpp)$",
+                "-o",
+                str(openmp_report),
+                str(lit_suite),
+            ],
+            output / "openmp-lit.log",
+            env,
+            check=False,
+        )
+        summary["openmp_tests"] = check_lit_results(openmp_report, OPENMP_TESTS, set())
+        if openmp_result.returncode:
+            raise RuntimeError("OpenMP lit returned nonzero; see openmp-lit.log")
 
 
 def main() -> int:
@@ -290,15 +344,29 @@ def main() -> int:
         action="store_true",
         help="Reject multi-device test being unsupported",
     )
+    parser.add_argument(
+        "--gpu-device-count",
+        type=int,
+        help="Execution host GPU count when build-time detection differed",
+    )
+    parser.add_argument(
+        "--openmp",
+        action="store_true",
+        help="Run all three OpenMP tests; requires working built offload runtimes",
+    )
     args = parser.parse_args()
     if args.require_multi_device and not args.gpu_arch:
         parser.error("--require-multi-device requires --gpu-arch")
+    if (args.openmp or args.gpu_device_count is not None) and not args.gpu_arch:
+        parser.error("--openmp and --gpu-device-count require --gpu-arch")
+    if args.gpu_device_count is not None and args.gpu_device_count < 1:
+        parser.error("--gpu-device-count must be positive")
     args.compile_arch = args.compile_arch or ["gfx942", "gfx950"]
     args.output_dir.mkdir(parents=True, exist_ok=True)
     summary: dict[str, object] = {
         "status": "failed",
         "gpu_tests": "not completed" if args.gpu_arch else "not run (no --gpu-arch)",
-        "openmp_tests": "not run by this script",
+        "openmp_tests": "not completed" if args.openmp else "not run (no --openmp)",
     }
     try:
         audit(args, summary)
