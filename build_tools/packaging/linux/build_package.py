@@ -57,7 +57,6 @@ from _therock_utils.log_utils import (
     configure_logging,
     TheRockLogger,
     capture_console,
-    github_group,
 )
 
 from deb_package import *
@@ -407,41 +406,25 @@ def cleanup_packaging_environment(config: PackageConfig):
     # remove_dir(artifacts_dir)
 
 
-def parse_input_package_list(pkg_name, artifact_dir):
+def parse_input_package_list(pkg_names, artifact_dir):
     """Populate the package list from the provided input arguments.
 
     Parameters:
-    pkg_name : List of packages to be created
+    pkg_names : List of packages to be created, or None for all packages
     artifact_dir: The path to the Artifactory directory
 
-    Returns: Package list
+    Returns: Tuple of (pkg_list, skipped_list), filtered to pkg_names if given
     """
-    logger.debug("parse_input_package_list")
-    pkg_list = []
-    skipped_list = []
-    # If pkg_name is None, include all packages
-    if pkg_name is None:
-        pkg_list, skipped_list = get_package_list(artifact_dir)
+    pkg_list, skipped_list = get_package_list(artifact_dir)
+    if pkg_names is None:
         return pkg_list, skipped_list
-
-    # Proceed if pkg_name is not None
-    data = read_package_json_file()
-
-    for entry in data:
-        # Skip if packaging is disabled
-        if is_packaging_disabled(entry):
-            continue
-
-        name = entry.get("Package")
-
-        # Loop through each type in pkg_name
-        for pkg in pkg_name:
-            if pkg == name:
-                pkg_list.append(name)
-                break
-
-    logger.debug(f"pkg_list: {pkg_list}")
-    return pkg_list, skipped_list
+    unknown = set(pkg_names) - set(pkg_list) - set(skipped_list)
+    if unknown:
+        logger.warning(f"Unknown or disabled packages ignored: {sorted(unknown)}")
+    return (
+        [p for p in pkg_list if p in pkg_names],
+        [p for p in skipped_list if p in pkg_names],
+    )
 
 
 def create_package_config(args: argparse.Namespace) -> PackageConfig:
