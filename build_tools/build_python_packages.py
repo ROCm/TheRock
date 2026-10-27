@@ -285,8 +285,9 @@ def run(args: argparse.Namespace):
             # TODO: The base package is shoving CMake redirects into lib.
             excludes=[
                 "**/cmake/**",
-                # profiler binaries
-                "bin/rocprof-*",
+                # profiler binaries (rocprof-attach from rocprofiler-sdk stays in core)
+                "bin/rocprof-compute*",
+                "bin/rocprof-sys-*",
                 # rocprofiler-systems payload
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
