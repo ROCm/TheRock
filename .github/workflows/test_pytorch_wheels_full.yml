@@ -32,6 +32,14 @@ on:
           channels (e.g. a dev-published torch that requires an rc ROCm SDK).
         type: string
         default: ""
+      rocm_version:
+        description: >-
+          Optional version to pin the rocm[devel,...] request to, normally the
+          ROCm version the torch wheel pins. Needed when that is a pre-release
+          and the indexes also carry a final rocm release, which pip prefers
+          for the unpinned request and which then conflicts with torch's pin.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -110,6 +118,9 @@ on:
         required: true
         type: string
       extra_index_url:
+        type: string
+        default: ""
+      rocm_version:
         type: string
         default: ""
       python_version:
@@ -299,13 +310,18 @@ jobs:
         timeout-minutes: 15
         env:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
+          ROCM_SDK_VERSION: ${{ inputs.rocm_version }}
         run: |
           extra_index_args=()
           if [ -n "${EXTRA_INDEX_URL}" ]; then
             extra_index_args+=(--extra-index-url="${EXTRA_INDEX_URL}")
           fi
+          rocm_req="rocm[devel,${DEVICE_EXTRAS}]"
+          if [ -n "${ROCM_SDK_VERSION}" ]; then
+            rocm_req+="==${ROCM_SDK_VERSION}"
+          fi
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} ${rocm_req}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             ${extra_index_args[@]+"${extra_index_args[@]}"} \
             --activate-in-future-github-actions-steps
