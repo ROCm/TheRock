@@ -226,7 +226,7 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
     lit_command = [str(args.llvm_lit.resolve())]
     if args.llvm_lit.suffix == ".py":
         lit_command.insert(0, sys.executable)
-    lit_command += ["-sv"]
+    lit_command += ["-sv", "-D", "rocm_root=" + str(rocm)]
     lit_suite = args.lit_suite.resolve()
     if args.openmp or args.gpu_device_count is not None:
         # The branch probes GPU access during CMake configuration. A build-only
