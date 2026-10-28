@@ -9,6 +9,7 @@ the co-located rocke package, which this puts on PYTHONPATH. Without at least
 one, the rocKE CTest entries fail with ModuleNotFoundError.
 """
 
+import json
 import logging
 import os
 import shlex
@@ -19,6 +20,52 @@ from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_RUNNER = SCRIPT_DIR / "test_runner.py"
+
+
+def forward_compiler() -> None:
+    """Give standalone native CTests the installed Python compiler selection."""
+    # Probe in a child so CTest owns its own compiler/runtime process lifetime.
+    # Query through the installed adapter to keep compiler policy in rocKE.
+    probe = """
+import json
+import os
+import sys
+from dataclasses import asdict
+from rocke.runtime.comgr import _resolve_lib, loaded_compiler_info
+_resolve_lib()
+info = loaded_compiler_info()
+if info is None or info.llvm_version is None:
+    raise RuntimeError("rocKE compiler could not be loaded and queried")
+override = os.environ.get("ROCKE_COMGR_LIB")
+if override and info.requested_comgr != override:
+    raise RuntimeError("rocKE did not load the requested ROCKE_COMGR_LIB override")
+selected = info.comgr_path
+if not selected:
+    raise RuntimeError("loaded COMGR has no usable physical module path")
+selected = os.path.realpath(selected)
+if not os.path.isfile(selected):
+    raise RuntimeError("loaded COMGR has no usable physical module path")
+print(json.dumps(dict(asdict(info), selected_comgr=selected, python=sys.executable)))
+"""
+    logging.info("Probing rocKE compiler with %s", sys.executable)
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", probe], check=True, capture_output=True, text=True
+        )
+    except OSError as e:
+        fail(f"could not execute the rocKE compiler probe: {e}")
+    except subprocess.CalledProcessError as e:
+        fail(f"rocKE compiler setup failed: {e.stderr or e}")
+    try:
+        info = json.loads(result.stdout)
+        selected = info["selected_comgr"]
+        if not isinstance(selected, str) or not selected or not info["llvm_version"]:
+            raise ValueError("missing loaded compiler path or version")
+    except (ValueError, KeyError, TypeError) as e:
+        fail(f"invalid rocKE compiler probe output: {e}")
+    logging.info("Selected rocKE compiler: %s", info)
+    if not os.environ.get("ROCKE_COMGR_LIB"):
+        os.environ["ROCKE_COMGR_LIB"] = selected
 
 
 def fail(message) -> NoReturn:
@@ -100,6 +147,15 @@ elif not wheels:
         f"Neither rocKE wheels nor a rocke package found under {test_dir}. "
         "Any rocKE CTest entry that runs will fail to import rocke."
     )
+
+# Native tests may live outside the interpreter prefix and cannot discover its
+# SDK. Keep the caller's nonempty override, including its failure policy.
+# HIP continues to come from the tested artifacts through test_runner.py.
+if (
+    any(Path(w).name.startswith("rocke-") for w in wheels)
+    or (test_dir / "rocke").is_dir()
+):
+    forward_compiler()
 
 # Subprocess rather than import: test_runner.py validates the environment and
 # calls sys.exit() at module scope.
