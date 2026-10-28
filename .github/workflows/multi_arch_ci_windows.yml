@@ -193,6 +193,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
     with:
       artifact_run_id: ${{ github.run_id }}
+      artifact_github_repo: ${{ github.repository }}
       rocm_version: ${{ inputs.rocm_package_version }}
       msi_version: ${{ inputs.rocm_msi_package_version }}
       # Only the runtime package is published in CI artifacts today; core's

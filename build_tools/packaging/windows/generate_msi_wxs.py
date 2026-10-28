@@ -433,6 +433,19 @@ def parse_args() -> argparse.Namespace:
         help="List available package names and exit.",
     )
     parser.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a directory of already-extracted artifacts. When set, "
+            "the generator uses these artifacts directly and skips any fetch "
+            "(--run-id and --build-root are ignored). Use this when the "
+            "workflow fetches artifacts in a dedicated step before calling "
+            "the generator."
+        ),
+    )
+    parser.add_argument(
         "--run-id",
         default=None,
         metavar="RUN_ID",
@@ -753,10 +766,15 @@ class WixDocument:
 def resolve_artifact_dir(args: argparse.Namespace) -> Path:
     """Return the directory of extracted artifacts for the selected source.
 
-    Fetches from the CI run when --run-id is set (once; the fetch is not
-    package-specific), otherwise points at the local build tree. Callers that
-    build several packages should resolve this once and reuse it.
+    Resolution order:
+      1. --artifact-dir: caller already fetched; use as-is (no network I/O).
+      2. --run-id: fetch from S3 via artifact_manager.py.
+      3. --build-root: local CMake build tree.
+
+    Callers that build several packages should resolve this once and reuse it.
     """
+    if getattr(args, "artifact_dir", None) is not None:
+        return args.artifact_dir
     if args.run_id:
         return fetch_artifacts(
             run_id=args.run_id,

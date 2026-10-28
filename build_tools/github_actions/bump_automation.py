@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -77,7 +78,7 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         # Selects an entry in the tokens dictionary, not a literal credential.
         "token_key": "systems",  # nosec B105
-        "branch": "amd-staging-rocgdb-16",
+        "branch": "amd-staging-rocgdb-18",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * rocgdb tests only (no impact on other project builds/tests)
@@ -131,25 +132,55 @@ def submodule_changed(before: str, after: str, path: str) -> bool:
     return bool(diff.strip())
 
 
+_GH_API_RETRYABLE_STATUSES = {502, 503, 504}
+_GH_API_MAX_RETRIES = 4
+_GH_API_RETRY_BACKOFF_BASE = 2  # seconds; doubles each attempt
+
+
 def gh_api(
     token: str, endpoint: str, method: str = "GET", data: dict | None = None
 ) -> Any:
-    """Make a GitHub API request and return the parsed JSON response."""
+    """Make a GitHub API request and return the parsed JSON response.
+
+    GET requests are retried on transient server errors (502/503/504) with
+    exponential backoff.  The run-jobs endpoint on large Multi-Arch CI runs
+    (~900 jobs) frequently returns 502 on individual pages; retrying lets
+    ``_list_run_jobs`` paginate through them reliably.
+    """
     url = f"https://api.github.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
 
-    response = requests.request(method, url, headers=headers, json=data)
+    last_response = None
+    attempts = _GH_API_MAX_RETRIES if method == "GET" else 1
+    for attempt in range(attempts):
+        response = requests.request(method, url, headers=headers, json=data)
+        if response.ok:
+            if response.status_code == 204 or not response.text:
+                return None
+            return response.json()
 
-    if not response.ok:
-        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
+        last_response = response
+        if (
+            response.status_code in _GH_API_RETRYABLE_STATUSES
+            and attempt < attempts - 1
+        ):
+            delay = _GH_API_RETRY_BACKOFF_BASE * (2**attempt)
+            print(
+                f"[WARN] GitHub API returned {response.status_code} for "
+                f"{method} {endpoint}; retrying in {delay}s "
+                f"(attempt {attempt + 1}/{attempts})"
+            )
+            time.sleep(delay)
+            continue
 
-    if response.status_code == 204 or not response.text:
-        return None
+        break
 
-    return response.json()
+    raise RuntimeError(
+        f"GitHub API failed: {last_response.status_code} {last_response.text}"
+    )
 
 
 LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
@@ -760,7 +791,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         # Fetch the exact target commit in the submodule. A plain depth-1 fetch
         # only retrieves the default branch tip, which misses commits that live
-        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-18).
         print(f"[INFO] Fetching {latest[:7]} for {submodule}")
         run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
         run(["git", "-C", submodule, "checkout", latest])

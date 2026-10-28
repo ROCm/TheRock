@@ -71,6 +71,11 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_hrr_flag_includes_hrr_run(self):
+        argv = self._run_main(["--hrr"])
+        self.assertIn("core-hrr_run", argv)
+        self.assertNotIn("core-hrr_lib", argv)
+
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
@@ -409,6 +414,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         hipdnn_integration_tests=False,
         hipdnn_samples=False,
         hipfile=False,
+        hrr=False,
         miopen=False,
         miopenprovider=False,
         hipkernelprovider=False,
