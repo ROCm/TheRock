@@ -81,6 +81,34 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
                 link.symlink_to(target.name)
 
 
+AMDSMI_ROCM_SDK_CORE_FLAG = "_AMDSMI_ROCM_SDK_CORE = False"
+
+
+def mark_amdsmi_rocm_sdk_core(core_dir: Path) -> None:
+    """Mark the amdsmi Python module shipped in rocm-sdk-core as rocm-sdk-core's.
+
+    The marked module loads libamd_smi from the _rocm_sdk_core package, also
+    when it is installed or copied out of share/amd_smi, and never a system
+    libamd_smi from another ROCm release. Native packages share the same
+    artifact and keep the unmarked module. A module without the flag, from
+    before amdsmi added it, is left as is.
+    """
+    wrapper = core_dir / "share" / "amd_smi" / "amdsmi" / "amdsmi_wrapper.py"
+    if not wrapper.exists():
+        return
+    text = wrapper.read_text()
+    count = text.count(AMDSMI_ROCM_SDK_CORE_FLAG)
+    if count == 0:
+        return
+    if count != 1:
+        raise RuntimeError(
+            f"{wrapper}: expected one '{AMDSMI_ROCM_SDK_CORE_FLAG}', found {count}"
+        )
+    wrapper.write_text(
+        text.replace(AMDSMI_ROCM_SDK_CORE_FLAG, "_AMDSMI_ROCM_SDK_CORE = True")
+    )
+
+
 def discover_llvm_host_triple(artifacts: ArtifactCatalog) -> str | None:
     """Discover the LLVM host triple for libomp's per-target runtime dir.
 
@@ -298,6 +326,7 @@ def run(args: argparse.Namespace):
             ],
         ),
     )
+    mark_amdsmi_rocm_sdk_core(core.platform_dir)
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
