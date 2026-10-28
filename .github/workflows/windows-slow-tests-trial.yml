@@ -1,0 +1,176 @@
+# Trial: run test_unary_ufuncs with slow tests enabled (PYTORCH_TEST_WITH_SLOW=1) on one GPU architecture.
+#
+# - No build: it downloads the wheels that an earlier run of windows-pytorch-build.yml uploaded
+#   (default: ROCm/TheRock run 40390014857, artifact pytorch-windows-wheels-py3.12, kept 14 days).
+# - One test job on windows-gfx120X-gpu-rocm. Same setup steps as the test job of windows-pytorch-build.yml.
+# - Upstream marks 12 test functions of test_unary_ufuncs @slowTestIf(IS_WINDOWS), so on Windows they are
+#   skipped unless slow tests are enabled (25,886 of 26,145 tests were skipped in the four-family run).
+#   This trial measures how long they take on ROCm and what fails.
+# - Runs on a push to this branch that changes this file, or by manual dispatch.
+
+name: Windows slow-test trial (test_unary_ufuncs)
+
+on:
+  push:
+    branches:
+      - users/windows-pytorch-build
+    paths:
+      - .github/workflows/windows-slow-tests-trial.yml
+  workflow_dispatch:
+    inputs:
+      wheels_run_id:
+        description: Run id of a windows-pytorch-build run whose wheels artifact is tested.
+        type: string
+        default: "40390014857"
+      test_runs_on:
+        description: GPU runner label.
+        type: string
+        default: "windows-gfx120X-gpu-rocm"
+      amdgpu_family:
+        description: GPU family that matches the runner label (used for the rocm device extras).
+        type: string
+        default: "gfx120X-all"
+
+run-name: Windows slow-test trial (${{ inputs.amdgpu_family || 'gfx120X-all' }}, wheels of run ${{ inputs.wheels_run_id || '40390014857' }})
+
+concurrency:
+  group: windows-slow-tests-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  slow_tests_trial:
+    name: test_unary_ufuncs with slow tests | ${{ inputs.amdgpu_family || 'gfx120X-all' }}
+    runs-on: ${{ inputs.test_runs_on || 'windows-gfx120X-gpu-rocm' }}
+    timeout-minutes: 240
+    env:
+      PYTHON_VERSION: "3.12"
+      ROCM_VERSION: "10.2.0a20261012"
+      ROCM_INDEX_URL: "https://nightly.repo.amd.com/rocm/whl-next"
+      PYTORCH_GIT_REF: "nightly"
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_family || 'gfx120X-all' }}
+      WHEELS_RUN_ID: ${{ inputs.wheels_run_id || '40390014857' }}
+      OPENBLAS_NUM_THREADS: "1"
+      PYTORCH_NUM_PYTEST_RERUNS: "2"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TheRock (test scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ROCm/TheRock
+          ref: main
+          path: TheRock
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # A venv location unique to this run (the test machines are persistent).
+      - name: Choose a venv location
+        run: |
+          echo "VENV_DIR=${RUNNER_TEMP}/venv-slow-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Download the wheels of an earlier run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pytorch-windows-wheels-py3.12
+          path: wheels
+          run-id: ${{ env.WHEELS_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Expand GPU family to device extras
+        id: expand
+        working-directory: TheRock
+        run: |
+          python build_tools/github_actions/expand_amdgpu_families.py \
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --output-mode=device-extras
+
+      - name: Set git options
+        run: |
+          git config --global --add safe.directory $PWD
+          git config --global core.longpaths true
+
+      - name: Set up virtual environment
+        timeout-minutes: 15
+        env:
+          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
+        run: |
+          ls -l wheels
+          TORCH_WHEEL="$(ls wheels/torch-*.whl | head -n 1)"
+          echo "Installing ${TORCH_WHEEL} and rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}"
+          python TheRock/build_tools/setup_venv.py "${VENV_DIR}" \
+            --clean \
+            --packages "${TORCH_WHEEL} rocm[${DEVICE_EXTRAS}]==${ROCM_VERSION}" \
+            --extra-index-url="${ROCM_INDEX_URL}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Checkout PyTorch test sources
+        timeout-minutes: 30
+        working-directory: TheRock
+        run: |
+          ORIGIN="https://github.com/pytorch/pytorch.git"
+          TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+          echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA}"
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin "${ORIGIN}" \
+            --repo-hashtag "${TORCH_SHA}" \
+            --no-hipify \
+            --no-submodules
+
+      - name: Install test requirements
+        working-directory: TheRock
+        run: |
+          python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+          pip freeze
+
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        working-directory: TheRock
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
+      - name: Run rocm-sdk sanity tests
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
+
+      # The only change from the normal test step: PYTORCH_TEST_WITH_SLOW=1 and one suite.
+      - name: Run test_unary_ufuncs with slow tests enabled
+        timeout-minutes: 200
+        working-directory: TheRock
+        env:
+          PYTORCH_TEST_WITH_SLOW: "1"
+        run: |
+          echo "Started: $(date -u +%FT%TZ)"
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query unique \
+            --gpu-policy single \
+            --include \
+              test_unary_ufuncs \
+            -- \
+            --continue-on-collection-errors
+          echo "Finished: $(date -u +%FT%TZ)"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: slow-trial-test-reports-${{ env.AMDGPU_FAMILIES }}
+          path: TheRock/external-builds/pytorch/pytorch/test/test-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Remove the venv
+        if: always()
+        run: |
+          rm -rf "${VENV_DIR}" || true
