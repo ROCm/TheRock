@@ -3,3 +3,5 @@ pytest>=9.0.3
 requests
 prettytable
 PyYAML
+# The amd-repo-setup package mode reads its contract from build_repo_setup_package.
+jinja2>=3.0.0
