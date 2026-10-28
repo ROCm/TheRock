@@ -307,7 +307,7 @@ jobs:
         # skipped job's outputs are empty strings, which fromJSON cannot parse.
         # Fall back to an empty matrix so this job skips cleanly.
         os_profile: ${{ fromJSON(needs.resolve_repo_setup_params.outputs.os_profiles || '[]') }}
-    runs-on: ubuntu-26.04
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       contents: read
       id-token: write # Authenticate to AWS to upload the amd-repo-setup package.
