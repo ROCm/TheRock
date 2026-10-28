@@ -21,11 +21,22 @@ from typing import NoReturn
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_RUNNER = SCRIPT_DIR / "test_runner.py"
 
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
+from rocm_sdk_utils import locate_comgr
+
 
 def forward_compiler() -> None:
     """Give standalone native CTests the installed Python compiler selection."""
+    try:
+        requested = locate_comgr(override=os.environ.get("ROCKE_COMGR_LIB"))
+    except (OSError, RuntimeError) as e:
+        fail(f"rocKE compiler selection failed: {e}")
+    probe_env = os.environ.copy()
+    # Older rocKE does not discover a torch-free SDK on Linux. Supply the same
+    # explicit selection to old and new adapters before either loads COMGR.
+    probe_env["ROCKE_COMGR_LIB"] = str(requested)
     # Probe in a child so CTest owns its own compiler/runtime process lifetime.
-    # Query through the installed adapter to keep compiler policy in rocKE.
+    # Query through the installed adapter to verify the selected compiler.
     probe = """
 import json
 import os
@@ -45,12 +56,18 @@ if not selected:
 selected = os.path.realpath(selected)
 if not os.path.isfile(selected):
     raise RuntimeError("loaded COMGR has no usable physical module path")
+if not os.path.samefile(selected, override):
+    raise RuntimeError("rocKE did not load the selected COMGR file")
 print(json.dumps(dict(asdict(info), selected_comgr=selected, python=sys.executable)))
 """
     logging.info("Probing rocKE compiler with %s", sys.executable)
     try:
         result = subprocess.run(
-            [sys.executable, "-c", probe], check=True, capture_output=True, text=True
+            [sys.executable, "-c", probe],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=probe_env,
         )
     except OSError as e:
         fail(f"could not execute the rocKE compiler probe: {e}")
@@ -64,8 +81,7 @@ print(json.dumps(dict(asdict(info), selected_comgr=selected, python=sys.executab
     except (ValueError, KeyError, TypeError) as e:
         fail(f"invalid rocKE compiler probe output: {e}")
     logging.info("Selected rocKE compiler: %s", info)
-    if not os.environ.get("ROCKE_COMGR_LIB"):
-        os.environ["ROCKE_COMGR_LIB"] = selected
+    os.environ["ROCKE_COMGR_LIB"] = selected
 
 
 def fail(message) -> NoReturn:
@@ -149,7 +165,7 @@ elif not wheels:
     )
 
 # Native tests may live outside the interpreter prefix and cannot discover its
-# SDK. Keep the caller's nonempty override, including its failure policy.
+# SDK. Preserve the caller's compiler choice with an absolute physical path.
 # HIP continues to come from the tested artifacts through test_runner.py.
 if (
     any(Path(w).name.startswith("rocke-") for w in wheels)
