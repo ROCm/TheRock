@@ -1,7 +1,7 @@
 ---
 author: Alexis Montoison (amontoison)
 created: 2026-07-20
-modified: 2026-10-21
+modified: 2026-10-27
 status: Approved
 ---
 
@@ -347,9 +347,29 @@ Fusing everything into one CMake package, or shipping only a subset, stays possi
 The build appendix has the details: the compiler guard, the CMake package, the install tree, and the test convention.
 
 **Distro packages.**
-A library's binding ships in that library's existing `-dev` package (for example `amdrocm-rocblas-dev`), not in a separate `-fortran` package: it adds a few MB and no dependency for C users.
-The HIP and ROCTx bindings ship in HIP's and ROCTx's `-dev` packages.
+A library's binding ships in that library's existing development package, not in a separate `-fortran` package: it adds a few MB and no dependency for C users.
+The development packages follow the existing `amdrocm-*` stems, one per library family, and are named `-devel` in RPM and `-dev` in DEB:
+
+| Package                 | Bindings                |
+| :---------------------- | :---------------------- |
+| `amdrocm-runtime-devel` | HIP                     |
+| `amdrocm-blas-devel`    | rocBLAS, hipBLAS        |
+| `amdrocm-sparse-devel`  | rocSPARSE, hipSPARSE    |
+| `amdrocm-solver-devel`  | rocSOLVER, hipSOLVER    |
+| `amdrocm-fft-devel`     | rocFFT, hipFFT, hipFFTW |
+| `amdrocm-rand-devel`    | rocRAND, hipRAND        |
+| `amdrocm-profiler-base` | ROCTx                   |
+
+The HIP and ROCTx bindings are both built by `projects/fortran/`, but each ships with its C library.
+ROCTx has no development package of its own: its headers and CMake config are in `amdrocm-profiler-base`, so its binding goes there too.
 The packages carry the `.mod` files of `amdflang`, the compiler ROCm ships; users of another compiler build the binding from the installed `.F90` sources.
+`amdrocm-core-devel` depends on every package in this table except `amdrocm-profiler-base`, so it installs every binding but ROCTx.
+`amdrocm-core-sdk` adds `amdrocm-profiler-base`, through `amdrocm-developer-tools`, and with it the ROCTx binding.
+
+For a Fortran user who wants one command, the `amdrocm-fortran` metapackage already declared in TheRock's packaging (today disabled, and depending only on `amdrocm-llvm`) gains a dependency on the seven packages above.
+It then installs the compiler and every binding.
+Because those packages are built per GPU architecture, `amdrocm-fortran` becomes per-architecture too, like `amdrocm-core-devel`.
+The opt-in HPC SDK development metapackage, `amdrocm-hpc-sdk`, may depend on `amdrocm-fortran`; that is for the HPC SDK owners to decide.
 The `hipfort` package stays separate until 11.0 and installs side by side.
 
 Every project with a binding takes the same options.
@@ -725,6 +745,14 @@ This is a draft, and several points are still open.
   The layout is decided (see [Tests and documentation](#tests-and-documentation), in the [build appendix](#appendix-building-installing-and-testing-the-bindings)).
   `fortran/` has no `docs/` subdirectory, and each library documents its Fortran API from its existing top-level `docs/`.
   For HIP and ROCTx, the documentation is built from `projects/fortran/`, or from HIP's and rocprofiler-sdk's `docs/` with their owners' agreement, since the bindings otherwise stay out of those projects.
+- **Separate Fortran distro packages.**
+  The bindings ship in their library's development package (see [Building and shipping a binding](#building-and-shipping-a-binding)).
+  The alternative is one `amdrocm-<stem>-fortran` package per library family, so that a C-only install carries no Fortran files.
+  The install tree does not depend on this choice, so the packages can be split later without moving a file.
+  It is not taken now, for three reasons:
+  - the development packages are built per GPU architecture, and an architecture-independent Fortran package has no simple way to depend on the right one;
+  - every library's artifact descriptor would need a new `fortran` component, and the Fortran config would have to be excluded from `dev` by file name, since it sits beside the C config;
+  - the saving for a C-only install is a few MB.
 
 ## Alternatives considered
 
@@ -1252,6 +1280,7 @@ So artifacts install under a per-compiler subdirectory, one archive and one modu
 
 `<libdir>`, `<includedir>` and `<datadir>` are the GNUInstallDirs values (`lib64` on Fedora, RHEL and SUSE).
 A stock ROCm install gives `/opt/rocm/include/fortran/amdflang/` and `/opt/rocm/lib/fortran/amdflang/`.
+The distro packages install under a versioned prefix, `/opt/rocm/core-<X.Y>`, so ROCm 10.3 installed from packages gives `/opt/rocm/core-10.3/include/fortran/amdflang/` and `/opt/rocm/core-10.3/lib/fortran/amdflang/`.
 There is no `hipfort/<backend>/` nesting.
 The packaged track has a single backend, so the `.mod` files sit directly under `include/fortran/<compiler>/`.
 The `rocm-libraries` configs sit beside their C library's, so that the C config can later pick them up (see [Building the bindings](#building-the-bindings)).
@@ -1422,13 +1451,17 @@ The items below are written against that mechanism rather than a second one.
 1. **Artifact descriptors.**
    The default `dev` component already collects `**/*.a`, `**/include/**` and `**/cmake/**`.
    So the `.mod` files, the archives and the config packages land in `dev` with no change.
-   From there they reach the library's existing `-dev` distro package (see [Building and shipping a binding](#building-and-shipping-a-binding)).
-   Four edits remain:
+   From there they reach the library's existing development package (see [Building and shipping a binding](#building-and-shipping-a-binding)).
+   Six edits remain:
    - Declare the `projects/fortran/` subproject and give it an artifact descriptor.
-     Its `dev` component holds the `.mod` files, archives, config packages and `share/`.
+     Its `dev` component holds the HIP binding's `.mod` files, archive, config package and `share/hip/fortran/`.
+     It excludes the ROCTx files, which go to the rocprofiler-sdk artifact (next item).
      Its `test` component holds the subproject's tests, once they are installed.
+   - In `profiler/artifact-rocprofiler-sdk.toml`, add a `dev` component over the `projects/fortran/` stage directory that takes only the ROCTx files: `roctx.mod`, `libroctx_fortran.a`, `cmake/roctx-fortran/**` and `share/roctx/fortran/**`.
+     The descriptor already gathers several subprojects (rocprofiler-sdk, roctracer), and its `dev` component already reaches `amdrocm-profiler-base`, so the ROCTx binding ships with the ROCTx library with no `package.json` change.
+     The rocprofiler-sdk artifact adds the `projects/fortran/` subproject to its `SUBPROJECT_DEPS` (in `profiler/CMakeLists.txt`), and the two descriptors' patterns stay complementary, so no file lands in both artifacts.
    - Add `share/<lib>/fortran/**` to the `dev` component of each library.
-     For HIP and ROCTx, add it to the `dev` component of the new `projects/fortran/` artifact.
+     For HIP and ROCTx, the two items above already cover it.
      This is needed because `share/` is not a default `dev` path, and the installed `.F90` is what users of other compilers build from.
      HIP's existing `share/hip/**` rule sits in the `lib` component of `core/artifact-core-hip.toml`.
      The Fortran files come from their own subproject, so they do not fall under it.
@@ -1443,6 +1476,9 @@ The items below are written against that mechanism rather than a second one.
      - the `-DBUILD_FORTRAN_WRAPPER` passed to rocRAND and hipRAND, with the `rocrand/src/fortran/**` and `hiprand/src/fortran/**` entries of `artifact-rand.toml`.
        The rocRAND and hipRAND bindings remove that option.
      - the `-DEXPORT_FORTRAN_BINDINGS` passed to hipSOLVER.
+   - In `build_tools/packaging/linux/package.json`, add the `dev` component of the `projects/fortran/` artifact to `amdrocm-runtime-devel`.
+     Enable `amdrocm-fortran`, make it per-architecture (`Gfxarch`), and add to its dependencies the seven packages that carry a binding (`amdrocm-runtime-devel`, the five math `-devel` packages, and `amdrocm-profiler-base`).
+     The math libraries' bindings need no packaging change, since they are already in their library's `dev` component.
 1. **Dependency order.**
    This order is already expressed: rocSOLVER depends on rocBLAS, and every library depends on `hip-clr`.
    So the Fortran build order follows the C one.
