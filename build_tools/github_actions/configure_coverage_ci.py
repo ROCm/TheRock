@@ -462,6 +462,15 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rocshmem"],
         artifact_relpaths=["comm-libs/rocshmem/stage"],
         coverage_option="BUILD_CODE_COVERAGE",
+        # With -fgpu-rdc, clang's host-side profile lowering leaves a second
+        # llvm.global_ctors in some translation units (util.cpp, envvar.cpp,
+        # hip_allocator_vmm_posix.cpp, ibv_wrapper.cpp), which the verifier
+        # rejects. Compiler bug; fix belongs in amd-llvm.
+        blocked_reason=(
+            "host compile fails with 'unknown special variable with appending "
+            "linkage: llvm.global_ctors.N' under -fgpu-rdc + "
+            "-fprofile-instr-generate"
+        ),
         stage=STAGE_COMM_LIBS,
         test_component="rocshmem",
         coverage_config="projects/rocshmem/test_categories_coverage.yaml",

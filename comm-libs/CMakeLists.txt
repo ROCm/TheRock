@@ -27,6 +27,13 @@ if(THEROCK_ENABLE_RCCL)
   ##############################################################################
   set(_rccl_subproject_names)
 
+  # rccl rejects ENABLE_CODE_COVERAGE outside Debug: its tests reach internal
+  # symbols that only Debug exports (-fvisibility=default). Respect an explicit
+  # -Drccl_BUILD_TYPE=... from the command line.
+  if(RCCL_ENABLE_COVERAGE AND NOT rccl_BUILD_TYPE)
+    set(rccl_BUILD_TYPE Debug)
+  endif()
+
   therock_cmake_subproject_declare(rccl
     # Build all GPU targets in a single target-neutral artifact as long as the
     # host code isn't fully target agnostic.
