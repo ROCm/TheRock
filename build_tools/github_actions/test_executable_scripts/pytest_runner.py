@@ -27,6 +27,10 @@ TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run; must be a category defined in
     test_categories.yaml (e.g. quick, standard, comprehensive, full). Defaults to
     "quick" when unset.
+TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
+    run one specific category regardless of the CI tier (e.g. hw-common). If
+    the installed component does not define that category yet, the run is
+    skipped with a warning instead of failing.
 AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
@@ -43,6 +47,10 @@ from importlib.util import find_spec
 from pathlib import Path
 import yaml
 
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from amdgpu_family_matrix import is_asan
+from configure_asan_env import get_asan_runtime_path
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Map job name -> install location, relative to the ROCm prefix (THEROCK_BIN_DIR
@@ -50,6 +58,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # packages + pytest modules, not native test executables.
 INSTALLED_COMPONENTS = {
     "tensilelite": "share/hipblaslt/tensilelite",
+    "tensilelite-common": "share/hipblaslt/tensilelite",
 }
 
 
@@ -80,6 +89,36 @@ def get_env_int_override(name):
         logging.warning(f"Ignoring negative {name}={raw!r}")
         return 0
     return value
+
+
+def resolve_test_category():
+    """Return the category to run: TEST_CATEGORY if set, else TEST_TYPE."""
+    return os.getenv("TEST_CATEGORY") or os.getenv("TEST_TYPE", "quick")
+
+
+def lookup_category(all_categories, category):
+    """Return the config for `category`, or exit if the component lacks it.
+
+    A category pinned via TEST_CATEGORY that the installed component does not
+    define yet exits 0 with a warning, so a CI job can land before the
+    component change that adds its category. A missing tier is still an error.
+    """
+    category_config = all_categories.get(category)
+    if category_config:
+        return category_config
+    available = sorted(all_categories)
+    if os.getenv("TEST_CATEGORY"):
+        message = (
+            f"Test category '{category}' is not defined by this component yet "
+            f"(available: {available}); skipping."
+        )
+        print(f"::warning title=pytest_runner::{message}")
+        logging.warning(message)
+        sys.exit(0)
+    _fail(
+        f"No configuration found for test category '{category}'. "
+        f"Available categories: {available}"
+    )
 
 
 def resolve_component_path(component_name, rocm_path):
@@ -207,6 +246,16 @@ def build_environment(rocm_path, component_name):
     env = os.environ.copy()
     component_root = resolve_component_path(component_name, rocm_path)
 
+    # Initialize ASan before Python allocates objects that instrumented imports
+    # may later free. Merely exposing the runtime on LD_LIBRARY_PATH loads it
+    # too late when rocisa imports instrumented ROCm libraries.
+    if is_asan():
+        runtime = str(get_asan_runtime_path(rocm_path))
+        existing_preload = env.get("LD_PRELOAD", "")
+        env["LD_PRELOAD"] = (
+            f"{runtime}:{existing_preload}" if existing_preload else runtime
+        )
+
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
         f"{component_root}{os.pathsep}{existing_pythonpath}"
@@ -216,13 +265,26 @@ def build_environment(rocm_path, component_name):
     env["ROCM_PATH"] = str(rocm_path)
 
     # _rocisa links libamdhip64.so (in lib/), tensilelite-client links libomp.so
-    # (in lib/llvm/lib/) — both are needed or the client segfaults at load.
+    # (in lib/llvm/lib/<triple>/ due to GNUInstallDirs) and librocm_sysdeps_z.so
+    # (in lib/rocm_sysdeps/lib/).
     lib_path = rocm_path / "lib"
     llvm_lib_path = rocm_path / "lib" / "llvm" / "lib"
-    existing_ld = env.get("LD_LIBRARY_PATH", "")
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(
-        filter(None, [str(lib_path), str(llvm_lib_path), existing_ld])
+    sysdeps_lib_path = rocm_path / "lib" / "rocm_sysdeps" / "lib"
+    ld_paths = [str(lib_path), str(llvm_lib_path)]
+    # GNUInstallDirs puts libomp.so under one or more platform-specific triple
+    # subdirs (e.g. x86_64-unknown-linux-gnu/) instead of lib/llvm/lib/ directly.
+    # Add every triple dir (sorted) so the result is deterministic and does not
+    # depend on glob order or break when a new triple is added to the location.
+    llvm_platform_dirs = sorted(
+        p for p in llvm_lib_path.glob("*-linux-*") if p.is_dir()
     )
+    ld_paths.extend(str(p) for p in llvm_platform_dirs)
+    if sysdeps_lib_path.is_dir():
+        ld_paths.append(str(sysdeps_lib_path))
+    existing_ld = env.get("LD_LIBRARY_PATH", "")
+    if existing_ld:
+        ld_paths.append(existing_ld)
+    env["LD_LIBRARY_PATH"] = os.pathsep.join(ld_paths)
 
     existing_path = env.get("PATH", "")
     env["PATH"] = os.pathsep.join(
@@ -240,7 +302,7 @@ def build_environment(rocm_path, component_name):
 
 if __name__ == "__main__":
     TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+    TEST_TYPE = resolve_test_category()
     AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
     AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
     THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -260,12 +322,7 @@ if __name__ == "__main__":
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     all_categories = config.get("test_categories", {})
-    category_config = all_categories.get(TEST_TYPE)
-    if not category_config:
-        _fail(
-            f"No configuration found for test category '{TEST_TYPE}'. "
-            f"Available categories: {sorted(all_categories)}"
-        )
+    category_config = lookup_category(all_categories, TEST_TYPE)
 
     test_paths = category_config.get("test_paths", [])
     if not test_paths:

@@ -206,9 +206,9 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
         if pkg:
             built_packages.extend(pkg)
 
-    # Device packages (one per architecture)
+    # Device packages (one per owner, retaining all selected member targets)
     # For metapackages, these become arch-specific meta packages
-    for device_arch in config.gfxarch_list:
+    for device_arch in group_package_targets(config.gfxarch_list):
         logger.info(f"Building device variant for {pkg_name} ({device_arch})")
         pkg = build_device_package(pkg_name, config, device_arch)
         if pkg:
@@ -358,13 +358,14 @@ def build_device_package(pkg_name, config: PackageConfig, device_arch: str) -> l
     try:
         if device_config.pkg_type == "rpm":
             return create_versioned_rpm_package(pkg_name, device_config)
-        else:
-            return create_versioned_deb_package(pkg_name, device_config)
+        return create_versioned_deb_package(pkg_name, device_config)
+    except PackageCollisionError:
+        raise
     except Exception as e:
         logger.error(
             f"Failed to build device package for {pkg_name} ({device_arch}): {e}"
         )
-        return []
+        raise
 
 
 def build_meta_package(pkg_name, config: PackageConfig) -> list:
@@ -591,13 +592,15 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
-    # Append version (and build variant for ASAN) to default install prefix.
+    # Append version (and build variant for ASan-family builds) to default
+    # install prefix. Debug variants (asan-debug, host-asan-debug) collapse to
+    # the same "-asan" prefix as their non-debug counterpart.
     # Release:  /opt/rocm/core-7.15
     # ASAN:     /opt/rocm/core-asan-7.15
     prefix = args.install_prefix
     if prefix == DEFAULT_INSTALL_PREFIX:
-        if args.build_variant == "asan":
-            prefix = f"{prefix}-{args.build_variant}-{modified_rocm_version}"
+        if "asan" in args.build_variant:
+            prefix = f"{prefix}-asan-{modified_rocm_version}"
         else:
             prefix = f"{prefix}-{modified_rocm_version}"
 
@@ -646,6 +649,8 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
                     shutil.move(str(src), str(dst))
                     result.append(f)
             return (task.pkg_name, result, None)
+        except PackageCollisionError:
+            raise
         except SystemExit as e:
             return (task.pkg_name, [], f"SystemExit: exited with code {e.code}")
         except Exception as e:
@@ -672,7 +677,7 @@ def run(args: argparse.Namespace):
         logger.error("No packages found to build. Package list is empty.")
         sys.exit(1)
 
-    logs_dir = Path(config.dest_dir) / "logs"
+    logs_dir = Path(config.dest_dir).parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     built_pkglist = []
@@ -719,6 +724,8 @@ def run(args: argparse.Namespace):
 
     # Print build summary
     print_build_summary(config, pkglist_status)
+    if failed_pkglist:
+        sys.exit(1)
 
 
 def main(argv: list[str]):
@@ -788,7 +795,8 @@ def main(argv: list[str]):
         "--build-variant",
         default="",
         help=(
-            "Build variant (e.g. 'asan'). When set to 'asan', the install prefix "
+            "Build variant (e.g. 'asan', 'asan-debug', 'host-asan', "
+            "'host-asan-debug'). When it contains 'asan', the install prefix "
             "becomes DEFAULT_INSTALL_PREFIX-asan-MAJOR.MINOR "
             "(e.g. /opt/rocm/core-asan-7.15)."
         ),

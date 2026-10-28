@@ -11,13 +11,14 @@ from pathlib import Path
 import os
 import sys
 import tempfile
+import tarfile
 import unittest
 import urllib.error
 from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-import index_generation_s3_tar
+import index_generation_s3
 import install_rocm_from_artifacts as mod
 from _therock_utils.s3_buckets import get_release_tarball_index_url
 
@@ -78,9 +79,41 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_hrr_flag_includes_hrr_run(self):
+        argv = self._run_main(["--hrr"])
+        self.assertIn("core-hrr_run", argv)
+        self.assertNotIn("core-hrr_lib", argv)
+
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
+
+    def test_clinfo_is_only_added_for_sanity(self):
+        base_argv = self._run_main(["--base-only"])
+        sanity_argv = self._run_main(["--sanity"])
+        self.assertNotIn("core-ocl_run", base_argv)
+        self.assertEqual(sanity_argv, base_argv + ["core-ocl_run", "hipify_run"])
+        self.assertNotIn("core-ocl_run", self._run_main(["--blas", "--tests"]))
+
+    def test_base_only_on_wsl_includes_wsl_rocdxg(self):
+        """WSL needs the libhsakmt WSL build to reach the GPU via /dev/dxg.
+
+        Without it the bare-metal libhsakmt in core-runtime is used and rocminfo
+        exits non-zero with no output, because there is no amdgpu driver in the
+        guest. Observed on actions/runs/36035911215.
+        """
+        with mock.patch(
+            "platform.release", return_value="6.6.87.2-microsoft-standard-WSL2"
+        ):
+            argv = self._run_main(["--base-only"])
+        self.assertIn("wsl-rocdxg_lib", argv)
+        # The ordinary base set must still be requested.
+        self.assertIn("core-runtime_lib", argv)
+
+    def test_base_only_off_wsl_excludes_wsl_rocdxg(self):
+        with mock.patch("platform.release", return_value="6.8.0-45-generic"):
+            argv = self._run_main(["--base-only"])
+        self.assertNotIn("wsl-rocdxg_lib", argv)
 
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
@@ -113,7 +146,7 @@ def _index_entry(
 def _generated_index_html(entries: list[dict], bucket_name: str) -> str:
     """Return an index page built by the generator that publishes the real one.
 
-    Building the fixture with index_generation_s3_tar keeps the parser under
+    Building the fixture with index_generation_s3 keeps the parser under
     test tied to the page format actually published to the CDN.
     """
     paginator = mock.Mock()
@@ -132,7 +165,7 @@ def _generated_index_html(entries: list[dict], bucket_name: str) -> str:
     ]
     s3_client = mock.Mock()
     s3_client.get_paginator.return_value = paginator
-    index_generation_s3_tar.generate_index_s3(
+    index_generation_s3.generate_tarball_index_s3(
         s3_client, bucket_name, "v4/tarball", upload=True, allow_empty=True
     )
     return s3_client.put_object.call_args.kwargs["Body"].decode("utf-8")
@@ -406,7 +439,7 @@ class TestReleaseDiscovery(unittest.TestCase):
             self.assertEqual(
                 (output_dir / asset_name).read_bytes(), b"tarball contents"
             )
-            urlopen.assert_called_once_with(expected_url)
+            urlopen.assert_called_once_with(expected_url, timeout=60)
             untar_files.assert_called_once_with(output_dir, output_dir / asset_name)
 
     def test_download_failure_reports_the_url(self) -> None:
@@ -463,7 +496,7 @@ class TestReleaseDiscovery(unittest.TestCase):
         version = "7.15.0a20260722"
         args = argparse.Namespace(
             artifact_group="gfx94X-dcgpu",
-            output_dir=Path("/tmp/therock-test"),
+            output_dir=Path("/fake/therock-test"),
             release=version,
             dry_run=False,
         )
@@ -479,7 +512,7 @@ class TestReleaseDiscovery(unittest.TestCase):
         self.assertIn("legacy_multi_arch_releases.md", output.getvalue())
 
     def _assert_release_uses_index_url(self, version: str, index_url: str) -> None:
-        output_dir = Path("/tmp/therock-test")
+        output_dir = Path("/fake/therock-test")
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
         args = argparse.Namespace(
             artifact_group="gfx94X-dcgpu",
@@ -574,12 +607,13 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
     defaults = dict(
         run_id="12345",
         artifact_group="gfx110X-all",
-        output_dir=Path("/tmp/therock-test"),
+        output_dir=Path("/fake/therock-test"),
         # Non-empty amdgpu_targets skips the expand_families call.
         amdgpu_targets="gfx1100",
         dry_run=False,
         run_github_repo=None,
         base_only=False,
+        sanity=False,
         aqlprofile=False,
         blas=False,
         debug_tools=False,
@@ -588,6 +622,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         hipdnn_integration_tests=False,
         hipdnn_samples=False,
         hipfile=False,
+        hrr=False,
         miopen=False,
         miopenprovider=False,
         hipkernelprovider=False,
@@ -607,10 +642,13 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocprofiler_systems=False,
         rocprofiler_systems_examples=False,
         rocrtst=False,
+        hip_tests=False,
         rocalution=False,
         kfdtest=False,
         rocwmma=False,
         rpp=False,
+        solver=False,
+        sparse=False,
         libhipcxx=False,
         hipthreads=False,
         tests=False,
@@ -633,6 +671,42 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
     def test_debug_tools_includes_amd_llvm_dev(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
         self.assertIn("amd-llvm_dev", argv)
+
+
+class TestRocprofilerSystemsHipfile(unittest.TestCase):
+    """--rocprofiler-systems fetches hipfile for sample-time dlopen telemetry."""
+
+    def test_rocprofiler_systems_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(_make_run_id_args(rocprofiler_systems=True))
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+    def test_rocprofiler_systems_examples_includes_hipfile(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(rocprofiler_systems_examples=True)
+        )
+        self.assertIn("hipfile_lib", argv)
+        self.assertIn("sysdeps-util-linux_lib", argv)
+
+
+class TestUntarFiles(unittest.TestCase):
+    def test_rejects_artifact_that_overwrites_file_outside_destination(self):
+        # We explicitly use filter="tar" to preserve packaged metadata.
+        # It still rejects writes outside the destination, as tested here:
+        # https://docs.python.org/3/library/tarfile.html#tarfile.tar_filter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root / "outside"
+            outside.write_bytes(b"original")
+            archive = root / "package.tar"
+            with tarfile.open(archive, "w") as tf:
+                member = tarfile.TarInfo("../outside")
+                member.size = 7
+                tf.addfile(member, io.BytesIO(b"changed"))
+            with self.assertRaises(tarfile.FilterError):
+                mod._untar_files(root / "output", archive)
+            self.assertEqual(outside.read_bytes(), b"original")
+            self.assertTrue(archive.exists())
 
 
 if __name__ == "__main__":

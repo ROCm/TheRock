@@ -290,8 +290,23 @@ For more details on using the `rocm-sdk-devel` package to build projects, see
 ##### Supported Python `[device-*]` install extras
 
 For packages which include device-specific code (such as `rocm`, `torch`, and
-`torchvision`), select your GPU using a `[device-*]` install extra from the
-table below. See also the
+`torchvision`), select your GPU using a `[device-*]` install extra.
+
+###### Detect your GPU automatically
+
+The
+[`rocm-bootstrap`](https://pypi.org/project/rocm-bootstrap/) package can
+detect your GPU's `gfx` target for you:
+
+```bash
+$ pip install rocm-bootstrap
+$ rocm-bootstrap-detect
+gfx1103
+```
+
+###### GFX target lookup table
+
+If you know your GPU you can also check the table below or the
 [GPU architecture specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)
 for a full list of supported AMD GPUs.
 
@@ -387,9 +402,12 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 
 > [!TIP]
 > The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
-> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
-> The compatible ROCm packages are installed automatically, you do not need to
-> install ROCm separately:
+> and `amd-torch-device-gfx110x` which contain GPU-specific kernels and depend on
+> `rocm-sdk-device-gfx1100`. Install them through the `device-*` extras rather
+> than by package name: the family package (`amd-torch-device-gfx110x`) carries
+> kernels shared by the whole GPU family, such as the AOTriton attention kernels,
+> and without it fused attention fails at runtime. The compatible ROCm packages
+> are installed automatically, you do not need to install ROCm separately:
 >
 > ```bash
 > pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
@@ -401,6 +419,7 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 > # rocm-sdk-device-gfx1100==10.1.0a...     ~50 MB  (only gfx1100 device code)
 > # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
 > # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
+> # amd-torch-device-gfx110x==2.11.0+...            (device code shared by gfx110X)
 > # Total:                                 ~1.1 GB
 > #
 > # For comparison, a similar per-family (non-multi-arch) torch wheel for
@@ -444,8 +463,8 @@ Install JAX with ROCm support using the unified multi-arch index.
 > ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
-# Set the version (currently supported: 0.10.1, 0.10.2, 0.11.0, and 0.11.1)
-JAX_VERSION=0.11.1
+# Set the version (currently supported: 0.10.2, 0.11.0, 0.11.1, 0.11.2, and 0.12.0)
+JAX_VERSION=0.12.0
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
 pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
@@ -473,7 +492,7 @@ print(jax.devices())
 ```
 
 > [!NOTE]
-> On ROCm 10, a released `jaxlib` (0.10.1 through 0.11.0) does not know the
+> On ROCm 10, a released `jaxlib` (0.10.2 through 0.11.0) does not know the
 > `jax_rocm10_plugin` name, so the GPU kernel modules resolve to `None` and no FFI
 > handlers are registered. Symptoms are `'NoneType' object has no attribute ...` and
 > `No FFI handler registered for hipsolver_*`. Those versions predate the upstream fix

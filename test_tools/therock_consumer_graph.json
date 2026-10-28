@@ -27,7 +27,10 @@
       "hipthreads",
       "kfdtest",
       "libhipcxx",
+      "mxdatagenerator",
       "ocl-clr",
+      "profiler-hub",
+      "profiler-hub-install-test",
       "rdc",
       "rocgdb",
       "rocminfo",
@@ -35,6 +38,7 @@
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
+      "therock-grpc",
       "therock-spdlog"
     ]
   },
@@ -51,7 +55,8 @@
       "rocrand",
       "rocrtst",
       "rocshmem",
-      "rocthrust"
+      "rocthrust",
+      "rocwmma"
     ]
   },
   "aqlprofile": {
@@ -89,6 +94,7 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
+      "hrr",
       "libhipcxx",
       "miopen",
       "miopenprovider",
@@ -180,7 +186,9 @@
   },
   "hipfile": {
     "consumers": [
-      "rocprofiler-sdk"
+      "rocprofiler-sdk",
+      "rocprofiler-systems",
+      "rocprofiler-systems-examples"
     ]
   },
   "hipify": {
@@ -212,6 +220,9 @@
     "consumers": []
   },
   "hipthreads": {
+    "consumers": []
+  },
+  "hrr": {
     "consumers": []
   },
   "kfdtest": {
@@ -256,6 +267,14 @@
       "hipblaslt",
       "hipsparselt"
     ]
+  },
+  "profiler-hub": {
+    "consumers": [
+      "rocprofiler-systems"
+    ]
+  },
+  "profiler-hub-install-test": {
+    "consumers": []
   },
   "rccl": {
     "consumers": [
@@ -604,6 +623,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rccl",
       "rocprofiler-systems",
       "rocroller",
@@ -641,6 +661,7 @@
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
+      "hipdnn_samples",
       "hipfft",
       "hipfile",
       "hipkernelprovider",
@@ -652,11 +673,14 @@
       "miopen",
       "miopenprovider",
       "mxdatagenerator",
+      "profiler-hub",
       "rccl",
       "rocalution",
       "rocblas",
       "rocfft",
       "rocprim_tests",
+      "rocprofiler-systems",
+      "rocr-debug-agent-tests",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -714,7 +738,6 @@
       "amdsmi",
       "kfdtest",
       "rocdecode",
-      "rocjitsu",
       "rocjpeg",
       "rocm_smi_lib",
       "rocprofiler-compute",
@@ -732,6 +755,7 @@
   },
   "therock-liblzma": {
     "consumers": [
+      "amd-llvm",
       "rocgdb",
       "therock-elfutils"
     ]
@@ -779,6 +803,8 @@
       "hipkernelprovider",
       "miopen",
       "miopenprovider",
+      "profiler-hub",
+      "rocprofiler-systems",
       "therock-frugally-deep"
     ]
   },
@@ -804,6 +830,7 @@
     "consumers": [
       "hipblaslt",
       "hipdnn",
+      "profiler-hub",
       "rocprofiler-systems",
       "rocroller"
     ]
@@ -811,6 +838,7 @@
   "therock-sqlite3": {
     "consumers": [
       "miopen",
+      "profiler-hub",
       "rocprofiler-compute",
       "rocprofiler-sdk",
       "rocprofiler-systems",

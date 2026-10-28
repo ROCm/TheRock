@@ -12,9 +12,20 @@ if(WIN32)
   set(_system_toolchain "")
 endif()
 
+# Optionally override the comgr DLL name that CLR dynamically loads (Windows).
+# Kept in sync with the comgr build side via the same THEROCK_COMGR_DLL_NAME
+# option, so the name CLR loads matches the name comgr is built as. Applies to
+# both CLR builds: hip-clr and ocl-clr each compile their own rocclr.
+set(_clr_comgr_dll_name_cmake_args)
+if(THEROCK_COMGR_DLL_NAME)
+  list(APPEND _clr_comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
+endif()
+
 ################################################################################
 # rocm-kpack
 ################################################################################
+
+if(THEROCK_ENABLE_KPACK)
 
 therock_cmake_subproject_declare(rocm-kpack
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack"
@@ -51,6 +62,8 @@ therock_provide_artifact(core-kpack
   SUBPROJECT_DEPS
     rocm-kpack
 )
+
+endif()
 
 if(THEROCK_ENABLE_CORE_AMDSMI)
 
@@ -240,7 +253,12 @@ if(_therock_enable_hsa_runtime)
 
 endif()
 
+set(_hip_clr_enabled OFF)
 if(THEROCK_ENABLE_HIP_RUNTIME)
+  therock_check_subproject_targets(_hip_clr_enabled hip-clr)
+endif()
+
+if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   # clr
   # The primary HIP compiler and runtime target. This is also the project used
@@ -275,16 +293,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ROCR-Runtime
     )
   endif()
-
-  # Optionally override the comgr DLL name that CLR dynamically loads (Windows).
-  # Kept in sync with the comgr build side via the same THEROCK_COMGR_DLL_NAME
-  # option, so the name CLR loads matches the name comgr is built as.
-  set(_clr_comgr_dll_name_cmake_args)
-  if(THEROCK_COMGR_DLL_NAME)
-    list(APPEND _clr_comgr_dll_name_cmake_args "-DCOMGR_DLL_NAME=${THEROCK_COMGR_DLL_NAME}")
-  endif()
-
-
 
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
@@ -350,6 +358,47 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
+  if(THEROCK_ENABLE_CORE_HRR)
+    ##############################################################################
+    # hrr
+    ##############################################################################
+
+    # hrr-playback replays archives that the HRR capture code in amdhip64
+    # writes. The HRR test suites are not built here: they are not installable
+    # yet, and the integration suite needs an amdhip64 with capture compiled in.
+    therock_cmake_subproject_declare(hrr
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        "-DHRR_BUILD_PLAYBACK=ON"
+        "-DHRR_BUILD_TESTS=OFF"
+        "-DHIP_PLATFORM=amd"
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(hrr SUBDIRS .)
+    therock_cmake_subproject_activate(hrr)
+
+    therock_provide_artifact(core-hrr
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hrr.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        run
+      SUBPROJECT_DEPS
+        hrr
+    )
+  endif()
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
@@ -381,7 +430,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_HIP_RUNTIME)
+endif(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
 
 if(THEROCK_ENABLE_WSL_ROCDXG)
   if(NOT THEROCK_WSL_WIN_SDK)
@@ -464,8 +513,12 @@ if(THEROCK_ENABLE_OCL_ICD)
   )
 endif(THEROCK_ENABLE_OCL_ICD)
 
+set(_ocl_clr_enabled OFF)
 if(THEROCK_ENABLE_OCL_RUNTIME)
+  therock_check_subproject_targets(_ocl_clr_enabled ocl-clr)
+endif()
 
+if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
   if(WIN32)
@@ -487,10 +540,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocprofiler-register
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
   endif()
+  list(APPEND OCL_CLR_CMAKE_ARGS
+    "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
   if(_therock_enable_hsa_runtime)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
@@ -509,6 +562,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "${_system_toolchain}"
     CMAKE_ARGS
       "-DCLR_BUILD_OCL=ON"
+      ${_clr_comgr_dll_name_cmake_args}
       ${OCL_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
@@ -564,7 +618,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     )
   endif()
 
-endif(THEROCK_ENABLE_OCL_RUNTIME)
+endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 
 ##############################################################################
 # Runtime tests
@@ -572,7 +626,12 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 # downstream stages like math-libs, dctools-core, etc.
 ##############################################################################
 
+set(_hip_tests_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
+  therock_check_subproject_targets(_hip_tests_enabled hip-tests TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
+endif()
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
   set(HIP_TESTS_CMAKE_ARGS)
   set(_hip_tests_subproject_names)
   therock_cmake_subproject_declare(hip-tests
@@ -609,9 +668,14 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
       hip-tests
   )
   list(APPEND _hip_tests_subproject_names hip-tests)
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
 
+set(_rocrtst_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+  therock_check_subproject_targets(_rocrtst_enabled rocrtst TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
+endif()
+
+if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
   # rocrtst may optionally build against amdsmi when available (Linux).
   set(_rocrtst_build_deps
     amd-llvm
@@ -663,7 +727,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enab
     SUBPROJECT_DEPS
       rocrtst
   )
-endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
+endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_KFDTESTS)
 

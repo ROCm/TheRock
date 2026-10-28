@@ -22,11 +22,16 @@ TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
+# WSL (kernel release "...-microsoft-standard-WSL2", also seen in containers)
+# runs the Linux build and has its own TEST_TO_IGNORE entries.
+if os_type == "linux" and "microsoft" in platform.release().lower():
+    os_type = "wsl"
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
 # Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
+from configure_asan_env import get_asan_runtime_path
 
 env = os.environ.copy()
 
@@ -85,14 +90,20 @@ TEST_TO_IGNORE = {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
-        ]
+        ],
+        # WSL (GPU paravirtualization). The first three each wedge their shard:
+        # after the deliberate kernel fault or the blocking stream wait, the GPU
+        # queue never recovers and every later test in the shard times out.
+        "wsl": [
+            "Unit_hipGetLastError_KernelFailure_ValidAndInvalidOperations",
+            "Unit_hipGetLastError_KernelFailure_TwoStreams",
+            "Unit_hipStreamWaitValue_Default",
+            "Contract_MemBatchDiscard_HipMemPrefetchBatchAsync_PrefetchBatch_IsAcceptedOrUnsupported",
+        ],
     },
     "gfx125X-dcgpu": {
         "linux": [
             "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
-            # ROCM-29275: SDMA COPY_SWAP hangs the GPU on gfx1250 (rocm-systems#9923).
-            "Unit_hipMemcpyBatchAsync_Swap",
-            "Unit_hipMemcpyBatchAsync_P2P_Swap",
             # TODO(#7499): Re-enable test once crash issue is resolved.
             "Unit_hipVoteSync_All",
         ]
@@ -110,17 +121,7 @@ GENERIC_TEST_TO_IGNORE = [
 
 
 def get_asan_lib_path():
-    arch = platform.machine()
-    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
-    logging.info(f"++ Exec [{CLANG_PATH}]$ {shlex.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip()
+    return str(get_asan_runtime_path(THEROCK_BIN_DIR.resolve().parent))
 
 
 def copy_dlls_exe_path():
@@ -153,6 +154,8 @@ def setup_env(env):
     # Set ROCM Path, to find rocm_agent_enum etc
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
+    # Require HIP YAML entries to exist for all tests
+    env["THEROCK_REQUIRE_HIP_YAML_ENTRIES"] = "1"
     # required for hip-tests to avoid optimizing out multi-stream tests
     env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
     if platform.system() == "Linux":

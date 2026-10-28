@@ -28,20 +28,31 @@ on:
         description: 'Comma-separated Windows GPU families. "all" = all, "none" or empty = skip.'
         type: string
         default: ""
-      linux_test_labels:
-        description: "Comma-separated list of test labels for Linux."
+      pr_labels:
         type: string
-        default: ""
-      windows_test_labels:
-        description: "Comma-separated list of test labels for Windows."
-        type: string
+        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
         default: ""
+      build_stages:
+        description: >-
+          Comma-separated allowlist of build stages to run, e.g.
+          "compiler-runtime,runtime-tests". Every other stage is skipped
+          outright, with nothing built and no artifacts copied. Empty (the
+          default) builds every stage.
+        type: string
+        default: ""
       baseline_run_id:
         description: "Workflow run ID to copy prebuilt stage artifacts from."
+        type: string
+        default: ""
+      baseline_repository:
+        description: >-
+          Repository to query for baseline_run_id. External repos should set
+          this to github.repository when using their own baseline_run_id.
+          Defaults to THEROCK_REPOSITORY (the 'repository' input).
         type: string
         default: ""
       stage_reuse_mode:
@@ -50,7 +61,8 @@ on:
           and baseline_run_id, and performs no reuse analysis or baseline lookup;
           "dry-run" (default) reports what automatic reuse could do while still
           honoring explicit prebuilt_stages; "reuse-stage" applies automatic
-          reuse and also honors explicit prebuilt_stages.
+          reuse and also honors explicit prebuilt_stages. Release branches
+          always use "off", regardless of this input.
         type: string
         default: "dry-run"
       stage_reuse_max_age_hours:
@@ -79,6 +91,10 @@ on:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
         default: true
+      build_native_windows:
+        description: "Build native Windows packages (MSI)."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -93,6 +109,14 @@ on:
         default: ""
       external_repo:
         description: "JSON object with 'repository' (e.g., 'ROCm/rocm-libraries') and 'ref' fields for external repo builds."
+        type: string
+        default: ""
+      changed_projects:
+        description: >-
+          Comma-separated list of changed project paths from external repos
+          (e.g., 'projects/rocprim'). These project directory names are mapped
+          to artifact names via BUILD_TOPOLOGY.toml source_paths for granular
+          artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
         type: string
         default: ""
       quartz_tracking_id:
@@ -130,6 +154,9 @@ on:
       rocm_rpm_package_version:
         description: ROCm RPM package version for native packages.
         value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version:
+        description: ROCm MSI package version for native Windows packages.
+        value: ${{ jobs.setup.outputs.rocm_msi_package_version }}
       ref:
         description: >-
           Resolved commit SHA from checkout. Use this instead of the input ref
@@ -146,7 +173,7 @@ permissions:
 
 jobs:
   setup:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
@@ -157,11 +184,15 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version: ${{ steps.rocm_package_version.outputs.rocm_msi_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     env:
       QUARTZ_REPORTING_WORKFLOW: setup_multi_arch.yml
       QUARTZ_WORKFLOW_POSTFIX: "- setup"
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      PRERELEASE_VERSION: ${{ inputs.prerelease_version }}
+      EXTERNAL_REPO: ${{ inputs.external_repo }}
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
@@ -177,7 +208,9 @@ jobs:
       - name: Checking out repository
         id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           # We need the parent commit to do a diff
@@ -185,10 +218,27 @@ jobs:
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
+        continue-on-error: true
+
+      # Checkout external repo config (skip-ci-config.toml) for path-based CI skip.
+      # This sparse checkout fetches only the .github directory to minimize checkout time.
+      - name: Checkout external repo config
+        if: inputs.external_repo != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ fromJSON(inputs.external_repo).repository }}
+          ref: ${{ fromJSON(inputs.external_repo).ref }}
+          path: external-repo-config
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
         continue-on-error: true
 
       # Note: the script reads PR labels, the base ref, etc. from the event
@@ -204,13 +254,16 @@ jobs:
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          BUILD_NATIVE_WINDOWS: ${{ inputs.build_native_windows }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
-          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          PR_LABELS: ${{ inputs.pr_labels }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
           STAGE_REUSE_MODE: ${{ inputs.stage_reuse_mode }}
           # The checkout commit is used for commit-compatibility checking.
           STAGE_REUSE_CURRENT_SHA: ${{ steps.checkout.outputs.commit }}
@@ -219,14 +272,16 @@ jobs:
           # For baseline run selection, use repository input (defaults to GITHUB_REPOSITORY).
           # External repos set repository to "ROCm/TheRock" to fetch TheRock baseline runs.
           THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          THEROCK_CHECKOUT_REF: ${{ inputs.ref }}
           # Token for GitHub API calls (branch history, baseline workflow runs)
           GITHUB_TOKEN: ${{ github.token }}
           # External repo JSON (e.g., {"repository":"ROCm/rocm-libraries","ref":"..."})
-          EXTERNAL_REPO: ${{ inputs.external_repo }}
           CI_CONFIG_PATH: ci-config
           # External repo family overrides allow callers to add/modify GPU family configs
           # (e.g., adding test runners for architectures not enabled in TheRock's default config)
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
+          # Changed projects from external repos for granular artifact-level reuse
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       # Note: Other scripts treat "dev releases" and "CI builds" differently.
@@ -243,18 +298,22 @@ jobs:
       # buckets, use different ccache namespaces, etc.
       - name: Compute package version
         id: rocm_package_version
+        env:
+          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python ./build_tools/compute_rocm_package_version.py \
-            --release-type=${{ inputs.release_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }} \
-            --override-git-sha=${{ steps.checkout.outputs.commit }}
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --prerelease-version="${PRERELEASE_VERSION}" \
+            --override-git-sha="${CHECKOUT_COMMIT}" \
+            --build-variant="${BUILD_VARIANT}"
 
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
         run: |
           python ./build_tools/github_actions/detect_external_repo_config.py \
-            --external-repo-json='${{ inputs.external_repo }}'
+            --external-repo-json="${EXTERNAL_REPO}"
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true

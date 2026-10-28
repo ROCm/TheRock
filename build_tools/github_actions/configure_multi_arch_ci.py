@@ -58,15 +58,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _therock_utils.build_topology import get_topology
 
 from amdgpu_family_matrix import (
+    WSL_RUN_LABEL,
     all_build_variants,
     get_all_families_for_trigger_types,
+    get_cpu_test_runner,
+    get_wsl_test_runner,
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    get_changed_files_for_external_repo,
     get_git_commit_hash,
     get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
+    load_skip_ci_patterns_for_external_repo,
 )
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
@@ -76,6 +81,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
+from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -84,6 +90,7 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
 
 # ---------------------------------------------------------------------------
 # Input parsing helpers
@@ -123,6 +130,112 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     return stages
 
 
+def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
+    """Convert an allowlist of build stages into the complement to skip.
+
+    Callers declare the stages they *want* (``build_stages``), which is the
+    stable way to express a narrow build: adding a new stage to
+    BUILD_TOPOLOGY.toml must not silently widen an existing caller's scope.
+    The build workflows consume the complement, so the translation happens
+    here where the full stage list is known.
+
+    Raises:
+        ValueError: if a requested stage is not defined in BUILD_TOPOLOGY.toml.
+    """
+    if not build_stages:
+        return []
+    all_stages = _get_all_build_stages()
+    unknown = [stage for stage in build_stages if stage not in all_stages]
+    if unknown:
+        raise ValueError(
+            f"Unknown build stages: {unknown}. Known stages: {sorted(all_stages)}"
+        )
+    return [stage for stage in all_stages if stage not in build_stages]
+
+
+# Maps build stages to the test labels that can run with artifacts from those
+# stages. Used to auto-filter tests when build_stages narrows the build graph.
+# Test labels not listed here require a full build.
+STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
+    "compiler-runtime": ["kfdtest"],
+    "runtime-tests": ["hip-tests", "rocrtst"],
+    "math-libs": [
+        "rocblas",
+        "hipblas",
+        "hipblaslt",
+        "rocfft",
+        "hipfft",
+        "rocrand",
+        "hiprand",
+        "rocsparse",
+        "hipsparse",
+        "rocsolver",
+        "hipsolver",
+        "rocprim",
+        "hipcub",
+        "rocthrust",
+        "rocalution",
+        "rocwmma",
+        "hiptensor",
+        "composable-kernel",
+    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
+    "comm-libs": ["rccl", "rocshmem"],
+    "storage-libs": ["hipfile"],
+    "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
+    "cv-libs": ["rpp"],
+    "media-libs": ["rocdecode", "rocjpeg"],
+    "debug-tools": ["rocgdb", "rocr-debug-agent"],
+}
+
+
+def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | None:
+    """Return the test labels allowed for a partial build, or None for full builds.
+
+    When build_stages is empty (full build), returns None to indicate no filtering.
+    When build_stages is set, returns the union of test labels for those stages.
+    """
+    if not build_stages:
+        return None
+    allowed = set()
+    for stage in build_stages:
+        allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
+    return sorted(allowed) if allowed else []
+
+
+# ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
+WSL_REQUIRED_STAGE = "wsl-rocdxg"
+
+
+def _apply_stage_test_labels(
+    platform: str,
+    labels: list[str],
+    build_stages: list[str],
+    allowed_labels: list[str],
+) -> list[str]:
+    """Validate or auto-select test labels for a partial build (build_stages set).
+
+    Selection is decided by component labels (test:*) only. ci:* control labels
+    (ci:run-wsl, ci:run-multi-gpu, ...) are kept but never count as a selection:
+    with only control labels, the stage-compatible test labels are auto-selected,
+    so a partial build never schedules tests for components it did not build.
+    """
+    component_labels = [lbl for lbl in labels if not lbl.startswith("ci:")]
+    if not component_labels:
+        return [f"test:{lbl}" for lbl in allowed_labels] + labels
+    invalid = [
+        lbl
+        for lbl in component_labels
+        if lbl.replace("test:", "") not in allowed_labels
+    ]
+    if invalid:
+        raise ValueError(
+            f"{platform} test labels {invalid} require stages not in "
+            f"build_stages {build_stages}. Allowed: {allowed_labels}"
+        )
+    return labels
+
+
 # ---------------------------------------------------------------------------
 # Dataclasses — the typed interfaces between pipeline steps
 # ---------------------------------------------------------------------------
@@ -147,12 +260,15 @@ class CIInputs:
     build_pytorch: bool = True
     build_jax: bool = False
     build_native_linux: bool = True
+    build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
 
-    # PR labels (from event payload for pull_request events)
+    # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
+    pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
+    checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
 
-    # Per-platform workflow_dispatch overrides (parsed from comma-separated input)
+    # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
     windows_amdgpu_families: list[str] = field(default_factory=list)
     linux_test_labels: list[str] = field(default_factory=list)
@@ -161,8 +277,14 @@ class CIInputs:
     # Prebuilt configuration (from workflow_dispatch)
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
+
+    # Allowlist of build stages to run. Empty means every stage, which is the
+    # default for all existing callers.
+    build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
+    # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
+    changed_projects: list[str] = field(default_factory=list)
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
@@ -173,6 +295,38 @@ class CIInputs:
         print("CIInputs:")
         for f in fields(self):
             print(f"  {f.name}: {getattr(self, f.name)!r}")
+
+    def validate(self) -> None:
+        """Validate inputs for consistency (fail-fast behavior).
+
+        Raises ValueError for conflicting build selections, test labels requiring
+        stages not in build_stages, or ci:run-wsl on a partial build without the
+        wsl-rocdxg stage.
+        """
+        for job in ("native-linux", "python-packages", "pytorch", "jax"):
+            build_label = f"ci:build-{job}"
+            skip_label = f"ci:skip-{job}"
+            if build_label in self.pr_labels and skip_label in self.pr_labels:
+                raise ValueError(f"{build_label} conflicts with {skip_label}")
+
+        allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
+        if allowed_labels is not None:
+            for platform, labels in [
+                ("Linux", self.linux_test_labels),
+                ("Windows", self.windows_test_labels),
+            ]:
+                _apply_stage_test_labels(
+                    platform, labels, self.build_stages, allowed_labels
+                )
+            if (
+                WSL_RUN_LABEL in self.linux_test_labels
+                and WSL_REQUIRED_STAGE not in self.build_stages
+            ):
+                raise ValueError(
+                    f"{WSL_RUN_LABEL} needs the {WSL_REQUIRED_STAGE} stage (the WSL "
+                    f"libhsakmt), which is not in build_stages {self.build_stages}. "
+                    f"Add {WSL_REQUIRED_STAGE} to build_stages."
+                )
 
     @property
     def is_pull_request(self) -> bool:
@@ -213,19 +367,26 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
+        build_native_windows = (
+            os.environ.get("BUILD_NATIVE_WINDOWS", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
+        pr_base_ref = ""
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
             #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
             #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"].lower() for label in pr_obj.get("labels", [])]
+            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
+            pr_base_ref = pr_obj.get("base", {}).get("ref", "")
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
+        elif event_name == "workflow_dispatch":
+            pr_labels = _parse_comma_list(os.environ.get("PR_LABELS", ""))
         elif event_name == "push":
             before_ref = event.get("before")
             # GitHub uses the null SHA when a push creates a new ref. That
@@ -239,19 +400,26 @@ class CIInputs:
                 # against its parent, missing earlier commits in the push.
                 base_ref = None
 
-        # Test labels come from two sources:
-        # 1. LINUX/WINDOWS_TEST_LABELS env vars (workflow_dispatch inputs)
-        # 2. PR test:* labels (apply to both platforms)
+        # Derive component and CI control labels from the PR or dispatch labels.
         pr_test_labels = [label for label in pr_labels if label.startswith("test:")]
-        linux_test_labels = (
-            _parse_comma_list(os.environ.get("LINUX_TEST_LABELS", "")) + pr_test_labels
-        )
-        windows_test_labels = (
-            _parse_comma_list(os.environ.get("WINDOWS_TEST_LABELS", ""))
-            + pr_test_labels
-        )
+        pr_ci_labels = [label for label in pr_labels if label.startswith("ci:")]
+        linux_test_labels = pr_test_labels + pr_ci_labels
+        windows_test_labels = pr_test_labels + pr_ci_labels
 
-        return CIInputs(
+        # When build_stages limits the build, validate or auto-select test labels.
+        # - If test:* labels provided: fail-fast if they require stages not in build_stages
+        # - If none (only ci:* control labels, or nothing): auto-select compatible labels
+        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
+        if allowed_labels is not None:
+            linux_test_labels = _apply_stage_test_labels(
+                "Linux", linux_test_labels, build_stages, allowed_labels
+            )
+            windows_test_labels = _apply_stage_test_labels(
+                "Windows", windows_test_labels, build_stages, allowed_labels
+            )
+
+        inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
             commit_ref=commit_ref,
@@ -262,8 +430,11 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             build_native_linux=build_native_linux,
+            build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
+            pr_base_ref=pr_base_ref,
+            checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -273,10 +444,16 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
+            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
-            baseline_repository=os.environ.get("THEROCK_REPOSITORY", ""),
+            # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
+            baseline_repository=os.environ.get("BASELINE_REPOSITORY")
+            or os.environ.get("THEROCK_REPOSITORY", ""),
+            changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
+        inputs.validate()
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -330,10 +507,12 @@ class GitContext:
         """Create context for external repo builds (e.g., rocm-libraries).
 
         For external repos, we treat the repo name as both a changed file and
-        a submodule path so that:
-        1. Stage reuse analysis can determine which TheRock stages are affected
-        2. has_submodule_changes returns True, enabling submodule_bump_tests_only
-           families to run their tests
+        a submodule path so that stage reuse analysis can determine which
+        TheRock stages are affected.
+
+        Note: has_submodule_changes will be True, but _get_current_triggers()
+        ignores this for external repos since submodule_bump only applies to
+        TheRock itself (when its submodule pointers are updated).
         """
         print(f"External repo detected: {external_repo_name}")
         return GitContext(
@@ -367,16 +546,36 @@ class GitContext:
 
 @dataclass(frozen=True)
 class TargetSelection:
-    """Which GPU families to build/test, per platform."""
+    """Which GPU families to build/test, per platform.
+
+    Supports fine-grained control over build vs test selection:
+    - linux_families/windows_families: families to build (always)
+    - build_only_families: families where tests should be skipped even if hardware
+      is available (useful for verifying compilation without running tests)
+    - test_only_families: families where tests should be force-enabled
+      (requires the family to be in the build list)
+    """
 
     linux_families: list[str] = field(default_factory=list)
     windows_families: list[str] = field(default_factory=list)
+    # Build-only families: build but skip tests (per-platform)
+    linux_build_only_families: list[str] = field(default_factory=list)
+    windows_build_only_families: list[str] = field(default_factory=list)
+    # Test-only families: force-enable tests (requires family in build list)
+    linux_test_only_families: list[str] = field(default_factory=list)
+    windows_test_only_families: list[str] = field(default_factory=list)
 
     def log(self) -> None:
         """Log selected targets for CI diagnostics."""
         print("TargetSelection:")
         print(f"  linux: {self.linux_families}")
         print(f"  windows: {self.windows_families}")
+        if self.linux_build_only_families or self.windows_build_only_families:
+            print(f"  linux_build_only: {self.linux_build_only_families}")
+            print(f"  windows_build_only: {self.windows_build_only_families}")
+        if self.linux_test_only_families or self.windows_test_only_families:
+            print(f"  linux_test_only: {self.linux_test_only_families}")
+            print(f"  windows_test_only: {self.windows_test_only_families}")
 
 
 # ---------------------------------------------------------------------------
@@ -442,6 +641,9 @@ class BuildRocmDecision(JobGroupDecision):
     # When set (e.g., "ROCm/TheRock"), external repos can copy artifacts from
     # TheRock's baseline runs instead of their own.
     baseline_repository: str = ""
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
 
     @property
     def prebuilt_stages(self) -> list[str]:
@@ -457,6 +659,15 @@ class BuildRocmDecision(JobGroupDecision):
             name
             for name, action in self.stage_decisions.items()
             if action == JobAction.RUN
+        ]
+
+    @property
+    def skipped_stages(self) -> list[str]:
+        """Stages that are neither built nor fetched from a baseline run."""
+        return [
+            name
+            for name, action in self.stage_decisions.items()
+            if action == JobAction.SKIP
         ]
 
 
@@ -526,25 +737,39 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_native_windows: bool
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
     test_python_packages_matrix: list[dict[str, str]] = field(default_factory=list)
     pytorch_build_matrix: list[dict[str, str]] = field(default_factory=list)
     jax_build_matrix: list[dict[str, str]] = field(default_factory=list)
-    # Build runner label for this platform/variant combination
-    build_runs_on: str = ""
+    # Build runner labels for this platform/variant combination
+    build_runs_on_large: str = ""
+    build_runs_on_small: str = ""
+    build_runs_on_medium: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Stages excluded from the build graph entirely (no build, no artifact copy).
+    skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
     baseline_repository: str = ""  # For cross-repo artifact reuse
+    # Granular artifact-level reuse within stages
+    rebuild_artifacts: list[str] = field(default_factory=list)
+    reusable_artifacts: list[str] = field(default_factory=list)
     # Cross-platform pair, populated identically in linux and windows configs.
     linux_amdgpu_families: str = ""  # Semicolon-separated
     windows_amdgpu_families: str = ""  # Semicolon-separated
+    # Families whose Linux build is also tested on WSL (ci:run-wsl). Same shape
+    # as per_family_info, with the WSL runner as test-runs-on.
+    wsl_per_family_info: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["prebuilt_stages"] = ",".join(self.prebuilt_stages)
+        d["rebuild_artifacts"] = ",".join(self.rebuild_artifacts)
+        d["reusable_artifacts"] = ",".join(self.reusable_artifacts)
+        d["skip_stages"] = ",".join(self.skip_stages)
         return d
 
 
@@ -604,18 +829,60 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
+    - ASAN builds on PRs without ci:asan or ci:host-asan labels
 
-    For external repo builds, path filtering is skipped since the external repo
-    name is used for stage reuse analysis, not for CI skip decisions.
+    For external repo builds, path filtering uses changed_files and
+    skip_ci_patterns from the external_repo JSON (both must be provided).
+    Schedule and workflow_dispatch runs always run CI.
     """
+    # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # Skip ASAN on PRs unless an enabling label is present.
-    # This avoids running expensive ASAN builds on every PR.
-    # Labels that enable ASAN CI:
-    #   - ci:asan / ci:host-asan: explicit opt-in for ASAN testing
+    # 2. Path filter skipping - check before ASAN label logic so we don't print
+    #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
+
+    # 2a. External repo builds: get changed files and evaluate against skip patterns
+    # from the TOML config. This allows external repos to skip TheRock CI when only
+    # docs/metadata files are changed.
+    if ci_inputs.external_repo:
+        try:
+            external_repo = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(
+                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
+            ) from e
+
+        if not isinstance(external_repo, dict):
+            raise ValueError(
+                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
+            )
+
+        repo_name = external_repo.get("repository", "").split("/")[-1]
+
+        # Get changed files via helper function (uses API or git diff)
+        changed_files = get_changed_files_for_external_repo(external_repo)
+
+        # Get skip patterns from TOML config file
+        skip_ci_config = external_repo.get("skip_ci_config")
+        skip_ci_patterns = None
+        if skip_ci_config:
+            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+        # Evaluate skip logic
+        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+            print("  External repo build: CI can be skipped")
+            return True
+
+    # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
+    if not ci_inputs.external_repo and git_context.changed_files is not None:
+        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
+        if not is_ci_run_required(git_context.changed_files):
+            print("  TheRock: CI can be skipped")
+            return True
+
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -631,28 +898,6 @@ def should_skip_ci(
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
-
-    # External repo builds skip path filtering - they always run CI and use
-    # stage reuse to determine which stages to rebuild.
-    # TODO(#3343): Reuse skip path filters from external repos to short-circuit
-    # CI for docs-only changes, experimental projects, etc.
-    if ci_inputs.external_repo:
-        print("  External repo build: skipping path filter checks, using stage reuse")
-        return False
-
-    # If we have a list of changed files (push/pull_request events), check if
-    # CI should run for that set of changed files. For example: if only .md
-    # files are changed, skip CI.
-    if git_context.changed_files is not None:
-        print(
-            f"  Checking {len(git_context.changed_files)} changed file(s) "
-            f"against path filters..."
-        )
-        if not is_ci_run_required(git_context.changed_files):
-            print("  Skipping: no CI-relevant files changed")
-            return True
-        else:
-            print("  CI-relevant files changed, running CI")
 
     return False
 
@@ -688,6 +933,119 @@ def _filter_families_by_platform(
     ]
 
 
+def _apply_arch_labels(
+    ci_inputs: CIInputs,
+    all_families: dict,
+    linux_names: list[str],
+    windows_names: list[str],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Apply PR arch labels (ci:gfx*, ci:build:gfx*, ci:test:gfx*) to family lists.
+
+    Labels are classified into batches and applied in priority order so that
+    behavior is deterministic regardless of label iteration order:
+
+      1. ci:run-all-archs — overrides both platform lists to all families
+      2. ci:gfx* — adds family to builds AND tests (bypasses trigger gating)
+      3. ci:build:gfx* — adds family to builds only
+      4. ci:test:gfx* — adds family to tests only (requires build label)
+
+    Mutates linux_names/windows_names in place and returns the build_only /
+    test_only lists.
+    """
+    linux_build_only: list[str] = []
+    windows_build_only: list[str] = []
+    linux_test_only: list[str] = []
+    windows_test_only: list[str] = []
+
+    if not ci_inputs.is_pull_request:
+        return linux_build_only, windows_build_only, linux_test_only, windows_test_only
+
+    # Classify labels into batches first, then apply in priority order.
+    has_run_all = False
+    gfx_targets: list[tuple[str, str]] = []  # (label, normalized_target)
+    build_targets: list[tuple[str, str]] = []
+    test_targets: list[tuple[str, str]] = []
+
+    for label in ci_inputs.pr_labels:
+        if label == "ci:run-all-archs":
+            has_run_all = True
+        elif label.lower().startswith("ci:build:gfx"):
+            target = label.lower().removeprefix("ci:build:").split("-")[0]
+            build_targets.append((label, target))
+        elif label.lower().startswith("ci:test:gfx"):
+            target = label.lower().removeprefix("ci:test:").split("-")[0]
+            test_targets.append((label, target))
+        elif label.lower().startswith("ci:gfx"):
+            # Trim suffixes: ci:gfx94X-dcgpu -> gfx94x
+            target = label.lower().removeprefix("ci:").split("-")[0]
+            gfx_targets.append((label, target))
+
+    # 1. ci:run-all-archs takes highest priority — override to all families.
+    if has_run_all:
+        linux_names[:] = list(all_families.keys())
+        windows_names[:] = list(all_families.keys())
+        print("  Label 'ci:run-all-archs' -> all families")
+
+    # 2. ci:gfx* — build AND test, bypassing trigger-based test gating.
+    for label, target in gfx_targets:
+        linux_names.append(target)
+        windows_names.append(target)
+        linux_test_only.append(target)
+        windows_test_only.append(target)
+        print(f"  Label '{label}' -> adding target {target} (build + test)")
+
+    # 3. ci:build:gfx* — build only.
+    for label, target in build_targets:
+        linux_names.append(target)
+        windows_names.append(target)
+        linux_build_only.append(target)
+        windows_build_only.append(target)
+        print(f"  Label '{label}' -> adding build-only target {target}")
+
+    # 4. ci:test:gfx* — test only (validated later to require a build label).
+    for label, target in test_targets:
+        linux_test_only.append(target)
+        windows_test_only.append(target)
+        print(f"  Label '{label}' -> adding test-only target {target}")
+
+    return linux_build_only, windows_build_only, linux_test_only, windows_test_only
+
+
+def _apply_platform_labels(
+    ci_inputs: CIInputs,
+    linux_names: list[str],
+    windows_names: list[str],
+    linux_build_only: list[str],
+    windows_build_only: list[str],
+    linux_test_only: list[str],
+    windows_test_only: list[str],
+) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]]:
+    """Apply ci:platform:* labels, clearing all lists for excluded platforms."""
+    has_platform_linux = "ci:platform:linux" in ci_inputs.pr_labels
+    has_platform_windows = "ci:platform:windows" in ci_inputs.pr_labels
+    if has_platform_linux or has_platform_windows:
+        if has_platform_linux:
+            print("  Label 'ci:platform:linux' -> including Linux builds/tests")
+        else:
+            linux_names = []
+            linux_build_only = []
+            linux_test_only = []
+        if has_platform_windows:
+            print("  Label 'ci:platform:windows' -> including Windows builds/tests")
+        else:
+            windows_names = []
+            windows_build_only = []
+            windows_test_only = []
+    return (
+        linux_names,
+        windows_names,
+        linux_build_only,
+        windows_build_only,
+        linux_test_only,
+        windows_test_only,
+    )
+
+
 def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     """Determine GPU families per platform based on trigger type and inputs.
 
@@ -695,7 +1053,7 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
     - pull_request: Smallest default set (presubmit families). Designed for
       fast feedback on proposed changes. PR labels can opt in to additional
-      families (gfx* labels) or the full set (ci:run-all-archs).
+      families (ci:gfx* labels) or the full set (ci:run-all-archs).
     - push: Broader coverage (presubmit + postsubmit families). Runs on
       code that has landed, so we want more thorough validation than PRs
       without paying the full nightly cost.
@@ -705,34 +1063,63 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
       taken directly from the workflow inputs, giving the caller the ability
       to either replicate what CI does on PRs/push or build/test a narrow
       set of targets for investigation.
+    - pull requests and pushes with explicit per-platform family inputs: The
+      caller-supplied families take precedence over trigger defaults. PR labels
+      can still extend this caller-selected set.
 
     Returns per-platform family lists, filtered to only include families
     that have a platform entry in amdgpu_family_matrix.py.
     """
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
+    # All families for validation and "all" keyword expansion.
+    # Empty trigger list returns all families (workflow_dispatch/schedule case).
+    all_families = get_all_families_for_trigger_types([])
+    # Default families excludes explicit_only targets (used for "all" keyword)
+    default_family_names = list(all_families)
+    # For workflow_dispatch, also include explicit_only families for lookup
+    if ci_inputs.is_workflow_dispatch:
+        all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
 
     # Select family names per platform based on trigger type.
     # Ordered from most-specific (workflow_dispatch) to broadest (schedule).
     if ci_inputs.is_workflow_dispatch:
-        # Manual trigger: caller specifies exact families per platform.
+        # Manual trigger: all families are implicitly allowed.
+        # Caller specifies exact families per platform.
         # "all" = all known families. "none" or empty = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
         if linux_names == ["all"]:
-            linux_names = list(all_families.keys())
+            linux_names = default_family_names
             print("  linux_amdgpu_families='all' -> all Linux families")
         elif linux_names == ["none"]:
             linux_names = []
         if windows_names == ["all"]:
-            windows_names = list(all_families.keys())
+            windows_names = default_family_names
             print("  windows_amdgpu_families='all' -> all Windows families")
         elif windows_names == ["none"]:
             windows_names = []
+    elif (ci_inputs.is_pull_request or ci_inputs.is_push) and (
+        ci_inputs.linux_amdgpu_families or ci_inputs.windows_amdgpu_families
+    ):
+        # Callers can define their intended build coverage through the reusable
+        # workflow inputs. When either platform is explicit, an empty input for
+        # the other platform skips it; trigger defaults apply only when both
+        # inputs are empty.
+        linux_names = list(ci_inputs.linux_amdgpu_families)
+        windows_names = list(ci_inputs.windows_amdgpu_families)
+        if linux_names == ["all"]:
+            linux_names = default_family_names
+            print("  linux_amdgpu_families='all' -> all Linux families")
+        elif linux_names == ["none"]:
+            linux_names = []
+        if windows_names == ["all"]:
+            windows_names = default_family_names
+            print("  windows_amdgpu_families='all' -> all Windows families")
+        elif windows_names == ["none"]:
+            windows_names = []
+        print("  Using caller-supplied GPU families")
     elif ci_inputs.is_pull_request:
         # Smallest default set for fast PR feedback. PR labels can extend
-        # the set below (gfx* for individual families, ci:run-all-archs
+        # the set below (ci:gfx* for individual families, ci:run-all-archs
         # for everything).
         defaults = list(get_all_families_for_trigger_types(["presubmit"]).keys())
         linux_names = list(defaults)
@@ -747,7 +1134,8 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
         linux_names = list(defaults)
         windows_names = list(defaults)
     elif ci_inputs.is_schedule:
-        # Schedule trigger: use explicit inputs if provided, else all families.
+        # Schedule trigger: all families implicitly allowed (like workflow_dispatch).
+        # Use explicit inputs if provided, else all families.
         # "all" or empty = all known families. "none" = skip platform.
         linux_names = list(ci_inputs.linux_amdgpu_families)
         windows_names = list(ci_inputs.windows_amdgpu_families)
@@ -769,40 +1157,90 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     else:
         raise ValueError(f"Unsupported event type: {ci_inputs.event_name!r}")
 
-    # PR labels can extend the family set (both platforms)
-    if ci_inputs.is_pull_request:
-        for label in ci_inputs.pr_labels:
-            if label == "ci:run-all-archs":
-                # Override to all families.
-                linux_names = list(all_families.keys())
-                windows_names = list(all_families.keys())
-                print("  Label 'ci:run-all-archs' -> all families")
-                break
-            if label.startswith("gfx"):
-                # Trim suffixes from labels since amdgpu_family_matrix.py
-                # specifies families with no suffix (e.g. `gfx94x`) but
-                # we have some labels like `gfx94X-dcgpu` or `gfx103X-linux`.
-                # Note: labels are normalized to lowercase during parsing.
-                target = label.split("-")[0]
-                linux_names.append(target)
-                windows_names.append(target)
-                print(f"  Label '{label}' -> adding target {target}")
+    # Apply PR label overrides to the trigger-selected family lists.
+    # Labels are processed in priority order (not iteration order) to ensure
+    # deterministic behavior regardless of label ordering on the PR.
+    linux_build_only, windows_build_only, linux_test_only, windows_test_only = (
+        _apply_arch_labels(
+            ci_inputs,
+            all_families,
+            linux_names,
+            windows_names,
+        )
+    )
+
+    # Platform-specific labels: if any ci:platform:* label is set, clear all
+    # lists for platforms NOT requested. This includes families, build_only,
+    # and test_only lists to prevent validation errors and stale data.
+    (
+        linux_names,
+        windows_names,
+        linux_build_only,
+        windows_build_only,
+        linux_test_only,
+        windows_test_only,
+    ) = _apply_platform_labels(
+        ci_inputs,
+        linux_names,
+        windows_names,
+        linux_build_only,
+        windows_build_only,
+        linux_test_only,
+        windows_test_only,
+    )
 
     # De-dup, validate, then filter by platform availability.
     linux_names = list(dict.fromkeys(linux_names))
     windows_names = list(dict.fromkeys(windows_names))
+    linux_build_only = list(dict.fromkeys(linux_build_only))
+    windows_build_only = list(dict.fromkeys(windows_build_only))
+    linux_test_only = list(dict.fromkeys(linux_test_only))
+    windows_test_only = list(dict.fromkeys(windows_test_only))
+
     _validate_family_names(linux_names, all_families)
     _validate_family_names(windows_names, all_families)
+
+    # Validate that test-only families have corresponding build labels.
+    # Tests depend on build artifacts, so ci:test:gfx* requires ci:gfx* or ci:build:gfx*.
+    for target in linux_test_only:
+        if target not in linux_names and target not in linux_build_only:
+            raise ValueError(
+                f"ci:test:{target} label requires a corresponding build label "
+                f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
+            )
+    for target in windows_test_only:
+        if target not in windows_names and target not in windows_build_only:
+            raise ValueError(
+                f"ci:test:{target} label requires a corresponding build label "
+                f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
+            )
+
     # TODO: For workflow_dispatch, a family requested for a specific platform
     # but not available there (e.g. gfx94x on windows) is silently dropped.
     # Consider validating per-platform and reporting the mismatch.
     # We could also filter per-platform in get_all_families_for_trigger_types.
     linux_names = _filter_families_by_platform(linux_names, "linux", all_families)
     windows_names = _filter_families_by_platform(windows_names, "windows", all_families)
+    linux_build_only = _filter_families_by_platform(
+        linux_build_only, "linux", all_families
+    )
+    windows_build_only = _filter_families_by_platform(
+        windows_build_only, "windows", all_families
+    )
+    linux_test_only = _filter_families_by_platform(
+        linux_test_only, "linux", all_families
+    )
+    windows_test_only = _filter_families_by_platform(
+        windows_test_only, "windows", all_families
+    )
 
     return TargetSelection(
         linux_families=linux_names,
         windows_families=windows_names,
+        linux_build_only_families=linux_build_only,
+        windows_build_only_families=windows_build_only,
+        linux_test_only_families=linux_test_only,
+        windows_test_only_families=windows_test_only,
     )
 
 
@@ -812,24 +1250,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 
 
 _VALID_TEST_FILTER_TYPES = {"quick", "standard", "comprehensive", "full"}
-
-
-def _has_test_labels(ci_inputs: CIInputs) -> bool:
-    """Check whether any test labels were specified (workflow_dispatch or PR).
-
-    Note: test_filter: labels are not test labels - they control test_type,
-    not which tests to run.
-    """
-    # Filter out test_filter: labels - those control test_type, not test selection
-    linux_tests = [
-        l for l in ci_inputs.linux_test_labels if not l.startswith("test_filter:")
-    ]
-    windows_tests = [
-        l for l in ci_inputs.windows_test_labels if not l.startswith("test_filter:")
-    ]
-    if linux_tests or windows_tests:
-        return True
-    return any(label.startswith("test:") for label in ci_inputs.pr_labels)
 
 
 def _determine_test_type(
@@ -870,13 +1290,7 @@ def _determine_test_type(
             )
         return filter_type, f"test_filter label: {label}"
 
-    # Priority 2: test:* labels request specific component tests (e.g.
-    # test:rocprim). When someone explicitly asks for tests, run the full
-    # suite — they're investigating something specific.
-    if _has_test_labels(ci_inputs):
-        return "full", "test labels specified"
-
-    # Priority 3: release builds run deeper test suites than regular CI.
+    # Priority 2: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,
     #   on a daily cadence)
     # * 'prerelease' gets full (exhaustive pre-release validation)
@@ -886,13 +1300,13 @@ def _determine_test_type(
     if ci_inputs.release_type == "prerelease":
         return "full", "release build (prerelease)"
 
-    # Priority 4: schedule runs the full nightly suite — comprehensive
+    # Priority 3: schedule runs the full nightly suite — comprehensive
     # coverage on a cadence, catching regressions that quick tests miss.
     if ci_inputs.is_schedule:
         return "comprehensive", "scheduled run"
 
-    # Priority 5: a submodule change means actual library code changed
-    # (e.g. rocBLAS, MIOpen). These need full testing since the change
+    # Priority 4: a submodule change means actual library code changed
+    # (e.g. rocBLAS, MIOpen). These need standard testing since the change
     # could affect any downstream consumer.
     if git_context.has_submodule_changes is True:
         matching = set(git_context.submodule_paths) & set(git_context.changed_files)
@@ -917,6 +1331,25 @@ def decide_jobs(
     # Build ROCm.
     stage_reuse_mode = StageReuseMode.from_environ()
 
+    # Force stage reuse off when running on a release branch.
+    # Release branches may use floating repository references instead of exact
+    # pins and the impact of building with stale artifacts is too high to risk.
+    target_branch = (
+        ci_inputs.pr_base_ref if ci_inputs.is_pull_request else ci_inputs.commit_ref
+    )
+    if any(
+        ref.removeprefix("refs/heads/").startswith("release/")
+        for ref in (target_branch, ci_inputs.checkout_ref)
+    ):
+        logging.info(
+            "[STAGE-REUSE] requested=%s effective=off: release branch "
+            "(target=%s, checkout=%s)",
+            stage_reuse_mode.value,
+            target_branch,
+            ci_inputs.checkout_ref,
+        )
+        stage_reuse_mode = StageReuseMode.OFF
+
     if stage_reuse_mode is StageReuseMode.OFF:
         # Strong off is authoritative: do not parse or honor explicit
         # prebuilt_stages, do not retain a baseline, and do not invoke automatic
@@ -940,9 +1373,26 @@ def decide_jobs(
     else:
         # Explicit prebuilt stages are honored in dry-run and reuse-stage modes.
         stage_decisions = {}
+        explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            for stage in _parse_prebuilt_stages(ci_inputs.prebuilt_stages):
+            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
+
+        # Log explicit baseline configuration when provided.
+        if ci_inputs.baseline_run_id and explicit_prebuilt_stages:
+            baseline_repo_info = (
+                f" from {ci_inputs.baseline_repository}"
+                if ci_inputs.baseline_repository
+                else ""
+            )
+            logging.info(
+                "[STAGE-REUSE] using explicit baseline_run_id=%s%s for "
+                "prebuilt_stages: %s",
+                ci_inputs.baseline_run_id,
+                baseline_repo_info,
+                ", ".join(explicit_prebuilt_stages),
+            )
 
         # In dry-run, automatic reuse is analyzed but not applied. In
         # reuse-stage, eligible stages are added to stage_decisions.
@@ -951,6 +1401,7 @@ def decide_jobs(
             mode=stage_reuse_mode,
             linux_amdgpu_families=targets.linux_families,
             windows_amdgpu_families=targets.windows_families,
+            explicit_prebuilt_stages=explicit_prebuilt_stages,
         )
 
         baseline_repository = ci_inputs.baseline_repository
@@ -962,11 +1413,42 @@ def decide_jobs(
         if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
             baseline_run_id = auto_stage_reuse.baseline_run_id
 
+    # A build_stages allowlist narrows the build graph: everything outside it
+    # is skipped outright, with no artifacts built or copied. This takes
+    # precedence over prebuilt/reuse decisions, which only matter for stages
+    # that are part of the build in the first place.
+    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    if skipped_stages:
+        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
+        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        for stage in skipped_stages:
+            stage_decisions[stage] = JobAction.SKIP
+
+    # For external repos, use changed_projects to determine artifact-level reuse.
+    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
+    # changed-file analysis.
+    rebuild_artifacts: list[str] = (
+        list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
+    )
+    reusable_artifacts: list[str] = (
+        list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
+    )
+    if (
+        stage_reuse_mode is not StageReuseMode.OFF
+        and ci_inputs.changed_projects
+        and not rebuild_artifacts
+    ):
+        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
+            ci_inputs.changed_projects
+        )
+
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
         stage_decisions=stage_decisions,
         baseline_run_id=baseline_run_id,
         baseline_repository=baseline_repository,
+        rebuild_artifacts=rebuild_artifacts,
+        reusable_artifacts=reusable_artifacts,
     )
     # Test ROCm.
     test_type, test_type_reason = _determine_test_type(
@@ -993,6 +1475,18 @@ def decide_jobs(
     build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
     build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
+    # PR labels can override packaging job decisions.
+    pr_labels = ci_inputs.pr_labels
+    if "ci:build-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.RUN
+    elif "ci:skip-pytorch" in pr_labels:
+        build_pytorch_action = JobAction.SKIP
+
+    if "ci:build-jax" in pr_labels:
+        build_jax_action = JobAction.RUN
+    elif "ci:skip-jax" in pr_labels:
+        build_jax_action = JobAction.SKIP
+
     # Other jobs run unconditionally with no configuration.
     # TODO: job pruning: skip pytorch if only JAX has been edited, etc.
 
@@ -1012,6 +1506,90 @@ def decide_jobs(
 # ---------------------------------------------------------------------------
 
 
+def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[str]:
+    """Determine which triggers are active for current CI context.
+
+    Triggers are cumulative - multiple can be active at once. For example,
+    a push to main with submodule changes activates both "postsubmit" and
+    "submodule_bump" triggers.
+
+    Note: workflow_dispatch (on_demand) is handled separately - it implicitly
+    allows all families, so it's not returned as a trigger here.
+
+    Returns:
+        Set of active trigger names from: presubmit, postsubmit, submodule_bump,
+        nightly.
+    """
+    triggers: set[str] = set()
+
+    # Event-based triggers (mutually exclusive)
+    # Note: workflow_dispatch handled separately in _should_run_tests_for_family
+    if ci_inputs.is_schedule:
+        triggers.add("nightly")
+    if ci_inputs.is_push:
+        triggers.add("postsubmit")
+    if ci_inputs.is_pull_request:
+        triggers.add("presubmit")
+
+    # Context-based triggers (can stack on top of event triggers)
+    # submodule_bump only applies to TheRock, not external repos.
+    if git_context.has_submodule_changes is True and not ci_inputs.external_repo:
+        triggers.add("submodule_bump")
+
+    return triggers
+
+
+def _should_run_tests_for_family(
+    platform_info: dict,
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> tuple[bool, str]:
+    """Determine if tests should run based on tests_on_trigger field.
+
+    This function replaces the old flag-based logic (nightly_check_only_for_family,
+    submodule_bump_tests_only, trigger_test_label_only) with a unified trigger-based
+    approach.
+
+    workflow_dispatch (on_demand) and ci:run-all-archs label implicitly allow
+    all families to run tests, since both represent explicit user intent to
+    run the full matrix.
+
+    Returns:
+        Tuple of (should_run, reason_string) for logging.
+    """
+    # workflow_dispatch implicitly allows all families
+    if ci_inputs.is_workflow_dispatch:
+        return True, "workflow_dispatch (on_demand)"
+
+    # ci:run-all-archs label means build AND test all families
+    # TODO(ROCm/rocm-systems#11374): Remove once gfx125x can run in ROCm/TheRock.
+    _RUN_ALL_ARCHS_TEST_EXCLUDE = {"gfx125X-dcgpu", "gfx117X-all"}
+    if "ci:run-all-archs" in ci_inputs.pr_labels:
+        family = platform_info.get("family", "")
+        if family in _RUN_ALL_ARCHS_TEST_EXCLUDE:
+            return False, f"ci:run-all-archs excludes tests for {family}"
+        return True, "ci:run-all-archs label"
+
+    tests_on_trigger = set(platform_info.get("tests_on_trigger", []))
+
+    # If no test triggers configured, tests should not run
+    if not tests_on_trigger:
+        return False, "no tests_on_trigger configured"
+
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+
+    # Check if any current trigger matches the allowed test triggers
+    matching = tests_on_trigger & current_triggers
+
+    if matching:
+        return True, f"trigger match: {matching}"
+
+    return (
+        False,
+        f"no trigger match (current={current_triggers}, allowed={tests_on_trigger})",
+    )
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1020,6 +1598,8 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     jobs: JobDecisions,
     git_context: GitContext,
+    build_only_families: list[str] | None = None,
+    test_only_families: list[str] | None = None,
 ) -> BuildConfig | None:
     """Build a BuildConfig for one platform, or None if no families match.
 
@@ -1031,7 +1611,19 @@ def _expand_build_config_for_platform(
     - amdgpu_targets: comma-separated gfx targets for split artifact fetching
     - test-runs-on: runner label for testing (empty = no test runner available)
     - sanity_check_only_for_family: whether to limit test scope
+
+    Families with a WSL runner (ci:run-wsl) are also listed in wsl_per_family_info.
+
+    Args:
+        build_only_families: Families where tests should be skipped even if
+            hardware is available (from ci:build:gfx* labels).
+        test_only_families: Families where tests should be force-enabled
+            (from ci:test:gfx* labels).
     """
+    if build_only_families is None:
+        build_only_families = []
+    if test_only_families is None:
+        test_only_families = []
     build_variant = variant_config["build_variant_label"]
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
@@ -1043,6 +1635,7 @@ def _expand_build_config_for_platform(
             break
 
     per_family_info: list[dict] = []
+    wsl_per_family_info: list[dict] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -1082,24 +1675,7 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant == "asan":
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif build_variant == "host-asan":
+        if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
             # due to limited ASAN runner capacity and stability concerns.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
@@ -1119,6 +1695,23 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: no host-asan sandbox runner available, "
                     f"disabling tests"
                 )
+        elif "asan" in build_variant:
+            # Only run full ASAN tests on scheduled or workflow_dispatch runs
+            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
+                    f"disabling tests"
+                )
+            elif "test-runs-on-sandbox" in platform_info:
+                test_runs_on = platform_info["test-runs-on-sandbox"]
+                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
+            else:
+                test_runs_on = ""
+                print(
+                    f"  {family_name}: no ASAN sandbox runner available, "
+                    f"disabling tests"
+                )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if (
@@ -1131,46 +1724,100 @@ def _expand_build_config_for_platform(
                 f"disabling tests for quick test run"
             )
 
-        # If nightly_check_only_for_family is set, only run tests for schedule
-        # or workflow_dispatch triggers (to allow manual testing of nightly-only archs)
-        if platform_info.get("nightly_check_only_for_family", False) and not (
-            ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch
-        ):
+        # Handle build-only labels (ci:build:gfx*).
+        # These allow verifying compilation without running tests.
+        # Note: if ci:test:gfx* is also present, test-only wins (user wants tests).
+        if family_name in build_only_families and family_name not in test_only_families:
+            if test_runs_on:
+                print(f"  {family_name}: tests disabled (ci:build:{family_name} label)")
             test_runs_on = ""
-            print(
-                f"  {family_name}: nightly_check_only_for_family flag set, "
-                f"disabling test runner for non-scheduled/non-dispatch runs"
+        # Use trigger-based test gating (replaces nightly_check_only_for_family,
+        # submodule_bump_tests_only, and trigger_test_label_only flags).
+        # Each family specifies tests_on_trigger list; tests run if any current
+        # trigger matches.
+        # Skip trigger-based gating for test-only families (ci:test:gfx*) - they
+        # explicitly request tests regardless of trigger type.
+        elif test_runs_on and family_name not in test_only_families:
+            should_run, reason = _should_run_tests_for_family(
+                platform_info, ci_inputs, git_context
             )
+            if not should_run:
+                test_runs_on = ""
+                print(f"  {family_name}: tests disabled ({reason})")
 
-        # If submodule_bump_tests_only is set, only run tests when submodule changes
-        # are detected or on workflow_dispatch (manual triggers).
-        if (
-            platform_info.get("submodule_bump_tests_only", False)
-            and not ci_inputs.is_workflow_dispatch
-            and git_context.has_submodule_changes is not True
-        ):
+        # If test_type_for_family is set, force the test type for this family.
+        # This overrides the global test_type, allowing families with limited
+        # hardware to always run quick tests regardless of trigger type.
+        test_type_for_family = platform_info.get("test_type_for_family", "")
+        family_test_type = None
+        if test_type_for_family and test_runs_on:
+            family_test_type = test_type_for_family
+            if family_test_type != jobs.test_rocm.test_type:
+                print(
+                    f"  {family_name}: forcing test_type={family_test_type} "
+                    f"(global={jobs.test_rocm.test_type})"
+                )
+
+        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
+        # This is useful for changes that don't require GPU testing (e.g., docs,
+        # build scripts, CPU-only components).
+        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
             test_runs_on = ""
-            print(
-                f"  {family_name}: submodule_bump_tests_only flag set, "
-                f"disabling tests (no submodule changes detected)"
-            )
+            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
+
+        # CPU test runner for components that don't need GPU access (e.g.,
+        # components with linux_cpu_runner: True). This allows CPU-only tests
+        # to run even when GPU testing is gated (e.g., trigger_test_label_only).
+        test_runs_on_cpu = get_cpu_test_runner(platform)
+
+        # tests_enabled is true when any test runner (GPU or CPU) is available.
+        # This provides a single flag for workflows to gate test jobs.
+        tests_enabled = bool(test_runs_on or test_runs_on_cpu)
 
         family_info = {
             "amdgpu_family": platform_info["family"],
             "amdgpu_targets": ",".join(platform_info["fetch-gfx-targets"]),
             "test-runs-on": test_runs_on,
+            "test-runs-on-cpu": test_runs_on_cpu,
+            "tests_enabled": tests_enabled,
             "sanity_check_only_for_family": platform_info.get(
                 "sanity_check_only_for_family", False
             ),
         }
+        if family_test_type:
+            family_info["test_type"] = family_test_type
         if test_runs_on and "test-runs-on-labels" in platform_info:
             family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
+        # Include multi-GPU runner info only when GPU tests are enabled.
+        # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
+        # should also be gated to respect the same trigger policy.
+        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
+            family_info["test-runs-on-multi-gpu"] = platform_info[
+                "test-runs-on-multi-gpu"
+            ]
+        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
+            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
+                "test-runs-on-multi-gpu-labels"
+            ]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
                 "test_labels_for_family"
             ]
         per_family_info.append(family_info)
+
+        test_runs_on_wsl = get_wsl_test_runner(
+            platform_info,
+            labels=ci_inputs.pr_labels,
+            test_runs_on=test_runs_on,
+            build_variant=build_variant,
+        )
+        if test_runs_on_wsl:
+            wsl_family_info = {
+                k: v for k, v in family_info.items() if not k.startswith("test-runs-on")
+            }
+            wsl_family_info["test-runs-on"] = test_runs_on_wsl
+            wsl_per_family_info.append(wsl_family_info)
 
     if not per_family_info:
         return None
@@ -1180,7 +1827,9 @@ def _expand_build_config_for_platform(
     suffix = variant_config.get("build_variant_suffix", "")
 
     # Select build runner using weighted distribution
-    build_runs_on = select_build_runner(platform, build_variant)
+    build_runs_on_large = select_build_runner(platform, build_variant, size="large")
+    build_runs_on_small = select_build_runner(platform, build_variant, size="small")
+    build_runs_on_medium = select_build_runner(platform, build_variant, size="medium")
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -1208,7 +1857,7 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    is_asan = suffix == "asan"
+    is_asan = suffix in ("asan", "host-asan")
     build_python_packages = ci_inputs.build_python_packages and not is_asan
     test_python_packages_matrix = (
         build_rocm_python_test_matrix(
@@ -1218,25 +1867,78 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
+    build_native_linux = ci_inputs.build_native_linux and platform == "linux"
+    build_native_windows = ci_inputs.build_native_windows and platform == "windows"
+
+    # PR labels can override packaging build decisions.
+    pr_labels = ci_inputs.pr_labels
+    if platform == "linux":
+        if "ci:build-native-linux" in pr_labels:
+            build_native_linux = True
+        elif "ci:skip-native-linux" in pr_labels:
+            build_native_linux = False
+
+    if platform == "windows":
+        if "ci:build-native-windows" in pr_labels:
+            build_native_windows = True
+        elif "ci:skip-native-windows" in pr_labels:
+            build_native_windows = False
+
+    if "ci:build-python-packages" in pr_labels:
+        build_python_packages = True
+    elif "ci:skip-python-packages" in pr_labels:
+        build_python_packages = False
+
+    # Ensure python packages are built if pytorch or jax are enabled,
+    # since they depend on rocm python packages.
+    if build_pytorch or build_jax:
+        if not build_python_packages:
+            print("  Enabling python packages (required by pytorch/jax)")
+        build_python_packages = True
+
+    # When stages are skipped (partial build), disable package builds since
+    # they require a complete artifact set. Prebuilt/reused stages are OK
+    # because their artifacts are copied from a baseline run.
+    has_skipped_stages = bool(jobs.build_rocm.skipped_stages)
+    if has_skipped_stages:
+        print(
+            f"  Disabling package builds due to skipped stages: "
+            f"{jobs.build_rocm.skipped_stages}"
+        )
+        build_python_packages = False
+        build_pytorch = False
+        build_jax = False
+        build_native_linux = False
+        build_native_windows = False
+        pytorch_build_matrix = []
+        jax_build_matrix = []
+        test_python_packages_matrix = []
 
     return BuildConfig(
         per_family_info=per_family_info,
+        wsl_per_family_info=wsl_per_family_info,
         dist_amdgpu_families=dist_amdgpu_families,
         artifact_group=f"multi-arch-{suffix or 'release'}",
         build_variant_label=variant_config["build_variant_label"],
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
-        build_native_linux=ci_inputs.build_native_linux,
+        build_native_linux=build_native_linux,
+        build_native_windows=build_native_windows,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
         pytorch_build_matrix=pytorch_build_matrix,
         jax_build_matrix=jax_build_matrix,
-        build_runs_on=build_runs_on,
+        build_runs_on_large=build_runs_on_large,
+        build_runs_on_small=build_runs_on_small,
+        build_runs_on_medium=build_runs_on_medium,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
+        skip_stages=jobs.build_rocm.skipped_stages,
         baseline_run_id=jobs.build_rocm.baseline_run_id,
         baseline_repository=jobs.build_rocm.baseline_repository,
+        rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
+        reusable_artifacts=jobs.build_rocm.reusable_artifacts,
     )
 
 
@@ -1286,10 +1988,12 @@ def expand_build_configs(
     """Build a BuildConfig for each platform that supports the variant.
 
     Returns BuildConfigs with a BuildConfig per platform, or None for
-    platforms where the variant isn't available or no families match.
+    platforms where the variant isn't available, no families match, or no
+    artifacts will be built or reused.
     """
     all_families = get_all_families_for_trigger_types(
         ["presubmit", "postsubmit", "nightly"]
+        + (["explicit_only"] if ci_inputs.is_workflow_dispatch else [])
     )
 
     # =========================================================================
@@ -1319,10 +2023,36 @@ def expand_build_configs(
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
-    for platform, families in [
-        ("linux", targets.linux_families),
-        ("windows", targets.windows_families),
+    # Prebuilt stages still supply artifacts; only SKIP removes a stage's work.
+    topology = get_topology()
+    active_artifacts = [
+        topology.artifacts[name]
+        for stage in topology.get_build_stages()
+        if jobs.build_rocm.stage_decisions.get(stage.name) != JobAction.SKIP
+        for name in topology.get_produced_artifacts(stage.name)
+    ]
+
+    for platform, families, build_only, test_only in [
+        (
+            "linux",
+            targets.linux_families,
+            targets.linux_build_only_families,
+            targets.linux_test_only_families,
+        ),
+        (
+            "windows",
+            targets.windows_families,
+            targets.windows_build_only_families,
+            targets.windows_test_only_families,
+        ),
     ]:
+        if not any(
+            artifact.platform in (None, platform)
+            and platform not in artifact.disable_platforms
+            for artifact in active_artifacts
+        ):
+            print(f"  Platform {platform} has no artifacts to build or reuse, skipping")
+            continue
         variant_config = all_build_variants.get(platform, {}).get(build_variant)
         if not variant_config:
             print(
@@ -1338,6 +2068,8 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             jobs=jobs,
             git_context=git_context,
+            build_only_families=build_only,
+            test_only_families=test_only,
         )
         if platform == "linux":
             linux_config = config

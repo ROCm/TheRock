@@ -43,7 +43,7 @@ Choose one of these options to specify where to install from:
 | `--prim`        | Flag | Include primitives artifacts                       |
 | `--rand`        | Flag | Include random number generator artifacts          |
 | `--rccl`        | Flag | Include RCCL artifacts                             |
-| `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
+| `--rocdecode`   | Flag | Include rocDecode artifacts                        |
 | `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
 | `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
@@ -53,8 +53,9 @@ Choose one of these options to specify where to install from:
 | `--tests`       | Flag | Include test artifacts for enabled components      |
 
 > [!NOTE]
-> `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa` and are only
-> available on Linux.
+> `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa`. `--rocjpeg` is
+> available on Linux only; `--rocdecode` is available on Linux and Windows
+> (Windows uses the vaon12 VA-API-on-D3D12 backend).
 
 ### Utility Options
 
@@ -197,9 +198,6 @@ Prerelease tarballs are release candidates and follow the naming pattern: `MAJOR
 > [!NOTE]
 > The prerelease bucket grants no anonymous S3 read access, so prerelease tarballs can only be downloaded through the CDN.
 
-> [!NOTE]
-> ROCm 10.1 and newer prereleases resolve to https://rc.repo.amd.com/, which is not serving yet: every path there currently returns a CloudFront `Request blocked` page. Until it opens, use a prerelease below ROCm 10.1 from the legacy index.
-
 ##### Dev Tarballs
 
 Dev tarballs are built from specific commits and follow the naming pattern: `MAJOR.MINOR.PATCH.dev0+{COMMIT_HASH}`
@@ -312,7 +310,7 @@ Install RCCL and FFT components from a nightly build for gfx94X:
 
 ```bash
 python build_tools/install_rocm_from_artifacts.py \
-    --release 6.4.0rc20250416 \
+    --release 10.1.0a20260823 \
     --amdgpu-family gfx94X-dcgpu \
     --rccl --fft --tests
 ```
@@ -346,7 +344,7 @@ Install a development build using a commit hash version:
 
 ```bash
 python build_tools/install_rocm_from_artifacts.py \
-    --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 \
+    --release 10.1.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
     --amdgpu-family gfx110X-all
 ```
 

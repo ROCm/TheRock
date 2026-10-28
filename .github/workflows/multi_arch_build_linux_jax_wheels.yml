@@ -12,6 +12,10 @@
 #   - Uploads the resulting wheels to the multi-arch release bucket.
 #   - Runs the JAX test subset against the published multi-arch index.
 
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust callers supply Quartz credentials without repeating nested mappings.
+
 name: Multi-Arch Build Linux JAX Wheels
 
 on:
@@ -35,9 +39,21 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref."
+        description: "JAX ref to build from jax_repository."
         type: string
         required: true
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
+      wheel_type:
+        description: "release builds the plugin and PJRT wheels for a ref whose jax/jaxlib are on PyPI; nightly also builds jax and jaxlib from the same checkout, dated from its HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
+        type: string
+        default: "release"
+      publish:
+        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -105,9 +121,24 @@ on:
         required: false
         default: ""
       jax_ref:
-        description: "JAX / rocm-jax release ref."
+        description: "JAX ref to build from jax_repository."
         type: string
         required: true
+      rocm_jax_ref:
+        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        type: string
+        default: ""
+      wheel_type:
+        description: "release builds the plugin and PJRT for a ref on PyPI; nightly also builds jax and jaxlib, dated from the HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
+        type: choice
+        options:
+          - release
+          - nightly
+        default: release
+      publish:
+        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -151,20 +182,25 @@ run-name: Build Multi-Arch Linux JAX Wheels (${{ inputs.release_type }}, ${{ inp
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_jax_wheels:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload wheels.
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-26.04' }}
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
       jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
       jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+      jax_commit: ${{ steps.checkout_jax.outputs.commit }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
@@ -184,6 +220,7 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
@@ -191,15 +228,17 @@ jobs:
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: rocm-jax
           repository: ROCm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.rocm_jax_ref || inputs.jax_ref }}
 
       - name: Checkout JAX
         id: checkout_jax
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: jax-source
           repository: ${{ inputs.jax_repository }}
           ref: ${{ inputs.jax_ref }}
@@ -240,22 +279,31 @@ jobs:
             --progress=plain \
             .
 
-      - name: Determine wheel version suffix
+      - name: Resolve JAX wheel version
+        id: resolve_jax_version
+        env:
+          WHEEL_TYPE: ${{ inputs.wheel_type }}
         run: |
-          python build_tools/github_actions/determine_version.py \
-            --rocm-version "${{ inputs.rocm_version }}"
+          python build_tools/github_actions/resolve_jax_version.py \
+            --wheel-type "${WHEEL_TYPE}" \
+            --rocm-version "${ROCM_VERSION}" \
+            --jax-source-dir jax-source
 
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
-          ROCM_VERSION: ${{ inputs.rocm_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
+          JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
+          ML_WHEEL_VERSION_SUFFIX: ${{ steps.resolve_jax_version.outputs.ml_wheel_version_suffix }}
+          JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
         run: |
           docker run --rm \
             --user root \
+            --env JAX_COMMIT \
+            --env ML_WHEEL_VERSION_SUFFIX \
+            --env JAX_WHEELS \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
-            --env ML_WHEEL_VERSION_SUFFIX="${version_suffix}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
@@ -263,14 +311,14 @@ jobs:
             bash -lc '
               ROCM_ROOT="$(rocm-sdk path --root)"
               python build/build.py build \
-                --wheels=jax-rocm-plugin,jax-rocm-pjrt \
+                --wheels="${JAX_WHEELS}" \
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
-                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${{ steps.checkout_jax.outputs.commit }}" \
+                --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"
@@ -280,9 +328,10 @@ jobs:
         id: write_jax_versions
         run: |
           python3 ./build_tools/github_actions/write_jax_versions.py \
-            --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
+            --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
+        if: ${{ inputs.publish }}
         uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
           release_type: ${{ inputs.release_type }}
@@ -290,11 +339,13 @@ jobs:
 
       - name: Upload JAX wheels to release bucket
         id: publish_jax_wheels
+        if: ${{ inputs.publish }}
         run: |
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
-            --source-dir="${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type="${{ inputs.release_type }}" \
+            --source-dir="${PACKAGE_DIST_DIR}" \
+            --release-type="${BUILD_RELEASE_TYPE}" \
             --structured
+
 
       - name: Capture job summary
         id: summary
@@ -303,17 +354,23 @@ jobs:
 
   configure_jax_tests:
     name: Configure JAX Tests
-    if: ${{ inputs.test_amdgpu_family != '' }}
-    runs-on: ubuntu-24.04
+    # The tests install from the release index, so unpublished wheels go untested.
+    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
+    runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
+    env:
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
+      TEST_SIZE: ${{ inputs.test_size }}
+
     steps:
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
 
@@ -321,6 +378,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
@@ -332,9 +390,9 @@ jobs:
           CI_CONFIG_PATH: ci-config
         run: |
           python ./build_tools/github_actions/configure_jax_test_matrix.py \
-            --target "${{ inputs.test_amdgpu_family }}" \
+            --target "${TEST_AMDGPU_FAMILY}" \
             --platform linux \
-            --test-size "${{ inputs.test_size }}"
+            --test-size "${TEST_SIZE}"
 
       - name: Capture job summary
         id: summary
@@ -350,9 +408,8 @@ jobs:
       matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
     permissions:
       contents: read
-      id-token: write
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
@@ -364,6 +421,9 @@ jobs:
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
       jax_ref: ${{ inputs.jax_ref }}
+      jax_repository: ${{ inputs.jax_repository }}
+      jax_commit: ${{ needs.build_jax_wheels.outputs.jax_commit }}
+      rocm_jax_ref: ${{ inputs.rocm_jax_ref }}
       jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
       jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
       jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
@@ -378,7 +438,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels]
     name: "Quartz - completed - build JAX Wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

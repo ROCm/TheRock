@@ -1,0 +1,52 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# PR-time security scan. Requests human-readable reports only: findings are
+# uploaded as a build artifact and printed to the job summary, never to the
+# Security tab, so fork PRs (which never receive elevated tokens) behave
+# identically to same-repo PRs. See the scheduled counterpart
+# (security_scan_weekly.yml) for the SARIF / code-scanning upload.
+
+name: Security scan (PR)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: Security scan
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@86901f5856e12c7211bc04d012ce80ee9a02b4b5 # v1.0.5
+    with:
+      report_formats: human
+      bandit_config_path: build_tools/scan_tools/bandit.yml
+      codeql_config_path: build_tools/scan_tools/codeql.yml
+      gitleaks_config_path: build_tools/scan_tools/gitleaks.toml
+      trivy_config_path: build_tools/scan_tools/trivy.yml
+      zizmor_config_path: build_tools/scan_tools/zizmor.yml
+
+  security_scan_summary:
+    name: Security Scan Summary
+    if: always()
+    needs:
+      - security
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json "${NEEDS_JSON}"

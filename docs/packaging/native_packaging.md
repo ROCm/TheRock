@@ -6,6 +6,9 @@ distribution as Debian and RPM packages.
 This process involves both the reorganization of artifacts and the
 execution of package management tools
 
+To configure a system package manager to install ROCm from a public repository,
+see [rocm_repo_setup.md](rocm_repo_setup.md).
+
 ## General Design
 
 The required packages and their details are stored in a JSON file
@@ -91,7 +94,7 @@ Optional Fields
 
 ## S3 Configuration and Package Repository URLs
 
-The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py` and `build_tools/packaging/linux/upload_package_repo.py`.
+The following table shows the S3 bucket configuration and public repository URLs for each release type. This configuration is used by `build_tools/packaging/linux/get_s3_config.py`. CI workflows build repository metadata locally with `build_tools/packaging/linux/build_package_repo.py` (after the simulate install test), then upload with `build_tools/packaging/linux/upload_package_repo.py`.
 
 ### Current Multi-Arch Release Packages
 

@@ -22,7 +22,7 @@ logger = TheRockLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
+def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
 
     Builds a minimal RPM binary package whose payload is empty and whose primary
@@ -33,7 +33,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
     """
     logger.debug("create_nonversioned_rpm_package")
     # Create immutable config copy with versioned_pkg=False
@@ -43,7 +43,8 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -51,7 +52,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     return output_list
 
 
-def create_versioned_rpm_package(pkg_name, config: PackageConfig):
+def create_versioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a versioned RPM package (.rpm).
 
     This function automates the process of building a RPM package by:
@@ -64,7 +65,8 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     config: Configuration object containing package metadata
 
     Returns:
-    output_list: List of packages created
+    list[str]: List of created package filenames, empty if package was skipped
+               (e.g., when no artifacts exist for the target architecture)
     """
     logger.debug("create_versioned_rpm_package")
     # Explicitly ensure versioned_pkg=True
@@ -75,7 +77,8 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     updated_pkg_name = update_package_name(pkg_name, build_config)
     package_dir = Path(build_config.dest_dir) / build_config.pkg_type / updated_pkg_name
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, build_config)
+    if not generate_spec_file(pkg_name, specfile, build_config):
+        return []
     package_with_rpmbuild(specfile)
 
     # Move packages to destination
@@ -91,7 +94,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     specfile: Path where the generated spec file should be saved
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if spec file was generated, False if package should be skipped
     """
     logger.debug("generate_spec_file")
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
@@ -105,9 +108,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
-    # amdrocm-debugger: Exclude libpython requirements
+    # amdrocm-debugger: Exclude libpython requires only (provides are not an issue).
     # Multiple Python-version-specific binaries are included; the wrapper script
-    # automatically selects the binary matching the system's Python version
+    # automatically selects the binary matching the system's Python version.
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
 
     if config.versioned_pkg:
@@ -116,25 +119,34 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_info, "RPMRecommends", config
         )
         rpmsuggests = process_secondary_dependencies(pkg_info, "RPMSuggests", config)
-        requires = process_main_dependencies(pkg_info, "RPMRequires", config)
+        requires = process_versioned_dependencies(pkg_info, "RPMRequires", config)
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_kpack
+            pkg_name,
+            config.artifacts_dir,
+            config.gfx_arch,
+            config.enable_kpack,
+            target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
 
-        # Filter out non-existing directories
-        sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+        # Filter out non-existing directories (log filtered paths to aid debugging
+        # build configuration issues where expected directories weren't created)
+        filtered_out = [path for path in sourcedir_list if not path.is_dir()]
+        if filtered_out:
+            logger.debug(f"Filtered out non-existent directories: {filtered_out}")
+        sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
 
         # GFX_META is a versioned meta package (empty content, just dependencies)
         is_gfx_meta = config.enable_kpack and config.gfx_arch == GFX_META
 
-        # Warn if we have no artifacts for non-meta packages
+        # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
             if config.enable_kpack:
-                logger.warning(
-                    f"{pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                logger.info(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
                 )
+                return False
             else:
                 sys.exit(
                     f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
@@ -149,7 +161,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         obsoletes = process_name_field(pkg_info, "Obsoletes")
         conflicts = process_name_field(pkg_info, "Conflicts")
         # Non-versioned package requires versioned package itself
-        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
+        requires = process_nonversioned_dependencies(pkg_info, config)
 
     pkg_name = update_package_name(pkg_name, config)
 
@@ -189,25 +201,52 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
 
+    return True
+
 
 def generate_rpm_postscripts(pkg_info, config: PackageConfig):
-    """Generate RPM postinst/prerm sections.
+    """Generate RPM %post and %preun sections.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     config: Configuration object containing package metadata
 
-    Returns: rpm script sections for specfile
+    Returns: Dictionary containing rendered RPM script sections.
     """
-    # RPM maintainer scripts
-    EXEC_SCRIPTS = {
-        "preinst": "%pre",
-        "postinst": "%post",
-        "prerm": "%preun",
-        "postrm": "%postun",
-    }
+
     pkg_name = pkg_info.get("Package")
+    if not pkg_name:
+        raise ValueError("Package metadata does not contain a valid 'Package' name")
+
+    alternatives_binaries = load_alternatives_binaries()
+    json_pkg_config = alternatives_binaries.get(pkg_name)
+
+    if json_pkg_config is None:
+        raise ValueError(
+            f"No alternatives configuration found for RPM package " f"{pkg_name!r}"
+        )
+
     parts = config.rocm_version.split(".")
+
+    if len(parts) < 3:
+        raise ValueError(
+            f"Version string '{config.rocm_version}' does not have "
+            "major.minor.patch versions"
+        )
+
+    version_major_match = re.match(r"^\d+", parts[0])
+    version_minor_match = re.match(r"^\d+", parts[1])
+    version_patch_match = re.match(r"^\d+", parts[2])
+
+    if not all(
+        (
+            version_major_match,
+            version_minor_match,
+            version_patch_match,
+        )
+    ):
+        raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -216,29 +255,45 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
             default=False,
         ),
     )
-    # Prepare your context dictionary
-    context = {
-        "install_prefix": config.install_prefix,
-        "version_major": int(re.match(r"^\d+", parts[0]).group()),
-        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
-        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
-        "target": "rpm",
+
+    rpm_sections = {
+        "preinst": "%pre",
+        "postinst": "%post",
+        "prerm": "%preun",
+        "postrm": "%postun",
     }
 
-    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
-    # Collect all matching files
-    # This will hold rendered RPM script sections
+    scripts = json_pkg_config["scripts"]
+    binaries = json_pkg_config["binaries"]
+    core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
+    llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+
+    unsupported_scripts = set(scripts) - set(rpm_sections)
+    if unsupported_scripts:
+        raise ValueError(
+            f"Unsupported RPM maintainer scripts for package "
+            f"{pkg_name!r}: {sorted(unsupported_scripts)}"
+        )
+
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(version_major_match.group()),
+        "version_minor": int(version_minor_match.group()),
+        "version_patch": int(version_patch_match.group()),
+        "target": "rpm",
+        "package_name": pkg_name,
+        "binaries": binaries,
+        "core_symlinks": core_symlinks,
+        "llvm_symlinks": llvm_symlinks,
+    }
+
     rpm_script_sections = {}
 
-    for script, rpm_section in EXEC_SCRIPTS.items():
-        pattern = f"{pkg_name}-{script}.j2"
-
-        for file in templates_root.glob(pattern):
-            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
-            rendered = template.render(context)
-
-            # Store rendered script under its RPM section name
-            rpm_script_sections[rpm_section] = rendered
+    for script in scripts:
+        rpm_section = rpm_sections[script]
+        template_name = f"template/scripts/amdrocm-{script}.j2"
+        template = env.get_template(template_name)
+        rpm_script_sections[rpm_section] = template.render(context)
 
     return rpm_script_sections
 
