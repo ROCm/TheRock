@@ -50,16 +50,22 @@ Follow these steps:
 
    ![multi_arch_find_links_url](assets/multi_arch_find_links_url.jpg)
 
-1. Copy the rocm packages for that version from the "nightly" release bucket to
-   the "dev" release bucket by triggering
-   https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
+1. Copy the ROCm Core packages for that version from the nightly aggregate
+   index into the `dev` aggregate index by triggering
+   https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml with
+   `rocm_version` set to the version above (for example `10.3.0a20261027`).
+   This keeps `https://dev.repo.amd.com/rocm/whl-next/` self-contained so
+   `pip install torch` can resolve the pinned `rocm==VERSION` dependency.
 
    ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
 
 1. Trigger
    https://github.com/ROCm/TheRock/actions/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
-   from the branch you want and enter those inputs along with a list of GPU
-   families to build and test for, e.g. `gfx94X-dcgpu;gfx1151`:
+   from the branch you want. Use `release_type=dev` and the same
+   `rocm_version`. Leave `rocm_package_index_url` empty so the build installs
+   ROCm from `https://dev.repo.amd.com/rocm/whl-next/` (the same index torch
+   will be published to). Enter a list of GPU families to build and test for,
+   e.g. `gfx94X-dcgpu;gfx1151`:
 
    ![multi_arch_build_torch_trigger](assets/multi_arch_build_torch_trigger.jpg)
 
