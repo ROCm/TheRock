@@ -218,11 +218,14 @@ jobs:
         id: install_profiler
         # rocm[profiler] is not built on Windows, so skip the whole flow there
         # (the two dependent steps gate on this step's success).
+        # rocm-profiler requires pyelftools, which is mirrored to the ROCm
+        # index rather than built with the ROCm wheels.
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
             --packages "rocm[profiler]==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --extra-index-url=https://nightly.repo.amd.com/rocm/whl-next/ \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 

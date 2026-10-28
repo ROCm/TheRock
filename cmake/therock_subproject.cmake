@@ -1623,6 +1623,32 @@ function(therock_filter_amdgpu_targets out_var project_name)
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
 endfunction()
 
+# Resolve whether <subproject_name> still has supported gfx targets after the
+# per-arch EXCLUDE_TARGET_PROJECTS filter. Writes ON/OFF into <out_var> in the
+# caller's scope and logs a STATUS line when it flips to OFF.
+function(therock_check_subproject_targets out_var subproject_name)
+  cmake_parse_arguments(ARG "" "TARGETS_VAR;DEFAULT" "" ${ARGN})
+  if(NOT ARG_TARGETS_VAR)
+    set(ARG_TARGETS_VAR "THEROCK_AMDGPU_TARGETS")
+  endif()
+  if(NOT DEFINED ARG_DEFAULT)
+    set(ARG_DEFAULT ON)
+  endif()
+
+  set(_enabled "${ARG_DEFAULT}")
+  set(_targets "${${ARG_TARGETS_VAR}}")
+  if(_targets AND NOT "${_targets}" MATCHES "-NOTFOUND$")
+    therock_filter_amdgpu_targets(_filtered "${subproject_name}" ${_targets})
+    if(NOT _filtered)
+      message(STATUS
+        "${subproject_name}: no supported gfx targets remain after filtering "
+        "(${ARG_TARGETS_VAR}='${_targets}'); skipping subproject.")
+      set(_enabled OFF)
+    endif()
+  endif()
+  set(${out_var} "${_enabled}" PARENT_SCOPE)
+endfunction()
+
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
@@ -1870,6 +1896,9 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
+    if(CMAKE_HIP_COMPILER_LAUNCHER)
+      string(APPEND _toolchain_contents "set(CMAKE_HIP_COMPILER_LAUNCHER \"@CMAKE_HIP_COMPILER_LAUNCHER@\")\n")
+    endif()
     if(THEROCK_VERBOSE)
       message(STATUS "HIP_DIR = ${_hip_dist_dir}")
     endif()

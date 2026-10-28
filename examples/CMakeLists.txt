@@ -46,19 +46,11 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   set(_hiptensor_available ON)
 endif()
 
-# MIOpen is skipped when filtered out for the selected gfx targets (e.g.
-# amdgcnspirv), even though THEROCK_ENABLE_MIOPEN is ON. _miopen_enabled, set by
-# ml-libs/CMakeLists.txt, reflects the actual built status so the example does
-# not find_package() a missing miopen.
 set(_miopen_available OFF)
 if(_miopen_enabled AND THEROCK_ENABLE_MIOPEN)
   set(_miopen_available ON)
 endif()
 
-# FFT and rocALUTION are likewise skipped when filtered out for the selected gfx
-# targets (e.g. amdgcnspirv). _fft_enabled / _rocalution_enabled, set by
-# math-libs/CMakeLists.txt, reflect the actual built status so the example does
-# not find_package() a missing rocfft/hipfft or rocalution.
 set(_fft_available OFF)
 if(_fft_enabled AND THEROCK_ENABLE_FFT)
   set(_fft_available ON)

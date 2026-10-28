@@ -584,6 +584,14 @@ feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
 source_paths = ["clr", "hip", "amdgpu-windows-interop"]
 
+[artifacts.core-hrr]
+artifact_group = "hip-runtime"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+source_paths = ["hrr"]
+feature_group = "CORE"  # Part of core, enabled by default
+disable_platforms = ["windows"]
+
 [artifacts.core-ocl-icd]
 artifact_group = "opencl-runtime"
 type = "target-neutral"
@@ -770,7 +778,6 @@ artifact_group = "media-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "base", "sysdeps", "sysdeps-amd-mesa"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
-disable_platforms = ["windows"]
 
 [artifacts.rocjpeg]
 artifact_group = "media-libs"
@@ -831,6 +838,14 @@ source_paths = ["rocprofiler", "rocprofiler-sdk", "roctracer", "rocprof-trace-de
 artifact_group = "profiler-apps"
 type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk", "openmpi"]
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
+[artifacts.profiler-hub]
+artifact_group = "profiler-core"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "base", "spdlog"]
+feature_name = "PROFILER_HUB"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 

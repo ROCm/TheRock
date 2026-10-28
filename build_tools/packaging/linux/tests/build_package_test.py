@@ -326,6 +326,20 @@ def _read_control_file(pkg_name: str, config: PackageConfig) -> str:
     return control_path.read_text(encoding="utf-8")
 
 
+def _rules_path(pkg_name: str, config: PackageConfig) -> Path:
+    """Return path to generated ``debian/rules`` for a versioned DEB build."""
+    updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
+    return Path(config.dest_dir) / config.pkg_type / updated / "debian" / "rules"
+
+
+def _read_rules_file(pkg_name: str, config: PackageConfig) -> str:
+    """Read generated ``debian/rules`` after validating it was created."""
+    rules_path = _rules_path(pkg_name=pkg_name, config=config)
+    if not rules_path.exists():
+        raise AssertionError(f"Expected rules file was not created: {rules_path}")
+    return rules_path.read_text(encoding="utf-8")
+
+
 def _spec_path(pkg_name: str, config: PackageConfig) -> Path:
     """Return path to generated RPM ``specfile`` for a versioned RPM build."""
     updated = update_package_name(pkg_name, replace(config, versioned_pkg=True))
@@ -382,6 +396,13 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
             )
         return replace(cfg, gfx_arch="gfx1250", versioned_pkg=True)
 
+    def _add_absent_manifest_roots(self, cfg: PackageConfig) -> None:
+        for target in cfg.gfxarch_list:
+            manifest = cfg.artifacts_dir / f"fft_lib_{target}" / "artifact_manifest.txt"
+            # A split archive can retain a root with no remaining files.
+            with manifest.open("a") as stream:
+                stream.write("empty/rocFFT/stage\n")
+
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
     def test_deb_retains_only_selected_payloads(self, mock_build, _mock_move):
@@ -408,6 +429,37 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
                         (payload_dir / f"fft_{target}.kpack").read_bytes(),
                         STAGING_PAYLOAD_BYTES,
                     )
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_deb_retains_kpacks_with_absent_manifest_roots(self, mock_build, _move):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"))
+        self._add_absent_manifest_roots(cfg)
+        deb_package.create_versioned_deb_package(PKG_FFT, cfg)
+        payload_dir = (
+            mock_build.call_args.args[0] / cfg.install_prefix.lstrip("/") / ".kpack"
+        )
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in payload_dir.iterdir()},
+            {
+                f"fft_{target}.kpack": STAGING_PAYLOAD_BYTES
+                for target in cfg.gfxarch_list
+            },
+        )
+
+    @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
+    @patch.object(rpm_package, "package_with_rpmbuild")
+    def test_rpm_retains_kpacks_with_absent_manifest_roots(self, external_build, _move):
+        cfg = self._stage_targets(("gfx1250", "gfx1250-strict"), "rpm")
+        self._add_absent_manifest_roots(cfg)
+        rpm_package.create_versioned_rpm_package(PKG_FFT, cfg)
+        external_build.assert_called_once()
+        spec = _read_spec_file(PKG_FFT, cfg)
+        for target in cfg.gfxarch_list:
+            root = self.stage_roots[target][0]
+            absent_root = cfg.artifacts_dir / f"fft_lib_{target}" / "empty/rocFFT/stage"
+            self.assertIn(f'cp -R "{root}"/*', spec)
+            self.assertNotIn(str(absent_root), spec)
 
     @patch.object(rpm_package, "move_packages_to_destination", return_value=[])
     @patch.object(rpm_package, "package_with_rpmbuild")
@@ -557,6 +609,23 @@ class SharedOwnerPackagingTest(BuildPackageTestCase):
             build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
         external_build.assert_not_called()
 
+    @patch.object(
+        build_package,
+        "create_versioned_deb_package",
+        side_effect=RuntimeError("Package build failed"),
+    )
+    def test_device_failure_propagates(self, _build):
+        cfg = self._stage_targets(("gfx1250",))
+        with self.assertRaisesRegex(RuntimeError, "Package build failed"):
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250")
+
+    @patch.object(build_package, "create_versioned_deb_package", return_value=[])
+    def test_empty_device_variant_remains_skippable(self, _build):
+        cfg = self._stage_targets(("gfx1250",))
+        self.assertEqual(
+            build_package.build_device_package(PKG_FFT, cfg, "gfx1250"), []
+        )
+
 
 class PackageFailureExitTest(BuildPackageTestCase):
     def _run_failing_build(self, error: Exception) -> None:
@@ -579,8 +648,10 @@ class PackageFailureExitTest(BuildPackageTestCase):
             )
         self.assertEqual(raised.exception.code, 1)
 
-    def test_other_failure_keeps_existing_exit_behavior(self):
-        self._run_failing_build(RuntimeError("Package build failed"))
+    def test_other_failure_exits_nonzero(self):
+        with self.assertRaises(SystemExit) as raised:
+            self._run_failing_build(RuntimeError("Package build failed"))
+        self.assertEqual(raised.exception.code, 1)
 
 
 class PackageRootCollisionTest(BuildPackageTestCase):
@@ -714,6 +785,31 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
 
         control = _read_control_file(pkg_name=PKG_FFT, config=device_cfg)
         self.assertEqual(_control_field(control, "Package"), FFT_DEVICE_PACKAGE)
+
+    @patch.object(deb_package, "move_packages_to_destination", return_value=[])
+    @patch.object(deb_package, "package_with_dpkg_build")
+    def test_rules_file_excludes_code_objects_from_makeshlibs(
+        self, _mock_dpkg: object, _mock_move: object
+    ) -> None:
+        """The rendered ``debian/rules`` must override dh_makeshlibs to skip
+        ``.co`` GPU code objects. hip-tests ships an intentionally-corrupted ELF
+        fixture (elf_bad_shoff.co) that dh_makeshlibs cannot parse; without the
+        ``-X.co`` exclusion it aborts dpkg-buildpackage for the whole package.
+        """
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            pkg_name=PKG_FFT,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
+
+        deb_package.create_versioned_deb_package(pkg_name=PKG_FFT, config=device_cfg)
+
+        rules = _read_rules_file(pkg_name=PKG_FFT, config=device_cfg)
+        self.assertIn("override_dh_makeshlibs:", rules)
+        self.assertIn("dh_makeshlibs -X.co", rules)
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
@@ -1212,7 +1308,11 @@ class HostFallbackTest(BuildPackageTestCase):
     def test_deb_device_package_uses_host_fallback_dependency(
         self, _mock_dpkg: object, _mock_move: object
     ) -> None:
-        """DEB device package falls back to host dependency when gfx artifacts missing."""
+        """DEB device package falls back to host dependency when gfx artifacts missing.
+
+        Also verifies host packages include gfxarch dependencies as host-versioned form
+        to ensure version-locked dependencies rather than version-ambiguous library deps.
+        """
         cfg = _kpack_config(self.temp_dir)
 
         # Stage BLAS for gfx1100 (the package we're building)
@@ -1220,6 +1320,13 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage BLAS host artifacts (needed for host package test)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
             enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
@@ -1247,8 +1354,15 @@ class HostFallbackTest(BuildPackageTestCase):
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
         deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS, config=device_cfg)
 
-        # Verify: BLAS depends on SOLVER-host (fallback), not SOLVER-gfx1100
+        # Verify: BLAS device depends on SOLVER-host (fallback), not SOLVER-gfx1100
         control = _read_control_file(pkg_name=PKG_BLAS, config=device_cfg)
+        depends = _control_field(control, "Depends")
+        self.assertIn("amdrocm-solver-host", depends)
+
+        # Also verify: BLAS host includes SOLVER-host (gfxarch dep as host-versioned)
+        host_cfg = replace(cfg, gfx_arch=GFX_HOST)
+        deb_package.create_versioned_deb_package(pkg_name=PKG_BLAS, config=host_cfg)
+        control = _read_control_file(pkg_name=PKG_BLAS, config=host_cfg)
         depends = _control_field(control, "Depends")
         self.assertIn("amdrocm-solver-host", depends)
 
@@ -1257,7 +1371,11 @@ class HostFallbackTest(BuildPackageTestCase):
     def test_rpm_device_package_uses_host_fallback_dependency(
         self, _mock_rpmbuild: object, _mock_move: object
     ) -> None:
-        """RPM device package falls back to host dependency when gfx artifacts missing."""
+        """RPM device package falls back to host dependency when gfx artifacts missing.
+
+        Also verifies host packages include gfxarch dependencies as host-versioned form
+        to ensure version-locked dependencies rather than version-ambiguous library deps.
+        """
         cfg = _kpack_config(self.temp_dir, pkg_type=TEST_PKG_TYPE_RPM)
 
         # Stage BLAS for gfx1100 (the package we're building)
@@ -1265,6 +1383,13 @@ class HostFallbackTest(BuildPackageTestCase):
             pkg_name=PKG_BLAS,
             artifacts_dir=cfg.artifacts_dir,
             gfx_arch=TEST_GFX_TARGET,
+            enable_kpack=True,
+        )
+        # Stage BLAS host artifacts (needed for host package test)
+        _stage_package_artifacts(
+            pkg_name=PKG_BLAS,
+            artifacts_dir=cfg.artifacts_dir,
+            gfx_arch=GFX_HOST,
             enable_kpack=True,
         )
         # Stage SOLVER for gfx942 only (NOT gfx1100) - makes it a gfxarch package
@@ -1292,8 +1417,15 @@ class HostFallbackTest(BuildPackageTestCase):
         device_cfg = replace(cfg, gfx_arch=TEST_GFX_TARGET)
         rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS, config=device_cfg)
 
-        # Verify: BLAS requires SOLVER-host (fallback), not SOLVER-gfx1100
+        # Verify: BLAS device requires SOLVER-host (fallback), not SOLVER-gfx1100
         spec = _read_spec_file(pkg_name=PKG_BLAS, config=device_cfg)
+        requires = _spec_field(spec, "Requires")
+        self.assertIn("amdrocm-solver-host", requires)
+
+        # Also verify: BLAS host includes SOLVER-host (gfxarch dep as host-versioned)
+        host_cfg = replace(cfg, gfx_arch=GFX_HOST)
+        rpm_package.create_versioned_rpm_package(pkg_name=PKG_BLAS, config=host_cfg)
+        spec = _read_spec_file(pkg_name=PKG_BLAS, config=host_cfg)
         requires = _spec_field(spec, "Requires")
         self.assertIn("amdrocm-solver-host", requires)
 

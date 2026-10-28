@@ -238,6 +238,20 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
     rccl-tests
 )
 
+# gfx117X family
+therock_add_amdgpu_target(gfx1170 "AMD gfx1170 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
+)
+therock_add_amdgpu_target(gfx1171 "AMD gfx1171 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
+)
+
 # gfx120X family
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
@@ -265,6 +279,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     hip-tests # https://github.com/ROCm/TheRock/issues/6918
     hipDNN_samples # https://github.com/ROCm/TheRock/issues/6918
     hipFFT # https://github.com/ROCm/TheRock/issues/6918
+    hipRAND # https://github.com/ROCm/TheRock/issues/6918
     hipSOLVER # https://github.com/ROCm/TheRock/issues/6918
     hipSPARSE # https://github.com/ROCm/TheRock/issues/6918
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/6918
@@ -283,16 +298,14 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     rocSPARSE # https://github.com/ROCm/TheRock/issues/6918
     rocWMMA # https://github.com/ROCm/TheRock/issues/6918
     roctracer # https://github.com/ROCm/TheRock/issues/6918
+    rocBLAS # https://github.com/ROCm/TheRock/issues/6918
     hipBLASLt # https://github.com/ROCm/TheRock/issues/6918
     aqlprofile # https://github.com/ROCm/TheRock/issues/6918
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/6918
     rocprofiler-sdk # https://github.com/ROCm/TheRock/issues/6918
     rocrtst # https://github.com/ROCm/TheRock/issues/6918
     rocshmem  # https://github.com/ROCm/TheRock/issues/6918
-    rocPRIM_tests # https://github.com/ROCm/TheRock/issues/6918
-    hipCUB_tests # https://github.com/ROCm/TheRock/issues/6918
-    rocThrust_tests # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-systems-examples # https://github.com/ROCm/TheRock/issues/6918
+    rocprofiler-systems-examples  # https://github.com/ROCm/TheRock/issues/6918
 )
 
 # Optional extension targets (used for out of tree target development).

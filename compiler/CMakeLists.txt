@@ -22,7 +22,7 @@ if(THEROCK_ENABLE_COMPILER)
     elseif(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang")
       execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env
-        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/liblzma/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
         "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
         --print-target-triple
         OUTPUT_VARIABLE LLVM_HOST_TRIPLE
@@ -146,7 +146,10 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      # FLANG_RUNTIME_F128_MATH_LIB is host-architecture dependent and is
+      # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D
+      # here: a -D value is written to the cache before the pre-hook runs and
+      # would shadow the per-host selection made there.
       -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
@@ -166,6 +169,7 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
+      ${THEROCK_BUNDLED_LIBLZMA}
       ${THEROCK_BUNDLED_NUMACTL}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}

@@ -13,7 +13,6 @@ if(NOT WIN32)
     set(_primlibs_benchmark_enable "OFF")
   else()
     set(_primlibs_benchmark_deps amdsmi)
-    set(_primlibs_benchmark_includes therock_primlibs_benchmark_deps.cmake)
   endif()
 endif()
 
@@ -127,17 +126,10 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  set(_rocprim_tests_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocprim_tests_targets rocPRIM_tests ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _rocprim_tests_targets)
-      message(STATUS
-        "rocPRIM_tests: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocprim_tests_enabled OFF)
-    endif()
+  set(_rocprim_tests_enabled OFF)
+  if (THEROCK_BUILD_TESTING)
+    therock_check_subproject_targets(_rocprim_tests_enabled rocPRIM_tests)
   endif()
-
 
   if(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
     ##############################################################################
@@ -175,20 +167,11 @@ if(THEROCK_ENABLE_PRIM)
         .
     )
     therock_cmake_subproject_activate(rocPRIM_tests)
-
   endif(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
 
-  # hipCUB builds its tests inline (no separate _tests subproject), so they are
-  # gated by forcing BUILD_TEST off rather than by skipping a subproject.
-  set(_hipcub_tests_enabled ${THEROCK_BUILD_TESTING})
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hipcub_tests_targets hipCUB_tests ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _hipcub_tests_targets)
-      message(STATUS
-        "hipCUB_tests: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); disabling tests.")
-      set(_hipcub_tests_enabled OFF)
-    endif()
+  set(_hipcub_tests_enabled OFF)
+  if (THEROCK_BUILD_TESTING)
+    therock_check_subproject_targets(_hipcub_tests_enabled hipCUB_tests)
   endif()
 
   therock_cmake_subproject_declare(hipCUB
@@ -220,17 +203,9 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
   therock_cmake_subproject_activate(hipCUB)
 
-  # rocThrust builds its tests inline (no separate _tests subproject), so they
-  # are gated by forcing BUILD_TEST off rather than by skipping a subproject.
-  set(_rocthrust_tests_enabled ${THEROCK_BUILD_TESTING})
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocthrust_tests_targets rocThrust_tests ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _rocthrust_tests_targets)
-      message(STATUS
-        "rocThrust_tests: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); disabling tests.")
-      set(_rocthrust_tests_enabled OFF)
-    endif()
+  set(_rocthrust_tests_enabled OFF)
+  if(THEROCK_BUILD_TESTING)
+    therock_check_subproject_targets(_rocthrust_tests_enabled rocThrust_tests)
   endif()
 
   therock_cmake_subproject_declare(rocThrust
@@ -288,20 +263,8 @@ endif(THEROCK_ENABLE_PRIM)
 
 set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
-  set(_fft_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_fft_targets rocFFT ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _fft_targets)
-      message(STATUS
-        "rocFFT/hipFFT: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subprojects.")
-      set(_fft_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_fft_enabled rocFFT)
 endif()
-# Push to parent scope so the cpp-sdk-user example reflects FFT's actual built
-# status (skipped when filtered out, e.g. amdgcnspirv) rather than
-# find_package()-ing a missing rocfft/hipfft. Mirrors _ck_enabled.
 set(_fft_enabled ${_fft_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_FFT AND _fft_enabled)
@@ -489,19 +452,8 @@ endif(THEROCK_ENABLE_ROCWMMA)
 set(_rocalution_enabled OFF)
 if(THEROCK_ENABLE_ROCALUTION)
   set(_rocalution_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocalution_targets rocALUTION ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _rocalution_targets)
-      message(STATUS
-        "rocALUTION: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocalution_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rocalution_enabled rocALUTION)
 endif()
-# Push to parent scope so the cpp-sdk-user example reflects rocALUTION's actual
-# built status (skipped when filtered out, e.g. amdgcnspirv) rather than
-# find_package()-ing a missing rocalution. Mirrors _ck_enabled.
 set(_rocalution_enabled ${_rocalution_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
