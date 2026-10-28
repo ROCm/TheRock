@@ -38,6 +38,7 @@ The script generates flags like:
 
 import argparse
 import platform as platform_module
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Optional, Set
@@ -468,11 +469,23 @@ def main(argv: List[str] = None):
 
     if args.gha_output:
         # Get python requirements for this stage (only applicable for stage mode)
+        python_requires = []
         if args.stage:
-            python_requires = topology.get_python_requires_for_stage(args.stage)
+            selected = None
+            if artifact_list:
+                selected, _, _ = filter_artifacts_for_stage(
+                    topology, args.stage, artifact_list, args.build_dir
+                )
+            python_requires = topology.get_python_requires_for_stage(
+                args.stage, selected or None, args.build_dir
+            )
             pip_install_cmd = " ".join(python_requires) if python_requires else ""
         else:
             pip_install_cmd = ""
+        # The SDK installer and provider configure probe must share an
+        # interpreter, including in manylinux builds.
+        if any("rocm-sdk-core" in req for req in python_requires):
+            output += f" -DPython3_EXECUTABLE={shlex.quote(sys.executable)}"
         gha_set_output({"cmake_args": output, "pip_install_cmd": pip_install_cmd})
     elif args.output_cmake_args:
         args.output_cmake_args.write_text(output + "\n")

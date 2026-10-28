@@ -4,8 +4,10 @@
 
 import json
 import os
+import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -224,6 +226,58 @@ class ManifestValidationTest(unittest.TestCase):
             0,
             f"artifact_subprojects.json is out of sync:\n{result.stdout}{result.stderr}",
         )
+
+
+class StagePythonRequirementsTest(unittest.TestCase):
+    def test_sdk_provisioning_is_scoped_to_selected_provider(self):
+        topology = get_topology()
+        requirement = "--extra-index-url https://nightly.repo.amd.com/rocm/whl-next/ --pre rocm-sdk-core"
+        self.assertIn(requirement, topology.get_python_requires_for_stage("math-libs"))
+        for alias in ("hipkernelprovider", "hip-kernel-provider"):
+            self.assertIn(
+                requirement,
+                topology.get_python_requires_for_stage("math-libs", [alias]),
+            )
+        self.assertEqual(
+            [], topology.get_python_requires_for_stage("math-libs", ["blas"])
+        )
+        self.assertEqual([], topology.get_python_requires_for_stage("math-libs", []))
+        for stage in ("compiler-runtime", "profiler-apps"):
+            self.assertNotIn(requirement, topology.get_python_requires_for_stage(stage))
+
+    def test_gha_configuration_installs_into_cmake_interpreter(self):
+        script = Path(__file__).resolve().parents[1] / "configure_stage.py"
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "outputs"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--stage",
+                    "math-libs",
+                    "--artifacts",
+                    "hipkernelprovider",
+                    "--gha-output",
+                ],
+                env=dict(os.environ, GITHUB_OUTPUT=str(output)),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            text = output.read_text()
+            self.assertIn(f"-DPython3_EXECUTABLE={sys.executable}", shlex.split(text))
+            self.assertIn("rocm-sdk-core", text)
+            # Both platform workflows install with the same `python` that
+            # executes configure_stage.py, then pass its interpreter to CMake.
+            for name in (
+                "multi_arch_build_portable_linux_artifacts.yml",
+                "multi_arch_build_windows_artifacts.yml",
+            ):
+                workflow = script.parents[1] / ".github" / "workflows" / name
+                self.assertIn(
+                    "python -m pip install ${{ steps.stage_config.outputs.pip_install_cmd }}",
+                    workflow.read_text(),
+                )
 
 
 if __name__ == "__main__":

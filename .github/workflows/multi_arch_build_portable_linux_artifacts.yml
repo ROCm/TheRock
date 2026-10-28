@@ -192,7 +192,7 @@ jobs:
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration as executable build input; multiple arguments are intentional.
         run: | # zizmor: ignore[template-injection]
-          pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+          python -m pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         # configure_stage.py emits argument fragments from repository build configuration.

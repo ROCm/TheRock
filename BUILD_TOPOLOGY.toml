@@ -760,6 +760,8 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "hipdnn-integration-tests"]
 split_databases = ["hipkernelprovider"]
 source_paths = ["hip-kernel-provider"]
+# rocKE packaging queries the SDK compiler before platform wheels exist.
+python_requires = ["--extra-index-url https://nightly.repo.amd.com/rocm/whl-next/ --pre rocm-sdk-core"]
 
 # --- Computer Vision Integration ---
 

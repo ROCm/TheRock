@@ -1140,7 +1140,12 @@ class BuildTopology:
                     sources_by_path[source.path] = source
         return list(sources_by_path.values())
 
-    def get_python_requires_for_stage(self, build_stage: str) -> List[str]:
+    def get_python_requires_for_stage(
+        self,
+        build_stage: str,
+        artifact_names: list[str] | None = None,
+        build_dir: Path | None = None,
+    ) -> list[str]:
         """
         Get all python_requires for artifacts produced by a build stage.
 
@@ -1149,6 +1154,8 @@ class BuildTopology:
 
         Args:
             build_stage: Name of the build stage
+            artifact_names: Selected artifact aliases, or None for the whole stage
+            build_dir: Optional manifest location for alias resolution
 
         Returns:
             List of pip install arguments (e.g., ["-r path/to/req.txt", "package"])
@@ -1157,12 +1164,21 @@ class BuildTopology:
             raise ValueError(f"Build stage '{build_stage}' not found")
 
         stage = self.build_stages[build_stage]
-        seen: Set[str] = set()
-        requires: List[str] = []
+        seen: set[str] = set()
+        requires: list[str] = []
 
-        # Collect python_requires from artifacts in this stage's groups
+        selected = None
+        if artifact_names is not None:
+            selected = {
+                self.resolve_alias_to_artifact(name, build_dir)
+                for name in artifact_names
+            }
+
+        # Collect requirements only for artifacts selected for this build.
         for group_name in stage.artifact_groups:
             for artifact in self.get_artifacts_in_group(group_name):
+                if selected is not None and artifact.name not in selected:
+                    continue
                 for req in artifact.python_requires:
                     if req not in seen:
                         seen.add(req)
