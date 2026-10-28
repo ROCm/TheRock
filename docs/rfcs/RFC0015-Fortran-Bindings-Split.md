@@ -176,7 +176,7 @@ Fusing the pieces into one package, or building only a subset, stays possible, b
 
 **P3. Keep the generator standalone.**
 The generator is build-time tooling, not a runtime dependency.
-It lives in its own repository, `ROCm/rocm-fortran-generator`, which is being made public, so that the monorepos' regeneration workflow can run it (see [Rollout](#rollout-and-success-criteria)).
+It lives in its own public repository, [`ROCm/rocm-fortran-generator`](https://github.com/ROCm/rocm-fortran-generator), so that the monorepos' regeneration workflow can run it (see [Rollout](#rollout-and-success-criteria)).
 This RFC commits to one thing: the generator's *output* is checked in, as reviewable Fortran, in the library repositories.
 Wherever the generator lives, the Fortran-bindings team owns and maintains it, not the compiler developers, and it is not part of the compiler build.
 Library repositories run it as a standalone tool and do not vendor it.
@@ -669,7 +669,7 @@ The rollout has three stages, each with a clear exit.
    A binding is refreshed by regenerating it and committing the result by hand, which is how the co-location PRs were produced; they stay in draft.
    Meanwhile the regeneration workflow is prepared.
    It needs a public generator, so that the monorepos' CI can run it, and a workflow and a bot identity in each monorepo.
-   The generator repository, `ROCm/rocm-fortran-generator`, is being made public.
+   The generator repository, [`ROCm/rocm-fortran-generator`](https://github.com/ROCm/rocm-fortran-generator), is now public; the workflow and the bot identity remain.
 
 1. **Co-locate and package (10.3).** Each in-scope library has a `fortran/` directory, each project builds its `.mod` set and `lib<lib>_fortran.a`, and TheRock packages them.
    The regeneration workflow and its bot run on those directories, once their inputs are trustworthy:
