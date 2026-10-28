@@ -732,10 +732,8 @@ def get_changed_files_for_external_repo(
 #
 # A change here can alter test selection for every project at once, so the run
 # cannot be narrowed to a subset of projects and instead covers all of them.
-# Running the full project set at standard depth would be prohibitively
-# expensive for a change that builds no new code, so these runs stay at "quick"
-# depth. That mirrors how TheRock treats a change to its own CI workflows:
-# no submodule moved, so _determine_test_type() falls through to "quick".
+# CI-plumbing changes build no new library code, so they run at quick depth,
+# mirroring TheRock's own CI-workflow changes.
 EXTERNAL_REPO_CI_PATTERNS = [
     # Workflows in the calling repo that invoke TheRock's reusable workflows.
     ".github/workflows/therock*",

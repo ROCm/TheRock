@@ -50,6 +50,7 @@ import json
 import logging
 import os
 import sys
+import typing
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
@@ -108,20 +109,75 @@ def _get_all_build_stages() -> list[str]:
 
 @dataclass
 class ExternalRepoConfig:
+    """Schema for the external_repo JSON blob passed by calling repos.
+
+    Fields:
+        repository: "owner/name" of the calling repo (e.g. "ROCm/rocm-libraries").
+        ref: Ref of the calling repo to check out.
+        event_name: Caller's github.event_name; "schedule"/"workflow_dispatch" have
+            no diff.
+        base_sha: Base commit SHA for computing the diff.
+        head_sha: Head commit SHA for computing the diff.
+        pr_number: Pull request number in the calling repo.
+        base_ref: Fallback base for the local git-diff path.
+        skip_ci_config: Path to the caller's skip-CI TOML.
+        family_overrides: Per-family overrides; consumed by setup_multi_arch.yml.
+    """
+
     repository: str
+    ref: str | None = None
     event_name: str = ""
     base_sha: str | None = None
     head_sha: str | None = None
     pr_number: int | None = None
     base_ref: str | None = None
     skip_ci_config: str | None = None
+    family_overrides: dict | None = None
+
+    # Expected types for each field, used by __post_init__ for validation.
+    _FIELD_TYPES: typing.ClassVar[dict[str, tuple[type, ...]]] = {
+        "repository": (str,),
+        "ref": (str,),
+        "event_name": (str,),
+        "base_sha": (str,),
+        "head_sha": (str,),
+        "pr_number": (int,),
+        "base_ref": (str,),
+        "skip_ci_config": (str,),
+        "family_overrides": (dict,),
+    }
+
+    def __post_init__(self):
+        if not self.repository or "/" not in self.repository:
+            raise ValueError(
+                f"external_repo.repository must be 'owner/name', "
+                f"got {self.repository!r}"
+            )
+        for f in fields(self):
+            if f.name.startswith("_"):
+                continue
+            value = getattr(self, f.name)
+            if value is None:
+                continue
+            expected = self._FIELD_TYPES.get(f.name)
+            if expected and not isinstance(value, expected):
+                raise ValueError(
+                    f"external_repo.{f.name}: expected "
+                    f"{'/'.join(t.__name__ for t in expected)}, "
+                    f"got {type(value).__name__}: {value!r}"
+                )
+
+    @property
+    def repo_name(self) -> str:
+        """Short repo name (the part after the slash)."""
+        return self.repository.split("/")[-1]
 
 
 def parse_external_repo(raw: str) -> ExternalRepoConfig:
     """Parse and validate the external_repo JSON blob.
 
-    Raises ValueError for malformed JSON, non-object payloads, or a missing
-    ``repository`` field.
+    Raises ValueError for malformed JSON, non-object payloads, missing or
+    invalid ``repository``, or fields with wrong types.
     """
     try:
         data = json.loads(raw)
@@ -133,36 +189,28 @@ def parse_external_repo(raw: str) -> ExternalRepoConfig:
             f"external_repo must be a JSON object, got: {type(data).__name__}"
         )
 
-    repository = data.get("repository")
-    if not repository or not isinstance(repository, str):
-        raise ValueError(
-            f"external_repo must contain a non-empty 'repository' string, "
-            f"got: {data.get('repository')!r}"
-        )
-
-    # Coerce pr_number to int if provided as a string.
+    # Coerce pr_number from string to int (callers may interpolate via ${{ }}).
     pr_number = data.get("pr_number")
-    if isinstance(pr_number, str) and pr_number.isdigit():
-        pr_number = int(pr_number)
-    elif pr_number is not None and not isinstance(pr_number, int):
-        pr_number = None
+    if isinstance(pr_number, str):
+        try:
+            data["pr_number"] = int(pr_number)
+        except ValueError:
+            raise ValueError(
+                f"external_repo.pr_number: cannot convert {pr_number!r} to int"
+            )
 
-    known_fields = {f.name for f in fields(ExternalRepoConfig)}
+    known_fields = {f.name for f in fields(ExternalRepoConfig) if not f.name.startswith("_")}
+    filtered = {k: v for k, v in data.items() if k in known_fields}
     unknown = set(data.keys()) - known_fields
     if unknown:
         logging.getLogger(__name__).debug(
             "Ignoring unknown external_repo fields: %s", sorted(unknown)
         )
 
-    return ExternalRepoConfig(
-        repository=repository,
-        event_name=data.get("event_name", ""),
-        base_sha=data.get("base_sha"),
-        head_sha=data.get("head_sha"),
-        pr_number=pr_number,
-        base_ref=data.get("base_ref"),
-        skip_ci_config=data.get("skip_ci_config"),
-    )
+    try:
+        return ExternalRepoConfig(**filtered)
+    except TypeError as e:
+        raise ValueError(f"Invalid external_repo payload: {e}") from e
 
 
 def _parse_comma_list(raw: str) -> list[str]:
@@ -899,7 +947,7 @@ def should_skip_ci(
     # external repos to skip TheRock CI when only docs/metadata files changed.
     if ci_inputs.external_repo:
         external_repo = parse_external_repo(ci_inputs.external_repo)
-        repo_name = external_repo.repository.split("/")[-1]
+        repo_name = external_repo.repo_name
 
         # Get skip patterns from TOML config file
         skip_ci_config = external_repo.skip_ci_config
@@ -1273,13 +1321,15 @@ def _determine_test_type(
     # Priority 4: an external repo diff that touches TheRock CI plumbing (the
     # workflow calling TheRock, project discovery scripts, shared CTest logic)
     # cannot be attributed to a subset of projects, so every project's tests
-    # run. Keep that breadth affordable by running them at quick depth, the
-    # same tradeoff TheRock makes for a change to its own CI workflows.
+    # run. CI-plumbing changes build no new library code, so they run at quick
+    # depth, mirroring TheRock's own CI-workflow changes.
     #
-    # This must precede the submodule check below: from_external_repo()
-    # synthesizes changed_files=[repo_name] and submodule_paths=[repo_name] so
-    # stage reuse can treat the repo as a single unit, which makes
-    # has_submodule_changes unconditionally True for every external repo run.
+    # This check must precede the submodule check below because
+    # from_external_repo() synthesizes changed_files=[repo_name] and
+    # submodule_paths=[repo_name] so that stage reuse can treat the repo as a
+    # single unit.  That synthesis makes has_submodule_changes True for *every*
+    # external repo run, so without this early return a CI-plumbing-only change
+    # would incorrectly fall through to Priority 5 and get "standard" depth.
     if is_external_repo_ci_change(git_context.external_changed_files):
         return "quick", "external repo change to TheRock CI plumbing"
 
@@ -2159,7 +2209,7 @@ def main():
         # Fetch the calling repo's diff once here; both skip-CI and test depth
         # read it off the context.
         git_context = GitContext.from_external_repo(
-            external_repo.repository.split("/")[-1],
+            external_repo.repo_name,
             external_changed_files=get_changed_files_for_external_repo(
                 asdict(external_repo)
             ),
