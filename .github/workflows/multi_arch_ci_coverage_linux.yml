@@ -312,6 +312,7 @@ jobs:
         setup_coverage_matrix,
         build_compiler_runtime,
         build_instrumented_math_libs,
+        build_instrumented_comm_libs,
         wait_for_baseline,
       ]
     # Also guard the empty matrix: fromJSON('') would hard-error.
