@@ -532,12 +532,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     os.environ["BUILD_VARIANT"] = build_variant
                 self.assertIsNotNone(self._dbsync_job("gfx94X-dcgpu", False, "gfx942"))
 
-    def test_skip_on_asan_only_drops_flagged_components_on_asan_builds(self):
-        self._inject_job("asan-incompatible", skip_on_asan=True)
+    def test_skip_build_variant_only_drops_listed_variants(self):
+        self._inject_job("asan-incompatible", skip_build_variant=["asan"])
         os.environ["BUILD_VARIANT"] = "asan"
         self.assertNotIn("asan-incompatible", self._selected_names())
         os.environ["BUILD_VARIANT"] = "release"
         self.assertIn("asan-incompatible", self._selected_names())
+
+    def test_skip_build_variant_is_an_exact_match(self):
+        self._inject_job("asan-only-listed", skip_build_variant=["asan"])
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        self.assertIn("asan-only-listed", self._selected_names())
 
     def test_asan_build_still_schedules_unflagged_components(self):
         self._inject_job("asan-compatible")
