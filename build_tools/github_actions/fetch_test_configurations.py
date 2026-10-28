@@ -936,10 +936,12 @@ test_matrix = {
             ],
         },
     },
-    # hipDNN samples tests
+    # hipDNN samples tests. Every provider is fetched so that samples whose
+    # operations only hipBLASLt (matmul) or hip-kernel-provider (layer norm,
+    # resample) implement find an engine instead of skipping.
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipblasltprovider --hipkernelprovider --hipdnn-samples --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],

@@ -119,6 +119,14 @@ RAN_OUTCOMES = {
 }
 COMPILED_OUTCOMES = RAN_OUTCOMES | {OUTCOME_COMPILED, OUTCOME_XFAIL_NOW_COMPILES}
 
+# Verdicts on legacy Catch2 case sidecars. A case's outcome is judged against a
+# per-case expectation, so an expected crash is not a failure.
+VERDICT_EXPECTED = "expected"
+VERDICT_UNEXPECTED = "unexpected"
+KNOWN_VERDICTS = {VERDICT_EXPECTED, VERDICT_UNEXPECTED}
+# A case that never reaches the shim; the harness reports it to ctest as skipped.
+TIER_VACUOUS = "VACUOUS"
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -363,6 +371,10 @@ def load_sidecars(report_dir: Path):
     all, so sidecars and tests do not correspond one-to-one. Each translation
     unit must still own exactly one sidecar; a second one would be counted
     twice, so it is an anomaly.
+
+    The directory is read recursively: newer harnesses write one sidecar per
+    legacy Catch2 case into a subdirectory. Older harnesses write only
+    top-level sidecars, which read the same either way.
     """
     entries = []
     anomalies = []
@@ -372,30 +384,35 @@ def load_sidecars(report_dir: Path):
         anomalies.append(f"No sidecar directory at {report_dir}")
         return entries, anomalies
 
-    sidecars = sorted(report_dir.glob("*.json"))
+    sidecars = sorted(report_dir.rglob("*.json"))
     if not sidecars:
         anomalies.append(f"No sidecars found in {report_dir}")
 
-    for sidecar in sidecars:
+    for path in sidecars:
+        sidecar = path.relative_to(report_dir).as_posix()
         try:
-            entry = json.loads(sidecar.read_text(encoding="utf-8"))
+            entry = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            anomalies.append(f"{sidecar.name}: unreadable ({exc})")
+            anomalies.append(f"{sidecar}: unreadable ({exc})")
             continue
         if not isinstance(entry, dict):
-            anomalies.append(f"{sidecar.name}: expected a JSON object")
+            anomalies.append(f"{sidecar}: expected a JSON object")
             continue
         if not entry.get("tu"):
-            anomalies.append(f"{sidecar.name}: missing 'tu'")
-            entry["tu"] = sidecar.stem
+            anomalies.append(f"{sidecar}: missing 'tu'")
+            entry["tu"] = path.stem
         if normalize_outcome(entry.get("outcome", "")) not in KNOWN_OUTCOMES:
             anomalies.append(
                 f"{entry['tu']}: unrecognized outcome {entry.get('outcome')!r}"
             )
-        previous = sidecar_by_tu.setdefault(entry["tu"], sidecar.name)
-        if previous != sidecar.name:
+        if is_case_entry(entry) and entry["verdict"] not in KNOWN_VERDICTS:
             anomalies.append(
-                f"{entry['tu']}: reported by both {previous} and {sidecar.name}"
+                f"{entry['tu']}: unrecognized verdict {entry['verdict']!r}"
+            )
+        previous = sidecar_by_tu.setdefault(entry["tu"], sidecar)
+        if previous != sidecar:
+            anomalies.append(
+                f"{entry['tu']}: reported by both {previous} and {sidecar}"
             )
         entries.append(entry)
 
@@ -403,8 +420,17 @@ def load_sidecars(report_dir: Path):
     return entries, anomalies
 
 
+def is_case_entry(entry: dict) -> bool:
+    """A legacy Catch2 case, judged against a per-case expectation.
+
+    Only case sidecars carry a verdict. They are not translation units, so they
+    stay out of the translation-unit counts.
+    """
+    return "verdict" in entry
+
+
 def summarize(entries: list) -> dict:
-    """The headline counts."""
+    """The headline counts, over translation units only."""
     counts = {
         "compiled": 0,
         "ran": 0,
@@ -414,6 +440,8 @@ def summarize(entries: list) -> dict:
         "xfail-still-failing": 0,
     }
     for entry in entries:
+        if is_case_entry(entry):
+            continue
         outcome = normalize_outcome(entry.get("outcome", ""))
         if outcome in COMPILED_OUTCOMES:
             counts["compiled"] += 1
@@ -427,6 +455,22 @@ def summarize(entries: list) -> dict:
             counts["ran-with-assertion-failures"] += 1
         if outcome == OUTCOME_XFAIL_STILL_FAILING:
             counts["xfail-still-failing"] += 1
+    return counts
+
+
+def summarize_cases(entries: list) -> dict:
+    """Counts over legacy cases; all zero for a harness that has none."""
+    counts = {"cases": 0, "expected": 0, "unexpected": 0, "vacuous": 0}
+    for entry in entries:
+        if not is_case_entry(entry):
+            continue
+        counts["cases"] += 1
+        if entry["verdict"] == VERDICT_EXPECTED:
+            counts["expected"] += 1
+        elif entry["verdict"] == VERDICT_UNEXPECTED:
+            counts["unexpected"] += 1
+        if str(entry.get("tier", "")).upper() == TIER_VACUOUS:
+            counts["vacuous"] += 1
     return counts
 
 
@@ -446,11 +490,19 @@ def _detail(entry: dict) -> str:
     return " / ".join(parts) if parts else "-"
 
 
-def format_report(entries: list, anomalies: list, counts: dict) -> str:
+def format_report(
+    entries: list, anomalies: list, counts: dict, case_counts: dict
+) -> str:
     lines = ["## hipDNN cuDNN sample corpus", ""]
     lines.append(
         "Counts: " + ", ".join(f"{name} {value}" for name, value in counts.items())
     )
+    if case_counts["cases"]:
+        lines.append("")
+        lines.append(
+            "Legacy cases: "
+            + ", ".join(f"{name} {value}" for name, value in case_counts.items())
+        )
     lines.append("")
 
     # An XFAIL entry that started compiling means the manifest has rotted. It is
@@ -470,20 +522,24 @@ def format_report(entries: list, anomalies: list, counts: dict) -> str:
             lines.append(f"- `{entry.get('tu', '?')}`")
         lines.append("")
 
-    lines.append("| TU | Tier | Outcome | Assertion failures / reason |")
-    lines.append("| --- | --- | --- | --- |")
+    lines.append("| TU | Tier | Outcome | Verdict | Assertion failures / reason |")
+    lines.append("| --- | --- | --- | --- | --- |")
     for entry in entries:
         outcome = entry.get("outcome", "?")
         if normalize_outcome(outcome) == OUTCOME_XFAIL_NOW_COMPILES:
             outcome = f"**{outcome}**"
+        verdict = entry.get("verdict", "-")
+        if verdict == VERDICT_UNEXPECTED:
+            verdict = f"**{verdict}**"
         lines.append(
             f"| {_cell(entry.get('tu', '?'))} "
             f"| {_cell(entry.get('tier', '?'))} "
             f"| {_cell(outcome)} "
+            f"| {_cell(verdict)} "
             f"| {_cell(_detail(entry))} |"
         )
     if not entries:
-        lines.append("| _(no sidecars)_ | - | - | - |")
+        lines.append("| _(no sidecars)_ | - | - | - | - |")
 
     if anomalies:
         lines.append("")
@@ -499,7 +555,7 @@ def emit_report(build_dir: Path):
     """Aggregate the sidecars into the job summary and onto stdout."""
     entries, anomalies = load_sidecars(build_dir / REPORT_DIR_NAME)
     counts = summarize(entries)
-    report = format_report(entries, anomalies, counts)
+    report = format_report(entries, anomalies, counts, summarize_cases(entries))
 
     # Always print: the step summary only exists under GitHub Actions, and a
     # local run needs to be readable too.
