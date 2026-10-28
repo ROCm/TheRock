@@ -16,9 +16,25 @@
 # This mode is for debugging purposes only. The launcher outputs its searching
 # logic so it is clear what particular rocgdb executable is being picked and
 # why.
+#
+# By default, this wrapper also instructs GDB to treat /usr/share/gdb/auto-load
+# as a trusted auto-load location (via `add-auto-load-safe-path` and
+# `add-auto-load-scripts-directory`), so that distro-provided GDB helper
+# scripts (e.g. python3-dbg pretty-printers) are picked up automatically. This
+# relies on that directory tree being root-owned and package-manager-controlled,
+# the same trust assumption GDB itself already makes for its own install.
+# Set ROCGDB_WRAPPER_AUTO_LOAD_SYSTEM_PATHS=0 to disable this behavior.
+#
+# Additional auto-load directories can be supplied via
+# ROCGDB_WRAPPER_AUTO_LOAD_EXTRA_PATHS, a colon-separated list of absolute
+# paths, each of which is added the same way.
 
 # Handle debugging output. Always disabled unless ROCGDB_WRAPPER_DEBUG is set to 1.
 : "${ROCGDB_WRAPPER_DEBUG:=0}"
+
+# Handle auto-load path injection. Enabled by default; see the header comment above.
+: "${ROCGDB_WRAPPER_AUTO_LOAD_SYSTEM_PATHS:=1}"
+: "${ROCGDB_WRAPPER_AUTO_LOAD_EXTRA_PATHS:=}"
 
 # Prints debug messages if ROCGDB_WRAPPER_DEBUG is 1.
 #
@@ -87,6 +103,39 @@ if [ -z "$TERMINFO" ]; then
     log_message "TERMINFO not defined. Setting it to ${TERMINFO}"
 fi
 
+# Prepend auto-load related -iex flags onto the positional parameters, so the
+# exec call sites further below pass them through to whichever rocgdb binary
+# ends up being picked, without needing to touch each exec call individually.
+log_message ""
+log_message "Checking auto-load path configuration."
+if [ "${ROCGDB_WRAPPER_AUTO_LOAD_SYSTEM_PATHS}" = "1" ]; then
+    log_message "Adding system auto-load path: /usr/share/gdb/auto-load"
+    set -- -iex "add-auto-load-safe-path /usr/share/gdb/auto-load" \
+        -iex "add-auto-load-scripts-directory /usr/share/gdb/auto-load" "$@"
+fi
+
+if [ -n "${ROCGDB_WRAPPER_AUTO_LOAD_EXTRA_PATHS}" ]; then
+    # Splitting on unquoted word expansion below relies on the shell's default
+    # IFS (space, tab, newline). This is intentional: it is what prevents an
+    # embedded newline in the env var from surviving into a single extra_dir
+    # token, which would otherwise let it be smuggled into GDB as a second,
+    # user-controlled command via the -iex string. Do not quote "${extra_paths}"
+    # here without re-checking that property.
+    extra_paths=$(printf '%s' "${ROCGDB_WRAPPER_AUTO_LOAD_EXTRA_PATHS}" | tr ':' ' ')
+    for extra_dir in ${extra_paths}; do
+        case "$extra_dir" in
+            /*)
+                log_message "Adding user-supplied auto-load path: ${extra_dir}"
+                set -- -iex "add-auto-load-safe-path ${extra_dir}" \
+                    -iex "add-auto-load-scripts-directory ${extra_dir}" "$@"
+                ;;
+            *)
+                log_message "Ignoring non-absolute auto-load path: ${extra_dir}"
+                ;;
+        esac
+    done
+fi
+
 # Create a rocgdb command with the active python version.
 gdb_executable="$GDB_BIN_DIR/rocgdb-py$python_version"
 log_message ""
@@ -94,7 +143,7 @@ log_message "rocgdb command for active python version: ${gdb_executable}"
 
 # Validate that our rocgdb executable for the active python version works.
 if validate_executable "$gdb_executable"; then
-    log_message "Executing: $gdb_executable $@"
+    log_message "Executing: $gdb_executable $*"
     if [ "${ROCGDB_WRAPPER_DEBUG}" = "0" ]; then
         exec "$gdb_executable" "$@"
     fi
@@ -119,7 +168,7 @@ done
 
 if [ -n "$working_gdb" ]; then
     log_message ""
-    log_message "Found working rocgdb executable: $working_gdb $@"
+    log_message "Found working rocgdb executable: $working_gdb $*"
     if [ "${ROCGDB_WRAPPER_DEBUG}" = "0" ]; then
         exec "$working_gdb" "$@"
     fi
@@ -134,7 +183,7 @@ log_message "Attempting to execute rocgdb without python support."
 
 gdb_executable="$GDB_BIN_DIR/rocgdb-pynone"
 if validate_executable "$gdb_executable"; then
-    log_message "Executing: $gdb_executable $@"
+    log_message "Executing: $gdb_executable $*"
     if [ "${ROCGDB_WRAPPER_DEBUG}" = "0" ]; then
         exec "$gdb_executable" "$@"
     fi
