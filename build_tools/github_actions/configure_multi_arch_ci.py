@@ -199,7 +199,9 @@ def parse_external_repo(raw: str) -> ExternalRepoConfig:
                 f"external_repo.pr_number: cannot convert {pr_number!r} to int"
             )
 
-    known_fields = {f.name for f in fields(ExternalRepoConfig) if not f.name.startswith("_")}
+    known_fields = {
+        f.name for f in fields(ExternalRepoConfig) if not f.name.startswith("_")
+    }
     filtered = {k: v for k, v in data.items() if k in known_fields}
     unknown = set(data.keys()) - known_fields
     if unknown:
