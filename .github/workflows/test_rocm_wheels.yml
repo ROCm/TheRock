@@ -125,6 +125,7 @@ jobs:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
+      ARTIFACT_DEPENDENCY_INDEX_URL: ${{ contains(inputs.test_runs_on, 'linux') && inputs.package_index_url == '' && inputs.package_find_links_url != '' && 'https://pypi.org/simple' || '' }}
       # Use a venv path containing a space on Windows so that `rocm-sdk test`
       # exercises the space-in-path handling of the console-script trampolines
       # (users often install under paths like "C:\Users\First Last\..." or "C:\Program Files\...").
@@ -168,6 +169,7 @@ jobs:
           python build_tools/setup_venv.py "${VENV_DIR}" \
             --packages "${pkg}==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --extra-index-url="${ARTIFACT_DEPENDENCY_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
@@ -196,6 +198,7 @@ jobs:
           python build_tools/setup_venv.py "${VENV_DIR}" \
             --packages "${pkg}==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --extra-index-url="${ARTIFACT_DEPENDENCY_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}"
 
       - name: Show installed packages (libraries,devel)
@@ -225,7 +228,7 @@ jobs:
           python build_tools/setup_venv.py ${PROFILER_VENV_DIR} \
             --packages "rocm[profiler]==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
-            --extra-index-url=https://nightly.repo.amd.com/rocm/whl-next/ \
+            --extra-index-url="${ARTIFACT_DEPENDENCY_INDEX_URL:-https://nightly.repo.amd.com/rocm/whl-next/}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -9,6 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import os
+
+import yaml
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -282,6 +285,41 @@ class InstallPackagesTest(unittest.TestCase):
 
         self.assertEqual(mock_run.call_count, 1)
         mock_sleep.assert_not_called()
+
+
+class WheelWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        workflow_path = (
+            Path(__file__).resolve().parents[2]
+            / ".github/workflows/test_rocm_wheels.yml"
+        )
+        self.job = yaml.safe_load(workflow_path.read_text())["jobs"]["test_wheels"]
+
+    def test_dependency_index_is_limited_to_linux_artifact_installs(self):
+        self.assertEqual(
+            self.job["env"].get("ARTIFACT_DEPENDENCY_INDEX_URL"),
+            "${{ contains(inputs.test_runs_on, 'linux') && "
+            "inputs.package_index_url == '' && "
+            "inputs.package_find_links_url != '' && "
+            "'https://pypi.org/simple' || '' }}",
+        )
+
+    def test_core_install_steps_use_the_artifact_dependency_index(self):
+        steps = {step.get("id"): step for step in self.job["steps"]}
+        expected_indexes = {
+            "install_libraries": "${ARTIFACT_DEPENDENCY_INDEX_URL}",
+            "install_devel": "${ARTIFACT_DEPENDENCY_INDEX_URL}",
+            "install_profiler": (
+                "${ARTIFACT_DEPENDENCY_INDEX_URL:"
+                "-https://nightly.repo.amd.com/rocm/whl-next/}"
+            ),
+        }
+        for step_id, expected_index in expected_indexes.items():
+            with self.subTest(step=step_id):
+                command = shlex.split(steps[step_id]["run"])
+                self.assertIn(f"--extra-index-url={expected_index}", command)
+                self.assertIn("--index-url=${PACKAGE_INDEX_URL}", command)
+                self.assertIn("--find-links=${PACKAGE_FIND_LINKS_URL}", command)
 
 
 if __name__ == "__main__":
