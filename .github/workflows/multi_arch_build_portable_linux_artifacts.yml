@@ -105,6 +105,10 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+      # Checking out a monorepo such as rocm-libraries takes several minutes, so
+      # only do it for the stages that actually build from those sources (see
+      # source_stages in detect_external_repo_config.py).
+      EXTERNAL_REPO_SOURCE_NEEDED: ${{ inputs.external_repo_config != '' && contains(fromJSON(inputs.external_repo_config).source_stages, inputs.stage_name) }}
       BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
 
@@ -129,7 +133,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Checkout external repository
-        if: ${{ inputs.external_repo_config != '' }}
+        if: ${{ env.EXTERNAL_REPO_SOURCE_NEEDED == 'true' }}
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -210,7 +214,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-            ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
+            ${{ env.EXTERNAL_REPO_SOURCE_NEEDED == 'true' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 

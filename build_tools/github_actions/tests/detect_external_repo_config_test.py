@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from detect_external_repo_config import (
     get_repo_config,
     get_external_repo_path,
+    get_source_stages,
     import_external_repo_module,
     get_skip_patterns,
     get_test_list,
@@ -464,6 +465,41 @@ class TestGetTestList(unittest.TestCase):
 
         result = get_test_list("rocm-libraries")
         self.assertEqual(result, [])
+
+
+class TestGetSourceStages(unittest.TestCase):
+    """Tests for mapping external repos to the build stages that need them."""
+
+    def test_rocm_libraries_stages(self):
+        """rocm-libraries is only built by the math-libs and cv-libs stages."""
+        self.assertEqual(get_source_stages("rocm-libraries"), ["cv-libs", "math-libs"])
+
+    def test_rocgdb_stages(self):
+        """rocgdb is only built by the debug-tools stage."""
+        self.assertEqual(get_source_stages("rocgdb"), ["debug-tools"])
+
+    def test_rocm_systems_stages(self):
+        """rocm-systems is used nearly everywhere, but not by cv-libs."""
+        stages = get_source_stages("rocm-systems")
+        self.assertIn("compiler-runtime", stages)
+        self.assertIn("math-libs", stages)
+        self.assertNotIn("cv-libs", stages)
+
+    def test_main_emits_source_stages(self):
+        """config_json carries source_stages for the workflows to filter on."""
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            temp_file = f.name
+        os.environ["GITHUB_OUTPUT"] = temp_file
+        try:
+            rc = detect_external_repo_config_main(["--repository", "rocm-libraries"])
+            self.assertEqual(rc, 0)
+            with open(temp_file, "r") as f:
+                output = f.read()
+        finally:
+            del os.environ["GITHUB_OUTPUT"]
+            os.unlink(temp_file)
+
+        self.assertIn('"source_stages": ["cv-libs", "math-libs"]', output)
 
 
 if __name__ == "__main__":

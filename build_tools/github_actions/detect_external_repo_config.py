@@ -35,8 +35,11 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
 
 
@@ -87,6 +90,26 @@ def get_repo_config(repo_name: str) -> Dict[str, Any]:
         )
 
     return REPO_CONFIGS[repo_name]
+
+
+def get_source_stages(repo_name: str) -> List[str]:
+    """Returns the build stages that need this external repo's sources.
+
+    A build stage only needs the external repo when one of the repo's submodules
+    appears in the stage's source sets (see BUILD_TOPOLOGY.toml). Checking out
+    a monorepo such as rocm-libraries takes several minutes, so stages that do
+    not build from it skip the checkout entirely.
+    """
+    repo_submodules = set(get_repo_config(repo_name).get("skip_submodules", []))
+    topology = get_topology()
+    return sorted(
+        stage_name
+        for stage_name in topology.get_all_stage_names()
+        if any(
+            submodule.name in repo_submodules
+            for submodule in topology.get_submodules_for_stage(stage_name)
+        )
+    )
 
 
 @lru_cache()
@@ -468,11 +491,15 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
+        source_stages = get_source_stages(args.repository)
+        print(f"Build stages needing {args.repository} sources: {source_stages}")
+
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
             "source_package": source_package,
+            "source_stages": source_stages,
             "submodule_path": config["submodule_path"],
             "fetch_sources_args": config.get("fetch_sources_args", ""),
             "extra_cmake_options": extra_cmake_options,

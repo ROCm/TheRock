@@ -64,6 +64,35 @@ graph LR
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
+### External repository checkouts
+
+When CI is triggered from an external repository (`rocm-libraries`, `rocm-systems`
+or `rocgdb`), TheRock is the primary checkout and the external repository is
+checked out alongside it into `external-<repo>/`. Cloning a monorepo such as
+`rocm-libraries` takes several minutes, so this only happens for the build stages
+that actually compile from those sources:
+
+| External repository | Build stages that check it out |
+| ------------------- | ------------------------------ |
+| `rocm-libraries`    | `math-libs`, `cv-libs`         |
+| `rocm-systems`      | all stages except `cv-libs`    |
+| `rocgdb`            | `debug-tools`                  |
+
+The mapping is derived from the `source_sets` entries on each artifact group in
+[`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), which is already the source of
+truth for `fetch_sources.py --stage`.
+[`detect_external_repo_config.py`](../../build_tools/github_actions/detect_external_repo_config.py)
+resolves it once during CI setup and publishes the result as `source_stages`
+inside the `external_repo_config` input. The build stage workflows use that list
+to gate both the checkout and the `-DTHEROCK_<REPO>_SOURCE_DIR=` configure
+option. Stages that skip the checkout see the same source tree as a regular
+TheRock CI run of that stage, since `fetch_sources.py --stage` already omits the
+corresponding submodule.
+
+No manual updates are needed as stages or libraries move: adding a library to an
+artifact group whose `source_sets` include the repository automatically adds that
+stage to the list.
+
 ## Artifact Storage and Distribution
 
 ### S3 Buckets
