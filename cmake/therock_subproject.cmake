@@ -10,6 +10,14 @@
 
 include(ExternalProject)
 
+# Global fingerprint epoch. Bump THEROCK_FPRINT_EPOCH to invalidate every
+# cached artifact at once -- e.g. when the fingerprint schema or an untracked
+# part of the build environment changes. It is folded into every subproject
+# fingerprint below, so a single bump propagates to all artifact-level
+# fingerprints and cache keys.
+set(THEROCK_FPRINT_EPOCH "1" CACHE STRING
+  "Global fingerprint/cache epoch; bump to invalidate all cached artifacts")
+
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
 # List of CMake variables that will be injected by default into the
@@ -694,6 +702,11 @@ function(therock_cmake_subproject_activate target_name)
   set(_fprint_is_valid TRUE)
   set(_fprint_files)
   set(_fprint_content)
+  # Fold the global epoch into every subproject fingerprint so bumping
+  # THEROCK_FPRINT_EPOCH invalidates all cached artifacts at once. Kept here
+  # (unconditional) rather than in the CONFIGURE branch so pre-built
+  # subprojects are invalidated too.
+  list(APPEND _fprint_content "FPRINT_EPOCH=${THEROCK_FPRINT_EPOCH}")
   if(NOT _fprint_source_hash)
     _therock_subproject_fprint_source_dir(_fprint_src "${_fprint_source_dir}")
     if(_fprint_src)

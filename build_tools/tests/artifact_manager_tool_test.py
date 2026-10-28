@@ -1549,6 +1549,80 @@ class TestCopy(ArtifactManagerTestBase):
         )
 
 
+class TestPushFingerprintUpload(ArtifactManagerTestBase):
+    """push uploads .fprint sidecars for produced artifacts, scoped to the stage."""
+
+    def _backend(self) -> LocalDirectoryBackend:
+        return LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="local", platform=TEST_PLATFORM
+            ),
+        )
+
+    def _write_fprint(self, name: str, component: str, target_family: str) -> Path:
+        artifacts_dir = self.build_dir / "artifacts"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        path = artifacts_dir / f"{name}_{component}_{target_family}.fprint"
+        path.write_text("a" * 64)
+        return path
+
+    def _push(self, stage: str) -> None:
+        artifact_manager.main(
+            [
+                "push",
+                "--stage",
+                stage,
+                "--build-dir",
+                str(self.build_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+            ]
+        )
+
+    def test_push_uploads_fingerprint_for_produced_artifact(self):
+        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        self._write_fprint("test-artifact", "lib", "generic")
+
+        self._push("upstream-stage")
+
+        backend = self._backend()
+        self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
+        self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.fprint"))
+
+    def test_push_skips_fingerprint_for_unproduced_artifact(self):
+        # second-artifact is produced by second-upstream-stage, not upstream-stage.
+        self._create_fake_precompressed_artifact("test-artifact", "lib", "generic")
+        self._write_fprint("test-artifact", "lib", "generic")
+        self._write_fprint("second-artifact", "lib", "generic")
+
+        self._push("upstream-stage")
+
+        backend = self._backend()
+        self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.fprint"))
+        self.assertFalse(backend.artifact_exists("second-artifact_lib_generic.fprint"))
+
+    def test_fingerprint_artifact_name_parsing(self):
+        self.assertEqual(
+            artifact_manager.fingerprint_artifact_name(
+                "test-artifact_lib_generic.fprint"
+            ),
+            "test-artifact",
+        )
+        self.assertEqual(
+            artifact_manager.fingerprint_artifact_name("rocm_smi_lib_generic.fprint"),
+            "rocm_smi",
+        )
+        self.assertIsNone(artifact_manager.fingerprint_artifact_name("notes.txt"))
+        self.assertIsNone(artifact_manager.fingerprint_artifact_name("x.fprint"))
+
+
 class ParseTargetFamiliesTest(unittest.TestCase):
     """Unit tests for artifact_manager.parse_target_families."""
 

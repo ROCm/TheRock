@@ -79,6 +79,32 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
+# Fingerprint sidecar files (THEROCK_FPRINT) are emitted at configure time next
+# to each artifact's component directory under build/artifacts/. They are
+# uploaded alongside the artifacts so later runs can compute cache keys without
+# rebuilding (see docs/rfcs/RFC0016-Fingerprint-Based-Artifact-Cache.md).
+FINGERPRINT_SUFFIX = ".fprint"
+
+
+def fingerprint_artifact_name(filename: str) -> Optional[str]:
+    """Artifact (slice) name for a ``<name>_<component>_<suffix>.fprint`` sidecar.
+
+    The slice name is the portion before the component token (one of
+    ``ARTIFACT_COMPONENTS``); returns None if the file is not a recognized
+    fingerprint sidecar. Artifact names may contain underscores, so the
+    component token is used as the split point, scanning from the right.
+    """
+    if not filename.endswith(FINGERPRINT_SUFFIX):
+        return None
+    stem = filename[: -len(FINGERPRINT_SUFFIX)]
+    tokens = stem.split("_")
+    for i in range(len(tokens) - 2, -1, -1):
+        if tokens[i] in ARTIFACT_COMPONENTS:
+            name = "_".join(tokens[:i])
+            if name:
+                return name
+    return None
+
 
 def _get_base_arch(target: str) -> str:
     """Strip xnack/other suffixes: 'gfx942:xnack+' -> 'gfx942'.
@@ -845,6 +871,7 @@ def do_push(args: argparse.Namespace):
 
     compress_requests = []
     direct_upload_requests = []
+    fprint_upload_requests = []
 
     for item in artifacts_dir.iterdir():
         if item.is_dir():
@@ -883,13 +910,34 @@ def do_push(args: argparse.Namespace):
                 )
             )
 
-    total_artifacts = len(compress_requests) + len(direct_upload_requests)
+        elif item.is_file() and item.name.endswith(FINGERPRINT_SUFFIX):
+            # Fingerprint sidecar - upload alongside the artifact under the same
+            # key (e.g. blas_lib_gfx94X-dcgpu.fprint) so later runs can compute
+            # cache keys without rebuilding. Scoped to this stage's produced
+            # artifacts, matching the archive branches above.
+            slice_name = fingerprint_artifact_name(item.name)
+            if slice_name is None or slice_name not in produced:
+                continue
+            fprint_upload_requests.append(
+                UploadRequest(
+                    source_path=item,
+                    artifact_key=item.name,
+                    backend=backend,
+                )
+            )
+
+    total_artifacts = (
+        len(compress_requests)
+        + len(direct_upload_requests)
+        + len(fprint_upload_requests)
+    )
     if total_artifacts == 0:
         log("No matching artifacts found to push")
         return
 
     log(
-        f"\nProcessing {total_artifacts} artifacts ({len(compress_requests)} to compress, {len(direct_upload_requests)} pre-compressed)..."
+        f"\nProcessing {total_artifacts} artifacts ({len(compress_requests)} to compress, "
+        f"{len(direct_upload_requests)} pre-compressed, {len(fprint_upload_requests)} fingerprints)..."
     )
 
     compressed_count = 0
@@ -909,8 +957,9 @@ def do_push(args: argparse.Namespace):
         ) as upload_executor:
             upload_futures = []
 
-            # Start uploading pre-compressed archives immediately
-            for req in direct_upload_requests:
+            # Start uploading pre-compressed archives and fingerprint sidecars
+            # immediately (neither needs compression).
+            for req in direct_upload_requests + fprint_upload_requests:
                 upload_futures.append(upload_executor.submit(upload_artifact, req))
 
             # As compression completes, start uploads
