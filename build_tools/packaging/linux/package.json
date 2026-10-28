@@ -2,7 +2,6 @@
     {
         "Package": "amdrocm-amdsmi",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "python3 (>= 3.6.8)",
@@ -43,7 +42,6 @@
     {
         "Package": "amdrocm-llvm",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "libstdc++6|libstdc++8",
@@ -118,7 +116,6 @@
     {
         "Package": "amdrocm-llvm-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "python3",
             "libc6",
@@ -178,7 +175,6 @@
     {
         "Package": "amdrocm-runtime",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-sysdeps",
             "amdrocm-base",
@@ -277,7 +273,6 @@
     {
         "Package": "amdrocm-runtime-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-sysdeps",
             "amdrocm-runtime",
@@ -360,7 +355,6 @@
     {
         "Package": "amdrocm-runtime-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime-devel",
             "amdrocm-sysdeps",
@@ -429,7 +423,6 @@
     {
         "Package": "amdrocm-fft-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-fft-devel",
             "amdrocm-rand",
@@ -473,7 +466,6 @@
     {
         "Package": "amdrocm-fft",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -520,7 +512,6 @@
     {
         "Package": "amdrocm-fft-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-fft",
@@ -563,7 +554,6 @@
     {
         "Package": "amdrocm-blas",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -648,7 +638,6 @@
     {
         "Package": "amdrocm-solver-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-solver-devel"
@@ -691,7 +680,6 @@
     {
         "Package": "amdrocm-sparse-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-sparse-devel"
@@ -739,7 +727,6 @@
     {
         "Package": "amdrocm-blas-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-amdsmi",
@@ -813,7 +800,6 @@
     {
         "Package": "amdrocm-blas-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-blas",
@@ -870,7 +856,6 @@
     {
         "Package": "amdrocm-sparse",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-blas",
@@ -927,7 +912,6 @@
     {
         "Package": "amdrocm-sparse-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-sparse",
@@ -976,7 +960,6 @@
     {
         "Package": "amdrocm-solver",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-math-common",
@@ -1026,7 +1009,6 @@
     {
         "Package": "amdrocm-solver-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-solver",
@@ -1071,7 +1053,6 @@
     {
         "Package": "amdrocm-rocalution",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-blas",
@@ -1112,7 +1093,6 @@
     {
         "Package": "amdrocm-rocalution-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-rocalution",
             "amdrocm-runtime-devel"
@@ -1148,7 +1128,6 @@
     {
         "Package": "amdrocm-rocalution-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-rocalution-devel"
         ],
@@ -1182,7 +1161,6 @@
     {
         "Package": "amdrocm-hiptensor",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime"
@@ -1217,7 +1195,6 @@
     {
         "Package": "amdrocm-hiptensor-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-hiptensor",
             "amdrocm-runtime-devel"
@@ -1253,7 +1230,6 @@
     {
         "Package": "amdrocm-hiptensor-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-hiptensor-devel"
         ],
@@ -1287,7 +1263,6 @@
     {
         "Package": "amdrocm-rand",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime"
@@ -1332,7 +1307,6 @@
     {
         "Package": "amdrocm-rand-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-rand-devel"
@@ -1373,7 +1347,6 @@
     {
         "Package": "amdrocm-rand-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-rand",
@@ -1416,7 +1389,6 @@
     {
         "Package": "amdrocm-ccl-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-ccl-devel"
         ],
@@ -1485,7 +1457,6 @@
     {
         "Package": "amdrocm-ccl-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "python3",
             "libc6",
@@ -1559,7 +1530,6 @@
     {
         "Package": "amdrocm-profiler-base",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -1655,7 +1625,6 @@
     {
         "Package": "amdrocm-profiler-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -1743,7 +1712,6 @@
     {
         "Package": "amdrocm-profiler",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -1803,7 +1771,6 @@
     {
         "Package": "amdrocm-hipify",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-llvm"
         ],
@@ -1838,7 +1805,6 @@
     {
         "Package": "amdrocm-base",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libgcc-s1",
             "libstdc++6",
@@ -1932,7 +1898,6 @@
     {
         "Package": "amdrocm-opencl-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-sysdeps"
@@ -1968,7 +1933,6 @@
     {
         "Package": "amdrocm-opencl",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-sysdeps"
@@ -2018,7 +1982,6 @@
     {
         "Package": "amdrocm-opencl-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-sysdeps",
             "amdrocm-opencl"
@@ -2054,7 +2017,6 @@
     {
         "Package": "amdrocm-sysdeps",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6"
         ],
@@ -2210,7 +2172,6 @@
     {
         "Package": "amdrocm-hipblas-common-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [],
         "RPMRequires": [],
         "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
@@ -2240,7 +2201,6 @@
     {
         "Package": "amdrocm-math-common",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [],
         "RPMRequires": [],
         "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -2287,7 +2247,6 @@
     {
         "Package": "amdrocm-ck",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [],
         "RPMRequires": [],
         "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
@@ -2320,7 +2279,6 @@
     {
         "Package": "amdrocm-ck-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-composablekernel"
         ],
@@ -2347,7 +2305,6 @@
     {
         "Package": "amdrocm-rccl-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-base",
@@ -2392,7 +2349,6 @@
     {
         "Package": "amdrocm-rccl",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-base",
@@ -2433,7 +2389,6 @@
     {
         "Package": "amdrocm-rccl-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "python3",
             "libc6",
@@ -2472,7 +2427,6 @@
     {
         "Package": "amdrocm-rocshmem-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-base"
@@ -2507,7 +2461,6 @@
     {
         "Package": "amdrocm-rocshmem",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-base",
@@ -2546,7 +2499,6 @@
     {
         "Package": "amdrocm-rocshmem-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-rocshmem"
         ],
@@ -2580,7 +2532,6 @@
     {
         "Package": "amdrocm-dnn",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-profiler-base",
@@ -2647,7 +2598,6 @@
     {
         "Package": "amdrocm-dnn-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-dnn-devel",
             "amdrocm-runtime",
@@ -2737,7 +2687,6 @@
     {
         "Package": "amdrocm-dnn-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-dnn",
             "amdrocm-runtime-devel"
@@ -2812,7 +2761,6 @@
     {
         "Package": "amdrocm-rdc-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-amdsmi",
             "amdrocm-profiler-base",
@@ -2853,7 +2801,6 @@
     {
         "Package": "amdrocm-rdc",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-amdsmi",
             "amdrocm-profiler-base",
@@ -2897,7 +2844,6 @@
     {
         "Package": "amdrocm-debugger",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-sysdeps"
@@ -2963,7 +2909,6 @@
     {
         "Package": "amdrocm-debugger-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-sysdeps"
         ],
@@ -3010,7 +2955,6 @@
     {
         "Package": "amdrocm-decode-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-decode-devel"
         ],
@@ -3044,7 +2988,6 @@
     {
         "Package": "amdrocm-decode",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -3082,7 +3025,6 @@
     {
         "Package": "amdrocm-decode-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-decode"
@@ -3117,7 +3059,6 @@
     {
         "Package": "amdrocm-jpeg-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-jpeg-devel"
         ],
@@ -3151,7 +3092,6 @@
     {
         "Package": "amdrocm-jpeg",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -3189,7 +3129,6 @@
     {
         "Package": "amdrocm-jpeg-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-jpeg"
@@ -3224,7 +3163,6 @@
     {
         "Package": "amdrocm-rpp-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-rpp-devel"
         ],
@@ -3258,7 +3196,6 @@
     {
         "Package": "amdrocm-rpp",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -3296,7 +3233,6 @@
     {
         "Package": "amdrocm-rpp-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-rpp"
@@ -3331,7 +3267,6 @@
     {
         "Package": "amdrocm-hipfile",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -3371,7 +3306,6 @@
     {
         "Package": "amdrocm-hipfile-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-hipfile"
         ],
@@ -3405,7 +3339,6 @@
     {
         "Package": "amdrocm-hipfile-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-hipfile-devel",
@@ -3442,7 +3375,6 @@
     {
         "Package": "amdrocm-threads",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-sysdeps"
@@ -3478,7 +3410,6 @@
     {
         "Package": "amdrocm-threads-test",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-threads"
         ],
@@ -3513,7 +3444,6 @@
         "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
         "Package": "amdrocm-core",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-base",
             "amdrocm-sysdeps",
@@ -3573,7 +3503,6 @@
     {
         "Package": "amdrocm",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-core"
         ],
@@ -3596,7 +3525,6 @@
         "Comments": "Opt-in HPC SDK metapackages. Built with Core but NOT pulled in by the default amdrocm metapackage. See docs/rfcs HPC SDK Release Model.",
         "Package": "amdrocm-hpc",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-rocalution",
             "amdrocm-hiptensor"
@@ -3620,7 +3548,6 @@
     {
         "Package": "amdrocm-hpc-sdk",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-hpc",
             "amdrocm-rocalution-devel",
@@ -3646,7 +3573,6 @@
     {
         "Package": "amdrocm-hpc-tests",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-hpc-sdk",
             "amdrocm-rocalution-test",
@@ -3672,7 +3598,6 @@
     {
         "Package": "amdrocm-core-devel",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-core",
             "amdrocm-runtime-devel",
@@ -3730,7 +3655,6 @@
     {
         "Package": "amdrocm-emulation",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "libc6",
             "amdrocm-runtime",
@@ -3779,7 +3703,6 @@
     {
         "Package": "amdrocm-developer-tools",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-base",
             "amdrocm-amdsmi",
@@ -3811,7 +3734,6 @@
     {
         "Package": "amdrocm-fortran",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-llvm"
         ],
@@ -3834,7 +3756,6 @@
     {
         "Package": "amdrocm-opencl-meta",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-runtime",
             "amdrocm-opencl"
@@ -3859,7 +3780,6 @@
     {
         "Package": "amdrocm-openmp",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-llvm",
             "amdrocm-runtime"
@@ -3884,7 +3804,6 @@
     {
         "Package": "amdrocm-core-sdk",
         "Version": "",
-        "Architecture": "amd64",
         "DEBDepends": [
             "amdrocm-core-devel",
             "amdrocm-developer-tools",

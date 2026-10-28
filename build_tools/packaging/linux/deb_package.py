@@ -21,6 +21,27 @@ from _therock_utils.log_utils import TheRockLogger
 
 logger = TheRockLogger(__name__)
 
+
+def _deb_host_arch():
+    """Return the Debian architecture name for the current host.
+
+    Uses dpkg if available (canonical), otherwise maps platform.machine().
+    """
+    try:
+        return subprocess.check_output(
+            ["dpkg", "--print-architecture"], text=True
+        ).strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        import platform
+        _DEB_ARCH_MAP = {
+            "x86_64": "amd64",
+            "aarch64": "arm64",
+            "ppc64le": "ppc64el",
+        }
+        machine = platform.machine()
+        return _DEB_ARCH_MAP.get(machine, machine)
+
+
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -348,7 +369,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         "source": pkg_name,
         "depends": depends,
         "pkg_name": pkg_name,
-        "arch": pkg_info.get("Architecture"),
+        "arch": pkg_info.get("Architecture") or _deb_host_arch(),
         "description_short": pkg_info.get("Description_Short"),
         "description_long": pkg_info.get("Description_Long"),
         "homepage": pkg_info.get("Homepage"),
