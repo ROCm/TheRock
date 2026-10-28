@@ -1,11 +1,45 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Check that artifact uploads are not pinned to GitHub-hosted runners.
+"""Check that jobs which upload artifacts are not pinned to GitHub-hosted runners.
 
 Fork PRs skip OIDC and rely on baseline storage credentials on our self-hosted
 runners, including AWS and Azure runners. See the Authentication section in
 docs/development/s3_buckets.md.
+
+This code would *fail* the tests as the job cannot use runner base credentials
+on fork PRs:
+
+    jobs:
+      upload:
+        runs-on: windows-2022  # Rejected: always GitHub-hosted.
+        steps:
+          - uses: ./.github/actions/configure_aws_artifacts_credentials
+          - run: aws s3 cp artifact.zip s3://therock-ci-artifacts-external/example/
+            # This would fail to upload on fork PRs: no baseline credentials.
+
+This code would *pass* the tests as runners are always self-hosted
+(note that our runners are unavailable to fork repositories so this is harder
+for contributors to run themselves):
+
+    jobs:
+      upload:
+        runs-on: aws-linux-scale-rocm-prod
+        steps:
+          - uses: ./.github/actions/configure_aws_artifacts_credentials
+          - run: aws s3 cp artifact.zip s3://therock-ci-artifacts-external/example/
+
+This code would *pass* the tests as runners are conditionally self-hosted
+(fork repositories can run, but skip uploads):
+
+    jobs:
+      upload:
+        runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
+        steps:
+          - uses: ./.github/actions/configure_aws_artifacts_credentials
+            if: ${{ github.repository_owner == 'ROCm' }}
+          - run: aws s3 cp artifact.zip s3://therock-ci-artifacts-external/example/
+            if: ${{ github.repository_owner == 'ROCm' }}
 
 This is a static guard against fixed GitHub-hosted runner labels. Expressions
 are allowed so reusable workflows can select self-hosted runners via inputs,
