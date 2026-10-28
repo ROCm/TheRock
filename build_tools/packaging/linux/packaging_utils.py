@@ -687,18 +687,11 @@ def process_main_dependencies_kpack(
         # GFX_META for non-meta gfxarch packages: depend on host + all device packages
         dep_list = expand_kpack_meta_dependencies(pkg_name, config.gfxarch_list, config)
     elif config.gfx_arch == GFX_HOST:
-        # Host package: only include non-gfxarch dependencies
-        # Gfxarch deps are pulled via the gfx-specific package
+        # Host package: include all dependencies (both gfxarch and non-gfxarch)
+        # Gfxarch deps are resolved to their host-versioned form (e.g., blas-host)
+        # to ensure version-locked dependencies rather than relying on auto-detected
+        # library deps (librocblas.so.5) which are version-ambiguous.
         dep_list = pkg_info.get(field_key, [])
-        dep_list = [
-            dep
-            for dep in dep_list
-            if not is_gfxarch_package(
-                get_package_info(dep, raise_if_missing=False) or {},
-                config.enable_kpack,
-                config.artifacts_dir,
-            )
-        ]
         # Host fallback is discarded (_) because we ARE the host package.
         # There's nothing to fall back to - if a dependency has no host artifacts,
         # it's a build configuration error that should fail, not silently degrade.
@@ -1105,6 +1098,17 @@ def filter_components_fromartifactory(
                                 if match_found and line.strip():
                                     logger.debug(f"Matching line: {line.strip()}")
                                     source_path = source_dir / line.strip()
+                                    # Split artifacts retain original manifest roots even
+                                    # when all of a root's device images were moved into
+                                    # a shared kpack under another root. Match the artifact
+                                    # flattener's handling of these absent roots, while
+                                    # retaining validation of every existing payload.
+                                    if enable_kpack and not source_path.exists():
+                                        logger.debug(
+                                            "Skipping absent split-artifact manifest "
+                                            f"root: {source_path}"
+                                        )
+                                        continue
                                     sourcedir_list.append(source_path)
                     except OSError as e:
                         logger.warning(f"Could not read manifest {filename}: {e}")
@@ -1441,3 +1445,75 @@ def filter_dependencies_by_artifacts(
             )
 
     return filtered, host_fallback
+
+
+def load_alternatives_binaries() -> dict[str, dict[str, list[str]]]:
+    """Load and validate package-specific alternatives configuration."""
+
+    scripts_dir = Path(__file__).resolve().parent / "template" / "scripts"
+    alternatives_file = scripts_dir / "amdrocm-alternatives.json"
+
+    executable_scripts = {
+        "preinst",
+        "postinst",
+        "prerm",
+        "postrm",
+        "config",
+    }
+
+    try:
+        with alternatives_file.open(encoding="utf-8") as file:
+            alternatives = json.load(file)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Alternatives configuration file was not found: " f"{alternatives_file}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Invalid JSON in alternatives configuration file "
+            f"{alternatives_file}: {exc}"
+        ) from exc
+    except OSError as exc:
+        raise OSError(
+            f"Unable to read alternatives configuration file: " f"{alternatives_file}"
+        ) from exc
+
+    if not isinstance(alternatives, dict):
+        raise ValueError(f"{alternatives_file} must contain a JSON object")
+
+    for package_name, package_config in alternatives.items():
+        if not isinstance(package_name, str):
+            raise ValueError(
+                f"Invalid package name in {alternatives_file}: " f"{package_name!r}"
+            )
+
+        if not isinstance(package_config, dict):
+            raise ValueError(f"Configuration for {package_name!r} must be an object")
+
+        scripts = package_config.get("scripts")
+        binaries = package_config.get("binaries")
+
+        if not isinstance(scripts, list) or not all(
+            isinstance(script, str) for script in scripts
+        ):
+            raise ValueError(
+                f"'scripts' for {package_name!r} must be a list " "of strings"
+            )
+
+        unsupported_scripts = set(scripts) - executable_scripts
+        if unsupported_scripts:
+            raise ValueError(
+                f"Unsupported maintainer scripts for "
+                f"{package_name!r}: "
+                f"{sorted(unsupported_scripts)}. Supported scripts: "
+                f"{sorted(executable_scripts)}"
+            )
+
+        if not isinstance(binaries, list) or not all(
+            isinstance(binary, str) for binary in binaries
+        ):
+            raise ValueError(
+                f"'binaries' for {package_name!r} must be a list " "of strings"
+            )
+
+    return alternatives

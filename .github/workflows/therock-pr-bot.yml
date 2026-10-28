@@ -34,7 +34,7 @@ concurrency:
 jobs:
   policy:
     name: therock-pr-bot
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       # SECURITY: check out the TRUSTED base commit, NEVER the PR head. This

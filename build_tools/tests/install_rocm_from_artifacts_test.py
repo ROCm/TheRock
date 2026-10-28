@@ -11,6 +11,7 @@ from pathlib import Path
 import os
 import sys
 import tempfile
+import tarfile
 import unittest
 from unittest import mock
 
@@ -70,6 +71,11 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_hrr_flag_includes_hrr_run(self):
+        argv = self._run_main(["--hrr"])
+        self.assertIn("core-hrr_run", argv)
+        self.assertNotIn("core-hrr_lib", argv)
+
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
@@ -80,6 +86,26 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertNotIn("core-ocl_run", base_argv)
         self.assertEqual(sanity_argv, base_argv + ["core-ocl_run", "hipify_run"])
         self.assertNotIn("core-ocl_run", self._run_main(["--blas", "--tests"]))
+
+    def test_base_only_on_wsl_includes_wsl_rocdxg(self):
+        """WSL needs the libhsakmt WSL build to reach the GPU via /dev/dxg.
+
+        Without it the bare-metal libhsakmt in core-runtime is used and rocminfo
+        exits non-zero with no output, because there is no amdgpu driver in the
+        guest. Observed on actions/runs/36035911215.
+        """
+        with mock.patch(
+            "platform.release", return_value="6.6.87.2-microsoft-standard-WSL2"
+        ):
+            argv = self._run_main(["--base-only"])
+        self.assertIn("wsl-rocdxg_lib", argv)
+        # The ordinary base set must still be requested.
+        self.assertIn("core-runtime_lib", argv)
+
+    def test_base_only_off_wsl_excludes_wsl_rocdxg(self):
+        with mock.patch("platform.release", return_value="6.8.0-45-generic"):
+            argv = self._run_main(["--base-only"])
+        self.assertNotIn("wsl-rocdxg_lib", argv)
 
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
@@ -275,7 +301,7 @@ class TestReleaseDiscovery(unittest.TestCase):
 
     def test_dev_release_uses_dev_multiarch_tarball_bucket(self) -> None:
         version = "7.15.0.dev0+deadbeef"
-        output_dir = Path("/tmp/therock-test")
+        output_dir = Path("/fake/therock-test")
         asset_name = _tarball_name(mod.PLATFORM, "gfx94X-dcgpu", version)
         args = argparse.Namespace(
             artifact_group="gfx94X-dcgpu",
@@ -373,7 +399,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
     defaults = dict(
         run_id="12345",
         artifact_group="gfx110X-all",
-        output_dir=Path("/tmp/therock-test"),
+        output_dir=Path("/fake/therock-test"),
         # Non-empty amdgpu_targets skips the expand_families call.
         amdgpu_targets="gfx1100",
         dry_run=False,
@@ -388,6 +414,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         hipdnn_integration_tests=False,
         hipdnn_samples=False,
         hipfile=False,
+        hrr=False,
         miopen=False,
         miopenprovider=False,
         hipkernelprovider=False,
@@ -452,6 +479,26 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
         )
         self.assertIn("hipfile_lib", argv)
         self.assertIn("sysdeps-util-linux_lib", argv)
+
+
+class TestUntarFiles(unittest.TestCase):
+    def test_rejects_artifact_that_overwrites_file_outside_destination(self):
+        # We explicitly use filter="tar" to preserve packaged metadata.
+        # It still rejects writes outside the destination, as tested here:
+        # https://docs.python.org/3/library/tarfile.html#tarfile.tar_filter
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root / "outside"
+            outside.write_bytes(b"original")
+            archive = root / "package.tar"
+            with tarfile.open(archive, "w") as tf:
+                member = tarfile.TarInfo("../outside")
+                member.size = 7
+                tf.addfile(member, io.BytesIO(b"changed"))
+            with self.assertRaises(tarfile.FilterError):
+                mod._untar_files(root / "output", archive)
+            self.assertEqual(outside.read_bytes(), b"original")
+            self.assertTrue(archive.exists())
 
 
 if __name__ == "__main__":

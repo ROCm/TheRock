@@ -1,17 +1,9 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_rccl_enabled OFF)
 if(THEROCK_ENABLE_RCCL)
-  set(_rccl_enabled ON)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rccl_targets rccl ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _rccl_targets)
-      message(STATUS
-        "rccl: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rccl_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rccl_enabled rccl)
 endif()
 
 if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
@@ -90,6 +82,14 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
     therock_cmake_subproject_dist_dir(_rocjitsu_dist_dir rocjitsu)
     therock_cmake_subproject_dist_dir(_rocjitsu_hotswap_dist_dir rocjitsu-hotswap)
 
+    # RCCL compiles filtered test targets; the generic comm-libs stage has no per-arch list.
+    get_target_property(_rccl_declared_targets rccl THEROCK_AMDGPU_TARGETS)
+    therock_filter_amdgpu_targets(_rccl_gpu_targets rccl ${_rccl_declared_targets})
+    set(_rccl_run_pretranslate OFF)
+    if("gfx1250" IN_LIST _rccl_gpu_targets)
+      set(_rccl_run_pretranslate ON)
+    endif()
+
     # Generate the install-owned translation tier from RCCL before KPACK splits
     # its fat binary. The splitter then assigns this tree only to gfx1250.
     therock_cmake_subproject_declare(rccl-translate
@@ -107,6 +107,7 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
         -DKPACK_PYTHON_SOURCE=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
         # TODO: Set ON once RocJitsu supports every RCCL gfx1250 code object.
         -DRCCL_TRANSLATE_FAIL_ON_SKIPPED=OFF
+        -DRCCL_TRANSLATE_RUN_PRETRANSLATE=${_rccl_run_pretranslate}
       EXTRA_DEPENDS
         ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/scripts/rocjitsu-pretranslate.py
         ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/binutils.py
@@ -173,17 +174,9 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   )
 endif(THEROCK_ENABLE_RCCL AND _rccl_enabled)
 
+set(_rocshmem_enabled OFF)
 if(THEROCK_ENABLE_ROCSHMEM)
-  set(_rocshmem_enabled ON)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocshmem_targets rocshmem ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _rocshmem_targets)
-      message(STATUS
-        "rocshmem: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocshmem_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rocshmem_enabled rocshmem)
 endif()
 
 if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)

@@ -10,21 +10,8 @@ endif()
 
 set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
-  set(_miopen_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_miopen_targets MIOpen ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _miopen_targets)
-      message(STATUS
-        "MIOpen: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_miopen_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
 endif()
-# ml-libs is configured before examples; push the resolved value so the
-# cpp-sdk-user example can reflect MIOpen's actual built status (it is skipped
-# when filtered out for the selected gfx targets, e.g. amdgcnspirv) rather than
-# find_package()-ing a missing miopen. Mirrors _ck_enabled in math-libs.
 set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
 
 if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
@@ -213,9 +200,6 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-# miopenprovider has an unconditional RUNTIME_DEP on MIOpen, so it can only be
-# declared when MIOpen itself is (MIOpen is skipped when no supported gfx
-# targets remain after filtering, e.g. THEROCK_AMDGPU_TARGETS='amdgcnspirv').
 if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
@@ -311,17 +295,9 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
-  set(_hipkernelprovider_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hipkernelprovider_targets hipkernelprovider ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _hipkernelprovider_targets)
-      message(STATUS
-        "hipkernelprovider: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hipkernelprovider_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hipkernelprovider_enabled hipkernelprovider)
 endif()
 
 if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
@@ -372,17 +348,9 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   )
 endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
+set(_hipdnn_samples_enabled OFF)
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
-  set(_hipdnn_samples_enabled ON)
-  if(THEROCK_AMDGPU_TARGETS AND NOT "${THEROCK_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hipdnn_samples_targets hipDNN_samples ${THEROCK_AMDGPU_TARGETS})
-    if(NOT _hipdnn_samples_targets)
-      message(STATUS
-        "hipDNN_samples: no supported gfx targets remain after filtering "
-        "(THEROCK_AMDGPU_TARGETS='${THEROCK_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hipdnn_samples_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hipdnn_samples_enabled hipDNN_samples)
 endif()
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)

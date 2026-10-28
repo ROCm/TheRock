@@ -253,17 +253,9 @@ if(_therock_enable_hsa_runtime)
 
 endif()
 
+set(_hip_clr_enabled OFF)
 if(THEROCK_ENABLE_HIP_RUNTIME)
-  set(_hip_clr_enabled ON)
-  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hip_clr_targets hip-clr ${THEROCK_DIST_AMDGPU_TARGETS})
-    if(NOT _hip_clr_targets)
-      message(STATUS
-        "hip-clr: no supported gfx targets remain after filtering "
-        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hip_clr_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hip_clr_enabled hip-clr)
 endif()
 
 if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
@@ -366,6 +358,47 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
+  if(THEROCK_ENABLE_CORE_HRR)
+    ##############################################################################
+    # hrr
+    ##############################################################################
+
+    # hrr-playback replays archives that the HRR capture code in amdhip64
+    # writes. The HRR test suites are not built here: they are not installable
+    # yet, and the integration suite needs an amdhip64 with capture compiled in.
+    therock_cmake_subproject_declare(hrr
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        "-DHRR_BUILD_PLAYBACK=ON"
+        "-DHRR_BUILD_TESTS=OFF"
+        "-DHIP_PLATFORM=amd"
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(hrr SUBDIRS .)
+    therock_cmake_subproject_activate(hrr)
+
+    therock_provide_artifact(core-hrr
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hrr.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        run
+      SUBPROJECT_DEPS
+        hrr
+    )
+  endif()
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
@@ -480,21 +513,12 @@ if(THEROCK_ENABLE_OCL_ICD)
   )
 endif(THEROCK_ENABLE_OCL_ICD)
 
+set(_ocl_clr_enabled OFF)
 if(THEROCK_ENABLE_OCL_RUNTIME)
-  set(_ocl_clr_enabled ON)
-  if(THEROCK_DIST_AMDGPU_TARGETS AND NOT "${THEROCK_DIST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_ocl_clr_targets ocl-clr ${THEROCK_DIST_AMDGPU_TARGETS})
-    if(NOT _ocl_clr_targets)
-      message(STATUS
-        "ocl-clr: no supported gfx targets remain after filtering "
-        "(THEROCK_DIST_AMDGPU_TARGETS='${THEROCK_DIST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_ocl_clr_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_ocl_clr_enabled ocl-clr)
 endif()
 
 if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
-
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
   if(WIN32)
@@ -516,10 +540,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocprofiler-register
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
   endif()
+  list(APPEND OCL_CLR_CMAKE_ARGS
+    "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
   if(_therock_enable_hsa_runtime)
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
@@ -602,17 +626,9 @@ endif(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
 # downstream stages like math-libs, dctools-core, etc.
 ##############################################################################
 
-set(_hip_tests_enabled ON)
+set(_hip_tests_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_hip_tests_targets hip-tests ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _hip_tests_targets)
-      message(STATUS
-        "hip-tests: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_hip_tests_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_hip_tests_enabled hip-tests TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
 endif()
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
@@ -654,17 +670,9 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled
   list(APPEND _hip_tests_subproject_names hip-tests)
 endif(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled)
 
-set(_rocrtst_enabled ON)
+set(_rocrtst_enabled OFF)
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime)
-  if(THEROCK_TEST_AMDGPU_TARGETS AND NOT "${THEROCK_TEST_AMDGPU_TARGETS}" MATCHES "-NOTFOUND$")
-    therock_filter_amdgpu_targets(_rocrtst_targets rocrtst ${THEROCK_TEST_AMDGPU_TARGETS})
-    if(NOT _rocrtst_targets)
-      message(STATUS
-        "rocrtst: no supported gfx targets remain after filtering "
-        "(THEROCK_TEST_AMDGPU_TARGETS='${THEROCK_TEST_AMDGPU_TARGETS}'); skipping subproject.")
-      set(_rocrtst_enabled OFF)
-    endif()
-  endif()
+  therock_check_subproject_targets(_rocrtst_enabled rocrtst TARGETS_VAR THEROCK_TEST_AMDGPU_TARGETS)
 endif()
 
 if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_RUNTIME_TESTS AND _therock_enable_hsa_runtime AND _rocrtst_enabled)

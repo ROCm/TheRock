@@ -51,7 +51,7 @@ jobs:
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
-      (${{ inputs.amdgpu_families }})
+      (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
@@ -63,7 +63,7 @@ jobs:
       # Otherwise use the default image.
       # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
       image: >- # zizmor: ignore[unpinned-images]
-        ${{ inputs.platform == 'linux' &&
+        ${{ inputs.platform != 'windows' &&
             (fromJSON(inputs.component).container_image || inputs.default_container_image)
             || null
         }}
@@ -232,7 +232,7 @@ jobs:
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
-            (${{ inputs.amdgpu_families }})
+            (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
         # This input is intentionally a shell program from fetch_test_configurations.py,
         # including command chains and per-command environment assignments. Callers

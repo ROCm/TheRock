@@ -26,6 +26,9 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:run-wsl`               | Also test the Linux build on the WSL GPU runner (`test-runs-on-wsl`), as non-blocking `Test <family> (WSL)` jobs for WSL-capable components (hip-tests, rocrtst). Adds to native tests.           |
+| `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
+| `ci:no-downstream-test`    | Test only changed components, skip downstream consumer tests. Useful for submodule bumps where you only want to validate the changed project itself without testing its dependents.               |
 | `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
 | `ci:platform:windows`      | Run CI only on Windows (skip Linux builds/tests)                                                                                                                                                  |
 | `ci:gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
@@ -36,6 +39,8 @@ The following labels may be added to a pull request to modify CI behavior:
 | `test_filter:...`          | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 | `ci:build-native-linux`    | Opt-in to building native Linux packages (deb/rpm).                                                                                                                                               |
 | `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
+| `ci:build-native-windows`  | Opt-in to building native Windows packages (MSI).                                                                                                                                                 |
+| `ci:skip-native-windows`   | Skip native Windows package builds.                                                                                                                                                               |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
@@ -94,6 +99,33 @@ Actions workflow page:
 \[\[ [Multi-Arch CI workflow dispatch](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml) \]\]
 Inputs allow per-platform family selection, test label filtering, and prebuilt
 stage configuration.
+
+The `pr_labels` input accepts comma-separated labels using the same names and
+label-driven behavior as pull requests. For example,
+`test:rocprim,test_filter:comprehensive` selects rocPRIM tests and requests
+comprehensive testing.
+
+#### Running tests against existing artifacts (`test_artifacts.yml`)
+
+[`test_artifacts.yml`](https://github.com/ROCm/TheRock/actions/workflows/test_artifacts.yml)
+runs tests against pre-built artifacts. Find a recent successful
+[Multi-Arch CI](https://github.com/ROCm/TheRock/actions/workflows/multi_arch_ci.yml)
+run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
+**Run workflow**:
+
+| Input              | Example                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_run_id`  | `35193881163` (from the Multi-Arch CI run URL). **Required** — this workflow only runs tests and needs artifacts from a previous build run. |
+| `artifact_group`   | `multi-arch-release`                                                                                                                        |
+| `amdgpu_families`  | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu`                                                                                |
+| `test_runs_on`     | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`                                                                                       |
+| `test_type`        | `quick` / `standard` / `comprehensive` / `full`                                                                                             |
+| `test_labels`      | `test:rocblas,test:hipblas` (comma-separated, empty = all). Directly selects which test components to run by name.                          |
+| `changed_projects` | `rocblas,hipblas` (comma-separated, empty = all). Selects projects and their downstream consumers via the dependency graph.                 |
+
+When both `test_labels` and `changed_projects` are set, the effective test set
+is the **intersection** of both filters — only components that match both a
+`test_labels` entry and a `changed_projects` dependency are run.
 
 ## Prebuilt stages
 
