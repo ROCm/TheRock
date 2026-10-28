@@ -247,5 +247,65 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             self.fail("\n".join(errors))
 
 
+class ExternalRepoCIWorkflowAllowlistTest(unittest.TestCase):
+    """An external repo may name the workflows that constitute its CI.
+
+    rocm-libraries routes every TheRock build through .github/workflows/
+    therock-*.yml. Everything else in that directory (labelers, PR bots,
+    component CI) cannot change a TheRock result, and there are far more of
+    those than there are entrypoints, so the allowlist is expressed as a glob
+    rather than enumerating the complement.
+    """
+
+    # Stands in for a real external repo's loaded skip patterns.
+    SKIP_PATTERNS = ["*.md", "docs/*"]
+    ALLOWLIST = {"therock-*"}
+
+    def _run(self, paths):
+        return is_ci_run_required(
+            paths,
+            skip_patterns=self.SKIP_PATTERNS,
+            repo_name="rocm-libraries",
+            ci_workflow_patterns=self.ALLOWLIST,
+        )
+
+    def test_allowlisted_workflow_requires_ci(self):
+        self.assertTrue(self._run([".github/workflows/therock-multi-arch-ci.yml"]))
+
+    def test_glob_covers_workflows_added_later(self):
+        """A new therock-* workflow is picked up without touching the config."""
+        self.assertTrue(
+            self._run([".github/workflows/therock-some-future-variant.yml"])
+        )
+
+    def test_non_allowlisted_workflow_skips_ci(self):
+        self.assertFalse(self._run([".github/workflows/pre-commit.yml"]))
+
+    def test_many_non_allowlisted_workflows_skip_ci(self):
+        paths = [
+            ".github/workflows/component-ci.yml",
+            ".github/workflows/labeler.yml",
+            ".github/workflows/pr-import.yml",
+        ]
+        self.assertFalse(self._run(paths))
+
+    def test_non_allowlisted_workflow_does_not_mask_a_real_change(self):
+        """A source change still forces CI even alongside an ignored workflow."""
+        paths = [".github/workflows/labeler.yml", "projects/rocblas/src/foo.cpp"]
+        self.assertTrue(self._run(paths))
+
+    def test_skip_patterns_still_apply_to_non_workflow_paths(self):
+        self.assertFalse(self._run(["README.md", ".github/workflows/labeler.yml"]))
+
+    def test_without_allowlist_workflows_fall_back_to_skip_patterns(self):
+        """Repos declaring no allowlist keep the pre-existing behaviour."""
+        paths = [".github/workflows/labeler.yml"]
+        self.assertTrue(
+            is_ci_run_required(
+                paths, skip_patterns=self.SKIP_PATTERNS, repo_name="rocm-libraries"
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

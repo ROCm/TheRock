@@ -6,6 +6,19 @@
 #
 # Individual repos (including TheRock) can extend these with their own
 # skip-ci-config.toml for repo-specific patterns.
+#
+# An extending repo may also declare which workflows constitute its CI:
+#
+#   [ci_workflows]
+#   filenames = ["multi_arch_ci.yml"]   # exact basenames
+#   patterns  = ["therock-*"]           # fnmatch globs over the basename
+#
+# When either key is present, files under .github/workflows are judged only
+# against that allowlist -- a workflow outside it never forces a CI run, and is
+# not consulted against the skip_ci patterns either. This lets a repo whose CI
+# entrypoints share a naming convention avoid enumerating the (much larger) set
+# of workflows that are not CI. Repos declaring neither key are unaffected:
+# their workflow files are matched against skip_ci like any other path.
 
 version = 1
 

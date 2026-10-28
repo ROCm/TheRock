@@ -867,11 +867,16 @@ def should_skip_ci(
         # Get skip patterns from TOML config file
         skip_ci_config = external_repo.get("skip_ci_config")
         skip_ci_patterns = None
+        ci_workflow_patterns: set[str] = set()
         if skip_ci_config:
-            skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
+            skip_ci_patterns, ci_workflow_patterns = (
+                load_skip_ci_patterns_for_external_repo(skip_ci_config)
+            )
 
         # Evaluate skip logic
-        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+        if not is_ci_run_required(
+            changed_files, skip_ci_patterns, repo_name, ci_workflow_patterns
+        ):
             print("  External repo build: CI can be skipped")
             return True
 

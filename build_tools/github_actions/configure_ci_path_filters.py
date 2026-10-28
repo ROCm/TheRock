@@ -137,12 +137,23 @@ def _extract_skip_patterns_from_config(config: dict) -> list[str]:
 
 
 def _extract_ci_workflow_filenames(config: dict) -> set[str]:
-    """Extract CI workflow filenames from a parsed TOML config dict."""
+    """Extract CI workflow filenames and globs from a parsed TOML config dict.
+
+    Two keys are accepted under [ci_workflows] and unioned together:
+      filenames: exact workflow basenames, e.g. "multi_arch_ci.yml"
+      patterns:  fnmatch globs over the basename, e.g. "therock-*"
+
+    Both are matched with fnmatch, so an entry without glob metacharacters
+    behaves as an exact match. The keys are kept separate only so that a
+    config reads honestly about which kind of entry it holds.
+    """
     ci_workflows = config.get("ci_workflows", {})
-    filenames = ci_workflows.get("filenames", [])
-    if isinstance(filenames, list):
-        return set(filenames)
-    return set()
+    result: set[str] = set()
+    for key in ("filenames", "patterns"):
+        values = ci_workflows.get(key, [])
+        if isinstance(values, list):
+            result.update(values)
+    return result
 
 
 def load_skip_ci_config(
@@ -204,7 +215,9 @@ def _get_therock_config() -> tuple[list[str], set[str]]:
 _EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
 
-def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | None:
+def load_skip_ci_patterns_for_external_repo(
+    config_path: str,
+) -> tuple[list[str] | None, set[str]]:
     """Load skip CI patterns from base config + external repo's TOML config file.
 
     This function is used by configure_multi_arch_ci.py to load skip-CI patterns
@@ -223,8 +236,12 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
             repo (e.g., ".github/skip-ci-config.toml")
 
     Returns:
-        Combined list of skip patterns (base + extension), or None if no patterns
-        could be loaded.
+        Tuple of (skip_patterns, ci_workflow_patterns):
+        - skip_patterns: combined list of skip patterns (base + extension), or
+          None if no patterns could be loaded.
+        - ci_workflow_patterns: the repo's [ci_workflows] allowlist, empty if it
+          declares none. When empty, workflow files are evaluated against
+          skip_patterns like any other path (the pre-existing behaviour).
     """
     # The external repo config is checked out to external-repo-config/
     full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
@@ -234,13 +251,15 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
         base_patterns, _ = load_skip_ci_config(extension_config_path=full_path)
         if base_patterns:
             print(f"  Using {len(base_patterns)} base skip-CI patterns only")
-            return base_patterns
-        return None
+            return base_patterns, set()
+        return None, set()
 
     # Load base + extension patterns using the shared loader
-    patterns, _ = load_skip_ci_config(extension_config_path=full_path)
+    patterns, ci_workflow_patterns = load_skip_ci_config(
+        extension_config_path=full_path
+    )
     print(f"  Loaded {len(patterns)} total skip CI patterns (base + {config_path})")
-    return patterns
+    return patterns, ci_workflow_patterns
 
 
 # ============================================================================
@@ -344,16 +363,23 @@ def is_ci_run_required(
     paths: Optional[Iterable[str]],
     skip_patterns: Optional[list[str]] = None,
     repo_name: str = "",
+    ci_workflow_patterns: Optional[set[str]] = None,
 ) -> bool:
     """Checks if a CI run is required based on modified file paths.
 
     CI will run if:
-    - At least one CI-related workflow file was modified (TheRock only), OR
+    - At least one CI-related workflow file was modified, OR
     - At least one non-skippable file was modified
 
     CI will be skipped if:
     - No files were modified, OR
     - Only skippable files were modified (docs, markdown, etc.)
+
+    When a CI workflow allowlist is in effect, files under .github/workflows are
+    judged *only* against that allowlist: a workflow outside it never forces a
+    run, and is not consulted against skip_patterns either. This lets a repo say
+    "only these workflows are my CI" without enumerating all the ones that are
+    not. Repos that declare no allowlist are unaffected.
 
     Args:
         paths: Iterable of file paths to evaluate, or None if no files modified
@@ -361,6 +387,9 @@ def is_ci_run_required(
             If provided (external repo case), uses these patterns.
             If None (TheRock case), loads patterns from TOML configs.
         repo_name: Optional repo name for logging (e.g., "rocm-libraries")
+        ci_workflow_patterns: Optional allowlist of workflow basenames/globs for
+            the external repo case. Ignored when skip_patterns is None, since
+            TheRock loads its own allowlist from its config.
 
     Returns:
         True if CI run is required, False if CI can be skipped
@@ -382,7 +411,7 @@ def is_ci_run_required(
     if use_external_patterns:
         # External repo: use provided patterns (already includes base patterns)
         effective_patterns = skip_patterns
-        ci_workflow_filenames: set[str] = set()
+        ci_workflow_filenames: set[str] = ci_workflow_patterns or set()
     else:
         # TheRock: load from TOML configs
         effective_patterns, ci_workflow_filenames = _get_therock_config()
@@ -637,7 +666,11 @@ def _check_for_workflow_file_related_to_ci(
     """
     if paths is None:
         return False
-    return any(Path(p).name in ci_workflow_filenames for p in paths)
+    return any(
+        fnmatch.fnmatch(Path(p).name, pattern)
+        for p in paths
+        for pattern in ci_workflow_filenames
+    )
 
 
 def get_changed_files_for_external_repo(
