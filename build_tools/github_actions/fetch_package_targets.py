@@ -89,6 +89,9 @@ def determine_package_targets(args):
 
         platform_for_key = info_for_key.get(package_platform)
 
+        if platform_for_key.get("exclude-from-packaging"):
+            continue
+
         if not platform_for_key:
             # Some AMDGPU families are only supported on certain platforms.
             continue
