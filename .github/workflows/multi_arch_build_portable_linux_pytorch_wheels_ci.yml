@@ -57,6 +57,11 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       kpack_split:
         description: "'true' if this is a kpack-split flat build."
         type: string
@@ -106,6 +111,13 @@ on:
           - sccache
           - ccache
         default: sccache
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       build_runs_on:
         description: >-
           Build runner label. On workflow_dispatch, default to the self-hosted
@@ -132,6 +144,7 @@ jobs:
     env:
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
       PYTHON_VERSION: ${{ inputs.python_version }}
@@ -235,8 +248,16 @@ jobs:
         if: ${{ inputs.amdgpu_families != '' }}
         id: expand
         run: |
+          # Excluded implicit targets remain available when requested directly.
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform linux \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
