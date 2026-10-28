@@ -96,16 +96,17 @@ def mark_amdsmi_rocm_sdk_core(core_dir: Path) -> None:
     wrapper = core_dir / "share" / "amd_smi" / "amdsmi" / "amdsmi_wrapper.py"
     if not wrapper.exists():
         return
-    text = wrapper.read_text()
-    count = text.count(AMDSMI_ROCM_SDK_CORE_FLAG)
-    if count == 0:
+    text = wrapper.read_text(encoding="utf-8")
+    if "_AMDSMI_ROCM_SDK_CORE" not in text:
         return
+    count = text.count(AMDSMI_ROCM_SDK_CORE_FLAG)
     if count != 1:
         raise RuntimeError(
             f"{wrapper}: expected one '{AMDSMI_ROCM_SDK_CORE_FLAG}', found {count}"
         )
     wrapper.write_text(
-        text.replace(AMDSMI_ROCM_SDK_CORE_FLAG, "_AMDSMI_ROCM_SDK_CORE = True")
+        text.replace(AMDSMI_ROCM_SDK_CORE_FLAG, "_AMDSMI_ROCM_SDK_CORE = True"),
+        encoding="utf-8",
     )
 
 

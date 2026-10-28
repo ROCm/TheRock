@@ -39,3 +39,9 @@ def test_duplicate_flag_fails(tmp_path):
     _wrapper(tmp_path, "_AMDSMI_ROCM_SDK_CORE = False\n_AMDSMI_ROCM_SDK_CORE = False\n")
     with pytest.raises(RuntimeError):
         mark_amdsmi_rocm_sdk_core(tmp_path)
+
+
+def test_changed_flag_line_fails(tmp_path):
+    _wrapper(tmp_path, "_AMDSMI_ROCM_SDK_CORE: bool = False\n")
+    with pytest.raises(RuntimeError):
+        mark_amdsmi_rocm_sdk_core(tmp_path)
