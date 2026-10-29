@@ -83,34 +83,22 @@ standard `ci:gfx...` labels.
 
 #### Running exactly the architectures you label
 
-The architecture labels above _add to_ the default presubmit families, so a pull
-request labeled `ci:gfx950` builds the presubmit set **and** gfx950.
+The architecture labels above _add to_ the default presubmit families. Add
+`ci:exactly` to drop those defaults, making the `ci:gfx...`, `ci:build:gfx...`,
+and `ci:test:gfx...` labels the complete architecture selection.
 
-Add `ci:exactly` to drop those defaults, so the `ci:gfx...`, `ci:build:gfx...`,
-and `ci:test:gfx...` labels become the complete architecture selection. This is
-useful when iterating on a change that only matters for one target and you do
-not want to pay for the full presubmit set.
+| Labels                                   | Result                                 |
+| ---------------------------------------- | -------------------------------------- |
+| `ci:gfx950`                              | Presubmit families **plus** gfx950     |
+| `ci:exactly` + `ci:gfx950`               | gfx950 only                            |
+| `ci:exactly` + `ci:build:gfx950`         | gfx950 only, no tests                  |
+| `ci:exactly` + `ci:gfx950` + `ci:gfx94x` | gfx950 and gfx94x only                 |
+| `ci:exactly` (alone)                     | **Error**: no architecture would build |
+| `ci:exactly` + `ci:run-all-archs`        | **Error**: the labels contradict       |
 
-**Examples:**
-
-| Labels                                           | Result                                                |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `ci:gfx950`                                      | Build and test the presubmit families **plus** gfx950 |
-| `ci:exactly` + `ci:gfx950`                       | Build and test gfx950 only                            |
-| `ci:exactly` + `ci:build:gfx950`                 | Build gfx950 only, no tests                           |
-| `ci:exactly` + `ci:gfx950` + `ci:gfx94x`         | Build and test gfx950 and gfx94x only                 |
-| `ci:exactly` + `ci:gfx950` + `ci:platform:linux` | Build and test gfx950 on Linux only                   |
-| `ci:exactly` (alone)                             | **Error**: no architecture would build                |
-| `ci:exactly` + `ci:run-all-archs`                | **Error**: the two labels ask for opposite things     |
-
-`ci:exactly` only narrows the architecture selection. Package builds
-(`ci:build-pytorch`, `ci:build-python-packages`, and friends), `test:...`,
-`test_filter:...`, and `ci:platform:...` all keep their usual meaning, so
-`ci:exactly` composes with them.
-
-> [!NOTE]
-> `ci:exactly` applies to pull requests only. Pushes, scheduled runs, and
-> workflow dispatch runs already state their coverage explicitly.
+Only the architecture selection is narrowed. Package builds, `test:...`,
+`test_filter:...`, and `ci:platform:...` keep their usual meaning. Pull requests
+only; other triggers already state their coverage explicitly.
 
 ### Push
 
