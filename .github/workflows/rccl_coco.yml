@@ -1,0 +1,99 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Reusable workflow that runs RCCL coco smoke tests via the
+# ROCm/rocm-systems rccl-coco-run harness.
+#
+# Callers must supply the ROCm version and the rocm-systems commit that the
+# build was produced from.  The three RCCL coco secrets are forwarded
+# explicitly so that `secrets: inherit` is not required.
+
+name: RCCL Coco Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      rocm_version:
+        description: 'Full ROCm dev wheel version (e.g. 6.5.0.dev20261029).'
+        type: string
+        required: true
+      rocm_system_ref:
+        description: '40-hex rocm-systems commit the stacks were built against.'
+        type: string
+        required: true
+      coco_ref:
+        description: 'Coco harness branch/tag to use.'
+        type: string
+        required: false
+        default: '1.4.x'
+      timeout_minutes:
+        description: 'Per-job timeout in minutes.'
+        type: number
+        required: false
+        default: 720
+      trigger_kind:
+        description: 'Trigger label forwarded to coco (e.g. ci, nightly).'
+        type: string
+        required: false
+        default: 'ci'
+  workflow_call:
+    inputs:
+      rocm_version:
+        description: 'Full ROCm dev wheel version (e.g. 6.5.0.dev20261029).'
+        type: string
+        required: true
+      rocm_system_ref:
+        description: '40-hex rocm-systems commit the stacks were built against.'
+        type: string
+        required: true
+      coco_ref:
+        description: 'Coco harness branch/tag to use.'
+        type: string
+        required: false
+        default: '1.4.x'
+      timeout_minutes:
+        description: 'Per-job timeout in minutes.'
+        type: number
+        required: false
+        default: 720
+      trigger_kind:
+        description: 'Trigger label forwarded to coco (e.g. ci, nightly).'
+        type: string
+        required: false
+        default: 'ci'
+    secrets:
+      RCCL_COCO_APP_ID:
+        required: true
+      RCCL_COCO_APP_PRIVATE_KEY:
+        required: true
+      RCCL_COCO_DB_URL:
+        required: false
+
+jobs:
+  rccl-coco:
+    name: RCCL coco (${{ matrix.job }})
+    if: ${{ inputs.rocm_version != '' && inputs.rocm_system_ref != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: ruby64-rccl-compiler-bump
+            runner: ruby-linux-slurm-scale-runner
+          - job: oci-rccl-compiler-bump
+            runner: oci-linux-slurm-scale-runner
+    permissions:
+      contents: read
+    uses: ROCm/rocm-systems/.github/workflows/rccl-coco-run.yml@develop
+    secrets:
+      APP_ID: ${{ secrets.RCCL_COCO_APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.RCCL_COCO_APP_PRIVATE_KEY }}
+      RCCL_COCO_DB_URL: ${{ secrets.RCCL_COCO_DB_URL }}
+    with:
+      job: ${{ matrix.job }}
+      runs_on: ${{ matrix.runner }}
+      concurrency_group: rccl-coco-compiler-bump-${{ matrix.job }}
+      trigger_kind: ${{ inputs.trigger_kind }}
+      coco_ref: ${{ inputs.coco_ref }}
+      timeout_minutes: ${{ inputs.timeout_minutes }}
+      rocm_version: ${{ inputs.rocm_version }}
+      rocm_system_ref: ${{ inputs.rocm_system_ref }}
