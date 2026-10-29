@@ -1,39 +1,64 @@
-From 2fc2092a84b0ea1d6b1416d7418e2e8cabcd70eb Mon Sep 17 00:00:00 2001
+From 9c47d6fe11566fde028dfe5bb7067d6ecf765ee4 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Mon, 26 Oct 2026 18:26:31 +0000
+Date: Wed, 28 Oct 2026 18:39:08 +0000
 Subject: [PATCH] fix(rocjitsu): suppress GCC 14 -Wfree-nonheap-object false
  positive on ppc64le
 
-GCC 14 on ppc64le emits a spurious -Wfree-nonheap-object warning in
-std::vector::_M_realloc_append inlining, which -Werror promotes to an
-error. Add -Wno-error=free-nonheap-object for GCC >= 14, matching the
-existing GCC >= 15 -Wno-error=maybe-uninitialized pattern.
+GCC 14 on ppc64le emits a false-positive -Wfree-nonheap-object inside
+std::vector<uint8_t>::push_back / _M_realloc_append when inlining
+random_input() in execution_fuzz_core.cpp at -O3 (GCC PR 115016).
+
+The inlining chain is:
+  random_input (execution_fuzz_core.cpp:500)
+    -> vector::push_back (stl_vector.h:1314)
+      -> vector::emplace_back (vector.tcc:123)
+        -> vector::_M_realloc_append (vector.tcc:688)
+          -> __new_allocator::deallocate (new_allocator.h:172)
+            => -Wfree-nonheap-object
+
+Scope the suppression to execution_fuzz_core.cpp only, guarded to
+GCC >= 14 on ppc64 targets, following the per-source COMPILE_OPTIONS
+pattern used for lds_test.cpp in tests/CMakeLists.txt. The warning
+is demoted from error but still emitted, so real instances remain
+visible in build logs.
+
+Recheck: remove this block and build execution_fuzz_core.cpp on
+ppc64le at -O3 with the next GCC upgrade.
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ---
- emulation/rocjitsu/cmake/rj_configure_target.cmake | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ .../rocjitsu/fuzz/execution/CMakeLists.txt     | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
 
-diff --git a/emulation/rocjitsu/cmake/rj_configure_target.cmake b/emulation/rocjitsu/cmake/rj_configure_target.cmake
-index 9b92e95380..737854e7f3 100644
---- a/emulation/rocjitsu/cmake/rj_configure_target.cmake
-+++ b/emulation/rocjitsu/cmake/rj_configure_target.cmake
-@@ -91,6 +91,15 @@ function(rj_configure_target target)
-                     PRIVATE -Wno-error=maybe-uninitialized
-                 )
-             endif()
-+            if(
-+                CMAKE_CXX_COMPILER_ID MATCHES "GNU"
-+                AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14
-+            )
-+                target_compile_options(
-+                    ${target}
-+                    PRIVATE -Wno-error=free-nonheap-object
-+                )
-+            endif()
-         endif()
-     endif()
-     if(ARG_HIDDEN)
+diff --git a/emulation/rocjitsu/fuzz/execution/CMakeLists.txt b/emulation/rocjitsu/fuzz/execution/CMakeLists.txt
+index e45fcd24385..7dc68f86d5b 100644
+--- a/emulation/rocjitsu/fuzz/execution/CMakeLists.txt
++++ b/emulation/rocjitsu/fuzz/execution/CMakeLists.txt
+@@ -29,6 +29,24 @@ target_link_libraries(
+ )
+ rj_configure_target(rj_execution_fuzz_core GENERATED PRIVATE_INCLUDES WARNINGS)
+ 
++# GCC 14 on ppc64le emits a false-positive -Wfree-nonheap-object inside
++# std::vector<uint8_t>::push_back / _M_realloc_append when inlining
++# random_input() at -O3 (GCC PR 115016).  The warning fires in
++# new_allocator.h on a pointer the compiler loses track of after
++# reserve() + push_back().  Recheck: remove this block and build
++# execution_fuzz_core.cpp on ppc64le at -O3 with the next GCC upgrade.
++if(
++    CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
++    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "14"
++    AND CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64"
++)
++    set_property(
++        SOURCE execution_fuzz_core.cpp
++        APPEND
++        PROPERTY COMPILE_OPTIONS -Wno-error=free-nonheap-object
++    )
++endif()
++
+ add_executable(rj_execution_fuzz execution_fuzz_main.cpp)
+ target_link_libraries(
+     rj_execution_fuzz
 -- 
 2.52.0
 

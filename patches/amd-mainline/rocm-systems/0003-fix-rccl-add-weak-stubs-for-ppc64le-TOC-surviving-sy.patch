@@ -1,38 +1,35 @@
-From 1a871a14fe00e4e780b5d5ab94dedc91af12d354 Mon Sep 17 00:00:00 2001
-From: benrichard-amd <ben.richard@amd.com>
-Date: Mon, 19 Oct 2026 19:40:42 +0000
+From ccb6dddc19b13c982253cd049425c8b45fb43f71 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Thu, 29 Oct 2026 14:09:18 -0400
 Subject: [PATCH] fix(rccl): add weak stubs for ppc64le TOC-surviving symbols
  in host tests
 
-On ppc64le, the ELF TOC (Table of Contents) generates relocations for
-function pointers even when --gc-sections would discard them on x86.
-This causes linker errors in RCCL host microtests:
+On ppc64le, TOC (Table of Contents) references to extern symbols survive
+--gc-sections even when the code path referencing them is dead. This
+causes undefined-symbol link errors in host-only test binaries for symbols
+that are normally provided by GPU-side or network libraries.
 
-- topo.cc stores ncclGinGetDevCount, ncclRmaGetDevCount,
-  ncclCollNetGetDevCount, ncclCollNetSetVirtDevCount,
-  ncclNetGetDevCount, ncclNetSetVirtDevCount as function pointers
-  in a netInfo struct. Add weak abort-stubs in transport_stubs.cc.
+Add weak stub definitions guarded by __powerpc64__/__PPC64__ for:
+- topoPathTypeStr[] in nccl_fakes.cc (from rome_models.cc)
+- ncclNetIb_devices, ncclNetGdrCopy_devices, ncclNetSocket_devices,
+  ncclGinDeviceCount, ncclGinCustomAllReduceDeviceCount in transport_stubs.cc
 
-- rome_models.cc externs topoPathTypeStr[] which is defined in
-  topo.cc (not linked by rccl-UnitTestsMicroRomeModels). Add a
-  weak definition in nccl_fakes.cc, guarded by
-  RCCL_NCCL_FAKES_OMIT_GRAPH to avoid collision with the real
-  topo.cc linked by rccl-UnitTestsMicroGraph.
+Weak linkage ensures tests that supply their own strong definitions win
+without a duplicate-symbol error.
 
-Weak symbols allow tests that supply their own strong definitions
-(e.g. gin-plugin-init-test.cc) to win without duplicate-symbol errors.
+Co-Authored-By: Claude <noreply@anthropic.com>
 ---
  projects/rccl/test/host/fakes/nccl_fakes.cc     | 10 ++++++++++
  .../rccl/test/host/fakes/transport_stubs.cc     | 17 +++++++++++++++++
  2 files changed, 27 insertions(+)
 
 diff --git a/projects/rccl/test/host/fakes/nccl_fakes.cc b/projects/rccl/test/host/fakes/nccl_fakes.cc
-index 9390bea3f92..8a9d1b4f0e8 100644
+index ac694bde7a..44f9746453 100644
 --- a/projects/rccl/test/host/fakes/nccl_fakes.cc
 +++ b/projects/rccl/test/host/fakes/nccl_fakes.cc
-@@ -592,3 +592,13 @@ void ResetNcclFakes()
-     g_commGraphRegister            = DefaultCommGraphRegister;
+@@ -626,3 +626,13 @@ void ResetNcclFakes()
      g_commGraphDeregister          = DefaultCommGraphDeregister;
+     g_ncclSetThreadName            = DefaultSetThreadName;
  }
 +
 +// ppc64le TOC references survive --gc-sections, so rome_models.cc's
@@ -45,10 +42,10 @@ index 9390bea3f92..8a9d1b4f0e8 100644
 +#endif
 +#endif
 diff --git a/projects/rccl/test/host/fakes/transport_stubs.cc b/projects/rccl/test/host/fakes/transport_stubs.cc
-index 02ab61f7d93..1e82cbb3821 100644
+index eedafab114..c51b290096 100644
 --- a/projects/rccl/test/host/fakes/transport_stubs.cc
 +++ b/projects/rccl/test/host/fakes/transport_stubs.cc
-@@ -145,3 +145,20 @@ static ncclResult_t ReachableCanConnect(int* ret, struct ncclComm*, struct ncclT
+@@ -148,3 +148,20 @@ static ncclResult_t ReachableCanConnect(int* ret, struct ncclComm*, struct ncclT
  }
  static struct ncclTransport reachableTransport = {"fake", ReachableCanConnect};
  struct ncclTransport* ncclTransports[NTRANSPORTS] = {&reachableTransport, &reachableTransport};
@@ -61,14 +58,14 @@ index 02ab61f7d93..1e82cbb3821 100644
 +#if defined(__powerpc64__) || defined(__PPC64__)
 +#include "gin.h"
 +#include "net.h"
-+#include "rma.h"
-+__attribute__((weak)) ncclResult_t ncclGinGetDevCount(int, int*, int*) { ::abort(); }
-+__attribute__((weak)) ncclResult_t ncclRmaGetDevCount(int, int*, int*) { ::abort(); }
-+__attribute__((weak)) ncclResult_t ncclCollNetGetDevCount(int, int*, int*) { ::abort(); }
-+__attribute__((weak)) ncclResult_t ncclCollNetSetVirtDevCount(int, int) { ::abort(); }
-+__attribute__((weak)) ncclResult_t ncclNetGetDevCount(int, int*, int*) { ::abort(); }
-+__attribute__((weak)) ncclResult_t ncclNetSetVirtDevCount(int, int) { ::abort(); }
++extern "C" {
++__attribute__((weak)) int ncclNetIb_devices(int* ndev) { *ndev = 0; return 0; }
++__attribute__((weak)) int ncclNetGdrCopy_devices(int* ndev) { *ndev = 0; return 0; }
++__attribute__((weak)) int ncclNetSocket_devices(int* ndev) { *ndev = 0; return 0; }
++__attribute__((weak)) int ncclGinDeviceCount(void) { return 0; }
++__attribute__((weak)) int ncclGinCustomAllReduceDeviceCount(void) { return 0; }
++}
 +#endif
 -- 
-2.52.0
+2.43.0
 
