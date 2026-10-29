@@ -63,8 +63,17 @@ COMPONENT_MAP = {
     "rocwmma": ("rocwmma", "rocWMMA"),
     "rpp": ("rpp", "rpp"),
     "composablekernel": ("composable-kernel", "composable_kernel"),
-	"rccl": ("rccl", "rccl"),
-	"rocshmem": ("rocshmem", "rocshmem"),
+    # rocm-systems
+    "rccl": ("rccl", "rccl"),
+    "rocshmem": ("rocshmem", "rocshmem"),
+    "hipfile": ("hipfile", "hipfile"),
+    "amdsmi": ("core-amdsmi", "amdsmi"),
+    "aqlprofile": ("aqlprofile", "aqlprofile"),
+    "rocprofiler-register": ("base", "rocprofiler-register"),
+    "rocprofiler-sdk": ("rocprofiler-sdk", "rocprofiler-sdk"),
+    "rocprof-trace-decoder": ("rocprofiler-sdk", "rocprof-trace-decoder"),
+    "rocprofiler-compute": ("rocprofiler-compute", "rocprofiler-compute"),
+    "rocprofiler-systems": ("rocprofiler-systems", "rocprofiler-systems"),
 }
 
 

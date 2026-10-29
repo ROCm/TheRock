@@ -52,6 +52,7 @@ STAGE_COMPILER_RUNTIME = "compiler-runtime"
 STAGE_MATH_LIBS = "math-libs"
 STAGE_COMM_LIBS = "comm-libs"
 STAGE_PROFILER_APPS = "profiler-apps"
+STAGE_STORAGE_LIBS = "storage-libs"
 
 # Stages a project may be registered against, validated below.
 KNOWN_STAGES = frozenset(
@@ -60,12 +61,14 @@ KNOWN_STAGES = frozenset(
         STAGE_MATH_LIBS,
         STAGE_COMM_LIBS,
         STAGE_PROFILER_APPS,
+        STAGE_STORAGE_LIBS,
     }
 )
 
 # Only compiler-runtime and math-libs have build jobs. rccl and rocshmem
 # (comm-libs) are blocked upstream, so selecting them is rejected here rather
-# than failing hours later on a missing inbound artifact.
+# than failing hours later on a missing inbound artifact. storage-libs
+# (hipFile) is registered but has no build job either.
 BUILDABLE_STAGES = frozenset({STAGE_COMPILER_RUNTIME, STAGE_MATH_LIBS, STAGE_COMM_LIBS})
 
 
@@ -523,11 +526,44 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="amdsmi",
         source_repo=ROCM_SYSTEMS,
     ),
+    "rocprofiler-register": CoverageProject(
+        cmake_target="rocprofiler-register",
+        artifact_names=["base"],
+        artifact_relpaths=["base/rocprofiler-register/stage"],
+        unsupported_reason=(
+            "only a CMAKE_BUILD_TYPE=Coverage build type, which selects gcov instrumentation, writing .gcda files rather than the .profraw this pipeline merges"
+        ),
+        stage=STAGE_COMPILER_RUNTIME,
+        test_component="rocprofiler-register",
+        coverage_config="projects/rocprofiler-register/test_categories_coverage.yaml",
+        object_globs=["lib/librocprofiler-register.so*"],
+        fetch_artifact_args="--base-only",
+        codecov_flag="rocprofiler-register",
+        source_repo=ROCM_SYSTEMS,
+    ),
+    "rocprof-trace-decoder": CoverageProject(
+        cmake_target="rocprof-trace-decoder",
+        # Ships inside the rocprofiler-sdk artifact (BUILD_TOPOLOGY source_paths).
+        artifact_names=["rocprofiler-sdk"],
+        artifact_relpaths=["profiler/rocprof-trace-decoder/stage"],
+        unsupported_reason=(
+            "no coverage option; its `coverage` target (BUILD_TESTS + lcov) collects gcov .gcda files rather than the .profraw this pipeline merges"
+        ),
+        stage=STAGE_COMPILER_RUNTIME,
+        test_component="rocprof-trace-decoder",
+        coverage_config="projects/rocprof-trace-decoder/test_categories_coverage.yaml",
+        object_globs=["lib/librocprof-trace-decoder.so*"],
+        fetch_artifact_args="--rocprofiler-sdk",
+        codecov_flag="rocprof-trace-decoder",
+        source_repo=ROCM_SYSTEMS,
+    ),
     "rocprofiler-compute": CoverageProject(
         cmake_target="rocprofiler-compute",
         artifact_names=["rocprofiler-compute"],
         artifact_relpaths=["profiler/rocprofiler-compute/stage"],
-        unsupported_reason="a Python tool with no native instrumentation option",
+        unsupported_reason=(
+            "ENABLE_COVERAGE only adds pytest-cov to its Python tests (lcov output); there is no native instrumentation to produce .profraw"
+        ),
         stage=STAGE_COMPILER_RUNTIME,
         test_component="rocprofiler-compute",
         coverage_config="projects/rocprofiler-compute/test_categories_coverage.yaml",
@@ -544,7 +580,7 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["rocprofiler-systems"],
         artifact_relpaths=["profiler/rocprofiler-systems/stage"],
         unsupported_reason=(
-            "no build-time coverage option; its coverage feature instruments other programs at runtime"
+            "ROCPROFSYS_BUILD_CODECOV selects gcov instrumentation (reported with gcovr), which writes .gcda files rather than the .profraw this pipeline merges"
         ),
         stage=STAGE_PROFILER_APPS,
         test_component="rocprofiler-systems",
@@ -552,6 +588,28 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         object_globs=["lib/librocprofiler-systems*.so*"],
         fetch_artifact_args="--rocprofiler-systems",
         codecov_flag="rocprofiler-systems",
+        source_repo=ROCM_SYSTEMS,
+    ),
+    #
+    # rocm-systems -- storage-libs stage
+    #
+    "hipfile": CoverageProject(
+        cmake_target="hipfile",
+        artifact_names=["hipfile"],
+        artifact_relpaths=["storage-libs/hipfile/stage"],
+        # llvm source-based (-fprofile-instr-generate -fcoverage-mapping), so
+        # measurable here once its stage can be built.
+        coverage_option="HIPFILE_USE_CODE_COVERAGE",
+        blocked_reason=(
+            "the coverage workflow has no storage-libs build job; restore it "
+            "in multi_arch_ci_coverage_linux.yml"
+        ),
+        stage=STAGE_STORAGE_LIBS,
+        test_component="hipfile",
+        coverage_config="projects/hipfile/test_categories_coverage.yaml",
+        object_globs=["lib/libhipfile.so*"],
+        fetch_artifact_args="--hipfile",
+        codecov_flag="hipFile",
         source_repo=ROCM_SYSTEMS,
     ),
 }
