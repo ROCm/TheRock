@@ -29,28 +29,29 @@ Choose one of these options to specify where to install from:
 
 ### Component Selection
 
-| Option          | Type | Description                                        |
-| --------------- | ---- | -------------------------------------------------- |
-| `--base-only`   | Flag | Include only base artifacts (minimal installation) |
-| `--blas`        | Flag | Include BLAS artifacts                             |
-| `--debug-tools` | Flag | Include ROCm debugging tools artifacts             |
-| `--fft`         | Flag | Include FFT artifacts                              |
-| `--hipdnn`      | Flag | Include hipDNN artifacts                           |
-| `--hiptensor`   | Flag | Include hipTensor artifacts                        |
-| `--libhipcxx`   | Flag | Include libhipcxx artifacts                        |
-| `--hipthreads`  | Flag | Include hipThreads artifacts                       |
-| `--miopen`      | Flag | Include MIOpen artifacts                           |
-| `--prim`        | Flag | Include primitives artifacts                       |
-| `--rand`        | Flag | Include random number generator artifacts          |
-| `--rccl`        | Flag | Include RCCL artifacts                             |
-| `--rocdecode`   | Flag | Include rocDecode artifacts                        |
-| `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
-| `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)            |
-| `--mirage`      | Flag | Include mirage artifacts (Linux only)              |
-| `--rocalution`  | Flag | Include rocALUTION artifacts                       |
-| `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
-| `--rpp`         | Flag | Include RPP artifacts                              |
-| `--tests`       | Flag | Include test artifacts for enabled components      |
+| Option          | Type | Description                                          |
+| --------------- | ---- | ---------------------------------------------------- |
+| `--base-only`   | Flag | Include only base artifacts (minimal installation)   |
+| `--blas`        | Flag | Include BLAS artifacts                               |
+| `--debug-tools` | Flag | Include ROCm debugging tools artifacts               |
+| `--dev`         | Flag | Include development artifacts for enabled components |
+| `--fft`         | Flag | Include FFT artifacts                                |
+| `--hipdnn`      | Flag | Include hipDNN artifacts                             |
+| `--hiptensor`   | Flag | Include hipTensor artifacts                          |
+| `--libhipcxx`   | Flag | Include libhipcxx artifacts                          |
+| `--hipthreads`  | Flag | Include hipThreads artifacts                         |
+| `--miopen`      | Flag | Include MIOpen artifacts                             |
+| `--prim`        | Flag | Include primitives artifacts                         |
+| `--rand`        | Flag | Include random number generator artifacts            |
+| `--rccl`        | Flag | Include RCCL artifacts                               |
+| `--rocdecode`   | Flag | Include rocDecode artifacts                          |
+| `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)               |
+| `--rocjitsu`    | Flag | Include rocjitsu artifacts (Linux only)              |
+| `--mirage`      | Flag | Include mirage artifacts (Linux only)                |
+| `--rocalution`  | Flag | Include rocALUTION artifacts                         |
+| `--rocwmma`     | Flag | Include rocWMMA artifacts                            |
+| `--rpp`         | Flag | Include RPP artifacts                                |
+| `--tests`       | Flag | Include test artifacts for enabled components        |
 
 > [!NOTE]
 > `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa`. `--rocjpeg` is
@@ -70,6 +71,27 @@ By default for CI workflow retrieval (`--run-id`), all artifacts (excluding test
 - Use `--base-only` for minimal installation (core ROCm only)
 - Use component flags (`--blas`, `--fft`, etc.) to select specific libraries
 - Add `--tests` to include test artifacts for enabled components
+- Add `--dev` to include development artifacts for enabled components
+
+### Building Against a Narrowed Installation
+
+Component flags fetch only the runtime (`_lib`/`_run`) artifacts, which is
+enough to run a prebuilt binary but not to compile against the installation.
+`--dev` adds the `_dev` artifact (headers, CMake package configs, import
+libraries) of the base artifacts and of every enabled component, the same way
+OS native packages pair a runtime package with a `-dev`/`-devel` package:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --run-id 15575624591 \
+    --amdgpu-family gfx110X-all \
+    --blas \
+    --dev
+```
+
+Without `--dev`, base development artifacts such as `amd-llvm_dev` and
+`base_dev` arrive only as a side effect of unrelated flags (`--debug-tools`,
+`--rocdecode`, `--rpp`, ...), and others have to be overlaid by hand.
 
 ### Selecting Your GPU Family
 
