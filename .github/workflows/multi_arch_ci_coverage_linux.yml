@@ -252,7 +252,8 @@ jobs:
       timeout_minutes: 240  # 4 hours
       amdgpu_family: ""
       dist_amdgpu_families: ${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}
-      extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }}
+      # Restrict test targets to the covered families; the all-targets default includes gfx1250, which breaks the RCCL coverage build.
+      extra_cmake_options: ${{ needs.setup_coverage_matrix.outputs.coverage_cmake_options }} -DTHEROCK_TEST_AMDGPU_FAMILIES="${{ needs.setup_coverage_matrix.outputs.dist_amdgpu_families }}"
       rocm_package_version: ${{ needs.setup_coverage_matrix.outputs.rocm_package_version }}
       release_type: ci
       artifact_run_id: ${{ needs.setup_coverage_matrix.outputs.artifact_run_id }}
