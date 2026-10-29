@@ -19,15 +19,22 @@ compiler, and no bundled sysdeps.
 """
 
 import platform
+import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
-from therock_subproject_test_utils import (
-    HARNESS_INCLUDES,
-    THEROCK_ROOT,
-    run,
-    write_file,
+THEROCK_ROOT = Path(__file__).resolve().parents[2]
+
+# The subset of TheRock's CMake modules that therock_subproject.cmake needs to
+# be usable outside the superproject.
+HARNESS_INCLUDES = (
+    "therock_globals",
+    "therock_sanitizers",
+    "therock_flag_utils",
+    "therock_default_targets",
+    "therock_subproject",
 )
 
 
@@ -35,6 +42,11 @@ BASELINE_SUPPORTED = platform.system() == "Linux" and platform.machine().lower()
     "x86_64",
     "amd64",
 )
+
+
+def write_file(path: Path, contents: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(textwrap.dedent(contents), encoding="utf-8")
 
 
 def write_harness(
@@ -131,6 +143,19 @@ def mark_prebuilt(build_dir: Path) -> None:
     (build_dir / "main" / "stage.prebuilt").touch()
 
 
+def run(*args: str) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        args,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        raise AssertionError(" ".join(args) + "\n" + result.stdout)
+    return result
+
+
 class PrebuiltRuntimeDepsTest(unittest.TestCase):
     def setUp(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
@@ -177,7 +202,7 @@ class PrebuiltRuntimeDepsTest(unittest.TestCase):
             if p.is_file()
         )
 
-    def test_built_subproject_dist_contains_runtime_deps(self) -> None:
+    def test_built_subproject_dist_contains_runtime_deps(self):
         # Control: when main_project is built normally, its dist picks up the
         # runtime dep. This is the behavior the prebuilt path must match.
         self.assertEqual(
@@ -185,7 +210,7 @@ class PrebuiltRuntimeDepsTest(unittest.TestCase):
             ["lib/dep.txt", "lib/main.txt"],
         )
 
-    def test_prebuilt_subproject_dist_contains_runtime_deps(self) -> None:
+    def test_prebuilt_subproject_dist_contains_runtime_deps(self):
         # Regression: the prebuilt stage rule copies from dep_project's stage
         # directory, so it must also depend on dep_project having been staged.
         # Without that dependency the copy runs first and silently produces a
