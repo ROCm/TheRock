@@ -135,6 +135,7 @@ jobs:
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_medium }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -154,6 +155,7 @@ jobs:
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
       build_variant: ${{ inputs.build_variant }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -173,6 +175,7 @@ jobs:
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
       build_variant: ${{ inputs.build_variant }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}

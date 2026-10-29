@@ -512,6 +512,50 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_miopen_dbsync_excluded_on_other_families(self):
         self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
 
+    def test_miopen_dbsync_not_scheduled_on_asan_builds(self):
+        # StaticFDBSync is compiled out under ASAN, so the job must not be scheduled.
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            for families, gfx_target in (
+                ("gfx94X-dcgpu", "gfx942"),
+                ("gfx950-dcgpu", "gfx950"),
+            ):
+                with self.subTest(build_variant=build_variant, families=families):
+                    os.environ["BUILD_VARIANT"] = build_variant
+                    self.assertIsNone(self._dbsync_job(families, False, gfx_target))
+
+    def test_miopen_dbsync_still_scheduled_on_non_asan_builds(self):
+        for build_variant in (None, "release", "tsan"):
+            with self.subTest(build_variant=build_variant):
+                if build_variant is None:
+                    os.environ.pop("BUILD_VARIANT", None)
+                else:
+                    os.environ["BUILD_VARIANT"] = build_variant
+                self.assertIsNotNone(self._dbsync_job("gfx94X-dcgpu", False, "gfx942"))
+
+    def test_skip_build_variant_only_drops_listed_variants(self):
+        self._inject_job("asan-incompatible", skip_build_variant=["asan"])
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertNotIn("asan-incompatible", self._selected_names())
+        os.environ["BUILD_VARIANT"] = "release"
+        self.assertIn("asan-incompatible", self._selected_names())
+
+    def test_skip_build_variant_is_an_exact_match(self):
+        self._inject_job("asan-only-listed", skip_build_variant=["asan"])
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        self.assertIn("asan-only-listed", self._selected_names())
+
+    def test_asan_build_still_schedules_unflagged_components(self):
+        self._inject_job("asan-compatible")
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertIn("asan-compatible", self._selected_names())
+
+    def test_asan_build_with_project_filter_keeps_only_unflagged_components(self):
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["BUILD_VARIANT"] = "asan"
+        names = self._selected_names()
+        self.assertIn("rocblas", names)
+        self.assertNotIn("miopen-dbsync", names)
+
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
@@ -672,6 +716,100 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         names = {job["job_name"] for job in components}
         self.assertNotIn("rccl", names)
+
+    def test_fft_multi_gpu_jobs_included_for_full(self):
+        """hipfft/rocfft multi-GPU split jobs are scheduled on multi-GPU runners
+        for the full tier when the family supports it."""
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+        for name in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
+            job = next(j for j in components if j["job_name"] == name)
+            self.assertEqual(job["multi_gpu_runner"], "linux-mi300-mgpu")
+
+    def test_fft_multi_gpu_selected_via_base_project_label(self):
+        """`test:hipfft`/`test:rocfft` labels select the multi-GPU variants too,
+        since they declare base_project even though they have no label of their own."""
+        os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
+
+        def fake_get_all_families(_):
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_selected_via_projects_to_test(self):
+        """PROJECTS_TO_TEST=hipfft selects the hipfft multi-GPU variant too."""
+        os.environ["PROJECTS_TO_TEST"] = "hipfft"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-mi300-1gpu",
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("hipfft", names)
+        self.assertIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+
+    def test_fft_multi_gpu_jobs_excluded_for_quick(self):
+        """The FFT multi-GPU split jobs only run for comprehensive/full tiers, so
+        they are skipped for quick (but the single-GPU fft jobs still run)."""
+        os.environ["TEST_TYPE"] = "quick"
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-mi300-1gpu",
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("hipfft-multi-gpu", names)
+        self.assertNotIn("rocfft-multi-gpu", names)
+        self.assertIn("hipfft", names)
+        self.assertIn("rocfft", names)
 
     def test_multi_gpu_job_excluded_for_quick_tests(self):
         """Multi-GPU tests are skipped on quick runs (temporary capacity constraint)."""
@@ -897,6 +1035,70 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         out = fetch_test_configurations._build_container_options(job, "linux")
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    # -----------------------
+    # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
+    # -----------------------
+
+    _WSL_RUNNER = "wsl-gfx1101-gpu-rocm"
+
+    def _run_wsl(self, labels):
+        sys.argv = ["fetch_test_configurations.py", "--platform=wsl"]
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["TEST_RUNS_ON"] = self._WSL_RUNNER
+        os.environ["TEST_LABELS"] = json.dumps(labels)
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx110x": {
+                "linux": {
+                    "test-runs-on": "linux-gfx110X-gpu-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx110X-gpu-rocm", "weight": 1}
+                    ],
+                    "test-runs-on-wsl": self._WSL_RUNNER,
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_wsl_selects_components_listing_wsl(self):
+        jobs = self._run_wsl(["test:hip-tests", "test:rocrtst", "test:rocblas"])
+
+        self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
+        self.assertEqual(self.gha_output["platform"], "wsl")
+        self.assertIsNone(json.loads(self.gha_output["sanity_component"]))
+
+        hip = jobs["hip-tests"]
+        self.assertEqual(hip["test_runner"], self._WSL_RUNNER)
+        self.assertTrue(hip["expect_failure"])
+        self.assertIn("--device /dev/dxg", hip["container_options"])
+        self.assertNotIn("/dev/kfd", hip["container_options"])
+        self.assertEqual(hip["shard_arr"], [1, 2, 3, 4])
+
+    def test_wsl_quick_runs_one_shard(self):
+        os.environ["TEST_TYPE"] = "quick"
+        hip = self._run_wsl(["test:hip-tests"])["hip-tests"]
+
+        self.assertEqual(hip["shard_arr"], [1])
+        self.assertEqual(hip["test_type"], "quick")
+
+    def test_linux_jobs_are_not_expect_failure(self):
+        fetch_test_configurations.run()
+        for job in self._get_components():
+            self.assertFalse(job.get("expect_failure"), job["job_name"])
+
+    def test_native_gfx110x_wsl_components_are_not_expect_failure(self):
+        """The "wsl" xfail entry must not leak into the native Linux jobs."""
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests", "test:rocrtst"])
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx110x": {"linux": {"test-runs-on": "linux-gfx110X-gpu-rocm"}}
+        }
+        fetch_test_configurations.run()
+        jobs = {job["job_name"]: job for job in self._get_components()}
+        self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
+        for job in jobs.values():
+            self.assertFalse(job["expect_failure"], job["job_name"])
 
     # -----------------------
     # ASAN sandbox runner selection

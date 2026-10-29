@@ -201,6 +201,47 @@ class TestCIInputs(unittest.TestCase):
         # Validation should pass without raising - ci:run-multi-gpu is a control label
         inputs.validate()
 
+    def test_build_stages_with_only_control_labels_auto_selects_tests(self):
+        """A partial build with only ci:* labels still gets the stage-compatible
+        test labels, so tests for components that were not built are not scheduled."""
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                "PR_LABELS": "ci:run-wsl",
+                "BUILD_STAGES": "compiler-runtime,runtime-tests,wsl-rocdxg",
+            },
+        )
+        self.assertEqual(
+            sorted(inputs.linux_test_labels),
+            ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
+        )
+
+    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
+        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
+        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
+            _run_from_environ(
+                event_name="workflow_dispatch",
+                event_payload={},
+                extra_env={
+                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
+                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
+                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
+                },
+            )
+
+    def test_run_wsl_full_build_needs_no_stage_check(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
+        )
+        inputs.validate()
+
 
 class TestCIInputsFromEnviron(unittest.TestCase):
     """Test CIInputs.from_environ() with event payload fixtures.
@@ -343,6 +384,39 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.linux_test_labels, ["ci:run-multi-gpu"])
         self.assertEqual(inputs.windows_test_labels, ["ci:run-multi-gpu"])
+
+    def test_ci_no_downstream_test_label_passed_to_test_labels(self):
+        """ci:no-downstream-test label is included in linux/windows_test_labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:no-downstream-test", "id": 1},
+                        {"name": "test:rocblas", "id": 2},
+                    ]
+                }
+            },
+        )
+        self.assertIn("ci:no-downstream-test", inputs.linux_test_labels)
+        self.assertIn("ci:no-downstream-test", inputs.windows_test_labels)
+        self.assertIn("test:rocblas", inputs.linux_test_labels)
+        self.assertIn("test:rocblas", inputs.windows_test_labels)
+
+    def test_ci_no_downstream_test_label_alone(self):
+        """ci:no-downstream-test label without other test labels."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "pull_request": {
+                    "labels": [
+                        {"name": "ci:no-downstream-test", "id": 1},
+                    ]
+                }
+            },
+        )
+        self.assertEqual(inputs.linux_test_labels, ["ci:no-downstream-test"])
+        self.assertEqual(inputs.windows_test_labels, ["ci:no-downstream-test"])
 
     def test_push_reads_before_sha(self):
         """Push events use event.before as the diff base."""
@@ -1715,6 +1789,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_native_windows=False,
             build_python_packages=True,
         )
         d = config.to_dict()
@@ -1747,6 +1822,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_pytorch=True,
             build_jax=False,
             build_native_linux=True,
+            build_native_windows=False,
             build_python_packages=True,
         )
         # Present config → valid JSON
@@ -1925,6 +2001,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "exclude_implicit_targets": "gfx1250-strict",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -1937,6 +2014,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx110X-all",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
@@ -2046,6 +2124,40 @@ class TestExpandBuildConfigs(unittest.TestCase):
             jobs=_jobs(),
         )
         self.assertFalse(result.linux.build_native_linux)
+
+    def test_build_native_windows_input_disables_native_packages(self):
+        """build_native_windows=False disables the native Windows build."""
+        targets = cm.TargetSelection(windows_families=["gfx110x"])
+        enabled = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=True),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertTrue(enabled.windows.build_native_windows)
+
+        disabled = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=False),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(disabled.windows.build_native_windows)
+
+    def test_build_native_windows_only_on_windows_platform(self):
+        """build_native_windows never enables the flag on the Linux config."""
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=["gfx110x"],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(build_native_windows=True),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertFalse(result.linux.build_native_windows)
+        self.assertTrue(result.windows.build_native_windows)
 
     def test_variant_filters_by_platform_and_family_support(self):
         """ASAN: only gfx94x on linux supports it, gfx110x doesn't, windows has no ASAN config."""
@@ -2355,6 +2467,29 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 )
                 self.assertIsNotNone(result.linux)
                 self.assertEqual(getattr(result.linux, config_field), expected)
+
+    def test_native_windows_label_overrides(self):
+        """PR labels can enable/disable the native Windows build."""
+        targets = cm.TargetSelection(windows_families=["gfx110x"])
+        cases = [
+            # (label, input_default, expected)
+            ("ci:build-native-windows", False, True),
+            ("ci:skip-native-windows", True, False),
+        ]
+        for label, default, expected in cases:
+            with self.subTest(label=label):
+                result = cm.expand_build_configs(
+                    ci_inputs=self._inputs(
+                        event_name="pull_request",
+                        build_native_windows=default,
+                        pr_labels=[label],
+                    ),
+                    git_context=cm.GitContext(),
+                    targets=targets,
+                    jobs=_jobs(build_pytorch=False, build_jax=False),
+                )
+                self.assertIsNotNone(result.windows)
+                self.assertEqual(result.windows.build_native_windows, expected)
 
     def test_pytorch_forces_python_packages_even_with_skip_label(self):
         """PyTorch/JAX depend on python packages, so skip label is ignored."""
@@ -2724,12 +2859,16 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
+        # build_native_windows is Windows-only, so Linux CI does not consume it.
+        unused_fields = {
+            "build_native_windows",
+        }
         self.assertEqual(
             yaml_fields,
-            python_fields,
+            python_fields - unused_fields,
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
-            f"  In Python but not YAML: {python_fields - yaml_fields}",
+            f"  In Python but not YAML: {python_fields - yaml_fields - unused_fields}",
         )
 
     def test_windows_workflow_uses_all_ci_fields(self):
@@ -2739,10 +2878,12 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         python_fields = {f.name for f in fields(cm.BuildConfig)}
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
+        # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
+            "wsl_per_family_info",
         }
         self.assertEqual(
             yaml_fields,

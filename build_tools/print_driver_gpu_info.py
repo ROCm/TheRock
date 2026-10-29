@@ -10,6 +10,10 @@ On Linux:
   - run "rocminfo"
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
+On Linux inside WSL (kernel release contains "microsoft"):
+  - as above, except the KFD IOCTL check: WSL has no amdgpu kernel driver and
+    no /dev/kfd. The GPU is /dev/dxg, and amd-smi reports the WDDM driver version.
+
 On Windows:
   - run "hipInfo.exe"
 
@@ -35,6 +39,7 @@ from typing import List, Optional, Tuple
 # _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
 _AMDKFD_IOC_GET_VERSION = 0x80084B01
 _KFD_DEVICE = "/dev/kfd"
+_DXG_DEVICE = "/dev/dxg"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
@@ -169,6 +174,19 @@ def run_sanity(os_name: str) -> int:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
+
+        # WSL kernel releases look like "6.6.87.2-microsoft-standard-WSL2"
+        # (containers share the host kernel).
+        if "microsoft" in platform.release().lower():
+            log("\n=== GPU-PV (WSL) ===")
+            if not os.path.exists(_DXG_DEVICE):
+                log(
+                    f"error: {_DXG_DEVICE} not found - is the GPU passed through to WSL?"
+                )
+                return 1
+            log(f"{_DXG_DEVICE} present; KFD IOCTL check does not apply under WSL")
+            log("\n=== End of sanity check ===")
+            return 0
 
         log("\n=== KFD IOCTL version ===")
         if not os.path.exists(_KFD_DEVICE):
