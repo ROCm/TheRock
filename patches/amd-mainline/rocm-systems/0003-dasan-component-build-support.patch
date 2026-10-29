@@ -3,9 +3,8 @@ From: Sahil Faizal <safaizal@amd.com>
 Date: Tue, 27 Oct 2026 20:52:26 +0000
 Subject: [PATCH] Preserve DASan instrumentation in component build paths
 
-Use the compiler-managed RCCL device link, preserve RDC toolchain flags and rebuild selected RDC kernels, instrument rocSHMEM exported device bitcode, and accept DASAN in rocprofiler-compute. Device and debug workarounds are scoped to DASAN; existing modes retain their paths. Ported from recorded developer-host build fixes.
+Preserve RDC toolchain flags and rebuild selected RDC kernels, instrument rocSHMEM exported device bitcode, and accept DASAN in rocprofiler-compute. Device and debug workarounds are scoped to DASAN; existing modes retain their paths. Ported from recorded developer-host build fixes.
 ---
- projects/rccl/CMakeLists.txt                  | 10 ++++++
  projects/rdc/CMakeLists.txt                   | 11 +++---
  projects/rdc/rdc_libs/CMakeLists.txt          | 34 ++++++++++++++++++-
  projects/rocprofiler-compute/README.md        |  2 +-
@@ -14,29 +13,8 @@ Use the compiler-managed RCCL device link, preserve RDC toolchain flags and rebu
  projects/rocshmem/cmake/DeviceBitcode.cmake   |  8 ++++-
  .../CMakeDeviceBitcodeTester.cmake            | 33 ++++++++++++++++--
  .../tests/functional_tests/CMakeLists.txt     |  8 +++++
- 9 files changed, 106 insertions(+), 15 deletions(-)
+ 8 files changed, 96 insertions(+), 15 deletions(-)
 
-diff --git a/projects/rccl/CMakeLists.txt b/projects/rccl/CMakeLists.txt
-index 5573beb0..cd6892f0 100644
---- a/projects/rccl/CMakeLists.txt
-+++ b/projects/rccl/CMakeLists.txt
-@@ -103,6 +103,16 @@ endif()
- option(ENABLE_IFC                              "Enable indirect function call"                 OFF)
- option(ENABLE_NET_PROFILING                    "Emit NET_IB/NET_SOCK profiler events"          OFF)
- option(ENABLE_DEVICE_LINKER                    "Build with assembly-extract device linker"     ON)
-+# The assembly-extract pipeline bypasses the Clang device link, including its
-+# DASan runtime library and kernel metadata handling. Use the compiler-managed
-+# relocatable-device-code pipeline so every device unit retains instrumentation.
-+if(THEROCK_SANITIZER STREQUAL "DASAN" OR CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*daddress")
-+  if(ENABLE_DEVICE_LINKER)
-+    message(STATUS "DASAN: disabling assembly-extract device linker; using Clang -fgpu-rdc")
-+    # Preserve the user's cached preference for subsequent non-DASan builds.
-+    set(ENABLE_DEVICE_LINKER OFF)
-+  endif()
-+endif()
- option(EMIT_LLVM_IR                            "Emit LLVM IR/bitcode for nccl_device APIs"     OFF)
- option(DISABLE_KERNARG_PRELOAD                 "Disable amdgpu-kernarg-preload-count compile/link flag" OFF)
- option(BUILD_NCCL4PY                           "Build the nccl4py Python bindings wheel"       OFF)
 diff --git a/projects/rdc/CMakeLists.txt b/projects/rdc/CMakeLists.txt
 index a9f87840..9181d25b 100755
 --- a/projects/rdc/CMakeLists.txt

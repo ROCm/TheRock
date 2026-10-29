@@ -1,0 +1,46 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Experimental DASan full rebuild
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  compiler_runtime:
+    uses: ./.github/workflows/multi_arch_ci_dasan.yml
+    # No secrets are needed; uploads use the job's OIDC identity.
+    with:
+      math_libraries: false
+
+  math:
+    needs: compiler_runtime
+    uses: ./.github/workflows/multi_arch_ci_dasan.yml
+    with:
+      math_libraries: true
+      baseline_run_id: ${{ format('{0}', github.run_id) }}
+
+  components:
+    needs: math
+    strategy:
+      fail-fast: false
+      matrix:
+        stage:
+          - emulation
+          - runtime-tests
+          - comm-libs
+          - cv-libs
+          - storage-libs
+          - dctools-core
+          - profiler-apps
+          - media-libs
+    uses: ./.github/workflows/multi_arch_ci_dasan_component.yml
+    with:
+      stage: ${{ matrix.stage }}
+      baseline_run_id: ${{ format('{0}', github.run_id) }}
+      dependencies_run_id: ${{ format('{0}', github.run_id) }}

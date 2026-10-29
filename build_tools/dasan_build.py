@@ -31,8 +31,8 @@ PINS = {
         "5817038657a5d3166f753389ff7f4740bd8d7c16",
     ),
     "rocm-systems": (
-        "https://github.com/jhuber6/rocm-systems.git",
-        "f535db62a0dc73f2d56d4b93d9bbd4f3155e113b",
+        "https://github.com/ROCm/rocm-systems.git",
+        "4b6ee66563c1f331d9d3568c73b3f41c0ed5a5f2",
     ),
 }
 

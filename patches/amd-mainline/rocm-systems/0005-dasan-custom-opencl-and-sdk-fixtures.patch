@@ -4,7 +4,7 @@ Date: Tue, 27 Oct 2026 20:52:26 +0000
 Subject: [PATCH] Propagate DASan into custom OpenCL and profiler fixture
  builds
 
-Custom commands bypass CMake language flags. Propagate instrumentation with the compatible device ABI under DASAN, and forward HIP toolchain flags to the SDK DWARF fixture while emitting its GPU ELF directly. This fixes the compiler bundle-triple mismatch without changing the fixture assertions.
+Custom commands bypass CMake language flags. Propagate instrumentation with the compatible device ABI under DASAN, and forward HIP toolchain flags to the SDK DWARF fixture while emitting its GPU ELF directly. This fixes the compiler bundle-triple mismatch without changing the fixture assertions. roctracer now uses native CMake HIP targets, which inherit language flags; retain only its custom OpenCL command instrumentation.
 ---
  projects/aqlprofile/test/CMakeLists.txt       |  4 +++
  .../counters/tests/CMakeLists.txt             |  4 +++
@@ -15,8 +15,8 @@ Custom commands bypass CMake language flags. Propagate instrumentation with the 
  .../featuretests/profiler/CMakeLists.txt      |  4 +++
  .../rocrtst/suites/test_common/CMakeLists.txt | 10 ++++++++
  .../hsa-runtime/image/blit_src/CMakeLists.txt |  4 +++
- projects/roctracer/test/CMakeLists.txt        | 13 ++++++++++
- 10 files changed, 59 insertions(+), 17 deletions(-)
+ projects/roctracer/test/CMakeLists.txt        |  4 +++
+ 10 files changed, 50 insertions(+), 17 deletions(-)
 
 diff --git a/projects/aqlprofile/test/CMakeLists.txt b/projects/aqlprofile/test/CMakeLists.txt
 index b7ded020..cfe6f3d0 100644
@@ -207,23 +207,7 @@ diff --git a/projects/roctracer/test/CMakeLists.txt b/projects/roctracer/test/CM
 index 95563d5b..6fb20d44 100644
 --- a/projects/roctracer/test/CMakeLists.txt
 +++ b/projects/roctracer/test/CMakeLists.txt
-@@ -33,6 +33,15 @@ if(DEFINED ROCM_PATH)
-     set(HIP_ROOT_DIR "${ROCM_PATH}/bin")
- endif()
- find_package(HIP REQUIRED MODULE)
-+if(THEROCK_SANITIZER STREQUAL "DASAN")
-+  # FindHIP's generated hipcc scripts do not inherit CMAKE_CXX/HIP_FLAGS.
-+  list(APPEND HIP_HIPCC_FLAGS -fsanitize=daddress -g)
-+  string(REPLACE "," ";" _dasan_gpu_targets "${GPU_TARGETS}")
-+  string(REPLACE " " ";" _dasan_gpu_targets "${_dasan_gpu_targets}")
-+  foreach(_target IN LISTS _dasan_gpu_targets)
-+    list(APPEND HIP_HIPCC_FLAGS "--offload-arch=${_target}")
-+  endforeach()
-+endif()
- 
- find_package(Clang REQUIRED CONFIG
-              PATHS "${ROCM_PATH}"
-@@ -91,6 +100,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
+@@ -91,6 +91,10 @@ function(generate_hsaco TARGET_ID INPUT_FILE OUTPUT_FILE)
    separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
      "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0 -Wl,--build-id=sha1
      -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")

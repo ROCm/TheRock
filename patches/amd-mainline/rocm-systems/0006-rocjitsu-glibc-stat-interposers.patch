@@ -39,8 +39,8 @@ index df95499d..f8a4f8ea 100644
 +#undef __USE_EXTERN_INLINES
 +
  #include <dlfcn.h>
- #include <sys/stat.h>
- 
+ #include <fcntl.h>
+ #include <sys/mman.h>
 -- 
 2.43.0
 

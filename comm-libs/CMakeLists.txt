@@ -31,6 +31,15 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   # rccl
   ##############################################################################
   set(_rccl_subproject_names)
+  set(_rccl_sanitizer_args)
+  if(THEROCK_SANITIZER STREQUAL "DASAN")
+    # RCCL's device linker links the DASan runtime into each translation unit.
+    # https://github.com/ROCm/rocm-systems/pull/14544
+    list(APPEND _rccl_sanitizer_args
+      -DBUILD_DEVICE_ADDRESS_SANITIZER=ON
+      -DENABLE_DEVICE_LINKER=ON
+    )
+  endif()
 
   therock_cmake_subproject_declare(rccl
     # Build all GPU targets in a single target-neutral artifact as long as the
@@ -49,6 +58,7 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
       -DENABLE_MSCCLPP=OFF
       -DENABLE_MSCCL_KERNEL=OFF
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+      ${_rccl_sanitizer_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

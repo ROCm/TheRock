@@ -1,5 +1,34 @@
 # Experimental DASan build
 
+## ROCm systems integration rebuild
+
+The current build pins `ROCm/rocm-systems` branch `users/searlmc1/dasan` at
+`4b6ee66563c1f331d9d3568c73b3f41c0ed5a5f2`, including Joseph's
+[ROCr changes](https://github.com/ROCm/rocm-systems/pull/12975) and Larry's
+[RCCL changes](https://github.com/ROCm/rocm-systems/pull/14544).
+The historical validation below describes the previous source combination.
+
+RCCL uses `BUILD_DEVICE_ADDRESS_SANITIZER=ON` and `ENABLE_DEVICE_LINKER=ON`
+under `THEROCK_SANITIZER=DASAN`. Its previous compatibility patch disabling
+the device linker is removed so the per-translation-unit DASan runtime path
+is used. The packaged RCCL device-code audit remains enabled.
+
+Dispatch `multi_arch_ci_asan.yml` with `dasan_full_rebuild=true` to rebuild
+the compiler/runtime, then math libraries, then the eight component stages
+listed below. Downstream stages consume artifacts from this same run, so
+the previous ROCr runtime is not reused. LLVM, the container image, GPU
+targets, and build flags otherwise retain the baseline configuration.
+
+The original [compiler/runtime run](https://github.com/ROCm/TheRock/actions/runs/40443090683)
+and [math run](https://github.com/ROCm/TheRock/actions/runs/40545400942) took
+12m48s and 2h52m34s respectively for their build steps. The original
+[comm-libs run](https://github.com/ROCm/TheRock/actions/runs/40586632932)
+took 2h41m32s for its build step; its Ninja log records 2h32m45.3s for
+RCCL's build stamp. The other component stages are runtime-tests, storage-libs,
+profiler-apps, media-libs, emulation, dctools-core, and cv-libs.
+These are comparison baselines; the RCCL improvement must be measured by
+the new run rather than inferred from workflow success.
+
 ## Validated one-off build (2026-10-27 UTC)
 
 The pinned source combination below, with both DASan compatibility patches and

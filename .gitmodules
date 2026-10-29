@@ -20,8 +20,8 @@
 	branch = develop
 [submodule "rocm-systems"]
 	path = rocm-systems
-	url = https://github.com/jhuber6/rocm-systems.git
-	branch = develop
+	url = https://github.com/ROCm/rocm-systems.git
+	branch = users/searlmc1/dasan
 [submodule "spirv-llvm-translator"]
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
