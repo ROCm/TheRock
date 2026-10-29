@@ -65,6 +65,19 @@ examples:
   python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
       --install-prefix /opt/rocm/core \\
       --cmake-executable /tmp/test-venv/bin/cmake
+
+  # Distro g++. Omit --cxx-compiler to let CMake search PATH.
+  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
+      --install-prefix /opt/rocm/core \\
+      --cxx-compiler g++
+
+  # Clang, or the ROCm compiler installed under the prefix
+  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
+      --install-prefix /opt/rocm/core \\
+      --cxx-compiler clang++
+  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
+      --install-prefix /opt/rocm/core \\
+      --cxx-compiler /opt/rocm/core/bin/amdclang++
 """
 
 
@@ -112,6 +125,7 @@ def build_configure_command(
     source_dir: Path,
     build_dir: Path,
     install_prefix: Path,
+    cxx_compiler: str | None = None,
 ) -> list[str]:
     """Build the list-form ``cmake`` configure command.
 
@@ -120,12 +134,15 @@ def build_configure_command(
         source_dir: Directory that contains ``CMakeLists.txt``.
         build_dir: Out-of-source build directory.
         install_prefix: Resolved ROCm prefix passed as ``CMAKE_PREFIX_PATH``.
+        cxx_compiler: Resolved compiler for ``CMAKE_CXX_COMPILER``. Unset
+            leaves the compiler choice to CMake.
 
     Returns:
-        argv for one configure invocation. No generator flag: the step does
-        not build, so Ninja is not required.
+        argv for one configure invocation. No generator flag, so CMake uses
+        Unix Makefiles and ``make`` must be on PATH when CXX is enabled. The
+        step does not build, so Ninja is not required.
     """
-    return [
+    command = [
         cmake_executable,
         "-S",
         str(source_dir),
@@ -134,6 +151,9 @@ def build_configure_command(
         f"-DCMAKE_PREFIX_PATH={install_prefix}",
         f"-DHIP_PLATFORM={HIP_PLATFORM}",
     ]
+    if cxx_compiler:
+        command.append(f"-DCMAKE_CXX_COMPILER={cxx_compiler}")
+    return command
 
 
 def path_is_inside(child: Path, parent: Path) -> bool:
@@ -149,9 +169,28 @@ def path_is_inside(child: Path, parent: Path) -> bool:
     return True
 
 
+def _resolve_executable(executable: str) -> str | None:
+    """Return an executable path, or None when it cannot be run.
+
+    An absolute path is accepted only when that file exists and is executable.
+    Any other value is looked up on ``PATH``.
+    """
+    candidate = Path(executable)
+    if candidate.is_absolute():
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+        return None
+    return shutil.which(executable)
+
+
 def _resolve_cmake(cmake_executable: str) -> str | None:
-    """Return the ``cmake`` binary, or None when it is not on PATH."""
-    return shutil.which(cmake_executable)
+    """Return the ``cmake`` binary, or None when it cannot be run."""
+    return _resolve_executable(cmake_executable)
+
+
+def _resolve_cxx_compiler(cxx_compiler: str) -> str | None:
+    """Return the C++ compiler, or None when it cannot be run."""
+    return _resolve_executable(cxx_compiler)
 
 
 def _captured_text(value: str | bytes | None) -> str:
@@ -253,6 +292,7 @@ def run_smoke(
     install_prefix: Path,
     *,
     cmake_executable: str = "cmake",
+    cxx_compiler: str | None = None,
     work_dir: Path | None = None,
     run_configure: ConfigureRunner | None = None,
 ) -> int:
@@ -261,14 +301,18 @@ def run_smoke(
     Args:
         install_prefix: ROCm prefix. Symlinks are resolved before configure.
         cmake_executable: ``cmake`` name or path. Resolved with ``shutil.which``.
+        cxx_compiler: Compiler name or path for ``CMAKE_CXX_COMPILER``. Unset
+            lets CMake search ``PATH``. ``g++`` selects the distro C++ compiler
+            and ``clang++`` selects Clang.
         work_dir: Project directory. Unset uses a temporary directory that is
             removed before this function returns.
         run_configure: Test seam. Production callers leave this unset so
             ``_run_cmake`` runs.
 
     Returns:
-        0 on success, 1 on a missing prefix, a missing ``cmake``, a project
-        directory inside the prefix, or a non-zero configure.
+        0 on success, 1 on a missing prefix, a missing ``cmake``, a missing
+        requested compiler, a project directory inside the prefix, or a
+        non-zero configure.
     """
     prefix = Path(install_prefix).resolve()
     if not prefix.is_dir():
@@ -282,6 +326,16 @@ def run_smoke(
             file=sys.stderr,
         )
         return 1
+
+    resolved_cxx = None
+    if cxx_compiler:
+        resolved_cxx = _resolve_cxx_compiler(cxx_compiler)
+        if resolved_cxx is None:
+            print(
+                f"[FAIL] C++ compiler not found: {cxx_compiler}",
+                file=sys.stderr,
+            )
+            return 1
 
     with _project_root(work_dir) as project_root:
         if path_is_inside(project_root, prefix):
@@ -297,6 +351,7 @@ def run_smoke(
             source_dir=source_dir,
             build_dir=build_dir,
             install_prefix=prefix,
+            cxx_compiler=resolved_cxx,
         )
         configure = run_configure or _run_cmake
         result = configure(command)
@@ -353,6 +408,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "ROCm configs require."
         ),
     )
+    parser.add_argument(
+        "--cxx-compiler",
+        default=None,
+        help=(
+            "C++ compiler passed as -DCMAKE_CXX_COMPILER. Omit to let CMake "
+            "search PATH. Pass g++ for the distro C++ compiler or clang++ for "
+            "Clang. An absolute path is accepted, for example "
+            "/opt/rocm/core/bin/amdclang++. make must still be on PATH."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.install_prefix is None:
         parser.error("Install prefix is required (--install-prefix or INSTALL_PREFIX)")
@@ -372,6 +437,7 @@ def main(argv: list[str]) -> int:
     return run_smoke(
         args.install_prefix,
         cmake_executable=args.cmake_executable,
+        cxx_compiler=args.cxx_compiler,
     )
 
 
