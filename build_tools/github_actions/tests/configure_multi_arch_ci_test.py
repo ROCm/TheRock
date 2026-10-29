@@ -155,22 +155,6 @@ class TestCIInputs(unittest.TestCase):
                 ):
                     replace(inputs, pr_labels=[build_label, skip_label]).validate()
 
-    def test_exactly_and_run_all_archs_conflict(self):
-        """ci:exactly narrows the run while ci:run-all-archs widens it."""
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-        )
-        replace(inputs, pr_labels=["ci:exactly", "ci:gfx950"]).validate()
-        replace(inputs, pr_labels=["ci:run-all-archs"]).validate()
-        with self.assertRaisesRegex(
-            ValueError, "ci:exactly conflicts with ci:run-all-archs"
-        ):
-            replace(inputs, pr_labels=["ci:exactly", "ci:run-all-archs"]).validate()
-
     def test_build_stages_rejects_incompatible_test_labels(self):
         """build_stages raises error for test_labels requiring skipped stages."""
         inputs = cm.CIInputs(
@@ -1354,6 +1338,28 @@ class TestSelectTargets(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
             cm.select_targets(inputs)
+
+    def test_exactly_label_conflicts_with_run_all_archs(self):
+        """ci:exactly narrows the run while ci:run-all-archs widens it."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        # Each label on its own is fine.
+        cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx950"]))
+        cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:run-all-archs"]))
+        for labels in (
+            ["ci:exactly", "ci:run-all-archs"],
+            ["ci:run-all-archs", "ci:exactly"],
+        ):
+            with self.subTest(labels=labels):
+                with self.assertRaisesRegex(
+                    ValueError, "ci:exactly conflicts with ci:run-all-archs"
+                ):
+                    cm.select_targets(cm.CIInputs(**base, pr_labels=labels))
 
     def test_exactly_label_ignored_for_push(self):
         """ci:exactly only applies to pull requests."""

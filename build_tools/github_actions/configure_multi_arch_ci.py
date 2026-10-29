@@ -314,11 +314,6 @@ class CIInputs:
             if build_label in self.pr_labels and skip_label in self.pr_labels:
                 raise ValueError(f"{build_label} conflicts with {skip_label}")
 
-        # ci:exactly narrows CI to the attached labels; ci:run-all-archs widens
-        # it to every family. Honoring both is ambiguous, so reject the pair.
-        if EXACTLY_LABEL in self.pr_labels and "ci:run-all-archs" in self.pr_labels:
-            raise ValueError(f"{EXACTLY_LABEL} conflicts with ci:run-all-archs")
-
         allowed_labels = _get_allowed_test_labels_for_stages(self.build_stages)
         if allowed_labels is not None:
             for platform, labels in [
@@ -1000,6 +995,12 @@ def _apply_arch_labels(
             target = label.lower().removeprefix("ci:").split("-")[0]
             gfx_targets.append((label, target))
 
+    # ci:exactly narrows CI to the attached labels; ci:run-all-archs widens it
+    # to every family. Honoring both is ambiguous, so reject the pair before
+    # applying either one.
+    if ci_inputs.is_exactly and has_run_all:
+        raise ValueError(f"{EXACTLY_LABEL} conflicts with ci:run-all-archs")
+
     # 0. ci:exactly drops the trigger defaults so the gfx labels below are the
     # only thing that selects families. Validated in select_targets() to ensure
     # at least one family survives.
@@ -1008,9 +1009,7 @@ def _apply_arch_labels(
         windows_names.clear()
         print(f"  Label '{EXACTLY_LABEL}' -> dropping default families")
 
-    # 1. ci:run-all-archs overrides to all families. It cannot combine with
-    # ci:exactly (rejected in CIInputs.validate()), so the clear above and this
-    # override are mutually exclusive.
+    # 1. ci:run-all-archs overrides to all families.
     if has_run_all:
         linux_names[:] = list(all_families.keys())
         windows_names[:] = list(all_families.keys())
