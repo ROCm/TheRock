@@ -243,9 +243,11 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
-          # cmake and a C++ compiler are for the downstream find_package smoke
-          # test, including sanity. hip-config calls find_dependency(Threads),
-          # which fails unless C or CXX is enabled. g++ / gcc-c++ is that compiler.
+          # cmake, make, and a C++ compiler are for the downstream find_package
+          # smoke test, including sanity. hip-config calls find_dependency(Threads),
+          # which fails unless C or CXX is enabled. The default Unix Makefiles
+          # generator still requires make when CXX is enabled, even though this
+          # step does not build. g++ / gcc-c++ is the compiler.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -257,6 +259,7 @@ jobs:
               lsb-release \
               binutils \
               cmake \
+              make \
               g++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
@@ -274,6 +277,7 @@ jobs:
               update-alternatives \
               binutils \
               cmake \
+              make \
               gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
@@ -289,6 +293,7 @@ jobs:
               dnf-plugins-core \
               binutils \
               cmake \
+              make \
               gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"

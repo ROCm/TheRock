@@ -76,9 +76,56 @@ class DownstreamCmakeSmokeTest(unittest.TestCase):
         self.assertEqual(return_code, 0)
         self.assertIn(f"-DCMAKE_PREFIX_PATH={self.prefix.resolve()}", self.command)
         self.assertIn(f"-DHIP_PLATFORM={smoke.HIP_PLATFORM}", self.command)
+        self.assertFalse(
+            any(
+                argument.startswith("-DCMAKE_CXX_COMPILER=")
+                for argument in self.command
+            )
+        )
         source_dir = Path(self.command[self.command.index("-S") + 1])
         self.assertFalse(smoke.path_is_inside(source_dir, self.prefix))
         self.assertTrue((source_dir / "CMakeLists.txt").is_file())
+
+    def test_cxx_compiler_is_passed_to_cmake(self) -> None:
+        """--cxx-compiler selects g++ or clang++ for this configure."""
+        with (
+            patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"),
+            patch.object(
+                smoke, "_resolve_cxx_compiler", return_value="/usr/bin/clang++"
+            ),
+        ):
+            return_code = smoke.run_smoke(
+                self.prefix,
+                work_dir=self.work_dir,
+                cxx_compiler="clang++",
+                run_configure=self._fake_success,
+            )
+
+        self.assertEqual(return_code, 0)
+        self.assertIn("-DCMAKE_CXX_COMPILER=/usr/bin/clang++", self.command)
+
+    def test_missing_cxx_compiler_fails(self) -> None:
+        """A requested compiler that cannot be run fails before configure."""
+        called = False
+
+        def configure(_command: list[str]) -> smoke.ConfigureResult:
+            nonlocal called
+            called = True
+            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
+
+        with (
+            patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"),
+            patch.object(smoke, "_resolve_cxx_compiler", return_value=None),
+        ):
+            return_code = smoke.run_smoke(
+                self.prefix,
+                work_dir=self.work_dir,
+                cxx_compiler="clang++",
+                run_configure=configure,
+            )
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(called)
 
     def test_nonzero_configure_fails(self) -> None:
         """A non-zero cmake status fails the helper."""
