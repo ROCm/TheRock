@@ -9,15 +9,6 @@ skip_tests = {
         }
     },
     "common": {
-        "cuda": [
-            # RuntimeError: Error building extension 'dummy_allocator'
-            # Skipped across all PyTorch versions; the hipblas.h include error
-            # persists in the ROCm SDK environment.
-            "test_mempool_empty_cache_inactive",
-            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
-            "test_memory_snapshot",
-            "test_memory_plots",
-        ],
         "autograd": [
             # Stream comparison mismatch on ROCm (non-default stream vs default stream)
             #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
@@ -25,6 +16,22 @@ skip_tests = {
             "test_side_stream_backward_overlap",
         ],
         "cuda": [
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Skipped across all PyTorch versions; the hipblas.h include error
+            # persists in the ROCm SDK environment.
+            "test_mempool_empty_cache_inactive",
+            # JIT-compiles dummy_allocator, but the wheel test environment is
+            # runtime-only and does not configure a native compiler or install
+            # the ROCm development headers. See #8217.
+            "test_mempool_limited_memory_with_allocator",
+            # JIT-compile throwing_free_allocator, but the wheel test environment
+            # is runtime-only and has no ROCm development files to link against
+            # (/usr/bin/ld: cannot find -lamdhip64). See #8889.
+            "test_custom_mempool_free_exception_does_not_fail_malloc",
+            "test_custom_mempool_free_exception_propagates_from_empty_cache",
+            # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
+            "test_memory_snapshot",
+            "test_memory_plots",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
@@ -48,6 +55,13 @@ skip_tests = {
             # NEW ERROR
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_with_allocator",
+            # RuntimeError: Error building extension 'dummy_allocator_v3'
+            "test_tensor_delete_after_allocator_delete",
+            # RuntimeError: Error building extension 'dummy_allocator'
+            "test_deleted_mempool_not_used_on_oom",
+            # Same hipblas.h compilation error as test_mempool_with_allocator.
+            # See https://github.com/pytorch/pytorch/pull/173330
+            "test_mempool_expandable",
             # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
             # Always skip as this test is very basic and needs manual intervention for new architectures
             # See
@@ -58,12 +72,25 @@ skip_tests = {
             # AttributeError: 'Model' object has no attribute '__annotations__'
             # https://github.com/ROCm/TheRock/issues/2985
             "test_autocast_cat_jit",
+            # what():  HIP error: operation not permitted when stream is capturing
+            # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
+            # HIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+            # For debugging consider passing AMD_SERIALIZE_KERNEL=3
+            # Compile with `TORCH_USE_HIP_DSA` to enable device-side assertions.
+            #
+            # Exception raised from ~CUDAGraph at /__w/TheRock/TheRock/external-builds/pytorch/pytorch/aten/src/ATen/hip/HIPGraph.cpp:320 (most recent call first):
+            # frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x7f2316f1bdf0 in /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/lib/libc10.so)
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_allow_unused_input",
+            "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             # ----------------
             # maybe failing
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            #
+            # Multi-processing error in py3.14 - https://github.com/ROCm/TheRock/issues/4197
+            "test_is_pinned_no_context",
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
@@ -203,7 +230,7 @@ skip_tests = {
             # We should fix the test to fail/skip more gracefully.
             #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
             "test_multi_grad_all_hooks",
-            # This is/was also failing on gfx942 linux, see the 2.9 and 2.10 skip test files.
+            # This is/was also failing on gfx942 linux, see the per-release skip test files.
             #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
             "test_reentrant_parent_error_on_cpu_cuda",
         ],
@@ -235,8 +262,36 @@ skip_tests = {
             #   AssertionError: Scalars are not equal!
             #   Expected 0 but got 2173342911312.
             "test_streams",
+            # Device-side assert() does not propagate to the host on Windows ROCm:
+            # the KMD has no trap handler, so the faulted queue never reports an
+            # error and torch.cuda.synchronize() hangs until the CI job timeout.
+            # These tests deliberately trigger a device-side assert and await it
+            # with no subprocess timeout, so they hang rather than fail.
+            # Re-enable once the Windows ROCm driver propagates device-side
+            # faults to the runtime.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_fixed_cuda_assert_async",
+            "test_index_out_of_bounds_exception_cuda",
+            # Same device-side-assert-propagation issue as the two tests above:
+            # spawns a subprocess that feeds invalid probabilities (negative,
+            # inf, nan) to torch.multinomial, calls torch.cuda.synchronize(), and
+            # asserts the device-side assert surfaces in stderr. On Windows ROCm
+            # the fault never propagates, so it hangs/fails instead.
+            # See https://github.com/ROCm/TheRock/issues/5565
+            "test_multinomial_invalid_probs_cuda",
+            # TestAmdSmiImport helpers assume Linux: they read /proc/self/maps
+            # to locate libc.so and symlink it as libamd_smi.so.
+            #   FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/maps'
+            # Added upstream in https://github.com/pytorch/pytorch/pull/197482
+            # See https://github.com/ROCm/TheRock/issues/8779
+            "test_amdsmi_bare_unversioned_path_uses_loader_first",
+            "test_amdsmi_explicit_unversioned_path_is_redirected",
+            "test_amdsmi_versioned_library_path_is_preserved",
         ],
         "nn": [
+            # Hangs on some Windows ROCm runners until the job hits the 6h limit.
+            # https://github.com/ROCm/TheRock/issues/5565
+            "test_cross_entropy_loss_2d_out_of_bounds_class_index",
             # RuntimeError: miopenStatusUnknownError
             "test_cudnn_weight_format",
             "test_rnn_retain_variables_cuda_float16",
@@ -261,7 +316,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])

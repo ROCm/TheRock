@@ -1,0 +1,513 @@
+#!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# install_rocm_packages.sh
+#
+# Installs ROCm from deb/rpm packages via the system package manager.
+# Automatically detects the distribution and configures the appropriate repository.
+# Installs both the runtime meta-package (amdrocm*) and the core SDK meta-package
+# (amdrocm-core-sdk*) to provide a complete ROCm installation.
+#
+# Usage:
+#   ./install_rocm_packages.sh <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+#
+# Arguments:
+#   VERSION          - Full version string (e.g., 7.13.0a20260322, 7.11.0)
+#   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110x, gfx94x, gfx110X-all)
+#                      Special value: 'multi-arch' installs the meta-package from
+#                      AMD's multi-arch repository, which supports all GPU
+#                      families in a single image.
+#   RELEASE_TYPE     - Release type: nightlies (default), prereleases, stable
+#
+# Examples:
+#   ./install_rocm_packages.sh 7.13.0a20260322 gfx110x
+#   ./install_rocm_packages.sh 7.13.0a20260322 gfx110x nightlies
+#   ./install_rocm_packages.sh 7.12.0 gfx94x prereleases
+#   ./install_rocm_packages.sh 7.11.0 gfx110x stable
+#   ./install_rocm_packages.sh 7.13.0a20260322 multi-arch nightlies   # multi-arch
+
+set -euo pipefail
+
+# Parse arguments
+VERSION="${1:?Error: VERSION is required}"
+AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
+RELEASE_TYPE="${3:-nightlies}"
+
+# Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
+# all GPU families, sourced from AMD's multi-arch repositories.
+if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
+    MULTI_ARCH=1
+else
+    MULTI_ARCH=0
+fi
+
+# Roots of the nightly package repositories.
+NIGHTLY_MULTI_ARCH_BASE_URL="https://nightly.repo.amd.com/rocm/core/packages"
+# Per-family nightlies are the legacy layout and were never migrated off the
+# retired host, which stopped publishing in 2026.
+NIGHTLY_PER_FAMILY_BASE_URL="https://rocm.nightlies.amd.com"
+
+# Roots of the prerelease and stable package repositories. Releases predating a
+# channel's switchover were never copied across, so both hosts stay in use.
+PRERELEASE_PRODUCT_BASE_URL="https://rc.repo.amd.com/rocm/core/packages"
+PRERELEASE_PRODUCT_MIN_VERSION="10.1"
+PRERELEASE_LEGACY_BASE_URL="https://rocm.prereleases.amd.com"
+STABLE_PRODUCT_BASE_URL="https://stable.repo.amd.com/rocm/core/packages"
+STABLE_PRODUCT_MIN_VERSION="10.0"
+STABLE_LEGACY_BASE_URL="https://repo.amd.com/rocm"
+
+# One key signs every prerelease and stable stream, old hosts included.
+PRODUCT_GPG_KEY_URL="https://stable.repo.amd.com/rocm/gpg/packages.gpg"
+
+# ---------------------------------------------------------------------------
+# Helper: extract MAJOR.MINOR from VERSION (e.g., 7.13.0a20260322 → 7.13)
+# ---------------------------------------------------------------------------
+extract_major_minor() {
+    echo "$1" | grep -oE '^[0-9]+\.[0-9]+'
+}
+
+# ---------------------------------------------------------------------------
+# Helper: normalize AMDGPU_FAMILY to package target
+#   gfx110X-all → gfx110x
+#   gfx94X-dcgpu → gfx94x
+#   gfx110x → gfx110x (already normalized)
+#   gfx1150 → gfx1150 (no change)
+# ---------------------------------------------------------------------------
+normalize_gpu_target() {
+    echo "$1" | sed 's/-[a-zA-Z]*$//' | tr '[:upper:]' '[:lower:]'
+}
+
+# ---------------------------------------------------------------------------
+# Helper: extract date from VERSION for nightly builds
+#   7.13.0a20260322 → 20260322
+# ---------------------------------------------------------------------------
+extract_date_from_version() {
+    echo "$1" | grep -oE '[0-9]{8}' | head -1 || echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Helper: detect distro and version from /etc/os-release
+# ---------------------------------------------------------------------------
+detect_distro_info() {
+    if [ -f /etc/os-release ]; then
+        # Source in subshell to avoid clobbering script variables (e.g., VERSION)
+        DISTRO_ID=$(. /etc/os-release && echo "$ID")
+        DISTRO_VERSION=$(. /etc/os-release && echo "${VERSION_ID:-unknown}")
+    else
+        echo "Error: Cannot detect distribution (/etc/os-release not found)" >&2
+        exit 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Helper: map distro to repo name and package type
+# ---------------------------------------------------------------------------
+map_distro_to_repo() {
+    local id="$1"
+    local ver="$2"
+    local major_ver="${ver%%.*}"
+
+    case "$id" in
+        ubuntu)
+            # 24.04 → ubuntu2404, 22.04 → ubuntu2204
+            # Use cut to keep MAJOR.MINOR even if VERSION_ID has a patch (e.g., 24.04.1)
+            local major_minor
+            major_minor=$(echo "$ver" | cut -d. -f1,2)
+            REPO_DISTRO="ubuntu$(echo "$major_minor" | tr -d '.')"
+            PKG_TYPE="deb"
+            PKG_MGR="apt"
+            ;;
+        debian)
+            # Debian VERSION_ID is major-only (e.g., 12, 13) → debian12, debian13
+            REPO_DISTRO="debian${major_ver}"
+            PKG_TYPE="deb"
+            PKG_MGR="apt"
+            ;;
+        almalinux)
+            # AlmaLinux uses RHEL repos
+            REPO_DISTRO="rhel${major_ver}"
+            PKG_TYPE="rpm"
+            PKG_MGR="dnf"
+            ;;
+        azurelinux)
+            REPO_DISTRO="azl${major_ver}"
+            PKG_TYPE="rpm"
+            PKG_MGR="tdnf"
+            ;;
+        rhel)
+            REPO_DISTRO="rhel${major_ver}"
+            PKG_TYPE="rpm"
+            PKG_MGR="dnf"
+            ;;
+        sles)
+            REPO_DISTRO="sles${major_ver}"
+            PKG_TYPE="rpm"
+            PKG_MGR="zypper"
+            ;;
+        *)
+            echo "Error: Unsupported distribution: $id"
+            echo "Supported: ubuntu, debian, almalinux, azurelinux, rhel, sles"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Helper: resolve nightly build directory from date
+# ---------------------------------------------------------------------------
+resolve_nightly_build_dir() {
+    local date_str="$1"
+    local repo_type="$2"  # deb or rpm
+    local multi_arch="${3:-0}"
+
+    if [ -z "$date_str" ]; then
+        echo "Error: Cannot extract date from VERSION '$VERSION' for nightly builds" >&2
+        echo "Nightly VERSION should contain a date, e.g., 7.13.0a20260322" >&2
+        exit 1
+    fi
+
+    local listing_url="${NIGHTLY_PER_FAMILY_BASE_URL}/${repo_type}/"
+    [ "$multi_arch" = "1" ] && listing_url="${NIGHTLY_MULTI_ARCH_BASE_URL}/${repo_type}/"
+    echo "Searching for nightly build directory matching date ${date_str}..." >&2
+
+    local build_dir
+    build_dir=$(curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+        "$listing_url" | grep -oE "${date_str}-[0-9]+" | head -1) || true
+
+    if [ -z "$build_dir" ]; then
+        echo "Error: No nightly build found for date ${date_str}" >&2
+        echo "Check available builds at: ${listing_url}" >&2
+        echo "Nightly runs are pruned after a few days, so an older date may" >&2
+        echo "simply have aged off." >&2
+        exit 1
+    fi
+
+    echo "Found nightly build directory: ${build_dir}" >&2
+    # Only the build dir goes to stdout (for capture by caller)
+    echo "$build_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Helper: report whether this release uses the ROCm Core product layout
+#
+# sort -VC exits 0 only when its input is already in version order, so this
+# reads as threshold <= release. Version order puts 7.14 below 10.0; a string
+# compare would get that backwards.
+# ---------------------------------------------------------------------------
+uses_product_layout() {
+    local release_type="$1"
+    local major_minor="$2"
+    local threshold
+
+    case "$release_type" in
+        prereleases) threshold="$PRERELEASE_PRODUCT_MIN_VERSION" ;;
+        stable)      threshold="$STABLE_PRODUCT_MIN_VERSION" ;;
+        *)           return 1 ;;
+    esac
+
+    printf '%s\n%s\n' "$threshold" "$major_minor" | sort -VC
+}
+
+# ---------------------------------------------------------------------------
+# Helper: build the repo base URL
+#
+# The product layout is flat — <base>/<distro> — one repo serving both install
+# modes, so pkg_segment applies only to the legacy hosts, which give each mode
+# its own tree.
+# ---------------------------------------------------------------------------
+build_repo_url() {
+    local release_type="$1"
+    local pkg_type="$2"
+    local repo_distro="$3"
+    local nightly_build_dir="$4"
+    local multi_arch="${5:-0}"
+    local major_minor="${6:-}"
+
+    local pkg_segment="packages"
+    [ "$multi_arch" = "1" ] && pkg_segment="packages-multi-arch"
+
+    case "$release_type" in
+        nightlies)
+            local nightly_root="${NIGHTLY_PER_FAMILY_BASE_URL}"
+            [ "$multi_arch" = "1" ] && nightly_root="${NIGHTLY_MULTI_ARCH_BASE_URL}"
+            if [ "$pkg_type" = "deb" ]; then
+                echo "${nightly_root}/deb/${nightly_build_dir}"
+            else
+                echo "${nightly_root}/rpm/${nightly_build_dir}/x86_64"
+            fi
+            ;;
+        prereleases)
+            local prerelease_root="${PRERELEASE_LEGACY_BASE_URL}/${pkg_segment}"
+            if uses_product_layout prereleases "$major_minor"; then
+                prerelease_root="${PRERELEASE_PRODUCT_BASE_URL}"
+            fi
+            if [ "$pkg_type" = "deb" ]; then
+                echo "${prerelease_root}/${repo_distro}"
+            else
+                echo "${prerelease_root}/${repo_distro}/x86_64"
+            fi
+            ;;
+        stable)
+            local stable_root="${STABLE_LEGACY_BASE_URL}/${pkg_segment}"
+            if uses_product_layout stable "$major_minor"; then
+                stable_root="${STABLE_PRODUCT_BASE_URL}"
+            fi
+            if [ "$pkg_type" = "deb" ]; then
+                echo "${stable_root}/${repo_distro}"
+            else
+                echo "${stable_root}/${repo_distro}/x86_64"
+            fi
+            ;;
+        *)
+            echo "Error: Unsupported release type: $release_type"
+            echo "Supported: nightlies, prereleases, stable"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Helper: get GPG key URL for signed repos
+#
+# One AMD key signs every prerelease and stable stream, legacy hosts included,
+# so they all read it from the stable host. Nightlies are unsigned.
+# ---------------------------------------------------------------------------
+get_gpg_key_url() {
+    case "$1" in
+        prereleases|stable) echo "$PRODUCT_GPG_KEY_URL" ;;
+        *)                  echo "" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Configure DEB repository and install
+# ---------------------------------------------------------------------------
+install_deb() {
+    local repo_url="$1"
+    local gpg_key_url="$2"
+    local meta_packages="$3"  # space-separated list
+    local release_type="$4"
+
+    echo "Configuring APT repository..."
+
+    if [ -n "$gpg_key_url" ]; then
+        # Signed repo: import GPG key (ASCII-armored, needs dearmor for apt)
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+            "$gpg_key_url" | gpg --dearmor -o /etc/apt/keyrings/amdrocm.gpg
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/amdrocm.gpg] ${repo_url} stable main" \
+            > /etc/apt/sources.list.d/rocm.list
+    else
+        # Unsigned repo (nightlies): use trusted=yes
+        echo "deb [arch=amd64 trusted=yes] ${repo_url} stable main" \
+            > /etc/apt/sources.list.d/rocm.list
+    fi
+
+    echo "Repository configured: $(cat /etc/apt/sources.list.d/rocm.list)"
+    apt-get update
+
+    echo "Installing ${meta_packages}..."
+    # shellcheck disable=SC2086  # intentional word-splitting of package list
+    apt-get install -y --no-install-recommends ${meta_packages}
+    rm -rf /var/lib/apt/lists/*
+}
+
+# ---------------------------------------------------------------------------
+# Configure RPM repository and install (dnf or tdnf)
+# ---------------------------------------------------------------------------
+install_rpm_dnf() {
+    local repo_url="$1"
+    local gpg_key_url="$2"
+    local meta_packages="$3"  # space-separated list
+    local release_type="$4"
+    local pkg_mgr="$5"
+
+    echo "Configuring YUM/DNF repository..."
+
+    local gpgcheck=1
+    local gpgkey_line="gpgkey=${gpg_key_url}"
+    if [ -z "$gpg_key_url" ]; then
+        gpgcheck=0
+        gpgkey_line=""
+    fi
+
+    cat > /etc/yum.repos.d/rocm.repo << REPOEOF
+[rocm]
+name=ROCm
+baseurl=${repo_url}
+enabled=1
+gpgcheck=${gpgcheck}
+${gpgkey_line}
+priority=50
+REPOEOF
+
+    echo "Repository configured:"
+    cat /etc/yum.repos.d/rocm.repo
+
+    if [ "$pkg_mgr" = "tdnf" ]; then
+        # tdnf requires explicit GPG key import before install
+        if [ -n "$gpg_key_url" ]; then
+            curl -fsSL --connect-timeout 30 --retry 3 --retry-delay 5 \
+                "$gpg_key_url" -o /tmp/rocm.gpg
+            rpm --import /tmp/rocm.gpg
+            rm -f /tmp/rocm.gpg
+        fi
+        tdnf clean all
+        echo "Installing ${meta_packages}..."
+        # shellcheck disable=SC2086  # intentional word-splitting of package list
+        tdnf install -y ${meta_packages}
+    else
+        # dnf: --allowerasing needed for RHEL UBI images where curl-minimal conflicts with curl
+        dnf clean all
+        echo "Installing ${meta_packages}..."
+        # shellcheck disable=SC2086  # intentional word-splitting of package list
+        dnf install -y --allowerasing ${meta_packages}
+        dnf clean all
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Configure RPM repository and install (zypper)
+# ---------------------------------------------------------------------------
+install_rpm_zypper() {
+    local repo_url="$1"
+    local gpg_key_url="$2"
+    local meta_packages="$3"  # space-separated list
+    local release_type="$4"
+
+    echo "Configuring Zypper repository..."
+
+    local gpgcheck=1
+    local gpgkey_line="gpgkey=${gpg_key_url}"
+    if [ -z "$gpg_key_url" ]; then
+        gpgcheck=0
+        gpgkey_line=""
+    fi
+
+    cat > /etc/zypp/repos.d/rocm.repo << REPOEOF
+[rocm]
+name=ROCm
+baseurl=${repo_url}
+enabled=1
+gpgcheck=${gpgcheck}
+${gpgkey_line}
+priority=50
+REPOEOF
+
+    echo "Repository configured:"
+    cat /etc/zypp/repos.d/rocm.repo
+
+    zypper --non-interactive --gpg-auto-import-keys refresh
+    echo "Installing ${meta_packages}..."
+    # shellcheck disable=SC2086  # intentional word-splitting of package list
+    zypper --non-interactive install --no-recommends ${meta_packages}
+    zypper clean --all
+}
+
+# ===========================================================================
+# Main
+# ===========================================================================
+
+MAJOR_MINOR=$(extract_major_minor "$VERSION")
+# Install both the runtime meta-package (amdrocm*) and the core SDK meta-package
+# (amdrocm-core-sdk*) so the image gets a complete ROCm installation.
+if [ "$MULTI_ARCH" = "1" ]; then
+    GPU_TARGET="multi-arch"
+    META_PACKAGES="amdrocm${MAJOR_MINOR} amdrocm-core-sdk${MAJOR_MINOR}"
+else
+    GPU_TARGET=$(normalize_gpu_target "$AMDGPU_FAMILY")
+    META_PACKAGES="amdrocm${MAJOR_MINOR}-${GPU_TARGET} amdrocm-core-sdk${MAJOR_MINOR}-${GPU_TARGET}"
+fi
+
+echo "=============================================="
+echo "ROCm Package Installation"
+echo "=============================================="
+echo "Version:         ${VERSION}"
+echo "Major.Minor:     ${MAJOR_MINOR}"
+echo "AMDGPU Family:   ${AMDGPU_FAMILY}"
+echo "GPU Target:      ${GPU_TARGET}"
+echo "Meta Packages:   ${META_PACKAGES}"
+echo "Release Type:    ${RELEASE_TYPE}"
+echo "Install Mode:    $([ "$MULTI_ARCH" = "1" ] && echo "multi-arch" || echo "single-family")"
+echo "=============================================="
+
+# Detect distribution
+detect_distro_info
+map_distro_to_repo "$DISTRO_ID" "$DISTRO_VERSION"
+
+echo "Distribution:    ${DISTRO_ID} ${DISTRO_VERSION}"
+echo "Repo Distro:     ${REPO_DISTRO}"
+echo "Package Type:    ${PKG_TYPE}"
+echo "Package Manager: ${PKG_MGR}"
+echo "=============================================="
+
+# Resolve nightly build directory if needed
+NIGHTLY_BUILD_DIR=""
+if [ "$RELEASE_TYPE" = "nightlies" ]; then
+    DATE_STR=$(extract_date_from_version "$VERSION")
+    NIGHTLY_BUILD_DIR=$(resolve_nightly_build_dir "$DATE_STR" "$PKG_TYPE" "$MULTI_ARCH")
+fi
+
+# Build repo URL
+REPO_URL=$(build_repo_url "$RELEASE_TYPE" "$PKG_TYPE" "$REPO_DISTRO" "$NIGHTLY_BUILD_DIR" "$MULTI_ARCH" "$MAJOR_MINOR")
+GPG_KEY_URL=$(get_gpg_key_url "$RELEASE_TYPE")
+
+echo "Repo URL:        ${REPO_URL}"
+echo "GPG Key URL:     ${GPG_KEY_URL:-none (unsigned)}"
+echo "=============================================="
+
+# Install based on package type
+case "$PKG_MGR" in
+    apt)
+        install_deb "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE"
+        ;;
+    dnf|tdnf)
+        install_rpm_dnf "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE" "$PKG_MGR"
+        ;;
+    zypper)
+        install_rpm_zypper "$REPO_URL" "$GPG_KEY_URL" "$META_PACKAGES" "$RELEASE_TYPE"
+        ;;
+esac
+
+# Create compatibility symlinks (fallback)
+# Recent deb/rpm packages create symlinks via update-alternatives automatically.
+# This fallback handles older packages or missing symlinks (e.g., share/).
+CORE_DIR="/opt/rocm/core-${MAJOR_MINOR}"
+if [ -d "$CORE_DIR" ]; then
+    echo "Creating compatibility symlinks from /opt/rocm/ to ${CORE_DIR}/..."
+    for subdir in bin lib include libexec share; do
+        if [ -d "${CORE_DIR}/${subdir}" ] && [ ! -e "/opt/rocm/${subdir}" ]; then
+            ln -sfn "${CORE_DIR}/${subdir}" "/opt/rocm/${subdir}"
+            echo "  /opt/rocm/${subdir} -> ${CORE_DIR}/${subdir}"
+        fi
+    done
+fi
+
+# Verify installation
+echo "=============================================="
+echo "Verifying installation..."
+missing_required=0
+for dir in bin lib include; do
+    if [ -d "/opt/rocm/${dir}" ]; then
+        echo "ROCm ${dir} found at /opt/rocm/${dir}"
+    else
+        echo "Error: /opt/rocm/${dir} not found" >&2
+        missing_required=1
+    fi
+done
+
+if [ -x /opt/rocm/bin/hipcc ]; then
+    echo "hipcc found at /opt/rocm/bin/hipcc"
+else
+    echo "Error: hipcc not found at /opt/rocm/bin/hipcc" >&2
+    missing_required=1
+fi
+
+echo "=============================================="
+if [ "$missing_required" -ne 0 ]; then
+    echo "ROCm package installation verification failed" >&2
+    exit 1
+fi
+echo "ROCm package installation complete"
+echo "=============================================="

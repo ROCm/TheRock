@@ -20,12 +20,12 @@ from typing import Callable
 import argparse
 from pathlib import Path
 import sys
-import shutil
-import tarfile
 
+from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.artifacts import ArtifactPopulator
 import _therock_utils.artifact_builder as artifact_builder
 from _therock_utils.hash_util import calculate_hash, write_hash
+from _therock_utils.os_util import rmtree_with_retry
 from _therock_utils.pattern_match import PatternMatcher
 
 
@@ -68,7 +68,7 @@ def do_artifact(args):
 
         # Setup output dir.
         if output_dir.exists():
-            shutil.rmtree(output_dir)
+            rmtree_with_retry(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -84,7 +84,7 @@ def do_artifact_archive(args):
         output_path.unlink()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with _open_archive(
+    with open_archive_for_write(
         output_path, args.compression_type, args.compression_level
     ) as arc:
         for artifact_path in args.artifact:
@@ -107,47 +107,6 @@ def do_artifact_archive(args):
     if args.hash_file:
         digest = calculate_hash(output_path, args.hash_algorithm)
         write_hash(args.hash_file, digest)
-
-
-def _get_pyzstd():
-    """Lazy import pyzstd with helpful error message."""
-    try:
-        import pyzstd
-
-        return pyzstd
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "pyzstd is required for zstd compression. "
-            "Install it with: pip install pyzstd"
-        )
-
-
-class _ZstdTarFile(tarfile.TarFile):
-    """TarFile wrapper that writes to a zstd-compressed file."""
-
-    def __init__(self, path: Path, compression_level: int) -> None:
-        pyzstd = _get_pyzstd()
-        self._zstd_file = pyzstd.ZstdFile(
-            path, mode="wb", level_or_option=compression_level
-        )
-        super().__init__(fileobj=self._zstd_file, mode="w")
-
-    def close(self) -> None:
-        super().close()
-        self._zstd_file.close()
-
-
-def _open_archive(
-    p: Path, compression_type: str, compression_level: int | None
-) -> tarfile.TarFile:
-    if compression_type == "zstd":
-        level = compression_level if compression_level is not None else 3
-        return _ZstdTarFile(p, level)
-    elif compression_type == "xz":
-        level = compression_level if compression_level is not None else 6
-        return tarfile.TarFile.open(p, mode="x:xz", preset=level)
-    else:
-        raise ValueError(f"Unknown compression type: {compression_type}")
 
 
 def _do_artifact_flatten(args):

@@ -26,9 +26,18 @@ on:
           - windows
         default: "linux"
       release_type:
-        description: 'Release type: "" for CI, or "dev", "nightly", "prerelease".'
+        description: 'Release type: "ci" or "dev"'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
         type: string
-        default: ""
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -45,7 +54,17 @@ on:
         default: "linux"
       release_type:
         type: string
-        default: ""
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+      build_runs_on:
+        description: "Runner label for the build job"
+        type: string
+        default: "aws-linux-scale-rocm-prod"
 
 permissions:
   contents: read
@@ -53,20 +72,26 @@ permissions:
 jobs:
   test_artifact_structure:
     name: "Validate artifact structure"
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
+    container:
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
     env:
+      ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      PLATFORM: ${{ inputs.platform }}
-      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      PLATFORM: ${{ inputs.platform }}
+      OUTPUT_ROOT: "${{ github.workspace }}"
+      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setting up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
-          python-version: "3.12"
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
 
       - name: Install test requirements
         run: |
@@ -77,16 +102,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python ./build_tools/artifact_manager.py fetch \
-            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
-            --run-github-repo="${{ inputs.artifact_github_repo }}" \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
-            --amdgpu-families="${{ inputs.amdgpu_families }}" \
-            --platform="${{ env.PLATFORM }}" \
-            --output-dir="${{ github.workspace }}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --platform="${PLATFORM}" \
+            --output-dir="${OUTPUT_ROOT}" \
             --no-extract
           # NOTE: artifact_manager.py appends /.download_cache to --output-dir
-          # in --no-extract mode, so pass workspace root here so that
-          # artifacts land in THEROCK_ARTIFACTS_DIR ($workspace/.download_cache).
+          # in --no-extract mode, so pass OUTPUT_ROOT here so that
+          # artifacts land in THEROCK_ARTIFACTS_DIR ($OUTPUT_ROOT/.download_cache).
 
       - name: Validate artifact structure
         run: |

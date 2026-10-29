@@ -1,14 +1,21 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-import argparse
-from pathlib import Path
+import json
 import os
 import sys
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
+
+from debian.debian_support import NativeVersion
+from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import compute_rocm_package_version
+
+TEST_BKC_VERSION_DATA = {"release-metadata": {"base-date": "20260811"}}
 
 
 # Note: the regex matches in here aren't exact, but they should be "good enough"
@@ -16,7 +23,124 @@ import compute_rocm_package_version
 # future changes like using X.Y versions instead of X.Y.Z versions.
 
 
-class DetermineVersionTest(unittest.TestCase):
+class VersionFileTest(unittest.TestCase):
+    def test_loads_repository_version_file(self):
+        # The version file in this repository should always parse correctly.
+        version_data = compute_rocm_package_version.load_version_file()
+
+        self.assertIsInstance(version_data["rocm-version"], str)
+        self.assertIsInstance(version_data["release-metadata"], dict)
+
+    def test_loads_version_file_without_metadata(self):
+        # Version files prior to introducing the metadata field should still
+        # parse and load without errors.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0"
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {"rocm-version": "7.9.0"},
+            )
+
+    def test_loads_version_file_with_empty_metadata(self):
+        # Metadata is expected to be empty on the default branch.
+        # It may be populated on release branches.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0",
+  "release-metadata": {
+    "base-date": ""
+  }
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {
+                    "rocm-version": "7.9.0",
+                    "release-metadata": {"base-date": ""},
+                },
+            )
+
+    def test_loads_version_file_with_populated_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            version_file.write_text(
+                """{
+  "rocm-version": "7.9.0",
+  "release-metadata": {
+    "base-date": "20260811"
+  }
+}
+""",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                compute_rocm_package_version.load_version_file(version_file),
+                {
+                    "rocm-version": "7.9.0",
+                    "release-metadata": {"base-date": "20260811"},
+                },
+            )
+
+    def test_rejects_invalid_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            version_file = Path(temp_dir) / "version.json"
+            # Missing closing }
+            version_file.write_text(
+                '{ "rocm-version": "7.9.0"',
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(json.JSONDecodeError):
+                compute_rocm_package_version.load_version_file(version_file)
+
+    def test_rejects_invalid_base_date_metadata(self):
+        for base_date in ("2026081", "20261301"):
+            with (
+                self.subTest(base_date=base_date),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                version_file = Path(temp_dir) / "version.json"
+                version_file.write_text(
+                    f"""{{
+  "rocm-version": "7.9.0",
+  "release-metadata": {{
+    "base-date": "{base_date}"
+  }}
+}}
+""",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(
+                    ValueError, "valid date in YYYYMMDD format"
+                ):
+                    compute_rocm_package_version.load_version_file(version_file)
+
+
+class PythonPackageVersionTest(unittest.TestCase):
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*\.dev0\+[0-9a-z]+$")
+
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
             release_type="dev",
@@ -31,6 +155,23 @@ class DetermineVersionTest(unittest.TestCase):
         #   [0-9a-z]+   Git SHA (short or long)
         self.assertRegex(version, r"^[0-9]+[0-9\.]*\.dev0\+[0-9a-z]+$")
 
+    def test_dev_version_with_git_sha_override(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="dev",
+            override_base_version="7.9.0",
+            override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+        )
+        self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
+
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="dev-bkc",
+            override_base_version="7.9.0",
+            override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertEqual(version, "7.9.0.dev0+abcdef1234567890abcdef1234567890abcdef12")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             release_type="nightly",
@@ -44,6 +185,29 @@ class DetermineVersionTest(unittest.TestCase):
         #   a
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*a[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="nightly-bkc",
+            override_base_version="7.9.0",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(
+            version,
+            r"^7\.9\.0a20260811\+bkc\.[0-9]{8}$",
+        )
+
+    def test_bkc_version_requires_base_date_metadata(self):
+        for release_type in ("dev-bkc", "nightly-bkc"):
+            with (
+                self.subTest(release_type=release_type),
+                self.assertRaisesRegex(ValueError, "release-metadata.base-date"),
+            ):
+                compute_rocm_package_version.compute_version(
+                    release_type=release_type,
+                    override_base_version="7.9.0",
+                    version_data={},
+                )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -81,9 +245,101 @@ class DetermineVersionTest(unittest.TestCase):
         )
         self.assertEqual(version, "1000abc")
 
+    def test_nightly_with_override_base_version(self):
+        version = compute_rocm_package_version.compute_version(
+            release_type="nightly",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version="7.9.0",
+        )
+        self.assertRegex(version, r"^7\.9\.0a[0-9]{8}$")
+
+    def test_versions_are_valid_and_canonical(self):
+        # Version() rejects non-PEP 440 versions such as "7.10.0~rc0".
+        # See https://packaging.python.org/en/latest/specifications/version-specifiers/.
+        versions = self._compute_versions_by_release_type()
+
+        for release_type, version in versions.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(str(Version(version)), version)
+
+    def test_versions_sort_by_release_type(self):
+        # pip install --upgrade selects the greatest available version, so enforce:
+        # release > prerelease > nightly > nightly-bkc > dev-bkc == dev.
+        versions = self._compute_versions_by_release_type()
+
+        self.assertEqual(
+            Version(versions["dev-bkc"]),
+            Version(versions["dev"]),
+        )
+        self.assertGreater(
+            Version(versions["nightly-bkc"]),
+            Version(versions["dev-bkc"]),
+        )
+        self.assertGreater(
+            Version(versions["nightly"]),
+            Version(versions["nightly-bkc"]),
+        )
+        self.assertGreater(
+            Version(versions["prerelease"]),
+            Version(versions["nightly"]),
+        )
+        self.assertGreater(
+            Version(versions["release"]),
+            Version(versions["prerelease"]),
+        )
+
+    @staticmethod
+    def _compute_versions_by_release_type() -> dict[str, str]:
+        common_args = {
+            "package_type": "wheel",
+            "override_base_version": "7.10.0",
+        }
+        return {
+            "dev": compute_rocm_package_version.compute_version(
+                release_type="dev",
+                override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+                **common_args,
+            ),
+            "dev-bkc": compute_rocm_package_version.compute_version(
+                release_type="dev-bkc",
+                override_git_sha="abcdef1234567890abcdef1234567890abcdef12",
+                version_data=TEST_BKC_VERSION_DATA,
+                **common_args,
+            ),
+            "nightly-bkc": compute_rocm_package_version.compute_version(
+                release_type="nightly-bkc",
+                version_data=TEST_BKC_VERSION_DATA,
+                **common_args,
+            ),
+            "nightly": compute_rocm_package_version.compute_version(
+                release_type="nightly",
+                **common_args,
+            ),
+            "prerelease": compute_rocm_package_version.compute_version(
+                release_type="prerelease",
+                prerelease_version="0",
+                **common_args,
+            ),
+            "release": compute_rocm_package_version.compute_version(
+                release_type="release",
+                **common_args,
+            ),
+        }
+
 
 class DebPackageVersionTest(unittest.TestCase):
     """Tests for Debian package version computation."""
+
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~dev[0-9]{8}$")
 
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -100,6 +356,15 @@ class DebPackageVersionTest(unittest.TestCase):
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~dev[0-9]{8}$")
 
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="dev-bkc",
+            override_base_version="8.1.0",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(version, r"^8\.1\.0~dev[0-9]{8}$")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="deb",
@@ -114,6 +379,18 @@ class DebPackageVersionTest(unittest.TestCase):
         #   ~
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="deb",
+            release_type="nightly-bkc",
+            override_base_version="8.1.0",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(
+            version,
+            r"^8\.1\.0~20260811\.bkc\.[0-9]{8}$",
+        )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -151,9 +428,77 @@ class DebPackageVersionTest(unittest.TestCase):
         )
         self.assertEqual(version, "8.0.0~custom1")
 
+    def test_versions_are_valid(self):
+        # NativeVersion() rejects invalid Debian versions such as "7.10.0/rc0".
+        # See https://www.debian.org/doc/debian-policy/ch-controlfields.html#version.
+        versions = self._compute_versions_by_release_type()
+
+        for release_type, version in versions.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(str(NativeVersion(version)), version)
+
+    def test_versions_sort_by_release_type(self):
+        # apt upgrade selects the greatest available version.
+        # To match other package types, we want:
+        #     release > prerelease > nightly > dev.
+        # Debian currently sorts:
+        #     release > prerelease > dev > nightly.
+        versions = self._compute_versions_by_release_type()
+
+        # This test is disabled since current sorting is dev > nightly!
+        # See https://github.com/ROCm/TheRock/issues/7638.
+        # self.assertGreater(
+        #     NativeVersion(versions["nightly"]),
+        #     NativeVersion(versions["dev"]),
+        # )
+        self.assertGreater(
+            NativeVersion(versions["prerelease"]),
+            NativeVersion(versions["nightly"]),
+        )
+        self.assertGreater(
+            NativeVersion(versions["release"]),
+            NativeVersion(versions["prerelease"]),
+        )
+
+    @staticmethod
+    def _compute_versions_by_release_type() -> dict[str, str]:
+        common_args = {
+            "package_type": "deb",
+            "override_base_version": "7.10.0",
+        }
+        return {
+            "dev": compute_rocm_package_version.compute_version(
+                release_type="dev",
+                **common_args,
+            ),
+            "nightly": compute_rocm_package_version.compute_version(
+                release_type="nightly",
+                **common_args,
+            ),
+            "prerelease": compute_rocm_package_version.compute_version(
+                release_type="prerelease",
+                prerelease_version="0",
+                **common_args,
+            ),
+            "release": compute_rocm_package_version.compute_version(
+                release_type="release",
+                **common_args,
+            ),
+        }
+
 
 class RpmPackageVersionTest(unittest.TestCase):
     """Tests for RPM package version computation."""
+
+    def test_ci_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="ci",
+            custom_version_suffix=None,
+            prerelease_version=None,
+            override_base_version=None,
+        )
+        self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}g[0-9a-z]{8}$")
 
     def test_dev_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -172,6 +517,25 @@ class RpmPackageVersionTest(unittest.TestCase):
         #   [0-9a-z]{8} Short git SHA (8 characters)
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}g[0-9a-z]{8}$")
 
+    def test_dev_version_with_git_sha_override(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="dev",
+            override_base_version="8.1.0",
+            override_git_sha="abcdef1234567890",
+        )
+        self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
+
+    def test_dev_bkc_version_uses_dev_version_shape(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="dev-bkc",
+            override_base_version="8.1.0",
+            override_git_sha="abcdef1234567890",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(version, r"^8\.1\.0~[0-9]{8}gabcdef12$")
+
     def test_nightly_version(self):
         version = compute_rocm_package_version.compute_version(
             package_type="rpm",
@@ -186,6 +550,18 @@ class RpmPackageVersionTest(unittest.TestCase):
         #   ~
         #   [0-9]{8}    Date as YYYYMMDD
         self.assertRegex(version, r"^[0-9]+[0-9\.]*~[0-9]{8}$")
+
+    def test_nightly_bkc_version(self):
+        version = compute_rocm_package_version.compute_version(
+            package_type="rpm",
+            release_type="nightly-bkc",
+            override_base_version="8.1.0",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(
+            version,
+            r"^8\.1\.0~20260811\.bkc\.[0-9]{8}$",
+        )
 
     def test_prerelease_version(self):
         version = compute_rocm_package_version.compute_version(
@@ -224,20 +600,244 @@ class RpmPackageVersionTest(unittest.TestCase):
         self.assertEqual(version, "8.0.0~custom1")
 
 
-class BackwardsCompatibilityTest(unittest.TestCase):
-    """Tests for backwards compatibility with old API."""
+class MsiPackageVersionTest(unittest.TestCase):
+    RELEASE_TYPES = ("ci", "dev", "nightly", "release")
 
-    def test_old_api_without_package_type(self):
-        """Test that old calls without package_type still work (defaults to wheel)."""
-        version = compute_rocm_package_version.compute_version(
-            release_type="nightly",
-            custom_version_suffix=None,
-            prerelease_version=None,
-            override_base_version="7.9.0",
+    # Pin the build field (days since the MSI epoch) so each expected version is a
+    # literal, not a value recomputed in the test. 3800 is an arbitrary in-range
+    # stand-in; the real value depends on the current date.
+    BUILD_FIELD = 3800
+
+    def setUp(self):
+        patcher = mock.patch.object(
+            compute_rocm_package_version,
+            "compute_msi_build_field",
+            return_value=self.BUILD_FIELD,
         )
-        # Should default to wheel format
-        self.assertEqual(version[:5], "7.9.0")
-        self.assertIn("a", version)  # alpha version for nightly
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_is_four_field_numeric(self):
+        # WiX requires a numeric #.#.#.# ProductVersion (WIX0108 otherwise).
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                version = compute_rocm_package_version.compute_version(
+                    package_type="msi",
+                    release_type=release_type,
+                    override_base_version="8.1.0",
+                )
+                self.assertEqual(version, "8.1.3800.0")
+
+    def test_all_release_types_share_one_shape(self):
+        # No dev/nightly suffix: every release type yields the same version on a
+        # given day (release "wins" only because it is built last, not via a
+        # different formula).
+        versions = {
+            compute_rocm_package_version.compute_version(
+                package_type="msi",
+                release_type=release_type,
+                override_base_version="8.1.0",
+            )
+            for release_type in self.RELEASE_TYPES
+        }
+        self.assertEqual(versions, {"8.1.3800.0"})
+
+    def test_rejects_base_without_minor(self):
+        with self.assertRaisesRegex(ValueError, "major.minor"):
+            compute_rocm_package_version.compute_version(
+                package_type="msi",
+                release_type="release",
+                override_base_version="8",
+            )
+
+
+class MsiBuildFieldTest(unittest.TestCase):
+    """Tests for compute_msi_build_field() itself (no version-string assembly)."""
+
+    def test_is_days_since_epoch(self):
+        # The build field is the number of days since 2016-04-01.
+        import datetime
+
+        self.assertEqual(
+            compute_rocm_package_version.compute_msi_build_field(
+                datetime.date(2016, 4, 11)
+            ),
+            10,
+        )
+
+    def test_is_monotonic_by_date(self):
+        # A later build date must yield a strictly greater field so a newer build
+        # upgrades an older one within its major.minor line.
+        import datetime
+
+        self.assertEqual(
+            compute_rocm_package_version.compute_msi_build_field(
+                datetime.date(2026, 10, 14)
+            ),
+            3848,
+        )
+        self.assertEqual(
+            compute_rocm_package_version.compute_msi_build_field(
+                datetime.date(2026, 10, 16)
+            ),
+            3850,
+        )
+
+    def test_rejects_date_past_installer_limit(self):
+        import datetime
+
+        with self.assertRaisesRegex(ValueError, "65535"):
+            compute_rocm_package_version.compute_msi_build_field(
+                datetime.date(2200, 1, 1)
+            )
+
+
+# Test meaningful combinations of argparse options through the real computation path,
+# including main()'s side effect of writing versions to GitHub Actions outputs.
+class MainFunctionTest(unittest.TestCase):
+    def test_sets_dev_outputs_with_version_overrides(self):
+        override_git_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        with (
+            mock.patch.dict(os.environ, {"GITHUB_SHA": "f" * 40}),
+            mock.patch.object(
+                compute_rocm_package_version, "gha_set_output"
+            ) as gha_set_output,
+        ):
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "dev",
+                    "--override-base-version",
+                    "7.99.0",
+                    "--override-git-sha",
+                    override_git_sha,
+                ]
+            )
+
+        gha_set_output.assert_called_once()
+        outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(
+            set(outputs),
+            {
+                "rocm_package_version",
+                "rocm_deb_package_version",
+                "rocm_rpm_package_version",
+                "rocm_msi_package_version",
+            },
+        )
+        self.assertEqual(
+            outputs["rocm_package_version"],
+            f"7.99.0.dev0+{override_git_sha}",
+        )
+        self.assertTrue(outputs["rocm_deb_package_version"].startswith("7.99.0~dev"))
+        self.assertTrue(outputs["rocm_rpm_package_version"].startswith("7.99.0~"))
+        self.assertTrue(outputs["rocm_rpm_package_version"].endswith("gabcdef12"))
+        # MSI: major.minor.<days-since-epoch>.0 (no dev suffix).
+        build_field = compute_rocm_package_version.compute_msi_build_field()
+        self.assertEqual(outputs["rocm_msi_package_version"], f"7.99.{build_field}.0")
+
+    def test_sets_prerelease_outputs(self):
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--release-type",
+                    "prerelease",
+                    "--prerelease-version",
+                    "2",
+                    "--override-base-version",
+                    "7.99.0",
+                ]
+            )
+
+        build_field = compute_rocm_package_version.compute_msi_build_field()
+        gha_set_output.assert_called_once_with(
+            {
+                "rocm_package_version": "7.99.0rc2",
+                "rocm_deb_package_version": "7.99.0~pre2",
+                "rocm_rpm_package_version": "7.99.0~rc2",
+                "rocm_msi_package_version": f"7.99.{build_field}.0",
+            }
+        )
+
+    def test_sets_custom_suffix_outputs(self):
+        with mock.patch.object(
+            compute_rocm_package_version, "gha_set_output"
+        ) as gha_set_output:
+            compute_rocm_package_version.main(
+                [
+                    "--custom-version-suffix",
+                    ".custom1",
+                    "--override-base-version",
+                    "7.99.0",
+                ]
+            )
+
+        # MSI versions must stay numeric #.#.#.#, so the msi branch ignores the
+        # custom suffix and always emits major.minor.<days-since-epoch>.0.
+        build_field = compute_rocm_package_version.compute_msi_build_field()
+        gha_set_output.assert_called_once_with(
+            {
+                "rocm_package_version": "7.99.0.custom1",
+                "rocm_deb_package_version": "7.99.0.custom1",
+                "rocm_rpm_package_version": "7.99.0.custom1",
+                "rocm_msi_package_version": f"7.99.{build_field}.0",
+            }
+        )
+
+    def test_build_variant_suffix_varies_by_local_version(self):
+        """Build variant suffix uses + (no local) or . (has local version)."""
+        test_cases = [
+            # (release_type, git_sha, variant, expected_pattern, description)
+            ("nightly", None, "asan", r"^7\.99\.0a[0-9]{8}\+asan$", "nightly +asan"),
+            ("release", None, "asan", r"^7\.99\.0\+asan$", "release +asan"),
+            (
+                "dev",
+                "abcdef1234567890",
+                "asan",
+                r"^7\.99\.0\.dev0\+abcdef1234567890\.asan$",
+                "dev .asan",
+            ),
+            # Dashes are removed from variant names
+            (
+                "nightly",
+                None,
+                "host-asan",
+                r"^7\.99\.0a[0-9]{8}\+hostasan$",
+                "host-asan -> hostasan",
+            ),
+            (
+                "nightly",
+                None,
+                "asan-debug",
+                r"^7\.99\.0a[0-9]{8}\+asandebug$",
+                "asan-debug -> asandebug",
+            ),
+            # Other sanitizers work too
+            ("nightly", None, "tsan", r"^7\.99\.0a[0-9]{8}\+tsan$", "tsan supported"),
+        ]
+        for release_type, git_sha, variant, pattern, desc in test_cases:
+            with self.subTest(desc=desc):
+                version = compute_rocm_package_version.compute_version(
+                    release_type=release_type,
+                    build_variant=variant,
+                    override_base_version="7.99.0",
+                    override_git_sha=git_sha,
+                )
+                self.assertRegex(version, pattern)
+
+    def test_release_variant_no_suffix(self):
+        """Empty or 'release' build variant does not add suffix."""
+        for variant in ("release", ""):
+            with self.subTest(variant=variant or "(empty)"):
+                version = compute_rocm_package_version.compute_version(
+                    release_type="nightly",
+                    build_variant=variant,
+                    override_base_version="7.99.0",
+                )
+                # Should just be base version + nightly suffix, no variant
+                self.assertRegex(version, r"^7\.99\.0a[0-9]{8}$")
 
 
 if __name__ == "__main__":

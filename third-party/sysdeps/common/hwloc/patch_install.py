@@ -4,37 +4,8 @@
 from pathlib import Path
 import os
 import platform
-import shutil
 import subprocess
 import sys
-
-
-def relativize_pc_file(pc_file: Path) -> None:
-    """Make a .pc file relocatable by using pcfiledir-relative paths.
-
-    Replaces the absolute prefix= line with a pcfiledir-relative path,
-    then replaces all other occurrences of the absolute prefix with ${prefix}.
-    Assumes the .pc file is located at $PREFIX/lib/pkgconfig/.
-    """
-    content = pc_file.read_text()
-
-    # Find the original absolute prefix value.
-    original_prefix = None
-    for line in content.splitlines():
-        if line.startswith("prefix="):
-            original_prefix = line[len("prefix=") :]
-            break
-
-    if not original_prefix:
-        return
-
-    # Replace the prefix line with pcfiledir-relative path.
-    # .pc files are in $PREFIX/lib/pkgconfig, so go up 2 levels.
-    content = content.replace(f"prefix={original_prefix}", "prefix=${pcfiledir}/../..")
-    # Replace all other occurrences of the absolute path with ${prefix}.
-    # Use trailing / to avoid partial matches.
-    content = content.replace(f"{original_prefix}/", "${prefix}/")
-    pc_file.write_text(content)
 
 
 # Fetch an environment variable or exit if it is not found.
@@ -60,6 +31,11 @@ therock_source_dir = Path(get_env_or_exit("THEROCK_SOURCE_DIR"))
 python_exe = get_env_or_exit("Python3_EXECUTABLE")
 patchelf_exe = get_env_or_exit("PATCHELF")
 
+# Import common utilities from build_tools using THEROCK_SOURCE_DIR
+script_path = therock_source_dir / "build_tools" / "patch_linux_so.py"
+sys.path.insert(0, str(script_path.parent))
+from patch_linux_so import update_library_links, relativize_pc_file
+
 if platform.system() == "Linux":
     # Specify the directory containing the libraries.
     lib_dir = Path(install_prefix) / "lib"
@@ -69,29 +45,7 @@ if platform.system() == "Linux":
         if file_path.suffix in (".a", ".la"):
             file_path.unlink(missing_ok=True)
 
-    # Now adjust the shared libraries according to our sysdeps rules.
-    script_path = therock_source_dir / "build_tools" / "patch_linux_so.py"
-
-    # Iterate over all shared libraries.
-    for lib_path in lib_dir.glob("*.so"):
-        # Patch the shared library and add our sysdeps prefix.
-        patch_cmd = [
-            python_exe,
-            str(script_path),
-            "--patchelf",
-            patchelf_exe,
-            "--add-prefix",
-            "rocm_sysdeps_",
-            str(lib_path),
-        ]
-
-        try:
-            subprocess.run(patch_cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Error: Failed to patch {lib_path.name} (Exit: {e.returncode})")
-            sys.exit(e.returncode)
-
-    # Set RPATH on all prefixed shared libraries.
+    # Set RPATH on all prefixed shared libraries (already named correctly from build).
     for lib_path in lib_dir.glob("librocm_sysdeps_*.so*"):
         if lib_path.is_symlink():
             continue
@@ -111,7 +65,13 @@ if platform.system() == "Linux":
             )
             sys.exit(e.returncode)
 
-    # Fix .pc files to use relocatable paths.
+    # Create linker symlink libhwloc.so -> librocm_sysdeps_hwloc.so.5
+    # using the common update_library_links function
+    hwloc_lib = lib_dir / "librocm_sysdeps_hwloc.so"
+    if hwloc_lib.exists():
+        update_library_links(hwloc_lib, "libhwloc.so", patchelf_exe)
+
+    # Fix .pc files to use relocatable paths using the common function
     pkgconfig_dir = lib_dir / "pkgconfig"
     if pkgconfig_dir.exists():
         for pc_file in pkgconfig_dir.glob("*.pc"):

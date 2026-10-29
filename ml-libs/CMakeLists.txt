@@ -8,89 +8,28 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-# limit use of composable kernel to the GPU families it is valid for
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
-  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
-      message(WARNING
-        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling composable kernel and it's use in MIOpen.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
-    endif()
-  endforeach()
-endif()
-
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  ##############################################################################
-  # Composable_kernel
-  ##############################################################################
-  # TODO: Move this to math-libs
-
-  therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_REQ_LIBS_ONLY=ON
-      "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-    RUNTIME_DEPS
-      hip-clr
-      rocm-half
-      rocRAND
-      ${THEROCK_BUNDLED_BZIP2}
-      ${optional_profiler_deps}
-  )
-  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
-
-  therock_cmake_subproject_activate(composable_kernel)
-
-  therock_provide_artifact(composable-kernel
-    DESCRIPTOR artifact-composable-kernel.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-    SUBPROJECT_DEPS
-      composable_kernel
-  )
-endif()
-
+set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
-  # If composable kernel is enabled, add it as an MIOpen dep.
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
+endif()
+set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
+  # MIOpen's CK use is gated on both the per-arch CK availability
+  # (math-libs/CMakeLists.txt) and the user-facing
+  # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
+  # someone build CK for other consumers while keeping it out of MIOpen.
+  set(_miopen_use_ck OFF)
+  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_miopen_use_ck ON)
+  endif()
+
   set(optional_miopen_build_deps)
-  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+  if(_miopen_use_ck)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
   if(MSVC)
-    # HACK, see https://github.com/ROCm/TheRock/issues/525.
-    # Take the most recent few MSVC versions from
-    # https://github.com/boostorg/boost_install/blob/develop/BoostDetectToolset.cmake
-    # and pass them through to the Boost_COMPILER option below. This is messy -
-    # maybe we can drop the Boost dependency or write new build rules for it.
-    if((MSVC_VERSION GREATER 1929) AND (MSVC_VERSION LESS 1950))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc143")
-    elseif((MSVC_VERSION GREATER 1919) AND (MSVC_VERSION LESS 1930))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc142")
-    elseif((MSVC_VERSION GREATER 1909) AND (MSVC_VERSION LESS 1920))
-      set(_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER "vc141")
-    else()
-      message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
-    endif()
-
     set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
@@ -105,10 +44,9 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
-      -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -116,7 +54,6 @@ if(THEROCK_ENABLE_MIOPEN)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-boost
       therock-eigen
       therock-frugally-deep
       therock-googletest
@@ -150,7 +87,7 @@ if(THEROCK_ENABLE_MIOPEN)
     SUBPROJECT_DEPS
       MIOpen
   )
-endif(THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
@@ -179,10 +116,10 @@ if(THEROCK_ENABLE_HIPDNN)
       therock-googletest
       therock-fmt
       therock-spdlog
-    RUNTIME_DEPS
-      hip-clr
       therock-flatbuffers
       therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
@@ -212,7 +149,58 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+  ##############################################################################
+  # hipDNN integration tests
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipdnn_integration_tests
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
+      hipDNN
+      rocRAND
+  )
+  therock_cmake_subproject_glob_c_sources(hipdnn_integration_tests
+  SUBDIRS
+    .
+  )
+
+  therock_cmake_subproject_provide_package(hipdnn_integration_tests hipdnn_integration_tests lib/cmake/hipdnn_integration_tests)
+
+  therock_cmake_subproject_activate(hipdnn_integration_tests)
+
+  therock_provide_artifact(hipdnn-integration-tests
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipdnn-integration-tests.toml
+    COMPONENTS
+      dbg
+      run
+      test
+    SUBPROJECT_DEPS
+      hipdnn_integration_tests
+  )
+
+endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -238,6 +226,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
+      hipdnn_integration_tests
       MIOpen
   )
   therock_cmake_subproject_glob_c_sources(miopenprovider
@@ -256,7 +245,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     SUBPROJECT_DEPS
       miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPENPROVIDER)
+endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
@@ -272,6 +261,8 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -284,6 +275,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     RUNTIME_DEPS
       hipBLAS-common
       hipBLASLt
+      hipdnn_integration_tests
   )
   therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
@@ -303,11 +295,15 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  therock_check_subproject_targets(_hipkernelprovider_enabled hipkernelprovider)
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
-
   therock_cmake_subproject_declare(hipkernelprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
@@ -319,6 +315,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
+      -DROCKE_KPACK_PYTHON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -328,8 +325,11 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
+      amd-comgr
     RUNTIME_DEPS
       hip-clr
+      hipdnn_integration_tests
+      rocm-kpack
   )
   therock_cmake_subproject_glob_c_sources(hipkernelprovider
   SUBDIRS
@@ -338,7 +338,6 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
   therock_cmake_subproject_activate(hipkernelprovider)
 
   therock_provide_artifact(hipkernelprovider
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipkernelprovider.toml
     COMPONENTS
       dbg
@@ -347,9 +346,14 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
+set(_hipdnn_samples_enabled OFF)
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  therock_check_subproject_targets(_hipdnn_samples_enabled hipDNN_samples)
+endif()
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
@@ -369,6 +373,7 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       amd-hip
     BUILD_DEPS
       hipDNN
+      therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
@@ -387,4 +392,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif(THEROCK_ENABLE_HIPDNN_SAMPLES)
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)

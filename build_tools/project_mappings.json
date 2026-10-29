@@ -1,0 +1,9 @@
+{
+  "subproject_features": {
+    "hipSPARSE": "SPARSE",
+    "hipSPARSELt": "SPARSE",
+    "rocSPARSE": "SPARSE",
+    "hipSOLVER": "SOLVER",
+    "rocSOLVER": "SOLVER"
+  }
+}

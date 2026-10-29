@@ -79,9 +79,21 @@ def _get_module_path(expand_devel: bool) -> Path:
          These tools should pass `expand_devel=False`.
       B) Other tools that benefit from the extra files in the 'devel' package
          will expand expand it by passing `expand_devel=True`.
+
+    NOTE: the "already expanded" check is one-shot. Once the devel tree exists
+    it is returned directly, WITHOUT re-running the device-link reconcile in
+    `rocm_sdk._devel._reconcile_device_links` (only `_expand_devel_module()` /
+    `rocm-sdk init` does that). So a `rocm-sdk-device-*` wheel installed or
+    removed after the first expansion is NOT picked up by these trampolines
+    (e.g. hipcc); refresh it with an explicit
+    `rocm-sdk init` / `rocm-sdk path` / `rocm-sdk test`.
+    This is intentional: reconciling on every compiler invocation would add a
+    subprocess + metadata scan to a build hot path.
     """
     if _has_devel_module():
         if _is_devel_module_expanded():
+            # One-shot: returns the existing tree without re-reconciling device
+            # links (see NOTE above).
             return _get_devel_module_path()
         elif expand_devel:
             _expand_devel_module()
@@ -103,9 +115,12 @@ def _exec(relpath: str, expand_devel=True):
     # override with expand_devel=False to avoid the expansion cost.
     full_path = _get_module_path(expand_devel) / (relpath + exe_suffix)
     if is_windows:
-        # https://bugs.python.org/issue19124
-        # prevent execution from occuring in the backround
-        os._exit(os.spawnv(os.P_WAIT, full_path, [str(full_path)] + sys.argv[1:]))
+        # Windows has no real exec() and subprocess is recommended instead.
+        # os.execv runs the child in the background (https://bugs.python.org/issue19124)
+        # os.spawnv has brittle argument handling (https://discuss.python.org/t/how-to-deal-with-unsafe-broken-os-spawn-arg-handling-behavior-on-windows/20829)
+        import subprocess
+
+        sys.exit(subprocess.run([str(full_path)] + sys.argv[1:]).returncode)
     os.execv(full_path, [str(full_path)] + sys.argv[1:])
 
 

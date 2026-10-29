@@ -61,6 +61,10 @@ def find_libraries(*shortnames: str) -> list[Path]:
             entry_pattern = lib_entry.so_pattern
         matching_paths = sorted(relpath.glob(entry_pattern))
         if len(matching_paths) == 0:
+            if lib_entry.optional:
+                # Optional libraries (e.g. WSL-only rocdxg) may be absent from
+                # the distribution. Skip rather than failing.
+                continue
             raise FileNotFoundError(
                 f"Could not find rocm library '{shortname}' at path '{relpath},' no match for pattern '{entry_pattern}'"
             )
@@ -84,6 +88,30 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
 _ALL_CDLLS = {}
 
+_WINDOWS_DLL_DIRS_ADDED: set[str] = set()
+
+
+def _ensure_windows_dll_search_dirs(lib_path: Path):
+    """Make a library's non-colocated dependencies discoverable on Windows.
+
+    Some core libraries import DLLs that ship under lib/rocm_sysdeps/bin rather
+    than co-located in bin/ (e.g. rocdecode imports the VA-API/vaon12 backend).
+    On Linux these resolve through RPATH ($ORIGIN/rocm_sysdeps/lib); Windows has
+    no RPATH equivalent, so the sysdeps bin directory must be added to the DLL
+    search path before the dependent library is loaded.
+    """
+    if platform.system() != "Windows":
+        return
+    # lib_path is <root>/bin/<name>.dll; sysdeps DLLs live in the sibling
+    # <root>/lib/rocm_sysdeps/bin.
+    sysdeps_bin = lib_path.parents[1] / "lib" / "rocm_sysdeps" / "bin"
+    key = str(sysdeps_bin)
+    if key in _WINDOWS_DLL_DIRS_ADDED:
+        return
+    if sysdeps_bin.is_dir():
+        os.add_dll_directory(key)
+        _WINDOWS_DLL_DIRS_ADDED.add(key)
+
 
 def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """Preloads a list of library names, caching their handles globally.
@@ -97,12 +125,18 @@ def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """
     import ctypes
 
-    paths = find_libraries(*shortnames)
     mode = ctypes.RTLD_GLOBAL if rtld_global is True else ctypes.RTLD_LOCAL
-    for shortname, path in zip(shortnames, paths):
+    for shortname in shortnames:
         if shortname in _ALL_CDLLS:
             continue
-        cdll = ctypes.CDLL(str(path), mode=mode)
+        # Resolve per shortname: find_libraries may skip entries (libraries
+        # absent on the current platform or optional ones not present in the
+        # distribution), so a positional zip against shortnames would mispair.
+        paths = find_libraries(shortname)
+        if not paths:
+            continue
+        _ensure_windows_dll_search_dirs(paths[0])
+        cdll = ctypes.CDLL(str(paths[0]), mode=mode)
         _ALL_CDLLS[shortname] = cdll
 
 

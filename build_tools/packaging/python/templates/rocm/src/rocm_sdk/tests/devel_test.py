@@ -78,10 +78,13 @@ class ROCmDevelTest(unittest.TestCase):
 
         # CLI scripts by default run from _rocm_sdk_core.
         # When the devel package is installed they should run from _rocm_sdk_devel.
+        hipconfig = utils.find_console_script("hipconfig")
+        self.assertIsNotNone(
+            hipconfig,
+            msg=f"Could not find `hipconfig` console script for interpreter {sys.executable}",
+        )
         rocmpath_output = (
-            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
-            .decode()
-            .strip()
+            utils.run_command([hipconfig, "--rocmpath"], capture=True).decode().strip()
         )
         rocmpath = Path(rocmpath_output)
         self.assertTrue(
@@ -131,10 +134,6 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
-            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
-                # TODO: Library preloads for amdsmi need to be implement.
-                # Though this is not needed for the amd-smi client.
-                continue
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
@@ -150,6 +149,10 @@ class ROCmDevelTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
@@ -157,18 +160,30 @@ class ROCmDevelTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
-                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
-                # explicitly and cannot necessarily be loaded standalone.
+                # Internal rocprofiler-sdk libraries cannot necessarily be loaded
+                # standalone. The duplicate SDK is a test fixture that requires the
+                # primary SDK to be preloaded by its test harness.
                 continue
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
+                continue
+            if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
+                # Python C extensions use symbols resolved at import time,
+                # not via dlopen — ctypes.CDLL fails across interpreter
+                # versions (e.g. .abi3.so using PyType_FromMetaclass on <3.12).
                 continue
 
             extra_setup = ""
@@ -187,6 +202,23 @@ class ROCmDevelTest(unittest.TestCase):
                 # and the dependencies are at .../{lib|bin}.
                 lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
                 extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+                # The rocke-client engine also DT_NEEDEDs the kpack runtime, which
+                # ships in the core wheel and is not under lib_dir; add its dir too.
+                kpack_paths = rocm_sdk.find_libraries("rocm_kpack")
+                if kpack_paths:
+                    kpack_dir = str(kpack_paths[0].parent).replace("\\", "\\\\")
+                    extra_setup += f"os.add_dll_directory('{kpack_dir}') if hasattr(os, 'add_dll_directory') else None; "
+            elif platform.system() == "Windows":
+                # Some libraries (e.g. rocdecode) import DLLs that ship under
+                # lib/rocm_sysdeps/bin rather than co-located in bin/. Linux
+                # resolves these via RPATH; Windows has no RPATH equivalent, so
+                # the sysdeps bin directory must be on the DLL search path. The
+                # library lives at <root>/bin/<name>.dll and the sysdeps DLLs at
+                # the sibling <root>/lib/rocm_sysdeps/bin.
+                sysdeps_bin = so_path.parents[1] / "lib" / "rocm_sysdeps" / "bin"
+                if sysdeps_bin.is_dir():
+                    sysdeps_dir = str(sysdeps_bin).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{sysdeps_dir}'); "
 
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
@@ -197,3 +229,89 @@ class ROCmDevelTest(unittest.TestCase):
                 )
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
+
+    def testLibrariesMirroredIntoDevel(self):
+        """Every file in the libraries platform tree must also appear in the
+        devel tree as the same (hardlinked) file.
+
+        Host libraries are mirrored when the devel tree is expanded; per-ISA
+        device payloads (.kpack archives, Tensile/MIOpen kernels, per-arch .so)
+        are mirrored by `_devel._reconcile_device_links`. Walking libraries and
+        checking each entry exists in devel is sufficient because devel is a
+        superset - extra devel files (headers, cmake, soname aliases, other
+        arches) are irrelevant. The only libraries entry with no devel
+        counterpart by design is the `.devel_links/` manifest dir, which drives
+        the reconcile rather than being a payload.
+        """
+        target_family = di.determine_target_family()
+        try:
+            libraries_mod = importlib.import_module(
+                di.ALL_PACKAGES["libraries"].get_py_package_name(
+                    target_family=target_family
+                )
+            )
+        except ModuleNotFoundError:
+            self.skipTest("rocm-sdk-libraries is not installed")
+
+        # Expand the devel tree and reconcile device links before comparing.
+        utils.run_command(
+            [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
+        )
+        try:
+            devel_mod = importlib.import_module(
+                di.ALL_PACKAGES["devel"].get_py_package_name(
+                    target_family=target_family
+                )
+            )
+        except ModuleNotFoundError:
+            self.skipTest("rocm[devel] is not installed")
+
+        def _platform_dir(mod) -> Path:
+            # In kpack-split mode `_rocm_sdk_libraries` is a namespace package
+            # (no __init__.py) so the libraries and device wheels can share the
+            # directory; __file__ is then None, so fall back to __path__.
+            if mod.__file__ is not None:
+                return Path(mod.__file__).parent
+            return Path(next(iter(mod.__path__)))
+
+        libraries_dir = _platform_dir(libraries_mod)
+        devel_dir = _platform_dir(devel_mod)
+
+        def _skip(rel: Path) -> bool:
+            # Each platform package has its own independent __init__.py marker.
+            if rel == Path("__init__.py"):
+                return True
+            if "__pycache__" in rel.parts:
+                return True
+            # Device-wheel manifest dir: drives the reconcile, not a payload.
+            return rel.parts[0] == ".devel_links"
+
+        missing = []
+        not_hardlinked = []
+        for libs_file in libraries_dir.rglob("*"):
+            if not libs_file.is_file():
+                continue
+            rel = libs_file.relative_to(libraries_dir)
+            if _skip(rel):
+                continue
+            devel_file = devel_dir / rel
+            if not devel_file.is_file():
+                missing.append(rel)
+            elif not devel_file.samefile(libs_file):
+                not_hardlinked.append(rel)
+
+        def _fmt(items: list) -> str:
+            shown = ", ".join(str(p) for p in items[:10])
+            return shown + (f" (+{len(items) - 10} more)" if len(items) > 10 else "")
+
+        self.assertFalse(
+            missing,
+            msg=f"{len(missing)} libraries file(s) missing from devel: {_fmt(missing)}",
+        )
+        self.assertFalse(
+            not_hardlinked,
+            msg=(
+                f"{len(not_hardlinked)} libraries file(s) present in devel but not "
+                f"hardlinked (different inode): {_fmt(not_hardlinked)}"
+            ),
+        )

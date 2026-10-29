@@ -21,8 +21,6 @@ endfunction()
 
 # Populates all artifacts and distributions (i.e. all artifact-foo targets).
 therock_add_convenience_target(artifacts)
-# Builds archives for all artifacts (i.e. all archive-foo targets).
-therock_add_convenience_target(archives)
 # Populates all distribution directories (i.e. all dist-foo targets).
 therock_add_convenience_target(dist)
 # Expunges configure/build byproducts and artifacts for all projects.

@@ -4,14 +4,32 @@ Compares submodule versions and generates HTML reports showing commit changes
 for each component between builds.
 
 Arguments:
-  --start                  Start commit SHA or workflow run ID (required unless using --find-last-successful)
-  --end                    End commit SHA or workflow run ID (required)
-  --find-last-successful   Workflow file to find last successful run (e.g., 'ci_nightly.yml')
-  --workflow-mode          Treat --start and --end as workflow run IDs instead of commit SHAs
+  --start                Start commit SHA or workflow run ID (required unless using
+                         --find-last-run or --pr-base-ref).
+  --end                  End commit SHA or workflow run ID (required).
+  --find-last-run        Workflow filename (e.g., 'multi_arch_ci.yml'). When set,
+                         --start is resolved as the head SHA of that workflow's
+                         most recent run on --branch that concluded with
+                         'success' or 'failure' (cancelled / skipped /
+                         in-progress runs are ignored).
+  --pr-base-ref          PR base branch name. When set, --start is resolved as
+                         the merge-base between --end and the named branch via
+                         the GitHub Compare API. Rebase-safe.
+  --workflow-mode        Treat --start and --end as workflow run IDs instead of
+                         commit SHAs.
+  --branch               Branch to scope --find-last-run lookups against
+                         (default: 'main'). Only consulted when --find-last-run
+                         is set.
+  --output-dir           Directory to write the HTML report into. If unset,
+                         falls back to the TheRock root directory.
+
+If no usable start ref can be derived, the script logs the reason and
+exits 0 without writing a report.
 
 Example usage:
   python build_tools/generate_manifest_diff_report.py --start abc123 --end def456
-  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-successful ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-run multi_arch_ci.yml
+  python build_tools/generate_manifest_diff_report.py --end def456 --pr-base-ref main
   python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
 """
 
@@ -33,8 +51,9 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 # Local imports
 from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_api import (
+    GitHubAPI,
     gha_append_step_summary,
-    gha_query_last_successful_workflow_run,
+    gha_query_last_workflow_run,
     gha_query_workflow_run_by_id,
     gha_send_request,
 )
@@ -181,8 +200,21 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
     parser.add_argument(
-        "--find-last-successful",
-        help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')",
+        "--find-last-run",
+        help=(
+            "Workflow filename (e.g. 'multi_arch_ci.yml'). When set, --start "
+            "is resolved as the head SHA of that workflow's most recent run "
+            "on --branch that concluded with 'success' or 'failure' "
+            "(cancelled / skipped / in-progress runs are ignored)."
+        ),
+    )
+    parser.add_argument(
+        "--pr-base-ref",
+        help=(
+            "PR base branch name. When set, --start is resolved as the "
+            "merge-base between --end and this branch via the GitHub Compare "
+            "API. Rebase-safe."
+        ),
     )
     parser.add_argument(
         "--workflow-mode",
@@ -192,7 +224,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--branch",
         default="main",
-        help="Branch to search for last successful workflow run (default: main)",
+        help=(
+            "Branch to scope --find-last-run lookups against (default: main). "
+            "Only consulted when --find-last-run is set; ignored otherwise."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -214,41 +249,67 @@ def _optional_str(val: str | None) -> str | None:
     return s if s else None
 
 
-def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
-    """Resolve start and end commit SHAs from arguments."""
+def resolve_commits(
+    args: argparse.Namespace,
+) -> tuple[str | None, str | None]:
+    """Resolve start and end commit SHAs from arguments.
+
+    Returns ``(None, None)`` when --find-last-run finds no prior matching
+    run (graceful empty); caller should exit 0. Other API errors (e.g.
+    Compare API 404 on --pr-base-ref) propagate as GitHubAPIError; the
+    workflow's continue-on-error gate handles those.
+    """
     start = _optional_str(args.start)
-    find_last = _optional_str(args.find_last_successful)
+    find_last = _optional_str(args.find_last_run)
+    pr_base = _optional_str(args.pr_base_ref)
     end = _optional_str(args.end)
 
-    if start is None and find_last is None:
-        raise ValueError(
-            "--start is required unless --find-last-successful is provided"
-        )
     if end is None:
         raise ValueError("--end is required")
-
-    therock_repo_full = f"{ROCM_ORG}/{THEROCK_REPO}"
-
-    # Resolve start commit
-    if find_last is not None:
-        last_run = gha_query_last_successful_workflow_run(
-            therock_repo_full, find_last, branch=args.branch
+    if start is None and find_last is None and pr_base is None:
+        raise ValueError(
+            "--start is required unless --find-last-run or --pr-base-ref is provided"
         )
-        if not last_run:
-            raise ValueError(f"No previous successful run found for {find_last}")
-        start_sha = last_run["head_sha"]
-    elif args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, start)
-        start_sha = workflow_info.get("head_sha")
-    else:
-        start_sha = start
 
-    # Resolve end commit
+    therock = f"{ROCM_ORG}/{THEROCK_REPO}"
+
+    # Resolve end first; --pr-base-ref needs end_sha to compute the merge-base.
     if args.workflow_mode:
-        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, end)
-        end_sha = workflow_info.get("head_sha")
+        end_sha = gha_query_workflow_run_by_id(therock, end).get("head_sha")
     else:
         end_sha = end
+
+    # Resolve start, in priority order: --pr-base-ref, --find-last-run,
+    # --workflow-mode, then plain --start.
+    if pr_base is not None:
+        compare_url = (
+            f"https://api.github.com/repos/{therock}/compare/{pr_base}...{end_sha}"
+        )
+        compare = gha_send_request(compare_url)
+        start_sha = compare.get("merge_base_commit", {}).get("sha")
+    elif find_last is not None:
+        # Hardcoded to terminal-status: any run that ran to completion (success
+        # or failure) is acceptable — devs comparing to "the last run that
+        # actually ran" don't care whether it was green or red, only that it
+        # wasn't cancelled / skipped / in-progress.
+        accepted = {"success", "failure"}
+        last_run = gha_query_last_workflow_run(
+            therock,
+            find_last,
+            branch=args.branch,
+            accepted_statuses=accepted,
+        )
+        if last_run is None:
+            print(
+                f"  [empty] No prior run of {find_last} on {args.branch} with "
+                f"conclusion in {sorted(accepted)} (likely a first-ever run)."
+            )
+            return None, None
+        start_sha = last_run["head_sha"]
+    elif args.workflow_mode:
+        start_sha = gha_query_workflow_run_by_id(therock, start).get("head_sha")
+    else:
+        start_sha = start
 
     return start_sha, end_sha
 
@@ -272,7 +333,12 @@ def get_api_base_from_url(url: str, fallback_name: str) -> str:
     return f"{GITHUB_API_BASE}/{ROCM_ORG}/{fallback_name}"
 
 
-def is_revert(old_sha: str, new_sha: str, api_base: str) -> bool:
+def is_revert(
+    old_sha: str,
+    new_sha: str,
+    api_base: str,
+    github_api: "GitHubAPI | None" = None,
+) -> bool:
     """Check if updating from old_sha to new_sha is a revert (going backwards).
 
     Uses GitHub compare API: compare/{new_sha}...{old_sha}
@@ -280,10 +346,16 @@ def is_revert(old_sha: str, new_sha: str, api_base: str) -> bool:
     - If old_sha is "behind" new_sha → normal forward progress → return False
     - If "diverged" → different branches, not a revert → return False
     - If 404 → commits deleted from repo → return False (can't determine)
+
+    By default uses the module-level singleton client (gha_send_request).
+    Pass an explicit `github_api` (e.g. an App-token-bound instance) to route
+    this request through that client instead -- required for cross-repo
+    callers that can't rely on the ambient GITHUB_TOKEN/gh-CLI singleton.
     """
+    send_request = github_api.send_request if github_api else gha_send_request
     try:
         # If old_sha is "ahead" of new_sha, we're moving backwards (revert)
-        compare = gha_send_request(f"{api_base}/compare/{new_sha}...{old_sha}")
+        compare = send_request(f"{api_base}/compare/{new_sha}...{old_sha}")
         status = compare.get("status", "")
         return status == "ahead"
     except HTTPError as e:
@@ -302,8 +374,16 @@ def fetch_commits_in_range(
     start_sha: str,
     end_sha: str,
     api_base: str,
+    github_api: "GitHubAPI | None" = None,
 ) -> list[dict]:
-    """Fetch commits between two SHAs."""
+    """Fetch commits between two SHAs.
+
+    By default uses the module-level singleton client (gha_send_request).
+    Pass an explicit `github_api` (e.g. an App-token-bound instance) to route
+    these requests through that client instead -- required for cross-repo
+    callers that can't rely on the ambient GITHUB_TOKEN/gh-CLI singleton.
+    """
+    send_request = github_api.send_request if github_api else gha_send_request
     commits: list[dict] = []
     found_start = False
     page = 1
@@ -314,7 +394,7 @@ def fetch_commits_in_range(
         params = {"sha": end_sha, "per_page": PER_PAGE, "page": page}
         url = f"{api_base}/commits?{urllib.parse.urlencode(params)}"
         try:
-            data = gha_send_request(url)
+            data = send_request(url)
             if not data:
                 break
             for commit in data:
@@ -336,7 +416,7 @@ def fetch_commits_in_range(
     if not found_start:
         try:
             compare_url = f"{api_base}/compare/{start_sha}...{end_sha}"
-            compare_data = gha_send_request(compare_url)
+            compare_data = send_request(compare_url)
             if compare_data.get("status") == "diverged":
                 print("    (Commits are off-branch/diverged - using compare API)")
                 diverged_commits = compare_data.get("commits", [])
@@ -1423,11 +1503,16 @@ def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     args = parse_args(argv)
     start_commit, end_commit = resolve_commits(args)
+    if start_commit is None:
+        # No comparison was performed (e.g. --find-last-run with no prior
+        # matching run on a first-ever branch). Exit non-zero so callers
+        # gating on step conclusion skip the upload step instead of trying
+        # to push a non-existent report.
+        print("No comparison performed — nothing to upload.", file=sys.stderr)
+        return 1
 
     diff = compare_manifests(start_commit, end_commit)
-
-    output_dir = args.output_dir
-    generate_html_report(diff, output_dir)
+    generate_html_report(diff, args.output_dir)
 
     print("\n=== Generating Step Summary ===")
     generate_step_summary(diff)

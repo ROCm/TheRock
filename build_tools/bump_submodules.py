@@ -54,7 +54,10 @@ def parse_components(components: list[str]) -> list[list]:
     if "default" in components:
         return [], []
 
-    if any(comp in components for comp in ["base", "comm-libs", "core", "profiler"]):
+    if any(
+        comp in components
+        for comp in ["base", "comm-libs", "core", "profiler", "storage-libs"]
+    ):
         arguments.append("--include-system-projects")
     else:
         arguments.append("--no-include-system-projects")
@@ -85,11 +88,6 @@ def parse_components(components: list[str]) -> list[list]:
         arguments.append("--include-compilers")
     else:
         arguments.append("--no-include-compilers")
-
-    if "iree-libs" in components:
-        arguments.append("--include-iree-libs")
-    else:
-        arguments.append("--no-include-iree-libs")
 
     if "debug-tools" in components:
         arguments.append("--include-debug-tools")
@@ -193,7 +191,6 @@ def main(argv):
                   rocm-libraries,
                   rocm-systems,
                   profiler,
-                  iree-libs,
                   debug-tools,
                   media-libs,
                   math-libraries

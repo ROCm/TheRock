@@ -3,38 +3,129 @@
 # SPDX-License-Identifier: MIT
 
 """
-Get URL/repo parameters: base URL from any URL, repo_sub_folder from an S3 prefix, or full repo URL from components.
+Canonical, unit-tested spec for native Linux install-test parameters (KEY=value → $GITHUB_OUTPUT).
 
-Output is always KEY=value (suitable for GITHUB_OUTPUT).
+Purpose: one Python module + tests that define how CDN repo URLs, GPG paths, GPU arch
+tokens, and CI container images should be derived (per native_packaging.md and install
+workflows). Callers should converge here; upload_package_repo.py and
+install_rocm_packages.sh still embed parallel logic until get-repo-url / get-gpg-url are
+wired. Tests catch spec drift at merge time — wrong …/packages/ paths, GPG tree mismatches,
+container renames — without running the full install matrix.
 
-Subcommands (get operations):
+In production CI today: test_native_linux_packages_install.yml uses extract-gfx-arch and
+get-container-image only. Install repo/GPG URLs still arrive via workflow inputs from
+upload_package_repo.py.
 
-  get-base-url         Get base URL (scheme + netloc) from an input URL. Prints repo_base_url=<value>.
-  get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty). Prints repo_sub_folder=<value>.
-  get-repo-url         Get full repo URL from components(release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder). Prints repo_url=<value>.
+Expected: get-repo-url → per_family or multi_arch install URLs; invalid release_type or
+layout → ValueError. get-gpg-url derives a default gpg_key_url= for workflow outputs:
+signed lines (prerelease/release) get a URL, dev/nightly/ci get empty when --release-type
+is set. That policy does not override install tests — native_linux_package_install_test.py
+and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL input as-is,
+regardless of release_type (if omitted, install runs without GPG verification).
 
-Usage:
-  python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url <url>
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix <prefix>
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url ...
+Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
+get-container-image, get-repo-setup-params. Run with -h for examples.
 
-Examples:
-  python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url https://example.com/v2/whl
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix v3/packages/deb/20260204-12345
-  python build_tools/packaging/linux/get_url_repo_params.py get-repo-url --release-type prerelease --native-package-type deb --repo-base-url https://x.com --os-profile ubuntu2404 --repo-sub-folder ''
+Maintenance (when packaging or install URLs change):
+
+1. Update docs first: docs/packaging/native_packaging.md (and docs/development/s3_buckets.md
+   if S3 bucket/prefix layout changes).
+2. Change this module and get_url_repo_params_test.py together — tests are the drift alarm.
+3. Cross-check upload_package_repo.py and dockerfiles/install_rocm_packages.sh if CI or
+   manual install paths must stay in sync (minimum sanity check; full dedupe is P2).
 """
 
 import argparse
+import json
+import os
 import re
 import sys
+from datetime import date, datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
+from github_actions.github_actions_api import gha_set_output
+
+LAYOUT_PER_FAMILY = "per_family"
+LAYOUT_MULTI_ARCH = "multi_arch"
+
+# Reserved dummy CDN host for docstrings, --help, and generic unit tests (RFC 2606).
+EXAMPLE_CDN_BASE = "https://sample-cdn.example"
+
+
+def normalize_layout(layout: str | None) -> str:
+    """Normalize a layout selector to :data:`LAYOUT_PER_FAMILY` or :data:`LAYOUT_MULTI_ARCH`.
+
+    Args:
+        layout: ``None``/empty → per-family; aliases ``legacy``, ``multiarch``.
+
+    Raises:
+        ValueError: If ``layout`` is not recognized.
+    """
+    if layout is None or not layout.strip():
+        return LAYOUT_PER_FAMILY
+    key = layout.strip().lower().replace("-", "_")
+    aliases = {
+        "legacy": LAYOUT_PER_FAMILY,
+        "perfamily": LAYOUT_PER_FAMILY,
+        "multiarch": LAYOUT_MULTI_ARCH,
+    }
+    normalized = aliases.get(key, key)
+    if normalized not in (LAYOUT_PER_FAMILY, LAYOUT_MULTI_ARCH):
+        raise ValueError(f"Unknown layout: {layout!r}")
+    return normalized
+
+
+def _normalize_release_type(release_type: str) -> str:
+    """Normalize workflow release-type strings to canonical names.
+
+    Maps ``prereleases`` → ``prerelease``, ``stable`` → ``release``,
+    ``nightlies`` → ``nightly``; other values are lowercased as-is.
+    """
+    rt = release_type.strip().lower()
+    aliases = {
+        "prereleases": "prerelease",
+        "stable": "release",
+        "nightlies": "nightly",
+    }
+    return aliases.get(rt, rt)
+
+
+_KNOWN_RELEASE_TYPES = frozenset(
+    {"prerelease", "release", "dev", "dev-bkc", "nightly", "nightly-bkc", "ci"}
+)
+
+
+def _normalize_and_validate_release_type(release_type: str) -> str:
+    """Normalize and validate ``release_type`` for :func:`get_repo_url`.
+
+    Raises:
+        ValueError: If ``release_type`` is empty or not a known workflow value.
+    """
+    if not release_type or not release_type.strip():
+        raise ValueError("release_type cannot be empty")
+    rt = _normalize_release_type(release_type)
+    if rt not in _KNOWN_RELEASE_TYPES:
+        raise ValueError(f"Unknown release_type: {release_type!r}")
+    return rt
 
 
 # --- base_url ---
 
 
 def get_base_url(url: str) -> str:
-    """Return base URL (scheme + netloc only). No path, query, or fragment."""
+    """Return scheme and netloc only (strip path, query, and fragment).
+
+    Args:
+        url: Any HTTP(S) URL (e.g. package repo, S3 HTTPS, or CDN index URL).
+
+    Returns:
+        Base URL string ``{scheme}://{netloc}``.
+
+    Raises:
+        ValueError: If ``url`` has no scheme or netloc.
+    """
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
         raise ValueError(f"Invalid URL: {url!r}")
@@ -42,12 +133,173 @@ def get_base_url(url: str) -> str:
 
 
 def cmd_base_url(args: argparse.Namespace) -> int:
+    """CLI: ``get-base-url`` → writes ``repo_base_url=`` to ``$GITHUB_OUTPUT``."""
     try:
         base_url = get_base_url(args.from_url)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"repo_base_url={base_url}")
+    gha_set_output({"repo_base_url": base_url})
+    return 0
+
+
+# --- gpg_key_url ---
+
+
+def get_gpg_key_url(package_url: str) -> str:
+    """Derive the AMD repo signing-key URL from a package repository URL.
+
+    Legacy hosts keep keys beside the packages tree (``…/packages/gpg/rocm.gpg``,
+    ``…/packages-multi-arch/gpg/rocm.gpg``, etc.).
+
+    Current ``{stream}.repo.amd.com`` product repos use a stream-scoped key at
+    ``{origin}/rocm/gpg/packages.gpg`` regardless of the ``core/packages/`` path
+    depth (standard or ASAN).
+
+    Args:
+        package_url: Full or partial native Linux package repo URL.
+
+    Returns:
+        HTTPS URL to the matching signing key (``packages.gpg`` or ``rocm.gpg``).
+
+    Raises:
+        ValueError: If ``package_url`` is not a valid HTTP(S) URL.
+
+    Examples:
+        https://sample-cdn.example/packages/ubuntu2404
+            → https://sample-cdn.example/packages/gpg/rocm.gpg
+        https://sample-cdn.example/rocm/packages/rhel10/x86_64/
+            → https://sample-cdn.example/rocm/packages/gpg/rocm.gpg
+        https://rc.repo.amd.com/rocm/core/packages/ubuntu2404
+            → https://rc.repo.amd.com/rocm/gpg/packages.gpg
+        https://stable.repo.amd.com/rocm/core/packages/ubuntu2404
+            → https://stable.repo.amd.com/rocm/gpg/packages.gpg
+        https://sample-cdn.example/packages-multi-arch/ubuntu2604
+            → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
+        https://sample-cdn.example/packages-multi-arch/deb/20260204-12345/
+            → https://sample-cdn.example/packages-multi-arch/gpg/rocm.gpg
+        https://repo.amd.com/
+            → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
+    """
+    parsed = urlparse(package_url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f"Invalid URL: {package_url!r}")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    path = parsed.path or ""
+
+    if "/rocm/packages-multi-arch/" in path or path.rstrip("/").endswith(
+        "/rocm/packages-multi-arch"
+    ):
+        return f"{origin}/rocm/packages-multi-arch/gpg/rocm.gpg"
+    if "/packages-multi-arch/" in path or path.rstrip("/").endswith(
+        "/packages-multi-arch"
+    ):
+        return f"{origin}/packages-multi-arch/gpg/rocm.gpg"
+    if "/rocm/core/packages-asan/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages-asan"
+    ):
+        return f"{origin}/rocm/gpg/packages.gpg"
+    if "/rocm/core/packages/" in path or path.rstrip("/").endswith(
+        "/rocm/core/packages"
+    ):
+        return f"{origin}/rocm/gpg/packages.gpg"
+    if "/rocm/packages/" in path or path.rstrip("/").endswith("/rocm/packages"):
+        return f"{origin}/rocm/packages/gpg/rocm.gpg"
+    if "/packages/" in path or path.rstrip("/").endswith("/packages"):
+        return f"{origin}/packages/gpg/rocm.gpg"
+    if parsed.netloc == "repo.amd.com":
+        return f"{origin}/rocm/packages/gpg/rocm.gpg"
+    return f"{origin}/packages/gpg/rocm.gpg"
+
+
+def get_gpg_key_url_from_release_type(
+    release_type: str,
+    layout: str | None = None,
+) -> str:
+    """Return the canonical GPG key URL for a signed release line and layout.
+
+    Args:
+        release_type: ``prerelease`` / ``prereleases``, ``release`` / ``stable``.
+        layout: ``multi_arch`` or per-family (default).
+
+    Returns:
+        HTTPS URL to ``rocm.gpg`` for the release host and layout.
+
+    Raises:
+        ValueError: If ``release_type`` is unsigned or unknown.
+
+    Examples:
+        prerelease + per_family
+            → https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+        stable (before ROCm 10) + per_family
+            → https://repo.amd.com/rocm/packages/gpg/rocm.gpg
+        prerelease + multi_arch
+            → https://rc.repo.amd.com/rocm/gpg/packages.gpg
+        stable + multi_arch
+            → https://stable.repo.amd.com/rocm/gpg/packages.gpg
+    """
+    rt = _normalize_release_type(release_type)
+    layout_norm = normalize_layout(layout)
+
+    if layout_norm == LAYOUT_MULTI_ARCH:
+        if rt == "prerelease":
+            return "https://rc.repo.amd.com/rocm/gpg/packages.gpg"
+        if rt == "release":
+            return "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
+        raise ValueError(
+            f"GPG key URL not defined for release_type={release_type!r} "
+            f"with layout={layout!r}"
+        )
+
+    if rt == "prerelease":
+        return "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
+    if rt == "release":
+        return "https://repo.amd.com/rocm/packages/gpg/rocm.gpg"
+    raise ValueError(f"Unknown or unsigned release_type: {release_type!r}")
+
+
+def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
+    """Return whether ``get-gpg-url`` should derive a non-empty GPG URL.
+
+    This is a **derivation policy for this helper only**. It does not restrict
+    ``native_linux_package_install_test.py`` or workflow ``gpg_key_url`` inputs: if the
+    caller supplies a GPG URL, install uses it regardless of ``release_type``.
+
+    Args:
+        release_type: Workflow release type, or ``None`` for legacy callers.
+
+    Returns:
+        ``True`` if ``get-gpg-url`` should derive from ``--from-url``; ``False`` if it
+        should emit empty ``gpg_key_url=`` for unsigned lines (``dev``, ``nightly``,
+        ``ci``, empty string).
+
+    Notes:
+        ``None`` means always derive from the package URL (backward compatible).
+        Signed lines: ``prerelease``, ``prereleases``, ``release``, ``stable``.
+    """
+    if release_type is None:
+        return True
+    rt = release_type.strip().lower()
+    return rt in ("prerelease", "prereleases", "release", "stable")
+
+
+def cmd_gpg_key_url(args: argparse.Namespace) -> int:
+    """CLI: ``get-gpg-url`` → writes ``gpg_key_url=`` (or empty) to ``$GITHUB_OUTPUT``.
+
+    When ``--release-type`` is unsigned (dev/nightly/ci), emits empty output so workflows
+    need not pass GPG for typical unsigned repos. Omit ``--release-type`` to always
+    derive from ``--from-url``. Explicit ``gpg_key_url`` on the install workflow or CLI
+    bypasses this helper entirely.
+    """
+    if not gpg_key_url_needed_for_release_type(args.release_type):
+        gha_set_output({"gpg_key_url": ""})
+        return 0
+    try:
+        gpg_url = get_gpg_key_url(args.from_url)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    gha_set_output({"gpg_key_url": gpg_url})
     return 0
 
 
@@ -57,7 +309,22 @@ DATE_ARTIFACT_PATTERN = re.compile(r"^\d{8}-\d+$")
 
 
 def get_repo_sub_folder(s3_prefix: str) -> str:
-    """Return last path segment if it matches YYYYMMDD-<id>, else empty."""
+    """Extract ``YYYYMMDD-<id>`` from an S3 key prefix when present.
+
+    Used to build dev/nightly CDN URLs via :func:`get_repo_url` (per-family or
+    multi-arch layout). Scans the **last** path segment only.
+
+    Args:
+        s3_prefix: S3 key prefix (with or without leading/trailing slashes).
+
+    Returns:
+        The last segment if it matches ``YYYYMMDD-<digits>``; otherwise ``""``.
+
+    Examples:
+        ``v3/packages/deb/20260204-12345`` → ``20260204-12345``
+        ``12345678-linux/packages/deb/20260204-12345`` → ``20260204-12345``
+        ``v3/packages/deb/`` → ``""``
+    """
     segments = [p for p in s3_prefix.strip("/").split("/") if p]
     if not segments:
         return ""
@@ -68,12 +335,106 @@ def get_repo_sub_folder(s3_prefix: str) -> str:
 
 
 def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
+    """CLI: ``get-repo-sub-folder`` → writes ``repo_sub_folder=`` to ``$GITHUB_OUTPUT``."""
     repo_sub_folder = get_repo_sub_folder(args.from_s3_prefix)
-    print(f"repo_sub_folder={repo_sub_folder}")
+    gha_set_output({"repo_sub_folder": repo_sub_folder})
     return 0
 
 
 # --- repo_url ---
+
+
+def get_repo_url_per_family(
+    release_type: str,
+    native_package_type: str,
+    repo_base_url: str,
+    os_profile: str,
+    repo_sub_folder: str,
+) -> str:
+    """Build a per-family native Linux package repo URL (``native_packaging.md``).
+
+    Args:
+        release_type: ``prerelease`` / ``prereleases``, ``release`` / ``stable``,
+            or unsigned lines ``dev``, ``nightly``, ``ci`` (aliases normalized).
+        native_package_type: ``deb`` or ``rpm``.
+        repo_base_url: Scheme + host (e.g. ``https://sample-cdn.example``).
+        os_profile: OS profile slug (e.g. ``ubuntu2404``, ``rhel10``).
+        repo_sub_folder: ``YYYYMMDD-<id>`` for dev/nightly; empty for signed lines.
+
+    Returns:
+        HTTPS URL pointing at the apt/dnf repo root (RPM URLs include ``/x86_64/``).
+
+    Raises:
+        ValueError: If ``release_type`` is empty or unknown.
+    """
+    base = repo_base_url.rstrip("/")
+    rt = _normalize_and_validate_release_type(release_type)
+
+    if rt == "prerelease":
+        if native_package_type == "deb":
+            return f"{base}/packages/{os_profile}"
+        return f"{base}/packages/{os_profile}/x86_64/"
+
+    if rt == "release":
+        if native_package_type == "deb":
+            return f"{base}/rocm/packages/{os_profile}"
+        return f"{base}/rocm/packages/{os_profile}/x86_64/"
+
+    if native_package_type == "deb":
+        return f"{base}/deb/{repo_sub_folder}/"
+    return f"{base}/rpm/{repo_sub_folder}/x86_64/"
+
+
+def get_repo_url_multi_arch(
+    release_type: str,
+    native_package_type: str,
+    repo_base_url: str,
+    os_profile: str,
+    repo_sub_folder: str,
+) -> str:
+    """Build a current multi-arch native Linux package repo URL.
+
+    Args:
+        release_type: ``prerelease``, ``release`` / ``stable``, or unsigned
+            ``dev`` / ``nightly`` / ``ci`` (aliases normalized).
+        native_package_type: ``deb`` or ``rpm``.
+        repo_base_url: Scheme + host.
+        os_profile: OS profile for signed lines (e.g. ``ubuntu2604``, ``rhel10``).
+        repo_sub_folder: ``YYYYMMDD-<id>`` for unsigned lines; ignored for signed.
+
+    Returns:
+        HTTPS URL pointing at the apt/dnf repo root.
+
+    Layout:
+        - prerelease deb: ``{base}/rocm/core/packages/{os_profile}``
+        - release deb: ``{base}/rocm/core/packages/{os_profile}``
+        - nightly deb: ``{base}/rocm/core/packages/deb/{repo_sub_folder}``
+        - nightly rpm: ``{base}/rocm/core/packages/rpm/{repo_sub_folder}/x86_64``
+
+    Raises:
+        ValueError: If ``release_type`` is empty or unknown.
+    """
+    base = repo_base_url.rstrip("/")
+    rt = _normalize_and_validate_release_type(release_type)
+    parent = f"{base}/rocm/core/packages"
+
+    if rt == "prerelease":
+        if native_package_type == "deb":
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
+
+    if rt == "release":
+        if native_package_type == "deb":
+            return f"{parent}/{os_profile}"
+        return f"{parent}/{os_profile}/x86_64/"
+
+    if native_package_type == "deb":
+        if repo_sub_folder:
+            return f"{parent}/deb/{repo_sub_folder}"
+        return f"{parent}/deb"
+    if repo_sub_folder:
+        return f"{parent}/rpm/{repo_sub_folder}/x86_64"
+    return f"{parent}/rpm/x86_64"
 
 
 def get_repo_url(
@@ -82,25 +443,47 @@ def get_repo_url(
     repo_base_url: str,
     os_profile: str,
     repo_sub_folder: str,
+    layout: str | None = None,
 ) -> str:
+    """Build a native Linux package repo URL for the selected layout.
+
+    Args:
+        release_type: Workflow release type (aliases normalized).
+        native_package_type: ``deb`` or ``rpm``.
+        repo_base_url: Scheme + host.
+        os_profile: OS profile slug (e.g. ``ubuntu2404``, ``rhel10``).
+        repo_sub_folder: ``YYYYMMDD-<id>`` for unsigned lines; empty for signed.
+        layout: ``per_family`` (default) or ``multi_arch`` (aliases accepted).
+
+    Returns:
+        HTTPS URL pointing at the apt/dnf repo root.
+
+    Raises:
+        ValueError: If ``layout`` or ``release_type`` is invalid.
+
+    See Also:
+        :func:`get_repo_url_per_family`, :func:`get_repo_url_multi_arch`.
     """
-    Return the full repo URL for install tests.
-    - prerelease + deb: repo_base_url / os_profile
-    - prerelease + rpm: repo_base_url / os_profile / x86_64/
-    - non-prerelease + deb: repo_base_url / deb / repo_sub_folder /
-    - non-prerelease + rpm: repo_base_url / rpm / repo_sub_folder / x86_64/
-    """
-    base = repo_base_url.rstrip("/")
-    if release_type == "prerelease":
-        if native_package_type == "deb":
-            return f"{base}/{os_profile}"
-        return f"{base}/{os_profile}/x86_64/"
-    if native_package_type == "deb":
-        return f"{base}/deb/{repo_sub_folder}/"
-    return f"{base}/rpm/{repo_sub_folder}/x86_64/"
+    layout_norm = normalize_layout(layout)
+    if layout_norm == LAYOUT_MULTI_ARCH:
+        return get_repo_url_multi_arch(
+            release_type=release_type,
+            native_package_type=native_package_type,
+            repo_base_url=repo_base_url,
+            os_profile=os_profile,
+            repo_sub_folder=repo_sub_folder,
+        )
+    return get_repo_url_per_family(
+        release_type=release_type,
+        native_package_type=native_package_type,
+        repo_base_url=repo_base_url,
+        os_profile=os_profile,
+        repo_sub_folder=repo_sub_folder,
+    )
 
 
 def cmd_repo_url(args: argparse.Namespace) -> int:
+    """CLI: ``get-repo-url`` → writes ``repo_url=`` to ``$GITHUB_OUTPUT``."""
     try:
         url = get_repo_url(
             release_type=args.release_type,
@@ -108,20 +491,317 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
             repo_base_url=args.repo_base_url,
             os_profile=args.os_profile,
             repo_sub_folder=args.repo_sub_folder or "",
+            layout=args.layout,
         )
-    except (ValueError, TypeError) as e:
+    except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    print(f"repo_url={url}")
+    gha_set_output({"repo_url": url})
+    return 0
+
+
+# --- public repository stream (RFC0012) ---
+
+# Which repo.amd.com stream a build line's amd-repo-setup package configures.
+#
+# Not s3_buckets.get_release_stream(), which picks the bucket a build publishes
+# into and raises on "release", the line that configures stable. A line absent
+# here has no public stream, and callers skip the package for it.
+#
+# Only the stream name and where it is served are recorded here; its shape,
+# signing and repo id belong to build_repo_setup_package. The key is at
+# <root>/gpg/packages.gpg, outside the packages base, so its URL is built here
+# and passed to the builder whole.
+_STREAM_ROOTS = {
+    "release": {
+        "stream": "stable",
+        "root": "https://stable.repo.amd.com/rocm",
+    },
+    "prerelease": {
+        "stream": "rc",
+        "root": "https://rc.repo.amd.com/rocm",
+    },
+    "nightly": {
+        "stream": "nightly",
+        "root": "https://nightly.repo.amd.com/rocm",
+    },
+}
+
+
+def get_public_repo_release_types() -> tuple[str, ...]:
+    """Return the build lines that configure a public stream, in table order."""
+    return tuple(_STREAM_ROOTS)
+
+
+def get_public_repo_stream(release_type: str) -> str:
+    """Return the stream a build line's package configures (empty if none).
+
+    Note that the build line and the stream are not the same vocabulary and do
+    not always share a name: the ``release`` line configures the ``stable``
+    stream and ``prerelease`` configures ``rc``. Passed to the builder as
+    ``--stream``.
+    """
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["stream"] if entry else ""
+
+
+def get_public_repo_stream_root(release_type: str) -> str:
+    """Return the stream root for a build line (empty if it has no stream)."""
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    return entry["root"] if entry else ""
+
+
+def get_public_repo_base_url(release_type: str) -> str:
+    """Return the packages base URL for a release line (empty if none)."""
+    root = get_public_repo_stream_root(release_type)
+    return f"{root}/core/packages" if root else ""
+
+
+def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
+    """Return the full signing-key URL for a release line (empty if none).
+
+    Passed to the builder as ``--gpg-key-url`` and fetched verbatim. Only a
+    signed stream publishes a key, so an unsigned one yields an empty value
+    even though it has a base URL. ``signed`` comes from
+    ``build_repo_setup_package.is_signed(stream)``, which owns that rule.
+    """
+    root = get_public_repo_stream_root(release_type)
+    if not root or not signed:
+        return ""
+    return f"{root}/gpg/packages.gpg"
+
+
+# --- nightly sub-folder ---
+
+
+# A workflow run id is always numeric. It is interpolated into a value written
+# to $GITHUB_OUTPUT, and gha_set_output writes multi-line values with a heredoc
+# whose delimiter it does not verify, so an unconstrained value could terminate
+# the heredoc early and inject further step outputs. \Z (not $) so a trailing
+# newline is not accepted.
+_RUN_ID_RE = re.compile(r"^[0-9]+\Z")
+
+
+def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
+    """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
+
+    ``today`` is injectable for deterministic tests; it defaults to the current
+    UTC date.
+
+    Raises:
+        ValueError: If ``run_id`` is not a run of digits.
+    """
+    if not _RUN_ID_RE.match(run_id):
+        raise ValueError(f"run_id must be numeric, got {run_id!r}")
+    day = today or datetime.now(timezone.utc).date()
+    return f"{day:%Y%m%d}-{run_id}"
+
+
+# --- container image map ---
+
+
+def get_container_image_map(os_profiles: list[str]) -> dict[str, str]:
+    """Map each OS profile to its container image (for a build matrix)."""
+    return {profile: get_container_image(profile) for profile in os_profiles}
+
+
+# --- amd-repo-setup parameters ---
+
+# These mirror build_repo_setup_package's private _FLAT / _BUILD_ID. They are compared
+# against its public stream_shape(), and a test asserts the two agree.
+_SHAPE_FLAT = "flat"
+_SHAPE_BUILD_ID = "build_id"
+
+
+def cmd_repo_setup_params(args: argparse.Namespace) -> int:
+    """Emit every parameter the amd-repo-setup build matrix needs, in one output.
+
+    Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
+    the build line configures and what follows from it -- ``stream``, ``tier``,
+    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
+    public stream gets all five empty, which callers read as "no package for
+    this line"; the matrix is still emitted.
+    """
+    # Deferred: build_repo_setup_package imports jinja2 at module level, and this
+    # script's other subcommands run in a workflow job that installs no Python
+    # packages. Only this subcommand needs the builder.
+    from build_repo_setup_package import (
+        REPO_ID_PREFIX,
+        is_signed,
+        list_profiles,
+        repo_id,
+        stream_shape,
+    )
+
+    profiles = list_profiles(args.pkg_type)
+    outputs = {
+        "os_profiles": json.dumps(profiles),
+        "images": json.dumps(get_container_image_map(profiles)),
+        "stream": "",
+        "tier": "",
+        "repo_base_url": "",
+        "gpg_key_url": "",
+        "repo_sub_folder": "",
+    }
+    stream = get_public_repo_stream(args.release_type)
+    if stream:
+        shape = stream_shape(stream)
+        if shape not in (_SHAPE_FLAT, _SHAPE_BUILD_ID):
+            print(
+                f"Error: stream {stream!r} has unknown shape {shape!r}", file=sys.stderr
+            )
+            return 1
+        outputs["stream"] = stream
+        # Names the stream's package file (amd-repo-setup-<tier>.<fmt>): the repo
+        # file stem without its prefix, so rc is "stablerc".
+        outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
+        outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
+        outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
+            args.release_type, signed=is_signed(stream)
+        )
+        # A build_id stream serves each build from its own dated folder; a flat
+        # one serves one tree at the root, and the builder rejects a sub-folder
+        # there. The run id is only validated where it is used.
+        if shape == _SHAPE_BUILD_ID:
+            try:
+                outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+    gha_set_output(outputs)
+    return 0
+
+
+# --- extract-gfx-arch ---
+
+
+def extract_gfx_arch(artifact_group: str) -> str:
+    """Normalize GPU architecture token(s) from CI artifact group name(s).
+
+    Takes the substring before the first ``-`` in each group, lowercases it,
+    and joins multiple groups with commas.
+
+    Args:
+        artifact_group: One group or comma/semicolon-separated list
+            (e.g. ``gfx94X-dcgpu`` or ``gfx94X-dcgpu;gfx1100-consumer``).
+
+    Returns:
+        Comma-separated gfx tokens (e.g. ``gfx94x,gfx1100``).
+
+    Raises:
+        ValueError: If ``artifact_group`` is empty or yields no tokens.
+
+    Examples:
+        ``gfx94X-dcgpu`` → ``gfx94x``
+        ``GFX942-server`` → ``gfx942``
+        ``gfx94X-dcgpu,gfx1100-consumer`` → ``gfx94x,gfx1100``
+    """
+    if not artifact_group:
+        raise ValueError("artifact_group cannot be empty")
+
+    # Split on comma or semicolon to handle multiple groups
+    # Replace semicolons with commas for consistent splitting
+    normalized = artifact_group.replace(";", ",")
+    groups = [g.strip() for g in normalized.split(",")]
+
+    # Extract first segment (before dash) and lowercase each
+    archs = [g.split("-")[0].lower() for g in groups if g]
+
+    if not archs:
+        raise ValueError("artifact_group cannot be empty after parsing")
+
+    return ",".join(archs)
+
+
+def cmd_extract_gfx_arch(args: argparse.Namespace) -> int:
+    """CLI: ``extract-gfx-arch`` → writes ``gfx_arch=`` to ``$GITHUB_OUTPUT``."""
+    try:
+        gfx_arch = extract_gfx_arch(args.artifact_group)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    gha_set_output({"gfx_arch": gfx_arch})
+    return 0
+
+
+# --- get-container-image ---
+
+# Maps OS profile prefixes to container images (checked in order; first match wins).
+# Single-profile entries (e.g. "rhel8") require an exact match so "rhel10" does not
+# match the "rhel8" prefix via startswith.
+# TODO: Centralize these floating image references with the other consumers.
+#       See https://github.com/ROCm/TheRock/pull/7683 for example.
+_OS_PROFILE_TO_IMAGE: list[tuple[tuple[str, ...], str]] = [
+    (("sles",), "registry.suse.com/bci/bci-base:16.0"),
+    (("ubuntu", "debian"), "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"),
+    (("rhel8",), "registry.access.redhat.com/ubi8/ubi:8.10"),
+    ((), "registry.access.redhat.com/ubi10/ubi:10.1"),  # default (e.g. rhel10)
+]
+
+# Single-prefix entries that must match the full profile (not startswith).
+_EXACT_PROFILE_PREFIXES = frozenset({"rhel8"})
+
+
+def get_container_image(os_profile: str) -> str:
+    """Return the container image for a given OS profile.
+
+    Examples:
+        ubuntu2404  -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        debian12    -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+        sles16      -> registry.suse.com/bci/bci-base:16.0
+        rhel8       -> registry.access.redhat.com/ubi8/ubi:8.10
+        rhel10      -> registry.access.redhat.com/ubi10/ubi:10.1
+    """
+    profile = os_profile.lower()
+    for prefixes, image in _OS_PROFILE_TO_IMAGE:
+        if not prefixes:
+            return image
+        if len(prefixes) == 1 and prefixes[0] in _EXACT_PROFILE_PREFIXES:
+            if profile == prefixes[0]:
+                return image
+            continue
+        if any(profile.startswith(p) for p in prefixes):
+            return image
+    return _OS_PROFILE_TO_IMAGE[-1][1]  # unreachable but satisfies type checker
+
+
+def cmd_container_image(args: argparse.Namespace) -> int:
+    """CLI: ``get-container-image`` → writes ``container_image=`` to ``$GITHUB_OUTPUT``."""
+    image = get_container_image(args.os_profile)
+    gha_set_output({"container_image": image})
     return 0
 
 
 # --- main ---
 
+_CLI_EPILOG = """
+Testing (unit tests)
+  Prerequisites:
+    - Python 3.10 or newer
+    - Run from the TheROCK repository root
+    - No extra pip packages (tests mock $GITHUB_OUTPUT; stdlib only)
+
+  From repo root:
+    python3 -m unittest \\
+      build_tools.packaging.linux.tests.get_url_repo_params_test -v
+
+  Pass: per-family and multi_arch layout tests OK via subTests in get_url_repo_params_test.py.
+
+  Layout: get-repo-url accepts --layout per_family (default) or multi_arch.
+
+  Optional: export GITHUB_OUTPUT=/tmp/out.txt to inspect CLI output locally.
+"""
+
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse CLI subcommands and dispatch to the matching ``cmd_*`` handler."""
     parser = argparse.ArgumentParser(
-        description="Get URL/repo parameters: base URL (from any URL) or repo_sub_folder (from S3 prefix). Output is KEY=value for GITHUB_OUTPUT.",
+        description=(
+            "Derive native Linux packaging URL parameters for GitHub Actions "
+            "(output is KEY=value for $GITHUB_OUTPUT)."
+        ),
+        epilog=_CLI_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Get operation to run"
@@ -137,9 +817,45 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         metavar="URL",
-        help="Any URL to derive base URL from (scheme + netloc only; e.g. https://example.com/v2/whl → https://example.com)",
+        help=(
+            "Any URL to derive base URL from (scheme + netloc only; e.g. "
+            "https://sample-cdn.example/v2/whl → https://sample-cdn.example)"
+        ),
     )
     p_base.set_defaults(func=cmd_base_url)
+
+    # get-gpg-url: get GPG key URL from package repository URL
+    p_gpg = subparsers.add_parser(
+        "get-gpg-url",
+        help=(
+            "Derive gpg_key_url= for GITHUB_OUTPUT from --from-url. With --release-type, "
+            "only signed lines get a non-empty URL; dev/nightly/ci emit gpg_key_url=. "
+            "Does not affect install when gpg_key_url is passed explicitly in the workflow."
+        ),
+    )
+    p_gpg.add_argument(
+        "--from-url",
+        type=str,
+        required=True,
+        metavar="URL",
+        help=(
+            "Package repository URL to derive GPG key URL from when needed "
+            "(e.g. https://sample-cdn.example/packages/ubuntu2404 → "
+            "…/packages/gpg/rocm.gpg)"
+        ),
+    )
+    p_gpg.add_argument(
+        "--release-type",
+        type=str,
+        default=None,
+        help=(
+            "If set, emit non-empty GPG URL only for signed lines (prerelease/release/stable); "
+            "for dev/nightly/ci print gpg_key_url= (typical unsigned repos). If omitted, "
+            "always derive from --from-url. Install tests still honor an explicit gpg_key_url "
+            "workflow input regardless of this flag."
+        ),
+    )
+    p_gpg.set_defaults(func=cmd_gpg_key_url)
 
     # get-repo-sub-folder: get repo_sub_folder from S3 prefix
     p_repo = subparsers.add_parser(
@@ -158,10 +874,17 @@ def main(argv: list[str] | None = None) -> int:
     # get-repo-url: full repo URL from components (replaces inline logic in workflows)
     p_url = subparsers.add_parser(
         "get-repo-url",
-        help="Get full repo URL from release_type, native_package_type, repo_base_url, os_profile, repo_sub_folder.",
+        help=(
+            "Get full repo URL from release_type, native_package_type, "
+            "repo_base_url, os_profile, repo_sub_folder; optional --layout "
+            "(per_family or multi_arch)."
+        ),
     )
     p_url.add_argument(
-        "--release-type", type=str, required=True, help="e.g. prerelease, dev, nightly"
+        "--release-type",
+        type=str,
+        required=True,
+        help="e.g. prerelease, prereleases, release, stable, dev, nightly, ci",
     )
     p_url.add_argument(
         "--native-package-type",
@@ -189,7 +912,76 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Repo subfolder (e.g. YYYYMMDD-<id> for dev/nightly; empty for prerelease)",
     )
+    p_url.add_argument(
+        "--layout",
+        type=str,
+        default=None,
+        help="Repo layout: per_family (default) or multi_arch (packages-multi-arch/…)",
+    )
     p_url.set_defaults(func=cmd_repo_url)
+
+    # extract-gfx-arch: extract GPU architecture from artifact group
+    p_gfx = subparsers.add_parser(
+        "extract-gfx-arch",
+        help="Extract and normalize GPU architecture from artifact group (e.g. gfx94X-dcgpu → gfx94x).",
+    )
+    p_gfx.add_argument(
+        "--artifact-group",
+        type=str,
+        required=True,
+        metavar="GROUP",
+        help="Artifact group to extract gfx_arch from (e.g. gfx94X-dcgpu, gfx1100-consumer)",
+    )
+    p_gfx.set_defaults(func=cmd_extract_gfx_arch)
+
+    # get-container-image: get container image for an OS profile
+    p_img = subparsers.add_parser(
+        "get-container-image",
+        help=(
+            "Get container image for a given OS profile "
+            "(e.g. ubuntu2404 -> ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest)."
+        ),
+    )
+    p_img.add_argument(
+        "--os-profile",
+        type=str,
+        required=True,
+        help="OS profile (e.g. ubuntu2404, sles16, rhel10)",
+    )
+    p_img.set_defaults(func=cmd_container_image)
+
+    # get-repo-setup-params: every amd-repo-setup build parameter in one output
+    p_rp = subparsers.add_parser(
+        "get-repo-setup-params",
+        help=(
+            "Print os_profiles=, images=, stream=, tier=, repo_base_url=, "
+            "gpg_key_url= and repo_sub_folder= for an amd-repo-setup build. The last "
+            "five are empty for a line with no public repository (e.g. ci/dev)."
+        ),
+    )
+    p_rp.add_argument(
+        "--pkg-type",
+        type=str,
+        required=True,
+        choices=["deb", "rpm"],
+        help="Package type whose OS profiles form the build matrix",
+    )
+    p_rp.add_argument(
+        "--release-type",
+        type=str,
+        required=True,
+        help="Release line (e.g. prerelease, release, nightly)",
+    )
+    p_rp.add_argument(
+        "--run-id",
+        type=str,
+        required=True,
+        help=(
+            "Workflow run id, embedded in the dated build folder of a per-build "
+            "stream. Ignored (and not validated) for other streams."
+        ),
+    )
+    p_rp.set_defaults(func=cmd_repo_setup_params)
 
     args = parser.parse_args(argv)
     return args.func(args)

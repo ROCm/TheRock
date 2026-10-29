@@ -1,0 +1,34 @@
+From 884905d589a5eb1d33af5d191b11fc34a47e736d Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 30 Mar 2026 22:00:46 -0700
+Subject: [PATCH] Explicitly-include-cstdint for gcc 15
+
+Fixes a following error on gcc 15:
+
+therock/build/third-party/elfio/build_elfio/
+dist/include/elfio/elf_types.hpp:30:20:
+error: unknown type name 'uint16_t'
+
+9.5	   30 | using Elf_Half   = uint16_t;
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ elfio/elf_types.hpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/elfio/elf_types.hpp b/elfio/elf_types.hpp
+index c4f6b47..6859b21 100644
+--- a/elfio/elf_types.hpp
++++ b/elfio/elf_types.hpp
+@@ -23,6 +23,8 @@ THE SOFTWARE.
+ #ifndef ELFTYPES_H
+ #define ELFTYPES_H
+ 
++#include <cstdint>
++
+ #ifdef __cplusplus
+ namespace ELFIO {
+ #endif
+-- 
+2.52.0
+

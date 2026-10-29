@@ -172,20 +172,69 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
+def rocm_version_from_package_version(rocm_package_version: str) -> str | None:
+    match = re.match(r"^(\d+\.\d+\.\d+)", rocm_package_version)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
+    """Parse and validate external repo configuration used by super-repo CI."""
+    if not raw:
+        return None
+
+    config = json.loads(raw)
+
+    if not isinstance(config, dict):
+        raise ValueError("EXTERNAL_REPO_CONFIG must be a JSON object")
+
+    submodule_path = config.get("submodule_path")
+    ref = config.get("ref")
+
+    if not isinstance(submodule_path, str) or not submodule_path.strip():
+        raise ValueError(
+            "EXTERNAL_REPO_CONFIG 'submodule_path' must be a non-empty string"
+        )
+
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValueError("EXTERNAL_REPO_CONFIG 'ref' must be a non-empty string")
+
+    return config
+
+
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
     github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
+    rocm_version: str | None = None,
+    external_repo_config: dict | None = None,
 ) -> dict:
     # Enumerate submodules from .gitmodules at the specified commit.
     entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
 
     # Build rows with pins (from tree) and patch lists
     rows = []
+
+    external_repo_submodule_path = None
+    external_repo_ref = None
+    external_repo_matched = False
+
+    if external_repo_config:
+        external_repo_submodule_path = external_repo_config["submodule_path"]
+        external_repo_ref = external_repo_config["ref"]
+
     for e in sorted(entries, key=lambda x: x["path"] or ""):
+        # Normal TheRock build: use the submodule gitlink from the TheRock tree.
         pin = submodule_pin(repo_root, the_rock_commit, e["path"])
+
+        # External-repo CI may build a different commit than the gitlink pinned
+        # in TheRock. Record the commit actually built in the manifest.
+        if external_repo_submodule_path and e["path"] == external_repo_submodule_path:
+            pin = external_repo_ref
+            external_repo_matched = True
         rows.append(
             {
                 "submodule_name": e["name"],
@@ -195,7 +244,11 @@ def build_manifest_schema(
                 "patches": patches_for_submodule_by_name(repo_root, e["name"]),
             }
         )
-
+    if external_repo_config and not external_repo_matched:
+        raise ValueError(
+            f"External repo submodule path {external_repo_submodule_path!r} "
+            "does not match a TheRock submodule path"
+        )
     manifest = {
         "the_rock_commit": the_rock_commit,
     }
@@ -209,6 +262,9 @@ def build_manifest_schema(
     if rocm_package_version:
         manifest["rocm_package_version"] = rocm_package_version
 
+    if rocm_version:
+        manifest["rocm_version"] = rocm_version
+
     manifest["submodules"] = rows
     return manifest
 
@@ -218,6 +274,8 @@ def build_partial_manifest_schema(
     github_job: str | None = None,
     github_run_id: str | None = None,
     rocm_package_version: str | None = None,
+    rocm_version: str | None = None,
+    external_repo_config: dict | None = None,
 ) -> dict:
     # Enumerate submodules from the filesystem .gitmodules file when git metadata
     # is unavailable (for example, source trees with .git removed).
@@ -225,17 +283,35 @@ def build_partial_manifest_schema(
 
     # Build rows without pins, since gitlink SHAs are not available without git metadata.
     rows = []
+
+    external_repo_submodule_path = None
+    external_repo_ref = None
+    external_repo_matched = False
+
+    if external_repo_config:
+        external_repo_submodule_path = external_repo_config["submodule_path"]
+        external_repo_ref = external_repo_config["ref"]
+
     for e in sorted(entries, key=lambda x: x["path"] or ""):
+        pin = None
+
+        if external_repo_submodule_path and e["path"] == external_repo_submodule_path:
+            pin = external_repo_ref
+            external_repo_matched = True
         rows.append(
             {
                 "submodule_name": e["name"],
                 "submodule_path": e["path"],
                 "submodule_url": e["url"],
-                "pin_sha": None,
+                "pin_sha": pin,
                 "patches": patches_for_submodule_by_name(repo_root, e["name"]),
             }
         )
-
+    if external_repo_config and not external_repo_matched:
+        raise ValueError(
+            f"External repo submodule path {external_repo_submodule_path!r} "
+            "does not match a TheRock submodule path"
+        )
     manifest = {
         "the_rock_commit": None,
     }
@@ -248,6 +324,9 @@ def build_partial_manifest_schema(
 
     if rocm_package_version:
         manifest["rocm_package_version"] = rocm_package_version
+
+    if rocm_version:
+        manifest["rocm_version"] = rocm_version
 
     manifest["submodules"] = rows
     return manifest
@@ -283,12 +362,22 @@ def main():
         help="ROCm package version to include in the manifest",
         default=None,
     )
+
     args = ap.parse_args()
 
+    external_repo_config = parse_and_validate_external_repo_config(
+        os.getenv("EXTERNAL_REPO_CONFIG")
+    )
     repo_root = source_root()
     github_job = os.getenv("GITHUB_JOB")
     github_run_id = os.getenv("GITHUB_RUN_ID")
     git_available = has_git_metadata(repo_root)
+
+    rocm_version = (
+        rocm_version_from_package_version(args.rocm_package_version)
+        if args.rocm_package_version
+        else None
+    )
 
     if git_available:
         the_rock_commit = capture(["git", "rev-parse", args.commit], cwd=repo_root)
@@ -298,6 +387,8 @@ def main():
             github_job,
             github_run_id,
             args.rocm_package_version,
+            rocm_version,
+            external_repo_config,
         )
     else:
         manifest = build_partial_manifest_schema(
@@ -305,6 +396,8 @@ def main():
             github_job,
             github_run_id,
             args.rocm_package_version,
+            rocm_version,
+            external_repo_config,
         )
 
     # Merge flag settings into the manifest if provided.

@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+# Pin root:root ownership and xz compression, matching template/debian_rules.j2,
+# which every other ROCm package uses. The archive is root:root either way:
+# without Rules-Requires-Root, dpkg-buildpackage runs "debian/rules binary"
+# under the gain-root command (fakeroot) when not building as root, and with
+# "Rules-Requires-Root: no" dh_builddeb adds --root-owner-group itself.
+override_dh_builddeb:
+	dh_builddeb -- -Zxz --root-owner-group

@@ -4,8 +4,8 @@
 # This will print a SHA image id, which you can run with (or equiv):
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
-# To build and push to a test branch, create a pull request on a branch named:
-#   stage/docker/*
+# To publish a test image from any other branch, run the
+# publish_build_manylinux_x86_64.yml workflow manually against that branch.
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
@@ -21,13 +21,10 @@ ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.46.2 && \
 pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
-######## Repo ########
-RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
-
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
-RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
+RUN ./install_ccache.sh "4.12.1" && rm -rf /install-ccache
 
 ######## SCCache ########
 WORKDIR /install-sccache
@@ -36,26 +33,40 @@ RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
 
 ######## CMake ########
 WORKDIR /install-cmake
-ENV CMAKE_VERSION="3.27.9"
+ENV CMAKE_VERSION="3.31.12"
 COPY install_cmake.sh ./
 RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
 ######## Ninja ########
 WORKDIR /install-ninja
-ENV CMAKE_VERSION="1.12.1"
+ENV NINJA_VERSION="1.12.1"
 COPY install_ninja.sh ./
-RUN ./install_ninja.sh "${CMAKE_VERSION}" && rm -rf /install-ninja
+RUN ./install_ninja.sh "${NINJA_VERSION}" && rm -rf /install-ninja
 
 ######## AWS CLI ######
 WORKDIR /install-awscli
 COPY install_awscli.sh ./
 RUN ./install_awscli.sh && rm -rf /install-awscli
 
+######## GitHub CLI (gh) ########
+WORKDIR /install-gh
+ENV GH_VERSION="2.97.0"
+COPY install_gh.sh ./
+RUN ./install_gh.sh "${GH_VERSION}" && rm -rf /install-gh
+
 ######## Installing Google test #######
 WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
+######## Rust (rustup) ########
+ENV RUSTUP_HOME="/usr/local/rustup"
+ENV CARGO_HOME="/usr/local/cargo"
+WORKDIR /install-rust
+ENV RUST_VERSION="1.95.0"
+COPY install_rust.sh ./
+RUN ./install_rust.sh "${RUST_VERSION}" && rm -rf /install-rust
 
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
@@ -76,7 +87,6 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-gcc-gfortran \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
-      patchelf \
       vim-common \
       git-lfs \
     && yum install -y \
@@ -85,17 +95,17 @@ RUN yum install -y epel-release && \
     && yum clean all && \
     rm -rf /var/cache/yum
 
-
 ######## DVC via pip ######
 # dvc's rpm package includes .so dependencies built against glib 2.29
 # settling for pip install for now, but it installs modules not needed for dvc pull
 # more dvc features may be used in upcoming sequenced builds
-# Also pinning pathspec because a new version of it breaks the private _DIR_MARK
-# API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+# Pin aiobotocore explicitly so rebuilds resolve a deterministic botocore
+# window. Without this, dvc's loose `aiobotocore` bound lets future pip
+# resolutions drift botocore out of the boto3 pin in requirements.txt.
 #
-# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
-#       in requirements.txt
-RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
+# Note: aiobotocore==3.4.0 requires botocore>=1.42.79,<1.42.85; keep the
+#       boto3 pin in requirements.txt aligned with that window.
+RUN pip install 'dvc[s3]==3.67.1' 'aiobotocore==3.4.0' && \
     which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
@@ -117,6 +127,13 @@ RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
 
+######## PatchELF ########
+# Note: requires newer gcc toolset so after gcc activation
+WORKDIR /install-patchelf
+ENV PATCHELF_GIT_REF="d0f70eea5397606c486857e0a105e53ec123904a"
+COPY install_patchelf.sh ./
+RUN ./install_patchelf.sh "${PATCHELF_GIT_REF}" && rm -rf /install-patchelf
+
 ######## Shared Python Interpreters ########
 # Build Python with --enable-shared for embedding (e.g., rocgdb).
 # The manylinux /opt/python builds are statically linked and can't be embedded.
@@ -132,3 +149,7 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+# This build image requires root for CI steps that install build dependencies.
+# trivy:ignore:DS-0002
+USER root

@@ -16,4 +16,6 @@ if(NOT TARGET LibLZMA::LibLZMA)
   set(LIBLZMA_INCLUDE_DIRS "${_IMPORT_PREFIX}/include")
 endif()
 
+set(LIBLZMA_FOUND TRUE)
+
 set(_IMPORT_PREFIX)

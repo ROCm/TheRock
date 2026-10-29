@@ -20,12 +20,18 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+TEST_TYPE = os.getenv("TEST_TYPE", "standard")
 os_type = platform.system().lower()
+# WSL (kernel release "...-microsoft-standard-WSL2", also seen in containers)
+# runs the Linux build and has its own TEST_TO_IGNORE entries.
+if os_type == "linux" and "microsoft" in platform.release().lower():
+    os_type = "wsl"
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_api.py
+# Importing is_asan from amdgpu_family_matrix.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_api import is_asan
+from amdgpu_family_matrix import is_asan
+from configure_asan_env import get_asan_runtime_path
 
 env = os.environ.copy()
 
@@ -66,29 +72,56 @@ TEST_TO_IGNORE = {
             "Unit_hipMemsetASyncMulti",
             "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
             "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
+        ]
+    },
+    "gfx94X-dcgpu": {
+        "linux": [
+            # TODO(#4244): Flaky with compiler submodule update — subprocess aborted.
+            "Unit_NonHost_Printf_loop",
+            "Unit_NonHost_Printf_multiple_Threads",
+            "Unit_NonHost_Printf_BufferAvailability",
         ]
     },
     "gfx110X-all": {
         "windows": [
             "Unit_hipStreamValue_Wait_Blocking - uint64_t",
             "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+        ],
+        # WSL (GPU paravirtualization). The first three each wedge their shard:
+        # after the deliberate kernel fault or the blocking stream wait, the GPU
+        # queue never recovers and every later test in the shard times out.
+        "wsl": [
+            "Unit_hipGetLastError_KernelFailure_ValidAndInvalidOperations",
+            "Unit_hipGetLastError_KernelFailure_TwoStreams",
+            "Unit_hipStreamWaitValue_Default",
+            "Contract_MemBatchDiscard_HipMemPrefetchBatchAsync_PrefetchBatch_IsAcceptedOrUnsupported",
+        ],
+    },
+    "gfx125X-dcgpu": {
+        "linux": [
+            "Unit_hipGraphAddMemcpyNode1D_Positive_Basic",
+            # TODO(#7499): Re-enable test once crash issue is resolved.
+            "Unit_hipVoteSync_All",
         ]
     },
 }
 
+# Tests excluded on every family and platform, merged into the per-family lists
+# above. Use this for failures that are not architecture specific, since nightly
+# runs many more families than presubmit does.
+GENERIC_TEST_TO_IGNORE = [
+    # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
+    "Unit_hip_linker_spirv_input",
+    "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
+]
+
 
 def get_asan_lib_path():
-    arch = platform.machine()
-    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
-    logging.info(f"++ Exec [{CLANG_PATH}]$ {shlex.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip()
+    return str(get_asan_runtime_path(THEROCK_BIN_DIR.resolve().parent))
 
 
 def copy_dlls_exe_path():
@@ -121,6 +154,10 @@ def setup_env(env):
     # Set ROCM Path, to find rocm_agent_enum etc
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
+    # Require HIP YAML entries to exist for all tests
+    env["THEROCK_REQUIRE_HIP_YAML_ENTRIES"] = "1"
+    # required for hip-tests to avoid optimizing out multi-stream tests
+    env["DEBUG_HIP_GRAPH_MIN_OVERLAP"] = str(0)
     if platform.system() == "Linux":
         HIP_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
         logging.info(f"++ Setting LD_LIBRARY_PATH={HIP_LIB_PATH}")
@@ -132,10 +169,16 @@ def setup_env(env):
         if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
             env["HSA_XNACK"] = "1"
+            # Increase stack size of clr threads
+            env["CQ_THREAD_STACK_SIZE"] = "8388608"
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
         copy_dlls_exe_path()
+
+    # Set env vars for gfx125X-dcgpu
+    if AMDGPU_FAMILIES == "gfx125X-dcgpu":
+        env["HSA_ENABLE_SDMA"] = "1"
 
 
 def execute_tests(env):
@@ -152,8 +195,14 @@ def execute_tests(env):
         f"{timeout}",
     ]
 
+    # If quick tests are enabled, run only the smoke test subset
+    if TEST_TYPE == "quick":
+        cmd.extend(["-L", "smoke"])
+
+    ignored_tests = list(GENERIC_TEST_TO_IGNORE)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
-        ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+        ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    if ignored_tests:
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

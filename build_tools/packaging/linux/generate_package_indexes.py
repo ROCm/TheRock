@@ -22,9 +22,10 @@ Examples:
 
 import argparse
 import boto3
+import html
 import os
 from pathlib import Path
-
+from urllib.parse import quote
 
 SVG_DEFS = """<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
 <defs>
@@ -66,7 +67,17 @@ def generate_index_html(directory: str) -> None:
         for entry in os.scandir(directory):
             if entry.name.startswith("."):
                 continue
-            rows.append(f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>')
+            if entry.is_dir():
+                rows.append(
+                    f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>'
+                )
+                continue
+            # Escape only at render: quote() percent-encodes '+' (and any
+            # other unsafe char) in the href, while html.escape() guards the
+            # display text.
+            rows.append(
+                f'<tr><td><a href="{quote(entry.name)}">{html.escape(entry.name)}</a></td></tr>'
+            )
     except PermissionError:
         return
 
@@ -81,7 +92,9 @@ def generate_indexes_recursive(root: str) -> None:
         generate_index_html(d)
 
 
-def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
+def generate_top_index_from_s3(
+    s3, bucket: str, prefix: str, dry_run: bool = False
+) -> None:
     """Generate index.html for top-level directory using S3 Delimiter.
 
     This is much more efficient than listing all objects recursively,
@@ -91,6 +104,7 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
         s3: boto3 S3 client
         bucket: S3 bucket name
         prefix: S3 prefix (e.g., 'deb' or 'rpm')
+        dry_run: If True, log what would be uploaded without uploading.
     """
     print(f"Generating top index from S3: s3://{bucket}/{prefix}/")
 
@@ -114,10 +128,19 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
                 continue
             name = key[len(prefix) + 1 :]
             if "/" not in name:  # Only files at this level
-                rows.append(f'<tr><td><a href="{name}">{name}</a></td></tr>')
+                # Escape only at render: quote() percent-encodes '+' (and
+                # any other unsafe char) in the href, while html.escape()
+                # guards the display text.
+                rows.append(
+                    f'<tr><td><a href="{quote(name)}">{html.escape(name)}</a></td></tr>'
+                )
 
     index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
     index_key = f"{prefix}/index.html"
+
+    if dry_run:
+        print(f"[DRY-RUN] Would upload top index: {index_key} ({len(rows)} entries)")
+        return
 
     print(f"Uploading top index: {index_key}")
     s3.put_object(
@@ -130,7 +153,12 @@ def generate_top_index_from_s3(s3, bucket: str, prefix: str) -> None:
 
 
 def generate_index_from_s3(
-    s3, bucket: str, prefix: str, max_depth: int | None = None
+    s3,
+    bucket: str,
+    prefix: str,
+    max_depth: int | None = None,
+    dry_run: bool = False,
+    skip_top_levels: int = 0,
 ) -> None:
     """Generate index.html files based on what's actually in S3.
 
@@ -143,6 +171,12 @@ def generate_index_from_s3(
         prefix: S3 prefix (e.g., 'deb/20260223-12345')
         max_depth: Maximum directory depth to generate indexes for.
                    None = unlimited (recursive), 0 = only root level, 1 = root + immediate children
+        dry_run: If True, log what would be uploaded without uploading.
+        skip_top_levels: Skip the top N directory levels under prefix.
+                         0 = no skipping (default), 1 = skip prefix root,
+                         2 = skip prefix root + immediate children, ...
+                         Useful when those upper indexes are managed elsewhere
+                         (e.g. via separate --top-prefix invocations).
     """
     depth_msg = (
         f" (max depth: {max_depth})" if max_depth is not None else " (recursive)"
@@ -210,6 +244,14 @@ def generate_index_from_s3(
             if depth > max_depth:
                 continue
 
+        # Skip top-level directories. Depth here is the number of path
+        # components in dir_path: 0 for the prefix root (""), 1 for
+        # immediate children ("deb"), 2 for "deb/dists", etc.
+        if skip_top_levels > 0:
+            top_depth = len(dir_path.split("/")) if dir_path else 0
+            if top_depth < skip_top_levels:
+                continue
+
         rows: list[str] = []
 
         # Add subdirectories first
@@ -231,9 +273,13 @@ def generate_index_from_s3(
                 f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>'
             )
 
-        # Add files
+        # Add files. Escape only at render: quote() percent-encodes '+'
+        # (and any other unsafe char) in the href, while html.escape()
+        # guards the display text.
         for filename in sorted(files):
-            rows.append(f'<tr><td><a href="{filename}">{filename}</a></td></tr>')
+            rows.append(
+                f'<tr><td><a href="{quote(filename)}">{html.escape(filename)}</a></td></tr>'
+            )
 
         index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
 
@@ -241,6 +287,14 @@ def generate_index_from_s3(
             index_key = f"{prefix}/{dir_path}/index.html"
         else:
             index_key = f"{prefix}/index.html"
+
+        if dry_run:
+            print(
+                f"[DRY-RUN] Would upload index: {index_key} "
+                f"({len(subdirs)} subdirs, {len(files)} files)"
+            )
+            uploaded_indexes += 1
+            continue
 
         try:
             print(f"Uploading index: {index_key}")
@@ -254,7 +308,8 @@ def generate_index_from_s3(
         except Exception as e:
             print(f"Error uploading index {index_key}: {e}")
 
-    print(f"Generated and uploaded {uploaded_indexes} index files from S3 state")
+    verb = "Would generate" if dry_run else "Generated and uploaded"
+    print(f"{verb} {uploaded_indexes} index files from S3 state")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -272,16 +327,41 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional max depth for per-prefix index generation.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be uploaded without actually uploading.",
+    )
+    parser.add_argument(
+        "--skip-top-levels",
+        type=int,
+        default=0,
+        help=(
+            "Skip generating index.html for the top N directory levels "
+            "under --prefix. 1 skips just the prefix root, 2 also skips "
+            "its immediate children, etc. Useful when those upper indexes "
+            "are managed by separate --top-prefix invocations."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     s3 = boto3.client("s3")
-    generate_index_from_s3(s3, args.s3_bucket, args.prefix, max_depth=args.max_depth)
+    generate_index_from_s3(
+        s3,
+        args.s3_bucket,
+        args.prefix,
+        max_depth=args.max_depth,
+        dry_run=args.dry_run,
+        skip_top_levels=args.skip_top_levels,
+    )
 
     if args.top_prefix is not None:
-        generate_top_index_from_s3(s3, args.s3_bucket, args.top_prefix)
+        generate_top_index_from_s3(
+            s3, args.s3_bucket, args.top_prefix, dry_run=args.dry_run
+        )
 
 
 if __name__ == "__main__":

@@ -24,8 +24,8 @@ exclude = [
 include = [
   "share/doc/rocprofiler-systems/**"
 ]
+# Test binaries lie under rocprofiler-systems-examples artifact
 [components.test."profiler/rocprofiler-systems/stage"]
 include = [
   "share/rocprofiler-systems/tests/**",
-  "share/rocprofiler-systems/examples/**",
 ]

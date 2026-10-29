@@ -8,12 +8,21 @@ set(CMAKE_CXX_STANDARD 17)
 enable_testing()
 
 function(add_hipdnn_install_test)
-    cmake_parse_arguments(ARG "" "PACKAGE;HEADER" "" ${ARGN})
+    cmake_parse_arguments(ARG "" "PACKAGE;COMPONENT;HEADER" "" ${ARGN})
 
-    find_package(${ARG_PACKAGE} CONFIG REQUIRED)
+    find_package(${ARG_PACKAGE} CONFIG REQUIRED OPTIONAL_COMPONENTS ${ARG_COMPONENT})
     message(STATUS "${ARG_PACKAGE} found")
 
+    # COMPONENT names an optional part of the package. Skip the test when the installed
+    # package was not built with it; if it was, a missing header is then a hard failure.
     set(test_name "test_${ARG_PACKAGE}")
+    if(ARG_COMPONENT)
+        if(NOT ${ARG_PACKAGE}_${ARG_COMPONENT}_FOUND)
+            message(STATUS "${ARG_PACKAGE}: built without ${ARG_COMPONENT}; skipping its test")
+            return()
+        endif()
+        string(APPEND test_name "_${ARG_COMPONENT}")
+    endif()
     set(header "${ARG_HEADER}")
     set(pkg_name "${ARG_PACKAGE}")
     configure_file(
@@ -27,7 +36,11 @@ function(add_hipdnn_install_test)
 endfunction()
 
 add_hipdnn_install_test(PACKAGE hipdnn_backend    HEADER hipdnn_backend.h)
-add_hipdnn_install_test(PACKAGE hipdnn_data_sdk   HEADER hipdnn_data_sdk/data_objects/graph_generated.h)
+add_hipdnn_install_test(PACKAGE hipdnn_data_sdk   HEADER hipdnn_data_sdk/utilities/Constants.hpp)
+add_hipdnn_install_test(PACKAGE hipdnn_flatbuffers_sdk HEADER hipdnn_flatbuffers_sdk/data_objects/graph_generated.h)
 add_hipdnn_install_test(PACKAGE hipdnn_frontend   HEADER hipdnn_frontend.hpp)
 add_hipdnn_install_test(PACKAGE hipdnn_plugin_sdk HEADER hipdnn_plugin_sdk/PluginApi.h)
 add_hipdnn_install_test(PACKAGE hipdnn_test_sdk   HEADER hipdnn_test_sdk/utilities/Seeds.hpp)
+
+add_hipdnn_install_test(PACKAGE hipdnn_frontend COMPONENT cudnn_compatibility
+                        HEADER hipdnn_compatibility/cudnn/cudnn_frontend.h)

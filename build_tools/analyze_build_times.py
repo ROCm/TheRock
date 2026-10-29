@@ -57,7 +57,6 @@ NAME_MAPPING = {
     "rocwmma": "rocWMMA",
     "miopenprovider": "miopenprovider",
     "hipblasltprovider": "hipblasltprovider",
-    "fusilliprovider": "fusilliprovider",
 }
 
 # Top-level directories for ROCm components
@@ -70,6 +69,8 @@ ROCM_COMPONENT_DIRS = {
     "profiler",
     "ml-libs",
     "media-libs",
+    "cv-libs",
+    "storage-libs",
 }
 
 # Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz
@@ -306,10 +307,7 @@ def get_system_info() -> Dict[str, str]:
         pass
 
     # Get CPU cores
-    try:
-        info["cpu_cores"] = str(os.cpu_count() or "Unknown")
-    except Exception:
-        pass
+    info["cpu_cores"] = str(os.cpu_count() or "Unknown")
 
     # Get memory from /proc/meminfo
     try:

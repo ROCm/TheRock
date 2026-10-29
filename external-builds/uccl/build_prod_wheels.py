@@ -30,7 +30,7 @@ Typical usage to build:
 # On Linux, using the default path for the repository:
 python build_prod_wheels.py \
     --output-dir $HOME/tmp/pyout \
-    --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+    --index-url https://rc.repo.amd.com/rocm/whl-next/
 ```
 
 ## Building Linux portable wheels
@@ -127,7 +127,7 @@ def main(argv: list[str]):
 
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb",
         help="Base docker image for UCCL's build",
     )
     p.add_argument(

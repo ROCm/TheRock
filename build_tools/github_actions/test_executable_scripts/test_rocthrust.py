@@ -84,12 +84,9 @@ QUICK_TESTS = [
     "ZipIterator*",
 ]
 
-# Some platforms are less capable than others.
-ctest_parallel_count = 8
-if AMDGPU_FAMILIES == "gfx1152":
-    ctest_parallel_count = 4
-elif AMDGPU_FAMILIES == "gfx1153":
-    ctest_parallel_count = 4
+# CTest runs serially by default; per-GPU overrides can be added below.
+# Example: if AMDGPU_FAMILIES == "gfx1153": ctest_parallel_count = 4
+ctest_parallel_count = 1
 
 # Generate the resource spec file for ctest
 rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
@@ -134,14 +131,12 @@ cmd = [
     f"{ctest_parallel_count}",
     "--resource-spec-file",
     resource_spec_file,
-    "--timeout",
-    "300",
 ]
 
 # If quick tests are enabled, we run quick tests only.
-# Otherwise, we run the normal test suite
+# Otherwise, we run the standard test suite.
 environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "full")
+test_type = os.getenv("TEST_TYPE", "standard")
 if test_type == "quick":
     environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 

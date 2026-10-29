@@ -66,6 +66,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
+
 # zlib provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -98,8 +99,8 @@ add_custom_target(
       # On Windows we only use the static library; skip the shared build
       # to avoid having to track the DLL alongside the static artifact.
       "$<$<BOOL:${WIN32}>:-DZLIB_BUILD_SHARED=OFF>"
-      # Disable writing pc files: we will do so ourselves.
-      -DSKIP_INSTALL_FILES=ON
+      # zlib 1.3.2 dropped SKIP_INSTALL_FILES, so it always installs its own
+      # zlib.pc. patch_install.py removes it; we install our own below.
 
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"

@@ -8,20 +8,27 @@ Full installation and simulate-install test script for ROCm native packages.
 Test modes (--test-type):
 - sanity: Basic test. Repo-based install plus basic verification only
   (steps 1 and 2).
+- quick / standard: CI aliases for sanity.
 - full: Full test. Repo-based install plus basic verification plus full
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
-     ROCm packages (amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}).
+     ROCm packages. Arch suffixes in metapackage names are used only when both
+     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
+     With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
+     With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
+- comprehensive: CI alias for full.
+- install: Repo-based install only (step 1). No rocminfo or component checks.
+  Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
   (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
   actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
-APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
+APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
 ROCM_APT_KEYRING_FILE, ROCM_ZYPP_REPOS_DIR, ROCM_YUM_REPOS_DIR,
 ROCM_RDHC_REL_PATH (relative path from install prefix to rdhc binary).
 
@@ -38,49 +45,86 @@ Prerequisites:
 - Python packages: listed in build_tools/packaging/linux/tests/requirements.txt.
   Install with: pip install -r build_tools/packaging/linux/tests/requirements.txt
   (or from build_tools/packaging/linux/tests: pip install -r requirements.txt).
-  Equivalent one-liner: pip install pyelftools requests prettytable PyYAML
+  Equivalent one-liner: pip install requests prettytable PyYAML
+
+CI typically runs this module under pytest (same file; reporting handled by pytest)::
+
+    pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=short
+
+Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
+For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
+For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
+You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x \\
- --release-type nightly
+         --os-profile ubuntu2404 \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x \\
+         --release-type nightly
 
  # Prerelease DEB with GPG verification
  python3 native_linux_package_install_test.py \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
- --release-type prerelease \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --os-profile ubuntu2404 \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
+         --release-type prerelease \\
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
- # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
+ # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
- --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
- --gfx-arch gfx94x \\
- --release-type nightly
+         --os-profile rhel8 \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/x86_64/ \\
+         --gfx-arch gfx94x \\
+         --release-type nightly
 
  # Prerelease RPM (SLES 16)
  python3 native_linux_package_install_test.py \\
- --os-profile sles16 \\
- --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
- --release-type prerelease \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+         --os-profile sles16 \\
+         --repo-url https://rc.repo.amd.com/rocm/core/packages/sles16/x86_64/ \\
+         --release-type prerelease \\
+         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+         --os-profile ubuntu2404 \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
- --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
- --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+         --os-profile ubuntu2404 \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: repo install only (no verification)
+ python3 native_linux_package_install_test.py --test-type install \\
+         --os-profile ubuntu2404 \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --gfx-arch gfx94x --release-type nightly
+
+ # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
+ # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Versioned generic metapackages (no arch suffix) when --rocm-version is set without --gfx-arch.
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local .deb or .rpm directory
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -89,11 +133,30 @@ Example invocations:
 
 import argparse
 import os
+import re
+import stat
 import subprocess
 import sys
+import time
 import traceback
 from argparse import ArgumentParser, Namespace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import NamedTuple
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from packaging_utils import normalize_target_list
+from native_linux_package_test_common import (
+    ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    VERIFY_KEY_COMPONENTS,
+    build_metapackage_names,
+    derive_package_type,
+    is_sles,
+    major_minor_rocm_version_from_input,
+    run_streaming as _run_streaming,
+)
 
 
 def _env(key: str, default: str) -> str:
@@ -106,22 +169,43 @@ def _env(key: str, default: str) -> str:
 # ROCM_REPO_NAME: logical repo name used for APT list, Zypper/Yum repo file and section id
 # ROCM_APT_*, ROCM_ZYPP_*, ROCM_YUM_*, ROCM_RDHC_REL_PATH
 REPO_NAME = _env("ROCM_REPO_NAME", "rocm-test")
-APT_KEYRING_DIR = _env("ROCM_APT_KEYRING_DIR", "/etc/apt/keyrings")
 APT_SOURCES_LIST = _env(
     "ROCM_APT_SOURCES_LIST", f"/etc/apt/sources.list.d/{REPO_NAME}.list"
 )
-APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", "/etc/apt/keyrings/rocm.gpg")
+# Derived from REPO_NAME like APT_SOURCES_LIST above, and deliberately not
+# /etc/apt/keyrings/rocm.gpg. No package owns that path, but the current
+# documented amdgpu package manager steps set the signing key up there
+# ("wget .../rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg")
+# and point signed-by= at it. This harness writes its keyring the same way, so
+# sharing the path would overwrite the key a host is already using. Distinct
+# from the amd-repo-setup package's own keyring
+# (build_repo_setup_package.DEB_KEYRING_PATH), which is package-owned and lives
+# in a different directory.
+APT_KEYRING_FILE = _env("ROCM_APT_KEYRING_FILE", f"/etc/apt/keyrings/{REPO_NAME}.gpg")
 ZYPP_REPOS_DIR = _env("ROCM_ZYPP_REPOS_DIR", "/etc/zypp/repos.d")
 YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
-VERIFY_KEY_COMPONENTS = [
-    "bin/rocminfo",
-    "bin/hipcc",
-    "bin/clinfo",
-    "include/hip/hip_runtime.h",
-    "lib/libamdhip64.so",
-]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
+
+# Where the amd-repo-setup package's deb repo file lands (rpm: ZYPP_REPOS_DIR /
+# YUM_REPOS_DIR above). File names, key paths and the repo id come from
+# build_repo_setup_package; see RepoSetupPackageContract.
+AMDROCM_DEB_SOURCES_DIR = "/etc/apt/sources.list.d"
+
+
+class RepoSetupPackageContract(NamedTuple):
+    """What an installed amd-repo-setup package leaves on disk for one stream.
+
+    Paths are POSIX strings: they name locations on the target system, not on
+    the host running the harness.
+    """
+
+    stream: str
+    repo_id: str
+    repo_file: str
+    key_file: str
+    signed: bool
+
 
 # Timeouts (seconds) and verification threshold
 GPG_MKDIR_TIMEOUT_SEC = 10
@@ -130,10 +214,45 @@ APT_UPDATE_TIMEOUT_SEC = 120
 ZYPP_CLEAN_TIMEOUT_SEC = 60
 ZYPP_REFRESH_TIMEOUT_SEC = 120
 DNF_CLEAN_TIMEOUT_SEC = 60
+DNF_MAKECACHE_TIMEOUT_SEC = 120
+REPO_SETUP_PACKAGE_INSTALL_TIMEOUT_SEC = 120
+# Retry the post-install metadata refresh so a transient repo/CDN blip does not
+# fail the (network-dependent) config-only run.
+REPO_REFRESH_ATTEMPTS = 3
+REPO_REFRESH_BACKOFF_SEC = 3
 INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
 ROCMINFO_TIMEOUT_SEC = 30
-RDHC_TIMEOUT_SEC = 30
+# rdhc.py ``--all`` runs the full ROCm deployment health check suite; 30s was too
+# short in container CI (timeouts under load). Optional cluster checks are skipped
+# separately via ``--skip-optional-cluster-checks`` in ``test_rdhc``.
+RDHC_TIMEOUT_SEC = 600  # 10 minutes
 VERIFY_MIN_COMPONENTS = 2
+_TEST_TYPE_MAP = {
+    "": "sanity",
+    "quick": "sanity",
+    "standard": "sanity",
+    "comprehensive": "full",
+    "full": "full",
+    "install": "install",
+    "sanity": "sanity",
+    "simulate": "simulate",
+}
+
+
+def _normalize_test_type(test_type: str | None) -> str:
+    """Map shared CI test types to native package install test modes.
+
+    quick/standard/empty -> sanity, comprehensive/full -> full.
+    Native modes (install/sanity/full/simulate) are also accepted directly.
+    """
+    normalized = (test_type or "").strip().lower()
+    try:
+        return _TEST_TYPE_MAP[normalized]
+    except KeyError as e:
+        valid = ", ".join(sorted(k or "<empty>" for k in _TEST_TYPE_MAP))
+        raise ValueError(
+            f"Unsupported test_type {test_type!r}. Expected one of: {valid}."
+        ) from e
 
 
 def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
@@ -189,62 +308,63 @@ def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
         return False
 
 
-def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
-    """Run a command with streaming stdout/stderr and return its exit code.
-
-    Lines are printed as they are produced. Raises subprocess.TimeoutExpired
-    (after killing the process) or OSError on failure.
-    """
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    try:
-        for line in process.stdout:
-            print(line.rstrip())
-            sys.stdout.flush()
-        return process.wait(timeout=timeout_sec)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        raise
-
-
 class NativeLinuxPackageInstallTest:
     """Runner for the native Linux package install test (repo setup, install, verification)."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
-        """Derive package type from OS profile.
+        """Derive package type from OS profile (delegates to shared helper)."""
+        return derive_package_type(os_profile)
 
-        Args:
-        os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
-
-        Returns:
-        Package type ('deb' or 'rpm')
-        """
-        os_profile_lower = os_profile.lower()
-        if os_profile_lower.startswith(("ubuntu", "debian")):
-            return "deb"
-        elif os_profile_lower.startswith(
-            ("rhel", "sles", "almalinux", "centos", "azl")
-        ):
-            return "rpm"
-        else:
-            raise ValueError(
-                f"Unable to derive package type from OS profile: {os_profile}. "
-                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
-            )
+    @staticmethod
+    def _major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
+        """Parse ROCm version for metapackage names (delegates to shared helper)."""
+        return major_minor_rocm_version_from_input(rocm_version)
 
     def _is_sles(self) -> bool:
-        """Check if the OS profile is SLES (SUSE Linux Enterprise Server).
+        """Return True when the OS profile is SLES (delegates to shared helper)."""
+        return is_sles(self.os_profile)
 
-        Returns:
-        True if SLES, False otherwise
+    def _repo_setup_package_contract(self) -> RepoSetupPackageContract:
+        """Return the repo file, key and repo id the amd-repo-setup package installs.
+
+        Read from build_repo_setup_package, which renders the package, so the harness
+        looks for the names the package actually ships. The release line maps to
+        a stream through get_url_repo_params, the same mapping the build uses.
+
+        Raises:
+            ValueError: If the release line has no public stream.
         """
-        return self.os_profile.lower().startswith("sles")
+        # Deferred: only the package mode needs build_repo_setup_package (and the
+        # jinja2 it imports), so the harness's other modes do not depend on it.
+        from build_repo_setup_package import (
+            DEB_KEYRING_PATH,
+            RPM_GPG_KEY_PATH,
+            is_signed,
+            repo_id,
+        )
+        from get_url_repo_params import get_public_repo_stream
+
+        stream = get_public_repo_stream(self.release_type)
+        if not stream:
+            raise ValueError(
+                f"release type {self.release_type!r} has no public repo.amd.com stream"
+            )
+        rid = repo_id(stream)
+        if self.package_type == "deb":
+            repo_file = PurePosixPath(AMDROCM_DEB_SOURCES_DIR) / f"{rid}.sources"
+            key_file = DEB_KEYRING_PATH
+        else:
+            repo_dir = ZYPP_REPOS_DIR if self._is_sles() else YUM_REPOS_DIR
+            repo_file = PurePosixPath(repo_dir) / f"{rid}.repo"
+            key_file = RPM_GPG_KEY_PATH
+        return RepoSetupPackageContract(
+            stream=stream,
+            repo_id=rid,
+            repo_file=str(repo_file),
+            key_file=key_file,
+            signed=is_signed(stream),
+        )
 
     def __init__(
         self,
@@ -253,41 +373,69 @@ class NativeLinuxPackageInstallTest:
         release_type: str = "nightly",
         install_prefix: str | None = None,
         gfx_arch: str | list[str] | None = None,
+        rocm_version: str | None = None,
         gpg_key_url: str | None = None,
+        build_variant: str = "",
+        repo_setup_package_dir: str | None = None,
+        repo_config_only: bool = False,
     ):
         """Initialize the native Linux package install test runner.
 
         Args:
-        repo_url: Full repository URL (constructed in YAML)
+        repo_url: Full repository URL (constructed in YAML). May be empty/None when
+        repo_setup_package_dir is set (the amd-repo-setup package supplies the repo
+        URL).
         os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3)
         release_type: Type of release ('nightly' or 'prerelease')
         install_prefix: Installation prefix (default: /opt/rocm/core)
-        gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
-        Only the first element is used for package name and installation.
+        gfx_arch: Optional GPU architecture(s). Used in package names only
+        together with ``rocm_version``; otherwise ignored for install targets.
+        rocm_version: Optional ROCm release (e.g. ``7.13`` or ``7.13.1``).
+        Major.minor only is used in package names. With ``gfx_arch`` and
+        ``rocm_version``: ``amdrocm{version}-{arch}`` per arch. With
+        ``rocm_version`` only: ``amdrocm{version}`` / ``amdrocm-core-sdk{version}``.
+        If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
+        does not add arch suffixes).
         gpg_key_url: GPG key URL
+        build_variant: Build variant (e.g. 'asan', 'host-asan', 'asan-debug',
+        'host-asan-debug'). When it contains 'asan', '-asan' is inserted before
+        the version suffix in package names so that variant packages are
+        tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
+        ``amdrocm7.15-gfx942``). Debug variants collapse to the same '-asan'
+        name as their non-debug counterpart — there is no separate
+        amdrocm-asan-debug package.
+        repo_setup_package_dir: Directory holding the built ``amd-repo-setup``
+        package. When set, the repository is configured by installing that
+        package instead of writing repo files directly.
+        repo_config_only: With ``repo_setup_package_dir``, install the package and
+        verify the repo config, then stop (do not install ROCm).
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
-        self.repo_url = repo_url.rstrip("/")
+        # repo_url may be empty/None in install-via-package mode (the package
+        # supplies it); tolerate both without raising.
+        self.repo_url = (repo_url or "").rstrip("/")
         self.release_type = release_type.lower()
+        self.repo_setup_package_dir = repo_setup_package_dir
+        self.repo_config_only = repo_config_only
         self.install_prefix = install_prefix
-        # Normalize to list; only the first element is used for now
-        if gfx_arch is None:
-            self.gfx_arch_list: list[str] = ["gfx94x"]
-        elif isinstance(gfx_arch, str):
-            self.gfx_arch_list = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
-        else:
-            self.gfx_arch_list = [a for a in gfx_arch if a and str(a).strip()] or [
-                "gfx94x"
-            ]
-        self.gfx_arch = self.gfx_arch_list[0].lower()
+        self.gfx_arch_list = normalize_target_list(
+            gfx_arch, lowercase=True, dedupe=True
+        )
+        self.rocm_version_major_minor = self._major_minor_rocm_version_from_input(
+            rocm_version
+        )
+        # Primary arch (compat / display): first listed after normalization, else unset
+        self.gfx_arch: str | None = (
+            self.gfx_arch_list[0] if self.gfx_arch_list else None
+        )
         self.gpg_key_url = gpg_key_url
-
-        # Packages to install, in order
-        self.package_names = [
-            f"amdrocm-{self.gfx_arch}",
-            f"amdrocm-core-sdk-{self.gfx_arch}",
-        ]
+        self.build_variant = build_variant.strip().lower()
+        self.package_names = build_metapackage_names(
+            gfx_arch=self.gfx_arch_list,
+            rocm_version=rocm_version,
+            build_variant=self.build_variant,
+        )
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -305,15 +453,20 @@ class NativeLinuxPackageInstallTest:
         print(f"\nGPG Key URL: {self.gpg_key_url}")
 
         if self.package_type == "deb":
-            # For DEB, import GPG key using pipeline approach
-            keyring_dir = Path(APT_KEYRING_DIR)
-            keyring_file = keyring_dir / "rocm.gpg"
+            # Write to the same path the sources entry pins with signed-by=.
+            # These were separate expressions that happened to agree, so any
+            # change to one silently broke apt's ability to find the keyring.
+            # PurePosixPath, not Path: these are paths on the target Linux
+            # filesystem handed to mkdir(1), tee(1) and chmod(1). Path follows
+            # the local flavour, so on Windows it renders "\etc\apt\keyrings".
+            keyring_file = PurePosixPath(APT_KEYRING_FILE)
+            keyring_dir = keyring_file.parent
 
             try:
                 # Create keyring directory
                 print(f"\nCreating keyring directory: {keyring_dir}...")
                 subprocess.run(
-                    ["mkdir", "--parents", "--mode=0755", str(keyring_dir)],
+                    ["sudo", "mkdir", "--parents", "--mode=0755", str(keyring_dir)],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -321,26 +474,42 @@ class NativeLinuxPackageInstallTest:
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
-                # Download, dearmor, and write GPG key using pipeline
-                # wget URL -O - | gpg --dearmor | tee keyring_file > /dev/null
+                # Download, dearmor and write the key as three list-form calls
+                # rather than one shell pipeline: the URL and the keyring path
+                # are both configurable, and interpolating them into a shell
+                # string makes them command injection vectors.
                 print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
-                pipeline_cmd = (
-                    f"wget -q -O - {self.gpg_key_url} | "
-                    f"gpg --dearmor | "
-                    f"tee {keyring_file} > /dev/null"
-                )
-
-                subprocess.run(
-                    pipeline_cmd,
-                    shell=True,
+                armored = subprocess.run(
+                    ["wget", "-q", "-O", "-", self.gpg_key_url],
                     check=True,
                     stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                dearmored = subprocess.run(
+                    ["gpg", "--dearmor"],
+                    input=armored,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
+                ).stdout
+                subprocess.run(
+                    ["sudo", "tee", str(keyring_file)],
+                    input=dearmored,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     timeout=GPG_KEY_TIMEOUT_SEC,
                 )
 
                 # Set proper permissions on the keyring file
-                keyring_file.chmod(0o644)
+                subprocess.run(
+                    ["sudo", "chmod", "0644", str(keyring_file)],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 print(f"[PASS] GPG key imported to {keyring_file}")
                 return True
 
@@ -348,6 +517,13 @@ class NativeLinuxPackageInstallTest:
                 print(f"[FAIL] Failed to setup GPG key: {e}")
                 if e.stderr:
                     print(f"Error output: {e.stderr.decode()}")
+                return False
+            except subprocess.TimeoutExpired as e:
+                # TimeoutExpired is a SubprocessError, not an OSError or a
+                # CalledProcessError, so neither handler around it catches one.
+                # Without this the whole run dies on a slow mirror instead of
+                # reporting a failed key import like every other failure here.
+                print(f"[FAIL] Timed out setting up GPG key: {e}")
                 return False
             except OSError as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
@@ -381,18 +557,26 @@ class NativeLinuxPackageInstallTest:
         sources_list = Path(APT_SOURCES_LIST)
 
         if self.gpg_key_url:
-            # Use GPG key verification
-            apt_keyring = Path(APT_KEYRING_FILE)
+            # Use GPG key verification (arch=amd64 matches ROCm Ubuntu install docs)
+            # PurePosixPath for the same reason: this lands in signed-by= inside
+            # a sources file on the target, not on the machine running the test.
+            apt_keyring = PurePosixPath(APT_KEYRING_FILE)
             repo_entry = f"deb [arch=amd64 signed-by={apt_keyring}] {self.repo_url} stable main\n"
         else:
-            # No GPG check (trusted=yes)
+            # No GPG check (trusted=yes; arch=amd64 matches install_rocm_packages.sh)
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
-            sources_list.write_text(repo_entry, encoding="utf-8")
+            subprocess.run(
+                ["sudo", "tee", str(sources_list)],
+                input=repo_entry.encode(),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
             print(f"[PASS] Repository added to {sources_list}")
             print(f" {repo_entry.strip()}")
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             print(f"[FAIL] Failed to add repository: {e}")
             return False
 
@@ -400,7 +584,9 @@ class NativeLinuxPackageInstallTest:
         print("\nUpdating package lists...")
         print("=" * 80)
         try:
-            return_code = _run_streaming(["apt", "update"], APT_UPDATE_TIMEOUT_SEC)
+            return_code = _run_streaming(
+                ["sudo", "apt", "update"], APT_UPDATE_TIMEOUT_SEC
+            )
             if return_code == 0:
                 print("\n[PASS] Package lists updated")
                 return True
@@ -605,7 +791,7 @@ gpgcheck=0
         print(f"\nPackages to install (in order): {self.package_names}")
 
         # Install using apt (packages in list order)
-        cmd = ["apt", "install", "-y"] + self.package_names
+        cmd = ["sudo", "apt", "install", "-y"] + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
         print("=" * 80)
         print("Installation progress (streaming output):\n")
@@ -683,6 +869,201 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
+    def _find_repo_setup_package(self) -> Path | None:
+        """Locate the built amd-repo-setup package in repo_setup_package_dir.
+
+        Globs in Python (no shell) and requires exactly one match for this
+        package type. Returns the resolved path, or None on error.
+        """
+        directory = Path(self.repo_setup_package_dir)
+        if not directory.is_dir():
+            print(
+                "[FAIL] --repo-setup-package-dir is not a directory: "
+                f"{self.repo_setup_package_dir}"
+            )
+            return None
+        from build_repo_setup_package import PACKAGE_NAME
+
+        # Matches the builder's file names (<name>_<version>_all.deb,
+        # <name>-<version>-<release>.noarch.rpm) and the published copies'
+        # (<name>-<tier>.<fmt>).
+        pattern = (
+            f"{PACKAGE_NAME}*.deb"
+            if self.package_type == "deb"
+            else f"{PACKAGE_NAME}*.rpm"
+        )
+        matches = sorted(directory.glob(pattern))
+        if not matches:
+            print(f"[FAIL] No {pattern} found in {self.repo_setup_package_dir}")
+            return None
+        if len(matches) > 1:
+            print(
+                f"[FAIL] Multiple {pattern} found in "
+                f"{self.repo_setup_package_dir}: {matches}"
+            )
+            return None
+        return matches[0].resolve()
+
+    def install_repo_setup_package(self) -> bool:
+        """Install the amd-repo-setup package, then refresh the repo it configures.
+
+        The package itself is unsigned, so the local install skips package
+        signature checks; the repository the package configures keeps its own
+        gpgcheck setting. The metadata refresh is scoped to the amdrocm repo.
+
+        Returns:
+        True if the package installed and the repo metadata refreshed.
+        """
+        print("\n" + "=" * 80)
+        print("CONFIGURING REPOSITORY VIA amd-repo-setup PACKAGE")
+        print("=" * 80)
+
+        try:
+            contract = self._repo_setup_package_contract()
+        except ValueError as e:
+            print(f"[FAIL] {e}")
+            return False
+        pkg = self._find_repo_setup_package()
+        if pkg is None:
+            return False
+        print(f"\nRepo package: {pkg}")
+        print(f"Stream: {contract.stream} (repo id {contract.repo_id})")
+
+        if self.package_type == "deb":
+            install_cmd = ["sudo", "apt", "install", "-y", str(pkg)]
+        elif self._is_sles():
+            install_cmd = [
+                "zypper",
+                "--non-interactive",
+                "--no-gpg-checks",
+                "install",
+                "-y",
+                str(pkg),
+            ]
+        else:
+            install_cmd = ["dnf", "install", "-y", "--nogpgcheck", str(pkg)]
+
+        print(f"\nInstalling repo package: {' '.join(install_cmd)}")
+        try:
+            rc = _run_streaming(install_cmd, REPO_SETUP_PACKAGE_INSTALL_TIMEOUT_SEC)
+        except subprocess.TimeoutExpired:
+            print("[FAIL] Installing amd-repo-setup package timed out")
+            return False
+        except OSError as e:
+            print(f"[FAIL] Error installing amd-repo-setup package: {e}")
+            return False
+        if rc != 0:
+            print(f"[FAIL] Failed to install amd-repo-setup package (exit code: {rc})")
+            return False
+        print("[PASS] amd-repo-setup package installed")
+
+        # Refresh metadata for the repo the package just configured. dnf and
+        # zypper are scoped to it; apt update is repo-wide, so a failing
+        # unrelated source in the base image also fails this step.
+        if self.package_type == "deb":
+            refresh_cmd = ["sudo", "apt", "update"]
+            refresh_timeout = APT_UPDATE_TIMEOUT_SEC
+        elif self._is_sles():
+            refresh_cmd = [
+                "zypper",
+                "--non-interactive",
+                "--gpg-auto-import-keys",
+                "refresh",
+                contract.repo_id,
+            ]
+            refresh_timeout = ZYPP_REFRESH_TIMEOUT_SEC
+        else:
+            refresh_cmd = [
+                "dnf",
+                "makecache",
+                "--disablerepo=*",
+                f"--enablerepo={contract.repo_id}",
+            ]
+            refresh_timeout = DNF_MAKECACHE_TIMEOUT_SEC
+
+        print(f"\nRefreshing repository metadata: {' '.join(refresh_cmd)}")
+        for attempt in range(1, REPO_REFRESH_ATTEMPTS + 1):
+            try:
+                rc = _run_streaming(refresh_cmd, refresh_timeout)
+            except subprocess.TimeoutExpired:
+                rc = None
+                print("[WARN] Repository metadata refresh timed out")
+            except OSError as e:
+                rc = None
+                print(f"[WARN] Error refreshing repository metadata: {e}")
+            if rc == 0:
+                print("[PASS] Repository metadata refreshed")
+                return True
+            if attempt < REPO_REFRESH_ATTEMPTS:
+                time.sleep(REPO_REFRESH_BACKOFF_SEC * attempt)
+                print(
+                    f"Retrying repository metadata refresh "
+                    f"({attempt + 1}/{REPO_REFRESH_ATTEMPTS})..."
+                )
+        print("[FAIL] Failed to refresh repository metadata")
+        return False
+
+    def assert_repo_configured(self) -> bool:
+        """Verify the amd-repo-setup package dropped the expected repo config.
+
+        Checks the repo file exists and has a ``URIs:``/``baseurl=`` line and,
+        for signed streams, that the signing key was installed too. Where to
+        look comes from _repo_setup_package_contract().
+
+        Returns:
+        True if the on-disk repo configuration is present and well-formed.
+        """
+        print("\n" + "=" * 80)
+        print("VERIFYING REPOSITORY CONFIGURATION")
+        print("=" * 80)
+
+        try:
+            contract = self._repo_setup_package_contract()
+        except ValueError as e:
+            print(f"[FAIL] {e}")
+            return False
+        signed = contract.signed
+        repo_file = Path(contract.repo_file)
+        key_file = Path(contract.key_file)
+        ok = True
+
+        if self.package_type == "deb":
+            # deb822 marker (independent of the repo host, which need not contain
+            # "rocm" for a mirror).
+            marker = "URIs:"
+        else:
+            marker = "baseurl="
+
+        if repo_file.is_file():
+            content = repo_file.read_text(encoding="utf-8", errors="replace")
+            print(f"[PASS] Repo file present: {repo_file}")
+            print(content)
+            # Match the marker at the start of a line so a file that only
+            # mentions it in a comment is not accepted as configured.
+            if not any(line.startswith(marker) for line in content.splitlines()):
+                print(
+                    f"[FAIL] Repo file missing expected {marker!r} entry: {repo_file}"
+                )
+                ok = False
+        else:
+            print(f"[FAIL] Repo file not found: {repo_file}")
+            ok = False
+
+        if signed:
+            if key_file.is_file():
+                print(f"[PASS] Signing key present: {key_file}")
+            else:
+                print(f"[FAIL] Signing key not found (signed stream): {key_file}")
+                ok = False
+        else:
+            print("[INFO] Unsigned stream: no signing key expected")
+
+        if ok:
+            print("\n[PASS] Repository configuration verified")
+        else:
+            print("\n[FAIL] Repository configuration verification failed")
+        return ok
+
     def run_repo_setup_and_install(self) -> bool:
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
@@ -694,9 +1075,45 @@ gpgcheck=0
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
-        print(f"Repository URL: {self.repo_url}")
+        # Log how GPU arch relates to package_names (same four cases as __init__).
+        if self.gfx_arch_list and self.rocm_version_major_minor:
+            print(f"GPU Architecture(s): {self.gfx_arch_list} (used in package names)")
+        elif self.gfx_arch_list:
+            print(
+                f"GPU Architecture(s): {self.gfx_arch_list} "
+                "(not used in package names without --rocm-version / "
+                f"{ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION})"
+            )
+        else:
+            ver = self.rocm_version_major_minor
+            if ver:
+                print(
+                    "GPU Architecture(s): (none — generic versioned packages "
+                    f"amdrocm{ver}, amdrocm-core-sdk{ver})"
+                )
+            else:
+                print(
+                    "GPU Architecture(s): (none — generic packages amdrocm, amdrocm-core-sdk)"
+                )
+        print(f"Repository URL: {self.repo_url or '(from amd-repo-setup package)'}")
         print(f"Packages (in order): {self.package_names}")
 
+        # Install-via-package mode: the amd-repo-setup package configures the repo.
+        if self.repo_setup_package_dir:
+            if not self.install_repo_setup_package():
+                return False
+            if not self.assert_repo_configured():
+                return False
+            if self.repo_config_only:
+                print(
+                    "\n[PASS] Repo configured via amd-repo-setup package (config-only)"
+                )
+                return True
+            if self.package_type == "deb":
+                return self.install_deb_packages()
+            return self.install_rpm_packages()
+
+        # Default: configure the repo directly, then install.
         if self.package_type == "deb":
             if not self.setup_deb_repository():
                 return False
@@ -719,6 +1136,12 @@ gpgcheck=0
         print("STEP 2: BASIC INSTALL VERIFICATION")
         print("=" * 80)
 
+        if not self.install_prefix:
+            # Reachable when a non-config-only run omits --install-prefix; report
+            # the missing option instead of failing inside Path().
+            print("\n[FAIL] --install-prefix is required to verify an installation")
+            return False
+
         install_path = Path(self.install_prefix)
         if not install_path.exists():
             print(f"\n[FAIL] Installation directory not found: {self.install_prefix}")
@@ -738,6 +1161,11 @@ gpgcheck=0
                 print(f" [WARN] {component} (not found)")
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
+
+        # Verify installed files are owned by root:root and have safe
+        # permissions (no group/other-writable paths or setuid/setgid bits),
+        # which guards against local PATH-hijack privilege escalation.
+        security_ok = self.verify_installed_file_security()
 
         # Check installed packages
         print("\nChecking installed packages:")
@@ -774,6 +1202,11 @@ gpgcheck=0
         except subprocess.CalledProcessError:
             print(" [WARN] Could not query installed packages")
 
+        # Verify installed ELF files use RPATH and not RUNPATH.
+        if not self.verify_no_runpath():
+            print("\n[FAIL] Basic verification FAILED (ELF files still using RUNPATH)")
+            return False
+
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
         if rocminfo_path.exists():
@@ -800,11 +1233,241 @@ gpgcheck=0
             except OSError as e:
                 print(f" [WARN] Could not run rocminfo: {e}")
 
-        if found_count >= VERIFY_MIN_COMPONENTS:
-            print("\n[PASS] Basic verification PASSED")
-            return True
-        print("\n[FAIL] Basic verification FAILED (insufficient components)")
-        return False
+        if found_count < VERIFY_MIN_COMPONENTS:
+            print("\n[FAIL] Basic verification FAILED (insufficient components)")
+            return False
+        if not security_ok:
+            print(
+                "\n[FAIL] Basic verification FAILED "
+                "(files not owned by root or with insecure permissions)"
+            )
+            return False
+        print("\n[PASS] Basic verification PASSED")
+        return True
+
+    @staticmethod
+    def _format_flagged_reason(st: os.stat_result) -> str:
+        """Format an owner/group/mode + 'why flagged' annotation from a stat result.
+
+        Renders which rule(s) a path violated (non-root owner, group/other
+        writable, setuid/setgid on a regular file) so the CI log shows *why*
+        each path was flagged rather than just its name. Mirrors the flagging
+        logic: symlink mode bits are ignored (only ownership is meaningful for
+        links) and the setuid/setgid rule applies to regular files only, since
+        setgid on a directory is a normal, benign group-inheritance pattern.
+
+        Returns the bare annotation body (no surrounding parentheses) so callers
+        can wrap it as needed.
+        """
+        mode = st.st_mode
+        reasons = []
+        if st.st_uid != 0 or st.st_gid != 0:
+            reasons.append("non-root-owner")
+        if not stat.S_ISLNK(mode):
+            if mode & 0o002:
+                reasons.append("other-writable")
+            if mode & 0o020:
+                reasons.append("group-writable")
+            if stat.S_ISREG(mode) and mode & (stat.S_ISUID | stat.S_ISGID):
+                reasons.append("setuid/setgid")
+        why = ",".join(reasons) if reasons else "?"
+        return f"uid={st.st_uid} gid={st.st_gid} mode={stat.S_IMODE(mode):04o} -> {why}"
+
+    @classmethod
+    def _describe_flagged_path(cls, path: str) -> str:
+        """Best-effort ``(owner/group/mode -> why)`` annotation for a ``find`` hit.
+
+        ``find`` prints only names, so re-``lstat`` the path to explain why it
+        was flagged. The prefix itself is often a symlink that ``find -H``
+        follows and flags via its *target*; ``lstat`` would only see the link's
+        meaningless ``0777`` bits, so for a symlink we additionally ``stat`` the
+        target and report that. Never raises: on any error it returns an
+        annotation noting the failure so reporting is unaffected.
+        """
+        try:
+            st = os.lstat(path)
+        except OSError as e:
+            return f"(stat failed: {e.strerror or e})"
+        if stat.S_ISLNK(st.st_mode):
+            try:
+                target = os.stat(path)
+            except OSError as e:
+                return f"(symlink; target stat failed: {e.strerror or e})"
+            return f"(symlink target: {cls._format_flagged_reason(target)})"
+        return f"({cls._format_flagged_reason(st)})"
+
+    def verify_installed_file_security(self) -> bool:
+        """Verify installed files are owned by root:root with safe permissions.
+
+        Combines two related install-tree security checks into a single
+        traversal. A path under the prefix is flagged when any of the following
+        holds:
+
+        - Ownership: its owner uid or group gid is not 0 (not ``root:root``);
+          a non-root-owned path can be tampered with by that owner.
+        - Writability: it is writable by group or other (mode bits ``0o022``).
+          This would let an unprivileged user drop or replace a binary in a
+          directory on ``PATH`` and have another user (or root) execute it.
+          ROCm ships no group/other-writable paths (including sticky
+          directories), so any such path is flagged.
+        - setuid/setgid on a **regular file**: it carries mode bits ``0o6000``,
+          a direct privilege-escalation surface. This rule applies to regular
+          files only: setgid on a *directory* is a normal, benign
+          group-inheritance pattern (``drwxr-sr-x``) and is not flagged.
+
+        Symbolic links are exempt from the permission rules: on Linux a
+        symlink's own mode bits are always ``lrwxrwxrwx`` and are ignored by
+        the kernel (the target's permissions govern access), so checking them
+        would produce false positives. The install prefix itself is commonly a
+        symlink (e.g. ``/opt/rocm/core`` -> ``/opt/rocm/core-X.Y``), so
+        ``find -H`` follows that top-level link to scan the real tree while not
+        following links found *inside* the tree. ``-xdev`` keeps the scan on the
+        prefix's own filesystem so bind mounts inside the tree are not crossed.
+
+        Uses ``find`` (C-level traversal) for speed on large install trees and
+        falls back to a pure-Python ``os.walk`` scan if ``find`` is unavailable
+        so the check is not silently skipped.
+
+        Returns:
+        True if no offending path is found (or the check could not be run),
+        False if any offending path is found.
+        """
+        print("\nVerifying installed files are owned by root with safe permissions...")
+        # PurePosixPath, not Path: this is a path on the target Linux filesystem
+        # handed to find(1). Path follows the local flavour, so on Windows it
+        # renders "\opt\rocm\core" and the scan silently targets the wrong path.
+        install_prefix = str(PurePosixPath(self.install_prefix))
+        try:
+            result = subprocess.run(
+                [
+                    "find",
+                    # follow the prefix if it is a symlink, but not links inside
+                    "-H",
+                    install_prefix,
+                    # do not cross into other filesystems mounted under prefix
+                    "-xdev",
+                    "(",
+                    # not owned by root:root
+                    "(",
+                    "!",
+                    "-uid",
+                    "0",
+                    "-o",
+                    "!",
+                    "-gid",
+                    "0",
+                    ")",
+                    "-o",
+                    # insecure permissions
+                    "(",
+                    # group/other-writable on any non-symlink (a symlink's own
+                    # mode bits are meaningless; the target is checked on its own)
+                    "(",
+                    "!",
+                    "-type",
+                    "l",
+                    "-perm",
+                    "/022",
+                    ")",
+                    "-o",
+                    # setuid/setgid on a regular file only; setgid on a
+                    # directory (drwxr-sr-x) is a benign group-inheritance
+                    # pattern and must not be flagged.
+                    "(",
+                    "-type",
+                    "f",
+                    "-perm",
+                    "/6000",
+                    ")",
+                    ")",
+                    ")",
+                    "-print",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except OSError as e:
+            # find not available on this host; fall back to a Python walk so the
+            # check still runs rather than being silently skipped.
+            print(f" [WARN] 'find' unavailable ({e}); falling back to Python scan")
+            return self._verify_installed_file_security_python(Path(install_prefix))
+
+        # find can exit non-zero (e.g. permission denied on a subtree) while
+        # still printing partial results; surface that rather than passing
+        # silently on an incomplete scan.
+        if result.returncode != 0:
+            print(f" [WARN] find exited {result.returncode}: {result.stderr[:200]}")
+        elif result.stderr.strip():
+            print(f" [WARN] find reported: {result.stderr[:200]}")
+
+        bad = [line for line in result.stdout.splitlines() if line]
+        if bad:
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
+            for line in bad[:10]:
+                print(f"   {line} {self._describe_flagged_path(line)}")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root with safe permissions")
+        return True
+
+    def _verify_installed_file_security_python(self, install_path: Path) -> bool:
+        """Pure-Python fallback for the install-tree security check.
+
+        Walks the install tree with ``os.walk`` (does not follow symlinked
+        directories found inside the tree) and ``os.lstat`` each entry, applying
+        the same rules as :meth:`verify_installed_file_security`: flag entries
+        not owned by ``root:root``, group/other-writable entries, and
+        setuid/setgid *regular files*. Symlinks are exempt from the permission
+        rules since their mode bits are meaningless on Linux, and setgid
+        directories are not flagged (a benign group-inheritance pattern).
+        Slower than ``find`` on large trees but portable.
+
+        Returns:
+        True if no offending path is found, False if any offending path is found.
+        """
+        # Store (path, stat) so printing can annotate why each path was flagged
+        # without re-stat'ing (the stat result here is authoritative).
+        bad: list[tuple[Path, os.stat_result]] = []
+        for root, dirs, files in os.walk(install_path):
+            for name in dirs + files:
+                entry = Path(root) / name
+                try:
+                    st = os.lstat(entry)
+                except OSError:
+                    continue
+                mode = st.st_mode
+                not_root = st.st_uid != 0 or st.st_gid != 0
+                if stat.S_ISLNK(mode):
+                    # A symlink's own mode bits are always 0o777 and ignored by
+                    # the kernel; only ownership is meaningful for links.
+                    if not_root:
+                        bad.append((entry, st))
+                    continue
+                group_other_writable = bool(mode & 0o022)
+                # setgid on a directory is benign; only flag setuid/setgid on
+                # regular files (a real privilege-escalation surface).
+                setid_file = stat.S_ISREG(mode) and bool(
+                    mode & (stat.S_ISUID | stat.S_ISGID)
+                )
+                if not_root or group_other_writable or setid_file:
+                    bad.append((entry, st))
+        if bad:
+            print(
+                f" [FAIL] {len(bad)} path(s) not owned by root "
+                "or with insecure permissions:"
+            )
+            for entry, st in bad[:10]:
+                print(f"   {entry} ({self._format_flagged_reason(st)})")
+            if len(bad) > 10:
+                print(f"   ... and {len(bad) - 10} more")
+            return False
+        print(" [PASS] All installed files owned by root with safe permissions")
+        return True
 
     def run_full_verification(self) -> bool:
         """Step 3: Full test — runs test_rdhc (rdhc.py) only. Used when --test-type is full."""
@@ -835,14 +1498,16 @@ gpgcheck=0
 
         print(f"\n[PASS] rdhc.py found at: {rdhc_script}")
 
-        # Check if script is executable or can be run with python
-        if os.access(rdhc_script, os.X_OK):
-            cmd = [str(rdhc_script)]
-        else:
-            cmd = [sys.executable, str(rdhc_script)]
+        # Always run rdhc with this process's interpreter.
+        cmd = [sys.executable, str(rdhc_script)]
 
         # Set RDHC arguments for full test
-        test_args = ["--rocm-install-prefix", rocm_install_prefix_arg, "--all"]
+        test_args = [
+            "--rocm-install-prefix",
+            rocm_install_prefix_arg,
+            "--all",
+            "--skip-optional-cluster-checks",
+        ]
         print(
             f"\nRun rdhc.py with --rocm-install-prefix {rocm_install_prefix_arg} --all..."
         )
@@ -877,40 +1542,192 @@ gpgcheck=0
             print(f" [WARN] Could not run rdhc.py: {e}")
             return False
 
+    def verify_no_runpath(self) -> bool:
+        """Verify installed ELF files use DT_RPATH (not DT_RUNPATH).
+
+        During packaging, RUNPATH is converted to RPATH (see runpath_to_rpath.py).
+        Each installed ELF's dynamic section is read with ``readelf -d`` and
+        classified by looking for DT_RPATH first, falling back to DT_RUNPATH:
+
+        * has DT_RPATH -> converted correctly (expected)
+        * no DT_RPATH but has DT_RUNPATH -> conversion was missed (failure)
+        * neither tag -> nothing to convert; counted and reported for
+          visibility only, not treated as a failure
+
+        For files that do have DT_RPATH, the rpath value is additionally
+        inspected for entries that are not ``$ORIGIN``-relative (i.e. fixed or
+        absolute paths). A relocatable package should only use
+        ``$ORIGIN``-relative rpaths, so fixed paths are reported for visibility
+        but are not treated as a failure here.
+
+        If ``readelf`` is unavailable the check is skipped (non-fatal), matching
+        the tolerant behaviour used elsewhere in basic verification.
+
+        Returns:
+        True if no installed ELF uses DT_RUNPATH (or the check could not run),
+        False if any offending file is found.
+        """
+        print("\nVerifying installed ELF files use RPATH (not RUNPATH)...")
+        install_path = Path(self.install_prefix)
+        runpath_only: list[str] = []
+        no_path: list[str] = []
+        fixed_rpath: list[tuple[str, list[str]]] = []
+        rpath_count = 0
+        for root, _dirs, files in os.walk(install_path):
+            for name in files:
+                filepath = Path(root) / name
+                if filepath.is_symlink():
+                    continue
+                try:
+                    # Cheap ELF magic check before invoking readelf.
+                    with open(filepath, "rb") as f:
+                        if f.read(4) != b"\x7fELF":
+                            continue
+                except OSError:
+                    continue
+                try:
+                    result = subprocess.run(
+                        ["readelf", "-d", str(filepath)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                except OSError as e:
+                    print(
+                        f" [WARN] 'readelf' unavailable ({e}); skipping RUNPATH check"
+                    )
+                    return True
+                if result.returncode != 0:
+                    print(
+                        f" [WARN] readelf failed for {filepath}: {result.stderr.strip()}"
+                    )
+                    continue
+                # Confirm DT_RPATH is present; only fall back to DT_RUNPATH if
+                # it is not. Note "(RPATH)" is not a substring of "(RUNPATH)".
+                if "(RPATH)" in result.stdout:
+                    rpath_count += 1
+                    fixed = self._fixed_rpath_entries(result.stdout)
+                    if fixed:
+                        fixed_rpath.append((str(filepath), fixed))
+                elif "(RUNPATH)" in result.stdout:
+                    runpath_only.append(str(filepath))
+                else:
+                    no_path.append(str(filepath))
+        print(
+            f" Scanned ELF files: {rpath_count} with DT_RPATH, "
+            f"{len(runpath_only)} with DT_RUNPATH only, "
+            f"{len(no_path)} with neither"
+        )
+        if no_path:
+            # Count only; the individual files are not interesting to list.
+            print(
+                f" [INFO] {len(no_path)} ELF file(s) have neither DT_RPATH nor DT_RUNPATH"
+            )
+        if fixed_rpath:
+            # List every offending file and its non-$ORIGIN entries in full.
+            print(
+                f" [WARN] {len(fixed_rpath)} ELF file(s) have DT_RPATH entries that are "
+                "not $ORIGIN-relative (fixed/absolute paths):"
+            )
+            for path, entries in fixed_rpath:
+                print(f"   {path}: {':'.join(entries)}")
+        if runpath_only:
+            print(f" [FAIL] {len(runpath_only)} ELF file(s) still using DT_RUNPATH:")
+            for entry in runpath_only[:10]:
+                print(f"   {entry}")
+            if len(runpath_only) > 10:
+                print(f"   ... and {len(runpath_only) - 10} more")
+            return False
+        print(" [PASS] No installed ELF files use DT_RUNPATH")
+        return True
+
+    @staticmethod
+    def _fixed_rpath_entries(readelf_output: str) -> list[str]:
+        """Return DT_RPATH entries that are not ``$ORIGIN``-relative.
+
+        Parses the ``Library rpath: [...]`` value from ``readelf -d`` output and
+        returns each colon-separated entry that does not reference ``$ORIGIN``
+        (i.e. fixed or absolute paths). Returns an empty list if there is no
+        rpath value or all entries are ``$ORIGIN``-relative.
+        """
+        match = re.search(r"\(RPATH\)\s+Library rpath: \[([^\]]*)\]", readelf_output)
+        if not match:
+            return []
+        entries = [entry for entry in match.group(1).split(":") if entry]
+        return [entry for entry in entries if "$ORIGIN" not in entry]
+
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
  python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # Nightly RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
+ python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
  python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
+ --repo-url https://rc.repo.amd.com/rocm/core/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
 
  # --test-type sanity (default): repo install + basic verification only
  python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full: install + basic verification + rdhc
  python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
- --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
+
+ # --test-type install: install only
+ python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
+ --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
+
+ # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Comma-separated arches in one argument (equivalent normalization)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --install-prefix /opt/rocm/core
+
+ # --rocm-version without --gfx-arch: amdrocm7.13 / amdrocm-core-sdk7.13 only
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
+
+ # without --rocm-version without --gfx-arch: amdrocm / amdrocm-core-sdk only
+ python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ --release-type dev --install-prefix /opt/rocm/core
 
  # Simulate install (dry-run) from local packages
  python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
@@ -918,12 +1735,15 @@ Examples:
 """
 
 
-def _build_argument_parser() -> ArgumentParser:
-    parser = ArgumentParser(
+def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
+    kwargs: dict = dict(
         description="Full installation and simulate-install test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
     )
+    if sys.version_info >= (3, 9):
+        kwargs["exit_on_error"] = exit_on_error
+    parser = ArgumentParser(**kwargs)
     parser.add_argument(
         "--os-profile",
         type=str,
@@ -938,14 +1758,37 @@ def _build_argument_parser() -> ArgumentParser:
         "--gfx-arch",
         type=str,
         nargs="+",
+        default=None,
         metavar="ARCH",
-        help="GPU architecture(s) as a list. Only the first is used for now. Required for sanity/full; not used for simulate. Examples: gfx94x, gfx110x gfx1151",
+        help="GPU architecture(s), optional. Used in package names only with --rocm-version "
+        "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
+        "(generic amdrocm / amdrocm-core-sdk). "
+        "Repeat flag or list; commas and semicolons split within each value. Not used for simulate.",
+    )
+    parser.add_argument(
+        "--rocm-version",
+        type=str,
+        default=None,
+        metavar="VER",
+        help=(
+            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm7.13-ARCH per arch; "
+            "without --gfx-arch: amdrocm7.13 and amdrocm-core-sdk7.13. Required for arch in package names. "
+            "Optional. Not used for simulate."
+        ),
     )
     parser.add_argument(
         "--release-type",
         type=str,
-        choices=["nightly", "prerelease"],
-        help="Type of release: 'nightly' or 'prerelease'",
+        choices=[
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+            "ci",
+        ],
+        help="Type of release: 'dev', 'nightly', 'prerelease', 'release', or 'ci'",
     )
     parser.add_argument(
         "--install-prefix",
@@ -958,17 +1801,39 @@ def _build_argument_parser() -> ArgumentParser:
         help="GPG key URL",
     )
     parser.add_argument(
+        "--build-variant",
+        type=str,
+        default="",
+        help="Build variant (e.g. 'asan', 'host-asan', 'asan-debug', 'host-asan-debug'). "
+        "Changes expected package names to match variant-suffixed packages.",
+    )
+    parser.add_argument(
         "--test-type",
         type=str,
-        choices=["sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' = basic test only; 'full' = basic + full test; 'simulate' = simulated install only (requires --packages-dir).",
+        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
         "--packages-dir",
         type=str,
         metavar="DIR",
         help="Directory containing .deb or .rpm files. Required when --test-type is 'simulate'.",
+    )
+    parser.add_argument(
+        "--repo-setup-package-dir",
+        type=str,
+        metavar="DIR",
+        help="Directory containing the built amd-repo-setup .deb/.rpm. When set, the "
+        "repository is configured by installing that package (instead of writing repo "
+        "files); --repo-url and --gpg-key-url become optional. Requires a "
+        "--release-type with a public stream. Not valid with --test-type simulate.",
+    )
+    parser.add_argument(
+        "--repo-config-only",
+        action="store_true",
+        help="With --repo-setup-package-dir: install the amd-repo-setup package, "
+        "verify the repo config, and stop (do not install ROCm). --install-prefix "
+        "is not required.",
     )
     parser.add_argument(
         "--pkg-type",
@@ -981,6 +1846,10 @@ def _build_argument_parser() -> ArgumentParser:
 
 def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
     if args.test_type == "simulate":
+        if args.repo_setup_package_dir:
+            parser.error(
+                "--repo-setup-package-dir is not valid with --test-type 'simulate'"
+            )
         if not args.packages_dir:
             parser.error("--packages-dir is required when --test-type is 'simulate'")
         if not args.pkg_type and not args.os_profile:
@@ -993,24 +1862,76 @@ def _validate_cli_args(parser: ArgumentParser, args: Namespace) -> None:
             except ValueError as e:
                 parser.error(str(e))
         return
+    if args.repo_config_only and not args.repo_setup_package_dir:
+        parser.error("--repo-config-only requires --repo-setup-package-dir")
+    if args.repo_setup_package_dir:
+        # Deferred for the same reason as in _repo_setup_package_contract: only the
+        # package mode needs the stream mapping.
+        from get_url_repo_params import (
+            get_public_repo_release_types,
+            get_public_repo_stream,
+        )
+
+        if not get_public_repo_stream(args.release_type or ""):
+            parser.error(
+                "--repo-setup-package-dir requires --release-type naming a line with a "
+                "public repo.amd.com stream: "
+                + ", ".join(get_public_repo_release_types())
+            )
     if not args.os_profile:
-        parser.error("--os-profile is required when --test-type is 'sanity' or 'full'")
-    if not args.repo_url:
-        parser.error("--repo-url is required when --test-type is 'sanity' or 'full'")
-    if not args.gfx_arch:
-        parser.error("--gfx-arch is required when --test-type is 'sanity' or 'full'")
+        parser.error(
+            "--os-profile is required when --test-type is 'install', 'sanity', or 'full'"
+        )
+    # In install-via-package mode the amd-repo-setup package supplies the repo URL.
+    if not args.repo_url and not args.repo_setup_package_dir:
+        parser.error(
+            "--repo-url is required when --test-type is 'install', 'sanity', or 'full' "
+            "(or provide --repo-setup-package-dir to configure the repo via the "
+            "amd-repo-setup package)"
+        )
+    if args.rocm_version:
+        try:
+            NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+                args.rocm_version
+            )
+        except ValueError as e:
+            parser.error(str(e))
 
 
-def parse_cli_arguments(argv: list[str] | None = None) -> Namespace:
-    """Build parser, parse argv, validate; may call parser.error (exits process)."""
-    parser = _build_argument_parser()
+def parse_cli_arguments(
+    argv: list[str] | None = None, *, raise_instead_of_exit: bool = False
+) -> Namespace:
+    """Build parser, parse argv, validate.
+
+    By default invalid input calls ``parser.error`` (exits the process). For pytest
+    or other callers, pass ``raise_instead_of_exit=True`` to get ``ValueError``
+    instead of ``sys.exit``.
+    """
+    exit_on_error = not raise_instead_of_exit
+    parser = _build_argument_parser(exit_on_error=exit_on_error)
+    if raise_instead_of_exit:
+
+        def _raise(msg: str) -> None:
+            raise ValueError(msg)
+
+        parser.error = _raise  # type: ignore[method-assign]
     args = parser.parse_args(argv)
+    try:
+        args.test_type = _normalize_test_type(args.test_type)
+    except ValueError as e:
+        parser.error(str(e))
     _validate_cli_args(parser, args)
     return args
 
 
 def run_tests(args: Namespace) -> int:
-    """Run simulate or repo-based install test from parsed CLI args. Returns exit code (0 success)."""
+    """Run simulate or repo-based install test from parsed CLI args.
+
+    Repo-based flows run Steps 1–2 (sanity) or 1–3 (full).
+
+    Returns:
+        Exit code (0 success).
+    """
     if args.test_type == "simulate":
         pkg_type = args.pkg_type or NativeLinuxPackageInstallTest._derive_package_type(
             args.os_profile
@@ -1019,7 +1940,9 @@ def run_tests(args: Namespace) -> int:
         print("SIMULATED INSTALL TEST")
         print("=" * 80)
         ok = run_simulate_install_test(pkg_type, args.packages_dir)
-        return 0 if ok else 1
+        if ok:
+            return 0
+        return 1
 
     try:
         derived_package_type = NativeLinuxPackageInstallTest._derive_package_type(
@@ -1035,8 +1958,44 @@ def run_tests(args: Namespace) -> int:
     print(f"OS Profile: {args.os_profile}")
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
-    print(f"Repository URL: {args.repo_url}")
-    print(f"GPU Architecture(s): {args.gfx_arch} (using first: {args.gfx_arch[0]})")
+    if args.repo_setup_package_dir:
+        print(f"Repo package dir: {args.repo_setup_package_dir}")
+        print(f"Repo config only: {args.repo_config_only}")
+    print(f"Repository URL: {args.repo_url or '(from amd-repo-setup package)'}")
+    # Preview package-name rules before NativeLinuxPackageInstallTest is constructed.
+    _norm = normalize_target_list(args.gfx_arch, lowercase=True, dedupe=True)
+    if _norm:
+        if args.rocm_version:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; used in package names with --rocm-version)"
+            )
+        else:
+            print(
+                f"GPU Architecture(s): {args.gfx_arch} "
+                f"(normalized: {_norm}; not used in package names without --rocm-version)"
+            )
+    else:
+        if args.rocm_version:
+            _gv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+                args.rocm_version
+            )
+            print(
+                "GPU Architecture(s): (none — generic versioned packages "
+                f"amdrocm{_gv}, amdrocm-core-sdk{_gv})"
+            )
+        else:
+            print("GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)")
+    if args.rocm_version:
+        _rv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
+            args.rocm_version
+        )
+        print(
+            f"ROCm version (for package names): {args.rocm_version} "
+            f"(major.minor: {_rv})"
+        )
+    else:
+        print("ROCm version (for package names): (not set)")
     print(f"Install Prefix: {args.install_prefix}")
     print(f"Test Type: {args.test_type}")
     if args.gpg_key_url:
@@ -1045,11 +2004,15 @@ def run_tests(args: Namespace) -> int:
 
     test_runner = NativeLinuxPackageInstallTest(
         os_profile=args.os_profile,
-        repo_url=args.repo_url,
+        repo_url=args.repo_url or "",
         release_type=args.release_type,
         install_prefix=args.install_prefix,
         gfx_arch=args.gfx_arch,
+        rocm_version=args.rocm_version,
         gpg_key_url=args.gpg_key_url,
+        build_variant=args.build_variant,
+        repo_setup_package_dir=args.repo_setup_package_dir,
+        repo_config_only=args.repo_config_only,
     )
 
     print("\n" + "=" * 80)
@@ -1064,6 +2027,18 @@ def run_tests(args: Namespace) -> int:
         if not test_runner.run_repo_setup_and_install():
             print("\n[FAIL] Step 1 (repo setup and install) failed.")
             return 1
+        if args.repo_config_only:
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(repo-config-only: amd-repo-setup package configured the repo)")
+            print("=" * 80 + "\n")
+            return 0
+        if args.test_type == "install":
+            print("\n" + "=" * 80)
+            print("[PASS] INSTALLATION TEST PASSED")
+            print("(install: repo setup and package install completed)")
+            print("=" * 80 + "\n")
+            return 0
         if not test_runner.run_basic_verification():
             print("\n[FAIL] Step 2 (basic verification) failed.")
             return 1
@@ -1074,15 +2049,132 @@ def run_tests(args: Namespace) -> int:
         print("\n" + "=" * 80)
         print("[PASS] INSTALLATION TEST PASSED")
         if args.test_type == "sanity":
-            print("(sanity: basic verification completed)")
-        else:
-            print("ROCm has been successfully installed from repository and verified!")
+            print("(sanity: repo install and basic verification completed)")
+        elif args.test_type == "full":
+            print("(full: repo install, basic verification, and RDHC completed)")
         print("=" * 80 + "\n")
         return 0
     except Exception as e:
         print(f"\n[FAIL] Error during installation test: {e}")
         traceback.print_exc()
         return 1
+
+
+def _argv_from_ci_env() -> list[str] | None:
+    """Build CLI argv from workflow/container env (see ``test_native_linux_packages_install.yml``).
+
+    Required for sanity/full: OS_PROFILE, RELEASE_TYPE, plus REPO_URL and
+    INSTALL_PREFIX — except in package mode (REPO_SETUP_PACKAGE_DIR set), where the
+    repo is configured by the installed package so REPO_URL is not needed, and
+    when REPO_CONFIG_ONLY is set INSTALL_PREFIX is not needed either.
+    Optional: GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT;
+    ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` maps to ``--rocm-version`` only when
+    versioned package names are needed (omit for unversioned installs).
+    """
+    test_type = (os.environ.get("TEST_TYPE") or "sanity").strip().lower() or "sanity"
+
+    if test_type == "simulate":
+        packages_dir = (os.environ.get("PACKAGES_DIR") or "").strip()
+        if not packages_dir:
+            return None
+        argv: list[str] = [
+            "--test-type",
+            "simulate",
+            "--packages-dir",
+            packages_dir,
+        ]
+        os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+        if os_profile:
+            argv.extend(["--os-profile", os_profile])
+        pkg_type = (os.environ.get("SIMULATE_PKG_TYPE") or "").strip()
+        if pkg_type in ("deb", "rpm"):
+            argv.extend(["--pkg-type", pkg_type])
+        prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+        if prefix:
+            argv.extend(["--install-prefix", prefix])
+        return argv
+
+    os_profile = (os.environ.get("OS_PROFILE") or "").strip()
+    repo_url = (os.environ.get("REPO_URL") or "").strip()
+    gfx_raw = (os.environ.get("GFX_ARCH") or "").strip()
+    # Semicolons delimit arches in CI; normalize to whitespace so split() does not
+    # leave stray ';' on the first token (e.g. "gfx94x; gfx1100").
+    gfx_arch = gfx_raw.replace(";", " ").split() if gfx_raw else []
+    release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
+    install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
+    repo_setup_package_dir = (os.environ.get("REPO_SETUP_PACKAGE_DIR") or "").strip()
+    repo_config_only = (os.environ.get("REPO_CONFIG_ONLY") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+    # In install-via-package mode the amd-repo-setup package supplies the repo URL;
+    # in config-only mode there is no install/verify, so INSTALL_PREFIX is not
+    # needed either.
+    if not (os_profile and release_type):
+        return None
+    if not repo_url and not repo_setup_package_dir:
+        return None
+    if not install_prefix and not repo_config_only:
+        return None
+
+    argv = [
+        "--test-type",
+        test_type,
+        "--os-profile",
+        os_profile,
+        "--release-type",
+        release_type,
+    ]
+    if repo_url:
+        argv.extend(["--repo-url", repo_url])
+    if install_prefix:
+        argv.extend(["--install-prefix", install_prefix])
+    if repo_setup_package_dir:
+        argv.extend(["--repo-setup-package-dir", repo_setup_package_dir])
+    if repo_config_only:
+        argv.append("--repo-config-only")
+    if gfx_arch:
+        argv.extend(["--gfx-arch", *gfx_arch])
+    rocm_version = (os.environ.get(ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION) or "").strip()
+    if rocm_version:
+        argv.extend(["--rocm-version", rocm_version])
+    gpg = (os.environ.get("GPG_KEY_URL") or "").strip()
+    if gpg:
+        argv.extend(["--gpg-key-url", gpg])
+    build_variant = (os.environ.get("BUILD_VARIANT") or "").strip()
+    if build_variant:
+        argv.extend(["--build-variant", build_variant])
+    return argv
+
+
+def test_native_linux_package_install() -> None:
+    """Pytest entry: same run as CLI, driven by env vars in CI."""
+    import pytest
+
+    argv = _argv_from_ci_env()
+    if argv is None:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(
+                "Missing required environment variables for native install test "
+                "(expected OS_PROFILE, RELEASE_TYPE, plus REPO_URL and INSTALL_PREFIX "
+                "unless REPO_SETUP_PACKAGE_DIR is set, and INSTALL_PREFIX is not "
+                "needed with REPO_CONFIG_ONLY; optional GFX_ARCH, GPG_KEY_URL, "
+                "BUILD_VARIANT, NATIVE_LINUX_INSTALL_ROCM_VERSION; "
+                "or for simulate: PACKAGES_DIR)."
+            )
+        pytest.skip(
+            "Set workflow env vars (OS_PROFILE, RELEASE_TYPE, plus REPO_URL/INSTALL_PREFIX "
+            "unless REPO_SETUP_PACKAGE_DIR/REPO_CONFIG_ONLY is set); "
+            "optional GFX_ARCH, GPG_KEY_URL, BUILD_VARIANT, "
+            "NATIVE_LINUX_INSTALL_ROCM_VERSION."
+        )
+
+    args = parse_cli_arguments(argv, raise_instead_of_exit=True)
+    rc = run_tests(args)
+    assert rc == 0, f"run_tests exited with code {rc}"
 
 
 def main() -> None:

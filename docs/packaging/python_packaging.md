@@ -8,12 +8,13 @@ alterations.
 
 ## General Design
 
-We generate three types of packages:
+We generate the following types of packages:
 
 - Selector package: The `rocm` package is built as an sdist so that it is
   evaluated at the point of install, allowing it to perform some selection logic
   to detect dependencies and needs. Most other packages are installed by
-  asking to install extras of this one (i.e. `rocm[libraries]`, etc).
+  asking to install extras of this one (i.e.
+  `rocm[libraries,device-gfx942]`, etc).
   - The `rocm` package provides the `rocm-sdk` tool.
   - The `rocm` package uses the `import rocm_sdk` Python namespace as we do
     not want a barename `rocm`.
@@ -23,6 +24,13 @@ We generate three types of packages:
   symlinks (instead, only SONAME libraries are included, and any executable
   symlinks are emitted by dynamically compiling an executable that can execle
   a relative binary).
+- Device packages: Per-ISA device wheels (`rocm-sdk-device-{target}`) are
+  produced alongside an arch-neutral `rocm-sdk-libraries` host wheel. Device
+  wheels contain `.kpack` archives and kernel databases (Tensile `.co`/`.dat`,
+  MIOpen `.kdb`/`.db.txt`, etc.) that overlay into the `rocm-sdk-libraries`
+  platform directory in site-packages. Each device wheel declares
+  `Requires-Dist` on the matching version of `rocm-sdk-libraries`. Users install
+  only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
   a relative symlink in the tarball. During extraction, file symlinks are
@@ -33,12 +41,26 @@ We generate three types of packages:
   file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
 
-Runtime packages can either be target neutral or target specific. Target specific
-packages are suffixed with their target family and the setup files have special logic
-to determine what is correct to load based on the system. In the future, this
-will be re-arranged to have more of a thin structure where the host code is
-always emitted as target neutral and separate device code packages are loaded
-as needed.
+### Kpack-split packaging
+
+All current builds enable `KPACK_SPLIT_ARTIFACTS` by default. The
+`rocm-sdk-libraries` host wheel is architecture neutral and device code is
+distributed in `rocm-sdk-device-{target}` wheels, one per GFX ISA target. The
+devel package is also architecture neutral and excludes test binaries, which
+require device code to run. The packaging tools detect this layout from the
+flag in the build's `therock_manifest.json`. Support for older manifests is
+retained temporarily in the implementation but is not part of the current
+release flow; see [issue 3340](https://github.com/ROCm/TheRock/issues/3340).
+
+The arch-neutral `rocm-sdk-devel` tree does not itself contain per-ISA device
+files. Each installed `rocm-sdk-device-{target}` wheel ships a manifest, and
+`rocm-sdk init` - which also runs on the first use of a devel tool such as
+`hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries` into the
+devel tree, recording them in the device wheel's `RECORD` so `pip uninstall`
+removes them. Because the compiler trampolines only trigger this on the first
+expansion, after installing or removing a `rocm-sdk-device-*` wheel in an
+already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test` to
+refresh the device files in the devel tree.
 
 It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The
@@ -58,9 +80,10 @@ including a commit hash). You can also set an explicit fixed version with the
 [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py).
 and the [versioning documentation](versioning.md) for more version formats.
 
-### Build Target Family Selection
+### Package Target Selection
 
-The target GPU family used when building packages is determined in the following order:
+The GPU target selected by the `rocm` meta package is determined in the following
+order:
 
 1. `ROCM_SDK_TARGET_FAMILY` environment variable, if set.
 1. Dynamically discovered target family on the system.
@@ -70,9 +93,10 @@ For CI builds on CPU-only machines, this will typically fall through to (3).
 For developer machines with GPUs, the dynamic detection in (2) should suffice,
 but can be overridden by setting (1).
 
-In case of multiple GPU architectures present, the dynamically discovered target family
-defaults to the first available family, in which case it might be necessary to set the
-`ROCM_SDK_TARGET_FAMILY` environment variable.
+If multiple GPU architectures are present, dynamic detection defaults to the
+first available target. Set the `ROCM_SDK_TARGET_FAMILY` environment variable to
+override that choice. The environment variable retains its historical name but
+accepts an individual GFX ISA target such as `gfx942`.
 
 ### Building from Local Artifacts
 
@@ -89,20 +113,29 @@ patching via patchelf. On Linux, it is recommended to run this in the same
 portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
+If running on a host rather than the portable container, make sure the host
+`patchelf` carries the [PR #544](https://github.com/NixOS/patchelf/pull/544)
+PHDR-relocation fix. A stock distro `patchelf`
+(for example Ubuntu's `apt install patchelf`) will silently corrupt the
+kpack-split libraries produced by TheRock, yielding wheels whose shared
+objects fail to load at install time. See
+[environment_setup_guide.md#patchelf](../environment_setup_guide.md#patchelf)
+for supported install paths.
+
 ### Building from CI Artifacts
 
 You can also build packages from artifacts uploaded by CI workflows:
 
 ```bash
 # 1. Fetch artifacts from a CI run (find run IDs at github.com/ROCm/TheRock/actions)
-RUN_ID=21440027240
-ARTIFACT_GROUP=gfx110X-all
+RUN_ID="<replace-with-run-id>"
 ARTIFACTS_DIR=${HOME}/therock/${RUN_ID}/artifacts
 PACKAGES_DIR=${HOME}/therock/${RUN_ID}/packages
 
+# Fetch the complete platform artifact set. Package construction requires the
+# generic host artifacts and every device target recorded in the build manifest.
 python ./build_tools/fetch_artifacts.py \
     --run-id=${RUN_ID} \
-    --artifact-group=${ARTIFACT_GROUP} \
     --output-dir=${ARTIFACTS_DIR}
 
 # 2. Build Python packages from the fetched artifacts
@@ -111,22 +144,24 @@ python ./build_tools/build_python_packages.py \
     --dest-dir=${PACKAGES_DIR}
 
 # 3. Check the packages that were built
-ls ${PACKAGES_DIR}
-# rocm_sdk_core-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm_sdk_devel-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm_sdk_libraries_gfx110x_all-7.12.0.dev0-py3-none-win_amd64.whl
-# rocm-7.12.0.dev0.tar.gz
+ls ${PACKAGES_DIR}/dist
+# rocm_sdk_core-*.whl
+# rocm_sdk_libraries-*.whl
+# rocm_sdk_device_gfx942-*.whl, rocm_sdk_device_gfx1100-*.whl, ...
+# rocm_sdk_devel-*.whl
+# rocm-*.tar.gz
 ```
 
 ### Installing Locally Built Packages
 
 To install locally built packages, you can use the
 [`-f, --find-links`](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)
-option:
+option. Replace `device-gfx942` with the target for your GPU, or use
+`device-all` to install every device wheel:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install rocm[libraries,devel] --pre \
+pip install "rocm[libraries,devel,device-gfx942]" --pre \
     --find-links=${PACKAGES_DIR}/dist
 
 # Run sanity tests to verify the installation
@@ -143,7 +178,7 @@ python ./third-party/indexer/indexer.py ${PACKAGES_DIR}/dist \
 
 # Install using --find-links
 python -m venv .venv && source .venv/bin/activate
-pip install rocm[libraries,devel] --pre \
+pip install "rocm[libraries,devel,device-gfx942]" --pre \
     --find-links=${PACKAGES_DIR}/dist/index.html
 ```
 
@@ -153,6 +188,133 @@ pip install rocm[libraries,devel] --pre \
 > with `--output-dir` instead of directly calling the indexer. This generates
 > the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
 > structure used by CI uploads.
+
+## Mirroring Third-Party Python Dependencies
+
+[`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
+resolves configured third-party wheels from PyPI and publishes them to the
+structured core `whl-next` prefix. It is usable from CI or locally.
+
+Resolve and download an immutable snapshot without AWS access:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py resolve \
+  --output-dir /tmp/rocm-dependency-snapshot
+```
+
+After configuring normal boto3/AWS credentials with `HeadBucket` (`ListBucket`),
+`HeadObject`, `GetObject`, `PutObject`, and same-key `CopyObject` access to one
+destination bucket, publish the same local snapshot:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py publish \
+  --snapshot-dir /tmp/rocm-dependency-snapshot \
+  --bucket therock-repo-amd-dev-core \
+  --refresh-existing
+```
+
+Use `mirror` for a convenient one-bucket resolve and publish. Add `--dry-run`
+to `publish` or `mirror` to inspect the required S3 operations without writing.
+Existing objects are skipped by default. `--refresh-existing` performs a
+conditional same-key copy, which updates `LastModified` so retained-stream
+lifecycle rules do not expire the current dependency version. Older versions
+are not refreshed. Run
+`python build_tools/packaging/python/mirror_python_dependencies.py --help` and
+the subcommand help for project and individual dependency selection.
+
+The tool publishes to the core product-local index under
+`v5/rocm/core/whl-next/`; see the
+[nightly core index](https://nightly.repo.amd.com/rocm/core/whl-next/) for a
+user-visible example. The aggregate `/rocm/whl-next/` index does not duplicate
+these wheels. Instead,
+[`rocm_whl_next_ownership.yaml`](/build_tools/packaging/python/rocm_whl_next_ownership.yaml)
+separately controls which product-local package page the aggregate index routes
+to. Publishing only to the product-local path is sufficient to populate the
+core index without implicitly changing that routing. If a mirrored dependency
+should also be available through the aggregate index used by pip, add its core
+ownership mapping and redeploy the aggregate index.
+
+The `Mirror Python Dependencies` workflow will live with the other
+[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
+It will resolve one snapshot every Monday and sequentially publish it to `dev`,
+`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
+resolve-only and allow targeting one stream for diagnostics. Retained streams
+will refresh only the current snapshot's existing objects; stable-staging will
+skip existing objects because it has no lifecycle expiration. If a stream
+fails, rerun the complete workflow. Each run is idempotent, and older versions
+remain subject to their normal retention policy.
+
+## rocm-profiler
+
+The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
+
+- ROCm Systems Profiler (rocprofiler-systems)
+- ROCm Compute Profiler (rocprofiler-compute)
+
+### Installation
+
+#### Using meta package
+
+The recommended way to install profiling tools is via the meta package:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+This will install:
+
+- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-profiler` (profiling tools)
+
+#### Direct installation
+
+Direct installation is not recommended for typical use:
+
+```bash
+pip install rocm-profiler
+```
+
+This may result in missing dependencies unless `rocm-sdk-core` is also installed.
+
+Always prefer:
+
+```bash
+pip install "rocm[profiler]"
+```
+
+### Package Layout
+
+ROCm Python packaging separates profiling functionality as follows:
+
+- `rocm-sdk-core`:
+
+  - `rocprofiler-sdk` libraries
+  - `rocprofv3`, `rocprof-attach`
+  - `roctx` API (user-facing annotation library)
+
+- `rocm-profiler`:
+
+  - `rocprof-compute`
+  - `rocprof-sys-*`
+  - `rocsys`
+  - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
+
+This separation allows you to install profiling tools only when needed.
+
+### Dependency Model
+
+The `rocm-profiler` package intentionally does **not** declare `install_requires`.
+
+Instead:
+
+- Dependencies are managed by the `rocm` meta package.
+- Packages are co-installed into the same `site-packages`.
+- Runtime dependencies are resolved using RPATH.
+
+> [!NOTE]
+> The `rocm` meta package requires a device wheel for the selected GFX ISA target
+> (for example, `rocm-sdk-device-gfx942`). If it is not available in the selected
+> package index, installation may be incomplete.
 
 ## Using Packages from Frameworks
 
@@ -164,9 +326,9 @@ subset (including runtime, HIP, system libraries and critical path math
 libraries), this is a process of installing the development packages like:
 
 ```bash
-# See RELEASES.md for exact arch specific incantations, --index-url
+# See RELEASES.md for exact target-specific incantations, --index-url
 # combinations, etc.
-pip install rocm[libraries,devel]
+pip install "rocm[libraries,devel,device-gfx942]"
 ```
 
 Then build your framework by setting appropriate CMake settings or environment

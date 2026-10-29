@@ -3,9 +3,14 @@ updates:
 
   # Check for updates to GitHub Actions
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
+    # Wait a week before adopting newly released action versions.
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:

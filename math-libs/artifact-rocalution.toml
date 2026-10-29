@@ -1,0 +1,19 @@
+# rocALUTION
+[components.lib."math-libs/rocALUTION/stage"]
+optional = true
+[components.dbg."math-libs/rocALUTION/stage"]
+optional = true
+[components.dev."math-libs/rocALUTION/stage"]
+include = [
+  "include/rocalution/*",
+  "include/rocalution/**",
+  "lib/cmake/rocalution/*",
+]
+[components.test."math-libs/rocALUTION/stage"]
+optional = true
+include = [
+  # Clients tests (test_runner runs ctest from bin/rocalution/; needs CTestTestfile.cmake)
+  "bin/rocalution/**",
+  "bin/rocalution-test*",
+  "bin/*_rtest.xml",
+]

@@ -1,17 +1,52 @@
 # ocl-clr
 [components.lib."core/ocl-clr/stage"]
+# ocltst libs/dlls belong to ocl_test package
+exclude = [
+  "bin/hsa-runtime64.dll",
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
+  "bin/*oclgl*",
+  "bin/*oclperf*",
+  "bin/*oclruntime*",
+]
 include = [
   "etc/**",
 ]
 [components.run."core/ocl-clr/stage"]
 include = [
-  "bin/**",
+  "bin/clinfo*",
+]
+exclude = [
+  "bin/hsa-runtime64.dll",
+  "bin/rocminfo.exe",
+  "bin/rocm_agent_enumerator*",
 ]
 [components.dbg."core/ocl-clr/stage"]
 [components.dev."core/ocl-clr/stage"]
+exclude = [
+  "include/hsa/**",
+  "include/hsakmt/**",
+  "lib/cmake/hsa-runtime64/**",
+  "lib/cmake/hsakmt/**",
+  "lib/hsa-runtime64.lib",
+  "lib/hsakmt.lib",
+  "lib/hsakmt-staticdrm.lib",
+  "lib/wkmi.lib",
+]
 [components.doc."core/ocl-clr/stage"]
+exclude = [
+  "share/doc/rocr/**",
+]
 [components.test."core/ocl-clr/stage"]
 include = [
   "tests/**",
   "share/opencl/**",
+  "bin/ocltst*",
+  "bin/*oclgl*",
+  "bin/*oclperf*",
+  "bin/*oclruntime*",
+  "lib/*oclgl*",
+  "lib/*oclperf*",
+  "lib/*oclruntime*",
 ]

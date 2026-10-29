@@ -111,6 +111,21 @@ When a `sys` component is present, the packaging and install tooling must **copy
 - On SELinux-enforcing systems (RHEL and derivatives), symlinks in `/etc` whose targets fall outside the expected security context may trigger policy denials.
 
 When installing from tarballs or artifacts directly (without an OS package manager), the user/installer must copy `sys` component files to the appropriate system paths (requires elevated privileges) and run `ldconfig` after copying any `ld.so.conf.d/` entries.
+#### Backward Compatibility with Legacy Directory Structure
+
+To maintain backward compatibility with applications built against previous ROCm versions (pre-8.0), `update-alternatives` symlinks are created in `/opt/rocm` that preserve the traditional directory layout. These symlinks point to `/etc/alternatives/rocm-*` paths, which in turn reference the versioned core directories:
+
+```
+/opt/rocm/bin -> /etc/alternatives/rocm-bin -> /opt/rocm/core-X.Y/bin
+/opt/rocm/lib -> /etc/alternatives/rocm-lib -> /opt/rocm/core-X.Y/lib
+/opt/rocm/include -> /etc/alternatives/rocm-include -> /opt/rocm/core-X.Y/include
+/opt/rocm/llvm -> /etc/alternatives/rocm-llvm -> /opt/rocm/core-X.Y/llvm
+/opt/rocm/amdgcn -> /etc/alternatives/rocm-amdgcn -> /opt/rocm/core-X.Y/amdgcn
+/opt/rocm/libexec -> /etc/alternatives/rocm-libexec -> /opt/rocm/core-X.Y/libexec
+/opt/rocm/share -> /etc/alternatives/rocm-share -> /opt/rocm/core-X.Y/share
+```
+
+This approach allows legacy applications to find expected directory structures without modification while supporting the new versioned installation scheme.
 
 ### RPATH and Relocatability
 
@@ -195,8 +210,8 @@ Using `yum` ROCm Core SDK runtime components and ROCm Core SDK runtime + develop
 yum install rocm # ROCm 8.0
 yum install rocm-core # ROCm 8.0
 yum install rocm-core<ver>
-yum install rocm-core-devel
-yum install rocm-core-devel<ver>
+yum install rocm-core-dev
+yum install rocm-core-dev<ver>
 ```
 
 The following table shows the meta packages that will be available:
@@ -204,12 +219,14 @@ The following table shows the meta packages that will be available:
 | Name                    | Content                                                              | Description                                                                   |
 | :---------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
 | amdrocm & amdrocm-core  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
-| amdrocm-core-devel      | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
+| amdrocm-core-dev        | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
 | amdrocm-developer-tools | Profiler, debugger, and related tools                                | Independent set of tools to debug and profile any application built with ROCm |
 | amdrocm-fortran         |                                                                      | Fortran compiler and related components                                       |
 | amdrocm-opencl          |                                                                      | Components needed to run OpenCL                                               |
 | amdrocm-openmp          |                                                                      | Components needed to build OpenMP                                             |
 | amdrocm-core-sdk        |                                                                      | Everything                                                                    |
+
+Note: ROCm Core includes libraries spanning math & compute, communication, media, storage, and support libraries.
 
 ## Package Granularity
 
@@ -239,8 +256,9 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-opencl                          |                             | OpenCL                                                                        |                                          |
 | amdrocm-decode                          |                             | rocDecode                                                                     |                                          |
 | amdrocm-jpeg                            |                             | rocJPEG                                                                       |                                          |
-| amdrocm-file                            |                             | hipFile, rocFile (future addition)                                            |                                          |
+| amdrocm-file                            |                             | hipFile (future addition)                                                     |                                          |
 | amdrocm-rccl                            |                             | rccl                                                                          |                                          |
+| amdrocm-shmem                           |                             | rocSHMEM                                                                      |                                          |
 | amdrocm-sysdeps                         |                             | Bundled 3rd party dependencies (e.g., libdrm, libelf, numa, subset of libVA)  |                                          |
 | amdrocm-cuid                            |                             | cuid                                                                          |                                          |
 | amdrocm-rdc                             |                             | ROCm Datacenter                                                               |                                          |
@@ -250,3 +268,7 @@ Note: Product management would like to follow upstream packaging structrures in 
 ## Versioning Requirements
 
 For versioning requirements on packaging, see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
+
+## Dependency Requirements
+
+For dependency requirements on packaging, see the following documentation: [TheRock package dependency](/docs/packaging/nativepackage_dependency_tree.md)

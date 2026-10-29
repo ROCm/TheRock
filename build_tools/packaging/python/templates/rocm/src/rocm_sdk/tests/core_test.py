@@ -53,6 +53,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
     ("hipInfo", [], "", True),
+    ("rocminfo", [], "", False),
 ]
 
 CONSOLE_SCRIPT_TESTS = COMMON_CONSOLE_SCRIPT_TESTS + (
@@ -87,10 +88,6 @@ class ROCmCoreTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
-            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
-                # TODO: Library preloads for amdsmi need to be implement.
-                # Though this is not needed for the amd-smi client.
-                continue
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
@@ -99,6 +96,10 @@ class ROCmCoreTest(unittest.TestCase):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
                 continue
+            if "libsqtt-marker" in str(so_path):
+                # LLVM pass plugin loaded via -fpass-plugin; it has unresolved
+                # LLVM symbols and is not intended to be dlopened standalone.
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
@@ -106,24 +107,47 @@ class ROCmCoreTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "share/rocprofiler-sdk/tests/duplicate-sdk/" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
-                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
-                # explicitly and cannot necessarily be loaded standalone.
+                # Internal rocprofiler-sdk libraries cannot necessarily be loaded
+                # standalone. The duplicate SDK is a test fixture that requires the
+                # primary SDK to be preloaded by its test harness.
                 continue
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
+
+            extra_setup = ""
+            if is_windows:
+                # Some libraries (e.g. rocdecode) import DLLs that ship under
+                # lib/rocm_sysdeps/bin rather than co-located in bin/. Linux
+                # resolves these via RPATH; Windows has no RPATH equivalent, so
+                # the sysdeps bin directory must be on the DLL search path. The
+                # library lives at <root>/bin/<name>.dll and the sysdeps DLLs at
+                # the sibling <root>/lib/rocm_sysdeps/bin.
+                sysdeps_bin = so_path.parents[1] / "lib" / "rocm_sysdeps" / "bin"
+                if sysdeps_bin.is_dir():
+                    sysdeps_dir = str(sysdeps_bin).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{sysdeps_dir}'); "
+
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                command = (
+                    extra_setup + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                )
                 cmd = [sys.executable, "-c", command, str(so_path)]
                 subprocess.check_call(cmd)
 

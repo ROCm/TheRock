@@ -69,7 +69,6 @@ if(_enable_rocRoller)
     BUILD_DEPS
       mxDataGenerator
       rocm-cmake
-      therock-boost
       therock-catch2
       therock-fmt
       therock-googletest
@@ -94,6 +93,40 @@ endif()
 
 
 ##############################################################################
+# origami
+##############################################################################
+
+therock_cmake_subproject_declare(origami
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/origami"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DHIP_PLATFORM=amd
+    -DORIGAMI_BUILD_SHARED_LIBS=ON
+    -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    # Python bindings (and their nanobind/tsl-robin-map deps) are built out of
+    # TheRock; land the C++ library only. Re-enable alongside a nanobind
+    # provider once bindings have a home (mirrors the hipDNN direction, #6425).
+    -DORIGAMI_ENABLE_PYTHON=OFF
+    -DORIGAMI_ENABLE_FETCH=OFF
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-catch2
+  RUNTIME_DEPS
+    hip-clr
+)
+therock_cmake_subproject_glob_c_sources(origami
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(origami)
+list(APPEND _blas_subproject_names origami)
+
+
+##############################################################################
 # hipBLASLt
 ##############################################################################
 
@@ -112,7 +145,6 @@ set(hipBLASLt_rocRoller_deps)
 if(_enable_rocRoller)
   list(APPEND hipBLASLt_rocRoller_build_deps
     mxDataGenerator
-    therock-boost
     therock-fmt
     therock-yaml-cpp
     therock-spdlog
@@ -132,8 +164,13 @@ therock_cmake_subproject_declare(hipBLASLt
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
-    -DTENSILELITE_BUILD_TESTING=OFF
+    # TensileLite's C++ gtest suite (tests/) is Linux-only for now (unvalidated
+    # on Windows); mirrors the TENSILELITE_ENABLE_CLIENT guard below.
+    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
+    -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
+    -DROCISA_USE_STABLE_ABI=ON
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
@@ -143,12 +180,14 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    mxDataGenerator
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
     ${hipBLASLt_rocRoller_build_deps}
   RUNTIME_DEPS
     hip-clr
+    origami
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_runtime_deps}
@@ -307,7 +346,7 @@ if(THEROCK_ENABLE_SPARSE)
   )
   therock_cmake_subproject_provide_package(hipSPARSE hipsparse lib/cmake/hipsparse)
   therock_cmake_subproject_activate(hipSPARSE)
-  list(APPEND _blas_subproject_names hipSPARSE)
+  list(APPEND _sparse_subproject_names hipSPARSE)
 
   ##############################################################################
   # hipSPARSELt
@@ -340,12 +379,15 @@ if(THEROCK_ENABLE_SPARSE)
         amd-hip
       BUILD_DEPS
         rocm-cmake
+        hipBLAS-common
         hipSPARSE
         rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
         hip-clr
+        hipBLASLt
+        origami
         therock-host-blas
         ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
@@ -356,8 +398,20 @@ if(THEROCK_ENABLE_SPARSE)
     )
     therock_cmake_subproject_provide_package(hipSPARSELt hipsparselt lib/cmake/hipsparselt)
     therock_cmake_subproject_activate(hipSPARSELt)
-    list(APPEND _blas_subproject_names hipSPARSELt)
+    list(APPEND _sparse_subproject_names hipSPARSELt)
   endif()
+
+  therock_provide_artifact(sparse
+    DESCRIPTOR artifact-sparse.toml
+    COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+    SUBPROJECT_DEPS ${_sparse_subproject_names}
+  )
 endif(THEROCK_ENABLE_SPARSE)
 
 
@@ -433,6 +487,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
+        -DEXPORT_FORTRAN_BINDINGS=OFF
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
@@ -451,7 +506,18 @@ if(THEROCK_ENABLE_SOLVER)
   )
   therock_cmake_subproject_provide_package(hipSOLVER hipsolver lib/cmake/hipsolver)
   therock_cmake_subproject_activate(hipSOLVER)
-  list(APPEND _blas_subproject_names hipSOLVER)
+  list(APPEND _solver_subproject_names hipSOLVER)
+
+  therock_provide_artifact(solver
+    DESCRIPTOR artifact-solver.toml
+    COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        test
+    SUBPROJECT_DEPS ${_solver_subproject_names}
+  )
 endif(THEROCK_ENABLE_SOLVER)
 
 

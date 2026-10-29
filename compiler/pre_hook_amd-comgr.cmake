@@ -15,35 +15,11 @@ endif()
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 
-# See Comgr::LoadLib in clr comgrctx.cpp: On windows, this expects the cmgr
-# library to have a versioned output name, but there does not seem to be a
-# public patch to llvm-project/amd/comgr which sets it properly. Therefore,
-# we align it with what LoadLib expects:
-#   amd_comgrMMNN.dll
-# where MM is the left zero padded HIP_MAJOR_VERSION and NN is the left zero
-# padded HIP_MINOR_VERSION. There is no natural connection between these
-# projects in the codebase, so this is just an action at a distance / must
-# line up thing. We require the version explicitly from the caller and complain
-# loudly if not present.
-function(therock_patch_comgr_win_output_name)
-  if(NOT DEFINED THEROCK_HIP_MAJOR_VERSION OR NOT DEFINED THEROCK_HIP_MINOR_VERSION)
-    message(FATAL_ERROR "Super-project must set THEROCK_HIP_MAJOR_VERSION and THEROCK_HIP_MINOR_VERSION")
-  endif()
-  if(THEROCK_HIP_MAJOR_VERSION LESS_EQUAL 9)
-    set(THEROCK_HIP_MAJOR_VERSION "0${THEROCK_HIP_MAJOR_VERSION}")
-  endif()
-  if(THEROCK_HIP_MINOR_VERSION LESS_EQUAL 9)
-    set(THEROCK_HIP_MINOR_VERSION "0${THEROCK_HIP_MINOR_VERSION}")
-  endif()
-
-  set(suffix_version "${THEROCK_HIP_MAJOR_VERSION}${THEROCK_HIP_MINOR_VERSION}")
-  message(STATUS "Versioned comgr suffix: ${suffix_version}")
-
-  if(WIN32)
-    set(output_name "amd_comgr${suffix_version}")
-    message(STATUS "Override comgr output_name (windows): ${output_name}")
-    set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "${output_name}")
-  endif()
-endfunction()
-
-cmake_language(DEFER CALL therock_patch_comgr_win_output_name)
+# Debug info for comgr's own objects only, not the statically linked LLVM.
+# Embedded (/Z7): /Zi collides with LLVM's shared PCH. Needs CMP0141 (CMakeLists.txt).
+# /OPT:REF,/OPT:ICF restore the Release defaults that /DEBUG turns off.
+# CMAKE_HOST_WIN32: WIN32/MSVC are unset before project().
+if(CMAKE_HOST_WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
+  add_link_options("LINKER:/DEBUG,/OPT:REF,/OPT:ICF")
+endif()

@@ -7,10 +7,9 @@ well as supporting scripts.
 
 ### `build_manylinux_*.Dockerfile`
 
-| Source .Dockerfile                                                                 | Published package                                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile)          | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64      |
-| [`build_manylinux_rccl_x86_64.Dockerfile`](build_manylinux_rccl_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_rccl_x86_64 |
+| Source .Dockerfile                                                        | Published package                                                             |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`build_manylinux_x86_x64.Dockerfile`](build_manylinux_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64 |
 
 These Dockerfiles are used to build ROCm, PyTorch, and other packages for
 release across a wide variety of Linux distributions. They are derived from
@@ -101,6 +100,19 @@ This includes dejagnu, make, gcc, g++ and gfortran.
 Used in ocltst execution. It installs OCL ICD package required
 by ocltst
 
+| Source .Dockerfile                                                                             | Published package                                                                |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`no_rocm_image_ubuntu24_04_openmpi.Dockerfile`](no_rocm_image_ubuntu24_04_openmpi.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_openmpi |
+
+Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing a system
+OpenMPI install (`libopenmpi-dev`, `openmpi-bin`) for the rocprofv3 `mpi-ranks`
+integration tests. Like the other `no_rocm_image_*` images this is a test-only
+image (not a ROCm build image): the rocprofiler-sdk tests are configured and
+compiled in-container at test time, so `find_package(MPI)` needs the OpenMPI
+headers and `mpiexec`. OpenMPI is intentionally not bundled in TheRock artifacts
+(to avoid forcing a specific MPI onto users), so it is provided at the system
+level here for the test environment.
+
 ### `rocm_runtime.Dockerfile`
 
 | Source .Dockerfile                                   | Published package |
@@ -118,11 +130,48 @@ access (e.g., `--device=/dev/kfd --device=/dev/dri`).
 See the header comments in [`rocm_runtime.Dockerfile`](rocm_runtime.Dockerfile)
 for supported base images, build arguments, and build/run examples.
 
+The installation method is selected via the `INSTALL_METHOD` build argument:
+
+- `tarball` (default): Downloads and extracts a prebuilt ROCm tarball.
+- `packages`: Configures the AMD package repository and installs ROCm via
+  apt/dnf/tdnf/zypper.
+
+By default each image targets a single GPU family (e.g.,
+`AMDGPU_FAMILY=gfx110X-all`). To build one image that supports all GPU
+families, set `AMDGPU_FAMILY=multi-arch` (works with both `INSTALL_METHOD`
+options):
+
+- With `INSTALL_METHOD=packages`: pulls the all-GPU meta-package from AMD's
+  `packages-multi-arch/` repository.
+- With `INSTALL_METHOD=tarball`: downloads AMD's bundled `multiarch`
+  tarball from the `tarball-multi-arch/` path (contains per-family `.kpack/`
+  files for every supported GPU target).
+
 Supporting scripts:
 
 - [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
   and installs ROCm runtime dependencies using the appropriate package manager
   (apt, dnf, tdnf, or zypper).
+
+- [`install_rocm_packages.sh`](install_rocm_packages.sh): Configures the AMD
+  deb/rpm package repository (nightlies, prereleases, or stable) and installs
+  ROCm via the system package manager. Auto-detects the distribution to select
+  the correct repository URL and package manager. Can also be used standalone
+  on a Linux host:
+
+  ```bash
+  # One-liner installation via packages
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+
+  # Example: Install ROCm 7.13.0a20260322 for gfx110x (nightly)
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.13.0a20260322 gfx110x nightlies
+
+  # Example: Install ROCm 7.13.0a20260322 with multi-arch (all GPU families)
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_packages.sh | \
+    sudo bash -s -- 7.13.0a20260322 multi-arch nightlies
+  ```
 
 - [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
   from `rocm.{nightlies|prereleases|devreleases}.amd.com` or `repo.amd.com` (for
@@ -162,28 +211,29 @@ tags may be used for test packages.
 ### Automated image publishing
 
 Images are automatically built and published to GitHub Packages (`ghcr.io`) by
-GitHub Actions after pushes to the associated `.Dockerfile` on the `main` or
-`stage/docker/**` branches. These actions can also be triggered manually from
-other branches
+GitHub Actions after pushes to the associated `.Dockerfile` on the `main`
+branch. To publish test images from any other branch, run the workflow manually
+against that branch
 [using workflow_dispatch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 The common
 [`.github/workflows/publish_dockerfile.yml`](/.github/workflows/publish_dockerfile.yml)
 workflow is used by other `publish_*.yml` workflows:
 
-| Workflow file                                                                                                             | Workflow run history                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)           | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)           |
-| [`.github/workflows/publish_build_manylinux_rccl_x86_64.yml`](/.github/workflows/publish_build_manylinux_rccl_x86_64.yml) | [actions/workflows/publish_build_manylinux_rccl_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_rccl_x86_64.yml) |
-| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml)     | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml)     |
+| Workflow file                                                                                                         | Workflow run history                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)       | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)       |
+| [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml) | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml) |
 
-Tags for built docker images are set based on the branch name pattern:
+Tags for built docker images are set based on the branch name:
 
-| Branch name pattern   | Tag pattern    |
-| --------------------- | -------------- |
-| `main`                | `latest`       |
-| `stage/docker/SUFFIX` | `stage-SUFFIX` |
-| `OTHER_NAME`          | `OTHER_NAME`   |
+| Branch name  | Tag          |
+| ------------ | ------------ |
+| `main`       | `latest`     |
+| `OTHER_NAME` | `OTHER_NAME` |
+
+Characters that are not valid in a tag are replaced with `-`, so a branch named
+`users/me/my-change` publishes as `users-me-my-change`.
 
 ### Updating images used by GitHub Actions workflows
 
@@ -193,15 +243,19 @@ The general sequence for updating an image is this:
 1. Build and test images locally
    (see [Testing and debugging](#testing-and-debugging))
 1. Build and test images on CI
-   1. Push the Dockerfile changes to a shared branch and build test packages
+   1. Push the Dockerfile changes to your working branch, then run each
+      relevant `publish_*.yml` workflow manually against that branch to build
+      test packages
       (see [Automated image publishing](#automated-image-publishing))
 
-   1. Edit sha256 pins across the project to use the staging packages, like so:
+   1. Edit the image pins across the project to use the test packages. These are
+      tagged with the branch name rather than `latest`, so they can be
+      referenced by tag:
 
       ```diff
           container:
       -     image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
-      +     image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      +     image: ghcr.io/rocm/therock_build_manylinux_x86_64:users-me-my-change
       ```
 
    1. Trigger test CI/CD jobs (e.g. by creating a draft PR with those changes)
