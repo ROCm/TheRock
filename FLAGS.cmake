@@ -77,6 +77,21 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+# FlyDSL's prebuilt kernels for the hip-kernel-provider's kernel ingestor
+# (rocm-libraries dnn-providers/hip-kernel-provider/flydsl/). The option is OFF
+# in rocm-libraries; this flag turns it on, and turning the flag off is how
+# TheRock switches FlyDSL off. Takes effect only with
+# HIPDNN_ENABLE_KERNEL_INGESTOR.
+therock_declare_flag(
+  NAME HIPKERNELPROVIDER_ENABLE_FLYDSL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Pack the prebuilt FlyDSL kernels for the hip-kernel-provider's kernel ingestor"
+  CMAKE_VARS
+    HIPKERNELPROVIDER_ENABLE_FLYDSL=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
 # Gates the generic kernel ingestor platform described in RFC 0017:
 # rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
 therock_declare_flag(
