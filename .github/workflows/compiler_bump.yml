@@ -659,6 +659,10 @@ jobs:
             # Hard-code: gfx950's tests_on_trigger is "submodule_bump" only,
             # so the setup config clears test_runs_on for scheduled runs.
             hardcoded_test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+            test_type_override: quick
+          - amdgpu_family: gfx950-dcgpu
+            # Run rccl tests on multi-GPU runner for compiler bump validation.
+            hardcoded_test_runs_on: linux-gfx950-8gpu-ccs-ossci-rocm
             test_labels: "test:rccl"
           - amdgpu_family: gfx1151
             hardcoded_test_runs_on: ""
