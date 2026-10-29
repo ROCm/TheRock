@@ -647,7 +647,8 @@
           {
             "Name": "hipblasltprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2651,7 +2652,8 @@
           {
             "Name": "miopenprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
