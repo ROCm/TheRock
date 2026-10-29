@@ -20,4 +20,8 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
   "share/hipdnn/cudnn_samples/**",
+  # TestUedFixtureParity (hipdnn_plugin_sdk_tests) reads the UED fixture corpus and the
+  # UED JSON Schema from share/hipdnn_plugin_sdk next to the test binary's bin/ directory.
+  "share/hipdnn_plugin_sdk/schemas/**",
+  "share/hipdnn_plugin_sdk/test_fixtures/**",
 ]
