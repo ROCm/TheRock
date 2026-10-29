@@ -284,6 +284,7 @@ def record_sources(output: Path, rocm: Path, artifacts: list[str]) -> None:
             "gpu_target": "gfx950",
             "sanitizer": "DASAN",
             "compiler_flag": "-fsanitize=daddress",
+            "build_testing": "ON",
             "artifacts": artifacts,
             "sources": sources,
         },
@@ -350,7 +351,7 @@ def build(args: argparse.Namespace) -> None:
             "-DTHEROCK_BUNDLE_SYSDEPS=ON",
             "-DTHEROCK_ENABLE_DASAN=ON",
             "-DTHEROCK_SANITIZER=DASAN",
-            "-DTHEROCK_BUILD_TESTING=OFF",
+            "-DTHEROCK_BUILD_TESTING=ON",
             "-DTHEROCK_BUILD_COMGR_TESTS=OFF",
             "-DTHEROCK_BUILD_LLVM_TESTS=OFF",
             # Regenerate the overlay's manifests and gfx950 metadata, but name

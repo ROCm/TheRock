@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """Build one downstream gfx950 DASan scope using an installed compiler SDK.
 
-Run in TheRock's manylinux image. Runtime tests are compiled, never executed.
+Run in TheRock's manylinux image. Component tests are compiled, never executed.
 Dependency artifacts are reused as built in their original workflow; only the
 selected scope and missing dependencies are rebuilt from this checkout.
 """
@@ -41,6 +41,13 @@ STAGES = (
     "media-libs",
     "hipdnn",
 )
+TEST_ENABLED_STAGES = {
+    "runtime-tests",
+    "comm-libs",
+    "storage-libs",
+    "dctools-core",
+    "profiler-apps",
+}
 SDK_ARTIFACTS = {"base", "amd-llvm", "hipify", "core-runtime", "core-hip", "core-kpack"}
 EXTRA_ARTIFACTS = {}
 # These targets do not have native CMake compilation databases. Their build
@@ -71,6 +78,35 @@ def select_artifacts(topology: BuildTopology, stage: str) -> tuple[set[str], set
                 closure.add(dependency)
                 pending.append(dependency)
     return primary, closure
+
+
+def audit_profiler_test_payload(build_dir: Path) -> None:
+    """Fail the producer if its selected full profiler suites cannot be staged."""
+    artifacts = build_dir / "artifacts"
+    examples = [
+        path for path in artifacts.iterdir()
+        if path.is_dir()
+        and (name := ArtifactName.from_path(path))
+        and name.name == "rocprofiler-systems-examples"
+        and name.target_family in ("generic", "gfx950")
+    ]
+    if not examples or not any(
+        (path / "artifact_manifest.txt").is_file()
+        and any(
+            "share/rocprofiler-systems/examples/" in line
+            for line in (path / "artifact_manifest.txt").read_text().splitlines()
+        )
+        for path in examples
+    ):
+        raise RuntimeError("Profiler producer lacks rocprofiler-systems-examples test artifact")
+    rocm = build_dir / "dist/rocm"
+    required = (
+        "libexec/rocprofiler-compute/CTestTestfile.cmake",
+        "share/rocprofiler-systems/tests/CTestTestfile.cmake",
+    )
+    missing = [path for path in required if not (rocm / path).is_file()]
+    if missing:
+        raise RuntimeError("Profiler producer lacks installed full suite payload: " + ", ".join(missing))
 
 
 def source_sets(topology: BuildTopology, artifacts: set[str]) -> list[str]:
@@ -591,6 +627,7 @@ def build(args: argparse.Namespace) -> None:
                 "gpu_target": "gfx950",
                 "sanitizer": "DASAN",
                 "compiler_flag": "-fsanitize=daddress",
+                "build_testing": "ON" if args.stage in TEST_ENABLED_STAGES else "OFF",
                 "baseline_run_id": os.environ.get("BASELINE_RUN_ID"),
                 "dependencies_run_id": os.environ.get("DEPENDENCIES_RUN_ID"),
             },
@@ -630,7 +667,7 @@ def build(args: argparse.Namespace) -> None:
             "-DTHEROCK_BUNDLE_SYSDEPS=ON",
             "-DTHEROCK_ENABLE_DASAN=ON",
             "-DTHEROCK_SANITIZER=DASAN",
-            f"-DTHEROCK_BUILD_TESTING={'ON' if args.stage == 'runtime-tests' else 'OFF'}",
+            f"-DTHEROCK_BUILD_TESTING={'ON' if args.stage in TEST_ENABLED_STAGES else 'OFF'}",
             "-DTHEROCK_BUILD_COMGR_TESTS=OFF",
             "-DTHEROCK_BUILD_LLVM_TESTS=OFF",
             f"-Dtherock-aux-overlay_CMAKE_ARGS=-DTHEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR={llvm_major}",
@@ -658,6 +695,8 @@ def build(args: argparse.Namespace) -> None:
                 ],
                 log,
             )
+            if args.stage == "profiler-apps":
+                audit_profiler_test_payload(build_dir)
             audit_instrumentation(output, primary, closure, complete=True)
             if args.stage == "comm-libs":
                 run(

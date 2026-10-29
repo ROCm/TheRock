@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 """Execute pinned CI commands against the selected DASan artifact installation."""
-import argparse, datetime, json, os, pathlib, re, signal, subprocess, sys, time
+import argparse, datetime, json, os, pathlib, re, signal, subprocess, sys, sysconfig, time
+
+def runtime_library_path(runtime, sdk, inherited):
+    # setup-python's interpreter needs libpython when the test scripts invoke it.
+    python_libdir = sysconfig.get_config_var('LIBDIR')
+    paths = [str(pathlib.Path(runtime).parent), str(sdk/'lib'),
+             str(sdk/'lib/llvm/lib'), str(sdk/'lib/rocm_sysdeps/lib')]
+    if python_libdir:
+        paths.append(python_libdir)
+    if inherited:
+        paths.append(inherited)
+    return ':'.join(paths)
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--component',required=True);p.add_argument('--matrix',required=True);p.add_argument('--sdk',default='build');p.add_argument('--evidence',default='evidence');a=p.parse_args()
@@ -20,7 +31,7 @@ def main():
     if not pathlib.Path(runtime).is_file(): raise RuntimeError('Selected compiler has no shared DASan runtime: '+runtime)
     if c.get('kind')=='compiler-dasan-lit': env.pop('LD_PRELOAD',None)
     else: env['LD_PRELOAD']=runtime
-    env['LD_LIBRARY_PATH']=':'.join([str(pathlib.Path(runtime).parent),str(sdk/'lib'),str(sdk/'lib/llvm/lib'),str(sdk/'lib/rocm_sysdeps/lib')])
+    env['LD_LIBRARY_PATH']=runtime_library_path(runtime,sdk,env.get('LD_LIBRARY_PATH'))
     if c.get('external_compile'):
         env.update(CC=str(sdk/'lib/llvm/bin/clang'),CXX=str(sdk/'lib/llvm/bin/clang++'),CFLAGS='-fsanitize=daddress -shared-libsan',CXXFLAGS='-fsanitize=daddress -shared-libsan',HIPFLAGS='-fsanitize=daddress -shared-libsan',LDFLAGS='-fsanitize=daddress -shared-libsan')
     cpu=env.get('KUBE_CPU_REQUEST','').split('.')[0]

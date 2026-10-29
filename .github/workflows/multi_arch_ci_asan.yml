@@ -53,6 +53,11 @@ jobs:
       matrix: ${{ steps.plan.outputs.matrix }}
       count: ${{ steps.plan.outputs.count }}
       missing: ${{ steps.plan.outputs.missing }}
+      artifact_setup_failed: ${{ steps.plan.outputs.artifact_setup_failed }}
+      producer_payload_incomplete: ${{ steps.plan.outputs.producer_payload_incomplete }}
+      missing_preflight_record: ${{ steps.plan.outputs.missing_preflight_record }}
+      missing_test_payload: ${{ steps.plan.outputs.missing_test_payload }}
+      no_executable_suite: ${{ steps.plan.outputs.no_executable_suite }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -112,7 +117,7 @@ jobs:
       - name: Install base test requirements
         run: uv pip install -r requirements-test.txt
       - name: Install exact selected artifacts
-        timeout-minutes: 90
+        timeout-minutes: 180
         env:
           GH_TOKEN: ${{ github.token }}
           COMPONENT_ID: ${{ matrix.id }}
@@ -151,9 +156,37 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           TEST_RESULT: ${{ needs.test.result }}
           MISSING: ${{ needs.plan.outputs.missing }}
+          ARTIFACT_SETUP_FAILED: ${{ needs.plan.outputs.artifact_setup_failed }}
+          PRODUCER_PAYLOAD_INCOMPLETE: ${{ needs.plan.outputs.producer_payload_incomplete }}
+          MISSING_PREFLIGHT_RECORD: ${{ needs.plan.outputs.missing_preflight_record }}
+          MISSING_TEST_PAYLOAD: ${{ needs.plan.outputs.missing_test_payload }}
+          NO_EXECUTABLE_SUITE: ${{ needs.plan.outputs.no_executable_suite }}
         run: |
-          echo "Preflight=$PREFLIGHT_RESULT Plan=$PLAN_RESULT Tests=$TEST_RESULT Missing=$MISSING"
-          test "$PREFLIGHT_RESULT" = success
-          test "$PLAN_RESULT" = success
-          test "$MISSING" = 0
-          test "$TEST_RESULT" = success
+          echo "Preflight=$PREFLIGHT_RESULT Plan=$PLAN_RESULT Tests=$TEST_RESULT Unavailable=$MISSING"
+          {
+            echo '## DASan selected artifact outcome'
+            echo
+            echo '| Category | Jobs |'
+            echo '| --- | ---: |'
+            echo "| Artifact setup failed | ${ARTIFACT_SETUP_FAILED:-unknown} |"
+            echo "| Producer payload incomplete | ${PRODUCER_PAYLOAD_INCOMPLETE:-unknown} |"
+            echo "| Preflight record absent | ${MISSING_PREFLIGHT_RECORD:-unknown} |"
+            echo "| Test payload missing | ${MISSING_TEST_PAYLOAD:-unknown} |"
+            echo "| No executable suite | ${NO_EXECUTABLE_SUITE:-unknown} |"
+            echo
+            echo "Test job result: **$TEST_RESULT**. See individual test artifacts for executed case counts and failures."
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          if [[ "$PREFLIGHT_RESULT" != success || "$PLAN_RESULT" != success ]]; then
+            echo 'Preflight or planning failed.'
+            failed=1
+          fi
+          if [[ "$MISSING" != 0 ]]; then
+            echo 'Requested suite payload coverage is incomplete.'
+            failed=1
+          fi
+          if [[ "$TEST_RESULT" != success ]]; then
+            echo 'One or more scheduled test jobs failed or did not run.'
+            failed=1
+          fi
+          exit "$failed"

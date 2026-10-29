@@ -10,15 +10,19 @@ bootstrap placeholders are recorded. Compiler files are authoritative. Requires 
 """
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import posixpath
 import re
 import shutil
+import socket
+import ssl
 import stat
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -80,13 +84,182 @@ def api_request(url, token):
     return urllib.request.build_opener(NoRedirect).open(req, timeout=120)
 
 
+DOWNLOAD_ATTEMPTS = 3
+RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
+REDIRECT_HTTP = {301, 302, 303, 307, 308}
+
+
+class ArtifactDigestMismatch(ValueError):
+    """The fully downloaded archive did not match its pinned SHA-256."""
+
+
+def retryable_error(exc):
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in RETRYABLE_HTTP
+    return isinstance(exc, (urllib.error.URLError, http.client.HTTPException,
+                            ConnectionError, TimeoutError, socket.timeout, ssl.SSLError))
+
+
+def error_label(exc):
+    # Exception strings can include signed storage URLs. Do not persist them.
+    if isinstance(exc, urllib.error.HTTPError):
+        return "HTTP " + str(exc.code)
+    return type(exc).__name__
+
+
+def artifact_response(base, token, offset):
+    try:
+        response = api_request(base + "/zip", token)
+    except urllib.error.HTTPError as exc:
+        if exc.code not in REDIRECT_HTTP:
+            raise
+        location = exc.headers.get("Location", "")
+        parsed = urllib.parse.urlsplit(location)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+            raise ValueError("Unsafe artifact redirect") from None
+        # A fresh request with no Authorization header. A new signed URL is
+        # acquired on every attempt, including attempts that resume a transfer.
+        headers = {"Accept-Encoding": "identity"}
+        if offset:
+            headers["Range"] = "bytes=" + str(offset) + "-"
+        request = urllib.request.Request(location, headers=headers)
+        response = urllib.request.urlopen(request, timeout=120)
+    return response
+
+
+def intact_zip(path):
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return archive.testzip() is None
+    except (OSError, EOFError, zipfile.BadZipFile):
+        return False
+
+
+def transfer_archive(base, token, partial, expected, aid, attempts_path, metadata_size=None):
+    attempts = []
+    for number in range(1, DOWNLOAD_ATTEMPTS + 1):
+        offset = partial.stat().st_size if partial.exists() else 0
+        started = time.monotonic()
+        entry = {"attempt": number, "phase": "artifact_download", "offset": offset,
+                 "started_utc": datetime.now(timezone.utc).isoformat()}
+        if isinstance(metadata_size, int):
+            entry["metadata_size_bytes"] = metadata_size
+        print("Artifact " + str(aid) + ": download attempt " + str(number) +
+              "/" + str(DOWNLOAD_ATTEMPTS) + " from byte " + str(offset), flush=True)
+        try:
+            with artifact_response(base, token, offset) as response:
+                status = response.getcode()
+                content_range = response.headers.get("Content-Range", "")
+                if offset and status == 206:
+                    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+|\*)", content_range)
+                    if not match or int(match.group(1)) != offset:
+                        raise ValueError("Unexpected artifact range response")
+                elif status == 200:
+                    # Some storage endpoints ignore Range; restart in that case.
+                    offset = 0
+                else:
+                    raise ValueError("Unexpected artifact download status " + str(status))
+                entry["http_status"] = status
+                entry["resumed"] = bool(offset)
+                h = hashlib.sha256()
+                if offset:
+                    with partial.open("rb") as existing:
+                        for block in iter(lambda: existing.read(8 * 1024 * 1024), b""):
+                            h.update(block)
+                received = 0
+                next_progress = offset + 512 * 1024 * 1024
+                with partial.open("ab" if offset else "wb") as output:
+                    while True:
+                        block = response.read(8 * 1024 * 1024)
+                        if not block:
+                            break
+                        output.write(block)
+                        h.update(block)
+                        received += len(block)
+                        if offset + received >= next_progress:
+                            print("Artifact " + str(aid) + ": received " +
+                                  str((offset + received) // (1024 * 1024)) + " MiB", flush=True)
+                            next_progress += 512 * 1024 * 1024
+                entry["bytes_received"] = received
+                entry["total_bytes"] = offset + received
+                length = response.headers.get("Content-Length")
+                if length is not None:
+                    entry["response_content_length"] = int(length)
+                if length is not None and received != int(length):
+                    raise http.client.IncompleteRead(b"", int(length) - received)
+                actual = h.hexdigest()
+                entry["sha256"] = actual
+                entry["matches_metadata_size"] = (entry["total_bytes"] == metadata_size
+                                                  if isinstance(metadata_size, int) else None)
+                if actual != expected:
+                    entry["result"] = "checking_zip_integrity"
+                    write_json(attempts_path, {"artifact_id": aid, "expected_sha256": expected,
+                                               "attempts": attempts + [entry]})
+                    print("Artifact " + str(aid) + ": digest differs; checking ZIP CRCs", flush=True)
+                    entry["zip_crc_valid"] = intact_zip(partial)
+                    entry["result"] = ("complete_zip_digest_mismatch" if entry["zip_crc_valid"]
+                                       else "corrupt_zip_digest_mismatch")
+                    entry["elapsed_seconds"] = round(time.monotonic() - started, 1)
+                    attempts.append(entry)
+                    write_json(attempts_path, {"artifact_id": aid, "expected_sha256": expected,
+                                               "attempts": attempts})
+                    partial.unlink()
+                    # A complete ZIP with valid member CRCs but a different
+                    # digest is a genuine pin discrepancy, not a dropped TCP
+                    # transfer. Repeating a multi-GB download cannot fix it.
+                    if entry["zip_crc_valid"] or number == DOWNLOAD_ATTEMPTS:
+                        raise ArtifactDigestMismatch("Downloaded archive digest mismatch for ID " + str(aid))
+                else:
+                    entry["result"] = "verified"
+                    entry["elapsed_seconds"] = round(time.monotonic() - started, 1)
+                    attempts.append(entry)
+                    write_json(attempts_path, {"artifact_id": aid, "expected_sha256": expected,
+                                               "attempts": attempts})
+                    return
+        except Exception as exc:
+            # A completed bad digest was recorded above and is retried as a
+            # fresh download. Other recoverable failures keep the partial ZIP.
+            if entry not in attempts:
+                entry["result"] = "transfer_error"
+                entry["error"] = error_label(exc)
+                entry["total_bytes"] = partial.stat().st_size if partial.exists() else 0
+                entry["elapsed_seconds"] = round(time.monotonic() - started, 1)
+                attempts.append(entry)
+                write_json(attempts_path, {"artifact_id": aid, "expected_sha256": expected,
+                                           "attempts": attempts})
+            if number == DOWNLOAD_ATTEMPTS or not retryable_error(exc):
+                if isinstance(exc, ArtifactDigestMismatch):
+                    raise
+                raise RuntimeError("Artifact " + str(aid) + " download failed (" +
+                                   error_label(exc) + ")") from None
+        if number < DOWNLOAD_ATTEMPTS:
+            delay = 4 ** number
+            print("Artifact " + str(aid) + ": retrying in " + str(delay) + "s", flush=True)
+            time.sleep(delay)
+    raise AssertionError("Artifact download exhausted without result")
+
+
 def artifact_zip(producer, cache, evidence, token, logs=False):
     aid = int(producer["logs_artifact_id" if logs else "artifact_id"])
     expected = digest_value(producer["logs_artifact_digest" if logs else "artifact_digest"])
     base = "https://api.github.com/repos/ROCm/TheRock/actions/artifacts/" + str(aid)
     # Verify identity even on cache hits. Never substitute by latest/name/run.
-    with api_request(base, token) as response:
-        metadata = json.load(response)
+    metadata_attempts = []
+    for number in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            with api_request(base, token) as response:
+                metadata = json.load(response)
+            break
+        except Exception as exc:
+            metadata_attempts.append({"attempt": number, "phase": "artifact_metadata",
+                                      "error": error_label(exc)})
+            write_json(evidence / (str(aid) + "-metadata-attempts.json"), metadata_attempts)
+            if number == DOWNLOAD_ATTEMPTS or not retryable_error(exc):
+                raise RuntimeError("Artifact " + str(aid) + " metadata failed (" +
+                                   error_label(exc) + ")") from None
+            print("Artifact " + str(aid) + ": metadata attempt " + str(number) +
+                  " failed (" + error_label(exc) + "); retrying", flush=True)
+            time.sleep(4 ** number)
     expected_name = producer.get("logs_artifact_name", "dasan-build-logs-and-tests") if logs else producer["artifact_name"]
     workflow = metadata.get("workflow_run") or {}
     checks = (metadata.get("id") == aid, metadata.get("name") == expected_name,
@@ -107,20 +280,9 @@ def artifact_zip(producer, cache, evidence, token, logs=False):
         if partial.exists():
             raise ValueError("Incomplete/concurrent download exists: " + partial.name)
         try:
-            try:
-                response = api_request(base + "/zip", token)
-            except urllib.error.HTTPError as exc:
-                if exc.code not in (301, 302, 303, 307, 308):
-                    raise
-                location = exc.headers.get("Location", "")
-                if urllib.parse.urlsplit(location).scheme != "https":
-                    raise ValueError("Unsafe artifact redirect") from None
-                # Fresh request: explicitly no Authorization header.
-                response = urllib.request.urlopen(location, timeout=120)
-            with response, partial.open("xb") as output:
-                shutil.copyfileobj(response, output, 8 * 1024 * 1024)
-            if sha256(partial) != expected:
-                raise ValueError("Downloaded archive digest mismatch for ID " + str(aid))
+            transfer_archive(base, token, partial, expected, aid,
+                             evidence / (str(aid) + "-download-attempts.json"),
+                             metadata.get("size_in_bytes"))
             partial.replace(archive)
         finally:
             if partial.exists():

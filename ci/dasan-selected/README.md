@@ -20,3 +20,22 @@ runtime is preloaded for component tests and compile-time tests use
 `-fsanitize=daddress -shared-libsan`. Compiler runtime validation retains its
 static/shared load-order checks without a forced preload. No tests may pass with
 an empty selection. CI artifacts retain logs and source provenance for 30 days.
+
+## Repairs after run 40809027703
+
+The launcher preserves Python's library directory and inherited library paths
+after the selected DASan and SDK paths. Artifact transfers retry up to three
+times, resume only on a matching HTTP range response, and retain byte counts and
+observed hashes without signed URLs. SHA256 pins remain mandatory; a complete
+ZIP with a different digest fails. Artifact installation has a 180-minute limit.
+
+Coverage distinguishes setup failures, incomplete producer artifacts, missing
+test payloads, and components without an executable suite. Missing payloads
+continue to fail the coverage gate. The ten pinned artifacts are unchanged.
+Future math, comm, storage, profiler, and RDC producers enable test building;
+profiler builds audit required manifests and installed CTest payloads before
+packaging. New producer artifacts require explicit provenance and selection.
+
+Validation: five transfer regression tests, Python compilation, workflow YAML
+parsing, launcher path precedence checks, profiler payload audit checks, and
+replay of the original plan (81 requested, 12 runnable, 69 unavailable).
