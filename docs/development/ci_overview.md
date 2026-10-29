@@ -82,12 +82,19 @@ The mapping is derived from the `source_sets` entries on each artifact group in
 [`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), which is already the source of
 truth for `fetch_sources.py --stage`.
 [`detect_external_repo_config.py`](../../build_tools/github_actions/detect_external_repo_config.py)
-resolves it once during CI setup and publishes the result as `source_stages`
-inside the `external_repo_config` input. The build stage workflows use that list
-to gate both the checkout and the `-DTHEROCK_<REPO>_SOURCE_DIR=` configure
-option. Stages that skip the checkout see the same source tree as a regular
-TheRock CI run of that stage, since `fetch_sources.py --stage` already omits the
-corresponding submodule.
+runs in two modes:
+
+- During CI setup it resolves the repository into the `external_repo_config`
+  input that is threaded through the build workflows, including the
+  `source_stages` list.
+- At the start of each build stage, `--config-json ... --stage <name>` narrows
+  that config down to the steps the stage actually needs, emitting
+  `needs_source`, `cmake_options` and `fetch_sources_args` as step outputs.
+
+Stages that skip the checkout see the same source tree as a regular TheRock CI
+run of that stage, since `fetch_sources.py --stage` already omits the
+corresponding submodule. The DVC project rooted in the external checkout is
+dropped from `fetch_sources_args` alongside it.
 
 No manual updates are needed as stages or libraries move: adding a library to an
 artifact group whose `source_sets` include the repository automatically adds that

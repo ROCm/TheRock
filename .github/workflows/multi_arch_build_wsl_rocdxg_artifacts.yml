@@ -76,11 +76,7 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
-      # Checking out a monorepo such as rocm-libraries takes several minutes, so
-      # only do it for the stages that actually build from those sources (see
-      # source_stages in detect_external_repo_config.py).
-      EXTERNAL_REPO_SOURCE_NEEDED: ${{ inputs.external_repo_config != '' && contains(fromJSON(inputs.external_repo_config).source_stages, inputs.stage_name) }}
+      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
@@ -114,16 +110,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      - name: Checkout external repository
-        if: ${{ env.EXTERNAL_REPO_SOURCE_NEEDED == 'true' }}
-        timeout-minutes: 10
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
-          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
-          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
-
       - name: Setting up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -131,6 +117,26 @@ jobs:
 
       - name: Install python deps
         run: pip install -r requirements.txt
+
+      # Narrows the external repo config down to this stage. Stages that do not
+      # build from the external sources skip its (multi-minute) checkout.
+      - name: Resolve external repo config
+        id: external_repo
+        if: ${{ inputs.external_repo_config != '' }}
+        run: |
+          python build_tools/github_actions/detect_external_repo_config.py \
+            --config-json "${EXTERNAL_REPO_CONFIG}" \
+            --stage "${STAGE_NAME}"
+
+      - name: Checkout external repository
+        if: ${{ steps.external_repo.outputs.needs_source == 'true' }}
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ steps.external_repo.outputs.repository }}
+          ref: ${{ steps.external_repo.outputs.ref }}
+          path: ${{ steps.external_repo.outputs.checkout_path }}
 
       - name: Runner health status
         run: python build_tools/health_status.py
@@ -168,6 +174,7 @@ jobs:
         timeout-minutes: 30
         env:
           GH_TOKEN: ${{ github.token }}
+          EXTERNAL_FETCH_SOURCES_ARGS: ${{ steps.external_repo.outputs.fetch_sources_args }}
         run: |
           gh auth setup-git --hostname github.com
           python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
@@ -302,8 +309,7 @@ jobs:
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
                 ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-                ${{ env.EXTERNAL_REPO_SOURCE_NEEDED == 'true' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
-                ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
+                ${{ steps.external_repo.outputs.cmake_options }} \
                 ${{ steps.stage_config.outputs.cmake_args }}
             '
 

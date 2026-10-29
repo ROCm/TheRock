@@ -4,6 +4,7 @@
 
 """Unit tests for detect_external_repo_config.py"""
 
+import json
 import os
 import sys
 import tempfile
@@ -18,6 +19,7 @@ from detect_external_repo_config import (
     get_repo_config,
     get_external_repo_path,
     get_source_stages,
+    resolve_stage_config,
     import_external_repo_module,
     get_skip_patterns,
     get_test_list,
@@ -500,6 +502,82 @@ class TestGetSourceStages(unittest.TestCase):
             os.unlink(temp_file)
 
         self.assertIn('"source_stages": ["cv-libs", "math-libs"]', output)
+
+
+class TestResolveStageConfig(unittest.TestCase):
+    """Tests for narrowing a generated config down to a single build stage."""
+
+    CONFIG = {
+        "repository": "ROCm/rocm-libraries",
+        "ref": "abc123",
+        "checkout_path": "external-rocm-libraries",
+        "source_package": "ROCM_LIBRARIES",
+        "source_stages": ["cv-libs", "math-libs"],
+        "extra_cmake_options": "-DFOO=BAR",
+    }
+
+    def test_stage_that_builds_from_sources(self):
+        """math-libs checks the repo out and points CMake at it."""
+        resolved = resolve_stage_config(self.CONFIG, "math-libs")
+        self.assertTrue(resolved["needs_source"])
+        self.assertEqual(
+            resolved["cmake_options"],
+            "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=external-rocm-libraries -DFOO=BAR",
+        )
+        self.assertEqual(resolved["repository"], "ROCm/rocm-libraries")
+        self.assertEqual(resolved["ref"], "abc123")
+        self.assertEqual(resolved["checkout_path"], "external-rocm-libraries")
+
+    def test_stage_that_does_not_build_from_sources(self):
+        """compiler-runtime skips the checkout and the source dir option."""
+        resolved = resolve_stage_config(self.CONFIG, "compiler-runtime")
+        self.assertFalse(resolved["needs_source"])
+        self.assertEqual(resolved["cmake_options"], "-DFOO=BAR")
+
+    def test_dvc_project_dropped_when_not_checked_out(self):
+        """The DVC project rooted in the external checkout is dropped with it."""
+        needed = resolve_stage_config(self.CONFIG, "math-libs")
+        self.assertEqual(
+            needed["fetch_sources_args"],
+            "--skip-submodules rocm-libraries "
+            "--dvc-projects external-rocm-libraries rocm-systems",
+        )
+
+        skipped = resolve_stage_config(self.CONFIG, "compiler-runtime")
+        self.assertEqual(
+            skipped["fetch_sources_args"],
+            "--skip-submodules rocm-libraries --dvc-projects rocm-systems",
+        )
+
+    def test_main_stage_mode(self):
+        """--stage emits step outputs consumed by the build workflows."""
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            temp_file = f.name
+        os.environ["GITHUB_OUTPUT"] = temp_file
+        try:
+            rc = detect_external_repo_config_main(
+                [
+                    "--config-json",
+                    json.dumps(self.CONFIG),
+                    "--stage",
+                    "compiler-runtime",
+                ]
+            )
+            self.assertEqual(rc, 0)
+            with open(temp_file, "r") as f:
+                output = f.read()
+        finally:
+            del os.environ["GITHUB_OUTPUT"]
+            os.unlink(temp_file)
+
+        self.assertIn("needs_source=false", output)
+        self.assertIn("checkout_path=external-rocm-libraries", output)
+        self.assertNotIn("THEROCK_ROCM_LIBRARIES_SOURCE_DIR", output)
+
+    def test_main_stage_mode_requires_config_json(self):
+        """--stage without --config-json is a usage error, not a crash."""
+        rc = detect_external_repo_config_main(["--stage", "math-libs"])
+        self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":
