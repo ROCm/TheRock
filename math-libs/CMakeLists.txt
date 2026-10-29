@@ -245,7 +245,7 @@ if(THEROCK_ENABLE_PRIM)
     rocThrust
   )
 
-  if(THEROCK_BUILD_TESTING)
+  if(THEROCK_BUILD_TESTING AND _rocprim_tests_enabled)
     list(APPEND _prim_subproject_deps rocPRIM_tests)
   endif()
 
