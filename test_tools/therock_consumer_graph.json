@@ -687,7 +687,8 @@
       "rocsolver",
       "rocsparse",
       "rocthrust",
-      "rocwmma"
+      "rocwmma",
+      "rpp"
     ]
   },
   "therock-grpc": {
