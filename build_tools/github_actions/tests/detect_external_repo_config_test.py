@@ -14,11 +14,15 @@ from unittest.mock import patch, MagicMock, mock_open
 
 # Add parent directory to path to import the module
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from _therock_utils.build_topology import get_topology
 
 from detect_external_repo_config import (
     get_repo_config,
     get_external_repo_path,
     get_source_stages,
+    build_stage_configs,
     resolve_stage_config,
     import_external_repo_module,
     get_skip_patterns,
@@ -505,7 +509,7 @@ class TestGetSourceStages(unittest.TestCase):
 
 
 class TestResolveStageConfig(unittest.TestCase):
-    """Tests for narrowing a generated config down to a single build stage."""
+    """Tests for the per-stage view the build workflows index into."""
 
     CONFIG = {
         "repository": "ROCm/rocm-libraries",
@@ -524,9 +528,6 @@ class TestResolveStageConfig(unittest.TestCase):
             resolved["cmake_options"],
             "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=external-rocm-libraries -DFOO=BAR",
         )
-        self.assertEqual(resolved["repository"], "ROCm/rocm-libraries")
-        self.assertEqual(resolved["ref"], "abc123")
-        self.assertEqual(resolved["checkout_path"], "external-rocm-libraries")
 
     def test_stage_that_does_not_build_from_sources(self):
         """compiler-runtime skips the checkout and the source dir option."""
@@ -549,20 +550,20 @@ class TestResolveStageConfig(unittest.TestCase):
             "--skip-submodules rocm-libraries --dvc-projects rocm-systems",
         )
 
-    def test_main_stage_mode(self):
-        """--stage emits step outputs consumed by the build workflows."""
+    def test_every_stage_has_an_entry(self):
+        """A missing key would silently skip the checkout, so cover all stages."""
+        stages = build_stage_configs(self.CONFIG)
+        self.assertEqual(sorted(stages), sorted(get_topology().get_all_stage_names()))
+        self.assertTrue(stages["math-libs"]["needs_source"])
+        self.assertFalse(stages["compiler-runtime"]["needs_source"])
+
+    def test_main_emits_stages_map(self):
+        """config_json carries the per-stage map the build workflows index."""
         with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
             temp_file = f.name
         os.environ["GITHUB_OUTPUT"] = temp_file
         try:
-            rc = detect_external_repo_config_main(
-                [
-                    "--config-json",
-                    json.dumps(self.CONFIG),
-                    "--stage",
-                    "compiler-runtime",
-                ]
-            )
+            rc = detect_external_repo_config_main(["--repository", "rocm-libraries"])
             self.assertEqual(rc, 0)
             with open(temp_file, "r") as f:
                 output = f.read()
@@ -570,14 +571,15 @@ class TestResolveStageConfig(unittest.TestCase):
             del os.environ["GITHUB_OUTPUT"]
             os.unlink(temp_file)
 
-        self.assertIn("needs_source=false", output)
-        self.assertIn("checkout_path=external-rocm-libraries", output)
-        self.assertNotIn("THEROCK_ROCM_LIBRARIES_SOURCE_DIR", output)
-
-    def test_main_stage_mode_requires_config_json(self):
-        """--stage without --config-json is a usage error, not a crash."""
-        rc = detect_external_repo_config_main(["--stage", "math-libs"])
-        self.assertEqual(rc, 1)
+        line = [l for l in output.splitlines() if l.startswith("config_json=")][0]
+        stages = json.loads(line.split("=", 1)[1])["stages"]
+        self.assertTrue(stages["math-libs"]["needs_source"])
+        self.assertEqual(
+            stages["math-libs"]["cmake_options"],
+            "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=external-rocm-libraries",
+        )
+        self.assertFalse(stages["compiler-runtime"]["needs_source"])
+        self.assertEqual(stages["compiler-runtime"]["cmake_options"], "")
 
 
 if __name__ == "__main__":

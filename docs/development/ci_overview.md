@@ -82,14 +82,30 @@ The mapping is derived from the `source_sets` entries on each artifact group in
 [`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), which is already the source of
 truth for `fetch_sources.py --stage`.
 [`detect_external_repo_config.py`](../../build_tools/github_actions/detect_external_repo_config.py)
-runs in two modes:
+runs once, in the CI setup job, and resolves the repository into the
+`external_repo_config` input that is threaded through the build workflows. That
+config carries a `stages` map holding what every build stage needs:
 
-- During CI setup it resolves the repository into the `external_repo_config`
-  input that is threaded through the build workflows, including the
-  `source_stages` list.
-- At the start of each build stage, `--config-json ... --stage <name>` narrows
-  that config down to the steps the stage actually needs, emitting
-  `needs_source`, `cmake_options` and `fetch_sources_args` as step outputs.
+```json
+"stages": {
+  "math-libs": {
+    "needs_source": true,
+    "cmake_options": "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=external-rocm-libraries",
+    "fetch_sources_args": "--skip-submodules rocm-libraries --dvc-projects external-rocm-libraries rocm-systems"
+  },
+  "compiler-runtime": {
+    "needs_source": false,
+    "cmake_options": "",
+    "fetch_sources_args": "--skip-submodules rocm-libraries --dvc-projects rocm-systems"
+  }
+}
+```
+
+A build stage job looks itself up by name, so nothing is re-derived per stage:
+
+```yaml
+if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source }}
+```
 
 Stages that skip the checkout see the same source tree as a regular TheRock CI
 run of that stage, since `fetch_sources.py --stage` already omits the

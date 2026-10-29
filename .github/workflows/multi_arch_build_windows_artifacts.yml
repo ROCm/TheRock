@@ -130,32 +130,26 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      # Checking out a monorepo such as rocm-libraries takes several minutes, so
+      # only do it for the stages that actually build from those sources. The
+      # setup job precomputed that decision for every stage (see
+      # detect_external_repo_config.py), so this just looks up our own stage.
+      - name: Checkout external repository
+        if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source }}
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ fromJSON(inputs.external_repo_config).repository }}
+          ref: ${{ fromJSON(inputs.external_repo_config).ref }}
+          path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Install python deps
         run: pip install -r requirements.txt
-
-      # Narrows the external repo config down to this stage. Stages that do not
-      # build from the external sources skip its (multi-minute) checkout.
-      - name: Resolve external repo config
-        id: external_repo
-        if: ${{ inputs.external_repo_config != '' }}
-        run: |
-          python build_tools/github_actions/detect_external_repo_config.py \
-            --config-json "${EXTERNAL_REPO_CONFIG}" \
-            --stage "${STAGE_NAME}"
-
-      - name: Checkout external repository
-        if: ${{ steps.external_repo.outputs.needs_source == 'true' }}
-        timeout-minutes: 10
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          repository: ${{ steps.external_repo.outputs.repository }}
-          ref: ${{ steps.external_repo.outputs.ref }}
-          path: ${{ steps.external_repo.outputs.checkout_path }}
 
       - name: Install requirements
         run: |
@@ -211,7 +205,7 @@ jobs:
         timeout-minutes: 30
         env:
           GH_TOKEN: ${{ github.token }}
-          EXTERNAL_FETCH_SOURCES_ARGS: ${{ steps.external_repo.outputs.fetch_sources_args }}
+          EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].fetch_sources_args || '' }}
         run: |
           gh auth setup-git --hostname github.com
           python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
@@ -244,7 +238,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
-            ${{ steps.external_repo.outputs.cmake_options }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
