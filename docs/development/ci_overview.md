@@ -64,24 +64,6 @@ graph LR
 
 **Artifact organization:** Each component is packaged into separate archives by sub-components (lib, run, dev, doc, test). See [artifacts.md](artifacts.md) for complete details on artifact structure and naming conventions.
 
-### External repository checkouts
-
-When CI is triggered from an external repository (`rocm-libraries`, `rocm-systems`
-or `rocgdb`), TheRock is the primary checkout and the external repository is
-checked out alongside it into `external-<repo>/`. Cloning a monorepo takes several
-minutes, so only the stages that build from those sources check it out - for
-example `rocm-libraries` is cloned for `math-libs` and `cv-libs` only. The other
-stages see the same source tree as a regular TheRock run, since
-`fetch_sources.py --stage` already omits the corresponding submodule.
-
-[`detect_external_repo_config.py`](../../build_tools/github_actions/detect_external_repo_config.py)
-runs once in the CI setup job and emits the `external_repo_config` input threaded
-through the build workflows. It holds a `stages` map keyed by stage name, so each
-job just looks itself up for its `needs_source` flag, `cmake_options` and
-`fetch_sources_args`. The mapping comes from the `source_sets` entries in
-[`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), so moving a library between
-artifact groups updates the stage list automatically.
-
 ## Artifact Storage and Distribution
 
 ### S3 Buckets
