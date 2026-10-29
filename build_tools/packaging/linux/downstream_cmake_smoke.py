@@ -83,8 +83,10 @@ ConfigureRunner = Callable[[list[str]], ConfigureResult]
 def render_cmake_lists() -> str:
     """Return the configure-only consumer project.
 
-    ``LANGUAGES NONE`` keeps configure from searching for a C++ or HIP
-    compiler. ``message(STATUS)`` prints ``hip_VERSION`` and
+    ``LANGUAGES CXX`` is required. ``hip-config`` calls
+    ``find_dependency(Threads)``, and CMake's ``FindThreads`` errors when
+    neither C nor CXX is enabled. The step still does not add a HIP target
+    or compile a program. ``message(STATUS)`` prints ``hip_VERSION`` and
     ``hipblaslt_VERSION`` on cmake stdout after each ``find_package``.
 
     Returns:
@@ -92,7 +94,7 @@ def render_cmake_lists() -> str:
     """
     lines = [
         f"cmake_minimum_required(VERSION {CMAKE_MINIMUM_VERSION})",
-        "project(install_smoke_test LANGUAGES NONE)",
+        "project(install_smoke_test LANGUAGES CXX)",
         "",
     ]
     for package_name in SMOKE_PACKAGES:
