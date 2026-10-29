@@ -435,9 +435,11 @@ class ComponentScannerTest(TmpDirTestCase):
             # yet.
             "bin/def.exe",
         ]
+        [components.sys."a/stage"]
         [components.dev."a/stage"]
         [components.dbg."a/stage"]
         [components.lib."a/stage"]
+        exclude = "etc/**"
         [components.run."a/stage"]
         include = "bin/*.exe"
         exclude = [
@@ -457,7 +459,29 @@ class ComponentScannerTest(TmpDirTestCase):
         self.touch("src/a/stage/bin/xyz.exe")
         self.touch("src/a/stage/.build-id/999999999/88888.debug")
         self.touch("src/a/stage/share/doc/README.md")
+        self.touch("src/a/stage/etc/ld.so.conf.d/10-rocm-opencl.conf")
+        self.touch("src/a/stage/usr/lib/systemd/system/amdcuid_daemon.service")
+        self.touch("src/a/stage/usr/share/doc/foo/README")
         self.touch("src/b/stage/lib/libbar.so.1")
+
+        # System config files (and their parent dirs) go to 'sys'; documentation
+        # under usr/ stays with 'doc'.
+        sys_relpaths = {
+            "etc",
+            "etc/ld.so.conf.d",
+            "etc/ld.so.conf.d/10-rocm-opencl.conf",
+            "usr",
+            "usr/lib",
+            "usr/lib/systemd",
+            "usr/lib/systemd/system",
+            "usr/lib/systemd/system/amdcuid_daemon.service",
+            "usr/share",
+        }
+        usr_doc_relpaths = {
+            "usr/share/doc",
+            "usr/share/doc/foo",
+            "usr/share/doc/foo/README",
+        }
 
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         scanner.verify()
@@ -475,7 +499,9 @@ class ComponentScannerTest(TmpDirTestCase):
                     "share/doc",
                     ".build-id/999999999/88888.debug",
                 ]
-            ),
+            )
+            | sys_relpaths
+            | usr_doc_relpaths,
         )
         self.assertSetEqual(
             set(relpath for relpath, _ in scanner.unmatched_files),
@@ -492,6 +518,14 @@ class ComponentScannerTest(TmpDirTestCase):
         pm_b = lib_comp.basedir_contents["b/stage"]
         self.assertSetEqual(set(pm_a.all.keys()), set(["lib/libfoo.so.1"]))
         self.assertSetEqual(set(pm_b.all.keys()), set(["lib/libbar.so.1"]))
+        self.assertSetEqual(
+            set(scanner.components["sys"].basedir_contents["a/stage"].all.keys()),
+            sys_relpaths,
+        )
+        self.assertSetEqual(
+            set(scanner.components["doc"].basedir_contents["a/stage"].all.keys()),
+            {"bin/def.exe", "share/doc", "share/doc/README.md"} | usr_doc_relpaths,
+        )
 
         # Write the artifact and verify.
         lib_comp.write_artifact(self.temp_dir / "out")

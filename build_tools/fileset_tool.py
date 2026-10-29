@@ -47,7 +47,7 @@ def do_copy(args: argparse.Namespace, pm: PatternMatcher):
 
 def do_artifact(args):
     """Produces an 'artifact directory', which is a slice of installed stage/
-    directories, split into components (i.e. run, dev, dbg, doc, test).
+    directories, split into components (i.e. run, dev, dbg, sys, doc, test).
     """
     descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(
         args.descriptor, artifact_name=args.artifact_name
