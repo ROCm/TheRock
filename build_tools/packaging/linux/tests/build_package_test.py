@@ -19,7 +19,6 @@ Requires Python 3.10+ (``packaging_utils`` type syntax).
 """
 
 import importlib.util
-import json
 import os
 import sys
 import tempfile
@@ -146,19 +145,6 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
     }
     defaults.update(overrides)
     return Namespace(**defaults)
-
-
-def _write_kpack_manifest(artifacts_dir: Path) -> None:
-    """Write ``therock_manifest.json`` with ``KPACK_SPLIT_ARTIFACTS`` enabled."""
-    manifest_dir = artifacts_dir / "pkg"
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = manifest_dir / "therock_manifest.json"
-    manifest_path.write_text(
-        json.dumps({"flags": {"KPACK_SPLIT_ARTIFACTS": True}}),
-        encoding="utf-8",
-    )
-    if not manifest_path.exists():
-        raise RuntimeError(f"Failed to write kpack manifest: {manifest_path}")
 
 
 def _metadata_field(metadata_text: str, field: str) -> str:
@@ -292,7 +278,6 @@ def _stage_package_artifacts(
 def _kpack_config(tmp: Path, **overrides: object) -> PackageConfig:
     """Build kpack ``PackageConfig`` via ``create_package_config`` (not hand-built)."""
     root = Path(tmp)
-    _write_kpack_manifest(root / "artifacts")
     args = _args(root, **overrides)
     return build_package.create_package_config(args)
 
@@ -996,22 +981,6 @@ class CreatePackageConfigTest(BuildPackageTestCase):
         self.assertEqual(cfg.gfx_arch, EMPTY_GFX_ARCH)
         self.assertEqual(cfg.gfxarch_list, (TEST_GFX_TARGET, TEST_GFX_TARGET_ALT))
 
-    @patch.object(
-        build_package, "create_package_config", side_effect=RuntimeError("stop")
-    )
-    def test_run_requires_kpack_manifest(self, mock_config: object) -> None:
-        # Without a kpack manifest: exit before creating the config.
-        with self.assertRaises(SystemExit) as ctx:
-            build_package.run(_args(self.temp_dir))
-        self.assertEqual(ctx.exception.code, 1)
-        mock_config.assert_not_called()
-
-        # With a kpack manifest: pass the check and proceed to config creation.
-        _write_kpack_manifest(self.artifacts_dir())
-        with self.assertRaisesRegex(RuntimeError, "stop"):
-            build_package.run(_args(self.temp_dir))
-        mock_config.assert_called_once()
-
     def test_invalid_rocm_version_raises(self) -> None:
         with self.assertRaises(ValueError):
             _kpack_config(self.temp_dir, rocm_version="7")
@@ -1061,24 +1030,6 @@ class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
             "amdrocm-core", replace(cfg, versioned_pkg=True, gfx_arch=TEST_GFX_TARGET)
         )
         self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
-
-
-# ---------------------------------------------------------------------------
-# load_kpack_from_manifest
-# ---------------------------------------------------------------------------
-class LoadKpackFromManifestTest(BuildPackageTestCase):
-    """``load_kpack_from_manifest`` reads ``therock_manifest.json`` kpack flags."""
-
-    def test_true_when_kpack_flag_set(self) -> None:
-        _write_kpack_manifest(self.artifacts_dir())
-        self.assertTrue(
-            build_package.load_kpack_from_manifest(artifacts_dir=self.artifacts_dir())
-        )
-
-    def test_false_when_no_manifest(self) -> None:
-        self.assertFalse(
-            build_package.load_kpack_from_manifest(artifacts_dir=self.artifacts_dir())
-        )
 
 
 # ---------------------------------------------------------------------------

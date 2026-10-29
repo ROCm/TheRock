@@ -35,7 +35,6 @@ create RPM and DEB packages and upload to artifactory server
 """
 
 import argparse
-import json
 import os
 import shutil
 import sys
@@ -77,22 +76,6 @@ class BuildTask(NamedTuple):
     pkg_name: str
     config: PackageConfig
     logs_dir: Path
-
-
-def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
-    """Check whether the artifacts are kpack split (multi-arch).
-
-    Scans therock_manifest.json files in the artifact directory.
-    Returns True if any manifest has KPACK_SPLIT_ARTIFACTS set to True.
-    """
-    for manifest_path in artifacts_dir.rglob("therock_manifest.json"):
-        try:
-            manifest = json.loads(manifest_path.read_text())
-            if manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False):
-                return True
-        except (json.JSONDecodeError, OSError):
-            pass
-    return False
 
 
 def get_all_target_families(artifact_dir):
@@ -582,18 +565,6 @@ def build_pkg(task: BuildTask) -> tuple[str, list[str], str | None]:
 
 
 def run(args: argparse.Namespace):
-    # Only multi-arch (kpack split) artifacts are supported
-    artifacts_dir = Path(args.artifacts_dir).resolve()
-    if not load_kpack_from_manifest(artifacts_dir):
-        logger.error(
-            f"KPACK_SPLIT_ARTIFACTS not enabled in any therock_manifest.json under {artifacts_dir}. "
-            "Only multi-arch (kpack split) artifacts are supported."
-        )
-        sys.exit(1)
-    logger.info(
-        "Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages"
-    )
-
     # Create configuration from arguments
     config = create_package_config(args)
 

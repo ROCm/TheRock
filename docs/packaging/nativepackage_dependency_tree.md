@@ -16,7 +16,7 @@ ______________________________________________________________________
 
 - `Gfxarch: False` (or not specified)
 - Same content for all GPU architectures
-- No host-device split in kpack mode
+- No host-device split
 - Creates versioned + non-versioned packages only
 
 ### Package Configuration
@@ -29,7 +29,7 @@ ______________________________________________________________________
 }
 ```
 
-### Dependency Tree (Kpack Mode)
+### Dependency Tree
 
 ```
 amdrocm-sysdeps (non-versioned)
@@ -88,7 +88,7 @@ ______________________________________________________________________
 
 - `Gfxarch: True`
 - Architecture-specific content (GPU binaries)
-- Host-device split in kpack mode
+- Host-device split
 - Creates: host + devices + meta + non-versioned packages
 
 ### Package Configuration
@@ -106,7 +106,7 @@ ______________________________________________________________________
 }
 ```
 
-### Dependency Tree (Kpack Mode)
+### Dependency Tree
 
 **For gfxarch_list = ["gfx1100", "gfx942"]**
 
@@ -245,7 +245,7 @@ There are two types of metapackages based on their `Gfxarch` setting:
 }
 ```
 
-### Dependency Tree (Kpack Mode)
+### Dependency Tree
 
 **For gfxarch_list = ["gfx1100", "gfx942"]**
 
@@ -364,7 +364,7 @@ ______________________________________________________________________
 }
 ```
 
-### Dependency Tree (Kpack Mode)
+### Dependency Tree
 
 ```
 amdrocm-developer-tools (non-versioned)
