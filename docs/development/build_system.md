@@ -170,7 +170,7 @@ together as the unified hipCCL superbuild (`projects/hipccl/hipccl3`). When
 (`projects/{rocprim,hipcub,rocthrust}`). Both source trees exist in
 rocm-libraries; this flag controls which one TheRock builds and ships, allowing
 the migration to be rolled out or reverted without a code change
-(e.g. `-DTHEROCK_ENABLE_HIPCCL=OFF`).
+(e.g. `-DTHEROCK_FLAG_BUILD_HIPCCL=OFF`).
 
 ## Developer Cookbook
 
