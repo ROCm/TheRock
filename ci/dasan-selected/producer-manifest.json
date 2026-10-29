@@ -1,0 +1,592 @@
+{
+  "owner_session_id": "01a17bc3-5a47-7832-8012-6a7e5551f090",
+  "canonical_query": "Identify exact user-named successful TheRock DASan artifact producers at 91f84d4,5c9396c,52dfa41,ec1a93e,14698ce for gfx950 test-only CI consumption; read-only audit, no dispatch or producer substitution.",
+  "producers": [
+    {
+      "stage": "compiler-runtime",
+      "repository": "ROCm/TheRock",
+      "run_id": 40443090683,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40443090683",
+      "head_sha": "91f84d411a32b0071c360360de9ac99897aae997",
+      "artifact_id": 12707464644,
+      "artifact_name": "dasan-installation-gfx942-gfx950",
+      "artifact_digest": "sha256:b0802f0b736830da418613b9efc5773df0f3b4ed88afbd4b8114c8301c3f043b",
+      "artifact_bytes": 556461554,
+      "logs_artifact_id": 12707922334,
+      "logs_artifact_digest": "sha256:8583a8d18ef4a7d9ec9269d35989f60ec6d5173d3d7aa6f17e1db50babfbc64a",
+      "expired": false,
+      "sources": {
+        "therock_commit": "91f84d411a32b0071c360360de9ac99897aae997",
+        "therock_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "image": "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb",
+        "sources": {
+          "compiler/amd-llvm": {
+            "url": "https://github.com/ROCm/llvm-project.git",
+            "requested_commit": "b07aa864f5b2bf648e6a61e2902cbfde83192481",
+            "effective_commit": "38eab7f365b85181eb49262dbb9beef89c699b26"
+          },
+          "compiler/hipify": {
+            "url": "https://github.com/ROCm/HIPIFY.git",
+            "requested_commit": "d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c",
+            "effective_commit": "d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c"
+          },
+          "compiler/spirv-llvm-translator": {
+            "url": "https://github.com/ROCm/SPIRV-LLVM-Translator.git",
+            "requested_commit": "5817038657a5d3166f753389ff7f4740bd8d7c16",
+            "effective_commit": "5817038657a5d3166f753389ff7f4740bd8d7c16"
+          },
+          "rocm-systems": {
+            "url": "https://github.com/jhuber6/rocm-systems.git",
+            "requested_commit": "f535db62a0dc73f2d56d4b93d9bbd4f3155e113b",
+            "effective_commit": "2e0a083f67cadd7bee0da8b5238c0881cd6db85d"
+          }
+        }
+      },
+      "primary_artifacts": null,
+      "build_testing": "OFF",
+      "evidence_sources_json": "compiler-runtime-logs\\sources.json",
+      "installation_archive": "therock-dasan-gfx942-gfx950.tar.xz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": null
+    },
+    {
+      "stage": "math-libs",
+      "repository": "ROCm/TheRock",
+      "run_id": 40545400942,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40545400942",
+      "head_sha": "5c9396caef3d3b3dc8b2a43a0e173338f57617e3",
+      "artifact_id": 12765965324,
+      "artifact_name": "dasan-math-libraries-gfx950",
+      "artifact_digest": "sha256:75969e799c3626239938d55879564b252d3b30d9bd113944e3cdb5e5eca7b4ca",
+      "artifact_bytes": 5439180869,
+      "logs_artifact_id": 12766660265,
+      "logs_artifact_digest": "sha256:161d5d4b0ff3942a37707a875107dae86de7f5fe8d2a36c26b842338c883505a",
+      "expired": false,
+      "sources": {
+        "therock_commit": "5c9396caef3d3b3dc8b2a43a0e173338f57617e3",
+        "rocm_path": "/__w/TheRock/TheRock/dasan-prebuilt/rocm",
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "artifacts": [
+          "blas",
+          "composable-kernel",
+          "fft",
+          "hiptensor",
+          "hipthreads",
+          "libhipcxx",
+          "prim",
+          "rand",
+          "rocalution",
+          "rocwmma",
+          "solver",
+          "sparse",
+          "support"
+        ],
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-libraries": "98737a5c5f49bda8145832118cad3b443e550d8f",
+          "rocm-systems": "68be05087763c362ed98be2f1a923f7b429abacf",
+          "math-libs/libhipcxx": "88f23f01fd7000c1ad25492311693e8e7ccabe31"
+        }
+      },
+      "primary_artifacts": [
+        "blas",
+        "composable-kernel",
+        "fft",
+        "hiptensor",
+        "hipthreads",
+        "libhipcxx",
+        "prim",
+        "rand",
+        "rocalution",
+        "rocwmma",
+        "solver",
+        "sparse",
+        "support"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "math-libs-logs\\sources.json",
+      "installation_archive": "dasan-math-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-math-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "runtime-tests",
+      "repository": "ROCm/TheRock",
+      "run_id": 40586626409,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40586626409",
+      "head_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "artifact_id": 12773036445,
+      "artifact_name": "dasan-runtime-tests-gfx950",
+      "artifact_digest": "sha256:f193cf52c9633c8f61e78e82763d9a60708163a81728bf58fb0c7a7f2d189b43",
+      "artifact_bytes": 4214002157,
+      "logs_artifact_id": 12771109469,
+      "logs_artifact_digest": "sha256:a4addff285da5130fe236b4e7fa5538102c594db62464a121adb65d648bda8f6",
+      "expired": false,
+      "sources": {
+        "therock_commit": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "runtime-tests",
+        "primary_artifacts": [
+          "core-hiptests",
+          "rocrtst"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "base",
+          "core-amdsmi",
+          "core-hip",
+          "core-hiptests",
+          "core-kpack",
+          "core-ocl",
+          "core-ocl-icd",
+          "core-runtime",
+          "rocrtst",
+          "sysdeps",
+          "sysdeps-hwloc",
+          "sysdeps-libmnl",
+          "sysdeps-libnl",
+          "sysdeps-libpciaccess"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "core-hiptests",
+        "rocrtst"
+      ],
+      "build_testing": "ON",
+      "evidence_sources_json": "runtime-tests-logs\\sources.json",
+      "installation_archive": "dasan-runtime-tests-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-runtime-tests-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "comm-libs",
+      "repository": "ROCm/TheRock",
+      "run_id": 40586632932,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40586632932",
+      "head_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "artifact_id": 12781525718,
+      "artifact_name": "dasan-comm-libs-gfx950",
+      "artifact_digest": "sha256:08054b335cfc27142fa78add9c2b237d0fe6bb04f3d3a53e95474084090d3b73",
+      "artifact_bytes": 3385596778,
+      "logs_artifact_id": 12781131439,
+      "logs_artifact_digest": "sha256:dcc98fd4404954048e1d5805a4fdef1be3242662f7a1df9cbaee3be76044980f",
+      "expired": false,
+      "sources": {
+        "therock_commit": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "comm-libs",
+        "primary_artifacts": [
+          "rccl",
+          "rocshmem"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "aqlprofile",
+          "base",
+          "core-amdsmi",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "elfio",
+          "hipify",
+          "openmpi",
+          "rccl",
+          "rocjitsu",
+          "rocjitsu-hotswap",
+          "rocprofiler-sdk",
+          "rocshmem",
+          "sysdeps",
+          "sysdeps-libmnl",
+          "sysdeps-libnl"
+        ],
+        "source_sets": [
+          "base",
+          "comm-libs",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "rccl",
+        "rocshmem"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "comm-libs-logs\\sources.json",
+      "installation_archive": "dasan-comm-libs-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-comm-libs-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "storage-libs",
+      "repository": "ROCm/TheRock",
+      "run_id": 40586640605,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40586640605",
+      "head_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "artifact_id": 12771343579,
+      "artifact_name": "dasan-storage-libs-gfx950",
+      "artifact_digest": "sha256:28e08ddf3cc32019a2432d078119fef72a95306e833f199f64edc5efd959a1d4",
+      "artifact_bytes": 1991446563,
+      "logs_artifact_id": 12772842022,
+      "logs_artifact_digest": "sha256:806de78ec6118eb67cbbb0e98df2b6976295357d4fbe60fc00ae6fdf82d7a396",
+      "expired": false,
+      "sources": {
+        "therock_commit": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "storage-libs",
+        "primary_artifacts": [
+          "hipfile"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "base",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "hipfile",
+          "sysdeps",
+          "sysdeps-util-linux"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-systems",
+          "storage-libs"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "hipfile"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "storage-libs-logs\\sources.json",
+      "installation_archive": "dasan-storage-libs-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-storage-libs-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "profiler-apps",
+      "repository": "ROCm/TheRock",
+      "run_id": 40586651063,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40586651063",
+      "head_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "artifact_id": 12773765154,
+      "artifact_name": "dasan-profiler-apps-gfx950",
+      "artifact_digest": "sha256:a6dc149a16dd1fa2f8011898c931f39d08eae4522fab48425d7789ad98b8fab8",
+      "artifact_bytes": 3293715203,
+      "logs_artifact_id": 12773225742,
+      "logs_artifact_digest": "sha256:5b19965807b91218d3948d7a926c704c342bc26765e0a526feb0e6177740136c",
+      "expired": false,
+      "sources": {
+        "therock_commit": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "profiler-apps",
+        "primary_artifacts": [
+          "rocprofiler-compute",
+          "rocprofiler-systems",
+          "rocprofiler-systems-examples"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "aqlprofile",
+          "base",
+          "core-amdsmi",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "elfio",
+          "hipfile",
+          "openmpi",
+          "rocprofiler-compute",
+          "rocprofiler-sdk",
+          "rocprofiler-systems",
+          "rocprofiler-systems-examples",
+          "spdlog",
+          "sysdeps",
+          "sysdeps-libmnl",
+          "sysdeps-libnl",
+          "sysdeps-util-linux"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-systems",
+          "storage-libs"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "rocprofiler-compute",
+        "rocprofiler-systems",
+        "rocprofiler-systems-examples"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "profiler-apps-logs\\sources.json",
+      "installation_archive": "dasan-profiler-apps-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-profiler-apps-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "media-libs",
+      "repository": "ROCm/TheRock",
+      "run_id": 40584081938,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40584081938",
+      "head_sha": "ec1a93e05948c1ce830c1610917096a44903916d",
+      "artifact_id": 12771666166,
+      "artifact_name": "dasan-media-libs-gfx950",
+      "artifact_digest": "sha256:9c5abbd20789b77ef3a12c97475c0847eed3277872e02b2f8006229aa35b2e7e",
+      "artifact_bytes": 2248272225,
+      "logs_artifact_id": 12772606185,
+      "logs_artifact_digest": "sha256:72dd792879bb87f555931399cf03c4db74b2967fc0f72bab3c0366e852204ea1",
+      "expired": false,
+      "sources": {
+        "therock_commit": "ec1a93e05948c1ce830c1610917096a44903916d",
+        "sources": {
+          "third-party/sysdeps/common/mesa-fork": "a799b0baca93870e722b12391a0c273d77023bf3",
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "media-libs",
+        "primary_artifacts": [
+          "rocdecode",
+          "rocjpeg",
+          "sysdeps-amd-mesa"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "base",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "rocdecode",
+          "rocjpeg",
+          "sysdeps",
+          "sysdeps-amd-mesa"
+        ],
+        "source_sets": [
+          "amd-mesa",
+          "base",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "rocdecode",
+        "rocjpeg",
+        "sysdeps-amd-mesa"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "media-libs-logs\\sources.json",
+      "installation_archive": "dasan-media-libs-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-media-libs-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "dctools-core",
+      "repository": "ROCm/TheRock",
+      "run_id": 40584069915,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40584069915",
+      "head_sha": "ec1a93e05948c1ce830c1610917096a44903916d",
+      "artifact_id": 12772231682,
+      "artifact_name": "dasan-dctools-core-gfx950",
+      "artifact_digest": "sha256:9d63a2bcb24e37c7ebc2679141c61268be415ed1474e80c5d2c8d65f4e46330e",
+      "artifact_bytes": 3334593196,
+      "logs_artifact_id": 12770952499,
+      "logs_artifact_digest": "sha256:9943b6891c929dd121d8685b1f372930a2e10af302814d4a1e9e17b2402d544e",
+      "expired": false,
+      "sources": {
+        "therock_commit": "ec1a93e05948c1ce830c1610917096a44903916d",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "dctools-core",
+        "primary_artifacts": [
+          "rdc"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "aqlprofile",
+          "base",
+          "core-amdsmi",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "elfio",
+          "grpc",
+          "rdc",
+          "rocprofiler-sdk",
+          "sysdeps",
+          "sysdeps-libmnl",
+          "sysdeps-libnl"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "rdc"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "dctools-core-logs\\sources.json",
+      "installation_archive": "dasan-dctools-core-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-dctools-core-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "cv-libs",
+      "repository": "ROCm/TheRock",
+      "run_id": 40584055579,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40584055579",
+      "head_sha": "ec1a93e05948c1ce830c1610917096a44903916d",
+      "artifact_id": 12771202153,
+      "artifact_name": "dasan-cv-libs-gfx950",
+      "artifact_digest": "sha256:87d98c142d62fbcfed06e507db163ebb49a06116869f7cb8451d91b244ff7db3",
+      "artifact_bytes": 2369990183,
+      "logs_artifact_id": 12771946156,
+      "logs_artifact_digest": "sha256:9c6202b8c29f159d67f7205bdb447eeeadc920c97d21d84ecc5f09552c0f1e15",
+      "expired": false,
+      "sources": {
+        "therock_commit": "ec1a93e05948c1ce830c1610917096a44903916d",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-libraries": "98737a5c5f49bda8145832118cad3b443e550d8f",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "cv-libs",
+        "primary_artifacts": [
+          "rpp"
+        ],
+        "dependency_closure": [
+          "amd-llvm",
+          "base",
+          "core-hip",
+          "core-kpack",
+          "core-runtime",
+          "rpp",
+          "sysdeps"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-libraries",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "rpp"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "cv-libs-logs\\sources.json",
+      "installation_archive": "dasan-cv-libs-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-cv-libs-artifacts-gfx950.tar.gz"
+    },
+    {
+      "stage": "emulation",
+      "repository": "ROCm/TheRock",
+      "run_id": 40583338049,
+      "run_url": "https://github.com/ROCm/TheRock/actions/runs/40583338049",
+      "head_sha": "14698ce9db2756d16cddcbf76778b007e8e00fc0",
+      "artifact_id": 12770951581,
+      "artifact_name": "dasan-emulation-gfx950",
+      "artifact_digest": "sha256:e6be621bc0b02696f1e0313c7718fb246f15267a0318c37d22582129af44c868",
+      "artifact_bytes": 2401396971,
+      "logs_artifact_id": 12772545201,
+      "logs_artifact_digest": "sha256:aa1a3018c68a11477ad0fa54e700afe4e57e0a1a4122bb0cb7b1065b81e67803",
+      "expired": false,
+      "sources": {
+        "therock_commit": "14698ce9db2756d16cddcbf76778b007e8e00fc0",
+        "sources": {
+          "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+          "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+          "rocm-systems": "a599c7ed2d9e2dc55fa4a8af16f47b8e14097376"
+        },
+        "stage": "emulation",
+        "primary_artifacts": [
+          "mirage",
+          "rocjitsu",
+          "rocjitsu-hotswap"
+        ],
+        "dependency_closure": [
+          "mirage",
+          "rocjitsu",
+          "rocjitsu-hotswap"
+        ],
+        "source_sets": [
+          "base",
+          "rocm-systems"
+        ],
+        "gpu_target": "gfx950",
+        "sanitizer": "DASAN",
+        "compiler_flag": "-fsanitize=daddress",
+        "baseline_run_id": "40443090683",
+        "dependencies_run_id": "40545400942"
+      },
+      "primary_artifacts": [
+        "mirage",
+        "rocjitsu",
+        "rocjitsu-hotswap"
+      ],
+      "build_testing": "OFF",
+      "evidence_sources_json": "emulation-logs\\sources.json",
+      "installation_archive": "dasan-emulation-gfx950.tar.gz",
+      "installation_root": "rocm",
+      "component_artifacts_archive": "dasan-emulation-artifacts-gfx950.tar.gz"
+    }
+  ]
+}
