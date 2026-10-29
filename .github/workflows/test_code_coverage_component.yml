@@ -148,13 +148,28 @@ jobs:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
-          GENERIC_RUN_ID: ${{ inputs.generic_run_id }}
         run: |
           pip3 install -r requirements-test.txt
+          # Baseline tree comes from generic_run_id. When empty (self-contained
+          # dispatch), fall back to this run's own instrumented artifacts;
+          # --replace then re-extracts them, leaving the whole stack instrumented.
+          generic_run_id="${GENERIC_RUN_ID}"
+          if [[ -z "${generic_run_id}" ]]; then
+            generic_run_id="${CODE_COVERAGE_RUN_ID}"
+          fi
+          # Pass --run-github-repo only when set, so empty defaults to the
+          # current repository. The generic baseline lives in a different repo
+          # than this coverage run (rockrel for the PR check, rocm-libraries for
+          # the nightly); the S3 bucket lookup 404s if that repo is not named.
+          run_github_repo_arg=()
+          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+          fi
           # FETCH_ARTIFACT_ARGS intentionally splits arguments supplied by fetch_test_configurations.py.
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
-            --run-id="${GENERIC_RUN_ID}" \
+            --run-id="${generic_run_id}" \
+            "${run_github_repo_arg[@]}" \
             --artifact-group="${AMDGPU_FAMILIES}" \
             --amdgpu-targets="${AMDGPU_TARGETS}" \
             --tests \
@@ -179,7 +194,9 @@ jobs:
           python ./build_tools/print_driver_gpu_info.py
 
       - name: Setup Additional Requirements
-        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        # First-element check skips cleanly when the list is empty ([]) or the
+        # key is absent, without depending on how an empty list coerces to ''.
+        if: ${{ fromJSON(inputs.component).additional_requirements_files[0] != '' }}
         env:
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
         run: |
