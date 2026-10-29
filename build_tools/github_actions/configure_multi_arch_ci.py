@@ -260,6 +260,7 @@ class CIInputs:
     build_pytorch: bool = True
     build_jax: bool = False
     build_native_linux: bool = True
+    build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
 
     # Labels from the PR event payload or workflow_dispatch pr_labels input.
@@ -366,6 +367,9 @@ class CIInputs:
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
+        build_native_windows = (
+            os.environ.get("BUILD_NATIVE_WINDOWS", "true").lower() != "false"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -426,6 +430,7 @@ class CIInputs:
             build_pytorch=build_pytorch,
             build_jax=build_jax,
             build_native_linux=build_native_linux,
+            build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
             pr_base_ref=pr_base_ref,
@@ -732,6 +737,7 @@ class BuildConfig:
     build_variant_suffix: str
     build_variant_cmake_preset: str
     build_native_linux: bool
+    build_native_windows: bool
     build_python_packages: bool
     build_pytorch: bool
     build_jax: bool
@@ -1861,14 +1867,22 @@ def _expand_build_config_for_platform(
         if build_python_packages
         else []
     )
-    build_native_linux = ci_inputs.build_native_linux
+    build_native_linux = ci_inputs.build_native_linux and platform == "linux"
+    build_native_windows = ci_inputs.build_native_windows and platform == "windows"
 
     # PR labels can override packaging build decisions.
     pr_labels = ci_inputs.pr_labels
-    if "ci:build-native-linux" in pr_labels:
-        build_native_linux = True
-    elif "ci:skip-native-linux" in pr_labels:
-        build_native_linux = False
+    if platform == "linux":
+        if "ci:build-native-linux" in pr_labels:
+            build_native_linux = True
+        elif "ci:skip-native-linux" in pr_labels:
+            build_native_linux = False
+
+    if platform == "windows":
+        if "ci:build-native-windows" in pr_labels:
+            build_native_windows = True
+        elif "ci:skip-native-windows" in pr_labels:
+            build_native_windows = False
 
     if "ci:build-python-packages" in pr_labels:
         build_python_packages = True
@@ -1895,6 +1909,7 @@ def _expand_build_config_for_platform(
         build_pytorch = False
         build_jax = False
         build_native_linux = False
+        build_native_windows = False
         pytorch_build_matrix = []
         jax_build_matrix = []
         test_python_packages_matrix = []
@@ -1908,6 +1923,7 @@ def _expand_build_config_for_platform(
         build_variant_suffix=suffix,
         build_variant_cmake_preset=variant_config["build_variant_cmake_preset"],
         build_native_linux=build_native_linux,
+        build_native_windows=build_native_windows,
         build_python_packages=build_python_packages,
         build_pytorch=build_pytorch,
         build_jax=build_jax,
