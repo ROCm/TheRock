@@ -822,12 +822,20 @@ def get_soname(sofile: Path) -> str:
     )
 
 
-def _build_package(
+def _build_package_worker(
     child_path: Path,
     *,
     effective_dist_dir: Path,
     wheel_compression: bool,
 ) -> None:
+    """Build one staged package by invoking its ``setup.py``.
+
+    ``rocm`` is built as an sdist. Every other package is a wheel, written
+    uncompressed when ``wheel_compression`` is false. ``build_packages``
+    calls this directly for a single package and submits it to the thread
+    pool when several packages run together. Each call writes its output
+    into the shared ``effective_dist_dir``.
+    """
     child_name = child_path.name
 
     # Some of our packages build as sdists and some as wheels.
@@ -911,7 +919,7 @@ def build_packages(
     )
     if worker_count == 1:
         for child_path in package_dirs:
-            _build_package(
+            _build_package_worker(
                 child_path,
                 effective_dist_dir=effective_dist_dir,
                 wheel_compression=wheel_compression,
@@ -921,7 +929,7 @@ def build_packages(
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [
             executor.submit(
-                _build_package,
+                _build_package_worker,
                 child_path,
                 effective_dist_dir=effective_dist_dir,
                 wheel_compression=wheel_compression,
