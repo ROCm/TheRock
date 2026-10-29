@@ -9,8 +9,9 @@ This script promotes the version of two kinds of artifact:
     whose internal version metadata is rewritten in place, and
   - standalone `therock-dist-*.tar.gz` distribution tarballs, which are renamed
     to the promoted version (their contents are NOT opened or modified). Pass
-    --source-bucket and --dest-bucket to copy those objects to the renamed key
-    in S3 instead of downloading them.
+    --source-bucket, --dest-bucket, and --version to copy those objects to the
+    renamed key in S3. --version is the filename token. --src-version-type and
+    --dest-version choose the new name. The source key is left in place.
 It optionally also restricts which gfx target architectures are referenced by the
 package metadata.
 
@@ -82,7 +83,9 @@ TYPICAL USAGE:
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
-  # Rename structured therock-dist tarballs in S3 (dry-run until --execute):
+  # Copy therock-dist tarballs in S3. --version is the filename token.
+  # --src-version-type and --dest-version choose the new name (default rc -> release).
+  # Dry-run until --execute. The source key is left in place.
   python ./build_tools/packaging/promote_packages.py \
     --version=7.13.0rc1 \
     --source-bucket=therock-repo-amd-rc-core \
@@ -113,15 +116,15 @@ from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 from pkginfo import Wheel
 
-_BUILD_TOOLS_DIR = pathlib.Path(__file__).resolve().parent.parent
-if str(_BUILD_TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+# build_tools/ is on sys.path for _therock_utils and the dynamic load below.
+this_file = pathlib.Path(__file__).resolve()
+build_tools_dir = this_file.parent.parent
+if str(build_tools_dir) not in sys.path:
+    sys.path.insert(0, str(build_tools_dir))
 
 from _therock_utils.python_package_paths import CORE_TARBALL_PREFIXES
 
 # Need dynamic load as change_wheel_version needs to be imported via parent directory
-this_file = pathlib.Path(__file__).resolve()
-build_tools_dir = this_file.parent.parent
 # ../third_party/change_wheel_version/change_wheel_version.py
 change_wheel_version_path = (
     build_tools_dir / "third_party" / "change_wheel_version" / "change_wheel_version.py"
@@ -181,9 +184,17 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
 Promotion works for wheels and .tar.gz.
 Wheels version is determined by python library to interact with the wheel.
-For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
+For sdist tar.gz, the version is extracted from the PKG-INFO file.
+therock-dist tarballs use the filename token. Pass --source-bucket, --dest-bucket,
+and --version to copy those objects in S3. --src-version-type and --dest-version
+choose the new name. --input-dir is not used on that path.
 """,
-        usage="python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/rc1/ --delete-old-on-success",
+        usage=(
+            "python ./build_tools/packaging/promote_packages.py "
+            "--input-dir=./release_candidates/rc1/ --delete-old-on-success\n"
+            "       python ./build_tools/packaging/promote_packages.py "
+            "--version=7.13.0rc1 --source-bucket=SRC --dest-bucket=DST"
+        ),
     )
     parser.add_argument(
         "--input-dir",
@@ -254,7 +265,11 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     parser.add_argument(
         "--version",
         default=None,
-        help="Source version token for an S3 tarball copy, for example 7.13.0rc1",
+        help=(
+            "Filename version token to copy, for example 7.13.0rc1. "
+            "--src-version-type and --dest-version still choose the new name "
+            "(default rc -> release)."
+        ),
     )
     parser.add_argument(
         "--source-bucket",
@@ -340,6 +355,8 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
             )
         if args.delete_old_on_success:
             parser.error("An S3 tarball copy does not use --delete-old-on-success")
+        if args.match_files != "*":
+            parser.error("An S3 tarball copy does not use --match-files")
         # Release and ASAN are separate prefixes. The filename does not say which.
         args.source_prefixes = list(CORE_TARBALL_PREFIXES.values())
     elif args.input_dir is None:
@@ -347,7 +364,9 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
             "--input-dir is required unless --source-bucket and --dest-bucket are set"
         )
     elif args.version or args.execute:
-        parser.error("--version and --execute require --source-bucket and --dest-bucket")
+        parser.error(
+            "--version and --execute require --source-bucket and --dest-bucket"
+        )
 
     return args
 
@@ -1384,17 +1403,23 @@ def promote_targz_sdist(
         return True
 
 
-def promoted_tarball_name(
+def promoted_tarball_rename(
     filename: str, src_version_type: str, dest_version: str
-) -> str | None:
-    """Return the renamed tarball filename, or None when the version does not change."""
+) -> tuple[str, str] | None:
+    """Return (new filename, new version), or None when the version does not change.
+
+    The version token is the last '-' segment. Only that segment is rewritten.
+    A token that is not a version raises InvalidVersion.
+    Example: therock-dist-linux-gfx950-7.13.0rc1.tar.gz ->
+    therock-dist-linux-gfx950-7.13.0.tar.gz with src 'rc' and dest 'release'.
+    """
     stem = filename.removesuffix(".tar.gz")
     old_version = stem.split("-")[-1]
+    Version(old_version)
     new_version = compute_new_version_str(old_version, src_version_type, dest_version)
     if new_version is None:
         return None
-    # The version token is the last '-' segment, same as a local tarball rename.
-    return stem.replace(old_version, new_version) + ".tar.gz"
+    return stem.removesuffix(old_version) + new_version + ".tar.gz", new_version
 
 
 def promote_targz_tarball(
@@ -1404,27 +1429,28 @@ def promote_targz_tarball(
     dest_version: str = "release",
 ) -> bool:
     old_version = filename.name.removesuffix(".tar.gz").split("-")[-1]
-    print(f"Promoting tarball from rc to final: {filename.name}")
+    print(f"Promoting tarball: {filename.name}")
     print(f"  Detected version: {old_version}")
 
-    new_name = promoted_tarball_name(filename.name, src_version_type, dest_version)
-    if new_name is None:
+    renamed = promoted_tarball_rename(filename.name, src_version_type, dest_version)
+    if renamed is None:
         print(
             f"  [WARNING] {old_version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
         )
         return False
+    new_name, new_version = renamed
 
-    print(f"  New version: {new_name.removesuffix('.tar.gz').split('-')[-1]}")
+    print(f"  New version: {new_version}")
 
     if delete:
         filename.rename(filename.parent / new_name)
-        print(f"  Rename {filename.name} to {new_name}", end="")
+        print(f"  Renamed {filename.name} to {new_name}")
     else:
         print(f"  Copy {filename.name} to {new_name}", end="")
         shutil.copy2(filename, filename.parent / new_name)
         print(" ...done")
 
-    print(f"Repacked {filename.name} as release {filename.parent}/{new_name}")
+    print(f"Promoted {filename.name} to {filename.parent}/{new_name}")
     return True
 
 
@@ -1434,12 +1460,16 @@ _MISSING_OBJECT = {"404", "NoSuchKey", "NotFound"}
 def select_tarball_copies(
     objects: list[tuple[str, int]],
     source_prefix: str,
-    dest_prefix: str,
     version: str,
     src_version_type: str,
     dest_version: str,
 ) -> tuple[list[tuple[str, str, int]], list[str]]:
-    """Select direct therock-dist children whose version token matches."""
+    """Select direct therock-dist children whose version token matches.
+
+    The renamed key stays under source_prefix. Returns (planned, unchanged).
+    planned entries are (source_key, dest_key, size). unchanged names matched
+    the version token but the version did not change.
+    """
     planned: list[tuple[str, str, int]] = []
     unchanged: list[str] = []
     for key, size in objects:
@@ -1453,11 +1483,12 @@ def select_tarball_copies(
         old_version = name.removesuffix(".tar.gz").split("-")[-1]
         if old_version != version:
             continue
-        new_name = promoted_tarball_name(name, src_version_type, dest_version)
-        if new_name is None:
+        renamed = promoted_tarball_rename(name, src_version_type, dest_version)
+        if renamed is None:
             unchanged.append(name)
             continue
-        planned.append((key, dest_prefix + new_name, size))
+        new_name, _new_version = renamed
+        planned.append((key, source_prefix + new_name, size))
     return planned, unchanged
 
 
@@ -1492,6 +1523,7 @@ def copy_tarballs(
     """Copy planned objects. Returns (copied, skipped_existing)."""
     manager = None
     if execute and copy_fn is None:
+        # Multipart server-side copy. copy_object stops at 5 GB.
         manager = TransferManager(client)
 
         def copy_fn(source_key: str, dest_key: str) -> None:
@@ -1505,8 +1537,7 @@ def copy_tarballs(
     skipped = 0
     try:
         for source_key, dest_key, size in planned:
-            same_object = source_bucket == dest_bucket and source_key == dest_key
-            if same_object or object_exists(client, dest_bucket, dest_key):
+            if object_exists(client, dest_bucket, dest_key):
                 print(f"    [SKIP] Already exists: s3://{dest_bucket}/{dest_key}")
                 skipped += 1
                 continue
@@ -1546,7 +1577,6 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
         batch, batch_unchanged = select_tarball_copies(
             objects,
             source_prefix,
-            source_prefix,
             args.version,
             args.src_version_type,
             args.dest_version,
@@ -1554,9 +1584,17 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
         planned.extend(batch)
         unchanged.extend(batch_unchanged)
     for name in unchanged:
-        print(f"    [SKIP] Version unchanged: {name}")
+        print(
+            f"    [SKIP] {name} has no '{args.src_version_type}' prerelease marker, nothing to promote."
+        )
     if not planned:
-        print(f"[ERROR]: No therock-dist tarballs matched version {args.version}")
+        if unchanged:
+            print(
+                f"[ERROR]: {len(unchanged)} therock-dist tarball(s) matched version "
+                f"{args.version}, but the version did not change."
+            )
+        else:
+            print(f"[ERROR]: No therock-dist tarballs matched version {args.version}")
         return 1
     total_bytes = sum(size for _, _, size in planned)
     print(f"Matched {len(planned)} tarball(s), {total_bytes} bytes")
@@ -1568,7 +1606,10 @@ def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> 
         args.execute,
         copy_fn=copy_fn,
     )
-    print(f"Copies: {copied}")
+    if args.execute:
+        print(f"Copies: {copied}")
+    else:
+        print(f"Would copy: {copied}")
     print(f"Skipped existing: {skipped}")
     return 0
 

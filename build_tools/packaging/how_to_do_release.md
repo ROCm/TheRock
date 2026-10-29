@@ -178,10 +178,16 @@ python build_tools/packaging/promote_packages.py --input-dir=./promotion/downloa
 ### Rename distribution tarballs in S3
 
 `therock-dist-*.tar.gz` files are renamed and their contents are not modified.
-For the structured layout, copy them to the promoted key instead of downloading
-them. The command lists both `tarball/` and `tarball-asan/` and keeps each
-object in its own prefix. It is dry-run until `--execute`. A destination key
-that already exists is skipped.
+Copy them to the promoted key instead of downloading them. The command lists
+both `tarball/` and `tarball-asan/` and keeps each object in its own prefix.
+The source key is left in place. It is dry-run until `--execute`. A destination
+key that already exists is skipped, with no size check. If every planned copy
+was skipped, the command exits 0.
+
+`--version` is the filename token to select, for example `7.13.0rc1`.
+`--src-version-type` and `--dest-version` still choose the new name. The
+default is `rc` to `release`. A nightly passes `--src-version-type=a` and the
+`a<YYYYMMDD>` token as `--version`.
 
 ```bash
 python build_tools/packaging/promote_packages.py \
@@ -358,9 +364,8 @@ then listed as `[DRY-RUN] Would overwrite: ...` in the dry run.
 ### Structured repo.amd.com upload
 
 After promoting the flat local `wheels/` directory, upload back to the
-product-owned repo.amd.com buckets. Release and ASAN `therock-dist-*.tar.gz`
-files can be copied with `promote_packages.py` instead of downloading
-and uploading them.
+product-owned repo.amd.com buckets. Release and ASAN `therock-dist` tarballs
+are copied with the S3 command in "Rename distribution tarballs in S3" above.
 
 ```bash
 python build_tools/packaging/upload_release_packages.py \

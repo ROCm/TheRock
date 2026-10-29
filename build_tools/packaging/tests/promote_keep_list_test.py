@@ -25,7 +25,7 @@ from pathlib import Path
 from botocore.exceptions import ClientError
 from packaging.metadata import Metadata
 from packaging.specifiers import SpecifierSet
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_packages as ptf
@@ -863,18 +863,44 @@ class S3TarballCopyTest(unittest.TestCase):
 
     def test_rc_release_renames_version_token(self):
         self.assertEqual(
-            ptf.promoted_tarball_name(
+            ptf.promoted_tarball_rename(
                 "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", "rc", "release"
             ),
+            (
+                "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                "7.13.0",
+            ),
+        )
+
+    def test_nightly_and_rc_bump_rename_version_token(self):
+        self.assertEqual(
+            ptf.promoted_tarball_rename(
+                "therock-dist-linux-gfx950-7.13.0a20260501.tar.gz", "a", "release"
+            )[0],
             "therock-dist-linux-gfx950-7.13.0.tar.gz",
+        )
+        self.assertEqual(
+            ptf.promoted_tarball_rename(
+                "therock-dist-linux-gfx950-7.13.0rc1.tar.gz", "rc", "rc2"
+            ),
+            (
+                "therock-dist-linux-gfx950-7.13.0rc2.tar.gz",
+                "7.13.0rc2",
+            ),
         )
 
     def test_final_version_is_unchanged(self):
         self.assertIsNone(
-            ptf.promoted_tarball_name(
+            ptf.promoted_tarball_rename(
                 "therock-dist-linux-gfx950-7.13.0.tar.gz", "rc", "release"
             )
         )
+
+    def test_invalid_version_token_raises(self):
+        with self.assertRaises(InvalidVersion):
+            ptf.promoted_tarball_rename(
+                "therock-dist-linux-gfx950-not-a-version.tar.gz", "rc", "release"
+            )
 
     def test_selects_therock_dist_only(self):
         objects = self._objects() + [
@@ -883,7 +909,7 @@ class S3TarballCopyTest(unittest.TestCase):
             (RELEASE_PREFIX + "nested/therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 50),
         ]
         planned, unchanged = ptf.select_tarball_copies(
-            objects, RELEASE_PREFIX, RELEASE_PREFIX, "7.13.0rc1", "rc", "release"
+            objects, RELEASE_PREFIX, "7.13.0rc1", "rc", "release"
         )
         self.assertEqual(unchanged, [])
         self.assertEqual(
@@ -908,6 +934,8 @@ class S3TarballCopyTest(unittest.TestCase):
         self.assertEqual(copied, [])
         text = output.getvalue()
         self.assertIn("[DRY-RUN] Would copy:", text)
+        self.assertIn("Would copy: 2", text)
+        self.assertNotIn("\nCopies:", text)
         self.assertIn(RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", text)
         self.assertIn(ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", text)
 
@@ -959,7 +987,53 @@ class S3TarballCopyTest(unittest.TestCase):
                 client=FakeS3Client(self._objects()),
             )
         self.assertEqual(code, 1)
-        self.assertIn("[ERROR]:", output.getvalue())
+        self.assertIn(
+            "No therock-dist tarballs matched version 7.99.0rc1", output.getvalue()
+        )
+
+    def test_matched_but_unchanged_is_not_a_miss(self):
+        objects = [
+            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", 10),
+        ]
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(version="7.13.0"),
+                client=FakeS3Client(objects),
+            )
+        self.assertEqual(code, 1)
+        text = output.getvalue()
+        self.assertIn("nothing to promote", text)
+        self.assertIn("version did not change", text)
+        self.assertNotIn("No therock-dist tarballs matched", text)
+
+    def test_one_prefix_exists_and_the_other_is_copied(self):
+        existing = {RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"}
+        copied = []
+        with redirect_stdout(io.StringIO()):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(execute=True),
+                client=FakeS3Client(self._objects(), existing=existing),
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            copied,
+            [
+                (
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0rc1.tar.gz",
+                    ASAN_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz",
+                ),
+            ],
+        )
+
+    def test_s3_rejects_local_only_flags(self):
+        with self.assertRaises(SystemExit):
+            _s3_args(**{"match-files": "*gfx950*"})
+        with self.assertRaises(SystemExit):
+            _s3_args(**{"input-dir": "/tmp/packages"})
+        with self.assertRaises(SystemExit):
+            ptf.parse_arguments(["--input-dir=/tmp/packages", "--version=7.13.0rc1"])
 
     def test_local_promotion_still_requires_input_dir(self):
         with self.assertRaises(SystemExit):
