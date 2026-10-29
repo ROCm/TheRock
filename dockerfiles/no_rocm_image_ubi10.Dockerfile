@@ -14,7 +14,6 @@ RUN dnf install -y --nodocs \
         libgfortran \
         libquadmath \
         lld \
-        ninja-build \
         python-unversioned-command \
         python3-pip \
         python3-setuptools \

@@ -358,6 +358,47 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
+  if(THEROCK_ENABLE_CORE_HRR)
+    ##############################################################################
+    # hrr
+    ##############################################################################
+
+    # hrr-playback replays archives that the HRR capture code in amdhip64
+    # writes. The HRR test suites are not built here: they are not installable
+    # yet, and the integration suite needs an amdhip64 with capture compiled in.
+    therock_cmake_subproject_declare(hrr
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        "-DHRR_BUILD_PLAYBACK=ON"
+        "-DHRR_BUILD_TESTS=OFF"
+        "-DHIP_PLATFORM=amd"
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(hrr SUBDIRS .)
+    therock_cmake_subproject_activate(hrr)
+
+    therock_provide_artifact(core-hrr
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hrr.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        run
+      SUBPROJECT_DEPS
+        hrr
+    )
+  endif()
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
