@@ -5,7 +5,8 @@
       "hip-clr",
       "hipkernelprovider",
       "ocl-clr",
-      "rocgdb"
+      "rocgdb",
+      "stinkytofu"
     ]
   },
   "amd-dbgapi": {
@@ -122,7 +123,8 @@
       "rocthrust",
       "roctracer",
       "rocwmma",
-      "rpp"
+      "rpp",
+      "stinkytofu"
     ]
   },
   "hip-tests": {
@@ -373,7 +375,8 @@
       "rocsolver",
       "rocsparse",
       "rocthrust",
-      "rocwmma"
+      "rocwmma",
+      "stinkytofu"
     ]
   },
   "rocm-core": {
@@ -547,6 +550,12 @@
   "rpp": {
     "consumers": []
   },
+  "stinkytofu": {
+    "consumers": [
+      "hipblaslt",
+      "hipsparselt"
+    ]
+  },
   "therock-amd-mesa": {
     "consumers": [
       "rocdecode",
@@ -687,7 +696,8 @@
       "rocsolver",
       "rocsparse",
       "rocthrust",
-      "rocwmma"
+      "rocwmma",
+      "stinkytofu"
     ]
   },
   "therock-grpc": {
