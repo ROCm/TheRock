@@ -4,9 +4,11 @@
 import io
 import os
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
@@ -60,6 +62,68 @@ class ExpandFamiliesTest(unittest.TestCase):
         )
 
 
+class ExcludeImplicitTargetsTest(unittest.TestCase):
+    def _expand_and_exclude(
+        self,
+        requested_families: list[str],
+        implicit_targets_to_exclude: set[str],
+    ) -> list[str]:
+        return expand_amdgpu_families.expand_requested_families(
+            requested_families,
+            _SAMPLE_MAP,
+            implicit_targets_to_exclude,
+        )
+
+    def test_exclusion_preserves_other_targets_and_explicit_requests(self):
+        cases = (
+            (["gfx110X-all"], ["gfx1100"]),
+            (["gfx110X-all", "gfx1101"], ["gfx1100", "gfx1101"]),
+            (["gfx1101", "gfx110X-all"], ["gfx1101", "gfx1100"]),
+            (["gfx110X-all", "gfx1100"], ["gfx1100"]),
+        )
+        for requested_families, expected in cases:
+            with self.subTest(requested_families=requested_families):
+                self.assertEqual(
+                    self._expand_and_exclude(requested_families, {"gfx1101"}),
+                    expected,
+                )
+
+    def test_multiple_exclusions_are_independent(self):
+        self.assertEqual(
+            self._expand_and_exclude(
+                ["gfx94X-dcgpu", "gfx110X-all", "gfx1101"],
+                {"gfx942", "gfx1101"},
+            ),
+            ["gfx1100", "gfx1101"],
+        )
+
+    def test_empty_exclusions_preserve_expansion(self):
+        self.assertEqual(
+            self._expand_and_exclude(["gfx94X-dcgpu", "gfx110X-all"], set()),
+            ["gfx942", "gfx1100", "gfx1101"],
+        )
+
+    def test_unregistered_exclusion_does_not_change_validation(self):
+        family_map = {
+            "gfx1100": ["gfx1100"],
+            "gfx110X-all": ["gfx1100"],
+        }
+        self.assertEqual(
+            expand_amdgpu_families.expand_requested_families(
+                ["gfx110X-all"],
+                family_map,
+                {"gfx1102"},
+            ),
+            ["gfx1100"],
+        )
+        with self.assertRaisesRegex(ValueError, "gfx1102"):
+            expand_amdgpu_families.expand_requested_families(
+                ["gfx1102"],
+                family_map,
+                {"gfx1102"},
+            )
+
+
 class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
     """End-to-end test of the script's main() against the real CMake file."""
 
@@ -76,27 +140,64 @@ class ExpandAmdgpuFamiliesMainTest(unittest.TestCase):
         self.assertIn("gfx942", out.split(","))
 
     def test_main_empty_input_prints_empty(self):
-        out = self._run_and_capture("--amdgpu-families", "")
-        self.assertEqual(out, "")
+        for policy_args in ((), ("--exclude-implicit-targets", "gfx1101")):
+            with self.subTest(policy_args=policy_args):
+                out = self._run_and_capture(
+                    "--amdgpu-families",
+                    "",
+                    *policy_args,
+                )
+                self.assertEqual(out, "")
 
     def test_main_unknown_family_raises(self):
         with self.assertRaises(ValueError):
             expand_amdgpu_families.main(["--amdgpu-families", "gfxNOPE"])
 
     def test_main_device_extras_mode(self):
-        out = self._run_and_capture(
-            "--amdgpu-families", "gfx94X-dcgpu", "--output-mode", "device-extras"
-        )
-        # gha_set_output logs extra lines to stdout; the result is the first line.
-        first_line = out.split("\n")[0]
-        self.assertIn("device-gfx942", first_line.split(","))
-        for token in first_line.split(","):
-            self.assertTrue(token.startswith("device-"), token)
+        with tempfile.TemporaryDirectory() as td:
+            output_path = Path(td) / "github-output"
+            with mock.patch.dict(
+                os.environ,
+                {"GITHUB_OUTPUT": os.fspath(output_path)},
+            ):
+                out = self._run_and_capture(
+                    "--amdgpu-families",
+                    "gfx94X-dcgpu",
+                    "--output-mode",
+                    "device-extras",
+                )
+
+            # gha_set_output logs extra lines; the result is the first line.
+            first_line = out.split("\n")[0]
+            self.assertIn("device-gfx942", first_line.split(","))
+            for token in first_line.split(","):
+                self.assertTrue(token.startswith("device-"), token)
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"),
+                "device_extras=device-gfx942\n",
+            )
 
     def test_main_targets_mode_is_default(self):
         out = self._run_and_capture("--amdgpu-families", "gfx94X-dcgpu")
         self.assertIn("gfx942", out.split(","))
         self.assertNotIn("device-", out)
+
+    def test_main_applies_exclusions_and_retains_explicit_targets(self):
+        cases = (
+            (" ; gfx110X-all ; gfx110X-all ;; ", False),
+            (" gfx110X-all ; gfx1101 ;; ", True),
+        )
+        for families, retain_excluded_target in cases:
+            with self.subTest(families=families):
+                targets = self._run_and_capture(
+                    "--amdgpu-families",
+                    families,
+                    "--exclude-implicit-targets",
+                    " ; gfx1101 ; gfx1101 ;; ",
+                ).split(",")
+                self.assertIn("gfx1100", targets)
+                self.assertEqual("gfx1101" in targets, retain_excluded_target)
+                self.assertEqual(len(targets), len(set(targets)))
 
     def test_shared_owner_device_extras(self):
         for families in ("gfx1250", "gfx1250-strict", "gfx1250;gfx1250-strict"):
