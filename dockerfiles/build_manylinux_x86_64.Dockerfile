@@ -24,7 +24,7 @@ pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
-RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
+RUN ./install_ccache.sh "4.12.1" && rm -rf /install-ccache
 
 ######## SCCache ########
 WORKDIR /install-sccache

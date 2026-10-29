@@ -659,7 +659,6 @@ jobs:
             # Hard-code: gfx950's tests_on_trigger is "submodule_bump" only,
             # so the setup config clears test_runs_on for scheduled runs.
             hardcoded_test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
-            test_type_override: quick
           - amdgpu_family: gfx1151
             hardcoded_test_runs_on: ""
     steps:
@@ -706,7 +705,7 @@ jobs:
               "amdgpu_families": "${{ matrix.amdgpu_family }}",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ matrix.test_type_override || inputs.test_type || 'standard' }}",
+              "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
