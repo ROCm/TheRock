@@ -106,49 +106,53 @@ def build_fetch_sources_args(
     return " ".join(parts)
 
 
-def resolve_stage_config(config: Dict[str, Any], stage_name: str) -> Dict[str, Any]:
-    """Resolves what a single build stage needs from the external repo.
+def build_stage_configs(
+    *,
+    repo_name: str,
+    checkout_path: str,
+    source_package: str,
+    source_stages: List[str],
+    extra_cmake_options: str,
+) -> Dict[str, Dict[str, Any]]:
+    """Resolves what every build stage needs from the external repo.
 
-    Stages outside 'source_stages' skip the checkout, the
-    -DTHEROCK_<REPO>_SOURCE_DIR= option, and the DVC pull rooted in the
-    (absent) external checkout.
+    Every stage gets an entry so a build workflow can look itself up with a
+    single `fromJSON(config).stages[stage_name]` index. Stages outside
+    'source_stages' skip the checkout, the -DTHEROCK_<REPO>_SOURCE_DIR= option,
+    and the DVC pull rooted in the (absent) external checkout.
     """
-    checkout_path = config["checkout_path"]
-    needs_source = stage_name in config.get("source_stages", [])
-
-    repo_name = config["repository"].split("/")[-1].lower()
     repo_config = get_repo_config(repo_name)
-    dvc_projects = list(repo_config.get("dvc_projects", []))
-    if not needs_source:
-        dvc_projects = [p for p in dvc_projects if p != checkout_path]
+    skip_submodules = repo_config.get("skip_submodules", [])
+    dvc_projects = repo_config.get("dvc_projects", [])
 
-    cmake_options = []
-    if needs_source:
-        cmake_options.append(
-            f"-DTHEROCK_{config['source_package']}_SOURCE_DIR={checkout_path}"
-        )
-    # Configures the build as a whole, so it applies to every stage, including
-    # the ones that never read the external sources.
-    if config.get("extra_cmake_options"):
-        cmake_options.append(config["extra_cmake_options"])
+    def resolve(stage_name: str) -> Dict[str, Any]:
+        needs_source = stage_name in source_stages
+
+        cmake_options = []
+        if needs_source:
+            cmake_options.append(
+                f"-DTHEROCK_{source_package}_SOURCE_DIR={checkout_path}"
+            )
+        # Configures the build as a whole, so it applies to every stage,
+        # including the ones that never read the external sources.
+        if extra_cmake_options:
+            cmake_options.append(extra_cmake_options)
+
+        return {
+            "needs_source": needs_source,
+            "cmake_options": " ".join(cmake_options),
+            "fetch_sources_args": build_fetch_sources_args(
+                skip_submodules,
+                (
+                    dvc_projects
+                    if needs_source
+                    else [p for p in dvc_projects if p != checkout_path]
+                ),
+            ),
+        }
 
     return {
-        "needs_source": needs_source,
-        "cmake_options": " ".join(cmake_options),
-        "fetch_sources_args": build_fetch_sources_args(
-            repo_config.get("skip_submodules", []), dvc_projects
-        ),
-    }
-
-
-def build_stage_configs(config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Precomputes the per-stage view of an external repo config.
-
-    Every build stage gets an entry so a build workflow can look itself up with
-    a single `fromJSON(config).stages[stage_name]` index.
-    """
-    return {
-        stage_name: resolve_stage_config(config, stage_name)
+        stage_name: resolve(stage_name)
         for stage_name in sorted(get_topology().get_all_stage_names())
     }
 
@@ -549,19 +553,23 @@ def main(argv=None):
         source_stages = get_source_stages(args.repository)
         print(f"Build stages needing {args.repository} sources: {source_stages}")
 
+        # Only the fields the workflows read. Anything that feeds into a single
+        # build stage lives under "stages" instead, resolved per stage here.
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
-            "source_package": source_package,
-            "source_stages": source_stages,
             "submodule_path": config["submodule_path"],
-            "fetch_sources_args": config.get("fetch_sources_args", ""),
-            "extra_cmake_options": extra_cmake_options,
             "projects": projects,
             "family_overrides": family_overrides,
+            "stages": build_stage_configs(
+                repo_name=args.repository,
+                checkout_path=checkout_path,
+                source_package=source_package,
+                source_stages=source_stages,
+                extra_cmake_options=extra_cmake_options,
+            ),
         }
-        config_json["stages"] = build_stage_configs(config_json)
         config["config_json"] = json.dumps(config_json)
         print(
             f"Generated config_json:\n{json.dumps(config_json, indent=2)}",

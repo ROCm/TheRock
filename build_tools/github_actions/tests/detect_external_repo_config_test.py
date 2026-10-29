@@ -213,76 +213,50 @@ class TestOutputGithubActionsVars(unittest.TestCase):
         self.assertIn('"checkout_path": "external-rocgdb"', output)
         self.assertIn("THEROCK_ROCGDB_SOURCE_DIR", output)
 
-    def test_extra_cmake_options_forwarded(self):
-        """Test that extra_cmake_options from external_repo JSON is forwarded to config_json."""
-        rc = detect_external_repo_config_main(
-            [
-                "--external-repo-json",
-                '{"repository": "ROCm/ROCgdb", "ref": "abc123", "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"}',
-            ]
-        )
-        self.assertEqual(rc, 0)
+    def test_extra_cmake_options_applies_to_every_stage(self):
+        """extra_cmake_options configures the build as a whole, not one stage.
 
-        with open(self.temp_file, "r") as f:
-            output = f.read()
+        It is folded into each stage's cmake_options, including the stages that
+        never read the external sources (rocgdb is built by debug-tools only).
+        """
+        for extra in [
+            "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON",
+            # Multiple flags, and embedded quotes surviving the JSON round trip.
+            "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON -DSOME_OTHER_FLAG=value",
+            '-DFOO="bar"',
+            "",
+        ]:
+            with self.subTest(extra_cmake_options=extra):
+                open(self.temp_file, "w").close()
+                rc = detect_external_repo_config_main(
+                    [
+                        "--external-repo-json",
+                        json.dumps(
+                            {
+                                "repository": "ROCm/ROCgdb",
+                                "ref": "abc123",
+                                "extra_cmake_options": extra,
+                            }
+                        ),
+                    ]
+                )
+                self.assertEqual(rc, 0)
 
-        self.assertIn(
-            '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON"', output
-        )
+                with open(self.temp_file, "r") as f:
+                    line = [
+                        l for l in f.read().splitlines() if l.startswith("config_json=")
+                    ][0]
+                stages = json.loads(line.split("=", 1)[1])["stages"]
 
-    def test_extra_cmake_options_empty_by_default(self):
-        """Test that extra_cmake_options defaults to empty string when not provided."""
-        rc = detect_external_repo_config_main(
-            [
-                "--repository",
-                "rocm-libraries",
-            ]
-        )
-        self.assertEqual(rc, 0)
-
-        with open(self.temp_file, "r") as f:
-            output = f.read()
-
-        self.assertIn('"extra_cmake_options": ""', output)
-
-    def test_extra_cmake_options_multiple_flags(self):
-        """Test that multiple space-separated cmake flags are forwarded intact."""
-        rc = detect_external_repo_config_main(
-            [
-                "--external-repo-json",
-                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
-                ' "extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON -DSOME_OTHER_FLAG=value"}',
-            ]
-        )
-        self.assertEqual(rc, 0)
-
-        with open(self.temp_file, "r") as f:
-            output = f.read()
-
-        self.assertIn(
-            '"extra_cmake_options": "-DTHEROCK_USE_EXTERNAL_ROCGDB=ON -DSOME_OTHER_FLAG=value"',
-            output,
-        )
-
-    def test_extra_cmake_options_embedded_quotes(self):
-        """Test that embedded quotes survive the JSON parse/serialize round-trip."""
-        # JSON input: extra_cmake_options value contains escaped double quotes.
-        # json.loads produces the Python string:  -DFOO="bar"
-        # json.dumps then re-escapes it back to:  "-DFOO=\"bar\""
-        rc = detect_external_repo_config_main(
-            [
-                "--external-repo-json",
-                '{"repository": "ROCm/ROCgdb", "ref": "abc123",'
-                ' "extra_cmake_options": "-DFOO=\\"bar\\""}',
-            ]
-        )
-        self.assertEqual(rc, 0)
-
-        with open(self.temp_file, "r") as f:
-            output = f.read()
-
-        # After round-trip the quotes are re-escaped in the serialized JSON
-        self.assertIn('"extra_cmake_options": "-DFOO=\\"bar\\""', output)
+                self.assertEqual(stages["compiler-runtime"]["cmake_options"], extra)
+                self.assertEqual(
+                    stages["debug-tools"]["cmake_options"],
+                    " ".join(
+                        filter(
+                            None, ["-DTHEROCK_ROCGDB_SOURCE_DIR=external-rocgdb", extra]
+                        )
+                    ),
+                )
 
 
 class TestGetExternalRepoPath(unittest.TestCase):
@@ -493,14 +467,13 @@ class TestGetSourceStages(unittest.TestCase):
 class TestStageConfigs(unittest.TestCase):
     """Tests for the per-stage view the build workflows index into."""
 
-    CONFIG = {
-        "repository": "ROCm/rocm-libraries",
-        "ref": "abc123",
-        "checkout_path": "external-rocm-libraries",
-        "source_package": "ROCM_LIBRARIES",
-        "source_stages": ["cv-libs", "math-libs"],
-        "extra_cmake_options": "-DFOO=BAR",
-    }
+    CONFIG = dict(
+        repo_name="rocm-libraries",
+        checkout_path="external-rocm-libraries",
+        source_package="ROCM_LIBRARIES",
+        source_stages=["cv-libs", "math-libs"],
+        extra_cmake_options="-DFOO=BAR",
+    )
 
     # stage -> (needs_source, cmake_options, --dvc-projects value)
     EXPECTED = {
@@ -523,7 +496,7 @@ class TestStageConfigs(unittest.TestCase):
     }
 
     def test_stage_examples(self):
-        stages = build_stage_configs(self.CONFIG)
+        stages = build_stage_configs(**self.CONFIG)
         for stage, (needs_source, cmake_options, dvc_projects) in self.EXPECTED.items():
             with self.subTest(stage=stage):
                 self.assertEqual(stages[stage]["needs_source"], needs_source)
@@ -536,7 +509,7 @@ class TestStageConfigs(unittest.TestCase):
     def test_every_stage_has_an_entry(self):
         """A missing key would silently skip the checkout, so cover all stages."""
         self.assertEqual(
-            sorted(build_stage_configs(self.CONFIG)),
+            sorted(build_stage_configs(**self.CONFIG)),
             sorted(get_topology().get_all_stage_names()),
         )
 
