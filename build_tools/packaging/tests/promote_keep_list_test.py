@@ -840,7 +840,6 @@ class FakeS3Client:
 
 def _s3_args(**overrides):
     values = {
-        "version": "7.13.0rc1",
         "source-bucket": "src-bucket",
         "dest-bucket": "dst-bucket",
     }
@@ -904,14 +903,11 @@ class S3TarballCopyTest(unittest.TestCase):
 
     def test_selects_therock_dist_only(self):
         objects = self._objects() + [
-            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.12.0rc1.tar.gz", 30),
+            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", 30),
             (RELEASE_PREFIX + "rocm-7.13.0rc1.tar.gz", 40),
             (RELEASE_PREFIX + "nested/therock-dist-linux-gfx950-7.13.0rc1.tar.gz", 50),
         ]
-        planned, unchanged = ptf.select_tarball_copies(
-            objects, RELEASE_PREFIX, "7.13.0rc1", "rc", "release"
-        )
-        self.assertEqual(unchanged, [])
+        planned = ptf.select_tarball_copies(objects, RELEASE_PREFIX, "rc", "release")
         self.assertEqual(
             [dest for _, dest, _ in planned],
             [RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"],
@@ -979,33 +975,39 @@ class S3TarballCopyTest(unittest.TestCase):
         self.assertEqual(copied, [])
         self.assertIn("[SKIP] Already exists:", output.getvalue())
 
-    def test_missing_version_fails(self):
-        output = io.StringIO()
-        with redirect_stdout(output):
-            code = ptf.promote_s3_tarballs(
-                _s3_args(version="7.99.0rc1"),
-                client=FakeS3Client(self._objects()),
-            )
-        self.assertEqual(code, 1)
-        self.assertIn(
-            "No therock-dist tarballs matched version 7.99.0rc1", output.getvalue()
-        )
-
-    def test_matched_but_unchanged_is_not_a_miss(self):
+    def test_no_matching_type_fails(self):
         objects = [
             (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz", 10),
         ]
         output = io.StringIO()
         with redirect_stdout(output):
             code = ptf.promote_s3_tarballs(
-                _s3_args(version="7.13.0"),
+                _s3_args(),
                 client=FakeS3Client(objects),
             )
         self.assertEqual(code, 1)
+        self.assertIn(
+            "No therock-dist tarballs have an 'rc' prerelease marker", output.getvalue()
+        )
+
+    def test_two_rc_tokens_stop(self):
+        objects = self._objects() + [
+            (RELEASE_PREFIX + "therock-dist-linux-gfx950-7.12.0rc1.tar.gz", 30),
+        ]
+        copied = []
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = ptf.promote_s3_tarballs(
+                _s3_args(execute=True),
+                client=FakeS3Client(objects),
+                copy_fn=lambda src, dst: copied.append((src, dst)),
+            )
+        self.assertEqual(code, 1)
+        self.assertEqual(copied, [])
         text = output.getvalue()
-        self.assertIn("nothing to promote", text)
-        self.assertIn("version did not change", text)
-        self.assertNotIn("No therock-dist tarballs matched", text)
+        self.assertIn("more than one version token", text)
+        self.assertIn("7.12.0rc1", text)
+        self.assertIn("7.13.0rc1", text)
 
     def test_one_prefix_exists_and_the_other_is_copied(self):
         existing = {RELEASE_PREFIX + "therock-dist-linux-gfx950-7.13.0.tar.gz"}
@@ -1033,7 +1035,7 @@ class S3TarballCopyTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             _s3_args(**{"input-dir": "/tmp/packages"})
         with self.assertRaises(SystemExit):
-            ptf.parse_arguments(["--input-dir=/tmp/packages", "--version=7.13.0rc1"])
+            ptf.parse_arguments(["--input-dir=/tmp/packages", "--execute"])
 
     def test_local_promotion_still_requires_input_dir(self):
         with self.assertRaises(SystemExit):
