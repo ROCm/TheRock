@@ -73,26 +73,6 @@ By default for CI workflow retrieval (`--run-id`), all artifacts (excluding test
 - Add `--tests` to include test artifacts for enabled components
 - Add `--dev` to include development artifacts for enabled components
 
-### Building Against a Narrowed Installation
-
-Component flags fetch only the runtime (`_lib`/`_run`) artifacts, which is
-enough to run a prebuilt binary but not to compile against the installation.
-`--dev` adds the `_dev` artifact (headers, CMake package configs, import
-libraries) of the base artifacts and of every enabled component, the same way
-OS native packages pair a runtime package with a `-dev`/`-devel` package:
-
-```bash
-python build_tools/install_rocm_from_artifacts.py \
-    --run-id 15575624591 \
-    --amdgpu-family gfx110X-all \
-    --blas \
-    --dev
-```
-
-Without `--dev`, base development artifacts such as `amd-llvm_dev` and
-`base_dev` arrive only as a side effect of unrelated flags (`--debug-tools`,
-`--rocdecode`, `--rpp`, ...), and others have to be overlaid by hand.
-
 ### Selecting Your GPU Family
 
 Select your AMD GPU family from [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake#L44-L81). Common families include:

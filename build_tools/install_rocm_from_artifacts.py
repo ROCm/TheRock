@@ -125,12 +125,6 @@ will be downloaded. For specific artifacts, pass in the flag such as `--rand`
 (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts).
 For base artifacts only, pass in the flag `--base-only`
 
-A narrowed selection fetches only runtime (`_lib`/`_run`) components, which is
-not enough to compile against the install. Pass `--dev` to also fetch the `_dev`
-component (headers, CMake package configs, import libraries) of the base
-artifacts and of every selected artifact, much like the `-dev`/`-devel`
-counterparts of OS native packages.
-
 Note that the ARTIFACT_GROUP controls which sub-directory of the run contains
 the artifacts. If not specified, it defaults to the AMDGPU_FAMILY, which was
 the historic interpretation.
