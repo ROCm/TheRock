@@ -68,53 +68,19 @@ graph LR
 
 When CI is triggered from an external repository (`rocm-libraries`, `rocm-systems`
 or `rocgdb`), TheRock is the primary checkout and the external repository is
-checked out alongside it into `external-<repo>/`. Cloning a monorepo such as
-`rocm-libraries` takes several minutes, so this only happens for the build stages
-that actually compile from those sources:
+checked out alongside it into `external-<repo>/`. Cloning a monorepo takes several
+minutes, so only the stages that build from those sources check it out - for
+example `rocm-libraries` is cloned for `math-libs` and `cv-libs` only. The other
+stages see the same source tree as a regular TheRock run, since
+`fetch_sources.py --stage` already omits the corresponding submodule.
 
-| External repository | Build stages that check it out |
-| ------------------- | ------------------------------ |
-| `rocm-libraries`    | `math-libs`, `cv-libs`         |
-| `rocm-systems`      | all stages except `cv-libs`    |
-| `rocgdb`            | `debug-tools`                  |
-
-The mapping is derived from the `source_sets` entries on each artifact group in
-[`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), which is already the source of
-truth for `fetch_sources.py --stage`.
 [`detect_external_repo_config.py`](../../build_tools/github_actions/detect_external_repo_config.py)
-runs once, in the CI setup job, and resolves the repository into the
-`external_repo_config` input that is threaded through the build workflows. That
-config carries a `stages` map holding what every build stage needs:
-
-```json
-"stages": {
-  "math-libs": {
-    "needs_source": true,
-    "cmake_options": "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=external-rocm-libraries",
-    "fetch_sources_args": "--skip-submodules rocm-libraries --dvc-projects external-rocm-libraries rocm-systems"
-  },
-  "compiler-runtime": {
-    "needs_source": false,
-    "cmake_options": "",
-    "fetch_sources_args": "--skip-submodules rocm-libraries --dvc-projects rocm-systems"
-  }
-}
-```
-
-A build stage job looks itself up by name, so nothing is re-derived per stage:
-
-```yaml
-if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source }}
-```
-
-Stages that skip the checkout see the same source tree as a regular TheRock CI
-run of that stage, since `fetch_sources.py --stage` already omits the
-corresponding submodule. The DVC project rooted in the external checkout is
-dropped from `fetch_sources_args` alongside it.
-
-No manual updates are needed as stages or libraries move: adding a library to an
-artifact group whose `source_sets` include the repository automatically adds that
-stage to the list.
+runs once in the CI setup job and emits the `external_repo_config` input threaded
+through the build workflows. It holds a `stages` map keyed by stage name, so each
+job just looks itself up for its `needs_source` flag, `cmake_options` and
+`fetch_sources_args`. The mapping comes from the `source_sets` entries in
+[`BUILD_TOPOLOGY.toml`](../../BUILD_TOPOLOGY.toml), so moving a library between
+artifact groups updates the stage list automatically.
 
 ## Artifact Storage and Distribution
 
