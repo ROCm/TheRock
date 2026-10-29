@@ -1,164 +1,159 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
+# Isolated test-only workflow consuming the ten pinned DASan producer artifacts.
 name: Multi-Arch CI ASAN
-run-name: ${{ inputs.dasan_component_stage && format('DASan {0} (gfx950)', inputs.dasan_component_stage) || github.event.pull_request.title || github.workflow }}
-
+run-name: DASan selected artifact tests gfx950 (01a17bc3)
 on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
-    inputs:
-      enable_dasan:
-        type: boolean
-        description: "Run the experimental DASan compiler/runtime build and lit tests for gfx942 and gfx950"
-        default: false
-      dasan_math_libraries:
-        type: boolean
-        description: "Build gfx950 math libraries with DASan using the installation from baseline_run_id"
-        default: false
-      dasan_component_stage:
-        type: string
-        description: "Additional gfx950 DASan stage: emulation, runtime-tests, comm-libs, cv-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs, or hipdnn"
-        default: ""
-      dasan_dependencies_run_id:
-        type: string
-        description: "Optional successful DASan math run providing reusable dependency artifacts for a component stage"
-        default: ""
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to reuse; required for prebuilt_stages or dasan_math_libraries"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
-  dasan_component:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_component_stage != '' }}
-    uses: ./.github/workflows/multi_arch_ci_dasan_component.yml
-    with:
-      stage: ${{ inputs.dasan_component_stage }}
-      baseline_run_id: ${{ inputs.baseline_run_id }}
-      dependencies_run_id: ${{ inputs.dasan_dependencies_run_id }}
-    permissions:
-      contents: read
-      actions: read
-      id-token: write
-
-  dasan:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_component_stage == '' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
-    uses: ./.github/workflows/multi_arch_ci_dasan.yml
-    with:
-      math_libraries: ${{ inputs.dasan_math_libraries }}
-      baseline_run_id: ${{ inputs.baseline_run_id }}
-    permissions:
-      contents: read
-      actions: read
-      id-token: write
-
-  setup:
-    if: ${{ !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
-      build_pytorch: false
-      build_jax: false
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_asan_summary:
-    name: CI ASAN Summary
-    if: ${{ always() && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-26.04
+  preflight:
+    name: Inspect ${{ matrix.stage }} test payloads
+    runs-on: aws-linux-scale-rocm-large
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        stage: [compiler-runtime, math-libs, runtime-tests, comm-libs, storage-libs, profiler-apps, media-libs, emulation, dctools-core, cv-libs]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.15'
+      - name: Preflight requirements and disk
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          pip install PyYAML==6.0.3
+          df -h .
+      - name: Verify pinned packages and inspect installed test payloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE: ${{ matrix.stage }}
+        run: python ci/dasan-selected/preflight.py --stage "$STAGE"
+      - name: Preserve preflight provenance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: preflight-${{ matrix.stage }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+  plan:
+    name: Select runnable full suites
+    if: always()
+    needs: preflight
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+      missing: ${{ steps.plan.outputs.missing }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: preflight-*
+          path: preflight-results
+      - id: plan
+        run: python3 ci/dasan-selected/plan.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: selected-test-plan
+          path: |
+            dispatch-matrix.json
+            coverage-results.json
+            ci/dasan-selected/producer-manifest.json
+            ci/dasan-selected/coverage.json
+          retention-days: 30
+  test:
+    name: ${{ matrix.id }} (${{ matrix.runner }})
+    needs: plan
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.count != '0' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    container:
+      image: ${{ matrix.image }}
+      options: ${{ matrix.container_options }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      OUTPUT_ARTIFACTS_DIR: ./build
+      THEROCK_BIN_DIR: ./build/bin
+      AMDGPU_FAMILIES: gfx950-dcgpu
+      AMDGPU_TARGETS: gfx950
+      ARTIFACT_GROUP: gfx950
+      BUILD_VARIANT: release
+      SANITIZER_MODE: dasan
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.15'
+      - name: Set up CI Python environment
+        run: |
+          pip install uv==0.13.5
+          python build_tools/setup_venv.py "$VENV_DIR" --activate-in-future-github-actions-steps --use-uv
+      - name: Install base test requirements
+        run: uv pip install -r requirements-test.txt
+      - name: Install exact selected artifacts
+        timeout-minutes: 90
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPONENT_ID: ${{ matrix.id }}
+        run: python ci/dasan-selected/prepare_component.py "$COMPONENT_ID"
+      - name: Install component test requirements
+        env:
+          REQUIREMENTS_FILES: ${{ join(matrix.additional_requirements_files, ',') }}
+        run: |
+          python build_tools/install_additional_requirements.py --requirements-files "$REQUIREMENTS_FILES"
+          uv pip freeze > evidence/python-freeze.txt
+      - name: Run full component suite
+        env:
+          COMPONENT_ID: ${{ matrix.id }}
+        run: python ci/dasan-selected/run_component.py --component "$COMPONENT_ID" --matrix ci/dasan-selected/matrix.json
+      - name: Preserve test logs and provenance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: dasan-${{ matrix.id }}
+          path: |
+            evidence/
+            build/**/Testing/Temporary/*.log
+            build/**/*.xml
+            build/**/compile_commands.json
+          retention-days: 30
+          if-no-files-found: warn
+  coverage:
+    name: Full requested coverage accounting
+    if: always()
+    needs: [preflight, plan, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require complete payload coverage and passing test jobs
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          MISSING: ${{ needs.plan.outputs.missing }}
+        run: |
+          echo "Preflight=$PREFLIGHT_RESULT Plan=$PLAN_RESULT Tests=$TEST_RESULT Missing=$MISSING"
+          test "$PREFLIGHT_RESULT" = success
+          test "$PLAN_RESULT" = success
+          test "$MISSING" = 0
+          test "$TEST_RESULT" = success

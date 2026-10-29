@@ -1,0 +1,552 @@
+{
+  "owner_session_id": "01a17bc3-5a47-7832-8012-6a7e5551f090",
+  "test_driver_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+  "current_main_supplement_sha": "eee107e60047531cc765664faa20cb4cf2b5d1bd",
+  "runner_config_sha": "7624a5e209cec569bbed38dad7071fa7393cb52b",
+  "producer_runs": {
+    "compiler-runtime": 40443090683,
+    "math-libs": 40545400942,
+    "runtime-tests": 40586626409,
+    "comm-libs": 40586632932,
+    "storage-libs": 40586640605,
+    "profiler-apps": 40586651063,
+    "media-libs": 40584081938,
+    "dctools-core": 40584069915,
+    "cv-libs": 40584055579,
+    "emulation": 40583338049
+  },
+  "stock_components_selected": 41,
+  "stock_shards_selected": 76,
+  "fft_supplemental_components": 2,
+  "total_component_jobs": 81,
+  "selected_components": [
+    {
+      "job_name": "sanity",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hip-tests",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "total_shards": 4,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipfile",
+      "stage": "storage-libs",
+      "producer_run_id": 40586640605,
+      "total_shards": 1,
+      "runner": "aws-linux-scale-rocm-prod",
+      "gpu_count": 0,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocblas",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 6,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocroller",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 5,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "tensilelite",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "tensilelite-common",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "origami",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipblas",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "amdsmi",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipblaslt",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 6,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipsolver",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocsolver",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 3,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocprim",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 2,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipcub",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocthrust",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipsparse",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 3,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocsparse",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 3,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipsparselt",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 6,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocrand",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hiprand",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocfft",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 2,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipfft",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 2,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rccl",
+      "stage": "comm-libs",
+      "producer_run_id": 40586632932,
+      "total_shards": 1,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "gpu_count": 8,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocshmem",
+      "stage": "comm-libs",
+      "producer_run_id": 40586632932,
+      "total_shards": 1,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "gpu_count": 8,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocprofiler-sdk",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "profiler-hub",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "runner": "aws-linux-scale-rocm-prod",
+      "gpu_count": 0,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocwmma",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 5,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocalution",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocprofiler-compute",
+      "stage": "profiler-apps",
+      "producer_run_id": 40586651063,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocprofiler-systems",
+      "stage": "profiler-apps",
+      "producer_run_id": 40586651063,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "libhipcxx_amdclang",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "libhipcxx_hiprtc",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipthreads",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipthreads_examples",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocdecode",
+      "stage": "media-libs",
+      "producer_run_id": 40584081938,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocjpeg",
+      "stage": "media-libs",
+      "producer_run_id": 40584081938,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rpp",
+      "stage": "cv-libs",
+      "producer_run_id": 40584055579,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "aqlprofile",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "rocrtst",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hiptensor",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "gpu_count": 1,
+      "kind": "stock-component"
+    },
+    {
+      "job_name": "hipfft-multi-gpu",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "gpu_count": 8,
+      "kind": "supplemental-current-main-FFT"
+    },
+    {
+      "job_name": "rocfft-multi-gpu",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "total_shards": 1,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "gpu_count": 8,
+      "kind": "supplemental-current-main-FFT"
+    }
+  ],
+  "excluded_components": [
+    {
+      "job_name": "rocgdb-cpu",
+      "reason": "debug-tools producer not in requested 10 runs",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "rocgdb-gpu",
+      "reason": "debug-tools producer not in requested 10 runs",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "rocr-debug-agent",
+      "reason": "debug-tools producer not in requested 10 runs",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "miopen",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "miopen-dbsync",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipdnn",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipdnn_install",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipdnn-integration-tests",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipdnn-samples",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipdnn-cudnn-samples",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "miopenprovider",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipblasltprovider",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    },
+    {
+      "job_name": "hipkernelprovider",
+      "reason": "ML artifact group excluded by requested math producer",
+      "source": "52dfa419e245242f79e25ad1bc10011d9c3c1295"
+    }
+  ],
+  "separate_jobs": [],
+  "limitations": [
+    "Math producer THEROCK_BUILD_TESTING=OFF; component producer enables build testing only for runtime-tests. Actual test payload availability must be measured, never inferred from built libraries.",
+    "Stock matrix full retains its committed filters and exclusions; full does not mean no upstream skips.",
+    "Stock is_asan uses substring matching: use BUILD_VARIANT=release with separately explicit DASan runtime/compile environment; dasan would incorrectly activate ASan paths.",
+    "Current-main supplemental FFT runner must execute at producer source test-script depth or be adapted explicitly: its __file__ parent chain determines THEROCK_DIR.",
+    "Artifact upload is GitHub custom tar format; stock single-run S3 fetcher cannot directly merge these ten outputs.",
+    "Missing test payload or zero selected cases must be reported unavailable/failure, never success."
+  ],
+  "recommended_dispatch": {
+    "repository": "ROCm/rockrel",
+    "workflow": "isolated session-specific adapter (parent implementation)",
+    "test_driver_ref": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+    "amdgpu_families": "gfx950-dcgpu",
+    "amdgpu_targets": "gfx950",
+    "test_type": "full",
+    "runner_policy": "per-entry runner, multi-GPU entries override no global one-GPU input",
+    "artifacts": "verified GitHub artifact IDs/digests for exact ten requested run IDs; common compiler base plus ownership-checked component overlays"
+  },
+  "total_matrix_jobs": 81,
+  "unique_matrix_entries_before_sharding": 46,
+  "special_jobs_in_matrix": [
+    {
+      "id": "dasan-lit27-s1",
+      "job_name": "compiler-runtime-lit27",
+      "stage": "compiler-runtime",
+      "kind": "compiler-dasan-lit",
+      "gpu_count": 8,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "required_paths": [
+        "lib/llvm/bin/clang"
+      ],
+      "test_script": "python ci-driver/ci/dasan-selected/run_lit.py"
+    },
+    {
+      "id": "rdc-availability-s1",
+      "job_name": "rdc-availability",
+      "stage": "dctools-core",
+      "kind": "availability-only",
+      "gpu_count": 0,
+      "runner": "aws-linux-scale-rocm-prod",
+      "required_paths": [
+        "share/rdc/rdctst_tests"
+      ],
+      "test_script": "python -c \"raise SystemExit(2)\""
+    },
+    {
+      "id": "emulation-availability-s1",
+      "job_name": "emulation-availability",
+      "stage": "emulation",
+      "kind": "availability-only",
+      "gpu_count": 0,
+      "runner": "aws-linux-scale-rocm-prod",
+      "required_paths": [
+        "lib/librocjitsu.so",
+        "bin/mirage"
+      ],
+      "test_script": "python -c \"raise SystemExit(2)\""
+    }
+  ],
+  "all_requested_stages_represented": [
+    "comm-libs",
+    "compiler-runtime",
+    "cv-libs",
+    "dctools-core",
+    "emulation",
+    "math-libs",
+    "media-libs",
+    "profiler-apps",
+    "runtime-tests",
+    "storage-libs"
+  ],
+  "availability_only_policy": "RDC/emulation are explicit unavailable/inventory outcomes and must not run a success command or count as suite passes. CPU preflight excludes these from runnable component GPU matrix.",
+  "required_category_preflight": "tensilelite-common must define hw-common in installed test_categories.yaml; FFT supplemental must expose nonzero multigpu_full tests."
+}

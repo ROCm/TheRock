@@ -1,0 +1,4041 @@
+{
+  "include": [
+    {
+      "additional_requirements_files": [],
+      "job_name": "sanity",
+      "skip_stages": [
+        "compiler-runtime"
+      ],
+      "fetch_artifact_args": "--sanity",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_sanity.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocminfo",
+        "lib/llvm/bin/clang"
+      ],
+      "id": "sanity-s1",
+      "shard": 1,
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hip-tests",
+      "fetch_artifact_args": "--hip-tests --tests",
+      "timeout_minutes": 120,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hiptests.py",
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "expect_failure": false,
+      "total_shards_dict": {
+        "linux": 4,
+        "windows": 4,
+        "wsl": 4
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "total_shards": 4,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hip/catch_tests"
+      ],
+      "id": "hip-tests-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hip-tests",
+      "fetch_artifact_args": "--hip-tests --tests",
+      "timeout_minutes": 120,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hiptests.py",
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "expect_failure": false,
+      "total_shards_dict": {
+        "linux": 4,
+        "windows": 4,
+        "wsl": 4
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "total_shards": 4,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hip/catch_tests"
+      ],
+      "id": "hip-tests-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hip-tests",
+      "fetch_artifact_args": "--hip-tests --tests",
+      "timeout_minutes": 120,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hiptests.py",
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "expect_failure": false,
+      "total_shards_dict": {
+        "linux": 4,
+        "windows": 4,
+        "wsl": 4
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "total_shards": 4,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hip/catch_tests"
+      ],
+      "id": "hip-tests-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hip-tests",
+      "fetch_artifact_args": "--hip-tests --tests",
+      "timeout_minutes": 120,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hiptests.py",
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "expect_failure": false,
+      "total_shards_dict": {
+        "linux": 4,
+        "windows": 4,
+        "wsl": 4
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "total_shards": 4,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hip/catch_tests"
+      ],
+      "id": "hip-tests-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipfile",
+      "fetch_artifact_args": "--hipfile --tests",
+      "timeout_minutes": 15,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hipfile.py",
+      "platform": [
+        "linux"
+      ],
+      "linux_cpu_runner": true,
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "aws-linux-scale-rocm-prod",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576",
+      "stage": "storage-libs",
+      "producer_run_id": 40586640605,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "aws-linux-scale-rocm-prod",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 0,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "share/hipfile/test"
+      ],
+      "id": "hipfile-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "aws-linux-scale-rocm-prod",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s5",
+      "shard": 5,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocblas",
+      "fetch_artifact_args": "--blas --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 288,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 6
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocblas/CTestTestfile.cmake"
+      ],
+      "id": "rocblas-s6",
+      "shard": 6,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocroller",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 5
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ],
+        "windows": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocroller/CTestTestfile.cmake"
+      ],
+      "id": "rocroller-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocroller",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 5
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ],
+        "windows": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocroller/CTestTestfile.cmake"
+      ],
+      "id": "rocroller-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocroller",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 5
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ],
+        "windows": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocroller/CTestTestfile.cmake"
+      ],
+      "id": "rocroller-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocroller",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 5
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ],
+        "windows": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocroller/CTestTestfile.cmake"
+      ],
+      "id": "rocroller-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocroller",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 5
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ],
+        "windows": [
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocroller/CTestTestfile.cmake"
+      ],
+      "id": "rocroller-s5",
+      "shard": 5,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/share/hipblaslt/tensilelite/requirements-test.txt"
+      ],
+      "job_name": "tensilelite",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/pytest_runner.py && TEST_COMPONENT=hipblaslt-tensilelite python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hipblaslt/tensilelite/test_categories.yaml",
+        "bin/hipblaslt-tensilelite/CTestTestfile.cmake"
+      ],
+      "id": "tensilelite-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/share/hipblaslt/tensilelite/requirements-test.txt"
+      ],
+      "job_name": "tensilelite-common",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "TEST_CATEGORY=hw-common python build_tools/github_actions/test_executable_scripts/pytest_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "include_family": {
+        "linux": [
+          "gfx90a",
+          "gfx94X-dcgpu",
+          "gfx950-dcgpu",
+          "gfx120X-all"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hipblaslt/tensilelite/test_categories.yaml"
+      ],
+      "preflight_note": "Stock driver exits0 when hw-common absent; record unavailable category, not passed.",
+      "id": "tensilelite-common-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs",
+      "required_yaml_categories": {
+        "share/hipblaslt/tensilelite/test_categories.yaml": [
+          "hw-common"
+        ]
+      }
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "origami",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_origami.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards": 1,
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/origami/CTestTestfile.cmake"
+      ],
+      "id": "origami-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblas",
+      "fetch_artifact_args": "--blas --solver --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblas/CTestTestfile.cmake"
+      ],
+      "id": "hipblas-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "amdsmi",
+      "fetch_artifact_args": "--base-only",
+      "timeout_minutes": 10,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_amdsmi.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/amd_smi/tests/amdsmitst"
+      ],
+      "id": "amdsmi-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s5",
+      "shard": 5,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipblaslt",
+      "fetch_artifact_args": "--blas --tests",
+      "timeout_minutes": 180,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipblaslt/CTestTestfile.cmake"
+      ],
+      "id": "hipblaslt-s6",
+      "shard": 6,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsolver",
+      "fetch_artifact_args": "--solver --blas --sparse --tests",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsolver/CTestTestfile.cmake"
+      ],
+      "id": "hipsolver-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsolver",
+      "fetch_artifact_args": "--solver --blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 2
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsolver/CTestTestfile.cmake"
+      ],
+      "id": "rocsolver-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsolver",
+      "fetch_artifact_args": "--solver --blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 2
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsolver/CTestTestfile.cmake"
+      ],
+      "id": "rocsolver-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsolver",
+      "fetch_artifact_args": "--solver --blas --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 2
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsolver/CTestTestfile.cmake"
+      ],
+      "id": "rocsolver-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocprim",
+      "fetch_artifact_args": "--prim --tests",
+      "timeout_minutes": 45,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocprim/CTestTestfile.cmake"
+      ],
+      "id": "rocprim-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocprim",
+      "fetch_artifact_args": "--prim --tests",
+      "timeout_minutes": 45,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocprim/CTestTestfile.cmake"
+      ],
+      "id": "rocprim-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipcub",
+      "fetch_artifact_args": "--prim --tests",
+      "timeout_minutes": 45,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipcub/CTestTestfile.cmake"
+      ],
+      "id": "hipcub-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocthrust",
+      "fetch_artifact_args": "--prim --tests",
+      "timeout_minutes": 45,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocthrust/CTestTestfile.cmake"
+      ],
+      "id": "rocthrust-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparse/CTestTestfile.cmake"
+      ],
+      "id": "hipsparse-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparse/CTestTestfile.cmake"
+      ],
+      "id": "hipsparse-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparse/CTestTestfile.cmake"
+      ],
+      "id": "hipsparse-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsparse/CTestTestfile.cmake"
+      ],
+      "id": "rocsparse-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsparse/CTestTestfile.cmake"
+      ],
+      "id": "rocsparse-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocsparse",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 3,
+        "windows": 3
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3
+      ],
+      "total_shards": 3,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocsparse/CTestTestfile.cmake"
+      ],
+      "id": "rocsparse-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s5",
+      "shard": 5,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipsparselt",
+      "fetch_artifact_args": "--sparse --blas --tests",
+      "timeout_minutes": 72,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 6,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx908",
+          "gfx90a",
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151",
+          "gfx1152",
+          "gfx1153",
+          "gfx1200",
+          "gfx1201"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "total_shards": 6,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipsparselt/CTestTestfile.cmake"
+      ],
+      "id": "hipsparselt-s6",
+      "shard": 6,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocrand",
+      "fetch_artifact_args": "--rand --tests",
+      "timeout_minutes": 15,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocRAND/CTestTestfile.cmake"
+      ],
+      "id": "rocrand-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hiprand",
+      "fetch_artifact_args": "--rand --tests",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipRAND/CTestTestfile.cmake"
+      ],
+      "id": "hiprand-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocfft",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocfft/CTestTestfile.cmake"
+      ],
+      "id": "rocfft-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocfft",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocfft/CTestTestfile.cmake"
+      ],
+      "id": "rocfft-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipfft",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipfft/CTestTestfile.cmake"
+      ],
+      "id": "hipfft-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipfft",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2
+      ],
+      "total_shards": 2,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipfft/CTestTestfile.cmake"
+      ],
+      "id": "hipfft-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rccl",
+      "fetch_artifact_args": "--rccl --tests",
+      "timeout_minutes": 15,
+      "test_script": "pytest build_tools/github_actions/test_executable_scripts/test_rccl.py -v -s --log-cli-level=info",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "multi_gpu": {
+        "linux": [
+          "gfx94X-dcgpu",
+          "gfx950-dcgpu"
+        ]
+      },
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --ipc host",
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "multi_gpu_runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "stage": "comm-libs",
+      "producer_run_id": 40586632932,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 8,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rccl-UnitTests",
+        "bin/all_gather_perf",
+        "bin/alltoallv_perf",
+        "bin/broadcast_perf",
+        "bin/alltoall_perf",
+        "bin/all_reduce_perf",
+        "bin/reduce_perf",
+        "bin/hypercube_perf",
+        "bin/gather_perf",
+        "bin/scatter_perf",
+        "bin/sendrecv_perf",
+        "bin/reduce_scatter_perf"
+      ],
+      "id": "rccl-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocshmem",
+      "fetch_artifact_args": "--rocshmem --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "multi_gpu": {
+        "linux": [
+          "gfx94X-dcgpu",
+          "gfx950-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "multi_gpu_runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "comm-libs",
+      "producer_run_id": 40586632932,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 8,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocshmem/CTestTestfile.cmake"
+      ],
+      "id": "rocshmem-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/share/rocprofiler-sdk/tests/requirements.txt"
+      ],
+      "job_name": "rocprofiler-sdk",
+      "fetch_artifact_args": "--tests",
+      "timeout_minutes": 20,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_rocprofiler_sdk.py --enable-cdash",
+      "platform": [
+        "linux"
+      ],
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add=SYS_PTRACE",
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "share/rocprofiler-sdk/tests/CMakeLists.txt"
+      ],
+      "id": "rocprofiler-sdk-s1",
+      "shard": 1,
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_note": "Stock --tests without feature restriction fetches all artifacts; include all requested producer primary groups, including rccl, but no unrequested producer substitution.",
+      "dependency_groups": [
+        "blas",
+        "composable-kernel",
+        "core-hiptests",
+        "fft",
+        "hipfile",
+        "hiptensor",
+        "hipthreads",
+        "libhipcxx",
+        "mirage",
+        "prim",
+        "rand",
+        "rccl",
+        "rdc",
+        "rocalution",
+        "rocdecode",
+        "rocjitsu",
+        "rocjitsu-hotswap",
+        "rocjpeg",
+        "rocprofiler-compute",
+        "rocprofiler-systems",
+        "rocprofiler-systems-examples",
+        "rocrtst",
+        "rocshmem",
+        "rocwmma",
+        "rpp",
+        "solver",
+        "sparse",
+        "support",
+        "sysdeps-amd-mesa"
+      ],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "profiler-hub",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_profiler_hub_install.py",
+      "platform": [
+        "linux"
+      ],
+      "linux_cpu_runner": true,
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "aws-linux-scale-rocm-prod",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "aws-linux-scale-rocm-prod",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 0,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/test_profiler-hub"
+      ],
+      "id": "profiler-hub-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "aws-linux-scale-rocm-prod",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocwmma",
+      "fetch_artifact_args": "--rocwmma --tests --blas",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocwmma/CTestTestfile.cmake"
+      ],
+      "id": "rocwmma-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocwmma",
+      "fetch_artifact_args": "--rocwmma --tests --blas",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocwmma/CTestTestfile.cmake"
+      ],
+      "id": "rocwmma-s2",
+      "shard": 2,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocwmma",
+      "fetch_artifact_args": "--rocwmma --tests --blas",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocwmma/CTestTestfile.cmake"
+      ],
+      "id": "rocwmma-s3",
+      "shard": 3,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocwmma",
+      "fetch_artifact_args": "--rocwmma --tests --blas",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocwmma/CTestTestfile.cmake"
+      ],
+      "id": "rocwmma-s4",
+      "shard": 4,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocwmma",
+      "fetch_artifact_args": "--rocwmma --tests --blas",
+      "timeout_minutes": 90,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 5,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "total_shards": 5,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocwmma/CTestTestfile.cmake"
+      ],
+      "id": "rocwmma-s5",
+      "shard": 5,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocalution",
+      "fetch_artifact_args": "--rocalution --tests --blas --sparse --rand",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocalution/CTestTestfile.cmake"
+      ],
+      "id": "rocalution-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/libexec/rocprofiler-compute/requirements.txt",
+        "build/libexec/rocprofiler-compute/requirements-test.txt"
+      ],
+      "job_name": "rocprofiler-compute",
+      "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx1030",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1200",
+          "gfx1201",
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "profiler-apps",
+      "producer_run_id": 40586651063,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "libexec/rocprofiler-compute/CTestTestfile.cmake"
+      ],
+      "id": "rocprofiler-compute-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/share/rocprofiler-systems/tests/requirements.txt"
+      ],
+      "job_name": "rocprofiler-systems",
+      "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-systems-examples --rocprofiler-sdk --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add=SYS_PTRACE --cap-add=PERFMON",
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "stage": "profiler-apps",
+      "producer_run_id": 40586651063,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/rocprofiler-systems/tests/CTestTestfile.cmake"
+      ],
+      "id": "rocprofiler-systems-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [
+        "build/libhipcxx/requirements-test.txt"
+      ],
+      "job_name": "libhipcxx_amdclang",
+      "fetch_artifact_args": "--libhipcxx --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_libhipcxx_amdclang.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "libhipcxx/CMakeLists.txt"
+      ],
+      "id": "libhipcxx_amdclang-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [
+        "build/libhipcxx/requirements-test.txt"
+      ],
+      "job_name": "libhipcxx_hiprtc",
+      "fetch_artifact_args": "--libhipcxx --tests",
+      "timeout_minutes": 20,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_libhipcxx_hiprtc.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "libhipcxx/CMakeLists.txt"
+      ],
+      "id": "libhipcxx_hiprtc-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [
+        "build/hipthreads/test/requirements-test.txt"
+      ],
+      "job_name": "hipthreads",
+      "fetch_artifact_args": "--hipthreads --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hipthreads.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "hipthreads/test",
+        "lib/hipthreads/libhipthreads.a"
+      ],
+      "id": "hipthreads-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipthreads_examples",
+      "fetch_artifact_args": "--hipthreads --prim --rand --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_hipthreads_examples.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "hipthreads/examples",
+        "lib/hipthreads/libhipthreads.a"
+      ],
+      "id": "hipthreads_examples-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocdecode",
+      "fetch_artifact_args": "--rocdecode --tests",
+      "timeout_minutes": 10,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_rocdecode.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "media-libs",
+      "producer_run_id": 40584081938,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "share/rocdecode/test"
+      ],
+      "id": "rocdecode-s1",
+      "shard": 1,
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocjpeg",
+      "fetch_artifact_args": "--rocjpeg --tests",
+      "timeout_minutes": 10,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_rocjpeg.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "media-libs",
+      "producer_run_id": 40584081938,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "share/rocjpeg/test"
+      ],
+      "id": "rocjpeg-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rpp",
+      "fetch_artifact_args": "--rpp --tests",
+      "timeout_minutes": 60,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_rpp.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "cv-libs",
+      "producer_run_id": 40584055579,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": true,
+      "required_paths": [
+        "share/rpp/test"
+      ],
+      "id": "rpp-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "aqlprofile",
+      "fetch_artifact_args": "--aqlprofile --tests",
+      "timeout_minutes": 5,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_aqlprofile.py",
+      "platform": [
+        "linux"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "share/hsa-amd-aqlprofile/run_tests.sh"
+      ],
+      "id": "aqlprofile-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocrtst",
+      "fetch_artifact_args": "--rocrtst --tests",
+      "timeout_minutes": 15,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "wsl"
+      ],
+      "expect_failure": false,
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1,
+        "wsl": 1
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "runtime-tests",
+      "producer_run_id": 40586626409,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocrtst/CTestTestfile.cmake"
+      ],
+      "id": "rocrtst-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "verify-actual-artifact-payload"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hiptensor",
+      "fetch_artifact_args": "--hiptensor --tests",
+      "rocm_kpack_debug": "0",
+      "timeout_minutes": 120,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 1,
+        "windows": 1
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx900",
+          "gfx90c",
+          "gfx906",
+          "gfx101X-all",
+          "gfx103X-all",
+          "gfx125X-dcgpu"
+        ],
+        "windows": [
+          "gfx900",
+          "gfx90c",
+          "gfx906",
+          "gfx101X-all",
+          "gfx103X-all"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 1,
+      "kind": "stock-component",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hiptensor/CTestTestfile.cmake"
+      ],
+      "id": "hiptensor-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "hipfft-multi-gpu",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 8,
+      "kind": "supplemental-current-main-FFT",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/hipfft/CTestTestfile.cmake"
+      ],
+      "multi_gpu_runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "supplemental_test_runner": "fft_multi_gpu_test_runner.py",
+      "supplemental_source_sha": "eee107e60047531cc765664faa20cb4cf2b5d1bd",
+      "supplemental_sha256": "cd9d91d66b170f09be317d09b5fd68702cf2e4fdffff3a46c69d137ee829fc73",
+      "required_ctest_labels": [
+        "multigpu_full"
+      ],
+      "preflight_note": "Require nonzero multigpu_full selection; absent labels mean unavailable payload, not passed. Original pinned driver remains used for single-GPU FFT.",
+      "id": "hipfft-multi-gpu-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "additional_requirements_files": [],
+      "job_name": "rocfft-multi-gpu",
+      "fetch_artifact_args": "--fft --rand --tests",
+      "timeout_minutes": 30,
+      "test_script": "python build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "platform": [
+        "linux",
+        "windows"
+      ],
+      "total_shards_dict": {
+        "linux": 2,
+        "windows": 2
+      },
+      "exclude_family": {
+        "linux": [
+          "gfx125X-dcgpu"
+        ]
+      },
+      "test_type": "full",
+      "shard_arr": [
+        1
+      ],
+      "total_shards": 1,
+      "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "stage": "math-libs",
+      "producer_run_id": 40545400942,
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "gpu_count": 8,
+      "kind": "supplemental-current-main-FFT",
+      "selection": "full",
+      "external_compile": false,
+      "required_paths": [
+        "bin/rocfft/CTestTestfile.cmake"
+      ],
+      "multi_gpu_runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "supplemental_test_runner": "fft_multi_gpu_test_runner.py",
+      "supplemental_source_sha": "eee107e60047531cc765664faa20cb4cf2b5d1bd",
+      "supplemental_sha256": "cd9d91d66b170f09be317d09b5fd68702cf2e4fdffff3a46c69d137ee829fc73",
+      "required_ctest_labels": [
+        "multigpu_full"
+      ],
+      "preflight_note": "Require nonzero multigpu_full selection; absent labels mean unavailable payload, not passed. Original pinned driver remains used for single-GPU FFT.",
+      "id": "rocfft-multi-gpu-s1",
+      "shard": 1,
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "dependency_groups": [],
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs"
+    },
+    {
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST",
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "job_name": "compiler-runtime-lit27",
+      "stage": "compiler-runtime",
+      "producer_run_id": 40443090683,
+      "total_shards": 1,
+      "shard_arr": [
+        1
+      ],
+      "shard": 1,
+      "external_compile": false,
+      "dependency_groups": [],
+      "additional_requirements_files": [],
+      "test_type": "full",
+      "selection": "full",
+      "availability_prediction": "verify-actual-artifact-payload",
+      "id": "dasan-lit27-s1",
+      "kind": "compiler-dasan-lit",
+      "gpu_count": 8,
+      "runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "runs_on": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "multi_gpu_runner": "linux-gfx950-8gpu-ccs-ossci-rocm",
+      "timeout_minutes": 120,
+      "required_paths": [
+        "lib/llvm/bin/clang"
+      ],
+      "test_script": "python ci/dasan-selected/run_lit.py",
+      "include_validation_bundle": true
+    },
+    {
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576",
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "job_name": "rdc-availability",
+      "stage": "dctools-core",
+      "producer_run_id": 40584069915,
+      "total_shards": 1,
+      "shard_arr": [
+        1
+      ],
+      "shard": 1,
+      "external_compile": false,
+      "dependency_groups": [],
+      "additional_requirements_files": [],
+      "test_type": "full",
+      "selection": "full",
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs",
+      "id": "rdc-availability-s1",
+      "kind": "availability-only",
+      "gpu_count": 0,
+      "runner": "aws-linux-scale-rocm-prod",
+      "runs_on": "aws-linux-scale-rocm-prod",
+      "test_runner": "aws-linux-scale-rocm-prod",
+      "linux_cpu_runner": true,
+      "timeout_minutes": 15,
+      "test_script": "python -c \"raise SystemExit(2)\"",
+      "availability_only": true,
+      "execution_policy": "Inventory only; never schedule as a passing component test. Missing tests or no stock harness is unavailable, even if installed library paths exist.",
+      "required_paths": [
+        "share/rdc/rdctst_tests"
+      ],
+      "required_path_source": "dctools/artifact-rdc.toml components.test include share/rdc/rdctst_tests/**",
+      "availability_reason": "RDC BUILD_TESTS=OFF; no stock CI matrix entry. This checks actual test-tree availability only."
+    },
+    {
+      "platform": [
+        "linux",
+        "windows",
+        "wsl"
+      ],
+      "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576",
+      "source_sha": "52dfa419e245242f79e25ad1bc10011d9c3c1295",
+      "image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98",
+      "job_name": "emulation-availability",
+      "stage": "emulation",
+      "producer_run_id": 40583338049,
+      "total_shards": 1,
+      "shard_arr": [
+        1
+      ],
+      "shard": 1,
+      "external_compile": false,
+      "dependency_groups": [],
+      "additional_requirements_files": [],
+      "test_type": "full",
+      "selection": "full",
+      "availability_prediction": "missing-standard-test-payload-from-producer-cache-and-install-logs",
+      "id": "emulation-availability-s1",
+      "kind": "availability-only",
+      "gpu_count": 0,
+      "runner": "aws-linux-scale-rocm-prod",
+      "runs_on": "aws-linux-scale-rocm-prod",
+      "test_runner": "aws-linux-scale-rocm-prod",
+      "linux_cpu_runner": true,
+      "timeout_minutes": 15,
+      "test_script": "python -c \"raise SystemExit(2)\"",
+      "availability_only": true,
+      "execution_policy": "Inventory only; never schedule as a passing component test. Missing tests or no stock harness is unavailable, even if installed library paths exist.",
+      "required_paths": [
+        "lib/librocjitsu.so",
+        "bin/mirage"
+      ],
+      "required_path_source": "emulation/artifact-rocjitsu.toml and artifact-mirage.toml",
+      "availability_reason": "Installed tools only. rocjitsu BUILD_TESTING=OFF and RJ_INSTALL_TESTS=OFF; Mirage cargo tests are build-tree only. No stock gfx950 full harness. These paths inventory libraries/tools, not tests."
+    }
+  ]
+}
