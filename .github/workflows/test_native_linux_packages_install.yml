@@ -243,7 +243,9 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
-          # cmake is for the downstream find_package smoke test, including sanity.
+          # cmake and a C++ compiler are for the downstream find_package smoke
+          # test, including sanity. hip-config calls find_dependency(Threads),
+          # which fails unless C or CXX is enabled. g++ / gcc-c++ is that compiler.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -254,7 +256,8 @@ jobs:
               gpg \
               lsb-release \
               binutils \
-              cmake
+              cmake \
+              g++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -270,7 +273,8 @@ jobs:
               lsb-release \
               update-alternatives \
               binutils \
-              cmake
+              cmake \
+              gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -284,7 +288,8 @@ jobs:
               gnupg2 \
               dnf-plugins-core \
               binutils \
-              cmake
+              cmake \
+              gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod

@@ -55,9 +55,9 @@ class DownstreamCmakeSmokeTest(unittest.TestCase):
         )
 
     def test_generated_project_finds_hip_and_hipblaslt(self) -> None:
-        """The generated project is configure-only and requires hip and hipblaslt."""
+        """The generated project enables CXX and requires hip and hipblaslt."""
         contents = smoke.render_cmake_lists()
-        self.assertIn("project(install_smoke_test LANGUAGES NONE)", contents)
+        self.assertIn("project(install_smoke_test LANGUAGES CXX)", contents)
         self.assertIn("find_package(hip CONFIG REQUIRED)", contents)
         self.assertIn("find_package(hipblaslt CONFIG REQUIRED)", contents)
 
