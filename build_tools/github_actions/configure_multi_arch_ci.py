@@ -206,9 +206,9 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
 # ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
-# ci:exactly turns the attached labels into the complete CI specification:
-# trigger-based defaults (presubmit GPU families, packaging builds) are dropped
-# so that only what the labels ask for runs.
+# ci:exactly makes the attached arch labels the complete family selection:
+# the trigger-based default families are dropped so that only the labeled
+# archs build and test. Packaging jobs are unaffected.
 EXACTLY_LABEL = "ci:exactly"
 
 
@@ -344,10 +344,10 @@ class CIInputs:
 
     @property
     def is_exactly(self) -> bool:
-        """True when ci:exactly should suppress trigger-based defaults.
+        """True when ci:exactly should suppress the default GPU families.
 
-        Only meaningful on pull requests, matching the other arch/packaging
-        labels. Other triggers already state their coverage explicitly.
+        Only meaningful on pull requests, matching the other arch labels.
+        Other triggers already state their coverage explicitly.
         """
         return self.is_pull_request and EXACTLY_LABEL in self.pr_labels
 
@@ -1008,7 +1008,9 @@ def _apply_arch_labels(
         windows_names.clear()
         print(f"  Label '{EXACTLY_LABEL}' -> dropping default families")
 
-    # 1. ci:run-all-archs takes highest priority — override to all families.
+    # 1. ci:run-all-archs overrides to all families. It cannot combine with
+    # ci:exactly (rejected in CIInputs.validate()), so the clear above and this
+    # override are mutually exclusive.
     if has_run_all:
         linux_names[:] = list(all_families.keys())
         windows_names[:] = list(all_families.keys())
@@ -1510,16 +1512,8 @@ def decide_jobs(
                 test_type_reason="ASAN tests skipped due to non-nightly trigger",
             )
 
-    # ci:exactly ignores the caller-supplied packaging defaults so that only an
-    # explicit ci:build-* label turns a packaging job on.
-    if ci_inputs.is_exactly:
-        build_pytorch_action = JobAction.SKIP
-        build_jax_action = JobAction.SKIP
-    else:
-        build_pytorch_action = (
-            JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
-        )
-        build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
+    build_pytorch_action = JobAction.RUN if ci_inputs.build_pytorch else JobAction.SKIP
+    build_jax_action = JobAction.RUN if ci_inputs.build_jax else JobAction.SKIP
 
     # PR labels can override packaging job decisions.
     pr_labels = ci_inputs.pr_labels
@@ -1903,19 +1897,18 @@ def _expand_build_config_for_platform(
 
     # ASAN builds native Linux packages (deb/rpm) but not Python packages.
     # The build_python_packages input allows callers to disable Python packages.
-    # ci:exactly ignores those defaults so only an explicit ci:build-* label
-    # (applied below) enables a packaging job.
     is_asan = suffix in ("asan", "host-asan")
-    exactly = ci_inputs.is_exactly
-    build_python_packages = (
-        not exactly and ci_inputs.build_python_packages and not is_asan
+    build_python_packages = ci_inputs.build_python_packages and not is_asan
+    test_python_packages_matrix = (
+        build_rocm_python_test_matrix(
+            per_family_info=per_family_info,
+            platform=platform,
+        )
+        if build_python_packages
+        else []
     )
-    build_native_linux = (
-        not exactly and ci_inputs.build_native_linux and platform == "linux"
-    )
-    build_native_windows = (
-        not exactly and ci_inputs.build_native_windows and platform == "windows"
-    )
+    build_native_linux = ci_inputs.build_native_linux and platform == "linux"
+    build_native_windows = ci_inputs.build_native_windows and platform == "windows"
 
     # PR labels can override packaging build decisions.
     pr_labels = ci_inputs.pr_labels
@@ -1935,17 +1928,6 @@ def _expand_build_config_for_platform(
         build_python_packages = True
     elif "ci:skip-python-packages" in pr_labels:
         build_python_packages = False
-
-    # Derived after the label overrides above so that a label that enables
-    # python packages also schedules their tests.
-    test_python_packages_matrix = (
-        build_rocm_python_test_matrix(
-            per_family_info=per_family_info,
-            platform=platform,
-        )
-        if build_python_packages
-        else []
-    )
 
     # Ensure python packages are built if pytorch or jax are enabled,
     # since they depend on rocm python packages.

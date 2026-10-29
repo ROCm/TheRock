@@ -23,7 +23,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
-| `ci:exactly`               | Honor only the attached labels: drop the default architectures and package builds. See [Running exactly what you label](#running-exactly-what-you-label).                                         |
+| `ci:exactly`               | Build and test only the architectures named by the `ci:gfx...` labels, dropping the defaults. See [Running exactly the architectures you label](#running-exactly-the-architectures-you-label).    |
 | `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
@@ -81,31 +81,32 @@ standard `ci:gfx...` labels.
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
 
-#### Running exactly what you label
+#### Running exactly the architectures you label
 
 The architecture labels above _add to_ the default presubmit families, so a pull
 request labeled `ci:gfx950` builds the presubmit set **and** gfx950.
 
-Add `ci:exactly` to treat the attached labels as the complete specification
-instead. The trigger defaults are dropped, so only what you asked for runs. This
-also applies to packaging: Python package, PyTorch, JAX, and native package
-builds are skipped unless the matching `ci:build-...` label is attached.
+Add `ci:exactly` to drop those defaults, so the `ci:gfx...`, `ci:build:gfx...`,
+and `ci:test:gfx...` labels become the complete architecture selection. This is
+useful when iterating on a change that only matters for one target and you do
+not want to pay for the full presubmit set.
 
 **Examples:**
 
 | Labels                                           | Result                                                |
 | ------------------------------------------------ | ----------------------------------------------------- |
 | `ci:gfx950`                                      | Build and test the presubmit families **plus** gfx950 |
-| `ci:exactly` + `ci:gfx950`                       | Build and test gfx950 only, no package builds         |
-| `ci:exactly` + `ci:build:gfx950`                 | Build gfx950 only, no tests, no package builds        |
+| `ci:exactly` + `ci:gfx950`                       | Build and test gfx950 only                            |
+| `ci:exactly` + `ci:build:gfx950`                 | Build gfx950 only, no tests                           |
+| `ci:exactly` + `ci:gfx950` + `ci:gfx94x`         | Build and test gfx950 and gfx94x only                 |
 | `ci:exactly` + `ci:gfx950` + `ci:platform:linux` | Build and test gfx950 on Linux only                   |
-| `ci:exactly` + `ci:gfx950` + `ci:build-pytorch`  | Build and test gfx950, and build PyTorch              |
 | `ci:exactly` (alone)                             | **Error**: no architecture would build                |
 | `ci:exactly` + `ci:run-all-archs`                | **Error**: the two labels ask for opposite things     |
 
-`test:...`, `test_filter:...`, and `ci:platform:...` keep their usual meaning, so
-`ci:exactly` composes with them to pin a run down to a single architecture,
-platform, and component.
+`ci:exactly` only narrows the architecture selection. Package builds
+(`ci:build-pytorch`, `ci:build-python-packages`, and friends), `test:...`,
+`test_filter:...`, and `ci:platform:...` all keep their usual meaning, so
+`ci:exactly` composes with them.
 
 > [!NOTE]
 > `ci:exactly` applies to pull requests only. Pushes, scheduled runs, and

@@ -1054,28 +1054,14 @@ class TestDecideJobs(unittest.TestCase):
                 actual = getattr(result, field).action
                 self.assertEqual(actual, expected)
 
-    def test_exactly_label_skips_packaging_by_default(self):
-        """ci:exactly ignores the caller's packaging defaults."""
+    def test_exactly_label_leaves_packaging_alone(self):
+        """ci:exactly scopes the arch selection, not the packaging jobs."""
         result = cm.decide_jobs(
             self._inputs(build_pytorch=True, pr_labels=["ci:exactly"]),
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(),
         )
-        self.assertEqual(result.build_pytorch.action, cm.JobAction.SKIP)
-        self.assertEqual(result.test_pytorch.action, cm.JobAction.SKIP)
-        self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
-
-    def test_exactly_label_still_honors_build_labels(self):
-        """ci:exactly keeps packaging jobs that a ci:build-* label asks for."""
-        result = cm.decide_jobs(
-            self._inputs(
-                build_pytorch=False, pr_labels=["ci:exactly", "ci:build-pytorch"]
-            ),
-            git_context=cm.GitContext(),
-            targets=cm.TargetSelection(),
-        )
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
-        self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
 
 
 # ---------------------------------------------------------------------------
