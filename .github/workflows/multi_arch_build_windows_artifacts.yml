@@ -130,10 +130,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
-      # Checking out a monorepo such as rocm-libraries takes several minutes, so
-      # only do it for the stages that actually build from those sources. The
-      # setup job precomputed that decision for every stage (see
-      # detect_external_repo_config.py), so this just looks up our own stage.
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source }}
         timeout-minutes: 10

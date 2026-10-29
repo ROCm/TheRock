@@ -11,11 +11,8 @@ that control checkout steps, patches, and build options.
 
 This runs once, in the CI setup job, and resolves the repository into a
 config_json blob that is threaded through the build workflows as an input.
-
-config_json carries a "stages" map precomputing what every build stage needs
-from the external repo, so a build stage only has to index that map by its own
-name. Stages that do not build from the external sources skip its (multi-minute)
-checkout entirely.
+config_json carries a "stages" map precomputing what every build stage needs,
+so a build stage only indexes that map by its own name.
 
 Usage:
     python detect_external_repo_config.py --repository <repository_name>
@@ -112,9 +109,9 @@ def build_fetch_sources_args(
 def resolve_stage_config(config: Dict[str, Any], stage_name: str) -> Dict[str, Any]:
     """Resolves what a single build stage needs from the external repo.
 
-    Only the stages listed in 'source_stages' build from the external repo, so
-    every other stage skips the checkout, the -DTHEROCK_<REPO>_SOURCE_DIR=
-    option, and the DVC pull rooted in the (absent) external checkout.
+    Stages outside 'source_stages' skip the checkout, the
+    -DTHEROCK_<REPO>_SOURCE_DIR= option, and the DVC pull rooted in the
+    (absent) external checkout.
     """
     checkout_path = config["checkout_path"]
     needs_source = stage_name in config.get("source_stages", [])
@@ -130,8 +127,8 @@ def resolve_stage_config(config: Dict[str, Any], stage_name: str) -> Dict[str, A
         cmake_options.append(
             f"-DTHEROCK_{config['source_package']}_SOURCE_DIR={checkout_path}"
         )
-    # Caller-supplied options configure the build as a whole, so they apply
-    # whether or not this stage reads the external sources.
+    # Configures the build as a whole, so it applies to every stage, including
+    # the ones that never read the external sources.
     if config.get("extra_cmake_options"):
         cmake_options.append(config["extra_cmake_options"])
 
@@ -147,9 +144,8 @@ def resolve_stage_config(config: Dict[str, Any], stage_name: str) -> Dict[str, A
 def build_stage_configs(config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """Precomputes the per-stage view of an external repo config.
 
-    Every build stage gets an entry, so a build workflow can look itself up with
-    a single `fromJSON(config).stages[stage_name]` index instead of re-deriving
-    the decision from 'source_stages'.
+    Every build stage gets an entry so a build workflow can look itself up with
+    a single `fromJSON(config).stages[stage_name]` index.
     """
     return {
         stage_name: resolve_stage_config(config, stage_name)
@@ -160,10 +156,9 @@ def build_stage_configs(config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 def get_source_stages(repo_name: str) -> List[str]:
     """Returns the build stages that need this external repo's sources.
 
-    A build stage only needs the external repo when one of the repo's submodules
-    appears in the stage's source sets (see BUILD_TOPOLOGY.toml). Checking out
-    a monorepo such as rocm-libraries takes several minutes, so stages that do
-    not build from it skip the checkout entirely.
+    A stage needs the repo when one of its submodules appears in the stage's
+    source sets (see BUILD_TOPOLOGY.toml). Checking out a monorepo such as
+    rocm-libraries takes several minutes, so every other stage skips it.
     """
     repo_submodules = set(get_repo_config(repo_name).get("skip_submodules", []))
     topology = get_topology()
@@ -566,8 +561,6 @@ def main(argv=None):
             "projects": projects,
             "family_overrides": family_overrides,
         }
-        # Resolved here, once, rather than in each build stage job: the build
-        # workflows just index 'stages' by their own stage name.
         config_json["stages"] = build_stage_configs(config_json)
         config["config_json"] = json.dumps(config_json)
         print(
