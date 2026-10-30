@@ -245,6 +245,7 @@ jobs:
         env:
           MATRIX_SHARD: ${{ matrix.shard }}
           COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
+          COMPONENT_JOB_NAME: ${{ fromJSON(inputs.component).job_name }}
           COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
@@ -256,6 +257,7 @@ jobs:
             --amdgpu-family "${AMDGPU_FAMILIES}" \
             --amdgpu-targets "${AMDGPU_TARGETS}" \
             --test-script "${COMPONENT_TEST_SCRIPT}" \
+            --test-component "${COMPONENT_JOB_NAME}" \
             --shard-index "${MATRIX_SHARD}" \
             --total-shards "${COMPONENT_TOTAL_SHARDS}" \
             --test-type "${COMPONENT_TEST_TYPE}" \
