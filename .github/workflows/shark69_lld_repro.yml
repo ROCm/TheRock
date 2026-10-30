@@ -1,0 +1,225 @@
+# NO-MERGE: lld-link silent object drop reproducer on shark69-ci (ROCm/TheRock#9469).
+#
+# shark69-ci is bare-metal Windows 11 on a Zen 5 Threadripper PRO 9985WX (no hypervisor).
+# This builds only the math-libs stage for gfx120X-all, with all inbound stages fetched
+# from main run 41076512607 (same commit as this branch), and runs repro_link.ps1 in the
+# background against the live build tree while the build keeps the machine loaded.
+#
+# Differences from multi_arch_build_windows_artifacts.yml:
+#   - choco uses public chocolatey (no in-cluster Nexus), and only installs missing tools
+#   - build root is a short path on the fixed drive with the most free space (no B:)
+#   - no ccache, no AWS credentials, no artifact push / log upload to S3
+name: shark69 lld-link repro (NO-MERGE)
+
+on:
+  push:
+    branches:
+      - users/justchen/shark69-lld-repro
+  workflow_dispatch:
+
+concurrency:
+  group: shark69-lld-repro
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REF_RUN_ID: "41076512607"
+  STAGE_NAME: math-libs
+  AMDGPU_FAMILIES: gfx120X-all
+  DIST_AMDGPU_FAMILIES: gfx110X-all;gfx1151;gfx120X-all;gfx90a
+  ROCM_PACKAGE_VERSION: 10.3.0.dev0+1c64e8692e235910ffacea88c315973c87cdaf7e
+  CMAKE_PRESET: windows-release
+
+jobs:
+  preflight:
+    name: Preflight (shark69-ci)
+    runs-on: windows-gfx1201-gpu-rocm-shark69-ci
+    timeout-minutes: 15
+    outputs:
+      root: ${{ steps.pf.outputs.root }}
+      jobs: ${{ steps.pf.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/lld_repro
+      - name: Preflight
+        id: pf
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/lld_repro/preflight.ps1
+
+  build_and_repro:
+    name: math-libs gfx120X build + lld-link repro (shark69-ci)
+    needs: preflight
+    runs-on: windows-gfx1201-gpu-rocm-shark69-ci
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROOT: ${{ needs.preflight.outputs.root }}
+      BUILD_DIR: ${{ needs.preflight.outputs.root }}\b
+      REPRO_DIR: ${{ needs.preflight.outputs.root }}\r
+      TOOLS_DIR: ${{ needs.preflight.outputs.root }}\t
+      STOP_FILE: ${{ needs.preflight.outputs.root }}\stop
+      WATCH_LOG: ${{ needs.preflight.outputs.root }}\repro_watch.log
+      BUILD_JOBS: ${{ needs.preflight.outputs.jobs }}
+      TEATIME_FORCE_INTERACTIVE: 0
+    steps:
+      - name: Prepare build root
+        shell: powershell
+        run: |
+          if (Test-Path $env:ROOT) { cmd /c "rmdir /s /q `"$env:ROOT`"" }
+          New-Item -ItemType Directory -Force $env:BUILD_DIR, $env:REPRO_DIR, $env:TOOLS_DIR | Out-Null
+          Get-ChildItem $env:ROOT
+
+      - name: Enable long paths for git
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Install missing tools (public chocolatey)
+        shell: powershell
+        run: |
+          $need = @()
+          if (-not (Get-Command ninja -EA SilentlyContinue)) { $need += 'ninja --version 1.13.2' }
+          if (-not (Test-Path 'C:\Strawberry\perl\bin\perl.exe')) { $need += 'strawberryperl' }
+          foreach ($p in $need) { "choco install $p"; choco install --no-progress -y $p.Split(' '); if ($LASTEXITCODE -ne 0) { exit 1 } }
+          if (-not (Get-Command ninja -EA SilentlyContinue)) { Add-Content $env:GITHUB_PATH 'C:\ProgramData\chocolatey\bin' }
+          Add-Content $env:GITHUB_PATH 'C:\Strawberry\c\bin'
+          Add-Content $env:GITHUB_PATH 'C:\Strawberry\perl\bin'
+
+      - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
+        with:
+          version: '3.62.0'
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Tool versions
+        run: |
+          which python cmake ninja perl git || true
+          cmake --version | head -1; ninja --version; python --version
+
+      # CI buckets have public read access; artifact_backend falls back to unsigned reads.
+      - name: Fetch inbound artifacts (from main run ${{ env.REF_RUN_ID }})
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${REF_RUN_ID}" \
+            --stage="${STAGE_NAME}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --output-dir="${BUILD_DIR}" \
+            --bootstrap
+
+      - name: Fetch sources
+        timeout-minutes: 45
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if command -v gh >/dev/null; then gh auth setup-git --hostname github.com; fi
+          python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+
+      - name: Get stage configuration
+        id: stage_config
+        run: |
+          python build_tools/configure_stage.py \
+            --stage=${STAGE_NAME} \
+            --artifacts="" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: | # zizmor: ignore[template-injection]
+          pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+
+      - name: Configure (no ccache)
+        run: | # zizmor: ignore[template-injection]
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            --preset=${CMAKE_PRESET} \
+            -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+            ${{ steps.stage_config.outputs.cmake_args }}
+
+      - name: Build xproc_probe
+        shell: powershell
+        run: |
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /optimize `
+            /out:"$env:TOOLS_DIR\xproc_probe2.exe" .github\lld_repro\xproc_probe.cs
+          if (-not (Test-Path "$env:TOOLS_DIR\xproc_probe2.exe")) { exit 1 }
+
+      - name: Start background lld-link reproducer
+        shell: powershell
+        run: |
+          $wargs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE\.github\lld_repro\watch.ps1",
+                    '-BuildRoot', $env:BUILD_DIR, '-ReproRoot', $env:REPRO_DIR, '-StopFile', $env:STOP_FILE,
+                    '-Probe', "$env:TOOLS_DIR\xproc_probe2.exe", '-Log', $env:WATCH_LOG, '-MinObjs', '80')
+          $p = Start-Process powershell -ArgumentList $wargs -WindowStyle Hidden -PassThru
+          "watcher pid=$($p.Id)"
+          Set-Content "$env:ROOT\watch.pid" $p.Id
+
+      - name: Build math-libs stage
+        id: build
+        continue-on-error: true
+        run: |
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} -- -k 0 -j ${BUILD_JOBS}
+
+      - name: Stop reproducer and summarize
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          New-Item -ItemType File -Force $env:STOP_FILE | Out-Null
+          $deadline = (Get-Date).AddMinutes(15)
+          while ((Get-Date) -lt $deadline) {
+            if ((Test-Path $env:WATCH_LOG) -and (Select-String -Quiet -Path $env:WATCH_LOG -Pattern 'WATCH stop')) { break }
+            Start-Sleep 10
+          }
+          $lines = if (Test-Path $env:WATCH_LOG) { Get-Content $env:WATCH_LOG } else { @('(no watcher log)') }
+          $key = $lines | Select-String -Pattern 'WATCH|ENV |PICK|REPRO |BASELINE|UNDEF|SIZEDIFF|MISSING_FROM_MAP|NO_CANDIDATE|RESULT|ROUND|STOPFILE|undefined symbol'
+          $prog = $lines | Select-String -Pattern 'PROGRESS' | Select-Object -Last 3
+          "==== reproducer key lines"; $key | ForEach-Object { $_.Line }
+          "==== last progress"; $prog | ForEach-Object { $_.Line }
+          $nat = Get-ChildItem "$env:BUILD_DIR\logs" -Recurse -File -EA SilentlyContinue | Select-String -Pattern 'lld-link: error: undefined symbol' -List
+          "==== natural build lld-link undefined-symbol logs: $(@($nat).Count)"; $nat | ForEach-Object { $_.Path }
+          $nat | ForEach-Object { $_.Path } | Set-Content "$env:ROOT\natural_undef_logs.txt"
+          @("### shark69 lld-link repro", "", "Build outcome: ${{ steps.build.outcome }}", "",
+            "Natural lld-link undefined-symbol logs: $(@($nat).Count)", "", '```') + ($key | Select-Object -Last 40 | ForEach-Object { $_.Line }) +
+            ($prog | ForEach-Object { $_.Line }) + '```' | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Collect logs
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          $out = "$env:ROOT\upload"; New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item $env:WATCH_LOG, "$env:ROOT\natural_undef_logs.txt" $out -EA SilentlyContinue
+          if (Test-Path "$env:ROOT\natural_undef_logs.txt") {
+            Get-Content "$env:ROOT\natural_undef_logs.txt" | ForEach-Object { Copy-Item $_ (Join-Path $out ((Split-Path $_ -Leaf) + '.natural.log')) -EA SilentlyContinue }
+          }
+          Get-ChildItem $env:REPRO_DIR -Recurse -Filter '_*.log' -EA SilentlyContinue | Copy-Item -Destination $out -EA SilentlyContinue
+          "UPLOAD_DIR=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() }}
+        with:
+          name: shark69-lld-repro-logs
+          path: ${{ env.UPLOAD_DIR }}
+          if-no-files-found: warn
+
+      - name: Fail if the build failed
+        if: ${{ steps.build.outcome == 'failure' }}
+        run: exit 1
