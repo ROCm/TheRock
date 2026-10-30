@@ -296,8 +296,13 @@ jobs:
           cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
 
       # Rocjitsu and mirage build tests report failures without gating CI.
+      - name: Install DASan emulation test tools
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'emulation' && steps.build_stage.outcome == 'success' }}
+        working-directory: rocm-systems/emulation/mirage
+        run: rustup component add clippy rustfmt
+
       - name: Run build tests (emulation, non-blocking)
-        if: ${{ !cancelled() && inputs.stage_name == 'emulation' }}
+        if: ${{ !cancelled() && inputs.stage_name == 'emulation' && (inputs.build_variant_cmake_preset != 'linux-release-dasan' || steps.build_stage.outcome == 'success') }}
         continue-on-error: true
         env:
           TEATIME_FORCE_INTERACTIVE: 1

@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 import json
+import os
 from pathlib import Path
 import sys
 import shlex
@@ -15,6 +16,56 @@ from _therock_utils.artifacts import prebuilt_marker_relpath
 
 
 class DasanStageTest(unittest.TestCase):
+    def test_runtime_environment_uses_selected_compiler_and_persists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "resource/custom-arch/libclang_rt.dasan.so"
+            runtime.parent.mkdir(parents=True)
+            runtime.touch()
+            github_env = root / "github-env"
+            previous = os.pathsep.join(["existing/lib", str(runtime.parent)])
+            with patch.dict(
+                os.environ, {"LD_LIBRARY_PATH": previous, "GITHUB_ENV": str(github_env)}
+            ), patch(
+                "dasan_stage.subprocess.check_output", return_value=str(runtime) + "\n"
+            ) as query:
+                result = dasan_stage.runtime_environment("math-libs", root / "build")
+                self.assertEqual(result, runtime)
+                self.assertEqual(
+                    os.environ["LD_LIBRARY_PATH"],
+                    os.pathsep.join([str(runtime.parent), "existing/lib"]),
+                )
+                self.assertEqual(
+                    github_env.read_text(),
+                    "LD_LIBRARY_PATH=" + os.environ["LD_LIBRARY_PATH"] + "\n",
+                )
+            query.assert_called_once_with(
+                [
+                    str(root / "build/compiler/amd-llvm/stage/lib/llvm/bin/clang"),
+                    "-print-file-name=libclang_rt.dasan.so",
+                ],
+                text=True,
+            )
+
+    def test_missing_or_relative_runtime_does_not_change_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for library in ("libclang_rt.dasan.so", str(Path(tmp) / "missing.so")):
+                with self.subTest(library=library), patch.dict(
+                    os.environ, {"LD_LIBRARY_PATH": "existing/lib"}
+                ), patch("dasan_stage.subprocess.check_output", return_value=library):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "existing absolute host runtime"
+                    ):
+                        dasan_stage.runtime_environment("emulation", Path(tmp))
+                    self.assertEqual(os.environ["LD_LIBRARY_PATH"], "existing/lib")
+
+    def test_bootstrap_skips_runtime_query(self):
+        with patch("dasan_stage.subprocess.check_output") as query:
+            self.assertIsNone(
+                dasan_stage.runtime_environment("compiler-runtime", Path("/build"))
+            )
+        query.assert_not_called()
+
     def test_imported_compiler_version_and_paths(self):
         with patch(
             "dasan_stage.subprocess.check_output",
@@ -112,6 +163,8 @@ class DasanStageTest(unittest.TestCase):
                 "dasan_stage.capture", return_value="sha"
             ), patch(
                 "dasan_stage.compiler_options", return_value=[]
+            ), patch(
+                "dasan_stage.runtime_environment", return_value=None
             ):
                 dasan_stage.prepare("math-libs", root / "build", root / "output")
             patches.assert_not_called()

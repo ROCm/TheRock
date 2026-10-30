@@ -18,6 +18,36 @@ from _therock_utils.build_topology import get_topology
 from dasan_component_build import has_daddress
 
 
+def runtime_environment(stage: str, build: Path) -> Path | None:
+    """Make the selected compiler's host runtime available to build-time Python."""
+    if stage == "compiler-runtime":
+        return None
+    clang = build / "compiler/amd-llvm/stage/lib/llvm/bin/clang"
+    library = subprocess.check_output(
+        [str(clang), "-print-file-name=libclang_rt.dasan.so"], text=True
+    ).strip()
+    runtime = Path(library)
+    if (
+        not runtime.is_absolute()
+        or not runtime.is_file()
+        or "\n" in library
+        or "\r" in library
+    ):
+        raise RuntimeError(
+            f"Selected DASan compiler did not resolve an existing absolute host runtime: {library!r}"
+        )
+    directory = str(runtime.parent)
+    previous = os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+    value = os.pathsep.join(
+        [directory] + [entry for entry in previous if entry and entry != directory]
+    )
+    os.environ["LD_LIBRARY_PATH"] = value
+    if github_env := os.environ.get("GITHUB_ENV"):
+        with open(github_env, "a", encoding="utf-8") as stream:
+            stream.write(f"LD_LIBRARY_PATH={value}\n")
+    return runtime
+
+
 def compiler_options(stage: str, build: Path) -> list[str]:
     options = [
         "-DTHEROCK_AMDGPU_FAMILIES=",
@@ -49,6 +79,7 @@ def compiler_options(stage: str, build: Path) -> list[str]:
 def prepare(stage: str, build: Path, output: Path) -> list[str]:
     output.mkdir(parents=True, exist_ok=True)
     log = output / "prepare.log"
+    runtime = runtime_environment(stage, build)
     for path, (origin, revision) in PINS.items():
         if (REPO / path / ".git").exists():
             raise RuntimeError(
@@ -95,6 +126,7 @@ def prepare(stage: str, build: Path, output: Path) -> list[str]:
             ),
             "produced_artifacts": sorted(get_topology().get_produced_artifacts(stage)),
             "sanitizer": "DASAN",
+            "host_dasan_runtime": str(runtime) if runtime else None,
             "binary_dependency_policy": "current workflow run only",
             "ccache_disabled": os.environ.get("CCACHE_DISABLE") == "1",
             "compiler_patches": {
