@@ -4,12 +4,166 @@
 import ctypes
 import importlib
 import importlib.util
+import json
 import logging
+import math
 import platform
 import re
+import subprocess
+import sys
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
+
+
+def _check_hip_error(hip: ctypes.CDLL, stage: str) -> None:
+    # Peek, never clear: a failed AOTriton launch can otherwise go unnoticed.
+    error = hip.hipPeekAtLastError()
+    print(f"{stage}: hipPeekAtLastError={error}", flush=True)
+    assert error == 0, f"HIP error {error} at {stage}"
+
+
+def _run_sdpa_smoke_test(
+    backend_name: str, shape: tuple[int, ...], use_bias: bool
+) -> None:
+    # Only needed in the isolated Windows worker, not on unrelated test hosts.
+    import rocm_sdk
+    from torch.utils._python_dispatch import TorchDispatchMode
+
+    class TraceSDPA(TorchDispatchMode):
+        def __init__(self) -> None:
+            super().__init__()
+            self.operators: set[str] = set()
+
+        def __torch_dispatch__(
+            self,
+            func: Callable[..., object],
+            types: tuple[type, ...],
+            args: tuple = (),
+            kwargs: dict | None = None,
+        ) -> object:
+            if "scaled_dot_product" in str(func):
+                self.operators.add(str(func))
+            return func(*args, **(kwargs or {}))
+
+    assert (
+        Path(torch.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+    ), f"Expected installed torch in {sys.prefix}, got {torch.__file__}"
+    print(
+        f"torch={torch.__version__}, git={torch.version.git_version}, "
+        f"HIP={torch.version.hip}, arch={torch.cuda.get_device_properties(0).gcnArchName}, "
+        f"Python={sys.version}, platform={platform.platform()}, torch_file={torch.__file__}",
+        flush=True,
+    )
+    (hip_path,) = rocm_sdk.find_libraries("amdhip64")
+    hip = ctypes.CDLL(str(hip_path))
+    hip.hipPeekAtLastError.argtypes = []
+    hip.hipPeekAtLastError.restype = ctypes.c_int
+    print(f"HIP runtime: {hip_path}", flush=True)
+
+    generator = torch.Generator(device="cpu").manual_seed(7992)
+    q, k, v = [
+        torch.randn(shape, generator=generator).to(torch.bfloat16) for _ in range(3)
+    ]
+    bias = (
+        (torch.randn((*shape[:-1], shape[-2]), generator=generator) * 0.1).to(
+            torch.bfloat16
+        )
+        if use_bias
+        else None
+    )
+    # Reference uses the exact BF16 inputs, independently on CPU in FP32.
+    scores = (q.float() @ k.float().transpose(-2, -1)) / math.sqrt(shape[-1])
+    if bias is not None:
+        scores += bias.float()
+    expected = torch.softmax(scores, dim=-1) @ v.float()
+    q_gpu, k_gpu, v_gpu = [tensor.to("cuda") for tensor in (q, k, v)]
+    bias_gpu = bias.to("cuda") if bias is not None else None
+    torch.cuda.synchronize()
+    _check_hip_error(hip, "before SDPA")
+    with TraceSDPA() as trace, sdpa_kernel([getattr(SDPBackend, backend_name)]):
+        actual = torch.nn.functional.scaled_dot_product_attention(
+            q_gpu, k_gpu, v_gpu, attn_mask=bias_gpu, dropout_p=0.0
+        )
+    print(f"SDPA operators: {sorted(trace.operators)}", flush=True)
+    _check_hip_error(hip, "after SDPA before synchronize")
+    torch.cuda.synchronize()
+    _check_hip_error(hip, "after SDPA synchronize")
+    operator = (
+        "aten._scaled_dot_product_flash_attention.default"
+        if backend_name == "FLASH_ATTENTION"
+        else "aten._scaled_dot_product_efficient_attention.default"
+    )
+    assert trace.operators == {
+        operator
+    }, f"Expected only {operator}, saw {trace.operators}"
+    assert actual.shape == q_gpu.shape
+    assert actual.dtype == torch.bfloat16
+    assert actual.device == q_gpu.device
+    downstream = actual + 1
+    _check_hip_error(hip, "after downstream before synchronize")
+    torch.cuda.synchronize()
+    _check_hip_error(hip, "after downstream synchronize")
+    actual_cpu = actual.cpu().float()
+    assert torch.isfinite(actual_cpu).all()
+    print(f"max_abs_error={(actual_cpu - expected).abs().max().item()}", flush=True)
+    # BF16 tolerances validated on the historical broken/working wheel pair.
+    torch.testing.assert_close(actual_cpu, expected, atol=0.03, rtol=0.03)
+    torch.testing.assert_close(
+        downstream.cpu().float(), expected + 1, atol=0.03, rtol=0.03
+    )
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows AOTriton packaging")
+class TestSDPA:
+    @pytest.mark.parametrize(
+        "backend,shape,use_bias",
+        [
+            pytest.param("FLASH_ATTENTION", (1, 2, 16, 64), False, id="flash"),
+            pytest.param(
+                "EFFICIENT_ATTENTION", (1, 2, 16, 64), True, id="efficient-bias"
+            ),
+            pytest.param(
+                "EFFICIENT_ATTENTION", (54, 12, 196, 64), True, id="vision-bias"
+            ),
+        ],
+    )
+    def test_fused_sdpa(
+        self, backend: str, shape: tuple[int, ...], use_bias: bool
+    ) -> None:
+        if torch.version.hip is None:
+            pytest.skip("UNSUPPORTED OUTSIDE SCOPE: requires ROCm")
+        if not torch.cuda.is_available():
+            pytest.skip("NOT RUN: no physical AMD GPU available")
+        arch = torch.cuda.get_device_properties(0).gcnArchName
+        if arch.split(":")[0] != "gfx1151":
+            pytest.skip(
+                f"UNSUPPORTED OUTSIDE SCOPE: Windows {arch}; validated on gfx1151"
+            )
+        # Sticky HIP errors must not contaminate another case. Inherit the
+        # runner's device visibility and use this interpreter's installed wheel.
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json, runpy, sys; "
+                "runpy.run_path(sys.argv[1])['_run_sdpa_smoke_test']"
+                "(*json.loads(sys.argv[2]))",
+                str(Path(__file__).resolve()),
+                json.dumps((backend, shape, use_bias)),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert result.returncode == 0, (
+            f"{backend} {shape}: worker exit {result.returncode}\n"
+            f"{result.stdout}\n{result.stderr}"
+        )
+        print(result.stdout)
 
 
 class TestROCmAvailability:
