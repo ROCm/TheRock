@@ -466,10 +466,7 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                     errors.append(e)
 
             # Exercise Windows publication and its PermissionError handling.
-            with (
-                mock.patch.object(fda, "sys", platform="win32"),
-                mock.patch.object(fda.os, "link", side_effect=patched_publish),
-            ):
+            with mock.patch.object(fda.os, "link", side_effect=patched_publish):
                 threads = [
                     threading.Thread(target=worker, args=(src1,)),
                     threading.Thread(target=worker, args=(src2,)),
@@ -522,7 +519,6 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                         source.unlink()
 
                 with (
-                    mock.patch.object(fda, "sys", platform="win32"),
                     mock.patch.object(
                         fda.os, "link", side_effect=link_and_publish_winner
                     ),
@@ -850,15 +846,25 @@ class TestDirectCachePublication(unittest.TestCase):
                 if corrupt:
                     cache_file.parent.mkdir(parents=True)
                     cache_file.write_bytes(b"bad manifest")
-                real_replace = os.replace
+                real_replace, real_rename = os.replace, os.rename
 
-                def replace(src, dest):
-                    if dest == cache_file:
-                        raise AssertionError("manifest cache rename window")
-                    return real_replace(src, dest)
+                def guarded(real):
+                    def move(src, dest):
+                        if dest == cache_file:
+                            raise AssertionError("manifest cache rename window")
+                        return real(src, dest)
+
+                    return move
 
                 messages = []
-                with mock.patch.object(fda.os, "replace", side_effect=replace):
+                with (
+                    mock.patch.object(
+                        fda.os, "replace", side_effect=guarded(real_replace)
+                    ),
+                    mock.patch.object(
+                        fda.os, "rename", side_effect=guarded(real_rename)
+                    ),
+                ):
                     fda._materialize_dir(
                         s3,
                         remote,

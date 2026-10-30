@@ -382,13 +382,11 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
         except OSError:
             if cache_file.exists():
                 return
-            # Retain support for filesystems without hardlinks. In-process
-            # readers/publishers are serialized by _cache_lock in this path.
+            # Filesystems without hardlinks need a rename. Windows refuses to
+            # replace an existing entry; POSIX replaces it atomically. In-process
+            # readers and publishers are serialized by _cache_lock.
             try:
-                if sys.platform == "win32":
-                    os.rename(tmp, cache_file)
-                else:
-                    os.replace(tmp, cache_file)
+                os.rename(tmp, cache_file)
             except FileExistsError:
                 return
     finally:
