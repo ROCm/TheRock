@@ -61,7 +61,7 @@ level = 3
 test_include = ["hip-tests"]
 
 [component.rocprofiler-sdk]
-test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples", "rocprofiler-sdk-spm"]
+test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]
 
 [component.rocprofiler-register]
 test_include = ["hipfile"]
@@ -72,14 +72,14 @@ test_include = ["rocprofiler-systems-examples"]
 [component.roctracer]
 test_include = ["hip-clr", "rocprofiler-sdk"]
 
-# rocgdb-cpu / rocgdb-gpu / rocgdb-corefile are ctest targets of rocgdb, not
+# rocgdb-cpu / rocgdb-gpu are ctest targets of rocgdb, not
 # subprojects, so they are named here rather than derived from the graph.
 
 [component.amd-dbgapi]
-test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 [component.rocgdb]
-test_include = ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"]
+test_include = ["rocgdb-cpu", "rocgdb-gpu"]
 
 # --- Math / ML library couplings ----------------------------------------------
 

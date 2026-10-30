@@ -56,7 +56,10 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "submodule_path": "rocm-systems",
         "skip_submodules": ["rocm-systems"],
-        "dvc_projects": ["external-rocm-systems"],
+        # --dvc-projects replaces fetch_sources.py's default project list rather
+        # than extending it, so "rocm-libraries" is listed explicitly to pull the
+        # rocSPARSE/hipSPARSE test matrices ClientMatrices.cmake needs.
+        "dvc_projects": ["external-rocm-systems", "rocm-libraries"],
     },
     "rocgdb": {
         "cmake_source_var": "THEROCK_ROCGDB_SOURCE_DIR",

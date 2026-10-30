@@ -56,6 +56,11 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       kpack_split:
         description: "'true' if this is a kpack-split flat build."
         type: string
@@ -63,7 +68,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "azure-windows-scale-rocm"
+        default: "aws-windows-scale-rocm-prod-mix"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -85,6 +90,13 @@ on:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
         default: "release/2.13"
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -132,6 +144,7 @@ jobs:
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
@@ -155,6 +168,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -187,7 +201,7 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ninja --version 1.13.1
+          choco install --no-progress -y ninja --version 1.13.2
 
       # Build a fixed version of libuv from source, no matter the pytorch ref.
       # gloo requires >= 1.26; v1.47.0 matches upstream's source build.
@@ -245,7 +259,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-ci
@@ -265,8 +279,15 @@ jobs:
         if: ${{ inputs.amdgpu_families != '' }}
         id: expand
         run: |
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform windows \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
@@ -280,7 +301,7 @@ jobs:
       # caller plumbs the value through and the fallback in
       # build_prod_wheels.py::get_rocm_sdk_targets is removed.
       - name: Build PyTorch wheels
-        shell: cmd
+        shell: cmd # zizmor: ignore[misfeature]
         env:
           CACHE_TYPE: ${{ steps.cache.outputs.cache_type }}
           AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
@@ -325,7 +346,8 @@ jobs:
           fi
 
       - name: Sanity check wheel
-        shell: cmd
+        # Keep CMD for compatibility with the Windows wheel build and validation.
+        shell: cmd # zizmor: ignore[misfeature]
         run: |
           python external-builds/pytorch/sanity_check_wheel.py "%PACKAGE_DIST_DIR%"
 

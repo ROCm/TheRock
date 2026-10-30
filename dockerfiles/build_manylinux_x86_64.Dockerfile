@@ -4,8 +4,8 @@
 # This will print a SHA image id, which you can run with (or equiv):
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
-# To build and push to a test branch, create a pull request on a branch named:
-#   stage/docker/*
+# To publish a test image from any other branch, run the
+# publish_build_manylinux_x86_64.yml workflow manually against that branch.
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
@@ -24,7 +24,7 @@ pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
-RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
+RUN ./install_ccache.sh "4.12.1" && rm -rf /install-ccache
 
 ######## SCCache ########
 WORKDIR /install-sccache
@@ -33,7 +33,7 @@ RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
 
 ######## CMake ########
 WORKDIR /install-cmake
-ENV CMAKE_VERSION="3.27.9"
+ENV CMAKE_VERSION="3.31.12"
 COPY install_cmake.sh ./
 RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
@@ -149,3 +149,7 @@ RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pyth
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+# This build image requires root for CI steps that install build dependencies.
+# trivy:ignore:DS-0002
+USER root
