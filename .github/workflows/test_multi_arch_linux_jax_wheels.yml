@@ -239,7 +239,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
 
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
       options: >-
         --shm-size=128g
         --device /dev/kfd

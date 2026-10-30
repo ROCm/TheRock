@@ -1,5 +1,6 @@
 # hipkernelprovider
 [components.dbg."ml-libs/hipkernelprovider/stage"]
+[components.doc."ml-libs/hipkernelprovider/stage"]
 [components.lib."ml-libs/hipkernelprovider/stage"]
 include = [
   # Per-arch content.

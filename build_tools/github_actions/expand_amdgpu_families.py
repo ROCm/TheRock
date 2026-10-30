@@ -12,6 +12,10 @@ Used by CI workflows that need build-side gfx targets (e.g.
 `--pytorch-rocm-arch`) from a family list. Mirrors the pattern used by
 `artifact_manager.py --expand-family-to-targets`.
 
+Callers may use --exclude-implicit-targets to remove selected targets that were
+introduced only through family expansion. An exact target in the original
+--amdgpu-families input remains selected.
+
 Output modes:
 
 * ``targets`` (default) — bare gfx targets, comma-separated:
@@ -47,6 +51,44 @@ from _therock_utils.sdk_targets import group_package_targets
 from github_actions.github_actions_api import gha_set_output
 
 
+def parse_semicolon_list(value: str) -> list[str]:
+    """Parse a semicolon-separated list, ignoring whitespace and empty items."""
+    return [item.strip() for item in value.split(";") if item.strip()]
+
+
+def exclude_implicit_targets(
+    requested_families: list[str],
+    expanded_targets: list[str],
+    implicit_targets_to_exclude: set[str],
+) -> list[str]:
+    """Exclude policy targets unless they were exact tokens in the input."""
+    directly_requested = set(requested_families)
+    return [
+        target
+        for target in expanded_targets
+        if target not in implicit_targets_to_exclude or target in directly_requested
+    ]
+
+
+def expand_requested_families(
+    requested_families: list[str],
+    family_map: dict[str, list[str]],
+    implicit_targets_to_exclude: set[str],
+) -> list[str]:
+    """Expand requested families and remove targets selected only implicitly."""
+    expanded_targets = expand_families(requested_families, family_map)
+    return exclude_implicit_targets(
+        requested_families,
+        expanded_targets,
+        implicit_targets_to_exclude,
+    )
+
+
+def format_device_extras(targets: list[str]) -> str:
+    """Format concrete targets as their deduplicated pip device extras."""
+    return ",".join(f"device-{owner}" for owner in group_package_targets(targets))
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="expand_amdgpu_families.py")
     p.add_argument(
@@ -56,6 +98,16 @@ def main(argv: list[str]) -> int:
         help=(
             "Semicolon-separated list of AMD GPU families to expand "
             "(e.g. 'gfx94X-dcgpu;gfx120X-all')."
+        ),
+    )
+    p.add_argument(
+        "--exclude-implicit-targets",
+        default="",
+        type=str,
+        help=(
+            "Optional semicolon-separated targets to exclude when introduced "
+            "only by family expansion. An exact target in --amdgpu-families "
+            "is retained."
         ),
     )
     p.add_argument(
@@ -70,15 +122,22 @@ def main(argv: list[str]) -> int:
     )
     args = p.parse_args(argv)
 
-    families = [f.strip() for f in args.amdgpu_families.split(";") if f.strip()]
+    families = parse_semicolon_list(args.amdgpu_families)
     if not families:
         print("")
         return 0
 
-    targets = expand_families(families, amdgpu_family_map())
+    implicit_targets_to_exclude = set(
+        parse_semicolon_list(args.exclude_implicit_targets)
+    )
+    targets = expand_requested_families(
+        families,
+        amdgpu_family_map(),
+        implicit_targets_to_exclude,
+    )
 
     if args.output_mode == "device-extras":
-        result = ",".join(f"device-{owner}" for owner in group_package_targets(targets))
+        result = format_device_extras(targets)
         print(result)
         gha_set_output({"device_extras": result})
     else:
