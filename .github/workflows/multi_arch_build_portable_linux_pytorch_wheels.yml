@@ -59,7 +59,9 @@ on:
         type: string
         required: true
       pytorch_git_ref:
-        description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
+        description: >-
+          PyTorch ref to checkout. Release refs require related_commits; custom
+          branches and SHAs use nightly companion repositories.
         type: string
         required: true
       pytorch_gitrepo_origin:
@@ -148,7 +150,9 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.13").
+        description: >-
+          PyTorch ref to checkout. Release refs require related_commits; custom
+          branches and SHAs use nightly companion repositories.
         type: string
         default: "release/2.13"
       pytorch_gitrepo_origin:
@@ -313,12 +317,21 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
-      - name: Checkout PyTorch source repos (nightly)
-        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+      - name: Checkout PyTorch source repos (non-release)
+        if: ${{ !startsWith(inputs.pytorch_git_ref, 'release/') }}
         timeout-minutes: 30
         run: |
+          pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
+          if [ -z "${pytorch_origin}" ]; then
+            if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+              pytorch_origin="https://github.com/pytorch/pytorch.git"
+            else
+              pytorch_origin="https://github.com/ROCm/pytorch.git"
+            fi
+          fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo-hashtag nightly \
+            --gitrepo-origin "${pytorch_origin}" \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo-hashtag nightly \
@@ -332,8 +345,8 @@ jobs:
             --repo-hashtag master \
             --no-commit-hipify
 
-      - name: Checkout PyTorch source repos (stable)
-        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+      - name: Checkout PyTorch source repos (release)
+        if: ${{ startsWith(inputs.pytorch_git_ref, 'release/') }}
         timeout-minutes: 30
         run: |
           pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
