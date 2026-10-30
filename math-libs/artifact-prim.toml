@@ -1,38 +1,24 @@
-# rocPRIM
-[components.dbg."math-libs/rocPRIM/stage"]
-[components.dev."math-libs/rocPRIM/stage"]
-[components.doc."math-libs/rocPRIM/stage"]
-[components.test."math-libs/rocPRIM_tests/stage"]
-include = [
-  "bin/test_*",
-  "bin/rocprim/CTestTestfile.cmake",
-  "bin/rocprim/generate_resource_spec*",
-  "lib/libtest_linking_*.*",
-]
+# hipCCL unified superbuild (rocPRIM + hipCUB + rocThrust).
+# All three components install under one staged prefix; the artifact stays keyed
+# `prim` and still ships the per-component config packages, so downstream
+# artifact_deps = ["prim"] and `--prim` fetches are unchanged.
+[components.dbg."math-libs/hipCCL/stage"]
+[components.dev."math-libs/hipCCL/stage"]
+[components.doc."math-libs/hipCCL/stage"]
 
-# hipCUB
-[components.dbg."math-libs/hipCUB/stage"]
-[components.dev."math-libs/hipCUB/stage"]
-[components.doc."math-libs/hipCUB/stage"]
-[components.test."math-libs/hipCUB/stage"]
+# Unit tests and benchmarks build in the separate hipCCL_tests subproject.
+[components.test."math-libs/hipCCL_tests/stage"]
 include = [
   "bin/test_*",
   "bin/benchmark_*",
+  "bin/*.hip",
+  "bin/*.hip.exe", # Windows
+  "bin/rocprim/CTestTestfile.cmake",
+  "bin/rocprim/generate_resource_spec*",
+  "lib/libtest_linking_*.*",
   "bin/hipcub/control.txt",
   "bin/hipcub/CTestTestfile.cmake",
   "bin/hipcub/generate_resource_spec*",
-]
-
-# rocThrust
-[components.dbg."math-libs/rocThrust/stage"]
-[components.dev."math-libs/rocThrust/stage"]
-[components.doc."math-libs/rocThrust/stage"]
-[components.test."math-libs/rocThrust/stage"]
-include = [
-  "bin/test_*",
-  "bin/benchmark_thrust_*",
-  "bin/*.hip",
-  "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",
   "bin/rocthrust/generate_resource_spec*",
 ]
