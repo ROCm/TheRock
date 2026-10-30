@@ -209,6 +209,7 @@ option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifa
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
+option(THEROCK_WINDOWS_LINK_CPU_AFFINITY "On Windows, run each link step of amd-llvm/amd-hip sub-projects pinned to one random CPU (works around lld-link silently dropping inputs on AMD Turin hosts, see #9469)" OFF)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
 ################################################################################

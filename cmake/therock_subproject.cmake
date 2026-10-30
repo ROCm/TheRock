@@ -1825,6 +1825,18 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
+    if(WIN32 AND THEROCK_WINDOWS_LINK_CPU_AFFINITY)
+      # lld-link can silently drop an input object on AMD Turin hosts when its
+      # threads span cores (#9469). Run every link step pinned to one random CPU.
+      # RULE_LAUNCH_LINK (unlike CMAKE_<LANG>_LINKER_LAUNCHER) covers all link
+      # languages, including HIP. Skipped inside try_compile so configure-time
+      # checks keep full speed.
+      set(_link_affinity_launcher "\"${Python3_EXECUTABLE}\" -S -E \"${THEROCK_SOURCE_DIR}/build_tools/affinity_launch.py\"")
+      string(APPEND _toolchain_contents "get_property(_therock_in_try_compile GLOBAL PROPERTY IN_TRY_COMPILE)\n")
+      string(APPEND _toolchain_contents "if(NOT _therock_in_try_compile)\n")
+      string(APPEND _toolchain_contents "  set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK \"@_link_affinity_launcher@\")\n")
+      string(APPEND _toolchain_contents "endif()\n")
+    endif()
     # Explicitly set clang's resource directory using the toolchain path rather
     # than letting clang auto-detect it. On Windows CI, B:\ is a volume mount
     # to C:\{GUID}\ and clang resolves its binary path through the mount when
