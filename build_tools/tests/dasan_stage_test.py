@@ -140,6 +140,74 @@ class DasanStageTest(unittest.TestCase):
             result = dasan_stage.audit("emulation", root, root / "logs")
             self.assertEqual(result["daddress_commands"], 1)
 
+    def test_empty_database_is_explicitly_unconfigured(self):
+        for text in ("", " \n\t"):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "compile_commands.json").write_text(text)
+                result = dasan_stage.audit("compiler-runtime", root, root / "logs")
+                self.assertEqual(
+                    result["databases"][0]["status"], "empty-not-yet-configured"
+                )
+                self.assertEqual(result["native_commands"], 0)
+                self.assertEqual(result["failures"], [])
+
+    def test_malformed_database_records_filename_before_raising(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            broken = root / "compiler/amd-llvm/build/compile_commands.json"
+            broken.parent.mkdir(parents=True)
+            broken.write_text("[{not valid JSON")
+            valid = root / "core/compile_commands.json"
+            valid.parent.mkdir(parents=True)
+            valid.write_text(
+                json.dumps([{"command": "clang++ -fsanitize=daddress -c test.cpp"}])
+            )
+            with self.assertRaisesRegex(
+                RuntimeError, "compile_commands.json.*JSONDecodeError"
+            ):
+                dasan_stage.audit("compiler-runtime", root, root / "logs")
+            report = json.loads((root / "logs/instrumentation-audit.json").read_text())
+            self.assertEqual(report["databases"][0]["status"], "invalid")
+            self.assertEqual(report["daddress_commands"], 1)
+            self.assertEqual(len(report["failures"]), 1)
+
+    def test_invalid_database_schemas_are_reported(self):
+        payloads = [
+            {},
+            {"commands": []},
+            [None],
+            ["not a row"],
+            [{}],
+            [{"command": None, "arguments": None}],
+            [{"command": 123}],
+            [{"arguments": "clang++ -c test.cpp"}],
+            [{"arguments": ["clang++", None]}],
+        ]
+        for payload in payloads:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "compile_commands.json").write_text(json.dumps(payload))
+                with self.assertRaisesRegex(
+                    RuntimeError, "compile_commands.json.*ValueError"
+                ):
+                    dasan_stage.audit("compiler-runtime", root, root / "logs")
+                report = json.loads(
+                    (root / "logs/instrumentation-audit.json").read_text()
+                )
+                self.assertTrue(report["failures"])
+                self.assertEqual(report["databases"][0]["status"], "invalid")
+
+    def test_empty_database_does_not_bypass_zero_instrumentation_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "compile_commands.json").write_text("")
+            native = root / "comm-libs/compile_commands.json"
+            native.parent.mkdir()
+            native.write_text(json.dumps([{"command": "clang++ -c test.cpp"}]))
+            with self.assertRaisesRegex(RuntimeError, "none enable"):
+                dasan_stage.audit("comm-libs", root, root / "logs")
+
 
 if __name__ == "__main__":
     unittest.main()

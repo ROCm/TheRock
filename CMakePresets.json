@@ -30,6 +30,7 @@
       "cacheVariables": {
         "THEROCK_ENABLE_DASAN": "ON",
         "THEROCK_SANITIZER": "DASAN",
+        "THEROCK_MINIMAL_DEBUG_INFO": "OFF",
         "amd-llvm_SANITIZER": "OFF",
         "hipcc_SANITIZER": "OFF",
         "hipify_SANITIZER": "OFF",

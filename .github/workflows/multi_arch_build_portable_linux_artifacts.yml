@@ -255,6 +255,7 @@ jobs:
             ${{ steps.dasan.outputs.cmake_args }}
 
       - name: Build stage
+        id: build_stage
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
@@ -288,7 +289,7 @@ jobs:
           python build_tools/dasan_stage.py audit --stage="${STAGE_NAME}" --build-dir="${BUILD_DIR}"
 
       - name: Run build tests (Comgr, blocking)
-        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' && (inputs.build_variant_cmake_preset != 'linux-release-dasan' || steps.build_stage.outcome == 'success') }}
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |

@@ -26,6 +26,11 @@ Emulation waits for this run's compiler so its C++ code uses the DASan compiler.
 
 The `linux-release-dasan` preset applies device address sanitizer flags,
 with explicit bootstrap-tool exclusions for LLVM, HIPIFY, and hipcc.
+It overrides the package preset's `THEROCK_MINIMAL_DEBUG_INFO` to `OFF`:
+the current minimal-debug toolchain generation defines configuration flags
+before CMake supplies optimized defaults, dropping `-O2` and breaking AMD SMI's
+`_FORTIFY_SOURCE` checks. Normal optimized defaults and explicit debug flags
+are retained in the DASan path.
 The WSL bridge has no GPU device code and uses its standard platform-support
 package preset. Per-stage provenance records source pins, patches, configuration,
 and instrumentation evidence; Rust and bootstrap/system dependencies are

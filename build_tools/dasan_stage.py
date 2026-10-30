@@ -102,21 +102,63 @@ def prepare(stage: str, build: Path, output: Path) -> list[str]:
     return compiler_options(stage, build)
 
 
+def database_commands(rows: object) -> list[str]:
+    """Validate the command-bearing fields of a compilation database."""
+    if not isinstance(rows, list):
+        raise ValueError("compilation database root must be an array")
+    commands = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"entry {index} must be an object")
+        command = row.get("command")
+        arguments = row.get("arguments")
+        if command is not None and not isinstance(command, str):
+            raise ValueError(f"entry {index} command must be a string")
+        if arguments is not None and (
+            not isinstance(arguments, list)
+            or not all(isinstance(argument, str) for argument in arguments)
+        ):
+            raise ValueError(f"entry {index} arguments must be an array of strings")
+        if command and command.strip():
+            commands.append(command)
+        elif arguments:
+            commands.append(shlex.join(arguments))
+        else:
+            raise ValueError(f"entry {index} requires a nonempty command or arguments")
+    return commands
+
+
 def audit(stage: str, build: Path, output: Path) -> dict:
     """Retain compiled-command evidence, including explicit bootstrap exceptions."""
     databases = []
+    failures = []
     total = instrumented = 0
     for database in sorted(build.rglob("compile_commands.json")):
-        rows = json.loads(database.read_text())
-        commands = [
-            r.get("command") or shlex.join(r.get("arguments", [])) for r in rows
-        ]
+        record = {"path": str(database.relative_to(build))}
+        databases.append(record)
+        try:
+            text = database.read_text(encoding="utf-8-sig")
+            if not text.strip():
+                record.update(
+                    status="empty-not-yet-configured",
+                    commands=0,
+                    daddress_commands=0,
+                    without_daddress=[],
+                    note="No generated commands are available; not instrumentation evidence.",
+                )
+                continue
+            commands = database_commands(json.loads(text))
+        except (OSError, UnicodeError, ValueError) as error:
+            message = f"{record['path']}: {type(error).__name__}: {error}"
+            record.update(status="invalid", error=message)
+            failures.append(message)
+            continue
         good = sum(has_daddress(c) for c in commands)
         total += len(commands)
         instrumented += good
-        databases.append(
+        record.update(
             {
-                "path": str(database.relative_to(build)),
+                "status": "configured" if commands else "configured-no-commands",
                 "commands": len(commands),
                 "daddress_commands": good,
                 "without_daddress": [c for c in commands if not has_daddress(c)],
@@ -133,13 +175,11 @@ def audit(stage: str, build: Path, output: Path) -> dict:
             "system-toolchain dependencies",
             "Rust targets (mirage)",
         ],
-        "failures": (
-            ["Native commands exist but none enable -fsanitize=daddress"]
-            if stage != "compiler-runtime" and total and not instrumented
-            else []
-        ),
+        "failures": failures,
         "limitations": "Bootstrap compiler/system dependencies and Rust are not device-instrumented. Command evidence does not prove GPU execution.",
     }
+    if stage != "compiler-runtime" and total and not instrumented:
+        failures.append("Native commands exist but none enable -fsanitize=daddress")
     output.mkdir(parents=True, exist_ok=True)
     write_json(output / "instrumentation-audit.json", report)
     if report["failures"]:
