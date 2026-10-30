@@ -62,7 +62,7 @@ CI_LABELS: list[Label] = [
     Label("ci:run-non-multi-arch", COLOR_CI_GENERAL, "Opt-in to running non-multi-arch CI on a pull request"),
     Label("ci:build-jax", COLOR_CI_GENERAL, "Enable Jax Build"),
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
-    Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
+    Label("ci:host-asan", COLOR_CI_GENERAL, "Select host-asan for postsubmit. host-asan is not a presubmit path"),
     Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
     Label("ci:run-wsl", COLOR_CI_GENERAL, "Opt-in to also running WSL-capable Linux tests on WSL GPU runners (non-blocking)"),
     Label("ci:cpu-test-only", COLOR_CI_GENERAL, "Run only CPU tests (skip GPU tests)"),
