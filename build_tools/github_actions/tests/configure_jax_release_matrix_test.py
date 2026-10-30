@@ -42,6 +42,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "gfx_arch",
                 "wheel_type",
                 "publish",
+                "run_tests",
             },
         )
 
@@ -60,6 +61,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
 
     def test_generate_jax_matrix_uses_requested_refs_only(self):
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["rocm-jaxlib-v0.10.2"],
             python_versions=["3.12"],
         )
@@ -91,6 +93,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # Upstream main has no rocm-jax ref of the same name, so the tip config
         # pins the Dockerfile checkout separately and names its own label.
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["jax-main"],
             python_versions=["3.11", "3.12"],
         )
@@ -103,16 +106,23 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["rocm_jax_ref"], "rocm-jax-infra")
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
 
-    def test_tip_builds_without_publishing(self):
-        # whl-next does not route jax/jaxlib yet and the tests install from
-        # there, so tip is a build-only signal while every pinned ref publishes.
-        matrix = m.generate_jax_matrix_for_release_type(
-            release_type="nightly", platform="linux"
-        )
-        published = {row["jax_ref"]: row["publish"] for row in matrix}
-        self.assertIs(published.pop("main"), False)
-        self.assertTrue(published)
-        self.assertTrue(all(published.values()))
+    def test_tip_publishes_on_dev_and_nightly_without_testing(self):
+        # Tip publishes to rocm/jax/whl-next before the aggregate whl-next
+        # routes its jax and jaxlib, which its tests install from. Every pinned
+        # ref publishes and tests.
+        for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type, platform="linux"
+                )
+                rows = {row["jax_ref"]: row for row in matrix}
+                tip = rows.pop("main")
+                self.assertIs(tip["publish"], release_type in ("dev", "nightly"))
+                self.assertIs(tip["run_tests"], False)
+                self.assertTrue(rows)
+                for row in rows.values():
+                    self.assertIs(row["publish"], True)
+                    self.assertIs(row["run_tests"], True)
 
     def test_release_refs_build_release_wheels(self):
         # Every pinned ref has a jax/jaxlib release on PyPI, so its plugin
@@ -209,6 +219,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # row key except jax_label, which only names the calling job, is an
         # input on each build workflow; the callers forward what they need.
         matrix = m.generate_jax_matrix(
+            release_type="dev",
             jax_refs=["rocm-jaxlib-v0.11.1", "jax-main"],
             python_versions=["3.12"],
         )
