@@ -74,27 +74,6 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(python_dest.bucket, "therock-nightly-python")
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_python_packages_use_v4_whl_directly(self, mock_copy):
-        mock_copy.return_value = 2
-        main(
-            [
-                "--run-id",
-                "123",
-                "--platform",
-                "linux",
-                "--release-type",
-                "dev",
-                "--skip-native-packages",
-                "--dry-run",
-            ]
-        )
-
-        # Calls: tarballs, python -> v4/whl (no staging for multi-arch)
-        self.assertEqual(mock_copy.call_count, 2)
-        _, python_dest = mock_copy.call_args_list[1].args
-        self.assertEqual(python_dest.relative_path, "v4/whl")
-
-    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_dev_linux_copies_native_packages(self, mock_copy):
         mock_copy.return_value = 2
         main(
@@ -255,7 +234,9 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
-    def test_structured_whl_next(self, mock_list, mock_copy_file, mock_copy_dir):
+    def test_structured_python_index_override(
+        self, mock_list, mock_copy_file, mock_copy_dir
+    ):
         mock_copy_dir.return_value = 2  # tarballs
         mock_list.return_value = [
             StorageLocation(
@@ -273,7 +254,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 "dev",
                 "--structured",
                 "--python-index",
-                "whl-next",
+                "whl",
                 "--skip-native-packages",
                 "--dry-run",
             ]
@@ -281,7 +262,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         _, dest = mock_copy_file.call_args_list[0].args
         self.assertEqual(
             dest.relative_path,
-            "v5/rocm/core/whl-next/rocm-sdk-core/"
+            "v5/rocm/core/whl/rocm-sdk-core/"
             "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
         )
 
