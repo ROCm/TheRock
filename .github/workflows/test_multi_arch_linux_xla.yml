@@ -135,8 +135,6 @@ jobs:
 
     # Test cases excluded from the run. A single combination, so this does not
     # fan out: the matrix is the one place a workflow can hold a real YAML list
-    # that an expression can read, since `env` values must be strings and GitHub
-    # Actions supports neither YAML anchors nor a workflow-level `vars` block.
     # `join()` below turns it into the negative gtest filter.
     #
     # A value-parameterized name is <Instantiation>/<Fixture>.<Test>/<Param>.
