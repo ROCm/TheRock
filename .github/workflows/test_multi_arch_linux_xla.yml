@@ -133,6 +133,23 @@ jobs:
     name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx950' }}
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
     timeout-minutes: 240
+
+    # Test cases excluded from the run. A single combination, so this does not
+    # fan out: the matrix is the one place a workflow can hold a real YAML list
+    # that an expression can read, since `env` values must be strings and GitHub
+    # Actions supports neither YAML anchors nor a workflow-level `vars` block.
+    # `join()` below turns it into the negative gtest filter.
+    #
+    # A value-parameterized name is <Instantiation>/<Fixture>.<Test>/<Param>.
+    strategy:
+      matrix:
+        include:
+          - excluded_tests:
+              - HloOpProfilerTest.BasicMeasurementsAreCorrect
+              - StreamExecutorGpuClientTest.NumaNode # Numa test doesn't work on DO nodes, rbe
+              - PrngTest.PassInGlobalRngSeed
+              - CommandBufferTests/CommandBufferTest.Convolutions* # TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
+
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
 
@@ -164,6 +181,12 @@ jobs:
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
       ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
+      # Negative gtest filter built from matrix.excluded_tests above: every test
+      # runs except those. This is the COMPLETE exclusion set, not an addition
+      # to the one run_xla_ci_build.sh declares — that script passes its own
+      # --test_filter and forwards ours after it, and bazel's --test_filter
+      # takes a single value, so ours replaces upstream's.
+      XLA_TEST_FILTER: "-${{ join(matrix.excluded_tests, ':') }}"
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -214,6 +237,7 @@ jobs:
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
+            --test_filter="${XLA_TEST_FILTER}" \
             --local_test_jobs=1 \
             --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
@@ -237,6 +261,7 @@ jobs:
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
             --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}" \
             --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}" \
+            --test_filter="${XLA_TEST_FILTER}" \
             --jobs=50 \
             --build_event_json_file=xla_single_gpu_build_events.json \
             --bes_keywords=gpu \
