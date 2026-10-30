@@ -304,6 +304,7 @@ jobs:
             --include \
               test_transformers \
             -- \
+            --ignore-win-blocklist \
             --continue-on-collection-errors
 
       - name: Upload test reports
