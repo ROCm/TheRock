@@ -53,6 +53,17 @@ $jobs = [math]::Max(8, [math]::Min($logical, [math]::Floor($ramGB / 2.5)))
 $busy = Get-Process -EA SilentlyContinue | Where-Object { $_.ProcessName -match '^(clang|clang\+\+|lld-link|ninja|cl|link)$' }
 "OTHER_BUILD_PROCS $(@($busy).Count)"
 
+# Prebuilt CI artifacts embed B:/build paths (e.g. fftw3 include dirs), so the build
+# itself must live at B:\build like on CI runners. Never clobber a B:\build we did not create.
+$bDrive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='B:'"
+if (-not $bDrive) { $fail += 'no B: drive (prebuilt artifacts require B:\build)' }
+else {
+    "BDRIVE free=$([math]::Round($bDrive.FreeSpace/1GB))GB size=$([math]::Round($bDrive.Size/1GB))GB fs=$($bDrive.FileSystem)"
+    Get-ChildItem B:\ -Force -EA SilentlyContinue | ForEach-Object { "  B:\$($_.Name)" }
+    if ((Test-Path 'B:\build') -and -not (Test-Path 'B:\build\.shark69-lld-repro')) { $fail += 'B:\build exists and is not ours' }
+    if ($bDrive.FreeSpace / 1GB -lt 250) { $fail += 'B: has < 250GB free' }
+}
+
 if ($env:GITHUB_OUTPUT) {
     "root=$root" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
     "jobs=$jobs" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

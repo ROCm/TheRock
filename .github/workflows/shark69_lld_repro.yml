@@ -6,8 +6,9 @@
 # background against the live build tree while the build keeps the machine loaded.
 #
 # Differences from multi_arch_build_windows_artifacts.yml:
-#   - choco uses public chocolatey (no in-cluster Nexus), and only installs missing tools
-#   - build root is a short path on the fixed drive with the most free space (no B:)
+#   - choco uses public chocolatey (no in-cluster Nexus); ninja pinned to 1.13.2 like CI
+#   - build dir is B:\build like CI (prebuilt artifacts embed B:/build paths); sources,
+#     repro copies and tools live under a short root on the largest free fixed drive
 #   - no ccache, no AWS credentials, no artifact push / log upload to S3
 name: shark69 lld-link repro (NO-MERGE)
 
@@ -59,7 +60,7 @@ jobs:
         shell: bash
     env:
       ROOT: ${{ needs.preflight.outputs.root }}
-      BUILD_DIR: ${{ needs.preflight.outputs.root }}\b
+      BUILD_DIR: B:\build
       SRC_DIR: ${{ needs.preflight.outputs.root }}\s
       REPRO_DIR: ${{ needs.preflight.outputs.root }}\r
       TOOLS_DIR: ${{ needs.preflight.outputs.root }}\t
@@ -72,7 +73,12 @@ jobs:
         shell: powershell
         run: |
           if (Test-Path $env:ROOT) { cmd /c "rmdir /s /q `"$env:ROOT`"" }
+          if (Test-Path $env:BUILD_DIR) {
+            if (-not (Test-Path "$env:BUILD_DIR\.shark69-lld-repro")) { "refusing to delete foreign $env:BUILD_DIR"; exit 1 }
+            cmd /c "rmdir /s /q `"$env:BUILD_DIR`""
+          }
           New-Item -ItemType Directory -Force $env:BUILD_DIR, $env:REPRO_DIR, $env:TOOLS_DIR | Out-Null
+          New-Item -ItemType File -Force "$env:BUILD_DIR\.shark69-lld-repro" | Out-Null
           Get-ChildItem $env:ROOT
 
       - name: Enable long paths for git
@@ -101,16 +107,16 @@ jobs:
         working-directory: ${{ env.SRC_DIR }}
         run: pip install -r requirements.txt
 
-      - name: Install missing tools (public chocolatey)
+      - name: Install tools (public chocolatey, same versions as CI)
         shell: powershell
         run: |
-          $need = @()
-          if (-not (Get-Command ninja -EA SilentlyContinue)) { $need += 'ninja --version 1.13.2' }
-          if (-not (Test-Path 'C:\Strawberry\perl\bin\perl.exe')) { $need += 'strawberryperl' }
-          foreach ($p in $need) { "choco install $p"; choco install --no-progress -y $p.Split(' '); if ($LASTEXITCODE -ne 0) { exit 1 } }
-          if (-not (Get-Command ninja -EA SilentlyContinue)) { Add-Content $env:GITHUB_PATH 'C:\ProgramData\chocolatey\bin' }
-          Add-Content $env:GITHUB_PATH 'C:\Strawberry\c\bin'
-          Add-Content $env:GITHUB_PATH 'C:\Strawberry\perl\bin'
+          choco install --no-progress -y --allow-downgrade ninja --version 1.13.2
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path 'C:\Strawberry\perl\bin\perl.exe')) { choco install --no-progress -y strawberryperl; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          # Prepend chocolatey's ninja; append Strawberry (as CI does) so its bundled
+          # cmake/ninja (C:\Strawberry\c\bin) never shadow the real ones.
+          Add-Content $env:GITHUB_PATH 'C:\ProgramData\chocolatey\bin'
+          "PATH=$env:PATH;C:\Strawberry\c\bin;C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
         with:
@@ -131,6 +137,8 @@ jobs:
         run: |
           which python cmake ninja perl git || true
           cmake --version | head -1; ninja --version; python --version
+          case "$(ninja --version)" in 1.13.*) ;; *) echo "::error::ninja must be 1.13.x (long-path aware)"; exit 1;; esac
+          if which cmake ninja | grep -qi strawberry; then echo "::error::Strawberry cmake/ninja shadow the real ones"; exit 1; fi
 
       # CI buckets have public read access; artifact_backend falls back to unsigned reads.
       - name: Fetch inbound artifacts (from main run ${{ env.REF_RUN_ID }})
@@ -241,6 +249,13 @@ jobs:
           name: shark69-lld-repro-logs
           path: ${{ env.UPLOAD_DIR }}
           if-no-files-found: warn
+
+      - name: Free B:\build
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          if (Test-Path "$env:BUILD_DIR\.shark69-lld-repro") { cmd /c "rmdir /s /q `"$env:BUILD_DIR`"" }
+          Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='B:'" | ForEach-Object { "B: free=$([math]::Round($_.FreeSpace/1GB))GB" }
 
       - name: Fail if the build failed
         if: ${{ steps.build.outcome == 'failure' }}
