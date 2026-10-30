@@ -114,6 +114,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "amd-llvm_BUILD_TYPE": "Release",
+        "hipTensor_BUILD_TYPE": "Release",
+        "hipTensor_GENERATE_DEBUG_INFO": "OFF",
         "therock-host-blas_BUILD_TYPE": "Release",
         "therock-SuiteSparse_BUILD_TYPE": "Release",
         "THEROCK_SANITIZER": "TSAN",
