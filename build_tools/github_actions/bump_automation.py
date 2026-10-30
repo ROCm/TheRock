@@ -98,13 +98,6 @@ SUBMODULE_CONFIG = {
     },
 }
 
-# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
-# (their real paths are nested) to their SUBMODULE_CONFIG key.
-ONLY_SUBMODULE_ALIASES = {
-    "rocgdb": "debug-tools/rocgdb/source",
-    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
-}
-
 
 def _clone_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{repo}.git"
@@ -849,23 +842,13 @@ def handle_push(
     after: str,
     tokens: dict[str, str],
     actions_token: str | None = None,
-    only_submodule: str | None = None,
-    skip_next_bump: bool = False,
 ) -> None:
-    """Push event: update TheRock refs, close stale PRs, create next bump PR.
-
-    `only_submodule` and `skip_next_bump` exist for the manual
-    `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
-    `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
-    function for one specific submodule without also opening a new "Bump
-    <submodule>" PR in TheRock. Real push events never set either.
-    """
-    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
-    if changed is None:
-        for path in SUBMODULE_CONFIG:
-            if submodule_changed(before, after, path):
-                changed = path
-                break
+    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
+    changed = None
+    for path in SUBMODULE_CONFIG:
+        if submodule_changed(before, after, path):
+            changed = path
+            break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
@@ -969,10 +952,6 @@ def handle_push(
 
     os.chdir(original_cwd)
 
-    if skip_next_bump:
-        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
-        return
-
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
     print(f"[INFO] Creating next bump PR for {changed} after merge")
@@ -982,36 +961,6 @@ def handle_push(
         print(f"[WARN] create_therock_bump failed: {e}")
 
     _fail_if_cancel_errors(cancel_errors)
-
-
-# (short name, argparse attribute, environment variable) for the GitHub App tokens.
-# Tokens are resolved from the environment by preference so the workflow does not
-# have to place them on the command line, where `ps` would expose them to any
-# process on the runner. The --*_token flags remain as an optional fallback for
-# local/manual runs. (Env vars are not perfectly secret either -- a child process
-# can still read /proc/<pid>/environ -- but they are not shown in the process
-# argument list the way CLI args are.)
-_APP_TOKENS = (
-    ("systems", "systems_token", "SYSTEMS_TOKEN"),
-    ("libraries", "libraries_token", "LIBRARIES_TOKEN"),
-    ("rocgdb", "rocgdb_token", "ROCGDB_TOKEN"),
-    ("mesa-fork", "mesa_token", "MESA_TOKEN"),
-)
-
-
-def resolve_app_tokens(args, parser):
-    """Return {short_name: token}, taking each token from its --*_token arg or,
-    if unset, its environment variable. Errors out listing any that are missing."""
-    tokens = {}
-    missing = []
-    for short, attr, env in _APP_TOKENS:
-        value = getattr(args, attr, None) or os.environ.get(env)
-        if not value:
-            missing.append(f"--{attr} or ${env}")
-        tokens[short] = value
-    if missing:
-        parser.error("Missing GitHub App token(s): " + ", ".join(missing))
-    return tokens
 
 
 def main() -> None:
@@ -1024,61 +973,33 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
-    parser.add_argument(
-        "--only-submodule",
-        default=None,
-        choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
-        help=(
-            "Manual workflow_dispatch replay only: treat this submodule as "
-            "the one that changed between --before/--after, instead of "
-            "auto-detecting it. Lets an operator re-run the ref/pin-update "
-            "half of a push event (e.g. to pick up a bump_automation.py fix) "
-            "without a real submodule-bump commit landing on main."
-        ),
-    )
-    parser.add_argument(
-        "--skip-next-bump",
-        action="store_true",
-        help=(
-            "Manual workflow_dispatch replay only: don't open a new "
-            "Bump <submodule> PR in TheRock after updating the downstream "
-            "ref/pins. Real push events always open the next bump PR."
-        ),
-    )
-    # Optional: each token falls back to its env var (SYSTEMS_TOKEN,
-    # LIBRARIES_TOKEN, ROCGDB_TOKEN, MESA_TOKEN). See resolve_app_tokens.
-    parser.add_argument("--systems_token")
-    parser.add_argument("--libraries_token")
-    parser.add_argument("--rocgdb_token")
-    parser.add_argument("--mesa_token")
+    parser.add_argument("--systems_token", required=True)
+    parser.add_argument("--libraries_token", required=True)
+    parser.add_argument("--rocgdb_token", required=True)
+    parser.add_argument("--mesa_token", required=True)
     parser.add_argument(
         "--actions_token",
-        default=os.environ.get("ACTIONS_TOKEN", ""),
-        help=(
-            "TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs. "
-            "Falls back to the ACTIONS_TOKEN environment variable."
-        ),
+        default="",
+        help="TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs.",
     )
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])
 
-    tokens = resolve_app_tokens(args, parser)
+    tokens = {
+        "systems": args.systems_token,
+        "libraries": args.libraries_token,
+        "rocgdb": args.rocgdb_token,
+        "mesa-fork": args.mesa_token,
+    }
 
     if args.event_type == "schedule":
         handle_schedule(tokens, args.submodule)
     elif args.event_type == "push":
         if not args.actions_token:
             parser.error("--actions_token is required when --event_type is push")
-        handle_push(
-            args.before,
-            args.after,
-            tokens,
-            actions_token=args.actions_token,
-            only_submodule=args.only_submodule,
-            skip_next_bump=args.skip_next_bump,
-        )
+        handle_push(args.before, args.after, tokens, actions_token=args.actions_token)
 
 
 if __name__ == "__main__":
