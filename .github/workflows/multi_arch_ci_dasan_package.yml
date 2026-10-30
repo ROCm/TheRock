@@ -1,0 +1,131 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Package and verify complete DASan SDK
+
+on:
+  workflow_call:
+    inputs:
+      rocm_package_version:
+        type: string
+        required: true
+      amdgpu_family:
+        type: string
+        default: gfx950-dcgpu
+      repository:
+        type: string
+        default: ""
+      ref:
+        type: string
+        default: ""
+    outputs:
+      artifact_name:
+        description: GitHub artifact containing SDK archives and checksums
+        value: ${{ jobs.package.outputs.artifact_name }}
+      installation_archive:
+        description: Complete tests SDK archive with bin/lib at its root
+        value: ${{ jobs.package.outputs.installation_archive }}
+      artifact_url:
+        description: Download link for the SDK GitHub artifact
+        value: ${{ jobs.package.outputs.artifact_url }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package and validate downloadable DASan SDK (gfx950)
+    runs-on: aws-linux-scale-rocm-large
+    timeout-minutes: 240
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+      installation_archive: ${{ steps.package.outputs.installation_archive }}
+      artifact_url: ${{ steps.upload.outputs.artifact-url }}
+    env:
+      PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    steps:
+      - name: Checkout TheRock packaging and source pins
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Install packaging and validation dependencies
+        # The generic test requirements pin an older boto3 than this build image.
+        # Artifact-structure tests only add pytest and its timeout plugin here.
+        run: python -m pip install -r requirements.txt pytest==9.0.3 pytest-timeout==2.4.0
+
+      - name: Fetch pinned KPACK audit helpers
+        timeout-minutes: 10
+        run: |
+          systems_sha="$(git ls-tree HEAD rocm-systems | awk '{print $3}')"
+          if [[ ! "${systems_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Missing pinned rocm-systems source"
+            exit 1
+          fi
+          git init package-sources/rocm-systems
+          git -C package-sources/rocm-systems remote add origin https://github.com/ROCm/rocm-systems.git
+          git -C package-sources/rocm-systems sparse-checkout init --cone
+          git -C package-sources/rocm-systems sparse-checkout set shared/kpack/python
+          git -C package-sources/rocm-systems fetch --depth 1 --filter=blob:none origin "${systems_sha}"
+          git -C package-sources/rocm-systems checkout --detach FETCH_HEAD
+
+      - name: Assemble same-run artifacts and verify extracted installation
+        id: package
+        run: |
+          python build_tools/package_dasan_stack.py \
+            --run-id "${GITHUB_RUN_ID}" --run-github-repo ROCm/TheRock \
+            --amdgpu-family "${AMDGPU_FAMILY}" \
+            --package-version "${PACKAGE_VERSION}" \
+            --kpack-python package-sources/rocm-systems/shared/kpack/python \
+            --output-dir dasan-stack-package
+
+      - name: Upload usable SDK archives, checksums and provenance
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-stack-sdk-gfx950
+          path: dasan-stack-package/deliverables/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload packaging verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-stack-package-validation-gfx950
+          path: dasan-stack-package/validation/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Link SDK downloads and extraction instructions
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          INSTALLATION_ARCHIVE: ${{ steps.package.outputs.installation_archive }}
+        run: |
+          {
+            echo "### Complete downloadable DASan SDK (gfx950)"
+            printf '[Download SDK, SHA256SUMS and source/config manifest](%s)\n\n' "${ARTIFACT_URL}"
+            echo 'The tests archive contains the complete installation and test payloads.'
+            echo 'Installation files are at archive root: bin/, lib/, include/, share/.'
+            echo 'Download the artifact, unzip it, then run:'
+            echo '```bash'
+            echo 'sha256sum -c SHA256SUMS'
+            echo 'mkdir rocm-dasan'
+            printf 'tar -xzf %q -C rocm-dasan\n' "${INSTALLATION_ARCHIVE}"
+            echo 'rocm-dasan/bin/hipcc --version'
+            echo '```'
+            echo 'GitHub downloads are retained for 30 days; raw component artifacts remain in same-run S3.'
+            echo 'Host usability and RCCL device-image checks passed; GPU execution is a separate gate.'
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -23,6 +23,24 @@
       }
     },
     {
+      "name": "linux-release-dasan",
+      "displayName": "Linux device address sanitizer stack",
+      "description": "Fresh experimental DASan stack with the pinned compiler and normalized stage artifacts.",
+      "inherits": "linux-release-package",
+      "cacheVariables": {
+        "THEROCK_ENABLE_DASAN": "ON",
+        "THEROCK_SANITIZER": "DASAN",
+        "amd-llvm_SANITIZER": "OFF",
+        "hipcc_SANITIZER": "OFF",
+        "hipify_SANITIZER": "OFF",
+        "THEROCK_BUILD_LLVM_TESTS": "ON",
+        "LLVM_PARALLEL_LINK_JOBS": "4",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1 -gdwarf-4",
+        "THEROCK_DEBUG_INFO_FLAGS": "-g1 -gdwarf-4"
+      }
+    },
+    {
       "name": "linux-asan-base",
       "hidden": true,
       "generator": "Ninja",

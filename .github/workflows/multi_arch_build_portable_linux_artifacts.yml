@@ -107,6 +107,7 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_DISABLE: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && '1' || '' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -147,6 +148,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Setup ccache
+        if: ${{ inputs.build_variant_cmake_preset != 'linux-release-dasan' }}
         run: |
           ./build_tools/setup_ccache.py \
             --release-type "${RELEASE_TYPE}" \
@@ -157,24 +159,61 @@ jobs:
         run: |
           ./build_tools/health_status.py
 
+      - name: Configure disabled local DASan cache
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' }}
+        run: |
+          mkdir -p "$(dirname "${CCACHE_CONFIGPATH}")"
+          printf 'disable = true\ncache_dir = %s/.dasan-unused-cache\n' "${GITHUB_WORKSPACE}" > "${CCACHE_CONFIGPATH}"
+
       # Note: no AWS credentials should be needed here since our CI buckets
       # all currently have public read access.
+      - name: Fetch same-run DASan compiler for emulation
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'emulation' }}
+        run: |
+          # Emulation has no standard compiler dependency but DASan needs the
+          # pinned compiler for its host C++ targets. Fetch only this run's SDK.
+          python build_tools/artifact_manager.py fetch \
+            --run-id=${{ github.run_id }} --stage=math-libs \
+            --amdgpu-families=gfx950-dcgpu --expand-family-to-targets \
+            --output-dir="${BUILD_DIR}" --bootstrap
+
       - name: Fetch inbound artifacts
         run: |
+          fetch_args=()
+          if [[ "${CCACHE_DISABLE}" == 1 ]]; then
+            fetch_args+=(--expand-family-to-targets)
+          fi
           python build_tools/artifact_manager.py fetch \
             --run-id=${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --output-dir="${BUILD_DIR}" \
-            --bootstrap
+            --bootstrap "${fetch_args[@]}"
 
       - name: Fetch sources
+        if: ${{ inputs.build_variant_cmake_preset != 'linux-release-dasan' }}
         timeout-minutes: 30
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh auth setup-git --hostname github.com
           ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+
+      - name: Prepare exact DASan stage sources
+        id: dasan
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' }}
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          if [[ "${STAGE_NAME}" != compiler-runtime ]]; then
+            llvm_root="${GITHUB_WORKSPACE}/${BUILD_DIR}/compiler/amd-llvm/stage/lib/llvm"
+            sysdeps="${GITHUB_WORKSPACE}/${BUILD_DIR}/third-party/sysdeps/linux"
+            export LD_LIBRARY_PATH="${llvm_root}/lib:${sysdeps}/zlib/build/stage/lib/rocm_sysdeps/lib:${sysdeps}/zstd/build/stage/lib/rocm_sysdeps/lib:${sysdeps}/liblzma/build/stage/lib/rocm_sysdeps/lib:${LD_LIBRARY_PATH:-}"
+            printf 'LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH}" >> "${GITHUB_ENV}"
+          fi
+          python build_tools/dasan_stage.py prepare --stage="${STAGE_NAME}" --build-dir="${BUILD_DIR}"
 
       - name: Get stage configuration
         id: stage_config
@@ -212,16 +251,41 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            ${{ steps.dasan.outputs.cmake_args }}
 
       - name: Build stage
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
+      - name: Prepare unchanged DASan compiler validation bundle
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'compiler-runtime' }}
+        run: |
+          cmake --build "${BUILD_DIR}" --target therock-dist -- -k 0
+          python test_tools/dasan_bundle.py \
+            --source-root compiler/amd-llvm \
+            --llvm-build "${BUILD_DIR}/compiler/amd-llvm/build" \
+            --rocm-root "${BUILD_DIR}/dist/rocm" \
+            --output "${BUILD_DIR}/dasan-lit-bundle"
+
+      - name: Upload unchanged DASan validation bundle
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'compiler-runtime' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-stack-lit-bundle
+          path: build/dasan-lit-bundle/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
         run: |
           python3 build_tools/github_actions/detect_failed_logs.py
+
+      - name: Record DASan instrumentation evidence
+        if: ${{ !cancelled() && inputs.build_variant_cmake_preset == 'linux-release-dasan' }}
+        run: |
+          python build_tools/dasan_stage.py audit --stage="${STAGE_NAME}" --build-dir="${BUILD_DIR}"
 
       - name: Run build tests (Comgr, blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
@@ -277,6 +341,15 @@ jobs:
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
+
+      - name: Upload DASan stage provenance
+        if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-dasan' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-stack-${{ inputs.stage_name }}-provenance
+          path: build/logs/dasan/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Capture job summary
         id: summary

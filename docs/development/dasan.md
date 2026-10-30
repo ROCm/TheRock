@@ -1,5 +1,49 @@
 # Experimental DASan build
 
+## Fresh normalized full-stack build
+
+Dispatch the full-stack path in **ROCm/TheRock**, using the current branch:
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-stack-01a189df -f dasan_full_stack=true
+```
+
+This uses the normalized stage targets and artifact tooling from the
+[rockrel reference run](https://github.com/ROCm/rockrel/actions/runs/40793100440),
+but the workflow run, source checkout, artifact ownership, and downloads all
+belong to `ROCm/TheRock`. Native build stages use
+`aws-linux-scale-rocm-large`, matching the actual reference jobs. WSL uses
+the reference runner group `ROCR-Runtime-libhsakmt-WSL`.
+
+The compiler/runtime, emulation, runtime tests, math/ML, communication,
+storage, debug tools, data-center tools, profiler applications, computer
+vision, media, and WSL stages all build from source. Profiler core libraries
+belong to compiler/runtime; ML libraries and hipDNN providers belong to the
+normalized math stage. No earlier run's binaries or compilation cache are
+reused. Stage dependencies are transferred only within the new run.
+Emulation waits for this run's compiler so its C++ code uses the DASan compiler.
+
+The `linux-release-dasan` preset applies device address sanitizer flags,
+with explicit bootstrap-tool exclusions for LLVM, HIPIFY, and hipcc.
+The WSL bridge has no GPU device code and uses its standard platform-support
+package preset. Per-stage provenance records source pins, patches, configuration,
+and instrumentation evidence; Rust and bootstrap/system dependencies are
+identified separately from instrumented C/C++ code.
+
+The final package job checks complete artifact coverage, assembles standard
+install-prefix tarballs, checks the host/compiler and packaged RCCL device
+code, and uploads the `dasan-stack-sdk-gfx950` GitHub Actions artifact.
+The delivery includes the ordinary SDK archive, a complete archive including
+tests, SHA-256 checksums, provenance, and download instructions. Stage binaries
+also remain in the standard run-scoped artifact store; stage logs alone are
+not treated as binary artifacts.
+
+The following job independently downloads this delivery and the unchanged lit
+bundle, verifies the archive checksums, and runs all 27 DASan host/HIP/OpenMP
+tests on a multi-GPU gfx950 runner. Build success, package validation, and GPU
+validation are distinct results; inspect all three before relying on the SDK.
+
 ## ROCm systems integration rebuild
 
 The current build pins `ROCm/rocm-systems` branch `users/searlmc1/dasan` at
