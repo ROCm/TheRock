@@ -8,7 +8,10 @@ This script promotes the version of two kinds of artifact:
   - Python wheels (.whl) and the `rocm` source distribution (`rocm-<ver>.tar.gz`),
     whose internal version metadata is rewritten in place, and
   - standalone `therock-dist-*.tar.gz` distribution tarballs, which are renamed
-    to the promoted version (their contents are NOT opened or modified).
+    to the promoted version (their contents are NOT opened or modified). Pass
+    --source-bucket and --dest-bucket to copy those objects to the renamed key
+    in S3. --src-version-type chooses the filename token (rc selects 7.13.0rc1).
+    --dest-version chooses the new name. The source key is left in place.
 It optionally also restricts which gfx target architectures are referenced by the
 package metadata.
 
@@ -80,6 +83,14 @@ TYPICAL USAGE:
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
+  # Copy therock-dist tarballs in S3. --src-version-type chooses the filename
+  # token (default rc). --dest-version chooses the new name (default release).
+  # Dry-run until --execute. The source key is left in place.
+  python ./build_tools/packaging/promote_packages.py \
+    --src-version-type=rc \
+    --source-bucket=therock-repo-amd-rc-core \
+    --dest-bucket=therock-repo-amd-stable-staging-core
+
 TESTING:
   # Point the on-demand test at a directory of already-downloaded RC packages:
   python ./build_tools/packaging/tests/promote_packages_test.py --input-dir ./rc_packages
@@ -97,14 +108,23 @@ import sys
 import tarfile
 import tempfile
 
+import boto3
+from boto3.s3.transfer import TransferManager
+from botocore.exceptions import ClientError
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 from pkginfo import Wheel
 
-# Need dynamic load as change_wheel_version needs to be imported via parent directory
+# build_tools/ is on sys.path for _therock_utils and the dynamic load below.
 this_file = pathlib.Path(__file__).resolve()
 build_tools_dir = this_file.parent.parent
+if str(build_tools_dir) not in sys.path:
+    sys.path.insert(0, str(build_tools_dir))
+
+from _therock_utils.python_package_paths import CORE_TARBALL_PREFIXES
+
+# Need dynamic load as change_wheel_version needs to be imported via parent directory
 # ../third_party/change_wheel_version/change_wheel_version.py
 change_wheel_version_path = (
     build_tools_dir / "third_party" / "change_wheel_version" / "change_wheel_version.py"
@@ -164,15 +184,22 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
 Promotion works for wheels and .tar.gz.
 Wheels version is determined by python library to interact with the wheel.
-For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
+For sdist tar.gz, the version is extracted from the PKG-INFO file.
+therock-dist tarballs use the filename token. Pass --source-bucket and
+--dest-bucket to copy those objects in S3. --src-version-type chooses that
+token and --dest-version chooses the new name. --input-dir is not used on that path.
 """,
-        usage="python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/rc1/ --delete-old-on-success",
+        usage=(
+            "python ./build_tools/packaging/promote_packages.py "
+            "--input-dir=./release_candidates/rc1/ --delete-old-on-success\n"
+            "       python ./build_tools/packaging/promote_packages.py "
+            "--src-version-type=rc --source-bucket=SRC --dest-bucket=DST"
+        ),
     )
     parser.add_argument(
         "--input-dir",
         help="Path to the directory that contains .whl and .tar.gz files to promote",
         type=pathlib.Path,
-        required=True,
     )
     parser.add_argument(
         "--match-files",
@@ -190,7 +217,11 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     )
     parser.add_argument(
         "--src-version-type",
-        help="Source prerelease type to look for in package versions (e.g. 'a', 'rc', 'dev'). Defaults to 'rc'.",
+        help=(
+            "Source prerelease type to look for in package versions "
+            "(e.g. 'a', 'rc', 'dev'). Defaults to 'rc'. An S3 tarball copy uses "
+            "this as the filename token, for example rc selects 7.13.0rc1."
+        ),
         # Sentinel default: lets us distinguish "user did not pass --src-version-type"
         # from "user explicitly passed --src-version-type=rc" (needed for the
         # --skip-version-promotion mutex check below). Resolved to "rc" after that check.
@@ -234,6 +265,22 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         ),
         action=argparse.BooleanOptionalAction,
         default=False,
+    )
+    parser.add_argument(
+        "--source-bucket",
+        default=None,
+        help="Copy therock-dist tarballs from this bucket instead of --input-dir",
+    )
+    parser.add_argument(
+        "--dest-bucket",
+        default=None,
+        help="Bucket that receives the renamed therock-dist tarballs",
+    )
+    parser.add_argument(
+        "--execute",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Perform the S3 copy. Without this flag the command only prints the plan.",
     )
 
     args = parser.parse_args(argv)
@@ -288,6 +335,31 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
 
     if args.src_version_type == "dev" and args.dest_version != "release":
         parser.error("--src-version-type=dev only supports --dest-version=release")
+
+    s3_copy = args.source_bucket is not None or args.dest_bucket is not None
+    if s3_copy:
+        if not args.source_bucket or not args.dest_bucket:
+            parser.error(
+                "An S3 tarball copy requires --source-bucket and --dest-bucket"
+            )
+        if args.input_dir is not None:
+            parser.error("An S3 tarball copy does not use --input-dir")
+        if args.skip_version_promotion or args.multi_arch_targets:
+            parser.error(
+                "An S3 tarball copy does not use --skip-version-promotion or --multi-arch-targets"
+            )
+        if args.delete_old_on_success:
+            parser.error("An S3 tarball copy does not use --delete-old-on-success")
+        if args.match_files != "*":
+            parser.error("An S3 tarball copy does not use --match-files")
+        # Release and ASAN are separate prefixes. The filename does not say which.
+        args.source_prefixes = list(CORE_TARBALL_PREFIXES.values())
+    elif args.input_dir is None:
+        parser.error(
+            "--input-dir is required unless --source-bucket and --dest-bucket are set"
+        )
+    elif args.execute:
+        parser.error("--execute requires --source-bucket and --dest-bucket")
 
     return args
 
@@ -1324,40 +1396,212 @@ def promote_targz_sdist(
         return True
 
 
+def promoted_tarball_rename(
+    filename: str, src_version_type: str, dest_version: str
+) -> tuple[str, str] | None:
+    """Return (new filename, new version), or None when the version does not change.
+
+    The version token is the last '-' segment. Only that segment is rewritten.
+    A token that is not a version raises InvalidVersion.
+    Example: therock-dist-linux-gfx950-7.13.0rc1.tar.gz ->
+    therock-dist-linux-gfx950-7.13.0.tar.gz with src 'rc' and dest 'release'.
+    """
+    stem = filename.removesuffix(".tar.gz")
+    old_version = stem.split("-")[-1]
+    Version(old_version)
+    new_version = compute_new_version_str(old_version, src_version_type, dest_version)
+    if new_version is None:
+        return None
+    return stem.removesuffix(old_version) + new_version + ".tar.gz", new_version
+
+
 def promote_targz_tarball(
     filename: pathlib.Path,
     delete: bool,
     src_version_type: str,
     dest_version: str = "release",
 ) -> bool:
-    old_name = filename.name.removesuffix(".tar.gz")
-    old_version = Version(old_name.split("-")[-1])
-
-    print(f"Promoting tarball from rc to final: {filename.name}")
+    old_version = filename.name.removesuffix(".tar.gz").split("-")[-1]
+    print(f"Promoting tarball: {filename.name}")
     print(f"  Detected version: {old_version}")
 
-    new_version_str = compute_new_version_str(
-        str(old_version), src_version_type, dest_version
-    )
-    if new_version_str is None:
+    renamed = promoted_tarball_rename(filename.name, src_version_type, dest_version)
+    if renamed is None:
         print(
             f"  [WARNING] {old_version} has no '{src_version_type}' prerelease marker, nothing to promote. Skipping!"
         )
         return False
-    new_name = old_name.replace(str(old_version), new_version_str) + ".tar.gz"
+    new_name, new_version = renamed
 
-    print(f"  New version: {new_version_str}")
+    print(f"  New version: {new_version}")
 
     if delete:
         filename.rename(filename.parent / new_name)
-        print(f"  Rename {filename.name} to {new_name}", end="")
+        print(f"  Renamed {filename.name} to {new_name}")
     else:
         print(f"  Copy {filename.name} to {new_name}", end="")
         shutil.copy2(filename, filename.parent / new_name)
         print(" ...done")
 
-    print(f"Repacked {filename.name} as release {filename.parent}/{new_name}")
+    print(f"Promoted {filename.name} to {filename.parent}/{new_name}")
     return True
+
+
+_MISSING_OBJECT = {"404", "NoSuchKey", "NotFound"}
+
+
+def select_tarball_copies(
+    objects: list[tuple[str, int]],
+    source_prefix: str,
+    src_version_type: str,
+    dest_version: str,
+) -> list[tuple[str, str, int]]:
+    """Select direct therock-dist children whose version token has src_version_type.
+
+    The token is the last '-' segment. rc selects 7.13.0rc1. The renamed key
+    stays under source_prefix. Each entry is (source_key, dest_key, size).
+    """
+    planned: list[tuple[str, str, int]] = []
+    for key, size in objects:
+        if not key.startswith(source_prefix):
+            continue
+        name = key[len(source_prefix) :]
+        if "/" in name or not (
+            name.startswith("therock-dist") and name.endswith(".tar.gz")
+        ):
+            continue
+        renamed = promoted_tarball_rename(name, src_version_type, dest_version)
+        if renamed is None:
+            continue
+        new_name, _new_version = renamed
+        planned.append((key, source_prefix + new_name, size))
+    return planned
+
+
+def list_object_sizes(client, bucket: str, prefix: str) -> list[tuple[str, int]]:
+    paginator = client.get_paginator("list_objects_v2")
+    found: list[tuple[str, int]] = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            found.append((obj["Key"], obj["Size"]))
+    return found
+
+
+def object_exists(client, bucket: str, key: str) -> bool:
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code", "")
+        if code in _MISSING_OBJECT:
+            return False
+        raise
+    return True
+
+
+def copy_tarballs(
+    client,
+    source_bucket: str,
+    dest_bucket: str,
+    planned: list[tuple[str, str, int]],
+    execute: bool,
+    copy_fn=None,
+) -> tuple[int, int]:
+    """Copy planned objects. Returns (copied, skipped_existing)."""
+    manager = None
+    if execute and copy_fn is None:
+        # Multipart server-side copy. copy_object stops at 5 GB.
+        manager = TransferManager(client)
+
+        def copy_fn(source_key: str, dest_key: str) -> None:
+            manager.copy(
+                {"Bucket": source_bucket, "Key": source_key},
+                dest_bucket,
+                dest_key,
+            ).result()
+
+    copied = 0
+    skipped = 0
+    try:
+        for source_key, dest_key, size in planned:
+            if object_exists(client, dest_bucket, dest_key):
+                print(f"    [SKIP] Already exists: s3://{dest_bucket}/{dest_key}")
+                skipped += 1
+                continue
+            source = f"s3://{source_bucket}/{source_key}"
+            destination = f"s3://{dest_bucket}/{dest_key}"
+            if execute:
+                print(f"    Copying {source} -> {destination} ...", end="", flush=True)
+                copy_fn(source_key, dest_key)
+                print(" done")
+            else:
+                print(
+                    f"    [DRY-RUN] Would copy: {source} -> {destination} ({size} bytes)"
+                )
+            copied += 1
+    finally:
+        if manager is not None:
+            manager.shutdown()
+    return copied, skipped
+
+
+def promote_s3_tarballs(args: argparse.Namespace, client=None, copy_fn=None) -> int:
+    """Copy therock-dist tarballs to the promoted key. Dry-run unless --execute."""
+    print("Copying therock-dist tarballs in S3")
+    if not args.execute:
+        print("DRY-RUN MODE: No copies will be performed")
+    print(f"Source type: {args.src_version_type}")
+    print(f"Source bucket: {args.source_bucket}")
+    print(f"Destination bucket: {args.dest_bucket}")
+    for prefix in args.source_prefixes:
+        print(f"Prefix: {prefix}")
+    if client is None:
+        client = boto3.client("s3")
+    planned: list[tuple[str, str, int]] = []
+    for source_prefix in args.source_prefixes:
+        objects = list_object_sizes(client, args.source_bucket, source_prefix)
+        planned.extend(
+            select_tarball_copies(
+                objects,
+                source_prefix,
+                args.src_version_type,
+                args.dest_version,
+            )
+        )
+    if not planned:
+        print(
+            f"[ERROR]: No therock-dist tarballs have an "
+            f"'{args.src_version_type}' prerelease marker"
+        )
+        return 1
+    tokens = sorted(
+        {
+            source_key.split("/")[-1].removesuffix(".tar.gz").split("-")[-1]
+            for source_key, _, _ in planned
+        }
+    )
+    if len(tokens) > 1:
+        print(
+            f"[ERROR]: --src-version-type={args.src_version_type} matched more than "
+            f"one version token: {', '.join(tokens)}"
+        )
+        return 1
+    print(f"Version token: {tokens[0]}")
+    total_bytes = sum(size for _, _, size in planned)
+    print(f"Matched {len(planned)} tarball(s), {total_bytes} bytes")
+    copied, skipped = copy_tarballs(
+        client,
+        args.source_bucket,
+        args.dest_bucket,
+        planned,
+        args.execute,
+        copy_fn=copy_fn,
+    )
+    if args.execute:
+        print(f"Copies: {copied}")
+    else:
+        print(f"Would copy: {copied}")
+    print(f"Skipped existing: {skipped}")
+    return 0
 
 
 def main(
@@ -1453,6 +1697,13 @@ if __name__ == "__main__":
         if p.multi_arch_targets
         else None
     )
+
+    if p.source_bucket:
+        try:
+            sys.exit(promote_s3_tarballs(p))
+        except ClientError as error:
+            print(f"[ERROR]: {error}")
+            sys.exit(1)
 
     main(
         p.input_dir,

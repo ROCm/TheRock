@@ -171,8 +171,34 @@ Or run manually for each arch-subdirectory
 # For python packages (repeat for each arch)
 python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/<arch> --delete-old-on-success
 
-# For tarballs
+# For tarballs that are already on local disk
 python build_tools/packaging/promote_packages.py --input-dir=./promotion/download/tarball --delete-old-on-success
+```
+
+### Rename distribution tarballs in S3
+
+`therock-dist-*.tar.gz` files are renamed and their contents are not modified.
+Copy them to the promoted key instead of downloading them. The local
+`--input-dir` command above still works when a download and upload is
+preferred. The S3 command lists both `tarball/` and `tarball-asan/` and keeps
+each object in its own prefix. The source key is left in place. It is dry-run
+until `--execute`. A destination key that already exists is skipped, with no
+size check. If every planned copy was skipped, the command exits 0.
+
+`--src-version-type` chooses the filename token. `rc` (the default) selects
+`7.13.0rc1` and rewrites it with `--dest-version` (default `release`). There is
+no separate `--version`. If the bucket has more than one token of that type,
+for example `7.13.0rc1` and `7.13.0rc2`, the command stops and names them.
+The source and destination buckets are still passed explicitly. An rc build
+uses `therock-repo-amd-rc-core`, and a release goes to
+`therock-repo-amd-stable-staging-core`. A nightly passes `--src-version-type=a`.
+
+```bash
+python build_tools/packaging/promote_packages.py \
+  --src-version-type=rc \
+  --source-bucket=therock-repo-amd-rc-core \
+  --dest-bucket=therock-repo-amd-stable-staging-core \
+  --execute
 ```
 
 ### Promoting nightly (`a`) builds
@@ -341,8 +367,11 @@ then listed as `[DRY-RUN] Would overwrite: ...` in the dry run.
 
 ### Structured repo.amd.com upload
 
-After promoting the flat local `wheels/`, `tarball/`, or `tarball-asan/`
-directories, upload back to the product-owned repo.amd.com buckets:
+After promoting the flat local `wheels/` directory, upload back to the
+product-owned repo.amd.com buckets. Release and ASAN `therock-dist` tarballs
+should be copied with the S3 command in "Rename distribution tarballs in S3"
+above. The local `--input-dir` tarball command still works when a download
+and upload is preferred.
 
 ```bash
 python build_tools/packaging/upload_release_packages.py \
