@@ -8,6 +8,7 @@
 # Make project-wide utilities available to the post hook.
 list(APPEND CMAKE_MODULE_PATH "${THEROCK_SOURCE_DIR}/cmake")
 include(therock_subproject_utils)
+include(therock_compiler_hardening)
 
 # Do post processing on all defined targets.
 set(THEROCK_ALL_TARGETS)
@@ -42,6 +43,15 @@ endblock()
 if(THEROCK_USER_POST_HOOK)
   include("${THEROCK_USER_POST_HOOK}")
 endif()
+
+# Apply hardening after the user hook so its explicit target properties
+# participate in policy decisions. Gather targets again because a user hook
+# may define additional targets.
+set(THEROCK_HARDENING_TARGETS)
+therock_get_all_targets(
+  THEROCK_HARDENING_TARGETS "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+therock_apply_hardening_to_targets(${THEROCK_HARDENING_TARGETS})
 
 # Performs post-processing on a dynamically linked target (executables and
 # shared libraries) for rpath settings.

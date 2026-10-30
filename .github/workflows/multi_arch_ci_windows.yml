@@ -192,6 +192,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_windows == true }}
     uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
     with:
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       artifact_run_id: ${{ github.run_id }}
       artifact_github_repo: ${{ github.repository }}
       rocm_version: ${{ inputs.rocm_package_version }}
@@ -263,6 +264,7 @@ jobs:
       # The reusable workflow expands this to gfx targets via
       # cmake/therock_amdgpu_targets.cmake.
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      exclude_implicit_targets: ${{ matrix.exclude_implicit_targets }}
       kpack_split: ${{ needs.build_python_packages.outputs.kpack_split }}
       rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}

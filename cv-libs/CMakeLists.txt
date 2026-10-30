@@ -19,6 +19,7 @@ if(THEROCK_ENABLE_RPP)
       hip-clr
     BUILD_DEPS
       rocm-half
+      therock-googletest
     CMAKE_ARGS
       -DROCM_PATH=
       -DBACKEND=HIP

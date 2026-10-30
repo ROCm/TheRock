@@ -114,8 +114,7 @@
     ],
     "Postinstall": "True",
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_RPM_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -175,8 +174,7 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Disable_RPM_STRIP": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-runtime",
@@ -1465,30 +1463,7 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM_tests",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
+            "Name": "hipCCL_tests",
             "Components": [
               "test"
             ]
@@ -1538,22 +1513,10 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM",
+            "Name": "hipCCL",
             "Components": [
               "dev",
               "doc"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -1566,18 +1529,6 @@
             "Components": [
               "lib",
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev",
-              "lib"
             ]
           }
         ]
@@ -2242,8 +2193,7 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_DEB_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-hipblas-common-devel",
@@ -2305,7 +2255,8 @@
               "dev"
             ]
           }
-        ]
+        ],
+        "Artifact_Gfxarch": "False"
       },
       {
         "Artifact": "host-blas",
@@ -2319,10 +2270,23 @@
               "dev"
             ]
           }
+        ],
+        "Artifact_Gfxarch": "False"
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev",
+              "lib"
+            ]
+          }
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-ck",
@@ -2688,6 +2652,18 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True",
@@ -2751,6 +2727,17 @@
         "Artifact_Subdir": [
           {
             "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
             "Components": [
               "test"
             ]
