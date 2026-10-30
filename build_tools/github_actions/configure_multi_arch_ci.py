@@ -207,6 +207,18 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
 
+def _add_wsl_stages(build_stages: list[str], labels: list[str]) -> list[str]:
+    """With ci:run-wsl, add the wsl-rocdxg stage and the stages it builds on.
+
+    A narrowed build_stages allowlist (e.g. from an external repo PR) usually
+    leaves out wsl-rocdxg, so the label adds it rather than failing setup.
+    """
+    if not build_stages or WSL_RUN_LABEL not in labels:
+        return build_stages
+    needed = get_topology().get_stages_for_artifacts([WSL_REQUIRED_STAGE])
+    return build_stages + sorted(s for s in needed if s not in build_stages)
+
+
 def _apply_stage_test_labels(
     platform: str,
     labels: list[str],
@@ -409,7 +421,9 @@ class CIInputs:
         # When build_stages limits the build, validate or auto-select test labels.
         # - If test:* labels provided: fail-fast if they require stages not in build_stages
         # - If none (only ci:* control labels, or nothing): auto-select compatible labels
-        build_stages = _parse_comma_list(os.environ.get("BUILD_STAGES", ""))
+        build_stages = _add_wsl_stages(
+            _parse_comma_list(os.environ.get("BUILD_STAGES", "")), pr_labels
+        )
         allowed_labels = _get_allowed_test_labels_for_stages(build_stages)
         if allowed_labels is not None:
             linux_test_labels = _apply_stage_test_labels(
@@ -444,7 +458,7 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
-            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
+            build_stages=build_stages,
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")

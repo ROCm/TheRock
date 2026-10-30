@@ -218,18 +218,27 @@ class TestCIInputs(unittest.TestCase):
             ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
         )
 
-    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
-        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
-        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
-            _run_from_environ(
-                event_name="workflow_dispatch",
-                event_payload={},
-                extra_env={
-                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
-                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
-                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
-                },
-            )
+    def test_run_wsl_adds_wsl_rocdxg_to_partial_build(self):
+        """A narrowed build (e.g. an external repo PR) still builds wsl-rocdxg,
+        the WSL libhsakmt that ci:run-wsl tests need."""
+        for labels, expect_wsl in (("ci:run-wsl,ci:gfx110X-all", True), ("", False)):
+            with self.subTest(labels=labels):
+                inputs = _run_from_environ(
+                    event_name="pull_request",
+                    event_payload={
+                        "pull_request": {
+                            "labels": [
+                                {"name": name} for name in labels.split(",") if name
+                            ],
+                            "base": {"ref": "develop"},
+                        }
+                    },
+                    extra_env={"BUILD_STAGES": "compiler-runtime,dctools-core"},
+                )
+                skipped = cm._resolve_skipped_stages(inputs.build_stages)
+                self.assertEqual("wsl-rocdxg" not in skipped, expect_wsl)
+                self.assertNotIn("compiler-runtime", skipped)
+                self.assertNotIn("dctools-core", skipped)
 
     def test_run_wsl_full_build_needs_no_stage_check(self):
         inputs = cm.CIInputs(
