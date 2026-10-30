@@ -666,13 +666,13 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
-    asan: bool = False,
+    use_rocm_clang: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
-    # ASAN needs the ROCm Clang that matches libclang_rt.asan.so ahead of
+    # A sanitizer build needs the ROCm Clang that matches its runtime ahead of
     # gcc-toolset. Write PATH once here.
     path_prefix = str(bin_dir)
-    if asan and not is_windows:
+    if use_rocm_clang and not is_windows:
         llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
         path_prefix = str(llvm_bin) + os.path.pathsep + path_prefix
     env: dict[str, str] = {
@@ -717,11 +717,11 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    elif not asan:
+    elif not use_rocm_clang:
         env.update(
             {
                 # Workaround GCC12 compiler flags. ROCm Clang rejects these, so
-                # an ASAN build does not add them.
+                # a sanitizer build does not add them.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
                 "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
@@ -862,7 +862,7 @@ def do_build(args: argparse.Namespace):
         pytorch_rocm_arch,
         triton_dir,
         is_windows,
-        asan=setup_pytorch_sanitizer.selected_sanitizer(args) is not None,
+        use_rocm_clang=setup_pytorch_sanitizer.selected_sanitizer(args) is not None,
     )
     print(f"  PATH = {env['PATH']}")
 
@@ -1621,10 +1621,10 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--build-variant",
         default="release",
-        help="Build variant passed by the release workflow (release, asan, "
-        "asan-debug, host-asan). A variant containing 'asan' builds the torch "
-        "wheel with AddressSanitizer. Triton, torchaudio, torchvision, and "
-        "apex are not built.",
+        help="Build variant passed by the release workflow. release is a normal "
+        "build. asan, asan-debug, host-asan, and host-asan-debug build the "
+        "torch wheel with AddressSanitizer. Triton, torchaudio, torchvision, "
+        "and apex are not built.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

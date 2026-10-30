@@ -11,7 +11,26 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
 from build_prod_wheels import validate_build_args
-from setup_pytorch_sanitizer import SANITIZERS, import_sanity_env
+from setup_pytorch_sanitizer import SANITIZERS, import_sanity_env, selected_sanitizer
+
+
+class SelectedSanitizerTest(unittest.TestCase):
+    def test_release_and_empty_select_none(self):
+        self.assertIsNone(
+            selected_sanitizer(argparse.Namespace(build_variant="release"))
+        )
+        self.assertIsNone(selected_sanitizer(argparse.Namespace(build_variant="")))
+        self.assertIsNone(selected_sanitizer(argparse.Namespace()))
+
+    def test_asan_labels_share_one_row(self):
+        for variant in ("asan", "asan-debug", "host-asan", "host-asan-debug"):
+            with self.subTest(variant=variant):
+                spec = selected_sanitizer(argparse.Namespace(build_variant=variant))
+                self.assertIs(spec, SANITIZERS["asan"])
+
+    def test_unknown_variant_is_an_error(self):
+        with self.assertRaises(ValueError):
+            selected_sanitizer(argparse.Namespace(build_variant="tsan"))
 
 
 class ImportSanityEnvTest(unittest.TestCase):

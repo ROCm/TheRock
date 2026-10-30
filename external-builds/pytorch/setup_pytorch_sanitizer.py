@@ -51,6 +51,18 @@ class SanitizerSpec:
 # preload_hsa: the ASan runtime resolves its HSA hooks once, at startup.
 # libhsa-runtime64 has to be preloaded ahead of a later dlopen or that call
 # goes through a null pointer during HIP init.
+# CI labels that share the AddressSanitizer row. -debug is the ROCm package
+# build type. host- says which ROCm libraries were instrumented. Both still
+# compile torch with AddressSanitizer. release and an empty value are not
+# listed: they select no row.
+_VARIANT_SANITIZERS = {
+    "asan": "asan",
+    "asan-debug": "asan",
+    "host-asan": "asan",
+    "host-asan-debug": "asan",
+}
+
+
 SANITIZERS = {
     "asan": SanitizerSpec(
         name="asan",
@@ -69,19 +81,22 @@ SANITIZERS = {
 
 
 def selected_sanitizer(args) -> SanitizerSpec | None:
-    """Return the sanitizer selected by ``--build-variant``.
+    """Return the sanitizer row for ``--build-variant``.
 
-    ``asan``, ``asan-debug``, and ``host-asan`` all select AddressSanitizer.
-    ``release`` selects none.
+    ``release`` and an empty value select none. The known AddressSanitizer
+    labels select the ``asan`` row. Any other token is an error.
     """
-    variant = getattr(args, "build_variant", "") or ""
-    selected = [spec for spec in SANITIZERS.values() if spec.name in variant]
-    if not selected:
+    variant = (getattr(args, "build_variant", "") or "").strip()
+    if not variant or variant == "release":
         return None
-    if len(selected) > 1:
-        names = ", ".join(spec.name for spec in selected)
-        raise RuntimeError(f"only one sanitizer can be selected, got {names}")
-    return selected[0]
+    try:
+        name = _VARIANT_SANITIZERS[variant]
+    except KeyError:
+        known = ", ".join(["release", *_VARIANT_SANITIZERS])
+        raise ValueError(
+            f"unknown build variant {variant!r}. Known variants: {known}"
+        ) from None
+    return SANITIZERS[name]
 
 
 def apply_sanitizer_companion_policy(parser, args) -> None:
