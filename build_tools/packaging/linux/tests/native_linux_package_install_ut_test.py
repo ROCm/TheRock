@@ -3159,10 +3159,13 @@ class RunRepoSetupDispatchTest(unittest.TestCase):
         runner = self._runner()  # no repo_setup_package_dir
         runner.install_repo_setup_package = MagicMock(return_value=True)
         runner.setup_deb_repository = MagicMock(return_value=True)
+        runner.verify_published_checksum_metadata = MagicMock(return_value=True)
         runner.install_deb_packages = MagicMock(return_value=True)
         with _suppress_script_output():
             self.assertTrue(runner.run_repo_setup_and_install())
         runner.setup_deb_repository.assert_called_once()
+        runner.verify_published_checksum_metadata.assert_called_once()
+        runner.install_deb_packages.assert_called_once()
         runner.install_repo_setup_package.assert_not_called()
 
 
