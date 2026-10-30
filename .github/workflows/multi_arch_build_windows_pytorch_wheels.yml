@@ -36,6 +36,11 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       test_amdgpu_families:
         description: >-
           Semicolon-separated AMD GPU families to run tests for (e.g.
@@ -111,6 +116,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       test_amdgpu_families:
         description: >-
           Semicolon-separated AMD GPU families to run tests for (e.g.
@@ -220,6 +232,7 @@ jobs:
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       CHECKOUT_ROOT: B:/src
@@ -373,7 +386,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: us-east-1
           role-to-assume: >-
@@ -397,8 +410,15 @@ jobs:
       - name: Expand amdgpu families to gfx targets
         id: expand
         run: |
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform windows \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
@@ -580,7 +600,7 @@ jobs:
 
   configure_pytorch_tests:
     name: Configure PyTorch Tests | ${{ inputs.test_level }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -656,7 +676,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_pytorch_wheels, configure_pytorch_tests, test_pytorch_wheels]
     name: "Quartz - completed - build PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

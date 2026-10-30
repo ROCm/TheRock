@@ -54,7 +54,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "aws-linux-scale-rocm-medium"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -92,7 +92,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "aws-linux-scale-rocm-medium"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
@@ -107,12 +107,12 @@ jobs:
   build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       contents: read
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
       summary: ${{ steps.summary.outputs.summary }}

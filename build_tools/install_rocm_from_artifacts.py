@@ -27,6 +27,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--hipfile | --no-hipfile]
+    [--hrr | --no-hrr]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -396,6 +397,12 @@ def retrieve_artifacts_by_run_id(args):
         "host-suite-sparse_lib",
     ]
 
+    # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds. The WSL kernel
+    # release ("...-microsoft-standard-WSL2") identifies it, also in containers.
+    if "microsoft" in platform.release().lower():
+        base_artifact_patterns.append("wsl-rocdxg_lib")
+
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
@@ -409,6 +416,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.hipfile,
+            args.hrr,
             args.miopen,
             args.miopenprovider,
             args.hiptensor,
@@ -485,6 +493,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.hipfile:
             extra_artifacts.append("hipfile")
             extra_artifacts.append("sysdeps-util-linux")
+        if args.hrr:
+            # core-hrr has no _lib component; hrr-playback is in _run.
+            argv.append("core-hrr_run")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -552,7 +563,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
-            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            # Contains executables (rocsys, rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
             # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
             argv.append("profiler-hub_lib")
@@ -1015,6 +1026,13 @@ def main(argv):
         "--rocprofiler-systems-examples",
         default=False,
         help="Include 'rocprofiler-systems-examples' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hrr",
+        default=False,
+        help="Include 'hrr' artifacts (hrr-playback)",
         action=argparse.BooleanOptionalAction,
     )
 
