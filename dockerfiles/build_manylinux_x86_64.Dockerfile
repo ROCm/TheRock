@@ -9,7 +9,7 @@
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:e0adf18521ad35192df733a6c62d35df7801957d24e0470238aacecfab2188a3
 
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
@@ -87,6 +87,7 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-gcc-gfortran \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
+      glibc-gconv-extra \
       vim-common \
       git-lfs \
     && yum install -y \
