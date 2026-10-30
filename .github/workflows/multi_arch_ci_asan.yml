@@ -8,7 +8,7 @@
 #     used to forward credentials for Quartz notifications.
 
 name: Multi-Arch CI ASAN
-run-name: ${{ inputs.dasan_full_stack && 'DASan full stack (gfx950, fresh)' || inputs.dasan_systems_update && 'DASan ROCr and RCCL update (gfx950)' || inputs.dasan_component_stage && format('DASan {0} (gfx950)', inputs.dasan_component_stage) || github.event.pull_request.title || github.workflow }}
+run-name: ${{ inputs.dasan_validate_run_id && format('Validate DASan SDK from run {0}', inputs.dasan_validate_run_id) || inputs.dasan_full_stack && 'DASan full stack (gfx950, fresh)' || inputs.dasan_systems_update && 'DASan ROCr and RCCL update (gfx950)' || inputs.dasan_component_stage && format('DASan {0} (gfx950)', inputs.dasan_component_stage) || github.event.pull_request.title || github.workflow }}
 
 on:
   # TODO: Enable postsubmit ASAN once we have capacity
@@ -17,6 +17,10 @@ on:
   #     - main
   workflow_dispatch:
     inputs:
+      dasan_validate_run_id:
+        type: string
+        description: "Validate only the existing complete SDK from this original build run; no rebuild"
+        default: ""
       dasan_full_stack:
         type: boolean
         description: "Build and package the full gfx950 DASan stack with same-run dependencies"
@@ -94,8 +98,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dasan_validate_existing:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_validate_run_id != '' }}
+    uses: ./.github/workflows/multi_arch_ci_dasan_validate_existing.yml
+    with:
+      origin_run_id: ${{ inputs.dasan_validate_run_id }}
+
   dasan_stack:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dasan_full_stack }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_validate_run_id && inputs.dasan_full_stack }}
     uses: ./.github/workflows/multi_arch_ci_dasan_stack.yml
     permissions:
       contents: read
@@ -103,7 +113,7 @@ jobs:
       id-token: write
 
   dasan_systems:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_full_stack && inputs.dasan_systems_update }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_validate_run_id && !inputs.dasan_full_stack && inputs.dasan_systems_update }}
     uses: ./.github/workflows/multi_arch_ci_dasan_systems.yml
     with:
       dependencies_run_id: ${{ inputs.dasan_dependencies_run_id }}
@@ -113,7 +123,7 @@ jobs:
       id-token: write
 
   dasan_component:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_full_stack && !inputs.dasan_systems_update && inputs.dasan_component_stage != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_validate_run_id && !inputs.dasan_full_stack && !inputs.dasan_systems_update && inputs.dasan_component_stage != '' }}
     uses: ./.github/workflows/multi_arch_ci_dasan_component.yml
     with:
       stage: ${{ inputs.dasan_component_stage }}
@@ -125,7 +135,7 @@ jobs:
       id-token: write
 
   dasan:
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_full_stack && !inputs.dasan_systems_update && inputs.dasan_component_stage == '' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dasan_validate_run_id && !inputs.dasan_full_stack && !inputs.dasan_systems_update && inputs.dasan_component_stage == '' && (inputs.enable_dasan || inputs.dasan_math_libraries) }}
     uses: ./.github/workflows/multi_arch_ci_dasan.yml
     with:
       math_libraries: ${{ inputs.dasan_math_libraries }}
@@ -136,7 +146,7 @@ jobs:
       id-token: write
 
   setup:
-    if: ${{ !inputs.dasan_full_stack && !inputs.dasan_systems_update && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
+    if: ${{ !inputs.dasan_validate_run_id && !inputs.dasan_full_stack && !inputs.dasan_systems_update && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan"
@@ -170,7 +180,7 @@ jobs:
 
   ci_asan_summary:
     name: CI ASAN Summary
-    if: ${{ always() && !inputs.dasan_full_stack && !inputs.dasan_systems_update && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
+    if: ${{ always() && !inputs.dasan_validate_run_id && !inputs.dasan_full_stack && !inputs.dasan_systems_update && !inputs.enable_dasan && !inputs.dasan_math_libraries && !inputs.dasan_component_stage }}
     needs:
       - setup
       - linux_build_and_test

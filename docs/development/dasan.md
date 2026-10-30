@@ -2,6 +2,27 @@
 
 ## Fresh normalized full-stack build
 
+### Retry only verification of an existing delivery
+
+When all build and packaging stages passed but downloading or verifying the
+SDK failed, dispatch only the corrected verification path:
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-stack-01a189df -f dasan_validate_run_id=41073351087
+```
+
+This runs no build or packaging stages. It selects the existing full-tests SDK
+from that original run's combined delivery ZIP using bounded HTTP Range reads,
+checks its ZIP CRC and original master SHA-256, and runs all 27 unchanged tests
+with the original lit bundle. The runtime-only SDK is not downloaded. Transfer
+logs and provenance distinguish the original build run/SHA from this new
+verification run/tools SHA. The historical delivery has no unpacked-size field;
+disk preflight explicitly reserves 300 GiB for extraction plus the selected
+archive and 15 GiB for scratch space. No test or debug payload is omitted.
+
+### Build a new stack from source
+
 Dispatch the full-stack path in **ROCm/TheRock**, using the current branch:
 
 ```bash

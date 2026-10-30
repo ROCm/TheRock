@@ -1,0 +1,76 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Validate existing DASan delivery without rebuilding
+on:
+  workflow_call:
+    inputs:
+      origin_run_id:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    name: Validate original DASan SDK on gfx950
+    runs-on: linux-gfx950-8gpu-ccs-ossci-rocm
+    timeout-minutes: 300
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+      options: >-
+        --user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576
+        --ipc=host --security-opt seccomp=unconfined --group-add video
+        --device /dev/kfd --device /dev/dri
+        --group-add 993 --group-add 992 --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout corrected verification tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select only full-tests SDK from original delivery ZIP
+        timeout-minutes: 190
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ORIGIN_RUN_ID: ${{ inputs.origin_run_id }}
+        run: |
+          mkdir -p validation
+          python3 test_tools/dasan_validate_delivery.py \
+            --origin-run-id "${ORIGIN_RUN_ID}" --output-dir delivery \
+            --validation-dir validation 2>&1 | tee validation/download.log
+      - name: Download the original unchanged lit bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dasan-stack-lit-bundle
+          path: lit-bundle
+          run-id: ${{ inputs.origin_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify and extract the complete original tests SDK
+        run: |
+          (cd delivery && sha256sum --check SELECTED_SHA256SUMS)
+          archives=(delivery/*-tests-*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          mkdir sdk
+          tar -xzf "${archives[0]}" -C sdk
+          rm -- "${archives[0]}"
+      - name: Run all 27 unchanged DASan host HIP and OpenMP tests
+        timeout-minutes: 90
+        run: |
+          export LD_LIBRARY_PATH="$PWD/sdk/lib:$PWD/sdk/lib/llvm/lib:$PWD/sdk/lib/rocm_sysdeps/lib"
+          runtime="$(sdk/lib/llvm/bin/clang -print-file-name=libclang_rt.dasan.so)"
+          test -f "${runtime}"
+          export LD_LIBRARY_PATH="$(dirname "${runtime}"):${LD_LIBRARY_PATH}"
+          python3 test_tools/dasan_stack_validate.py --rocm-path sdk \
+            --bundle lit-bundle --output-dir validation/tests
+      - name: Upload original-build verification provenance and test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dasan-existing-sdk-validation-gfx950
+          path: validation/
+          if-no-files-found: warn
+          retention-days: 30
