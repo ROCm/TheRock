@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import fetch_test_configurations
+from test_tools.determine_rocm_test_dependencies import _to_ci_test_selectors
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -89,6 +90,51 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_rocprofiler_sdk_submits_to_cdash(self):
         config = fetch_test_configurations.test_matrix["rocprofiler-sdk"]
         self.assertIn("--enable-cdash", config["test_script"])
+
+    def test_rocwmma_install_selection(self):
+        selected = _to_ci_test_selectors({"rocwmma"})
+        self.assertEqual(selected, {"rocwmma", "rocwmma_install"})
+        os.environ["PROJECTS_TO_TEST"] = ",".join(sorted(selected))
+        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
+            for label in ["test:rocwmma", "test:rocwmma_install"]:
+                with self.subTest(platform=platform, label=label):
+                    sys.argv = [
+                        "fetch_test_configurations.py",
+                        f"--platform={platform}",
+                    ]
+                    os.environ["AMDGPU_FAMILIES"] = family
+                    os.environ["TEST_LABELS"] = label
+                    fetch_test_configurations.run()
+                    jobs = {job["job_name"]: job for job in self._get_components()}
+                    install = jobs["rocwmma_install"]
+                    self.assertEqual(install["total_shards"], 1)
+                    self.assertTrue(install["linux_cpu_runner"])
+                    self.assertNotIn("fetch_artifact_args", install)
+                    self.assertEqual("rocwmma" in jobs, label == "test:rocwmma")
+
+    def test_rocwmma_install_requires_test_artifacts(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocwmma_install"
+        for platform in ["linux", "windows"]:
+            for family in [
+                "gfx900",
+                "gfx90c",
+                "gfx906",
+                "gfx101X-all",
+                "gfx103X-all",
+                "gfx1030",
+            ]:
+                with self.subTest(platform=platform, family=family):
+                    sys.argv = [
+                        "fetch_test_configurations.py",
+                        f"--platform={platform}",
+                    ]
+                    os.environ["AMDGPU_FAMILIES"] = family
+                    fetch_test_configurations.run()
+                    self.assertEqual(self._get_components(), [])
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["SKIP_STAGES"] = "math-libs"
+        fetch_test_configurations.run()
+        self.assertEqual(self._get_components(), [])
 
     def test_single_project_filter(self):
         os.environ["PROJECTS_TO_TEST"] = "hipblas"
