@@ -15,7 +15,12 @@ that explicitly want skip-if-exists.
 
 CI flow (``multi_arch_build_native_linux_packages.yml``)::
 
-  build_package.py → simulate test → build_package_repo.py (--release-type) → this script
+  build_package.py → simulate test → build_package_repo.py (--release-type)
+  → verify_package_repo_checksums.py → this script
+
+``verify_package_repo_checksums.py`` must pass before upload. It compares every
+local DEB (MD5 and SHA256) or RPM (SHA256 or stronger) archive with the metadata
+this script uploads.
 
 Usage:
   python ./build_tools/packaging/linux/upload_package_repo.py \\
