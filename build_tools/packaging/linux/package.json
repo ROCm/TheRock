@@ -1,5 +1,77 @@
 [
   {
+    "Package": "amdrocm-openmpi",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "Open MPI runtime libraries and command-line tools for ROCm",
+    "Description_Long": "Open MPI runtime libraries and command-line tools used by ROCm communication libraries and profiling applications.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "BSD-3-Clause",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://www.open-mpi.org/",
+    "Artifactory": [
+      {
+        "Artifact": "openmpi",
+        "Artifact_Subdir": [
+          {
+            "Name": "openmpi",
+            "Components": [
+              "lib",
+              "run"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-openmpi-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-openmpi"
+    ],
+    "RPMRequires": [
+      "amdrocm-openmpi"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "Open MPI development headers and build configuration for ROCm",
+    "Description_Long": "Development headers, libraries, and CMake configuration for building ROCm applications that use Open MPI.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "BSD-3-Clause",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://www.open-mpi.org/",
+    "Artifactory": [
+      {
+        "Artifact": "openmpi",
+        "Artifact_Subdir": [
+          {
+            "Name": "openmpi",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-amdsmi",
     "Version": "",
     "Architecture": "amd64",

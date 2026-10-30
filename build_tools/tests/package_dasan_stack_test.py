@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import io
+import json
 from pathlib import Path
 import sys
 import tarfile
@@ -15,6 +16,34 @@ import package_dasan_stack as package
 
 
 class InventoryTest(unittest.TestCase):
+    def test_openmpi_components_have_real_linux_packages(self):
+        data = json.loads(
+            (package.REPO / "build_tools/packaging/linux/package.json").read_text()
+        )
+        packages = {item["Package"]: item for item in data}
+        self.assertIn("amdrocm-openmpi", packages)
+        self.assertIn("amdrocm-openmpi-devel", packages)
+        self.assertIn(
+            "amdrocm-openmpi", packages["amdrocm-openmpi-devel"]["DEBDepends"]
+        )
+        owners = {}
+        for item in data:
+            for artifact in item.get("Artifactory", []):
+                if artifact.get("Artifact") == "openmpi":
+                    for subdir in artifact["Artifact_Subdir"]:
+                        self.assertEqual(subdir["Name"], "openmpi")
+                        for component in subdir["Components"]:
+                            self.assertNotIn(component, owners)
+                            owners[component] = item["Package"]
+        self.assertEqual(
+            owners,
+            {
+                "lib": "amdrocm-openmpi",
+                "run": "amdrocm-openmpi",
+                "dev": "amdrocm-openmpi-devel",
+            },
+        )
+
     def test_only_current_run_from_therock_is_accepted(self):
         with patch.dict("os.environ", {"GITHUB_RUN_ID": "123"}):
             package.validate_run_identity("123", "ROCm/TheRock")
