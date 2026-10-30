@@ -114,8 +114,7 @@
     ],
     "Postinstall": "True",
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_RPM_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -175,8 +174,7 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Disable_RPM_STRIP": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-runtime",
@@ -2195,8 +2193,7 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_DEB_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-hipblas-common-devel",

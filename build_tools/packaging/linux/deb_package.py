@@ -103,7 +103,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         pkg_name,
         build_config.artifacts_dir,
         build_config.gfx_arch,
-        build_config.enable_kpack,
         target_members=package_target_members(build_config),
     )
     sourcedir_list.extend(dir_list)
@@ -117,17 +116,12 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     logger.debug(f"sourcedir_list: {sourcedir_list}")
 
     # GFX_META is a versioned meta package (empty content, just dependencies)
-    is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
+    is_gfx_meta = build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
-        if build_config.enable_kpack:
-            logger.info(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
-            )
-            return []
-        else:
-            sys.exit(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
-            )
+        logger.info(
+            f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+        )
+        return []
 
     if not sourcedir_list:
         logger.debug(f"{pkg_name} is a Meta package")
@@ -263,18 +257,16 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     logger.debug("generate_rules_file")
     rules_file = Path(deb_dir) / "rules"
-    disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
-    # Disable debian dh_strip for multi-arch builds
+    # Disable debian dh_strip
     # WORKAROUND: dh_strip's debugedit incorrectly truncates ELF files with
     # unconventional layouts (e.g., program headers at end of file).
     # This causes "program header goes past the end of the file" errors.
     # See: https://github.com/ROCm/TheRock/issues/4047
-    if config.enable_kpack:
-        disable_dh_strip = True
+    disable_dh_strip = True
 
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
