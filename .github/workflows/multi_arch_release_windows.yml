@@ -221,7 +221,7 @@ jobs:
   trigger_test_native_windows_install:
     needs: [build_native_msi_packages]
     name: Trigger Test Native Windows Packages Install
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: write
     steps:
