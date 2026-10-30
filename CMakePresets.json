@@ -168,6 +168,18 @@
       "inherits": [
         "windows-base"
       ]
+    },
+    {
+      "name": "windows-release-driver",
+      "displayName": "Windows driver-package release build",
+      "description": "Windows release plus driver-specific options: THEROCK_WINDOWS_DRIVER_BUILD and custom comgr DLL name.",
+      "cacheVariables": {
+        "THEROCK_WINDOWS_DRIVER_BUILD": "ON",
+        "THEROCK_COMGR_DLL_NAME": "amd_comgr_3.dll"
+      },
+      "inherits": [
+        "windows-release"
+      ]
     }
   ]
 }
