@@ -252,7 +252,10 @@ class TestCIInputs(unittest.TestCase):
             pr_labels=["ci:skip-rocm"],
         )
         cases = [
-            ({"pr_labels": ["ci:skip-rocm", label]}, "conflicts with")
+            (
+                {"pr_labels": ["ci:skip-rocm", label]},
+                "conflicts with.*require ROCm artifacts",
+            )
             for label in (
                 "ci:build-python-packages",
                 "ci:build-native-linux",
@@ -1862,7 +1865,10 @@ class TestExpandBuildConfigs(unittest.TestCase):
         expected_keys = {f.name for f in fields(cm.BuildConfig)}
         self.assertEqual(set(d.keys()), expected_keys)
 
-    @patch("configure_multi_arch_ci.get_latest_package_version", return_value="10.1.0")
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        return_value="10.1.0",
+    )
     def test_published_packages_replace_source_package_dependency(self, lookup):
         jobs = replace(
             _jobs(build_jax=True),
@@ -1898,7 +1904,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertFalse(configs.windows.build_jax)
         self.assertEqual(configs.windows.jax_build_matrix, [])
 
-    @patch("configure_multi_arch_ci.get_latest_package_version")
+    @patch("configure_multi_arch_ci.get_latest_python_package_version")
     def test_no_package_inputs_when_package_builds_are_disabled(self, lookup):
         for package_action in (cm.JobAction.RUN, cm.JobAction.PREBUILT):
             with self.subTest(package_action=package_action):
@@ -1923,7 +1929,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     self.assertEqual(config.framework_rocm_version, "")
         lookup.assert_not_called()
 
-    @patch("configure_multi_arch_ci.get_latest_package_version")
+    @patch("configure_multi_arch_ci.get_latest_python_package_version")
     @patch("configure_multi_arch_ci.WorkflowOutputRoot.from_workflow_run")
     def test_source_builds_resolve_run_package_urls(self, output_root, lookup):
         output_root.return_value.python_packages.return_value.https_url = (
@@ -1961,7 +1967,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             )
 
     @patch(
-        "configure_multi_arch_ci.get_latest_package_version",
+        "configure_multi_arch_ci.get_latest_python_package_version",
         side_effect=RuntimeError("Index unavailable"),
     )
     def test_published_version_failure_does_not_fall_back_to_built_version(
@@ -2904,7 +2910,10 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
 
-    @patch("configure_multi_arch_ci.get_latest_package_version", return_value="10.1.0")
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        return_value="10.1.0",
+    )
     def test_framework_labels_select_builds_without_rocm(self, lookup):
         # These are distinct graphs: either framework alone, or both together.
         for frameworks in (("pytorch",), ("jax",), ("pytorch", "jax")):

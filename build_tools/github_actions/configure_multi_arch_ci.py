@@ -61,8 +61,10 @@ from dataclasses import asdict, dataclass, field, fields, replace
 from functools import cache
 from pathlib import Path
 
-# Add parent directory to path for _therock_utils imports
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Add build tools and Python packaging utilities to path.
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.build_topology import get_topology
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
@@ -90,7 +92,7 @@ from github_actions_api import (
     gha_load_github_event,
     gha_set_output,
 )
-from get_latest_package_version import get_latest_package_version
+from get_latest_python_package_version import get_latest_python_package_version
 from stage_impact import analyze_artifact_impact_from_projects
 from stage_reuse_decision import (
     AutoStageReuse,
@@ -333,7 +335,12 @@ class CIInputs:
                 "ci:build-native-windows",
             }.intersection(self.pr_labels)
             if conflicts:
-                raise ValueError(f"ci:skip-rocm conflicts with {sorted(conflicts)}")
+                raise ValueError(
+                    f"ci:skip-rocm conflicts with {sorted(conflicts)}: "
+                    "ROCm packaging jobs require ROCm artifacts, but ci:skip-rocm "
+                    "disables both source builds and copying prebuilt artifacts. "
+                    "Remove ci:skip-rocm to build ROCm packages."
+                )
 
             # When skipping ROCm builds/tests the stage reuse inputs are not
             # meaningful, so we reject them. Note that this mode is primarily
@@ -1668,7 +1675,7 @@ def _should_run_tests_for_family(
 @cache
 def _get_published_rocm_version(index_url: str) -> str:
     """Resolve once per index so all framework builds use the same version."""
-    return get_latest_package_version("rocm", index_url)
+    return get_latest_python_package_version("rocm", index_url)
 
 
 def _expand_build_config_for_platform(

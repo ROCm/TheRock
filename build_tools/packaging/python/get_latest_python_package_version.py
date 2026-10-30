@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 
-def get_latest_package_version(package: str, index_url: str) -> str:
+def get_latest_python_package_version(package: str, index_url: str) -> str:
     """Return the latest version, failing if pip cannot find a compatible wheel."""
     result = subprocess.run(
         [
@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("package", help="Package name to look up")
     parser.add_argument("--index-url", required=True, help="Python package index URL")
     args = parser.parse_args()
-    print(get_latest_package_version(args.package, args.index_url))
+    print(get_latest_python_package_version(args.package, args.index_url))
 
 
 if __name__ == "__main__":
