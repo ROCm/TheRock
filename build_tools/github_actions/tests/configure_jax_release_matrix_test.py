@@ -95,6 +95,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "jax_label",
                 "jax_repository",
                 "rocm_jax_ref",
+                "build_image",
                 "gfx_arch",
                 "wheel_type",
                 "publish",
@@ -139,6 +140,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(matrix), 0)
         for row in matrix:
             self.assertEqual(row["rocm_jax_ref"], row["jax_ref"])
+            self.assertEqual(row["build_image"], "")
 
     def test_jax_main_ref_builds_upstream_with_rocm_jax_default_branch(self):
         # Upstream main has no rocm-jax ref of the same name, so the tip config

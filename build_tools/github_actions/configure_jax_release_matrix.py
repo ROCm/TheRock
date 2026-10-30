@@ -76,6 +76,8 @@ JAX_REF_CONFIGS = {
         "rocm_jax_ref": "rocm-jax-infra",
         "gfx_arch": "device-all",
         "jax_label": "tip",
+        # main's hermetic clang needs glibc >= 2.34, newer than manylinux_2_28 has.
+        "build_image": "ghcr.io/rocm/jax-build-ubu24.rocmless@sha256:fe966c6f77ad7dcd279bad02833d4cd70f72a9cd87640912ae37b20b3de7edea",
         # main has no release on PyPI, so jax and jaxlib are built from the same
         # checkout and dated from its HEAD commit (see resolve_jax_version.py).
         "wheel_type": "nightly",
@@ -167,6 +169,8 @@ def generate_jax_matrix(
                     # release tag exists under the same name in both
                     # repositories, so this defaults to jax_ref.
                     "rocm_jax_ref": ref_cfg.get("rocm_jax_ref", ref_cfg["jax_ref"]),
+                    # The image to build in. Empty builds the manylinux image.
+                    "build_image": ref_cfg.get("build_image", ""),
                     # gfx_arch selects the ROCm device package for the manylinux
                     # build (e.g. device-all). This direct lookup raises
                     # KeyError if JAX_REF_CONFIGS omits the key.
