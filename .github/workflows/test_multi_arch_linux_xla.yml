@@ -42,13 +42,6 @@ on:
         description: Runner label to execute tests on
         required: true
         type: string
-      test_subset:
-        description: >-
-          Accelerator subset to run: "single_gpu", "multi_gpu", "cpu", or
-          "all" for all three.
-        required: false
-        type: string
-        default: "all"
       test_timeout_minutes:
         description: "Budget for the whole test job."
         required: false
@@ -99,13 +92,6 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx950-1gpu-ccs-ossci-rocm"
-      test_subset:
-        description: >-
-          Accelerator subset to run: "single_gpu", "multi_gpu", "cpu", or
-          "all" for all three.
-        type: choice
-        options: ["single_gpu", "multi_gpu", "cpu", "all"]
-        default: "all"
       test_timeout_minutes:
         description: "Budget for the whole test job, in minutes."
         type: number
@@ -129,7 +115,7 @@ permissions:
 
 jobs:
   test_xla:
-    name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx950' }}
+    name: Test XLA | ${{ inputs.test_amdgpu_family || 'gfx950' }}
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
     timeout-minutes: ${{ inputs.test_timeout_minutes || 240 }}
 
