@@ -1752,8 +1752,6 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
         )
 
 
-
-
 class ResolveAppTokensTest(unittest.TestCase):
     def _parser(self):
         import argparse
@@ -1784,7 +1782,12 @@ class ResolveAppTokensTest(unittest.TestCase):
             tokens = resolve_app_tokens(self._args(), self._parser())
         self.assertEqual(
             tokens,
-            {"systems": "sys", "libraries": "lib", "rocgdb": "gdb", "mesa-fork": "mesa"},
+            {
+                "systems": "sys",
+                "libraries": "lib",
+                "rocgdb": "gdb",
+                "mesa-fork": "mesa",
+            },
         )
 
     def test_cli_arg_overrides_environment(self):
@@ -1801,8 +1804,10 @@ class ResolveAppTokensTest(unittest.TestCase):
         self.assertEqual(tokens["systems"], "cli")
 
     def test_errors_when_a_token_is_missing(self):
-        clear_env = {k: "" for k in (
-            "SYSTEMS_TOKEN", "LIBRARIES_TOKEN", "ROCGDB_TOKEN", "MESA_TOKEN")}
+        clear_env = {
+            k: ""
+            for k in ("SYSTEMS_TOKEN", "LIBRARIES_TOKEN", "ROCGDB_TOKEN", "MESA_TOKEN")
+        }
         with patch.dict(os.environ, clear_env, clear=False):
             with self.assertRaises(SystemExit):
                 resolve_app_tokens(
