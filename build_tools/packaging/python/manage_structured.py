@@ -31,8 +31,8 @@ Example usage:
     python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket --upload
 
     # Regenerate a single package directory (skips the product root index):
-    python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket \
-        --package numpy --upload
+    python manage_structured.py v5/rocm/third-party/whl-next \
+        --bucket my-core-bucket --package numpy --upload
 
 The bucket may also be supplied via the `S3_BUCKET_PY` environment variable;
 an explicit `--bucket` takes precedence.
@@ -518,7 +518,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "prefix",
         help="Product-local root prefix, e.g. v5/rocm/pytorch/whl or "
-        "v5/rocm/core/whl-next",
+        "v5/rocm/third-party/whl-next",
     )
     parser.add_argument("--bucket", type=str, help="S3 bucket name")
     parser.add_argument(
