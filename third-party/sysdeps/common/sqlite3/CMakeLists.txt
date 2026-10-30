@@ -42,11 +42,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
     therock_cmake_subproject_provide_package(therock-sqlite3 SQLite3 lib/rocm_sysdeps/lib/cmake/SQLite3)
     therock_cmake_subproject_activate(therock-sqlite3)
-
-    therock_test_validate_shared_lib(
-      PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libsqlite3.so
-    )
     return()
 endif()
 
@@ -55,13 +50,17 @@ cmake_minimum_required(VERSION 3.25)
 project(SQLITE3_BUILD)
 include(CMakeDependentOption)
 
-set(BUILD_SHARED_LIBS ON)
-set(INSTALL_SHLIB_DIR "lib")
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-  set(BUILD_SHARED_LIBS OFF)
-  set(INSTALL_SHLIB_DIR "bin")
-endif()
+# SQLite is built as a static library with hidden symbols, so each ROCm
+# component that uses it (MIOpen, the rocprofiler-sdk tool, profiler-hub) embeds
+# a private copy, the same way rocFFT already embeds its own SQLite. A shared
+# librocm_sysdeps_sqlite3 is preloaded RTLD_GLOBAL with the rest of ROCm and
+# would capture the sqlite3_* references of every other SQLite user in the
+# process, e.g. Python's sqlite3 module or GDAL; see
+# https://github.com/ROCm/TheRock/issues/9385.
+#
+# SQLITE_OMIT_LOAD_EXTENSION (which rocFFT sets) is not used: MIOpen's
+# MIOPEN_EMBED_DB build calls sqlite3_enable_load_extension.
+set(BUILD_SHARED_LIBS OFF)
 
 find_package(Threads REQUIRED)
 
@@ -69,27 +68,24 @@ add_library(
   rocm_sysdeps_sqlite3
   ${SOURCE_DIR}/sqlite3.c
 )
+set_target_properties(rocm_sysdeps_sqlite3 PROPERTIES
+  C_VISIBILITY_PRESET "hidden"
+  POSITION_INDEPENDENT_CODE ON
+)
 
-if(NOT WIN32)
-    add_custom_command(
-    TARGET rocm_sysdeps_sqlite3
-    POST_BUILD
-    COMMAND
-        "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_sqlite3.so
-        ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.so
-    BYPRODUCTS libsqlite3.so
-    )
-    target_link_options(rocm_sysdeps_sqlite3 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
-endif()
 target_link_libraries(rocm_sysdeps_sqlite3 PRIVATE
   ${CMAKE_DL_LIBS}
   Threads::Threads
 )
 
-install(TARGETS rocm_sysdeps_sqlite3)
+# Consumers of the static library link its system dependencies themselves.
+set(SQLITE3_STATIC_LINK_LIBRARIES "")
 if(NOT WIN32)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.so TYPE LIB)
+    # Unquoted so that empty entries (e.g. pthread on glibc >= 2.34) are dropped.
+    set(SQLITE3_STATIC_LINK_LIBRARIES ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} m)
 endif()
+
+install(TARGETS rocm_sysdeps_sqlite3)
 install(FILES "${SOURCE_DIR}/sqlite3.h" TYPE INCLUDE)
 install(FILES "${SOURCE_DIR}/sqlite3ext.h" TYPE INCLUDE)
 
