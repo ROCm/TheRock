@@ -85,10 +85,13 @@ def _write_deb_repo(
     # Real Packages indexes fold the Description field across lines.
     lines.insert(description_at + 1, " continued description")
     packages_text = "\n".join(lines) + "\n\n"
+    packages_bytes = packages_text.encode("utf-8")
+    # Write the index as bytes. Path.write_text on Windows translates "\n" to
+    # "\r\n", which would no longer match the bytes stored in Packages.gz.
     packages_path = index / "Packages"
-    packages_path.write_text(packages_text, encoding="utf-8")
+    packages_path.write_bytes(packages_bytes)
     with gzip.open(index / "Packages.gz", "wb") as handle:
-        handle.write(packages_text.encode("utf-8"))
+        handle.write(packages_bytes)
     repo_builder.generate_release_file_with_checksums(
         root / "dists" / "stable" / "Release",
         "ci",
