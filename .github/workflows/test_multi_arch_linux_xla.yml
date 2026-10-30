@@ -50,10 +50,10 @@ on:
         type: string
         default: "all"
       test_timeout_minutes:
-        description: "Budget for the test step."
+        description: "Budget for the whole test job."
         required: false
         type: number
-        default: 120
+        default: 240
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -107,9 +107,9 @@ on:
         options: ["single_gpu", "multi_gpu", "cpu", "all"]
         default: "all"
       test_timeout_minutes:
-        description: "Budget for the test step, in minutes."
+        description: "Budget for the whole test job, in minutes."
         type: number
-        default: 120
+        default: 240
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -118,7 +118,7 @@ on:
         type: string
         default: ""
   # Validates the pipeline itself whenever it changes, with literal defaults
-  # standing in for what a real caller would pass — pull_request has no `inputs` context,
+  # standing in for what a future caller would pass — pull_request has no `inputs` context,
   # so every `inputs.x` below is null here and falls back to these defaults.
   pull_request:
     paths:
@@ -131,7 +131,7 @@ jobs:
   test_xla:
     name: Test XLA | ${{ inputs.test_subset || 'all' }} | ${{ inputs.test_amdgpu_family || 'gfx950' }}
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
-    timeout-minutes: 240
+    timeout-minutes: ${{ inputs.test_timeout_minutes || 240 }}
 
     # Test cases excluded from the run. A single combination, so this does not
     # fan out: the matrix is the one place a workflow can hold a real YAML list
@@ -224,7 +224,6 @@ jobs:
           python build_tools/print_driver_gpu_info.py
 
       - name: Run XLA tests [single_gpu]
-        timeout-minutes: 120
         working-directory: xla
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
@@ -248,7 +247,6 @@ jobs:
             //xla/...
 
       - name: Run XLA tests [cpu]
-        timeout-minutes: 120
         working-directory: xla
         run: |
           build_tools/rocm/run_xla_ci_build.sh \
