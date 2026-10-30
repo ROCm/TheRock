@@ -109,8 +109,9 @@ Examples:
         --amdgpu-family gfx110X-all \
         --dry-run
     ```
-- Downloads the BLAS runtime plus the headers and CMake configs needed to build
-  against it (the `_dev` component of BLAS and of every base artifact):
+- Adds `--dev` to any selection to also download the headers and CMake configs
+  needed to build against it (the `_dev` component of every selected artifact
+  and of the base artifacts), shown here for `--blas`:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --run-id 14474448215 \
