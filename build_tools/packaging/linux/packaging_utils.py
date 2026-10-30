@@ -83,6 +83,7 @@ def normalize_target_list(
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # enable_kpack - To enable multi-architecture support
 # gfxarch_list - List of all architectures for multi-arch mode
+# deb_compression_args - Resolved dpkg-deb compression arguments (DEB only)
 #
 # frozen=True makes this dataclass immutable (hashable and thread-safe).
 # Note: gfxarch_list uses tuple instead of list because frozen dataclasses
@@ -100,6 +101,7 @@ class PackageConfig:
     enable_kpack: bool = False
     gfxarch_list: tuple = field(default_factory=tuple)
     build_variant: str = ""
+    deb_compression_args: str = "-Zxz"
 
 
 def read_package_json_file():

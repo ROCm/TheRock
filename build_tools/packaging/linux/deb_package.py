@@ -25,6 +25,40 @@ logger = TheRockLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
+def get_deb_compression_args(choice: str, auto_max_cpus: int = 4) -> str:
+    """Return the dpkg-deb compression arguments passed through dh_builddeb.
+
+    xz gives the smallest packages but is CPU-heavy; zstd -9 is ~4x faster on
+    low-core machines at the cost of ~16% larger packages.
+
+    Parameters:
+    choice: "xz", "zstd", or "auto". Any other value logs a warning and
+        falls back to "auto".
+    auto_max_cpus: "auto" selects zstd at or below this many usable CPUs
+        (e.g. small CI runners, where xz dominates packaging time), xz above it
+
+    Returns: dpkg-deb compression arguments ("-Zxz" or "-Zzstd -z9")
+    """
+    compression_args = {"xz": "-Zxz", "zstd": "-Zzstd -z9"}
+    if choice in compression_args:
+        logger.info(f"DEB compression: {choice} (requested)")
+        return compression_args[choice]
+    if choice != "auto":
+        logger.warning(
+            f"Invalid DEB compression '{choice}' (expected auto, xz or zstd); "
+            "using auto"
+        )
+
+    # sched_getaffinity honors CPU pinning; fall back where it is unavailable.
+    if hasattr(os, "sched_getaffinity"):
+        cpus = len(os.sched_getaffinity(0))
+    else:
+        cpus = os.cpu_count() or 1
+    resolved = "zstd" if cpus <= auto_max_cpus else "xz"
+    logger.info(f"DEB compression: {resolved} (auto: {cpus} usable CPUs)")
+    return compression_args[resolved]
+
+
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     """Create a non-versioned Debian meta package (.deb).
 
@@ -289,6 +323,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     context = {
         "disable_dwz": disable_dwz,
         "disable_dh_strip": disable_dh_strip,
+        "deb_compression_args": config.deb_compression_args,
         "install_prefix": config.install_prefix,
         "pkg_name": pkg_name,
     }

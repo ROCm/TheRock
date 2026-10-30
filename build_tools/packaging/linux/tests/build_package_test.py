@@ -144,6 +144,7 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "pkg_names": None,
         "clean_build": False,
         "build_variant": "",
+        "deb_compression": "auto",
     }
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -810,6 +811,22 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         rules = _read_rules_file(pkg_name=PKG_FFT, config=device_cfg)
         self.assertIn("override_dh_makeshlibs:", rules)
         self.assertIn("dh_makeshlibs -X.co", rules)
+        self.assertIn("dh_builddeb -- -Zxz --root-owner-group", rules)
+
+    def test_deb_compression_args(self) -> None:
+        """Explicit choice wins; auto/invalid use zstd at <= 4 CPUs, else xz."""
+        for choice, cpus, expected in [
+            ("xz", 2, "-Zxz"),
+            ("zstd", 64, "-Zzstd -z9"),
+            ("auto", 4, "-Zzstd -z9"),
+            ("auto", 5, "-Zxz"),
+            ("gzip", 2, "-Zzstd -z9"),
+        ]:
+            with (
+                self.subTest(choice=choice, cpus=cpus),
+                patch("os.sched_getaffinity", return_value=set(range(cpus))),
+            ):
+                self.assertEqual(deb_package.get_deb_compression_args(choice), expected)
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")

@@ -612,6 +612,14 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
             f"Invalid package type: {args.pkg_type}. Must be 'deb' or 'rpm'."
         )
 
+    # Resolved once here so every worker process uses the same compression.
+    # RPM builds skip it; the field keeps its default and is never read.
+    deb_compression_args = (
+        get_deb_compression_args(args.deb_compression)
+        if pkg_type == "deb"
+        else PackageConfig.deb_compression_args
+    )
+
     return PackageConfig(
         artifacts_dir=Path(args.artifacts_dir).resolve(),
         dest_dir=dest_dir,
@@ -623,6 +631,7 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         enable_kpack=args.enable_kpack,
         gfxarch_list=tuple(gfxarch_list),
         build_variant=args.build_variant,
+        deb_compression_args=deb_compression_args,
     )
 
 
@@ -832,6 +841,17 @@ def main(argv: list[str]):
         type=int,
         default=min(8, os.cpu_count() or 1),
         help="Number of parallel package builds (default: min(8, cpu_count))",
+    )
+
+    p.add_argument(
+        "--deb-compression",
+        default="auto",
+        help=(
+            "DEB payload compression. 'xz' = smallest packages, 'zstd' = zstd -9 "
+            "(much faster, ~16%% larger). 'auto' (default) uses zstd on machines "
+            "with <= 4 usable CPUs, xz otherwise. Invalid values fall back to auto. "
+            "Ignored for RPM."
+        ),
     )
 
     args = p.parse_args(argv)
