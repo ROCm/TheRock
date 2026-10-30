@@ -293,12 +293,7 @@ jobs:
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
             --include \
-              test_nn \
-              test_torch \
-              test_cuda \
-              test_unary_ufuncs \
-              test_binary_ufuncs \
-              test_autograd \
+              test_transformers \
             -- \
             --continue-on-collection-errors
 
