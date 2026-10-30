@@ -269,6 +269,13 @@ jobs:
             --rocm-root "${BUILD_DIR}/dist/rocm" \
             --output "${BUILD_DIR}/dasan-lit-bundle"
 
+      - name: Validate shared DASan HIP and ROCr initialization on CPU
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'compiler-runtime' }}
+        run: |
+          python test_tools/dasan_stack_cpu.py \
+            --rocm-path "${BUILD_DIR}/dist/rocm" \
+            --output-dir "${BUILD_DIR}/logs/dasan/cpu-integration"
+
       - name: Upload unchanged DASan validation bundle
         if: ${{ inputs.build_variant_cmake_preset == 'linux-release-dasan' && inputs.stage_name == 'compiler-runtime' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

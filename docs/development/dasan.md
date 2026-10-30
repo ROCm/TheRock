@@ -49,6 +49,17 @@ bundle, verifies the archive checksums, and runs all 27 DASan host/HIP/OpenMP
 tests on a multi-GPU gfx950 runner. Build success, package validation, and GPU
 validation are distinct results; inspect all three before relying on the SDK.
 
+Applications using the fully sanitized HIP/ROCr libraries must link the shared
+host runtime with `-fsanitize=daddress -shared-libsan` and make the compiler's
+shared runtime directory discoverable at execution. The delivery README gives
+the environment setup. Mixing a static host DASan runtime with these sanitized
+shared libraries produces recursive HSA interception and is unsupported.
+The compiler stage checks shared HIP/ROCr initialization before library builds.
+GPU validation uses shared host linkage, including GPU test host helpers;
+the three original host tests and standalone static/shared initialization checks
+retain their original linkage coverage. All 27 source tests and assertions are
+retained, but this full SDK's GPU tests do not claim static-host-runtime coverage.
+
 ## ROCm systems integration rebuild
 
 The current build pins `ROCm/rocm-systems` branch `users/searlmc1/dasan` at

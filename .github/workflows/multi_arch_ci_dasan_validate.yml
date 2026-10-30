@@ -54,6 +54,9 @@ jobs:
       - name: Run all 27 unchanged DASan tests on downloaded SDK
         run: |
           export LD_LIBRARY_PATH="$PWD/sdk/lib:$PWD/sdk/lib/llvm/lib:$PWD/sdk/lib/rocm_sysdeps/lib"
+          runtime="$(sdk/lib/llvm/bin/clang -print-file-name=libclang_rt.dasan.so)"
+          test -f "${runtime}"
+          export LD_LIBRARY_PATH="$(dirname "${runtime}"):${LD_LIBRARY_PATH}"
           python3 test_tools/dasan_stack_validate.py --rocm-path sdk \
             --bundle lit-bundle --output-dir validation
       - name: Upload downloaded-SDK validation results

@@ -188,6 +188,7 @@ def validate_sdk(rocm: Path, logs: Path, kpack_python: Path) -> dict:
     source = logs / "initialize.c"
     source.write_text("int main(void) { return 0; }\n", encoding="utf-8")
     shared = next(p for p in host if p.name == "libclang_rt.dasan.so")
+    env["LD_LIBRARY_PATH"] = str(shared.parent) + os.pathsep + env["LD_LIBRARY_PATH"]
     for linkage in ("static", "shared"):
         output = logs / f"initialize-{linkage}"
         flags = (
@@ -219,12 +220,25 @@ def validate_sdk(rocm: Path, logs: Path, kpack_python: Path) -> dict:
             rocm / "bin/hipcc",
             "--offload-arch=gfx950",
             "-fsanitize=daddress",
+            "-shared-libsan",
             "-O1",
             hip,
             "-o",
             logs / "hipcc-smoke",
         ],
         logs / "hipcc-compile-link.log",
+        env,
+    )
+    run(
+        [
+            sys.executable,
+            REPO / "test_tools/dasan_stack_cpu.py",
+            "--rocm-path",
+            rocm,
+            "--output-dir",
+            logs / "hip-runtime",
+        ],
+        logs / "hip-runtime.log",
         env,
     )
     ir = logs / "smoke.ll"
@@ -265,7 +279,11 @@ def validate_sdk(rocm: Path, logs: Path, kpack_python: Path) -> dict:
         logs / "rccl-device.log",
         env,
     )
-    report.update(status="passed", gpu_execution="separate workflow gate")
+    report.update(
+        status="passed",
+        gpu_execution="separate workflow gate",
+        hip_host_runtime_linkage="shared (-shared-libsan)",
+    )
     return report
 
 
@@ -387,6 +405,7 @@ def package(args: argparse.Namespace) -> None:
         "archive_layout": "installation prefix at archive root: bin/, lib/, include/, share/",
         "wsl": "Support artifact uses the release-package preset; no DASan device code",
         "gpu_validation": "Separate GPU workflow uses this archive and the unchanged lit bundle",
+        "gpu_runtime_linkage": "Shared host runtime; do not mix a static DASan host runtime with sanitized HIP/ROCr shared libraries",
         "raw_artifacts": str(backend.base_uri),
     }
     write_json(deliver / "source-config-manifest.json", manifest)
@@ -400,7 +419,11 @@ def package(args: argparse.Namespace) -> None:
         'export ROCM_PATH="$PWD/rocm-dasan"\n'
         'export PATH="$ROCM_PATH/bin:$ROCM_PATH/lib/llvm/bin:$PATH"\n'
         'export LD_LIBRARY_PATH="$ROCM_PATH/lib:$ROCM_PATH/lib/llvm/lib:$ROCM_PATH/lib/rocm_sysdeps/lib"\n'
-        "hipcc --offload-arch=gfx950 -fsanitize=daddress app.hip -o app\n\n"
+        'DASAN_RUNTIME="$(clang -print-file-name=libclang_rt.dasan.so)"\n'
+        'export LD_LIBRARY_PATH="$(dirname "$DASAN_RUNTIME"):$LD_LIBRARY_PATH"\n'
+        "hipcc --offload-arch=gfx950 -fsanitize=daddress -shared-libsan app.hip -o app\n\n"
+        "Use shared host DASan when linking this sanitized HIP/ROCr SDK.\n"
+        "A default static DASan host runtime mixed with these shared libraries is unsupported.\n"
         "Linux x86_64; gfx950 GPU required for device execution.\n"
         "Extract with tar to preserve executable permissions and relative links.\n"
         "GitHub artifact retention: 30 days. Raw same-run components are in S3.\n"

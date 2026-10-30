@@ -8,6 +8,10 @@ The source inventory is pinned to llvm-project b07aa864f5b2bf648e6a61e2902cbfde8
 3 host tests, 21 HIP tests, and 3 OpenMP tests. This script runs the host tests,
 optionally runs HIP and OpenMP tests. Run after building both
 compiler-rt runtime targets and HIP. A successful host run is not GPU validation.
+
+Use --shared-runtime when HIP/ROCr depend on the shared DASan runtime. Mixing
+that runtime with a statically linked application runtime is unsupported by
+this experimental compiler. Host tests retain their static/shared coverage.
 """
 
 import argparse
@@ -98,6 +102,56 @@ def check_lit_results(
     return results
 
 
+def hip_link_runtime_flags(shared_runtime: bool, runtime_dir: Path) -> list[str]:
+    if not shared_runtime:
+        return []
+    return ["-shared-libsan", "-Wl,-rpath," + str(runtime_dir)]
+
+
+def write_lit_overlay(
+    site: Path,
+    output: Path,
+    *,
+    openmp: bool,
+    gpu_device_count: int | None,
+    shared_runtime: bool,
+) -> Path:
+    """Configure one lit invocation without editing upstream test sources.
+
+    Shared mode is used only by the GPU invocation, including the module-unload
+    host helper linked to HIP. Host tests use a separate overlay with no linkage
+    changes, preserving their explicit static/shared runtime checks.
+    """
+    overlay = output / "lit-overlay"
+    overlay.mkdir(parents=True, exist_ok=True)
+    settings = []
+    if openmp:
+        settings.append("config.can_run_openmp_offload = True")
+    if gpu_device_count is not None:
+        settings.append(f"config.gpu_device_count = {gpu_device_count}")
+    settings.append(f"lit_config.load_config(config, {str(site)!r})")
+    if shared_runtime:
+        required = {"%clang_dasan ", "%clang_hip_dasan "}
+        if openmp:
+            required.add("%clang_omp_offload_dasan ")
+        settings += [
+            "# GPU invocation only: one shared host runtime, including module-unload's host helper.",
+            "_gpu_dasan = {'%clang_dasan ', '%clang_hip_dasan ', '%clang_omp_offload_dasan '}",
+            "_shared_seen = set()",
+            "for _index, (_pattern, _command) in enumerate(config.substitutions):",
+            "    if _pattern in _gpu_dasan:",
+            "        config.substitutions[_index] = (_pattern, _command.rstrip() + ' -shared-libsan ')",
+            "        _shared_seen.add(_pattern)",
+            f"_shared_required = {sorted(required)!r}",
+            "if not set(_shared_required).issubset(_shared_seen):",
+            "    lit_config.fatal('Missing DASan compiler substitutions for shared runtime mode')",
+        ]
+    (overlay / "lit.site.cfg.py").write_text(
+        "\n".join(settings) + "\n", encoding="utf-8"
+    )
+    return overlay
+
+
 def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
     output = args.output_dir.resolve()
     rocm = args.rocm_path.resolve()
@@ -129,6 +183,13 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
     for kind, paths in required.items():
         if not paths or not all(p.is_file() and p.stat().st_size for p in paths):
             raise RuntimeError(f"Missing or empty {kind} runtime under {resource}")
+    if args.shared_runtime:
+        env["LD_LIBRARY_PATH"] = (
+            str(required["host shared"][0].parent) + os.pathsep + env["LD_LIBRARY_PATH"]
+        )
+    summary["gpu_host_runtime"] = (
+        "shared only" if args.shared_runtime else "compiler default"
+    )
 
     host_source = output / "initialize.c"
     host_source.write_text("int main(void) { return 0; }\n", encoding="utf-8")
@@ -230,6 +291,9 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
                 "-o",
                 str(output / f"smoke-{arch}"),
             ]
+            + hip_link_runtime_flags(
+                args.shared_runtime, required["host shared"][0].parent
+            )
         )
         run_command(command, output / f"compile-link-{arch}.log", env)
         compiled_architectures.append(arch)
@@ -238,8 +302,11 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
     if args.llvm_lit.suffix == ".py":
         lit_command.insert(0, sys.executable)
     lit_command += ["-sv", "-D", "rocm_root=" + str(rocm)]
+    if args.shared_runtime:
+        lit_command += ["-D", "dasan_shared_runtime=1"]
     lit_suite = args.lit_suite.resolve()
-    if args.openmp or args.gpu_device_count is not None:
+    gpu_lit_suite = lit_suite
+    if args.openmp or args.gpu_device_count is not None or args.shared_runtime:
         # The branch probes GPU access during CMake configuration. A build-only
         # container may see no GPUs even when the tests later run on a GPU host.
         # Its configured fields use set_default(), so an explicit site overlay
@@ -250,18 +317,22 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
                 "Expected exactly one host lit.site.cfg.py under --lit-suite; "
                 f"found {len(sites)}"
             )
-        overlay = output / "lit-overlay"
-        overlay.mkdir(exist_ok=True)
-        settings = []
-        if args.openmp:
-            settings.append("config.can_run_openmp_offload = True")
-        if args.gpu_device_count is not None:
-            settings.append(f"config.gpu_device_count = {args.gpu_device_count}")
-        settings.append(f"lit_config.load_config(config, {str(sites[0])!r})")
-        (overlay / "lit.site.cfg.py").write_text(
-            "\n".join(settings) + "\n", encoding="utf-8"
+        lit_suite = write_lit_overlay(
+            sites[0],
+            output,
+            openmp=args.openmp,
+            gpu_device_count=args.gpu_device_count,
+            shared_runtime=False,
         )
-        lit_suite = overlay
+        gpu_lit_suite = lit_suite
+        if args.shared_runtime:
+            gpu_lit_suite = write_lit_overlay(
+                sites[0],
+                output / "gpu",
+                openmp=args.openmp,
+                gpu_device_count=args.gpu_device_count,
+                shared_runtime=True,
+            )
     gpu_parameters = []
     if args.gpu_arch:
         gpu_parameters = [
@@ -299,7 +370,7 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
                 r":: AMDGPU/.*\.hip$",
                 "-o",
                 str(gpu_report),
-                str(lit_suite),
+                str(gpu_lit_suite),
             ],
             output / "gpu-lit.log",
             env,
@@ -319,7 +390,7 @@ def audit(args: argparse.Namespace, summary: dict[str, object]) -> None:
                 r":: AMDGPU/openmp-.*\.(c|cpp)$",
                 "-o",
                 str(openmp_report),
-                str(lit_suite),
+                str(gpu_lit_suite),
             ],
             output / "openmp-lit.log",
             env,
@@ -342,6 +413,11 @@ def main() -> int:
         help="Configured HOST compiler-rt test/dasan directory",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--shared-runtime",
+        action="store_true",
+        help="Use one shared host DASan runtime for HIP/OpenMP; host static/shared tests stay unchanged",
+    )
     parser.add_argument(
         "--compile-arch",
         action="append",

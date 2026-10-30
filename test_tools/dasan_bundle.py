@@ -103,6 +103,13 @@ def configure_paths(config, lit_config, bundle, target_triple):
     for path in (runtime / "libclang_rt.dasan.a", runtime / "libclang_rt.dasan.so", device):
         if not path.resolve().is_relative_to(root):
             lit_config.fatal("Runtime symlink leaves installed distribution: " + str(path))
+    if lit_config.params.get("dasan_shared_runtime") == "1":
+        # Normalized HIP/ROCr libraries share this runtime. Test programs and
+        # compiler configuration probes need its actual resource directory;
+        # their build locations cannot use the SDK's installed relative RPATH.
+        loader_path = str(runtime) + os.pathsep + loader_path
+        environment["LD_LIBRARY_PATH"] = loader_path
+        os.environ["LD_LIBRARY_PATH"] = loader_path
     config.environment["LD_LIBRARY_PATH"] = loader_path
     config.environment["PATH"] = environment["PATH"]
     config.environment["CLANG_NO_DEFAULT_CONFIG"] = "1"

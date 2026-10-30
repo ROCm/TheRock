@@ -49,6 +49,7 @@ def main() -> None:
             str(device_count(rocm)),
             "--openmp",
             "--require-multi-device",
+            "--shared-runtime",
             "--output-dir",
             str(args.output_dir),
         ]
