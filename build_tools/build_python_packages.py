@@ -587,6 +587,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     ] and an.component in [
         "lib",
         "run",
+        "sys",
     ]
     hotswap = an.name == "rocjitsu-hotswap" and an.component == "lib"
     # hiprtc needs to be able to find HIP headers in its same tree.
