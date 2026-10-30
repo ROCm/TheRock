@@ -279,3 +279,25 @@ Debian package with RUNPATH preserved (skip RPATH conversion):<br>
    --version-suffix build_type \
    --runpath-pkg
 ```
+
+### DEB compression
+
+`--deb-compression` selects the DEB payload compression (ignored for RPM):
+
+- `auto` (default): `zstd -9` when the machine has 4 or fewer usable CPUs,
+  `xz` otherwise. On 2-CPU CI runners xz dominates packaging time; zstd is
+  roughly 4x faster there at the cost of ~16% larger packages.
+- `xz`: smallest packages.
+- `zstd`: `zstd -9`, fastest.
+- Any other value logs a warning and falls back to `auto`.
+
+The resolved choice is logged as `DEB compression: <choice> (...)`.
+
+```bash
+./build_tools/packaging/linux/build_package.py \
+   --artifacts-dir ./ARTIFACTS_DIR \
+   --dest-dir ./OUTPUT_PKG \
+   --rocm-version 7.1.0 \
+   --pkg-type deb \
+   --deb-compression xz
+```
