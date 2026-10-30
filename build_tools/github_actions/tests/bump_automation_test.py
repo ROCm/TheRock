@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import subprocess
+from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
@@ -12,6 +14,10 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
+    BOT_NAME,
+    BOT_EMAIL,
+    SUBMODULE_CONFIG,
+    run,
     _baseline_gate_jobs_succeeded,
     _clone_url,
     _GH_API_MAX_RETRIES,
@@ -66,7 +72,7 @@ class GeneratePrBodyTest(unittest.TestCase):
 
 class GetSubmoduleShaTest(unittest.TestCase):
     def test_parses_sha_from_ls_tree_output(self):
-        ls_tree_output = "160000 commit abc123def456  debug-tools/rocgdb/source"
+        ls_tree_output = "160000 commit abc123def456\tdebug-tools/rocgdb/source\0"
         with patch("bump_automation.run", return_value=ls_tree_output):
             sha = get_submodule_sha("HEAD", "debug-tools/rocgdb/source")
         self.assertEqual(sha, "abc123def456")
@@ -1568,8 +1574,7 @@ class HandlePushTest(unittest.TestCase):
 
 class CreateTheRockBumpTest(unittest.TestCase):
     def test_skips_when_pr_already_open(self):
-        """create_therock_bump must bail out without cloning when an open PR
-        already targets the exact bump branch for the latest commit."""
+        """Skip cloning if an open PR already targets the latest bump branch."""
         with patch("bump_automation.latest_commit", return_value="abc1234567890"):
             with patch(
                 "bump_automation.gh_api",
@@ -1584,70 +1589,6 @@ class CreateTheRockBumpTest(unittest.TestCase):
         endpoint = mock_api.call_args.args[1]
         self.assertIn("pulls?state=open", endpoint)
         self.assertIn("bump-rocm-systems-abc1234", endpoint)
-
-    def test_skips_when_submodule_already_at_latest(self):
-        """create_therock_bump must bail out without cloning when the submodule
-        is already pinned to the latest upstream commit."""
-        latest_sha = "abc1234567890"
-        api_responses = [
-            [],  # open-PR check returns nothing
-        ]
-
-        def _gh_api_side_effect(*args, **kwargs):
-            return api_responses.pop(0) if api_responses else {}
-
-        with patch("bump_automation.latest_commit", return_value=latest_sha):
-            with patch("bump_automation.gh_api", side_effect=_gh_api_side_effect):
-                with patch("bump_automation.run") as mock_run:
-                    with patch("bump_automation.os.chdir"):
-                        with patch("bump_automation.os.path.exists", return_value=True):
-                            with patch(
-                                "bump_automation.get_submodule_sha",
-                                return_value=latest_sha,
-                            ):
-                                with patch(
-                                    "bump_automation.tempfile.TemporaryDirectory"
-                                ) as mock_tmp:
-                                    create_therock_bump("rocm-systems", "token")
-
-        # The clone is created before we detect the no-op, so TemporaryDirectory
-        # will have been called. What must NOT happen is any git commit or push.
-        git_calls = [c for c in mock_run.call_args_list if "commit" in c.args[0]]
-        self.assertEqual(
-            git_calls, [], "git commit must not run when already at latest"
-        )
-        push_calls = [c for c in mock_run.call_args_list if "push" in c.args[0]]
-        self.assertEqual(push_calls, [], "git push must not run when already at latest")
-
-    def test_proceeds_when_no_open_pr(self):
-        """create_therock_bump must proceed to clone when no open PR exists."""
-        # First gh_api call is the open-PR check (returns []); subsequent calls
-        # are PR creation (returns a PR dict) and label addition (ignored).
-        api_responses = [[], {"number": 1}, {}]
-
-        def _gh_api_side_effect(*args, **kwargs):
-            return api_responses.pop(0) if api_responses else {}
-
-        with patch("bump_automation.latest_commit", return_value="abc1234567890"):
-            with patch(
-                "bump_automation.gh_api", side_effect=_gh_api_side_effect
-            ) as mock_api:
-                with patch("bump_automation.run"):
-                    with patch("bump_automation.os.chdir"):
-                        with patch("bump_automation.os.path.exists", return_value=True):
-                            with patch(
-                                "bump_automation.get_submodule_sha",
-                                return_value="old1234",
-                            ):
-                                with patch(
-                                    "bump_automation.generate_pr_body",
-                                    return_value="body",
-                                ):
-                                    with patch("bump_automation._git_commit"):
-                                        create_therock_bump("rocm-systems", "token")
-
-        # Must have made at least the open-PR check + PR creation calls.
-        self.assertGreaterEqual(mock_api.call_count, 2)
 
 
 class HandleScheduleTest(unittest.TestCase):
@@ -1741,7 +1682,7 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
                                     "bump_automation.generate_pr_body",
                                     return_value="body",
                                 ):
-                                    with patch("bump_automation._git_commit"):
+                                    with patch("bump_automation._commit_gitlink_bump"):
                                         create_therock_bump(
                                             "debug-tools/rocgdb/source", "token"
                                         )
@@ -1749,6 +1690,331 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
         mock_latest.assert_called_once_with(
             "ROCm/rocgdb", "token", "amd-staging-rocgdb-18"
         )
+
+
+class LocalGitTestCase(unittest.TestCase):
+    """Test filtered clones over file:// without network access or shared objects."""
+
+    OLD_SHA = "1" * 40
+    NEW_SHA = "2" * 40
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.trace = self.root / "git.trace"
+        environment = patch.dict(
+            os.environ,
+            {
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_TRACE": str(self.trace),
+                "GIT_ALLOW_PROTOCOL": "file",
+            },
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.seed = self.root / "seed"
+        self.remote = self.root / "remote.git"
+        self.git(self.root, "init", "--initial-branch=main", str(self.seed))
+        self.git(self.seed, "config", "user.name", "Fixture author")
+        self.git(self.seed, "config", "user.email", "fixture@example.com")
+        contents = {
+            "README.md": "Root file included by cone mode\n",
+            ".gitmodules": "".join(
+                f'[submodule "{path}"]\n  path = {path}\n  url = {self.remote.as_uri()}\n'
+                for path in SUBMODULE_CONFIG
+            ),
+            ".github/workflows/build.yml": (
+                f"uses: ROCm/TheRock/.github/workflows/build.yml@{self.OLD_SHA}\n"
+            ),
+            ".github/actions/nested/action.yaml": (
+                f"uses: ROCm/TheRock/.github/actions/build@{self.OLD_SHA}\n"
+            ),
+            ".github/actions/ci-env/action.yml": (
+                "outputs:\n  therock-ref:\n"
+                f'    value: "{self.OLD_SHA}"\n'
+                '  baseline-run-id:\n    value: "12345"\n'
+            ),
+            "ci/ancestor.txt": "Ancestor file included by cone mode\n",
+            "ci/config/ancestor.txt": "Another ancestor file\n",
+            "ci/config/nested/pin.yml": "Configured outside .github\n",
+            "src/excluded.txt": "Excluded content must stay in the commit\n",
+        }
+        for path, content in contents.items():
+            destination = self.seed / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(content, encoding="utf-8")
+        self.git(self.seed, "add", ".")
+        for path in SUBMODULE_CONFIG:
+            self.git(
+                self.seed,
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"160000,{self.OLD_SHA},{path}",
+            )
+        self.git(self.seed, "commit", "-m", "Fixture main")
+        self.main = self.git(self.seed, "rev-parse", "HEAD")
+        self.git(self.root, "init", "--bare", "--initial-branch=main", str(self.remote))
+        self.git(self.remote, "config", "uploadpack.allowFilter", "true")
+        self.git(self.seed, "remote", "add", "origin", self.remote.as_uri())
+        self.git(self.seed, "push", "origin", "main")
+        self.git(self.seed, "checkout", "-b", "develop")
+        (self.seed / "README.md").write_text("Develop branch root file\n")
+        self.git(self.seed, "commit", "-am", "Fixture develop")
+        self.develop = self.git(self.seed, "rev-parse", "HEAD")
+        self.git(self.seed, "push", "origin", "develop")
+        self.commands: list[list[str]] = []
+        self.pack_snapshot: dict[str, int] = {}
+        self.trace_boundary = 0
+
+    @staticmethod
+    def git(cwd: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    @staticmethod
+    def packs(clone: Path) -> dict[str, int]:
+        return {
+            p.name: p.stat().st_size
+            for p in (clone / ".git/objects/pack").glob("*.pack")
+        }
+
+    def tree(self, revision: str) -> dict[str, str]:
+        records = self.git(self.remote, "ls-tree", "-r", "-z", revision).split("\0")
+        return {
+            path: metadata
+            for record in records
+            if record
+            for metadata, path in [record.split("\t")]
+        }
+
+    def assert_commit(self, branch: str, parent: str, expected: dict[str, str]) -> None:
+        self.assertEqual(
+            self.git(self.remote, "show", "--no-patch", "--format=%P", branch), parent
+        )
+        self.assertEqual(self.tree(branch), expected)
+        identity = self.git(
+            self.remote, "show", "--no-patch", "--format=%an <%ae>%n%cn <%ce>", branch
+        )
+        self.assertEqual(identity.splitlines(), [f"{BOT_NAME} <{BOT_EMAIL}>"] * 2)
+
+    def record_run(self, cmd: list[str]) -> str:
+        self.commands.append(cmd)
+        # Reject submodule commands before they can download any contents.
+        self.assertNotIn("submodule", cmd)
+        result = run(cmd)
+        if "clone" in cmd:
+            self.clone = Path(cmd[-1])
+        if "clone" in cmd or "sparse-checkout" in cmd:
+            self.pack_snapshot = self.packs(self.clone)
+            self.trace_boundary = len(self.trace.read_text())
+        return result
+
+    def assert_no_fetch_after_preparation(self) -> None:
+        self.assertTrue(self.pack_snapshot)
+        self.assertEqual(self.packs(self.clone), self.pack_snapshot)
+        trace = self.trace.read_text()[self.trace_boundary :]
+        self.assertNotIn("upload-pack", trace)
+        self.assertNotIn("git fetch", trace)
+        self.assertEqual(
+            self.git(self.clone, "config", "remote.origin.promisor"), "true"
+        )
+        self.assertEqual(
+            self.git(self.clone, "config", "remote.origin.partialclonefilter"),
+            "blob:none",
+        )
+        self.assertFalse((self.clone / ".git/objects/info/alternates").exists())
+        excluded = self.git(self.remote, "rev-parse", "main:src/excluded.txt")
+        # --batch-all-objects lists local objects without fetching missing ones.
+        available = self.git(
+            self.clone, "cat-file", "--batch-all-objects", "--batch-check=%(objectname)"
+        )
+        self.assertNotIn(excluded, available.splitlines())
+
+    def temporary_clone(self) -> AbstractContextManager[MagicMock]:
+        destination = self.root / f"clone-{len(self.commands)}"
+        destination.mkdir()
+        return patch(
+            "bump_automation.tempfile.TemporaryDirectory",
+            return_value=nullcontext(str(destination)),
+        )
+
+
+class GitlinkBumpIntegrationTest(LocalGitTestCase):
+    def bump(self, submodule: str, target: str) -> MagicMock:
+        with (
+            self.temporary_clone(),
+            patch("bump_automation._clone_url", return_value=self.remote.as_uri()),
+            patch("bump_automation.run", side_effect=self.record_run),
+            patch(
+                "bump_automation.gh_api",
+                side_effect=[[{"sha": target}], [], {"number": 7}, {}],
+            ) as api,
+        ):
+            create_therock_bump(submodule, "token")
+        return api
+
+    def test_exact_gitlink_commits_and_local_push_without_blob_fetches(self) -> None:
+        # Set the default branch to develop to check that bumps still use main.
+        self.git(self.remote, "symbolic-ref", "HEAD", "refs/heads/develop")
+        for submodule, config in SUBMODULE_CONFIG.items():
+            with self.subTest(submodule=submodule):
+                api = self.bump(submodule, self.NEW_SHA)
+                branch = f"bump-{submodule.replace('/', '-')}-{self.NEW_SHA[:7]}"
+                expected = self.tree(self.main)
+                expected[submodule] = f"160000 commit {self.NEW_SHA}"
+                self.assert_commit(branch, self.main, expected)
+                self.assert_no_fetch_after_preparation()
+                self.assertEqual(list(self.clone.iterdir()), [self.clone / ".git"])
+                self.assertFalse((self.clone / ".git/modules").exists())
+                types = self.git(
+                    self.clone,
+                    "cat-file",
+                    "--batch-all-objects",
+                    "--batch-check=%(objecttype)",
+                )
+                self.assertNotIn("blob", types.splitlines())
+                pr = api.call_args_list[2].kwargs["data"]
+                self.assertEqual(pr["head"], branch)
+                self.assertEqual(pr["base"], "main")
+                self.assertEqual(
+                    pr["title"],
+                    f"Bump {submodule} from {self.OLD_SHA[:7]} to {self.NEW_SHA[:7]}",
+                )
+                self.assertEqual(
+                    api.call_args_list[3].kwargs["data"], {"labels": config["labels"]}
+                )
+
+    def test_noop_leaves_base_and_remote_unchanged(self) -> None:
+        refs = self.git(self.remote, "show-ref")
+        cwd = Path.cwd()
+        api = self.bump("rocm-systems", self.OLD_SHA)
+        self.assertEqual(Path.cwd(), cwd)
+        self.assertEqual(self.git(self.remote, "show-ref"), refs)
+        self.assertEqual(api.call_count, 2)
+        self.assertFalse(
+            any(
+                "read-tree" in cmd or "push" in cmd or "commit-tree" in cmd
+                for cmd in self.commands
+            )
+        )
+        self.assert_no_fetch_after_preparation()
+
+    def test_missing_and_wrong_mode_paths_fail_before_commit_or_push(self) -> None:
+        for path in ("missing", "README.md", "src"):
+            with (
+                self.subTest(path=path),
+                patch.dict(SUBMODULE_CONFIG, {path: SUBMODULE_CONFIG["rocm-systems"]}),
+            ):
+                refs = self.git(self.remote, "show-ref")
+                cwd = Path.cwd()
+                with self.assertRaisesRegex(RuntimeError, "gitlink"):
+                    self.bump(path, self.NEW_SHA)
+                self.assertEqual(Path.cwd(), cwd)
+                self.assertEqual(self.git(self.remote, "show-ref"), refs)
+                self.assertFalse(
+                    any("read-tree" in cmd or "push" in cmd for cmd in self.commands)
+                )
+                self.assert_no_fetch_after_preparation()
+
+    def test_verification_rejects_extra_changes_before_push(self) -> None:
+        def inject_change(cmd: list[str]) -> str:
+            if "update-index" in cmd:
+                run(["git", "update-index", "--force-remove", "README.md"])
+            return self.record_run(cmd)
+
+        with (
+            self.temporary_clone(),
+            patch("bump_automation._clone_url", return_value=self.remote.as_uri()),
+            patch("bump_automation.run", side_effect=inject_change),
+            patch("bump_automation.gh_api", side_effect=[[{"sha": self.NEW_SHA}], []]),
+            self.assertRaisesRegex(RuntimeError, "must change only"),
+        ):
+            create_therock_bump("rocm-systems", "token")
+        self.assertFalse(any("push" in cmd for cmd in self.commands))
+        self.assert_no_fetch_after_preparation()
+
+
+class SparseRefUpdateIntegrationTest(LocalGitTestCase):
+    def test_systems_ref_update(self) -> None:
+        self.assert_sparse_update("rocm-systems")
+
+    def test_libraries_ref_update(self) -> None:
+        self.assert_sparse_update("rocm-libraries")
+
+    def test_systems_ref_update_with_configured_files(self) -> None:
+        self.assert_sparse_update("rocm-systems", include_extra_files=True)
+
+    def test_libraries_ref_update_with_configured_files(self) -> None:
+        self.assert_sparse_update("rocm-libraries", include_extra_files=True)
+
+    def assert_sparse_update(
+        self, submodule: str, *, include_extra_files: bool = False
+    ) -> None:
+        config = dict(SUBMODULE_CONFIG[submodule])
+        if include_extra_files:
+            config["files"] = [
+                *config["files"],
+                "README.md",
+                "ci/config/nested/pin.yml",
+            ]
+        cwd = Path.cwd()
+        with (
+            self.temporary_clone(),
+            patch.dict(SUBMODULE_CONFIG, {submodule: config}),
+            patch("bump_automation.get_submodule_sha", return_value=self.OLD_SHA),
+            patch("bump_automation.close_stale_prs", return_value=[]),
+            patch(
+                "bump_automation.get_baseline_run_id_from_merged_pr",
+                return_value="67890",
+            ),
+            patch("bump_automation.close_stale_therock_ref_prs"),
+            patch("bump_automation.create_therock_bump") as next_bump,
+            patch("bump_automation._clone_url", return_value=self.remote.as_uri()),
+            patch("bump_automation.run", side_effect=self.record_run),
+            patch("bump_automation.gh_api", return_value={"number": 7}) as api,
+        ):
+            handle_push(
+                self.OLD_SHA,
+                self.NEW_SHA,
+                {config["token_key"]: "token"},
+                only_submodule=submodule,
+            )
+        self.assertEqual(Path.cwd(), cwd)
+        next_bump.assert_called_once_with(submodule, "token")
+        branch = f"update-therock-{submodule}-{self.NEW_SHA[:7]}"
+        expected = self.tree(self.develop)
+        changed = [
+            ".github/workflows/build.yml",
+            ".github/actions/nested/action.yaml",
+        ]
+        if config["updater"] == "ci-env":
+            changed.append(".github/actions/ci-env/action.yml")
+            action = (self.clone / ".github/actions/ci-env/action.yml").read_text()
+            self.assertIn(self.NEW_SHA, action)
+            self.assertIn('value: "67890"', action)
+        for path in changed:
+            content = (self.clone / path).read_text()
+            self.assertIn(self.NEW_SHA, content)
+            self.assertNotIn(self.OLD_SHA, content)
+            expected[path] = f"100644 blob {self.git(self.clone, 'hash-object', path)}"
+        self.assert_commit(branch, self.develop, expected)
+        self.assertTrue((self.clone / "README.md").is_file())
+        if include_extra_files:
+            for path in (
+                "ci/ancestor.txt",
+                "ci/config/ancestor.txt",
+                "ci/config/nested/pin.yml",
+            ):
+                self.assertTrue((self.clone / path).is_file(), path)
+        else:
+            self.assertFalse((self.clone / "ci").exists())
+        self.assertFalse((self.clone / "src").exists())
+        self.assert_no_fetch_after_preparation()
+        self.assertEqual(api.call_args.kwargs["data"]["base"], "develop")
 
 
 if __name__ == "__main__":
