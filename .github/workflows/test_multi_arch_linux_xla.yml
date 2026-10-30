@@ -162,7 +162,7 @@ jobs:
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
       ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_family || 'gfx950' }}
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
-      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://rocm.devreleases.amd.com/tarball-multi-arch/therock-dist-linux-multiarch-10.0.0.dev0%2Bc247febed686e713051e4cf7bcce437a8dcbfad9.tar.gz' }}
+      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
       ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
 
     steps:
