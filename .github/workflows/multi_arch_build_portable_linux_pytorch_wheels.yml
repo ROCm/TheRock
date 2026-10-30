@@ -102,7 +102,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -207,7 +207,7 @@ on:
         type: boolean
         default: false
       build_variant:
-        description: "Build variant (release, asan, asan-debug). ASAN variants build torch only."
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -309,6 +309,11 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
+      - name: Select PyTorch wheel variant
+        run: |
+          python build_tools/github_actions/pytorch_wheel_variant.py \
+            --build-variant "${BUILD_VARIANT}"
+
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         timeout-minutes: 30
@@ -316,8 +321,8 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
+          # AddressSanitizer variants build torch only.
+          if [[ "${PYTORCH_CHECKOUT_COMPANIONS}" == true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --repo-hashtag nightly \
               --no-commit-hipify
@@ -343,8 +348,8 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          # ASAN variants build torch only, so skip torchaudio, torchvision, triton, and apex.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
+          # AddressSanitizer variants build torch only.
+          if [[ "${PYTORCH_CHECKOUT_COMPANIONS}" == true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --require-related-commit \
               --no-commit-hipify
@@ -416,13 +421,6 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-          # asan and asan-debug both compile torch with AddressSanitizer.
-          # The wheel builder turns companion projects off for that variant.
-          build_variant_flag=""
-          if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            build_variant_flag="--build-variant=asan"
-          fi
-
           # build_prod_wheels.py forwards --index-url and --find-links to pip
           # (ignoring empty), so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
@@ -445,7 +443,7 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
-            ${build_variant_flag} \
+            ${PYTORCH_BUILD_VARIANT_ARG} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -510,8 +508,8 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          # ASAN variants do not build torchvision, so there is no wheel to split.
-          if [[ "${BUILD_VARIANT}" != asan* ]]; then
+          # AddressSanitizer variants do not build torchvision, so there is no wheel to split.
+          if [[ "${PYTORCH_SPLIT_TORCHVISION}" == true ]]; then
             mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
             python -m rocm_kpack.tools.split_python_wheels \
               --input "${FAT_STAGE}"/torchvision-*.whl \
@@ -533,14 +531,9 @@ jobs:
       - name: Write PyTorch package version outputs
         id: pytorch-versions
         run: |
-          # ASAN variants produce only the torch wheel.
-          torch_only_flag=""
-          if [[ "${BUILD_VARIANT}" == asan* ]]; then
-            torch_only_flag="--torch-only"
-          fi
           python build_tools/github_actions/write_torch_versions.py \
             --dist-dir "${PACKAGE_DIST_DIR}" \
-            ${torch_only_flag}
+            ${PYTORCH_TORCH_ONLY_ARG}
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
