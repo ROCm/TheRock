@@ -111,6 +111,7 @@ When a `sys` component is present, the packaging and install tooling must **copy
 - On SELinux-enforcing systems (RHEL and derivatives), symlinks in `/etc` whose targets fall outside the expected security context may trigger policy denials.
 
 When installing from tarballs or artifacts directly (without an OS package manager), the user/installer must copy `sys` component files to the appropriate system paths (requires elevated privileges) and run `ldconfig` after copying any `ld.so.conf.d/` entries.
+
 #### Backward Compatibility with Legacy Directory Structure
 
 To maintain backward compatibility with applications built against previous ROCm versions (pre-8.0), `update-alternatives` symlinks are created in `/opt/rocm` that preserve the traditional directory layout. These symlinks point to `/etc/alternatives/rocm-*` paths, which in turn reference the versioned core directories:
