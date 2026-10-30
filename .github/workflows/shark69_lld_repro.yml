@@ -60,6 +60,7 @@ jobs:
     env:
       ROOT: ${{ needs.preflight.outputs.root }}
       BUILD_DIR: ${{ needs.preflight.outputs.root }}\b
+      SRC_DIR: ${{ needs.preflight.outputs.root }}\s
       REPRO_DIR: ${{ needs.preflight.outputs.root }}\r
       TOOLS_DIR: ${{ needs.preflight.outputs.root }}\t
       STOP_FILE: ${{ needs.preflight.outputs.root }}\stop
@@ -77,13 +78,27 @@ jobs:
       - name: Enable long paths for git
         run: git config --global core.longpaths true
 
+      # Workspace checkout only provides the .github/lld_repro scripts. The runner
+      # workspace path (C:\runner-controller\workspaces\<runner>\runner\_work\...) is
+      # ~50 chars longer than CI's, which pushes rocm-libraries sources past MAX_PATH
+      # for ninja, so the build uses a second clone at a short path.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Clone sources to short path
+        run: |
+          git init -q "${SRC_DIR}"
+          cd "${SRC_DIR}"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch -q --depth 1 origin "${GITHUB_SHA}"
+          git checkout -q FETCH_HEAD
+          git log --oneline -1
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Install python deps
+        working-directory: ${{ env.SRC_DIR }}
         run: pip install -r requirements.txt
 
       - name: Install missing tools (public chocolatey)
@@ -106,6 +121,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Adjust git config
+        working-directory: ${{ env.SRC_DIR }}
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true
@@ -118,6 +134,7 @@ jobs:
 
       # CI buckets have public read access; artifact_backend falls back to unsigned reads.
       - name: Fetch inbound artifacts (from main run ${{ env.REF_RUN_ID }})
+        working-directory: ${{ env.SRC_DIR }}
         run: |
           python build_tools/artifact_manager.py fetch \
             --run-id="${REF_RUN_ID}" \
@@ -127,6 +144,7 @@ jobs:
             --bootstrap
 
       - name: Fetch sources
+        working-directory: ${{ env.SRC_DIR }}
         timeout-minutes: 45
         env:
           GH_TOKEN: ${{ github.token }}
@@ -135,6 +153,7 @@ jobs:
           python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
+        working-directory: ${{ env.SRC_DIR }}
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
@@ -145,11 +164,13 @@ jobs:
             --gha-output
 
       - name: Install stage python deps
+        working-directory: ${{ env.SRC_DIR }}
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure (no ccache)
+        working-directory: ${{ env.SRC_DIR }}
         run: | # zizmor: ignore[template-injection]
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${CMAKE_PRESET} \
@@ -174,6 +195,7 @@ jobs:
           Set-Content "$env:ROOT\watch.pid" $p.Id
 
       - name: Build math-libs stage
+        working-directory: ${{ env.SRC_DIR }}
         id: build
         continue-on-error: true
         run: |
