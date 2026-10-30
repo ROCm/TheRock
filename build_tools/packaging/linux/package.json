@@ -2655,6 +2655,18 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True",
@@ -2718,6 +2730,17 @@
         "Artifact_Subdir": [
           {
             "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
             "Components": [
               "test"
             ]
