@@ -14,7 +14,6 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "github_actions"))
 
 from configure_external_repo_ci import (
     CI_RELEVANT_NON_SUBTREE_PREFIXES,
-    ConfigureResult,
     RepoEntry,
     configure,
     find_matched_subtrees,
@@ -185,27 +184,11 @@ class LoadRepoConfigTest(unittest.TestCase):
 
 
 class ConfigureTest(unittest.TestCase):
-    """Tests for configure() main logic."""
+    """Tests for configure() main logic.
 
-    def test_schedule_event_runs_all_tests(self):
-        result = configure(
-            event_name="schedule",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result.run_all_tests, True)
-
-    def test_workflow_dispatch_runs_all_tests(self):
-        result = configure(
-            event_name="workflow_dispatch",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result.run_all_tests, True)
+    An empty return value means "could not narrow safely", which downstream
+    means every project is tested.
+    """
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -222,8 +205,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.run_all_tests, False)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -240,8 +222,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.run_all_tests, False)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     def test_ci_workflow_changed_runs_all_tests(self, mock_api):
@@ -253,7 +234,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -269,8 +250,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.changed_projects, "projects/rocblas")
-        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result, "projects/rocblas")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     def test_truncated_api_response_runs_all_tests(self, mock_api):
@@ -282,7 +262,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
     def test_no_shas_provided_runs_all_tests(self):
         result = configure(
@@ -292,7 +272,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha=None,
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
     def test_push_without_base_sha_runs_all_tests(self):
         """Push events without base_sha should run all tests."""
@@ -303,7 +283,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
 
 class GetUnclassifiedPathsTest(unittest.TestCase):
@@ -346,40 +326,35 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
 
     def test_shared_component_is_surfaced(self):
         r = self._configure(["shared/amdgpu-windows-interop/pal/x.cpp"])
-        self.assertEqual(r.changed_projects, "shared/amdgpu-windows-interop")
-        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r, "shared/amdgpu-windows-interop")
 
     def test_emulation_components_are_surfaced(self):
         r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])
         self.assertEqual(
-            sorted(r.changed_projects.split(",")),
+            sorted(r.split(",")),
             ["emulation/mirage", "emulation/rocjitsu"],
         )
 
     def test_ctest_harness_triggers_full_run(self):
         r = self._configure(["shared/ctest/TestCategories.cmake"])
-        self.assertTrue(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "")
+        self.assertEqual(r, "")
 
     def test_dnn_provider_cmake_surfaces_prefix(self):
         r = self._configure(
             ["dnn-providers/cmake/Tests.cmake"],
             repo="ROCm/rocm-libraries",
         )
-        self.assertFalse(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "dnn-providers/cmake")
+        self.assertEqual(r, "dnn-providers/cmake")
 
     def test_mixed_recognized_and_unclassified_runs_all(self):
         r = self._configure(
             ["projects/rocm-core/src/x.cpp", "tools/rocm-build/helper.py"]
         )
-        self.assertTrue(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "")
+        self.assertEqual(r, "")
 
     def test_recognized_plus_skippable_still_narrows(self):
         r = self._configure(["projects/rocm-core/src/x.cpp", "README.md"])
-        self.assertFalse(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "projects/rocm-core")
+        self.assertEqual(r, "projects/rocm-core")
 
     def test_declared_prefixes_are_wellformed(self):
         for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:
