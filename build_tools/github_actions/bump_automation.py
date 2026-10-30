@@ -984,6 +984,36 @@ def handle_push(
     _fail_if_cancel_errors(cancel_errors)
 
 
+# (short name, argparse attribute, environment variable) for the GitHub App tokens.
+# Tokens are resolved from the environment by preference so the workflow does not
+# have to place them on the command line, where `ps` would expose them to any
+# process on the runner. The --*_token flags remain as an optional fallback for
+# local/manual runs. (Env vars are not perfectly secret either -- a child process
+# can still read /proc/<pid>/environ -- but they are not shown in the process
+# argument list the way CLI args are.)
+_APP_TOKENS = (
+    ("systems", "systems_token", "SYSTEMS_TOKEN"),
+    ("libraries", "libraries_token", "LIBRARIES_TOKEN"),
+    ("rocgdb", "rocgdb_token", "ROCGDB_TOKEN"),
+    ("mesa-fork", "mesa_token", "MESA_TOKEN"),
+)
+
+
+def resolve_app_tokens(args, parser):
+    """Return {short_name: token}, taking each token from its --*_token arg or,
+    if unset, its environment variable. Errors out listing any that are missing."""
+    tokens = {}
+    missing = []
+    for short, attr, env in _APP_TOKENS:
+        value = getattr(args, attr, None) or os.environ.get(env)
+        if not value:
+            missing.append(f"--{attr} or ${env}")
+        tokens[short] = value
+    if missing:
+        parser.error("Missing GitHub App token(s): " + ", ".join(missing))
+    return tokens
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
@@ -1015,26 +1045,26 @@ def main() -> None:
             "ref/pins. Real push events always open the next bump PR."
         ),
     )
-    parser.add_argument("--systems_token", required=True)
-    parser.add_argument("--libraries_token", required=True)
-    parser.add_argument("--rocgdb_token", required=True)
-    parser.add_argument("--mesa_token", required=True)
+    # Optional: each token falls back to its env var (SYSTEMS_TOKEN,
+    # LIBRARIES_TOKEN, ROCGDB_TOKEN, MESA_TOKEN). See resolve_app_tokens.
+    parser.add_argument("--systems_token")
+    parser.add_argument("--libraries_token")
+    parser.add_argument("--rocgdb_token")
+    parser.add_argument("--mesa_token")
     parser.add_argument(
         "--actions_token",
-        default="",
-        help="TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs.",
+        default=os.environ.get("ACTIONS_TOKEN", ""),
+        help=(
+            "TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs. "
+            "Falls back to the ACTIONS_TOKEN environment variable."
+        ),
     )
     args = parser.parse_args()
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])
 
-    tokens = {
-        "systems": args.systems_token,
-        "libraries": args.libraries_token,
-        "rocgdb": args.rocgdb_token,
-        "mesa-fork": args.mesa_token,
-    }
+    tokens = resolve_app_tokens(args, parser)
 
     if args.event_type == "schedule":
         handle_schedule(tokens, args.submodule)
