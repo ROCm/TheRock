@@ -1,0 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Component tests use Ninja to build samples and consumer tests with CMake.
+# Version 1.13.2 fixes MSVC linker response-file handling on Windows.
+ninja>=1.13.2

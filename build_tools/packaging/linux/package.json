@@ -38,6 +38,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -111,9 +112,9 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_RPM_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -173,8 +174,7 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Disable_RPM_STRIP": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-runtime",
@@ -1463,30 +1463,7 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM_tests",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
+            "Name": "hipCCL_tests",
             "Components": [
               "test"
             ]
@@ -1536,22 +1513,10 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM",
+            "Name": "hipCCL",
             "Components": [
               "dev",
               "doc"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -1564,18 +1529,6 @@
             "Components": [
               "lib",
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev",
-              "lib"
             ]
           }
         ]
@@ -1677,6 +1630,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1825,6 +1779,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False",
     "Disable_DWZ": "True"
   },
@@ -1861,6 +1816,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -1955,6 +1911,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -2042,6 +1999,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -2235,8 +2193,7 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_DEB_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-hipblas-common-devel",
@@ -2298,7 +2255,8 @@
               "dev"
             ]
           }
-        ]
+        ],
+        "Artifact_Gfxarch": "False"
       },
       {
         "Artifact": "host-blas",
@@ -2312,10 +2270,23 @@
               "dev"
             ]
           }
+        ],
+        "Artifact_Gfxarch": "False"
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev",
+              "lib"
+            ]
+          }
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-ck",
@@ -2681,6 +2652,18 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
+            "Components": [
+              "lib",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "True",
@@ -2744,6 +2727,17 @@
         "Artifact_Subdir": [
           {
             "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
             "Components": [
               "test"
             ]
@@ -2850,6 +2844,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3003,6 +2998,7 @@
         ]
       }
     ],
+    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {
@@ -3629,7 +3625,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3792,7 +3787,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -3846,6 +3840,43 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-hrr",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "HIP Record and Replay playback tool",
+    "Description_Long": "hrr-playback replays HIP captures produced by the HRR capture runtime in amdhip64. Provides archive inspection, replay, and device-to-host validation for debugging GPU workloads. Installs the playback binary and HRR headers.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "core-hrr",
+        "Artifact_Subdir": [
+          {
+            "Name": "hrr",
+            "Components": [
+              "run",
+              "dev",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-developer-tools",
     "Version": "",
     "Architecture": "amd64",
@@ -3856,7 +3887,8 @@
       "amdrocm-profiler-base",
       "amdrocm-profiler",
       "amdrocm-emulation",
-      "amdrocm-debugger"
+      "amdrocm-debugger",
+      "amdrocm-hrr"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -3864,7 +3896,8 @@
       "amdrocm-profiler-base",
       "amdrocm-profiler",
       "amdrocm-emulation",
-      "amdrocm-debugger"
+      "amdrocm-debugger",
+      "amdrocm-hrr"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm development tools metapackage with profiling and debugging",
@@ -3876,7 +3909,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "False"
   },
   {

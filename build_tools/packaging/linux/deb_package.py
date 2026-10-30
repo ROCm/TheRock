@@ -103,7 +103,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         pkg_name,
         build_config.artifacts_dir,
         build_config.gfx_arch,
-        build_config.enable_kpack,
         target_members=package_target_members(build_config),
     )
     sourcedir_list.extend(dir_list)
@@ -117,17 +116,12 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     logger.debug(f"sourcedir_list: {sourcedir_list}")
 
     # GFX_META is a versioned meta package (empty content, just dependencies)
-    is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
+    is_gfx_meta = build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
-        if build_config.enable_kpack:
-            logger.info(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
-            )
-            return []
-        else:
-            sys.exit(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
-            )
+        logger.info(
+            f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+        )
+        return []
 
     if not sourcedir_list:
         logger.debug(f"{pkg_name} is a Meta package")
@@ -263,18 +257,16 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     logger.debug("generate_rules_file")
     rules_file = Path(deb_dir) / "rules"
-    disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
-    # Disable debian dh_strip for multi-arch builds
+    # Disable debian dh_strip
     # WORKAROUND: dh_strip's debugedit incorrectly truncates ELF files with
     # unconventional layouts (e.g., program headers at end of file).
     # This causes "program header goes past the end of the file" errors.
     # See: https://github.com/ROCm/TheRock/issues/4047
-    if config.enable_kpack:
-        disable_dh_strip = True
+    disable_dh_strip = True
 
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
@@ -369,7 +361,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
 
 def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
-    """Generate a Debian postinst/prerm file entry in `debian folder`.
+    """Generate Debian postinst/prerm maintainer scripts.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
@@ -378,13 +370,50 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    # Debian maintainer scripts that must be executable
+    # Debian maintainer scripts supported by the template generator.
     EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
     pkg_name = pkg_info.get("Package")
+    if not pkg_name:
+        raise ValueError("Package metadata does not contain a valid 'Package' name")
+
+    alternatives_binaries = load_alternatives_binaries()
+    json_pkg_config = alternatives_binaries.get(pkg_name)
+
+    if json_pkg_config is None:
+        raise ValueError(
+            f"No alternatives configuration found for Debian package " f"{pkg_name!r}"
+        )
+
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have "
+            "major.minor.patch versions"
+        )
+
+    version_major_match = re.match(r"^\d+", parts[0])
+    version_minor_match = re.match(r"^\d+", parts[1])
+    version_patch_match = re.match(r"^\d+", parts[2])
+
+    if not all(
+        (
+            version_major_match,
+            version_minor_match,
+            version_patch_match,
+        )
+    ):
+        raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
+
+    scripts = json_pkg_config["scripts"]
+    binaries = json_pkg_config["binaries"]
+    core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
+    llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+
+    unsupported_scripts = set(scripts) - EXEC_SCRIPTS
+    if unsupported_scripts:
+        raise ValueError(
+            f"Unsupported maintainer scripts for package {pkg_name!r}: "
+            f"{sorted(unsupported_scripts)}"
         )
 
     env = Environment(
@@ -395,26 +424,39 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
             default=False,
         ),
     )
-    # Prepare your context dictionary
+
     context = {
         "install_prefix": config.install_prefix,
-        "version_major": int(re.match(r"^\d+", parts[0]).group()),
-        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
-        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "version_major": int(version_major_match.group()),
+        "version_minor": int(version_minor_match.group()),
+        "version_patch": int(version_patch_match.group()),
         "target": "deb",
+        "package_name": pkg_name,
+        "binaries": binaries,
+        "core_symlinks": core_symlinks,
+        "llvm_symlinks": llvm_symlinks,
     }
 
-    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
-    # Collect all matching files
-    for script in EXEC_SCRIPTS:
-        pattern = f"{pkg_name}-{script}.j2"
-        for file in templates_root.glob(pattern):
-            script_file = Path(deb_dir) / script
-            template = env.get_template(file.relative_to(SCRIPT_DIR).as_posix())
-            with script_file.open("w", encoding="utf-8") as f:
-                f.write(template.render(context))
-            # Package maintainer scripts must be executable.
-            os.chmod(script_file, 0o755)  # nosec B103
+    deb_dir = Path(deb_dir)
+    deb_dir.mkdir(parents=True, exist_ok=True)
+
+    for script in scripts:
+        template_name = f"template/scripts/amdrocm-{script}.j2"
+        script_file = deb_dir / script
+
+        try:
+            template = env.get_template(template_name)
+            rendered_script = template.render(context)
+            script_file.write_text(
+                rendered_script,
+                encoding="utf-8",
+            )
+            script_file.chmod(0o755)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to generate Debian {script} script "
+                f"for package {pkg_name!r}"
+            ) from exc
 
 
 def copy_package_contents(source_dir, destination_dir):

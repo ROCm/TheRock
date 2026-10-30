@@ -154,7 +154,7 @@ permissions:
 jobs:
   setup_matrix:
     name: Configure PyTorch Release Matrix
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     env:
@@ -207,6 +207,7 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      exclude_implicit_targets: ${{ matrix.exclude_implicit_targets }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}
@@ -225,7 +226,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
     name: "Quartz - completed - release PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
