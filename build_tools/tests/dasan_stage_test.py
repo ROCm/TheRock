@@ -3,12 +3,15 @@
 import json
 from pathlib import Path
 import sys
+import shlex
 import tempfile
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import dasan_stage
+from configure_stage import generate_cmake_args
+from _therock_utils.artifacts import prebuilt_marker_relpath
 
 
 class DasanStageTest(unittest.TestCase):
@@ -30,6 +33,45 @@ class DasanStageTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "Cannot determine"):
                 dasan_stage.compiler_options("emulation", Path("/build"))
+
+    def test_emulation_enables_imported_compiler_base_dependency(self):
+        topology = dasan_stage.get_topology()
+        standard = generate_cmake_args(
+            "emulation",
+            "",
+            "gfx950-dcgpu",
+            topology,
+            platform_name="linux",
+            manylinux=True,
+        )
+
+        def definitions(options):
+            return dict(
+                shlex.split(option)[0][2:].split("=", 1)
+                for option in options
+                if option.startswith("-D")
+            )
+
+        self.assertEqual(definitions(standard)["THEROCK_ENABLE_ALL"], "OFF")
+        self.assertNotIn("THEROCK_ENABLE_BASE", definitions(standard))
+        with patch(
+            "dasan_stage.subprocess.check_output",
+            return_value="AMD clang version 24.0.0",
+        ):
+            effective = definitions(
+                standard + dasan_stage.compiler_options("emulation", Path("/build"))
+            )
+        self.assertEqual(effective["THEROCK_ENABLE_COMPILER"], "ON")
+        self.assertEqual(effective["THEROCK_ENABLE_BASE"], "ON")
+        # Emulation's DASan fetch bootstraps the same-run math inbound closure.
+        # This already provides base and the compiler; enabling their CMake
+        # targets consumes imported stage markers rather than rebuilding them.
+        imported = topology.get_inbound_artifacts("math-libs")
+        self.assertTrue({"base", "amd-llvm", "sysdeps"}.issubset(imported))
+        self.assertEqual(
+            prebuilt_marker_relpath("base/rocm-cmake/stage"),
+            "base/rocm-cmake/stage.prebuilt",
+        )
 
     def test_bootstrap_without_imported_compiler(self):
         with patch("dasan_stage.subprocess.check_output") as query:

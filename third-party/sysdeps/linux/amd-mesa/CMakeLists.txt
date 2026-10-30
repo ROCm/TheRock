@@ -53,6 +53,7 @@ therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
 set(_meson_ldflags "-Wl,-rpath='$$ORIGIN'")
 set(_meson_sanitizer_env)
+set(_meson_runtime_env)
 if(THEROCK_SANITIZER STREQUAL "DASAN")
   # Meson does not consume CMake language flags or add_link_options().
   list(APPEND _meson_sanitizer_env
@@ -60,6 +61,26 @@ if(THEROCK_SANITIZER STREQUAL "DASAN")
     "CXXFLAGS=${CMAKE_CXX_FLAGS}"
   )
   string(APPEND _meson_ldflags " ${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=daddress -shared-libsan")
+  # Meson's compiler sanity checks and generated build tools execute before
+  # installation, where the SDK-relative RPATH below cannot locate the runtime.
+  # Supply the selected compiler's runtime only to the build environment; keep
+  # installed libraries relocatable instead of embedding an absolute build path.
+  execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" -print-file-name=libclang_rt.dasan.so
+    OUTPUT_VARIABLE _dasan_runtime
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _dasan_runtime_result
+  )
+  if(NOT _dasan_runtime_result EQUAL 0 OR
+     NOT IS_ABSOLUTE "${_dasan_runtime}" OR NOT EXISTS "${_dasan_runtime}")
+    message(FATAL_ERROR "DASan Mesa build requires the selected compiler's libclang_rt.dasan.so")
+  endif()
+  get_filename_component(_dasan_runtime_dir "${_dasan_runtime}" DIRECTORY)
+  set(_meson_ld_library_path "${_dasan_runtime_dir}")
+  if(NOT "$ENV{LD_LIBRARY_PATH}" STREQUAL "")
+    string(APPEND _meson_ld_library_path ":$ENV{LD_LIBRARY_PATH}")
+  endif()
+  list(APPEND _meson_runtime_env "LD_LIBRARY_PATH=${_meson_ld_library_path}")
   # Mesa's libraries install below lib/rocm_sysdeps/lib in the unified SDK.
   # Keep the shared sanitizer discoverable after relocating that SDK.
   foreach(_runtime_dir IN LISTS THEROCK_PRIVATE_INSTALL_RPATH_DIRS)
@@ -89,6 +110,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=${_meson_ldflags}"
       ${_meson_sanitizer_env}
+      ${_meson_runtime_env}
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
@@ -136,6 +158,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=${_meson_ldflags}"
       ${_meson_sanitizer_env}
+      ${_meson_runtime_env}
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
@@ -174,9 +197,10 @@ add_custom_target(
         "${CMAKE_CURRENT_BINARY_DIR}"
         "${PATCH_SOURCE_DIR}"
   COMMAND
-    "${MESON_BUILD}" compile --verbose
+    "${CMAKE_COMMAND}" -E env ${_meson_runtime_env} --
+      "${MESON_BUILD}" compile --verbose
   COMMAND
-    "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+    "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" ${_meson_runtime_env} --
       "${MESON_BUILD}" install
   COMMAND
     "${CMAKE_COMMAND}" -E env

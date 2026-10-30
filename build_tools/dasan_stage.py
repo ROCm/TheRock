@@ -38,6 +38,9 @@ def compiler_options(stage: str, build: Path) -> list[str]:
             f"-DCMAKE_C_COMPILER={clang}",
             f"-DCMAKE_CXX_COMPILER={clang.parent / 'clang++'}",
             "-DTHEROCK_ENABLE_COMPILER=ON",
+            # The compiler CMake targets reference rocm-cmake from base even
+            # when the SDK stages have already been imported from this run.
+            "-DTHEROCK_ENABLE_BASE=ON",
             f"-Dtherock-aux-overlay_CMAKE_ARGS=-DTHEROCK_AUX_OVERLAY_LLVM_VERSION_MAJOR={match[1]}",
         ]
     return options
