@@ -192,6 +192,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') && fromJSON(inputs.build_config).build_native_windows == true }}
     uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
     with:
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
       artifact_run_id: ${{ github.run_id }}
       artifact_github_repo: ${{ github.repository }}
       rocm_version: ${{ inputs.rocm_package_version }}
