@@ -1,0 +1,142 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Pull request scenarios: the narrowest and most frequently exercised trigger.
+# Families come from the frozen matrix in mock_family_matrix.py.
+
+- name: ci-skip label skips the entire pipeline
+  description: >
+    The ci:skip label short-circuits before target selection, so no build
+    config is produced for either platform.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+        labels: [{name: "ci:skip"}]
+  git:
+    changed_files: ["core/CMakeLists.txt"]
+    submodule_paths: []
+  expect:
+    outputs:
+      enable_build_jobs: "false"
+      linux_build_config: ""
+      windows_build_config: ""
+      test_type: ""
+
+- name: documentation-only change skips the pipeline
+  description: >
+    Path filtering against the real skip-ci config drops changes that cannot
+    affect a build.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+  git:
+    changed_files: ["README.md", "docs/development/ci_overview.md"]
+    submodule_paths: []
+  expect:
+    outputs:
+      enable_build_jobs: "false"
+      linux_build_config: ""
+      windows_build_config: ""
+
+- name: default pull request builds presubmit families with quick tests
+  description: >
+    The baseline PR run. mock-postsubmit and mock-nightly are not presubmit
+    families and must not be built; mock-submodule builds but is not tested
+    because it only tests on a submodule bump.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+  git:
+    changed_files: ["core/CMakeLists.txt"]
+    submodule_paths: []
+  expect:
+    outputs:
+      enable_build_jobs: "true"
+      test_type: "quick"
+    linux:
+      families: ["mock-primary", "mock-submodule", "mock-asan"]
+      tested_families: ["mock-primary", "mock-asan"]
+      build_variant_suffix: ""
+      artifact_group: "multi-arch-release"
+      dist_amdgpu_families: "mock-primary;mock-submodule;mock-asan"
+    windows:
+      families: ["mock-primary", "mock-windows"]
+      tested_families: ["mock-primary", "mock-windows"]
+    jobs:
+      build_rocm: "run"
+      test_rocm: "run"
+
+- name: ci-run-all-archs builds and tests every family
+  description: >
+    The label overrides both trigger-based build selection and per-family test
+    gating, so nightly-only families build and submodule-gated families test.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+        labels: [{name: "ci:run-all-archs"}]
+  git:
+    changed_files: ["core/CMakeLists.txt"]
+    submodule_paths: []
+  expect:
+    outputs:
+      enable_build_jobs: "true"
+    linux:
+      families:
+        ["mock-primary", "mock-postsubmit", "mock-nightly", "mock-submodule", "mock-asan"]
+      tested_families:
+        ["mock-primary", "mock-postsubmit", "mock-nightly", "mock-submodule", "mock-asan"]
+    windows:
+      families: ["mock-primary", "mock-windows"]
+
+- name: submodule bump enables submodule-gated tests
+  description: >
+    A submodule pointer in the diff adds the submodule_bump trigger on top of
+    presubmit, which turns on tests for mock-submodule and promotes test_type
+    to standard. Note "standard", not "full": the TestRocmDecision docstring
+    claims submodule changes give "full", but _determine_test_type returns
+    "standard". The code is the contract here.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+  git:
+    changed_files: ["math-libs/libhipcxx", "core/CMakeLists.txt"]
+    submodule_paths: ["math-libs/libhipcxx"]
+  expect:
+    outputs:
+      enable_build_jobs: "true"
+      test_type: "standard"
+    linux:
+      families: ["mock-primary", "mock-submodule", "mock-asan"]
+      tested_families: ["mock-primary", "mock-submodule", "mock-asan"]
+    jobs:
+      test_type_reason: "submodule(s) changed: ['math-libs/libhipcxx']"
+
+- name: conflicting build and skip labels are rejected
+  description: >
+    CIInputs.validate() fails fast rather than letting an ambiguous request
+    reach target selection.
+  trigger:
+    event: pull_request
+    ref: my-feature
+    payload:
+      pull_request:
+        base: {ref: main}
+        labels: [{name: "ci:build-pytorch"}, {name: "ci:skip-pytorch"}]
+  git:
+    changed_files: ["core/CMakeLists.txt"]
+  expect_error: "ci:build-pytorch conflicts with ci:skip-pytorch"
