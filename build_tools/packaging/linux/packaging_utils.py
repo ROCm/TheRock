@@ -175,34 +175,6 @@ def is_devel_package(pkg_info):
     return pkg_name.endswith("-devel")
 
 
-def is_rpm_stripping_disabled(pkg_info):
-    """
-    Verifies whether Disable_RPM_STRIP key is enabled for a package.
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if Disable_RPM_STRIP key is defined, False otherwise.
-    """
-
-    return is_key_defined(pkg_info, "Disable_RPM_STRIP")
-
-
-def is_debug_package_disabled(pkg_info):
-    """
-    Verifies whether Disable_Debug_Package key is enabled for a package.
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if Disable_Debug_Package key is defined, False otherwise.
-    """
-
-    return is_key_defined(pkg_info, "Disable_Debug_Package")
-
-
 def is_packaging_disabled(pkg_info):
     """
     Verifies whether 'Disablepackaging' key is enabled for a package.

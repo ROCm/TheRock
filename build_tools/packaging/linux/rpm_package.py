@@ -186,7 +186,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "rpmrecommends": rpmrecommends,
         "rpmsuggests": rpmsuggests,
         "disable_rpm_strip": True,
-        "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
