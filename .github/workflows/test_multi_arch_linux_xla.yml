@@ -118,8 +118,7 @@ on:
         type: string
         default: ""
   # Validates the pipeline itself whenever it changes, with literal defaults
-  # standing in for what a real caller (e.g. multi_arch_release_linux.yml's
-  # trigger_test_xla job) would pass — pull_request has no `inputs` context,
+  # standing in for what a real caller would pass — pull_request has no `inputs` context,
   # so every `inputs.x` below is null here and falls back to these defaults.
   pull_request:
     paths:
@@ -255,7 +254,7 @@ jobs:
           build_tools/rocm/run_xla_ci_build.sh \
             --config=rocm_ci_hermetic \
             --config=rocm_rbe_dev \
-            --config=ci_single_gpu \
+            --config=ci_rocm_cpu \
             --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}" \
             --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}" \
             --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}" \
