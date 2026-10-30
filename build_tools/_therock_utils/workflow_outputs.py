@@ -310,7 +310,10 @@ class WorkflowOutputRoot:
         metadata and environment variables.
 
         Args:
-            run_id: GitHub Actions workflow run ID.
+            run_id: GitHub Actions workflow run ID. A variant build that shares
+                its workflow run with a regular one appends ``-<variant>``
+                (``12345-coverage``), since both produce outputs with the same
+                names.
             platform: Platform name ('linux' or 'windows').
             github_repository: Repository in 'owner/repo' format. If None,
                 reads GITHUB_REPOSITORY env var (default: 'ROCm/TheRock').
@@ -318,7 +321,8 @@ class WorkflowOutputRoot:
                 provided, uses it directly for fork detection and bucket
                 cutover dating (no API call).
             lookup_workflow_run: If True and ``workflow_run`` is not provided,
-                fetches the workflow run from the GitHub API using ``run_id``.
+                fetches the workflow run from the GitHub API using ``run_id``,
+                less any ``-<variant>`` suffix the API would not recognize.
                 Most callers running inside their own CI workflow do not need
                 this — environment variables suffice. Set this when looking up
                 another repository's workflow run (e.g. fetching artifacts).
@@ -326,7 +330,9 @@ class WorkflowOutputRoot:
                 None, falls back to the RELEASE_TYPE environment variable.
         """
         workflow_run_id = (
-            run_id if lookup_workflow_run and workflow_run is None else None
+            run_id.partition("-")[0]
+            if lookup_workflow_run and workflow_run is None
+            else None
         )
         external_repo, bucket = _retrieve_bucket_info(
             github_repository=github_repository,
