@@ -401,17 +401,50 @@ jobs:
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
-      - name: Build PyTorch wheels
-        # Default to the nightly repo.amd.com aggregate ROCm index when neither source is
-        # provided so a bare manual dispatch works; setting either input
-        # overrides it. The default is applied here rather than on the input
-        # because GitHub reverts an emptied input back to its declared default,
-        # which would make the two inputs impossible to use exclusively.
+      - name: Resolve ROCm package source
+        id: rocm-source
+        # Default to the release stream's own aggregate index when neither
+        # source is provided. Dev builds publish torch to
+        # https://dev.repo.amd.com/rocm/whl-next/; installing ROCm from a
+        # different stream leaves that index unable to resolve the pinned
+        # rocm==VERSION at test time. Override with either input. The default
+        # is applied here rather than on the input because GitHub reverts an
+        # emptied input back to its declared default, which would make the two
+        # inputs impossible to use exclusively.
         env:
-          # Use the index if given; else the find-links page; else default to
-          # the nightly repo.amd.com aggregate index (both empty is the bare-dispatch case).
-          ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
-          ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
+          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          python <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path("build_tools").resolve()))
+          from _therock_utils.s3_buckets import get_release_package_index_url
+          from github_actions.github_actions_api import gha_set_output
+
+          index_url = os.environ.get("ROCM_PACKAGE_INDEX_URL", "").strip()
+          find_links = os.environ.get("ROCM_PACKAGE_FIND_LINKS_URL", "").strip()
+          if not index_url and not find_links:
+              index_url = get_release_package_index_url(
+                  os.environ["RELEASE_TYPE"]
+              ).rstrip("/")
+          gha_set_output(
+              {
+                  "index_url": index_url,
+                  "find_links": find_links,
+              }
+          )
+          print(f"ROCm index_url={index_url!r}")
+          print(f"ROCm find_links={find_links!r}")
+          PY
+
+      - name: Build PyTorch wheels
+        env:
+          ROCM_INDEX_URL: ${{ steps.rocm-source.outputs.index_url }}
+          ROCM_FIND_LINKS: ${{ steps.rocm-source.outputs.find_links }}
           AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
         # determine_version.py emits multiple arguments from a parsed ROCm version.
         # Trust that repository script to produce this intentional shell fragment.

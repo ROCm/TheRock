@@ -289,8 +289,13 @@ jobs:
         env:
           DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
         run: |
+          # Pin rocm[devel] to the ROCm version encoded in the torch local version.
+          # Unpinned extras skip pre-releases, so pip selects stable rocm (e.g. 10.0.0)
+          # and conflicts with torch's exact rocm pin.
+          ROCM_VERSION="$(python build_tools/github_actions/determine_version.py \
+            --torch-version "${TORCH_VERSION}")"
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
+            --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]==${ROCM_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
 
