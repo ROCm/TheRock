@@ -72,9 +72,8 @@ jobs:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       # --cap-add=SYS_PTRACE : to enable ptrace insided the build container for tsan builds
       # --security-opt seccomp=unconfined : to disable the system call filtering for tsan builds
-      options: -v /runner/config:/home/awsconfig/ --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
+      options: --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
