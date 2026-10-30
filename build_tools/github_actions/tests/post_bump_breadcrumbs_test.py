@@ -354,40 +354,5 @@ class DetectChangedSubmodulesTest(unittest.TestCase):
         self.assertEqual(result, [])
 
 
-class ResolveAppTokensTest(unittest.TestCase):
-    def _parser(self):
-        import argparse
-
-        return argparse.ArgumentParser()
-
-    def _args(self, **kw):
-        import argparse
-
-        ns = argparse.Namespace(
-            systems_token=None, libraries_token=None, rocgdb_token=None
-        )
-        for k, v in kw.items():
-            setattr(ns, k, v)
-        return ns
-
-    def test_reads_tokens_from_environment(self):
-        env = {"SYSTEMS_TOKEN": "sys", "LIBRARIES_TOKEN": "lib", "ROCGDB_TOKEN": "gdb"}
-        with mock.patch.dict(os.environ, env, clear=False):
-            tokens = post_bump_breadcrumbs.resolve_app_tokens(
-                self._args(), self._parser()
-            )
-        self.assertEqual(
-            tokens, {"systems": "sys", "libraries": "lib", "rocgdb": "gdb"}
-        )
-
-    def test_errors_when_missing(self):
-        clear_env = {
-            k: "" for k in ("SYSTEMS_TOKEN", "LIBRARIES_TOKEN", "ROCGDB_TOKEN")
-        }
-        with mock.patch.dict(os.environ, clear_env, clear=False):
-            with self.assertRaises(SystemExit):
-                post_bump_breadcrumbs.resolve_app_tokens(self._args(), self._parser())
-
-
 if __name__ == "__main__":
     unittest.main()

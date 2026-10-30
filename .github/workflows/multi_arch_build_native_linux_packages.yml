@@ -136,7 +136,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python requirements
-        run: pip install jinja2
+        run: pip install jinja2==3.1.6
 
       - name: Derive amd-repo-setup parameters
         id: derive
@@ -198,7 +198,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2 pyzstd
+          pip install pyelftools==0.33 boto3==1.39.15 jinja2==3.1.6 pyzstd==0.19.1
 
       - name: Install System requirements
         run: |
@@ -351,7 +351,7 @@ jobs:
         run: |
           $PYTHON_CMD -m venv /tmp/repo-venv
           /tmp/repo-venv/bin/python -m pip install --upgrade pip
-          /tmp/repo-venv/bin/python -m pip install jinja2 boto3
+          /tmp/repo-venv/bin/python -m pip install jinja2==3.1.6 boto3==1.39.15
           echo "PYTHON_CMD=/tmp/repo-venv/bin/python" >> "$GITHUB_ENV"
           # configure_aws_artifacts_credentials runs bare `python`, which these
           # per-distro images do not provide. A venv always does, so putting its

@@ -28,7 +28,6 @@ from bump_automation import (
     GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
     handle_push,
-    resolve_app_tokens,
     latest_commit,
     LIBRARIES_BASELINE_GATE_JOB_NAME,
     RUN_JOBS_PAGE_SIZE,
@@ -1622,69 +1621,6 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
         mock_latest.assert_called_once_with(
             "ROCm/rocgdb", "token", "amd-staging-rocgdb-18"
         )
-
-
-class ResolveAppTokensTest(unittest.TestCase):
-    def _parser(self):
-        import argparse
-
-        return argparse.ArgumentParser()
-
-    def _args(self, **kw):
-        import argparse
-
-        ns = argparse.Namespace(
-            systems_token=None,
-            libraries_token=None,
-            rocgdb_token=None,
-            mesa_token=None,
-        )
-        for k, v in kw.items():
-            setattr(ns, k, v)
-        return ns
-
-    def test_reads_all_tokens_from_environment(self):
-        env = {
-            "SYSTEMS_TOKEN": "sys",
-            "LIBRARIES_TOKEN": "lib",
-            "ROCGDB_TOKEN": "gdb",
-            "MESA_TOKEN": "mesa",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            tokens = resolve_app_tokens(self._args(), self._parser())
-        self.assertEqual(
-            tokens,
-            {
-                "systems": "sys",
-                "libraries": "lib",
-                "rocgdb": "gdb",
-                "mesa-fork": "mesa",
-            },
-        )
-
-    def test_cli_arg_overrides_environment(self):
-        with patch.dict(os.environ, {"SYSTEMS_TOKEN": "env"}, clear=False):
-            tokens = resolve_app_tokens(
-                self._args(
-                    systems_token="cli",
-                    libraries_token="l",
-                    rocgdb_token="g",
-                    mesa_token="m",
-                ),
-                self._parser(),
-            )
-        self.assertEqual(tokens["systems"], "cli")
-
-    def test_errors_when_a_token_is_missing(self):
-        clear_env = {
-            k: ""
-            for k in ("SYSTEMS_TOKEN", "LIBRARIES_TOKEN", "ROCGDB_TOKEN", "MESA_TOKEN")
-        }
-        with patch.dict(os.environ, clear_env, clear=False):
-            with self.assertRaises(SystemExit):
-                resolve_app_tokens(
-                    self._args(systems_token="only-this"), self._parser()
-                )
 
 
 if __name__ == "__main__":

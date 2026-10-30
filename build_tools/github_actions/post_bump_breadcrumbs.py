@@ -24,7 +24,6 @@ Example usage:
 """
 
 import argparse
-import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -484,38 +483,13 @@ def handle_post_breadcrumbs(before, after, tokens, dry_run=False):
         )
 
 
-_APP_TOKENS = (
-    ("systems", "systems_token", "SYSTEMS_TOKEN"),
-    ("libraries", "libraries_token", "LIBRARIES_TOKEN"),
-    ("rocgdb", "rocgdb_token", "ROCGDB_TOKEN"),
-)
-
-
-def resolve_app_tokens(args, parser):
-    """Return {short_name: token}, taking each token from its --*_token arg or,
-    if unset, its environment variable (keeps secrets off the command line, where
-    `ps` would expose them). Errors out listing any that are missing."""
-    tokens = {}
-    missing = []
-    for short, attr, env in _APP_TOKENS:
-        value = getattr(args, attr, None) or os.environ.get(env)
-        if not value:
-            missing.append(f"--{attr} or ${env}")
-        tokens[short] = value
-    if missing:
-        parser.error("Missing GitHub App token(s): " + ", ".join(missing))
-    return tokens
-
-
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before", required=True)
     parser.add_argument("--after", required=True)
-    # Optional: each token falls back to its env var (SYSTEMS_TOKEN,
-    # LIBRARIES_TOKEN, ROCGDB_TOKEN). See resolve_app_tokens.
-    parser.add_argument("--systems_token")
-    parser.add_argument("--libraries_token")
-    parser.add_argument("--rocgdb_token")
+    parser.add_argument("--systems_token", required=True)
+    parser.add_argument("--libraries_token", required=True)
+    parser.add_argument("--rocgdb_token", required=True)
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -525,7 +499,11 @@ def main(argv=None) -> None:
     )
     args = parser.parse_args(argv)
 
-    tokens = resolve_app_tokens(args, parser)
+    tokens = {
+        "systems": args.systems_token,
+        "libraries": args.libraries_token,
+        "rocgdb": args.rocgdb_token,
+    }
 
     handle_post_breadcrumbs(args.before, args.after, tokens, dry_run=args.dry_run)
 
