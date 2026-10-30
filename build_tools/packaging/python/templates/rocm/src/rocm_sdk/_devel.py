@@ -235,7 +235,7 @@ def _record_has_entries(record_path: Path, names: list[str]) -> bool:
     if not record_path.exists():
         return False
     existing = set()
-    for line in record_path.read_text().splitlines():
+    for line in record_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         name = line.split(",", 1)[0]
@@ -360,7 +360,7 @@ def _ensure_record_entries(record_path: Path, names: list[str]) -> None:
     seen = set()
     changed = False
     if record_path.exists():
-        for line in record_path.read_text().splitlines():
+        for line in record_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             path0 = line.split(",", 1)[0]
