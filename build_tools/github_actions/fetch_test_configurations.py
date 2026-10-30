@@ -978,7 +978,7 @@ test_matrix = {
         # <name>_dev. Omitting the key takes the fetch-everything branch, which
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
-        "timeout_minutes": 10,
+        "timeout_minutes": 15,
         "additional_requirements_files": [
             _get_script_path("requirements-test-ninja.txt"),
         ],

@@ -16,7 +16,8 @@ The driver skips (exit 0) when the installed hipdnn_frontend package lacks the
 cudnn_compatibility component, before touching the harness. Otherwise the
 harness owns every policy decision: which translation units are expected to
 compile, and which are expected to fail. This driver only configures, builds,
-tests, and reports.
+tests, and reports, and fails if the harness then registers only its
+shim-absent placeholder.
 """
 
 import argparse
@@ -78,6 +79,8 @@ REPORT_DIR_NAME = "cudnn_samples_report"
 EXIT_PAYLOAD_MISSING = 11
 EXIT_FLAG_REQUIRED_BUT_OFF = 10
 EXIT_FRONTEND_CONFIG_MISSING = 12
+# The package config reports the shim, but the harness's find_package did not.
+EXIT_SHIM_NOT_FOUND_BY_HARNESS = 13
 
 # Outcome tokens the harness writes into the sidecars. Any other value is
 # surfaced as an anomaly instead of being folded into a count.
@@ -622,13 +625,15 @@ def main() -> int:
     ctest_returncode = run_ctest(build_dir, jobs, environ_vars)
 
     if is_skip_run(list_registered_tests(build_dir, environ_vars)):
-        if ctest_returncode == 0:
-            return report_skip()
-        logging.error(
-            f"The harness registered only {SHIM_ABSENT_PLACEHOLDER_TEST}, but ctest exited "
-            f"with {ctest_returncode} instead of reporting it as skipped."
+        message = (
+            f"{frontend_config} reports the cudnn_compatibility component, but the "
+            f"harness registered only {SHIM_ABSENT_PLACEHOLDER_TEST}, so its "
+            "find_package(hipdnn_frontend) resolved a package without the shim. "
+            "Check which hipdnn_frontend_DIR the configure step found."
         )
-        return ctest_returncode
+        logging.error(message)
+        print(f"::error title=cuDNN samples harness found no shim::{message}")
+        return EXIT_SHIM_NOT_FOUND_BY_HARNESS
 
     emit_report(build_dir)
     return ctest_returncode
