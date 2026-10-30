@@ -1,0 +1,57 @@
+From 8e000bacbb06fd4478dfc5cbd8419eae21f75e68 Mon Sep 17 00:00:00 2001
+From: TheRock <therockbot@amd.com>
+Date: Fri, 30 Oct 2026 03:33:59 -0700
+Subject: [PATCH] Preserve DASan flags in the hipDNN example provider sub-build
+
+The samples ExternalProject forwards compiler paths but drops the parent
+sanitizer flags and directory link options. Its unit tests then link
+DASan-instrumented GoogleTest without resolving __dasan_report_load/store.
+
+Forward the parent language flags and select the shared host runtime only
+for DASAN. Preserve other modes, per-configuration flags, and all sample
+and unit-test targets. Avoid duplicating an existing shared-runtime flag.
+---
+ projects/hipdnn/samples/CMakeLists.txt | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/projects/hipdnn/samples/CMakeLists.txt b/projects/hipdnn/samples/CMakeLists.txt
+index 297691f..af3269f 100644
+--- a/projects/hipdnn/samples/CMakeLists.txt
++++ b/projects/hipdnn/samples/CMakeLists.txt
+@@ -542,6 +542,25 @@ if(HIPDNN_GTEST_VERSION AND NOT _example_plugin_gtest_from_source)
+     )
+ endif()
+ 
++# The nested example provider links the parent's instrumented GoogleTest.
++# Its separate configure does not inherit the parent's sanitizer toolchain or
++# directory link options. Keep DASan compilation and shared runtime linkage
++# consistent without changing standalone or other sanitizer configurations.
++set(EXAMPLE_ENGINE_PLUGIN_DASAN_CMAKE_ARGS "")
++if(THEROCK_SANITIZER STREQUAL "DASAN")
++    foreach(_language C CXX HIP)
++        if(DEFINED CMAKE_${_language}_FLAGS AND NOT "${CMAKE_${_language}_FLAGS}" STREQUAL "")
++            set(_example_plugin_flags "${CMAKE_${_language}_FLAGS}")
++            if(NOT _example_plugin_flags MATCHES "(^| )-shared-libsan( |$)")
++                string(APPEND _example_plugin_flags " -shared-libsan")
++            endif()
++            list(APPEND EXAMPLE_ENGINE_PLUGIN_DASAN_CMAKE_ARGS
++                 "-DCMAKE_${_language}_FLAGS:STRING=${_example_plugin_flags}"
++            )
++        endif()
++    endforeach()
++endif()
++
+ ExternalProject_Add(example_engine_plugin
+     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/example_engine_plugin
+     BUILD_ALWAYS TRUE
+@@ -577,6 +596,7 @@ ExternalProject_Add(example_engine_plugin
+         "-UFETCHCONTENT_SOURCE_DIR_GOOGLETEST"
+         "-UEXAMPLE_PROVIDER_GTEST_VERSION"
+         ${EXAMPLE_ENGINE_PLUGIN_CLANG_TIDY_CMAKE_ARGS}
++        ${EXAMPLE_ENGINE_PLUGIN_DASAN_CMAKE_ARGS}
+     DEPENDS ${_example_plugin_depends}
+     INSTALL_COMMAND ""
+ )
+-- 
+2.53.0.windows.2
+
