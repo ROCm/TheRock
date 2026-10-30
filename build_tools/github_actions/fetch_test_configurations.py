@@ -194,7 +194,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:7615107f2f16969fe47e297028c10482968d4a4821bc947ad4fec79ef69e3761",  # 2026-10-01T09:35:28.00411791Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:e89ba4458be7add8ee1f8e398da9f3fd8816a0ad56d521054543916d4133184a",
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -276,7 +276,7 @@ test_matrix = {
             "windows": 1,
         },
         # Supply the system OpenCL ICD loader for clinfo (Linux only).
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
         "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
@@ -875,6 +875,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
@@ -885,7 +886,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:64f8d6e3e6dfd46e2b1b9321b99aa72fd09140025638e27e5a0d50acb0e69e89",
         "exclude_family": {
             "linux": [
                 # CRITICAL FAILURE (pytest hangs): rocprofiler-sdk test hangs during pytest collection
@@ -917,6 +918,9 @@ test_matrix = {
     "hipdnn_install": {
         "job_name": "hipdnn_install",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -973,6 +977,9 @@ test_matrix = {
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1151,6 +1158,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
@@ -1172,6 +1180,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
@@ -1215,6 +1224,9 @@ test_matrix = {
         # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1226,6 +1238,9 @@ test_matrix = {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1237,12 +1252,15 @@ test_matrix = {
         # on Linux via the specialized media image below. Windows runs the always-on
         # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
         # the vaon12 backend, so it needs no FFmpeg and no container image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:7853bb7fc56e8ddd768e849b5594d0b7f2e89aad9618e29943888ee9d916c6d2",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1257,6 +1275,9 @@ test_matrix = {
         # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
         # of the correctness suite.
         "timeout_minutes": 60,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {

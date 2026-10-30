@@ -94,7 +94,7 @@ jobs:
     if: inputs.enable_repo_setup_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
     # Resolves parameters only; it needs no cloud credentials.
     permissions:
       contents: read
@@ -153,7 +153,7 @@ jobs:
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:15241d0e87bf81fe0986006ab832a36ea53a2cda0f9a31b4a5dc7826bc2396b6
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
     outputs:
       package_repository_url: ${{ steps.upload-packages.outputs.package_repository_url }}
       summary: ${{ steps.summary.outputs.summary }}
