@@ -48,7 +48,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME HIPDNN_ENABLE_SDPA
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Enable SDPA (Scaled Dot-Product Attention) support in hipDNN"
   CMAKE_VARS
     HIPDNN_ENABLE_SDPA=ON
@@ -77,11 +77,26 @@ therock_declare_flag(
     hipkernelprovider
 )
 
+# FlyDSL's prebuilt kernels for the hip-kernel-provider's kernel ingestor
+# (rocm-libraries dnn-providers/hip-kernel-provider/flydsl/). The option is OFF
+# in rocm-libraries; this flag turns it on, and turning the flag off is how
+# TheRock switches FlyDSL off. Takes effect only with
+# HIPDNN_ENABLE_KERNEL_INGESTOR.
+therock_declare_flag(
+  NAME HIPKERNELPROVIDER_ENABLE_FLYDSL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Pack the prebuilt FlyDSL kernels for the hip-kernel-provider's kernel ingestor"
+  CMAKE_VARS
+    HIPKERNELPROVIDER_ENABLE_FLYDSL=ON
+  SUB_PROJECTS
+    hipkernelprovider
+)
+
 # Gates the generic kernel ingestor platform described in RFC 0017:
 # rocm-libraries/projects/hipdnn/docs/rfcs/0017_UniversalKernelDescriptor.md
 therock_declare_flag(
   NAME HIPDNN_ENABLE_KERNEL_INGESTOR
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Enable the generic kernel ingestor build-time logic in hipDNN (dynamic engine loading, kpack bundling/packaging) and its providers"
   CMAKE_VARS
     HIPDNN_ENABLE_KERNEL_INGESTOR=ON
@@ -102,7 +117,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME HIPDNN_ENABLE_CUDNN_COMPATIBILITY
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build hipDNN including the cuDNN compatibility wrapper.  Please see hipDNN RFC 0012."
   CMAKE_VARS
     HIPDNN_ENABLE_CUDNN_COMPATIBILITY=ON
@@ -130,6 +145,13 @@ set(_fftw3_autotools_default OFF)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(_fftw3_autotools_default ON)
 endif()
+
+therock_declare_flag(
+  NAME FFTW3_AUTOTOOLS_BUILD
+  DEFAULT_VALUE ${_fftw3_autotools_default}
+  DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
+)
+
 therock_declare_flag(
   NAME HSA_HOTSWAP_DEFAULT_ON
   DEFAULT_VALUE ON
@@ -138,12 +160,6 @@ therock_declare_flag(
     HSA_HOTSWAP_DEFAULT_ON=1
   SUB_PROJECTS
     ROCR-Runtime
-)
-
-therock_declare_flag(
-  NAME FFTW3_AUTOTOOLS_BUILD
-  DEFAULT_VALUE ${_fftw3_autotools_default}
-  DESCRIPTION "Build third-party fftw3 with autotools on Linux. Ignored on Windows."
 )
 
 therock_declare_flag(
@@ -168,6 +184,24 @@ therock_declare_flag(
   DEFAULT_VALUE OFF
   DESCRIPTION "Windows: build for the AMD driver package"
   GLOBAL_PROPAGATE_FLAG
+)
+
+# RFC0018 flag metadata (recorded here as a comment until therock_declare_flag
+# grows dedicated OWNER/CREATED/EXPIRES/STAGE keywords; see
+# docs/rfcs/RFC0018-Feature-Flag-Lifecycle-and-Canary-Promotion.md):
+#   OWNER    prim-team
+#   CREATED  2026-10-21
+#   EXPIRES  2027-04-21
+#   STAGE    default-on
+# Build-time flag: changes build topology, install layout and artifacts, so it
+# cannot be a runtime flag. ON builds the unified hipCCL superbuild; OFF is the
+# kill switch back to the legacy separate subprojects (no PR revert needed).
+therock_declare_flag(
+  NAME BUILD_HIPCCL
+  TYPE BOOL
+  DEFAULT_VALUE ON
+  DESCRIPTION "Build rocPRIM/hipCUB/rocThrust together as the unified hipCCL superbuild (rocm-libraries projects/hipccl/hipccl3) instead of the legacy separate subprojects. OFF builds the legacy subprojects."
+  ISSUE AIPRIMS-251
 )
 
 ###############################################################################

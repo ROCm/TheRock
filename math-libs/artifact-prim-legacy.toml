@@ -1,0 +1,38 @@
+# rocPRIM
+[components.dbg."math-libs/rocPRIM/stage"]
+[components.dev."math-libs/rocPRIM/stage"]
+[components.doc."math-libs/rocPRIM/stage"]
+[components.test."math-libs/rocPRIM_tests/stage"]
+include = [
+  "bin/test_*",
+  "bin/rocprim/CTestTestfile.cmake",
+  "bin/rocprim/generate_resource_spec*",
+  "lib/libtest_linking_*.*",
+]
+
+# hipCUB
+[components.dbg."math-libs/hipCUB/stage"]
+[components.dev."math-libs/hipCUB/stage"]
+[components.doc."math-libs/hipCUB/stage"]
+[components.test."math-libs/hipCUB/stage"]
+include = [
+  "bin/test_*",
+  "bin/benchmark_*",
+  "bin/hipcub/control.txt",
+  "bin/hipcub/CTestTestfile.cmake",
+  "bin/hipcub/generate_resource_spec*",
+]
+
+# rocThrust
+[components.dbg."math-libs/rocThrust/stage"]
+[components.dev."math-libs/rocThrust/stage"]
+[components.doc."math-libs/rocThrust/stage"]
+[components.test."math-libs/rocThrust/stage"]
+include = [
+  "bin/test_*",
+  "bin/benchmark_thrust_*",
+  "bin/*.hip",
+  "bin/*.hip.exe", # Windows
+  "bin/rocthrust/CTestTestfile.cmake",
+  "bin/rocthrust/generate_resource_spec*",
+]

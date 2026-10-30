@@ -105,6 +105,10 @@ class TestROCmSanity:
         is_asan(),
         reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
     )
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="clinfo test is disabled for gfx125X-dcgpu due to hangs",
+    )
     @pytest.mark.parametrize(
         "to_search",
         [

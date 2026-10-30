@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -77,7 +78,7 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         # Selects an entry in the tokens dictionary, not a literal credential.
         "token_key": "systems",  # nosec B105
-        "branch": "amd-staging-rocgdb-16",
+        "branch": "amd-staging-rocgdb-18",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * rocgdb tests only (no impact on other project builds/tests)
@@ -95,6 +96,13 @@ SUBMODULE_CONFIG = {
         #   * mesa-fork tests only (no impact on other project builds/tests)
         "labels": [*COMMON_CI_LABELS, "test:rocdecode", "test:rocjpeg"],
     },
+}
+
+# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
+# (their real paths are nested) to their SUBMODULE_CONFIG key.
+ONLY_SUBMODULE_ALIASES = {
+    "rocgdb": "debug-tools/rocgdb/source",
+    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
 }
 
 
@@ -124,28 +132,61 @@ def submodule_changed(before: str, after: str, path: str) -> bool:
     return bool(diff.strip())
 
 
+_GH_API_RETRYABLE_STATUSES = {502, 503, 504}
+_GH_API_MAX_RETRIES = 4
+_GH_API_RETRY_BACKOFF_BASE = 2  # seconds; doubles each attempt
+
+
 def gh_api(
     token: str, endpoint: str, method: str = "GET", data: dict | None = None
 ) -> Any:
-    """Make a GitHub API request and return the parsed JSON response."""
+    """Make a GitHub API request and return the parsed JSON response.
+
+    GET requests are retried on transient server errors (502/503/504) with
+    exponential backoff.  The run-jobs endpoint on large Multi-Arch CI runs
+    (~900 jobs) frequently returns 502 on individual pages; retrying lets
+    ``_list_run_jobs`` paginate through them reliably.
+    """
     url = f"https://api.github.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
 
-    response = requests.request(method, url, headers=headers, json=data)
+    last_response = None
+    attempts = _GH_API_MAX_RETRIES if method == "GET" else 1
+    for attempt in range(attempts):
+        response = requests.request(method, url, headers=headers, json=data)
+        if response.ok:
+            if response.status_code == 204 or not response.text:
+                return None
+            return response.json()
 
-    if not response.ok:
-        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
+        last_response = response
+        if (
+            response.status_code in _GH_API_RETRYABLE_STATUSES
+            and attempt < attempts - 1
+        ):
+            delay = _GH_API_RETRY_BACKOFF_BASE * (2**attempt)
+            print(
+                f"[WARN] GitHub API returned {response.status_code} for "
+                f"{method} {endpoint}; retrying in {delay}s "
+                f"(attempt {attempt + 1}/{attempts})"
+            )
+            time.sleep(delay)
+            continue
 
-    if response.status_code == 204 or not response.text:
-        return None
+        break
 
-    return response.json()
+    raise RuntimeError(
+        f"GitHub API failed: {last_response.status_code} {last_response.text}"
+    )
 
 
 LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
+# A Multi-Arch CI run has ~900 jobs, and the run-jobs endpoint reliably
+# answers 502 for those runs at the API maximum of 100 per page. 50 serves.
+RUN_JOBS_PAGE_SIZE = 50
 
 
 def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, Any]]:
@@ -156,12 +197,15 @@ def _list_run_jobs(repo: str, token: str, run_id: str | int) -> list[dict[str, A
     while True:
         result = gh_api(
             token,
-            f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}",
+            f"repos/{repo}/actions/runs/{run_id}/jobs"
+            f"?per_page={RUN_JOBS_PAGE_SIZE}&page={page}",
         )
         page_jobs = result.get("jobs", [])
         jobs.extend(page_jobs)
 
-        if len(page_jobs) < 100 or len(jobs) >= result.get("total_count", 0):
+        if len(page_jobs) < RUN_JOBS_PAGE_SIZE or len(jobs) >= result.get(
+            "total_count", 0
+        ):
             return jobs
 
         page += 1
@@ -214,18 +258,24 @@ def get_baseline_run_id_from_merged_pr(
     """Get the baseline run ID from the PR that was just merged.
 
     Downstream repos reuse this run's build-stage artifacts directly (via
-    `baseline_run_id`), so only a run where those specific stages actually
+    ``baseline_run_id``), so only a run where those specific stages actually
     succeeded is safe to hand out. We check the "Libraries Baseline Ready"
-    gate job rather than the whole run's `conclusion`: an unrelated
+    gate job rather than the whole run's ``conclusion``: an unrelated
     math-libs/compiler-runtime failure elsewhere in the matrix makes the
     overall run "failure" even when every stage rocm-libraries needs
-    succeeded, and rejecting on that basis would throw away perfectly good
-    baselines. `status=completed` still filters candidate runs to ones that
-    have finished; their overall `conclusion` no longer decides usability. If
-    the newest matching run's gate job did not succeed (or does not exist),
-    we deliberately do not fall back to an older run on a different commit;
-    the caller treats a `None` return as "no baseline", which forces a full
-    rebuild instead of a plausible-looking but wrong artifact reuse.
+    succeeded.
+
+    We filter by ``event=pull_request`` to target the PR-triggered runs, but
+    deliberately not by run status. The gate job finishes with the build
+    stages, hours before the test matrix behind it, so a bump PR is routinely
+    merged while its run is still ``in_progress`` (or re-running a failed
+    job); filtering on ``status=completed`` hid exactly those runs and left
+    only the cancelled duplicates GitHub creates on the same head SHA, which
+    have no gate job (see #9402). Those duplicates can also come back first
+    in the list, so the gate job, not list order, decides which run is used.
+
+    Returns ``None`` when no matching run's gate job succeeded; the caller
+    preserves the existing ``baseline-run-id`` in that case.
     """
     # Find the PR that produced this merge commit
     prs = gh_api(token, f"repos/{repo}/commits/{merge_commit_sha}/pulls")
@@ -241,34 +291,47 @@ def get_baseline_run_id_from_merged_pr(
         print(f"[WARN] No merged PR found for commit {merge_commit_sha[:7]}")
         return None
 
-    # Get the completed workflow run for this PR's head commit
+    # Find the PR-triggered workflow runs for this PR's head commit,
+    # finished or not.
     pr_head_sha = pr["head"]["sha"]
     runs = gh_api(
-        token, f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&status=completed"
+        token,
+        f"repos/{repo}/actions/runs?head_sha={pr_head_sha}&event=pull_request",
     )
     matching_runs = [
-        run for run in runs.get("workflow_runs", []) if run["name"] == workflow_name
+        r for r in runs.get("workflow_runs", []) if r["name"] == workflow_name
     ]
 
+    if not matching_runs:
+        print(f"[WARN] No {workflow_name} PR run found for PR #{pr['number']}")
+        return None
+
     for run in matching_runs:
-        if _baseline_gate_jobs_succeeded(repo, token, run["id"]):
+        try:
+            gate_succeeded = _baseline_gate_jobs_succeeded(repo, token, run["id"])
+        except RuntimeError as e:
+            # The jobs endpoint is flaky on runs this large. Skipping the run
+            # costs a baseline refresh; letting the error escape would abort
+            # the whole pin PR.
+            print(f"[WARN] Could not read jobs for run {run['id']}: {e}")
+            continue
+        if gate_succeeded:
             print(
-                f"[INFO] Found {workflow_name} run {run['id']} with all reused "
-                f"stages succeeded for PR #{pr['number']}"
+                f"[INFO] Using {workflow_name} PR run {run['id']} for "
+                f"PR #{pr['number']} (status={run.get('status')}, "
+                f"conclusion={run.get('conclusion')})"
             )
             return str(run["id"])
         print(
-            f"[WARN] Run {run['id']} (conclusion={run.get('conclusion')}) does not "
-            f"have all reused stages succeeded; skipping"
+            f"[WARN] Run {run['id']} (status={run.get('status')}, "
+            f"conclusion={run.get('conclusion')}) does not have all reused "
+            f"stages succeeded; skipping"
         )
 
-    if matching_runs:
-        print(
-            f"[WARN] No {workflow_name} run with all reused stages succeeded "
-            f"found for PR #{pr['number']}"
-        )
-    else:
-        print(f"[WARN] No {workflow_name} run found for PR #{pr['number']}")
+    print(
+        f"[WARN] No {workflow_name} run with all reused stages succeeded "
+        f"found for PR #{pr['number']}"
+    )
     return None
 
 
@@ -329,16 +392,17 @@ def update_ci_env_file(
             continue
 
         if in_baseline_run_id and stripped.startswith("value:"):
-            indent = line[: line.find("value:")]
             if baseline_run_id:
+                indent = line[: line.find("value:")]
                 updated_lines.append(
                     f'{indent}value: "{baseline_run_id}" # Updated by assistant-librarian[bot] on submodule bumps\n'
                 )
             else:
-                # Keep empty if no successful run found
-                updated_lines.append(
-                    f'{indent}value: "" # Updated by assistant-librarian[bot] on submodule bumps\n'
-                )
+                # Preserve the existing baseline-run-id when no successful run
+                # is found.  A stale-but-valid baseline is better than none:
+                # blanking the field disables stage reuse and forces a full
+                # rebuild in rocm-libraries CI.
+                updated_lines.append(line)
             in_baseline_run_id = False
             continue
 
@@ -727,7 +791,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         # Fetch the exact target commit in the submodule. A plain depth-1 fetch
         # only retrieves the default branch tip, which misses commits that live
-        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-18).
         print(f"[INFO] Fetching {latest[:7]} for {submodule}")
         run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
         run(["git", "-C", submodule, "checkout", latest])
@@ -785,13 +849,23 @@ def handle_push(
     after: str,
     tokens: dict[str, str],
     actions_token: str | None = None,
+    only_submodule: str | None = None,
+    skip_next_bump: bool = False,
 ) -> None:
-    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
-    changed = None
-    for path in SUBMODULE_CONFIG:
-        if submodule_changed(before, after, path):
-            changed = path
-            break
+    """Push event: update TheRock refs, close stale PRs, create next bump PR.
+
+    `only_submodule` and `skip_next_bump` exist for the manual
+    `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
+    `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
+    function for one specific submodule without also opening a new "Bump
+    <submodule>" PR in TheRock. Real push events never set either.
+    """
+    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
+    if changed is None:
+        for path in SUBMODULE_CONFIG:
+            if submodule_changed(before, after, path):
+                changed = path
+                break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
@@ -824,7 +898,8 @@ def handle_push(
             print(f"[INFO] Using baseline run ID {baseline_run_id} from merged PR")
         else:
             print(
-                f"[WARN] Could not get baseline run ID from merged PR, proceeding without it"
+                f"[WARN] Could not find baseline run ID from merged PR; "
+                f"keeping existing baseline-run-id in ci-env"
             )
 
     # Update workflow YAML
@@ -870,6 +945,12 @@ def handle_push(
         )
         if baseline_run_id:
             pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
+        else:
+            pr_body += (
+                "\n\n**Note:** No successful baseline run was found for the "
+                "merged PR. The existing `baseline-run-id` in ci-env was "
+                "preserved (not cleared)."
+            )
 
         pr = gh_api(
             token,
@@ -887,6 +968,10 @@ def handle_push(
         )
 
     os.chdir(original_cwd)
+
+    if skip_next_bump:
+        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
+        return
 
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
@@ -909,6 +994,27 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
+    parser.add_argument(
+        "--only-submodule",
+        default=None,
+        choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
+        help=(
+            "Manual workflow_dispatch replay only: treat this submodule as "
+            "the one that changed between --before/--after, instead of "
+            "auto-detecting it. Lets an operator re-run the ref/pin-update "
+            "half of a push event (e.g. to pick up a bump_automation.py fix) "
+            "without a real submodule-bump commit landing on main."
+        ),
+    )
+    parser.add_argument(
+        "--skip-next-bump",
+        action="store_true",
+        help=(
+            "Manual workflow_dispatch replay only: don't open a new "
+            "Bump <submodule> PR in TheRock after updating the downstream "
+            "ref/pins. Real push events always open the next bump PR."
+        ),
+    )
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
@@ -935,7 +1041,14 @@ def main() -> None:
     elif args.event_type == "push":
         if not args.actions_token:
             parser.error("--actions_token is required when --event_type is push")
-        handle_push(args.before, args.after, tokens, actions_token=args.actions_token)
+        handle_push(
+            args.before,
+            args.after,
+            tokens,
+            actions_token=args.actions_token,
+            only_submodule=args.only_submodule,
+            skip_next_bump=args.skip_next_bump,
+        )
 
 
 if __name__ == "__main__":

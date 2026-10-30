@@ -76,7 +76,12 @@ class PackageDef:
     # {version} (X.Y.Z), {major}, and {minor}.
     install_subdir: str
 
-    # Fixed GUID for MajorUpgrade matching across versions.  Must never change.
+    # Base namespace GUID for this package. The actual MSI UpgradeCode is derived
+    # per-major.minor as uuid5(upgrade_code, "major.minor") (see upgrade_code_for),
+    # so e.g. 10.2 and 10.3 get distinct UpgradeCodes and install side by side,
+    # while builds within one major.minor share an UpgradeCode and upgrade in
+    # place. This base GUID is a namespace, never emitted as an UpgradeCode
+    # directly; it must never change.
     upgrade_code: str
 
     # WiX Feature Id and Title for the primary feature.
@@ -428,6 +433,19 @@ def parse_args() -> argparse.Namespace:
         help="List available package names and exit.",
     )
     parser.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a directory of already-extracted artifacts. When set, "
+            "the generator uses these artifacts directly and skips any fetch "
+            "(--run-id and --build-root are ignored). Use this when the "
+            "workflow fetches artifacts in a dedicated step before calling "
+            "the generator."
+        ),
+    )
+    parser.add_argument(
         "--run-id",
         default=None,
         metavar="RUN_ID",
@@ -532,6 +550,17 @@ def parse_args() -> argparse.Namespace:
         metavar="X.Y.Z",
         help=(f"MSI version string. Default: {default_version} (from version.json)"),
     )
+    parser.add_argument(
+        "--display-version",
+        default=default_version,
+        metavar="X.Y.Z",
+        help=(
+            "Marketing version shown in Add/Remove Programs (ARPDISPLAYVERSION). "
+            f"Default: {default_version} (from version.json). Unlike "
+            "--package-version, this is not required to be a numeric MSI version; "
+            "it is the human-facing ROCm version."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -616,6 +645,63 @@ def discovery_registry_key(major: str, minor: str) -> str:
     return f"Software\\AMD\\ROCm\\{major}.{minor}"
 
 
+def parse_major_minor(version: str) -> tuple[str, str]:
+    """Return ``(major, minor)`` from a dotted version like ``10.2.0``.
+
+    Raises ``ValueError`` on a version without at least major and minor
+    components. The MSI install path and discovery key are both scoped to
+    ``major.minor``, so consumers (the generator and the install test) share
+    this parse to stay consistent.
+    """
+    parts = version.split(".")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"version must be at least major.minor (got {version!r})")
+    return parts[0], parts[1]
+
+
+def upgrade_code_for(package: PackageDef, version: str) -> str:
+    """Return the per-major.minor MSI UpgradeCode for ``package`` at ``version``.
+
+    Derived deterministically as uuid5(package base GUID, "major.minor"), so a
+    given major.minor always maps to the same UpgradeCode (builds upgrade in
+    place) while different major.minor values map to different UpgradeCodes
+    (distinct products that coexist, e.g. ROCm 10.2 alongside 10.3). Formatted
+    uppercase inside braces, as WiX expects.
+    """
+    major, minor = parse_major_minor(version)
+    namespace = uuid.UUID(package.upgrade_code)
+    derived = uuid.uuid5(namespace, f"{major}.{minor}")
+    return "{" + str(derived).upper() + "}"
+
+
+def expected_msi_filename(package: str) -> str:
+    """Return the MSI filename the generator writes for ``package``.
+
+    The generator names each package's output ``<output_stem>.msi``; the install
+    test imports this so it looks for the same filename the build produced,
+    without duplicating the stem-to-filename rule.
+    """
+    try:
+        return f"{PACKAGES[package].output_stem}.msi"
+    except KeyError as e:
+        raise ValueError(
+            f"unknown package {package!r}; choose from {', '.join(PACKAGES)}"
+        ) from e
+
+
+def install_subdir_for(package: str, version: str) -> str:
+    """Return the versioned install subdirectory name for ``package``.
+
+    Expands the package's ``install_subdir`` template (e.g. ``core-{major}.{minor}``)
+    the same way resolve_install_layout does, so the install test derives the
+    install location from the same rule the generator uses.
+    """
+    major, minor = parse_major_minor(version)
+    return PACKAGES[package].install_subdir.format(
+        version=version, major=major, minor=minor
+    )
+
+
 @dataclass
 class PackageInputs:
     """Everything gathered from disk before any WiX XML is emitted.
@@ -626,6 +712,7 @@ class PackageInputs:
 
     package: PackageDef
     version: str
+    display_version: str
     files: list[tuple[Path, Path]]
     legacy_dlls: list[tuple[str, Path]]
 
@@ -642,6 +729,7 @@ class InstallLayout:
     product_dir: str
     version_dir: str
     version: str
+    display_version: str
     subdir_name: str
     major: str
     minor: str
@@ -678,10 +766,15 @@ class WixDocument:
 def resolve_artifact_dir(args: argparse.Namespace) -> Path:
     """Return the directory of extracted artifacts for the selected source.
 
-    Fetches from the CI run when --run-id is set (once; the fetch is not
-    package-specific), otherwise points at the local build tree. Callers that
-    build several packages should resolve this once and reuse it.
+    Resolution order:
+      1. --artifact-dir: caller already fetched; use as-is (no network I/O).
+      2. --run-id: fetch from S3 via artifact_manager.py.
+      3. --build-root: local CMake build tree.
+
+    Callers that build several packages should resolve this once and reuse it.
     """
+    if getattr(args, "artifact_dir", None) is not None:
+        return args.artifact_dir
     if args.run_id:
         return fetch_artifacts(
             run_id=args.run_id,
@@ -711,6 +804,7 @@ def resolve_package_inputs(
     return PackageInputs(
         package=package,
         version=args.package_version,
+        display_version=args.display_version,
         files=collect_files_from_catalog(artifact_dir, package),
         legacy_dlls=resolve_legacy_dlls(
             artifact_dir,
@@ -722,9 +816,7 @@ def resolve_package_inputs(
 
 def resolve_install_layout(args: argparse.Namespace, version: str) -> InstallLayout:
     """Resolve the install location and versioned subdirectory name."""
-    parts = version.split(".")
-    major = parts[0] if len(parts) > 0 else ""
-    minor = parts[1] if len(parts) > 1 else ""
+    major, minor = parse_major_minor(version)
     package = PACKAGES[args.package]
     subdir_name = package.install_subdir.format(
         version=version, major=major, minor=minor
@@ -734,18 +826,26 @@ def resolve_install_layout(args: argparse.Namespace, version: str) -> InstallLay
         product_dir=args.product_dir,
         version_dir=args.version_dir,
         version=version,
+        display_version=getattr(args, "display_version", version),
         subdir_name=subdir_name,
         major=major,
         minor=minor,
     )
 
 
-def create_wix_document(package: PackageDef, version: str) -> WixDocument:
+def create_wix_document(
+    package: PackageDef, version: str, display_version: str
+) -> WixDocument:
     """Create the <Wix>/<Package> skeleton with summary, upgrade, and properties.
 
     Emits everything that precedes the directory tree: SummaryInformation,
     MajorUpgrade, MediaTemplate, the three control Properties, and the
     INSTALLFOLDER redirect.
+
+    ``version`` is the numeric MSI ProductVersion (major.minor.<build-date>.0);
+    ``display_version`` is the human-facing marketing version (e.g. 10.2.0)
+    surfaced in Add/Remove Programs via ARPDISPLAYVERSION, since ProductVersion
+    carries a date in its third field rather than the marketing patch.
     """
     root = ET.Element(_tag("Wix"))
     pkg = ET.SubElement(
@@ -754,7 +854,10 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         Name=package.product_name,
         Version=version,
         Manufacturer="Advanced Micro Devices, Inc.",
-        UpgradeCode=package.upgrade_code,
+        # Per-major.minor UpgradeCode: 10.2 and 10.3 are distinct products that
+        # coexist; builds within one major.minor share this code and upgrade in
+        # place. See upgrade_code_for.
+        UpgradeCode=upgrade_code_for(package, version),
         Language="1033",
         Codepage="1252",
         InstallerVersion="500",
@@ -768,11 +871,25 @@ def create_wix_document(package: PackageDef, version: str) -> WixDocument:
         pkg,
         _tag("SummaryInformation"),
         Keywords="ROCm AMD GPU",
-        Description=f"{package.product_name} {version}",
+        Description=f"{package.product_name} {display_version}",
     )
+    # Show the marketing version (e.g. 10.2.0) in Add/Remove Programs; the
+    # numeric ProductVersion above carries the build date, not the patch.
+    ET.SubElement(
+        pkg,
+        _tag("Property"),
+        Id="ARPDISPLAYVERSION",
+        Value=display_version,
+        Secure="yes",
+    )
+    # AllowSameVersionUpgrades: two builds on the same day share the third
+    # ProductVersion field (the date). Without this, Windows Installer would let
+    # the second install side by side rather than replacing the first; with it,
+    # the later build replaces the earlier one.
     ET.SubElement(
         pkg,
         _tag("MajorUpgrade"),
+        AllowSameVersionUpgrades="yes",
         DowngradeErrorMessage=f"A newer version of {package.product_name} is already installed.",
     )
     ET.SubElement(pkg, _tag("MediaTemplate"), EmbedCab="yes")
@@ -993,8 +1110,10 @@ def add_discovery_registry(
         _tag("RegistryValue"),
         Root="HKLM",
         Key=discovery_key,
+        # The marketing version (e.g. 10.2.0), not the dated MSI ProductVersion:
+        # tools discovering ROCm via this key want the human-facing version.
         Name="Version",
-        Value=layout.version,
+        Value=layout.display_version,
         Type="string",
     )
     ET.SubElement(feature, _tag("ComponentRef"), Id="RocmDiscovery")
@@ -1213,7 +1332,7 @@ def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> Non
     inputs = resolve_package_inputs(args, artifact_dir)
     layout = resolve_install_layout(args, inputs.version)
 
-    doc = create_wix_document(inputs.package, inputs.version)
+    doc = create_wix_document(inputs.package, inputs.version, inputs.display_version)
     add_install_directory_tree(doc, layout)
     feature = add_primary_feature(doc, inputs.package)
     add_payload_components(doc, feature, inputs.files)
@@ -1224,9 +1343,17 @@ def build_wxs(args: argparse.Namespace, artifact_dir: Path | None = None) -> Non
 
     write_wxs(doc.root, args.output)
 
-    print(f"Written:  {args.output}")
-    print(f"Files:    {len(inputs.files)}")
+    print(f"Package:  {inputs.package.product_name}")
+    print(f"Version:  {inputs.version}  (display: {inputs.display_version})")
     print(f"Install:  {layout.display_path}")
+    print(f"Files:    {len(inputs.files)}")
+    for install_rel, source in inputs.files:
+        print(f"  {install_rel}  <-  {source.name}")
+    if inputs.legacy_dlls:
+        print(f"Legacy System32 DLLs ({len(inputs.legacy_dlls)}):")
+        for dll_name, source in inputs.legacy_dlls:
+            print(f"  {dll_name}  <-  {source}")
+    print(f"Written:  {args.output}")
 
 
 def build_all(args: argparse.Namespace) -> None:
@@ -1236,6 +1363,7 @@ def build_all(args: argparse.Namespace) -> None:
     package-specific — then loops over args.package_list, writing each package's
     .wxs to its resolved output path.
     """
+    print(f"Building packages: {', '.join(args.package_list)}")
     artifact_dir = resolve_artifact_dir(args)
     explicit_output = args.output  # Set only for single-package --output.
     for pkg_name in args.package_list:

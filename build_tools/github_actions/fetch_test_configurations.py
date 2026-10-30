@@ -100,26 +100,36 @@ _BASE_CONTAINER_OPTIONS = [
     "--ulimit nofile=1048576:1048576",
 ]
 
-# GPU-specific container options (only applied when linux_cpu_runner != True)
-# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
-# --group-add video - Grants access to GPU video group
-# --device /dev/kfd - AMD KFD device for GPU compute
-# --device /dev/dri - Direct Rendering Infrastructure devices
-# --group-add 993,992,110 - Additional GPU-related groups
-# --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
-_GPU_CONTAINER_OPTIONS = [
-    "--security-opt seccomp=unconfined",
-    "--group-add video",
-    "--device /dev/kfd",
-    "--device /dev/dri",
-    "--group-add 993",
-    "--group-add 992",
-    "--group-add 110",
-    "--env-file /etc/podinfo/gha-gpu-isolation-settings",
-    "-e ROCR_VISIBLE_DEVICES",
-    "-e KUBE_CPU_REQUEST",
-]
+# GPU-specific container options per platform (only applied when linux_cpu_runner != True)
+# linux:
+#   --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
+#   --group-add video - Grants access to GPU video group
+#   --device /dev/kfd - AMD KFD device for GPU compute
+#   --device /dev/dri - Direct Rendering Infrastructure devices
+#   --group-add 993,992,110 - Additional GPU-related groups
+#   --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+#   -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# wsl: the GPU is only /dev/dxg (no /dev/kfd or /dev/dri), with its driver
+#   libraries in /usr/lib/wsl on the host.
+_GPU_CONTAINER_OPTIONS = {
+    "linux": [
+        "--security-opt seccomp=unconfined",
+        "--group-add video",
+        "--device /dev/kfd",
+        "--device /dev/dri",
+        "--group-add 993",
+        "--group-add 992",
+        "--group-add 110",
+        "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+        "-e ROCR_VISIBLE_DEVICES",
+        "-e KUBE_CPU_REQUEST",
+    ],
+    "wsl": [
+        "--device /dev/dxg",
+        "-v /usr/lib/wsl:/usr/lib/wsl",
+        "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
+    ],
+}
 
 
 def _build_container_options(job_config: dict, platform: str) -> dict:
@@ -128,16 +138,17 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     Args:
         job_config: The job configuration dictionary
-        platform: The platform (e.g., "linux", "windows")
+        platform: The platform (e.g., "linux", "windows", "wsl")
 
     Returns:
         The modified job_config with updated container_options
     """
-    # Containers are Linux-only (test_component.yml gates container.image on
-    # platform == 'linux'). On other platforms, collapse container_options to an
-    # empty string so `options: ${{ fromJSON(...).container_options }}` doesn't
-    # evaluate to a YAML sequence and fail template parsing.
-    if platform != "linux":
+    # Containers are Linux-only, including WSL (test_component.yml gates
+    # container.image on platform != 'windows'). On Windows, collapse
+    # container_options to an empty string so
+    # `options: ${{ fromJSON(...).container_options }}` doesn't evaluate to a
+    # YAML sequence and fail template parsing.
+    if platform not in _GPU_CONTAINER_OPTIONS:
         job_config["container_options"] = ""
         return job_config
 
@@ -146,7 +157,7 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     # Add GPU-specific options unless this is a CPU-only runner
     if not job_config.get("linux_cpu_runner", False):
-        options_parts.extend(_GPU_CONTAINER_OPTIONS)
+        options_parts.extend(_GPU_CONTAINER_OPTIONS[platform])
 
     # Add any job-specific container options
     if "container_options" in job_config:
@@ -183,7 +194,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:e89ba4458be7add8ee1f8e398da9f3fd8816a0ad56d521054543916d4133184a",
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -233,9 +244,23 @@ _rocgdb_common = {
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
 #
+# A component may mark itself advisory (non-blocking) on specific GPU families via
+# "expect_failure", a map keyed by platform whose value is a list of family entries,
+# matched exactly like include_family/exclude_family (so either the family group
+# string or an individual gfx target works). It is resolved to a single boolean per
+# job before the matrix is emitted, which test_component.yml maps to
+# continue-on-error plus an "(xfail)" job-name suffix. The job is still scheduled and
+# still reports; it just cannot fail the run. Use it to land coverage for an arch
+# that is still being qualified without blocking everyone else. For example:
+#   "expect_failure": {"linux": ["gfx950"]}
+#
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
 # still supply artifacts and do not exclude tests. Omit the field for no stage gate.
+#
+# A component's "skip_build_variant" lists BUILD_VARIANT values (exact match) on which
+# it is not scheduled, e.g. ["asan", "host-asan", "asan-debug", "host-asan-debug"] for a
+# test that cannot work under ASAN. Omit the field to run on every build variant.
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
@@ -251,7 +276,7 @@ test_matrix = {
             "windows": 1,
         },
         # Supply the system OpenCL ICD loader for clinfo (Linux only).
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
         "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
@@ -262,10 +287,14 @@ test_matrix = {
         "fetch_artifact_args": "--hip-tests --tests",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
-        "platform": ["linux", "windows"],
+        # "wsl": the Linux build on a WSL-hosted runner (ci:run-wsl).
+        "platform": ["linux", "windows", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
+            "wsl": 4,
         },
     },
     # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
@@ -710,6 +739,43 @@ test_matrix = {
             ],
         },
     },
+    # hipFFT multi-GPU subset: only the *multi_gpu* hipfft tests, scheduled on
+    # 8-GPU runners. Shares the hipfft-test binary/artifacts with the single-GPU
+    # "hipfft" job above. test_runner.py rewrites the ctest label to
+    # "multigpu_<category>" for this job (see MULTI_GPU_COMPONENTS), so it selects
+    # only the multigpu_* labelled tests from hipfft's test_categories.yaml.
+    "hipfft-multi-gpu": {
+        "job_name": "hipfft-multi-gpu",
+        # Selected whenever the base hipfft component is (test:hipfft /
+        # PROJECTS_TO_TEST=hipfft), since this variant has no label of its own.
+        "base_project": "hipfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "test_types": ["comprehensive", "full"],
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
+    # rocFFT multi-GPU subset: mirror of hipfft-multi-gpu for rocFFT. Selects only
+    # the multigpu_* labelled tests from rocfft's test_categories.yaml on 8-GPU
+    # runners, sharing the rocfft-test binary/artifacts with the single-GPU
+    # "rocfft" job above.
+    "rocfft-multi-gpu": {
+        "job_name": "rocfft-multi-gpu",
+        "base_project": "rocfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "test_types": ["comprehensive", "full"],
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
@@ -738,8 +804,10 @@ test_matrix = {
     # The runner ships in the MIOpen dist (share/miopen/bin/run_dbsync_rocjitsu.py, pulled via
     # --miopen; defined in rocm-libraries projects/miopen/test/gtest/dbsync/): it resolves arch + CU
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
-    # per CU with a CU-corrected config. include_family restricts it to gfx942, whose FAMILY_MAP
-    # entry covers both CU variants -- MI300X (304 CU) and MI300A (228 CU) -- in a single job.
+    # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
+    # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
+    # expect_failure below).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -749,15 +817,22 @@ test_matrix = {
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
-        # under rocjitsu; full set (gfx942 304+228) + artifact fetch + rocjitsu build
-        # measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
+        # StaticFDBSync skips itself at runtime under ASAN.
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
-            "linux": ["gfx942"],
+            "linux": ["gfx942", "gfx950"],
+        },
+        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
+        # few consecutive standard/comprehensive/full runs.
+        "expect_failure": {
+            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -800,6 +875,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
@@ -810,7 +886,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:64f8d6e3e6dfd46e2b1b9321b99aa72fd09140025638e27e5a0d50acb0e69e89",
         "exclude_family": {
             "linux": [
                 # CRITICAL FAILURE (pytest hangs): rocprofiler-sdk test hangs during pytest collection
@@ -842,6 +918,9 @@ test_matrix = {
     "hipdnn_install": {
         "job_name": "hipdnn_install",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -898,6 +977,9 @@ test_matrix = {
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1076,6 +1158,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
@@ -1097,6 +1180,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
@@ -1140,6 +1224,9 @@ test_matrix = {
         # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1151,20 +1238,29 @@ test_matrix = {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
+            "windows": 1,
         },
         # rocdecode requires FFmpeg dev libraries (libavcodec-dev, libavformat-dev,
-        # libavutil-dev) for test builds. These are not bundled in TheRock
-        # artifacts and are provided via the specialized media image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        # libavutil-dev) for the extended (FFmpeg-demux) test builds, which run only
+        # on Linux via the specialized media image below. Windows runs the always-on
+        # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
+        # the vaon12 backend, so it needs no FFmpeg and no container image.
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:7853bb7fc56e8ddd768e849b5594d0b7f2e89aad9618e29943888ee9d916c6d2",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1179,6 +1275,9 @@ test_matrix = {
         # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
         # of the correctness suite.
         "timeout_minutes": 60,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1203,10 +1302,13 @@ test_matrix = {
         "fetch_artifact_args": "--rocrtst --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+            "wsl": 1,
         },
     },
     # hipTensor tests
@@ -1254,7 +1356,10 @@ def run():
         "--platform",
         type=str,
         default=platform_module.system().lower(),
-        help="Platform to configure tests for (linux or windows)",
+        help=(
+            "Platform to configure tests for: linux, windows, or wsl (the Linux"
+            " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
+        ),
     )
     args, _ = parser.parse_known_args()
     platform = args.platform
@@ -1297,6 +1402,7 @@ def run():
             ["presubmit", "postsubmit", "nightly"]
         )
         if shortened_family in all_families:
+            # wsl has no entry of its own here; its runner is TEST_RUNS_ON.
             platform_info = all_families[shortened_family].get(platform, {})
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
@@ -1359,6 +1465,12 @@ def run():
             )
             continue
 
+        if build_variant in test_matrix[key].get("skip_build_variant", []):
+            logging.info(
+                f"Excluding job {job_name}: skip_build_variant lists {build_variant}"
+            )
+            continue
+
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
         # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
@@ -1394,6 +1506,12 @@ def run():
             )
             continue
 
+        # Key used for test-label / project selection. Split jobs (e.g. the
+        # multi-GPU variants) declare a "base_project" so that selecting the base
+        # component (via `test:hipfft` label or PROJECTS_TO_TEST=hipfft) also picks
+        # up the variant, which otherwise has no matching label of its own.
+        selection_key = test_matrix[key].get("base_project", key)
+
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
         # Filter out ci: control labels - they're not test component selectors
@@ -1404,14 +1522,19 @@ def run():
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+        if (
+            key != "sanity"
+            and expanded_test_labels
+            and selection_key not in expanded_test_labels
+        ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
         # Tier gate: a component may declare which test tiers it runs on via
         # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
         # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
-        # quick. Omit the field to run on every tier.
+        # quick, and the hipfft/rocfft multi-GPU split jobs run comprehensive/full
+        # only. Omit the field to run on every tier.
         allowed_test_types = test_matrix[key].get("test_types")
         if allowed_test_types and test_type not in allowed_test_types:
             logging.info(
@@ -1422,8 +1545,10 @@ def run():
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
+        # Split jobs match via selection_key (base_project) so PROJECTS_TO_TEST=hipfft
+        # also selects hipfft-multi-gpu.
         if platform in test_matrix[key]["platform"] and (
-            key == "sanity" or key in project_array or "*" in project_array
+            key == "sanity" or selection_key in project_array or "*" in project_array
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
@@ -1468,6 +1593,17 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # A component declares the families it is advisory on via
+            # "expect_failure" (see the key reference above). Resolve that
+            # declaration down to the single boolean the workflows read --
+            # test_component.yml compares it with `== true` to set
+            # continue-on-error, so the emitted value must never stay a map.
+            _xfail = job_config_data.get("expect_failure")
+            if _xfail:
+                job_config_data["expect_failure"] = _family_matches(
+                    _xfail.get(platform, []), amdgpu_families, _family_gfx_targets
+                )
 
             # tensilelite: append the tensilelite/tests C++ gtest suite (run via
             # ctest -L <test_type>, driven by the shared test_runner.py) after
