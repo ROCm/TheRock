@@ -4,6 +4,12 @@
 # Known release/2.14 transformer failures found by the AIPYTORCH-1609
 # cross-architecture validation.
 skip_tests = {
+    "windows": {
+        "transformers": [
+            # Fails fake-tensor execution on every validated Windows family.
+            "test_transformer_encoder_layer_fwd_fake_cuda",
+        ],
+    },
     "gfx110": {
         "transformers": [
             # Produces non-finite fp16 output on gfx1101.
