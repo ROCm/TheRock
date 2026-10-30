@@ -8,12 +8,13 @@ import sys
 import tempfile
 import textwrap
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
     _baseline_gate_jobs_succeeded,
     _clone_url,
+    _GH_API_MAX_RETRIES,
     _list_run_jobs,
     _list_workflow_runs_for_head,
     close_stale_prs,
@@ -22,6 +23,7 @@ from bump_automation import (
     find_therock_workflow_files,
     generate_pr_body,
     get_baseline_run_id_from_merged_pr,
+    gh_api,
     GITHUB_SEARCH_PAGE_SIZE,
     GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
@@ -89,6 +91,75 @@ class LatestCommitTest(unittest.TestCase):
             mock_api.call_args.args[1],
             "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-18",
         )
+
+
+def _mock_response(status_code: int, json_data=None, text: str = ""):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.ok = 200 <= status_code < 400
+    resp.text = text or (str(json_data) if json_data else "")
+    resp.json.return_value = json_data
+    return resp
+
+
+class GhApiRetryTest(unittest.TestCase):
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_retries_on_502(self, mock_request, mock_sleep):
+        mock_request.side_effect = [
+            _mock_response(502, text="Bad Gateway"),
+            _mock_response(200, json_data={"ok": True}),
+        ]
+        result = gh_api("token", "repos/ROCm/TheRock/actions/runs")
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(mock_request.call_count, 2)
+        mock_sleep.assert_called_once_with(2)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_retries_on_503_and_504(self, mock_request, mock_sleep):
+        mock_request.side_effect = [
+            _mock_response(503, text="Service Unavailable"),
+            _mock_response(504, text="Gateway Timeout"),
+            _mock_response(200, json_data={"data": 1}),
+        ]
+        result = gh_api("token", "repos/ROCm/TheRock/something")
+        self.assertEqual(result, {"data": 1})
+        self.assertEqual(mock_request.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_raises_after_max_retries(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(502, text="Bad Gateway")
+        with self.assertRaises(RuntimeError) as ctx:
+            gh_api("token", "repos/ROCm/TheRock/actions/runs/123/jobs")
+        self.assertIn("502", str(ctx.exception))
+        self.assertEqual(mock_request.call_count, _GH_API_MAX_RETRIES)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_post_does_not_retry_on_502(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(502, text="Bad Gateway")
+        with self.assertRaises(RuntimeError):
+            gh_api("token", "repos/ROCm/TheRock/issues/1/comments", method="POST")
+        mock_request.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_does_not_retry_on_404(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(404, text="Not Found")
+        with self.assertRaises(RuntimeError):
+            gh_api("token", "repos/ROCm/TheRock/nonexistent")
+        mock_request.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @patch("bump_automation.requests.request")
+    def test_returns_none_on_204(self, mock_request):
+        mock_request.return_value = _mock_response(204)
+        result = gh_api("token", "repos/ROCm/TheRock/something", method="POST")
+        self.assertIsNone(result)
 
 
 def _gate_job(conclusion: str | None, name: str = LIBRARIES_BASELINE_GATE_JOB_NAME):

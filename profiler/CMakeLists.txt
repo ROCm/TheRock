@@ -452,6 +452,10 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-systems
+    HARDENING_DEFERRED
+      "PAPI (autotools, when ROCPROFSYS_USE_PAPI and ROCPROFSYS_BUILD_PAPI are enabled)"
+      "libiberty (autotools, when built internally instead of using an external library)"
+      "elfutils (autotools, when ROCPROFSYS_BUILD_ELFUTILS is enabled)"
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
