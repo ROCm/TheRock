@@ -25,6 +25,19 @@ from _therock_utils.build_topology import get_topology
 REPO = Path(__file__).resolve().parent.parent
 ARTIFACT_NAME = "dasan-stack-sdk-gfx950"
 
+# BUILD_TOPOLOGY includes dependency/configuration nodes as well as archives.
+# Keep this list source-backed and explicit; never infer completeness from
+# whichever files happened to upload. OpenMPI is a real archive and stays
+# required (third-party/openmpi/CMakeLists.txt: therock_provide_artifact).
+LINUX_NON_ARCHIVE_NODES = {
+    "core-hipinfo": "core/CMakeLists.txt declares this artifact only inside if(WIN32)",
+    "fmt": "third-party/fmt/CMakeLists.txt declares a build dependency, no artifact",
+    "grpc": "third-party/grpc/CMakeLists.txt declares a build dependency, no artifact",
+    "spdlog": "third-party/spdlog/CMakeLists.txt declares a build dependency, no artifact",
+    "sysdeps-libmnl": "third-party/sysdeps/linux/CMakeLists.txt bundles therock-libmnl in sysdeps",
+    "sysdeps-libnl": "third-party/sysdeps/linux/CMakeLists.txt bundles therock-libnl in sysdeps",
+}
+
 
 def write_json(path: Path, data: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,6 +75,7 @@ def required_artifacts(topology) -> set[str]:
         for name, artifact in topology.artifacts.items()
         if not topology.is_artifact_disabled_on_platform(artifact, "linux")
         and not topology.is_artifact_disabled_on_processor(artifact, "x86_64")
+        and name not in LINUX_NON_ARCHIVE_NODES
     }
 
 
@@ -407,6 +421,7 @@ def package(args: argparse.Namespace) -> None:
         "gpu_validation": "Separate GPU workflow uses this archive and the unchanged lit bundle",
         "gpu_runtime_linkage": "Shared host runtime; do not mix a static DASan host runtime with sanitized HIP/ROCr shared libraries",
         "raw_artifacts": str(backend.base_uri),
+        "non_archive_topology_nodes": LINUX_NON_ARCHIVE_NODES,
     }
     write_json(deliver / "source-config-manifest.json", manifest)
     (deliver / "README.txt").write_text(

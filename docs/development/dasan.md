@@ -39,6 +39,11 @@ identified separately from instrumented C/C++ code.
 The final package job checks complete artifact coverage, assembles standard
 install-prefix tarballs, checks the host/compiler and packaged RCCL device
 code, and uploads the `dasan-stack-sdk-gfx950` GitHub Actions artifact.
+Coverage requires distributable archives, including OpenMPI. Six topology
+nodes do not produce separate Linux archives: Windows-only `core-hipinfo`,
+build dependencies `fmt`, `grpc`, and `spdlog`, and `sysdeps-libmnl`/`sysdeps-libnl`
+whose payloads belong to `sysdeps`. The source manifest records these exceptions;
+missing distributable archives still fail packaging.
 The delivery includes the ordinary SDK archive, a complete archive including
 tests, SHA-256 checksums, provenance, and download instructions. Stage binaries
 also remain in the standard run-scoped artifact store; stage logs alone are

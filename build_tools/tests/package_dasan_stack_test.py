@@ -62,6 +62,37 @@ class InventoryTest(unittest.TestCase):
         )
         self.assertEqual(package.required_artifacts(topology), {"linux"})
 
+    def test_inventory_exempts_only_verified_non_archive_nodes(self):
+        required = package.required_artifacts(package.get_topology())
+        self.assertTrue(
+            {
+                "core-hipinfo",
+                "fmt",
+                "grpc",
+                "spdlog",
+                "sysdeps-libmnl",
+                "sysdeps-libnl",
+            }.isdisjoint(required)
+        )
+        # OpenMPI is declared by CMake and must not be excused simply because
+        # its feature was misconfigured or the archive failed to upload.
+        self.assertTrue({"openmpi", "sysdeps", "hipdnn", "miopen", "rccl"} <= required)
+        complete = [f"{name}_lib_generic.tar.zst" for name in required]
+        self.assertEqual(
+            len(package.check_inventory(complete, required, "gfx950-dcgpu")),
+            len(required),
+        )
+        for real_artifact in ("openmpi", "sysdeps", "hipdnn", "miopen", "rccl"):
+            incomplete = [
+                filename
+                for filename in complete
+                if not filename.startswith(real_artifact + "_")
+            ]
+            with self.subTest(missing=real_artifact), self.assertRaisesRegex(
+                RuntimeError, real_artifact
+            ):
+                package.check_inventory(incomplete, required, "gfx950-dcgpu")
+
 
 class IntegrityTest(unittest.TestCase):
     def setUp(self):
