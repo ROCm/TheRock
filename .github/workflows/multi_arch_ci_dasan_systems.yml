@@ -1,0 +1,32 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Experimental DASan ROCr and RCCL update
+
+on:
+  workflow_call:
+    inputs:
+      dependencies_run_id:
+        type: string
+        required: true
+        description: "Existing successful DASan math run providing reusable dependency artifacts"
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  compiler_runtime:
+    uses: ./.github/workflows/multi_arch_ci_dasan.yml
+    # No secrets are needed; uploads use the job's OIDC identity.
+    with:
+      math_libraries: false
+
+  comm_libs:
+    needs: compiler_runtime
+    uses: ./.github/workflows/multi_arch_ci_dasan_component.yml
+    with:
+      stage: comm-libs
+      baseline_run_id: ${{ format('{0}', github.run_id) }}
+      dependencies_run_id: ${{ inputs.dependencies_run_id }}

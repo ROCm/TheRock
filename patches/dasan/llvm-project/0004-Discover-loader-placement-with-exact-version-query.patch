@@ -1,0 +1,74 @@
+From: Sahil Faizal <safaizal@amd.com>
+Subject: [PATCH] Discover ROCr loader placement with the exact-version query
+
+ROCr users/searlmc1/dasan at 4b6ee66563c1f331d9d3568c73b3f41c0ed5a5f2
+reports loader minor 0 through hsa_system_major_extension_supported while
+advertising loader 1.04 through hsa_system_extension_supported. Its
+Loader_ReservedAddress_Test explicitly verifies that contract. The older
+jhuber6 pin reported minor 4 through the major-version query.
+
+Use the exact 1.04 capability query before requesting the placement table.
+Otherwise DASan silently skips the available placement API and rejects the
+non-executable dma-buf alias fallback, leaving globals unchecked. Resolve the
+standard exact-query API in both external-header and standalone builds.
+Keep the smaller loader prefix fallback and non-null placement checks;
+report loader 1.04 only after successfully loading its placement functions.
+
+LLVM base: b07aa864f5b2bf648e6a61e2902cbfde83192481 plus patches 0001..0003.
+No test expectations are changed; the existing GPU global and module tests
+exercise executable placement and global instrumentation.
+
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_offload.cpp b/compiler-rt/lib/sanitizer_common/sanitizer_offload.cpp
+index de28e07..efa841c 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_offload.cpp
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_offload.cpp
+@@ -191,12 +191,12 @@ bool Offload::BindLoader() {
+   const uptr Prefix = offsetof(LoaderApi, GetLoadSize);
+   CheckHsa(Api.hsa_system_get_major_extension_table(HSA_EXTENSION_AMD_LOADER, 1,
+                                                     Prefix, &Loader));
+-  uint16_t Minor = 0;
++  // Some ROCr runtimes report minor 0 through the major-version query while
++  // publishing loader 1.04 through the exact-version capability query.
+   bool Supported = false;
+-  if (Api.hsa_system_major_extension_supported(HSA_EXTENSION_AMD_LOADER, 1,
+-                                               &Minor, &Supported) ==
+-          HSA_STATUS_SUCCESS &&
+-      Supported && Minor >= 4) {
++  if (Api.hsa_system_extension_supported(HSA_EXTENSION_AMD_LOADER, 1, 4,
++                                         &Supported) == HSA_STATUS_SUCCESS &&
++      Supported) {
+     LoaderApi104 Table = {};
+     if (Api.hsa_system_get_major_extension_table(HSA_EXTENSION_AMD_LOADER, 1,
+                                                  sizeof(Table), &Table) ==
+@@ -204,7 +204,7 @@ bool Offload::BindLoader() {
+         Table.GetLoadSize && Table.LoadAtAddress) {
+       Loader.GetLoadSize = Table.GetLoadSize;
+       Loader.LoadAtAddress = Table.LoadAtAddress;
+-      LoaderMinor = Minor;
++      LoaderMinor = 4;
+     }
+   }
+   return Loader.QueryHostAddress && Loader.IterateLoadedCodeObjects &&
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+index c173e1e..e605be6 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_offload_hsa.h
+@@ -33,6 +33,7 @@
+   X(hsa_amd_agent_iterate_memory_pools)   \
+   X(hsa_system_get_major_extension_table) \
+   X(hsa_system_major_extension_supported) \
++  X(hsa_system_extension_supported)       \
+   X(hsa_queue_create)                     \
+   X(hsa_queue_destroy)                    \
+   X(hsa_queue_add_write_index_screlease)  \
+@@ -366,6 +367,10 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension,
+                                                   uint16_t version_major,
+                                                   size_t table_length,
+                                                   void* table);
++hsa_status_t hsa_system_extension_supported(uint16_t extension,
++                                         uint16_t version_major,
++                                         uint16_t version_minor,
++                                         bool* result);
+ hsa_status_t hsa_system_major_extension_supported(uint16_t extension,
+                                                   uint16_t version_major,
+                                                   uint16_t* version_minor,

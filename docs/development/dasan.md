@@ -13,11 +13,22 @@ under `THEROCK_SANITIZER=DASAN`. Its previous compatibility patch disabling
 the device linker is removed so the per-translation-unit DASan runtime path
 is used. The packaged RCCL device-code audit remains enabled.
 
-Dispatch `multi_arch_ci_asan.yml` with `dasan_full_rebuild=true` to rebuild
-the compiler/runtime, then math libraries, then the eight component stages
-listed below. Downstream stages consume artifacts from this same run, so
-the previous ROCr runtime is not reused. LLVM, the container image, GPU
-targets, and build flags otherwise retain the baseline configuration.
+The targeted update rebuilds and validates the compiler/runtime, then builds
+`comm-libs` against that installation while reusing the original math artifacts
+from run `40545400942`. The other component stages do not need rebuilding.
+The compiler/runtime workflow also rebuilds LLVM; its compiler-rt DASan runtime
+needs a loader capability-query compatibility patch for this ROCr revision.
+ROCr reports loader minor version zero through the general major-version query
+while exposing loader 1.4 through the exact-version query. DASan must use the
+exact-version query to discover code-object placement, or global-memory
+instrumentation is ineffective. The unchanged GPU lit tests gate this update.
+The container image and GPU targets retain the baseline configuration.
+
+```bash
+gh workflow run multi_arch_ci_asan.yml --repo ROCm/TheRock \
+  --ref users/safaizal/dasan-systems-01a189df \
+  -f dasan_systems_update=true -f dasan_dependencies_run_id=40545400942
+```
 
 The original [compiler/runtime run](https://github.com/ROCm/TheRock/actions/runs/40443090683)
 and [math run](https://github.com/ROCm/TheRock/actions/runs/40545400942) took
