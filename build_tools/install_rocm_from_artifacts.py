@@ -177,15 +177,6 @@ RELEASE_KIND_VERSION_PATTERNS = {
     "dev": re.compile(r"\d+\.\d+\.\d+\.dev0\+[0-9a-f]+"),
 }
 
-# Example version strings quoted when --release cannot be classified. The index
-# each one is found at is resolved from the version, so the CDN domains are not
-# repeated here.
-RELEASE_KIND_VERSION_EXAMPLES = {
-    "nightly": ["10.1.0a20260901"],
-    "prerelease": ["10.0.0rc4", "10.1.0rc0"],
-    "dev": ["10.1.0.dev0+cf046a2fdeaa59014c61f823fe67baebc23ab2a7"],
-}
-
 
 def classify_release_version(version: str) -> Optional[str]:
     """Return the release kind a version string belongs to, or None if unknown."""
@@ -230,27 +221,6 @@ def _multiarch_tarball_url(index_url: str, asset_name: str) -> str:
     404. Quoting the asset name is what makes those downloads resolve.
     """
     return f"{index_url}/{urllib.parse.quote(asset_name)}"
-
-
-def release_version_source_lines() -> list[str]:
-    """Return one line per published tarball index, with the versions it serves.
-
-    A release kind can span two indexes, since versions below the repo.amd.com
-    product layout stay at the legacy index, so each example is listed under
-    the index it actually resolves to.
-    """
-    lines = []
-    for release_kind, examples in RELEASE_KIND_VERSION_EXAMPLES.items():
-        versions_by_index: dict[str, list[str]] = {}
-        for version in examples:
-            index_url = get_release_tarball_index_url(release_kind, version)
-            versions_by_index.setdefault(index_url, []).append(version)
-        for index_url, versions in versions_by_index.items():
-            label = "example" if len(versions) == 1 else "examples"
-            lines.append(
-                f"\t - {index_url}/ ({release_kind} {label}: {', '.join(versions)})"
-            )
-    return lines
 
 
 def _read_url(url: str) -> bytes:
@@ -427,6 +397,8 @@ def _retrieve_multiarch_tarball(
     log(f"Downloading {url}")
 
     try:
+        # This timeout applies to blocking socket operations, not the total
+        # download duration, so large tarballs can take longer than 60 seconds.
         # URL comes from the fixed HTTPS release CDN configuration.
         with (
             urllib.request.urlopen(url, timeout=60) as response,  # nosec B310
@@ -774,21 +746,31 @@ def retrieve_artifacts_by_release(args):
     artifact_group = args.artifact_group
     release_kind = classify_release_version(args.release)
     if release_kind is None:
-        log("This script requires a nightly, prerelease or dev release version.")
         log("Please retrieve the correct release version from:")
-        for line in release_version_source_lines():
-            log(line)
-        log("Exiting...")
-        return
+        log(
+            f"\t - {get_release_tarball_index_url('nightly')}/ "
+            "(nightly example: 10.1.0a20260901)"
+        )
+        log(
+            f"\t - {get_release_tarball_index_url('prerelease', '10.0.0rc4')}/ "
+            "(prerelease example: 10.0.0rc4)"
+        )
+        log(
+            f"\t - {get_release_tarball_index_url('prerelease')}/ "
+            "(prerelease example: 10.1.0rc0)"
+        )
+        log(
+            f"\t - {get_release_tarball_index_url('dev')}/ "
+            "(dev example: 10.1.0.dev0+deadbeef)"
+        )
+        raise ValueError(
+            f"Unsupported release version {args.release!r}; "
+            "expected a nightly, prerelease or dev release version."
+        )
 
     release_version = args.release
     asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
-    try:
-        index_url = get_release_tarball_index_url(release_kind, release_version)
-    except ValueError as e:
-        log(str(e))
-        log("Exiting...")
-        return
+    index_url = get_release_tarball_index_url(release_kind, release_version)
     url = _multiarch_tarball_url(index_url, asset_name)
 
     log(f"Retrieving {release_kind} multi-arch artifacts from {index_url}/")

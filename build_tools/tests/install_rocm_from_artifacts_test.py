@@ -9,6 +9,7 @@ import io
 from datetime import datetime, timezone
 from pathlib import Path
 import os
+import subprocess
 import sys
 import tempfile
 import tarfile
@@ -285,35 +286,57 @@ class TestReleaseVersionClassification(unittest.TestCase):
                 self.assertIsNone(mod.classify_release_version(version))
 
 
-class TestReleaseVersionSourceLines(unittest.TestCase):
-    """The '--release' help text derives its URLs from the index resolver."""
+class TestInvalidRelease(unittest.TestCase):
+    def test_unknown_release_reports_sources_and_raises_before_download(self) -> None:
+        args = argparse.Namespace(
+            release="nonsense", artifact_group="gfx94X-dcgpu", output_dir=Path("unused")
+        )
+        output = io.StringIO()
+        with (
+            mock.patch("sys.stdout", output),
+            mock.patch.object(mod, "_retrieve_multiarch_tarball") as retrieve_tarball,
+            self.assertRaisesRegex(ValueError, "nonsense"),
+        ):
+            mod.retrieve_artifacts_by_release(args)
 
-    def test_covers_every_release_kind_that_publishes_tarballs(self) -> None:
-        lines = mod.release_version_source_lines()
-        for release_kind in mod.RELEASE_KIND_VERSION_PATTERNS:
-            with self.subTest(release_kind=release_kind):
-                self.assertTrue(any(f"({release_kind} example" in l for l in lines))
+        retrieve_tarball.assert_not_called()
+        for kind, version in (
+            ("nightly", "10.1.0a20260901"),
+            ("prerelease", "10.0.0rc4"),
+            ("prerelease", "10.1.0rc0"),
+            ("dev", "10.1.0.dev0+deadbeef"),
+        ):
+            with self.subTest(kind=kind, version=version):
+                self.assertIn(
+                    get_release_tarball_index_url(kind, version), output.getvalue()
+                )
+                self.assertIn(f"{kind} example:", output.getvalue())
 
-    def test_each_example_is_listed_under_the_index_it_resolves_to(self) -> None:
-        lines = mod.release_version_source_lines()
-        for release_kind, examples in mod.RELEASE_KIND_VERSION_EXAMPLES.items():
-            for version in examples:
-                with self.subTest(release_kind=release_kind, version=version):
-                    index_url = get_release_tarball_index_url(release_kind, version)
-                    self.assertTrue(
-                        any(
-                            line.startswith(f"\t - {index_url}/ ") and version in line
-                            for line in lines
-                        )
-                    )
-
-    def test_quoted_examples_classify_as_the_kind_they_are_listed_under(self) -> None:
-        for release_kind, examples in mod.RELEASE_KIND_VERSION_EXAMPLES.items():
-            for version in examples:
-                with self.subTest(release_kind=release_kind, version=version):
-                    self.assertEqual(
-                        mod.classify_release_version(version), release_kind
-                    )
+    def test_cli_rejects_invalid_and_frozen_versions_with_nonzero_exit(self) -> None:
+        for version in ("nonsense", "7.15.0a20260722", "7.15.0.dev0+deadbeef"):
+            with (
+                self.subTest(version=version),
+                tempfile.TemporaryDirectory() as temp_dir,
+            ):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        os.fspath(Path(mod.__file__)),
+                        "--release",
+                        version,
+                        "--artifact-group",
+                        "gfx94X-dcgpu",
+                        "--output-dir",
+                        os.fspath(Path(temp_dir) / "rocm"),
+                        "--dry-run",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("ValueError", result.stderr)
+                if version != "nonsense":
+                    self.assertIn("legacy_multi_arch_releases.md", result.stderr)
 
 
 class TestReleaseDiscovery(unittest.TestCase):
@@ -492,7 +515,9 @@ class TestReleaseDiscovery(unittest.TestCase):
             "10.1.0rc0", "https://rc.repo.amd.com/rocm/core/tarball"
         )
 
-    def test_nightly_only_in_the_frozen_legacy_index_is_refused(self) -> None:
+    def test_nightly_only_in_the_frozen_legacy_index_raises_before_download(
+        self,
+    ) -> None:
         version = "7.15.0a20260722"
         args = argparse.Namespace(
             artifact_group="gfx94X-dcgpu",
@@ -505,11 +530,11 @@ class TestReleaseDiscovery(unittest.TestCase):
         with (
             mock.patch.object(mod, "_retrieve_multiarch_tarball") as retrieve_tarball,
             mock.patch("sys.stdout", output),
+            self.assertRaisesRegex(ValueError, "legacy_multi_arch_releases.md"),
         ):
             mod.retrieve_artifacts_by_release(args)
 
         retrieve_tarball.assert_not_called()
-        self.assertIn("legacy_multi_arch_releases.md", output.getvalue())
 
     def _assert_release_uses_index_url(self, version: str, index_url: str) -> None:
         output_dir = Path("/fake/therock-test")
