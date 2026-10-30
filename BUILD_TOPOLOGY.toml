@@ -513,6 +513,7 @@ feature_group = "CORE"
 artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
+feature_name = "MPI" # third-party/CMakeLists.txt gates the OpenMPI build on MPI.
 feature_group = "CORE"
 
 # --- Base Infrastructure ---

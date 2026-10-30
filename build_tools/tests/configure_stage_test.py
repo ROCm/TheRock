@@ -56,6 +56,16 @@ class ArtifactResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", args)
         self.assertIn("-DTHEROCK_ENABLE_RCCL=ON", args)
 
+    def test_openmpi_uses_mpi_build_gate(self):
+        """OpenMPI must enable the gate used by third-party/CMakeLists.txt."""
+        for args in (
+            self._get_flags(["openmpi"]),
+            self._get_flags(None, stage_name="compiler-runtime"),
+            self._get_flags(None, stage_name="comm-libs"),
+        ):
+            self.assertIn("-DTHEROCK_ENABLE_MPI=ON", args)
+            self.assertNotIn("-DTHEROCK_ENABLE_OPENMPI=ON", args)
+
 
 class FeatureOrientedResolutionTest(unittest.TestCase):
     """Tests for feature-oriented artifact resolution."""
