@@ -20,14 +20,17 @@ on:
         default: ""
     outputs:
       artifact_name:
-        description: GitHub artifact containing SDK archives and checksums
+        description: Small GitHub artifact containing SDK checksums and provenance
         value: ${{ jobs.package.outputs.artifact_name }}
       installation_archive:
         description: Complete tests SDK archive with bin/lib at its root
         value: ${{ jobs.package.outputs.installation_archive }}
       artifact_url:
-        description: Download link for the SDK GitHub artifact
+        description: Download link for the SDK metadata artifact
         value: ${{ jobs.package.outputs.artifact_url }}
+      tests_artifact_id:
+        description: Raw full-tests SDK artifact to validate
+        value: ${{ jobs.package.outputs.tests_artifact_id }}
 
 permissions:
   contents: read
@@ -46,6 +49,7 @@ jobs:
       artifact_name: ${{ steps.package.outputs.artifact_name }}
       installation_archive: ${{ steps.package.outputs.installation_archive }}
       artifact_url: ${{ steps.upload.outputs.artifact-url }}
+      tests_artifact_id: ${{ steps.upload_tests.outputs.artifact-id }}
     env:
       PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
@@ -91,12 +95,34 @@ jobs:
             --kpack-python package-sources/rocm-systems/shared/kpack/python \
             --output-dir dasan-stack-package
 
-      - name: Upload usable SDK archives, checksums and provenance
+      - name: Upload raw full-tests SDK archive
+        id: upload_tests
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: dasan-stack-package/deliverables/${{ steps.package.outputs.installation_archive }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload raw runtime SDK archive
+        id: upload_runtime
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: dasan-stack-package/deliverables/${{ steps.package.outputs.runtime_archive }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload SDK checksums and provenance
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dasan-stack-sdk-gfx950
-          path: dasan-stack-package/deliverables/
+          name: dasan-stack-sdk-metadata-gfx950
+          path: |
+            dasan-stack-package/deliverables/*.json
+            dasan-stack-package/deliverables/*.toml
+            dasan-stack-package/deliverables/*.txt
+            dasan-stack-package/deliverables/SHA256SUMS
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -113,14 +139,17 @@ jobs:
       - name: Link SDK downloads and extraction instructions
         env:
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          TESTS_URL: ${{ steps.upload_tests.outputs.artifact-url }}
+          RUNTIME_URL: ${{ steps.upload_runtime.outputs.artifact-url }}
           INSTALLATION_ARCHIVE: ${{ steps.package.outputs.installation_archive }}
         run: |
           {
             echo "### Complete downloadable DASan SDK (gfx950)"
             printf '[Download SDK, SHA256SUMS and source/config manifest](%s)\n\n' "${ARTIFACT_URL}"
+            printf '[Full SDK with tests](%s) | [Runtime SDK](%s)\n\n' "${TESTS_URL}" "${RUNTIME_URL}"
             echo 'The tests archive contains the complete installation and test payloads.'
             echo 'Installation files are at archive root: bin/, lib/, include/, share/.'
-            echo 'Download the artifact, unzip it, then run:'
+            echo 'Download metadata and both raw archives to check the complete master checksum file:'
             echo '```bash'
             echo 'sha256sum -c SHA256SUMS'
             echo 'mkdir rocm-dasan'

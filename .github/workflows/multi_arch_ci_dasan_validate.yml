@@ -5,6 +5,10 @@ name: Validate downloaded DASan stack
 
 on:
   workflow_call:
+    inputs:
+      tests_artifact_id:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -14,7 +18,7 @@ jobs:
   validate:
     name: Download and validate DASan SDK (gfx950)
     runs-on: linux-gfx950-8gpu-ccs-ossci-rocm
-    timeout-minutes: 90
+    timeout-minutes: 240
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
       options: >-
@@ -32,11 +36,21 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Download full SDK delivery
+      - name: Download SDK checksums and provenance
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: dasan-stack-sdk-gfx950
+          name: dasan-stack-sdk-metadata-gfx950
           path: delivery
+      - name: Download only the raw full-tests SDK with progress and resume
+        timeout-minutes: 160
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TESTS_ARTIFACT_ID: ${{ inputs.tests_artifact_id }}
+        run: |
+          mkdir -p validation
+          python3 build_tools/package_dasan_stack.py download \
+            --metadata-dir delivery --artifact-id "${TESTS_ARTIFACT_ID}" \
+            --timeout-seconds 9000 2>&1 | tee validation/download.log
       - name: Download unchanged compiler test bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -44,13 +58,14 @@ jobs:
           path: lit-bundle
       - name: Verify downloaded archive checksums
         working-directory: delivery
-        run: sha256sum --check SHA256SUMS
+        run: sha256sum --check SELECTED_SHA256SUMS
       - name: Extract complete installation including tests
         run: |
           archives=(delivery/*-tests-*.tar.gz)
           test "${#archives[@]}" -eq 1
           mkdir sdk
           tar -xzf "${archives[0]}" -C sdk
+          rm -- "${archives[0]}"
       - name: Run all 27 unchanged DASan tests on downloaded SDK
         run: |
           export LD_LIBRARY_PATH="$PWD/sdk/lib:$PWD/sdk/lib/llvm/lib:$PWD/sdk/lib/rocm_sysdeps/lib"

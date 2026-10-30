@@ -38,7 +38,9 @@ identified separately from instrumented C/C++ code.
 
 The final package job checks complete artifact coverage, assembles standard
 install-prefix tarballs, checks the host/compiler and packaged RCCL device
-code, and uploads the `dasan-stack-sdk-gfx950` GitHub Actions artifact.
+code, and publishes each `.tar.gz` as a separate raw GitHub Actions artifact,
+named exactly as that archive. The small `dasan-stack-sdk-metadata-gfx950`
+artifact contains the master checksums, provenance, and download instructions.
 Coverage requires distributable archives, including OpenMPI. Six topology
 nodes do not produce separate Linux archives: Windows-only `core-hipinfo`,
 build dependencies `fmt`, `grpc`, and `spdlog`, and `sysdeps-libmnl`/`sysdeps-libnl`
@@ -49,10 +51,19 @@ tests, SHA-256 checksums, provenance, and download instructions. Stage binaries
 also remain in the standard run-scoped artifact store; stage logs alone are
 not treated as binary artifacts.
 
-The following job independently downloads this delivery and the unchanged lit
-bundle, verifies the archive checksums, and runs all 27 DASan host/HIP/OpenMP
+The following job independently downloads only the full-tests archive and the
+unchanged lit bundle. It verifies every metadata checksum and the exact selected
+archive SHA-256 entry, then runs all 27 DASan host/HIP/OpenMP
 tests on a multi-GPU gfx950 runner. Build success, package validation, and GPU
 validation are distinct results; inspect all three before relying on the SDK.
+
+The raw single-file transport avoids downloading a ZIP containing both SDK
+variants. It checks space for the selected archive, its extracted payload, and
+15 GiB of scratch space before transferring. Downloads report progress every
+30 seconds, resume partial transfers only for the same artifact identity, and
+fail on incorrect byte ranges, sizes, or checksums. The transfer budget is
+150 minutes within a 240-minute validation job. The complete runtime and tests
+SDKs remain separate downloads; the runtime archive is not needed by GPU validation.
 
 Applications using the fully sanitized HIP/ROCr libraries must link the shared
 host runtime with `-fsanitize=daddress -shared-libsan` and make the compiler's

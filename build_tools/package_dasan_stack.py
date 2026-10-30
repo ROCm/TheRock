@@ -10,6 +10,7 @@ include/ and share/ at their root. GPU execution is a separate workflow gate.
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -18,12 +19,15 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
+import urllib.error
+import urllib.request
 
 from _therock_utils.artifacts import ArtifactName
 from _therock_utils.build_topology import get_topology
 
 REPO = Path(__file__).resolve().parent.parent
-ARTIFACT_NAME = "dasan-stack-sdk-gfx950"
+ARTIFACT_NAME = "dasan-stack-sdk-metadata-gfx950"
 
 # BUILD_TOPOLOGY includes dependency/configuration nodes as well as archives.
 # Keep this list source-backed and explicit; never infer completeness from
@@ -331,6 +335,7 @@ def package(args: argparse.Namespace) -> None:
     )
     cache = output / "download-cache"
     archives = []
+    archive_metadata = []
     for tests in (True, False):
         prefix = output / ("full-tests-install" if tests else "runtime-install")
         fetch_and_flatten(
@@ -383,6 +388,18 @@ def package(args: argparse.Namespace) -> None:
         )
         compress_tarball(source_dir=prefix, tarball_path=archive)
         archives.append(archive)
+        archive_metadata.append(
+            {
+                "name": archive.name,
+                "bytes": archive.stat().st_size,
+                "unpacked_bytes": sum(
+                    p.stat().st_size
+                    for p in prefix.rglob("*")
+                    if p.is_file() and not p.is_symlink()
+                ),
+                "sha256": sha256(archive),
+            }
+        )
         shutil.rmtree(prefix)
     shutil.rmtree(output / "extraction-cache")
     shutil.rmtree(cache)
@@ -416,6 +433,9 @@ def package(args: argparse.Namespace) -> None:
         "family": args.amdgpu_family,
         "artifact_name": ARTIFACT_NAME,
         "installation_archive": archives[0].name,
+        "runtime_archive": archives[1].name,
+        "archives": archive_metadata,
+        "archive_transport": "Separate raw single-file GitHub artifacts; metadata is a small zipped artifact",
         "archive_layout": "installation prefix at archive root: bin/, lib/, include/, share/",
         "wsl": "Support artifact uses the release-package preset; no DASan device code",
         "gpu_validation": "Separate GPU workflow uses this archive and the unchanged lit bundle",
@@ -426,10 +446,13 @@ def package(args: argparse.Namespace) -> None:
     write_json(deliver / "source-config-manifest.json", manifest)
     (deliver / "README.txt").write_text(
         f"DASan complete gfx950 SDK, run {args.run_id}\n\n"
-        f"Download the {ARTIFACT_NAME} artifact from {manifest['run_url']}.\n"
+        f"Download metadata ({ARTIFACT_NAME}) and one archive artifact from {manifest['run_url']}.\n"
         "The -tests- archive is the full SDK including installed test payloads.\n"
         "The other archive omits tests. Choose one; do not overlay them.\n\n"
-        "sha256sum -c SHA256SUMS\nmkdir rocm-dasan\n"
+        "Each .tar.gz is a separate raw artifact, named exactly as the archive.\n"
+        "The master SHA256SUMS covers both archives and every metadata file.\n"
+        "Download both archives to check the entire master file, or verify the exact chosen archive entry.\n"
+        "mkdir rocm-dasan\n"
         f"tar -xzf {archives[0].name} -C rocm-dasan\n"
         'export ROCM_PATH="$PWD/rocm-dasan"\n'
         'export PATH="$ROCM_PATH/bin:$ROCM_PATH/lib/llvm/bin:$PATH"\n'
@@ -455,10 +478,224 @@ def package(args: argparse.Namespace) -> None:
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
             stream.write(
                 f"installation_archive={archives[0].name}\nartifact_name={ARTIFACT_NAME}\n"
+                f"runtime_archive={archives[1].name}\n"
             )
 
 
+def selected_download(metadata: Path) -> dict:
+    """Check every metadata checksum and select exactly the full-tests archive."""
+    manifest = json.loads((metadata / "source-config-manifest.json").read_text())
+    validate_run_identity(str(manifest["run_id"]), manifest["repository"])
+    entries = {}
+    for line in (metadata / "SHA256SUMS").read_text().splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9.+_-]+)", line)
+        if not match or match[2] in entries or match[2] in {".", ".."}:
+            raise RuntimeError("Invalid or duplicate master checksum entry")
+        entries[match[2]] = match[1]
+    archives = {item["name"]: item for item in manifest["archives"]}
+    if len(archives) != 2 or set(archives) != {
+        manifest["installation_archive"],
+        manifest["runtime_archive"],
+    }:
+        raise RuntimeError("Delivery must describe exactly both SDK archives")
+    for name, digest in entries.items():
+        if name in archives:
+            if archives[name]["sha256"] != digest:
+                raise RuntimeError(f"Archive manifest/checksum mismatch: {name}")
+        elif not (metadata / name).is_file() or sha256(metadata / name) != digest:
+            raise RuntimeError(f"Metadata missing or checksum mismatch: {name}")
+    if (
+        not set(archives).issubset(entries)
+        or "source-config-manifest.json" not in entries
+    ):
+        raise RuntimeError("Missing exact archive or provenance checksum")
+    selected = archives[manifest["installation_archive"]]
+    if "-tests-" not in selected["name"] or not selected["name"].endswith(".tar.gz"):
+        raise RuntimeError("GPU validation must download the full-tests SDK")
+    if any(
+        not isinstance(selected[key], int) or selected[key] <= 0
+        for key in ("bytes", "unpacked_bytes")
+    ):
+        raise RuntimeError("Missing archive disk-size metadata")
+    return {**selected, "run_id": str(manifest["run_id"])}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def github_artifact_request(artifact_id: str, token: str, *, location: bool = False):
+    """Send credentials only to api.github.com; never follow its redirect."""
+    if not artifact_id.isdecimal():
+        raise RuntimeError("Invalid artifact ID")
+    suffix = "/zip" if location else ""
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/ROCm/TheRock/actions/artifacts/{artifact_id}{suffix}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+        },
+    )
+    try:
+        with urllib.request.build_opener(NoRedirect).open(
+            request, timeout=30
+        ) as response:
+            if location:
+                raise RuntimeError("Artifact API did not return a download redirect")
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if location and error.code == 302:
+            url = error.headers["Location"]
+            if not url.startswith("https://"):
+                raise RuntimeError("Artifact redirect must use HTTPS") from None
+            return url
+        raise RuntimeError(f"GitHub artifact API returned HTTP {error.code}") from None
+
+
+def download_raw_archive(
+    selected: dict,
+    directory: Path,
+    artifact_id: str,
+    token: str,
+    timeout: int = 9000,
+    margin: int = 15 * 1024**3,
+) -> Path:
+    artifact = github_artifact_request(artifact_id, token)
+    if (
+        artifact["name"] != selected["name"]
+        or artifact["size_in_bytes"] != selected["bytes"]
+        or str(artifact["workflow_run"]["id"]) != selected["run_id"]
+        or artifact.get("expired")
+    ):
+        raise RuntimeError(
+            "Raw artifact identity/size does not match this run's selected archive"
+        )
+    target = directory / selected["name"]
+    partial = target.with_name(target.name + ".part")
+    state = partial.with_name(partial.name + ".json")
+    identity = {
+        "artifact_id": artifact_id,
+        "sha256": selected["sha256"],
+        "bytes": selected["bytes"],
+    }
+    if partial.exists() and (
+        not state.exists() or json.loads(state.read_text()) != identity
+    ):
+        raise RuntimeError("Partial download belongs to a different artifact")
+    write_json(state, identity)
+    deadline = time.monotonic() + timeout
+    last_progress = time.monotonic()
+    for attempt in range(1, 9):
+        offset = partial.stat().st_size if partial.exists() else 0
+        if offset > selected["bytes"]:
+            raise RuntimeError("Partial download exceeds expected archive size")
+        needed = selected["bytes"] - offset + selected["unpacked_bytes"] + margin
+        if shutil.disk_usage(directory).free < needed:
+            raise RuntimeError(
+                f"Insufficient disk: need {needed} bytes for archive, extraction and scratch"
+            )
+        if offset == selected["bytes"]:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("SDK download exceeded its transfer time budget")
+        print(
+            f"SDK transfer attempt {attempt}: {offset}/{selected['bytes']} bytes",
+            flush=True,
+        )
+        try:
+            # The signed URL stays in memory, with no Authorization on blob requests.
+            url = github_artifact_request(artifact_id, token, location=True)
+            request = urllib.request.Request(url, headers={"Range": f"bytes={offset}-"})
+            with urllib.request.urlopen(
+                request, timeout=min(30, remaining)
+            ) as response:
+                if response.status == 206:
+                    expected = (
+                        f"bytes {offset}-{selected['bytes'] - 1}/{selected['bytes']}"
+                    )
+                    if response.headers.get("Content-Range") != expected:
+                        raise RuntimeError(
+                            "Blob returned an inconsistent Content-Range"
+                        )
+                elif response.status != 200 or offset:
+                    raise RuntimeError(
+                        "Blob rejected the required resumable byte range"
+                    )
+                length = response.headers.get("Content-Length")
+                if length is not None and int(length) != selected["bytes"] - offset:
+                    raise RuntimeError(
+                        "Blob length does not match expected raw archive"
+                    )
+                with partial.open("ab") as stream:
+                    while offset < selected["bytes"]:
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError(
+                                "SDK download exceeded its transfer time budget"
+                            )
+                        # A trickling response must not hide the deadline.
+                        read = getattr(response, "read1", response.read)
+                        chunk = read(min(1024**2, selected["bytes"] - offset))
+                        if not chunk:
+                            raise OSError("Artifact stream ended before expected size")
+                        stream.write(chunk)
+                        offset += len(chunk)
+                        if time.monotonic() - last_progress >= 30:
+                            print(
+                                f"SDK transfer: {offset}/{selected['bytes']} bytes ({offset / selected['bytes']:.1%})",
+                                flush=True,
+                            )
+                            last_progress = time.monotonic()
+            break
+        except RuntimeError:
+            raise
+        except (OSError, urllib.error.URLError, http.client.HTTPException) as error:
+            print(
+                f"SDK transfer interrupted ({type(error).__name__}); retaining verified-identity partial file",
+                flush=True,
+            )
+            if attempt == 8:
+                raise RuntimeError("SDK transfer exhausted eight attempts") from None
+            time.sleep(min(5 * attempt, 30, max(0, deadline - time.monotonic())))
+    if (
+        not partial.is_file()
+        or partial.stat().st_size != selected["bytes"]
+        or sha256(partial) != selected["sha256"]
+    ):
+        raise RuntimeError("Downloaded archive size or SHA256 mismatch")
+    partial.replace(target)
+    state.unlink()
+    (directory / "SELECTED_SHA256SUMS").write_text(
+        f"{selected['sha256']}  {selected['name']}\n"
+    )
+    print(
+        f"SDK transfer complete: {selected['bytes']} bytes; SHA256 verified", flush=True
+    )
+    return target
+
+
+def download_main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Download only this run's raw full-tests SDK with progress and resume"
+    )
+    parser.add_argument("--metadata-dir", required=True, type=Path)
+    parser.add_argument("--artifact-id", required=True)
+    parser.add_argument("--timeout-seconds", type=int, default=9000)
+    args = parser.parse_args(sys.argv[2:])
+    selected = selected_download(args.metadata_dir)
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        raise RuntimeError("GITHUB_TOKEN is required for artifact download")
+    download_raw_archive(
+        selected, args.metadata_dir, args.artifact_id, token, args.timeout_seconds
+    )
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["download"]:
+        download_main()
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--run-github-repo", default="ROCm/TheRock")

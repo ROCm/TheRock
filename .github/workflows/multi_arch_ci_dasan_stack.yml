@@ -229,3 +229,5 @@ jobs:
   validate_download:
     needs: package
     uses: ./.github/workflows/multi_arch_ci_dasan_validate.yml
+    with:
+      tests_artifact_id: ${{ needs.package.outputs.tests_artifact_id }}

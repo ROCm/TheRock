@@ -2,13 +2,18 @@
 # SPDX-License-Identifier: MIT
 
 import io
+import hashlib
+import http.server
 import json
+import os
 from pathlib import Path
 import sys
 import tarfile
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -121,6 +126,195 @@ class InventoryTest(unittest.TestCase):
                 RuntimeError, real_artifact
             ):
                 package.check_inventory(incomplete, required, "gfx950-dcgpu")
+
+
+class DownloadTest(unittest.TestCase):
+    def test_exact_selected_checksum_and_all_metadata_are_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archives = [
+                {
+                    "name": "sdk-tests-123.tar.gz",
+                    "bytes": 10,
+                    "unpacked_bytes": 20,
+                    "sha256": "a" * 64,
+                },
+                {
+                    "name": "sdk-runtime-123.tar.gz",
+                    "bytes": 5,
+                    "unpacked_bytes": 10,
+                    "sha256": "b" * 64,
+                },
+            ]
+            manifest = {
+                "run_id": "123",
+                "repository": "ROCm/TheRock",
+                "installation_archive": archives[0]["name"],
+                "runtime_archive": archives[1]["name"],
+                "archives": archives,
+            }
+            package.write_json(root / "source-config-manifest.json", manifest)
+            (root / "README.txt").write_text("instructions")
+            checksums = "".join(f"{a['sha256']}  {a['name']}\n" for a in archives)
+            for name in ("README.txt", "source-config-manifest.json"):
+                checksums += f"{package.sha256(root / name)}  {name}\n"
+            (root / "SHA256SUMS").write_text(checksums)
+            with patch.dict(os.environ, {"GITHUB_RUN_ID": "123"}):
+                self.assertEqual(
+                    package.selected_download(root)["name"], "sdk-tests-123.tar.gz"
+                )
+                (root / "README.txt").unlink()
+                with self.assertRaisesRegex(RuntimeError, "Metadata missing"):
+                    package.selected_download(root)
+
+    def transfer(self, mode):
+        payload = b"dasan transport\n" * 200000
+        observed = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                offset = int(self.headers["Range"].split("=")[1].split("-")[0])
+                observed.append((offset, self.headers.get("Authorization")))
+                self.send_response(200 if mode == "ignore-range" else 206)
+                start = offset + 1 if mode == "bad-range" else offset
+                self.send_header(
+                    "Content-Range", f"bytes {start}-{len(payload)-1}/{len(payload)}"
+                )
+                body = payload[offset:]
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if mode == "disconnect" and len(observed) == 1:
+                    self.wfile.write(body[: 1024**2])
+                    self.wfile.flush()
+                    self.close_connection = True
+                else:
+                    try:
+                        self.wfile.write(
+                            (b"X" + body[1:]) if mode == "corrupt" else body
+                        )
+                    except (BrokenPipeError, ConnectionResetError):
+                        # Rejected range tests deliberately close immediately.
+                        pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        selected = {
+            "name": "sdk-tests-123.tar.gz",
+            "bytes": len(payload),
+            "unpacked_bytes": 32,
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "run_id": "123",
+        }
+        metadata = {
+            "name": selected["name"],
+            "size_in_bytes": len(payload),
+            "workflow_run": {"id": 123},
+            "expired": False,
+        }
+
+        def api(artifact_id, token, *, location=False):
+            return (
+                f"http://127.0.0.1:{server.server_port}/blob" if location else metadata
+            )
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            package, "github_artifact_request", side_effect=api
+        ), patch.object(package.time, "sleep"):
+            root = Path(tmp)
+            if mode == "ignore-range":
+                partial = root / (selected["name"] + ".part")
+                partial.write_bytes(payload[:1])
+                package.write_json(
+                    partial.with_name(partial.name + ".json"),
+                    {
+                        "artifact_id": "42",
+                        "sha256": selected["sha256"],
+                        "bytes": len(payload),
+                    },
+                )
+            if mode in ("corrupt", "ignore-range", "bad-range"):
+                with self.assertRaises(RuntimeError):
+                    package.download_raw_archive(
+                        selected, root, "42", "secret-api-token", timeout=10, margin=0
+                    )
+                self.assertFalse((root / selected["name"]).exists())
+            else:
+                result = package.download_raw_archive(
+                    selected, root, "42", "secret-api-token", timeout=10, margin=0
+                )
+                self.assertEqual(result.read_bytes(), payload)
+                self.assertTrue((root / "SELECTED_SHA256SUMS").exists())
+        self.assertTrue(all(auth is None for offset, auth in observed))
+        return observed
+
+    def test_actual_http_disconnect_resumes_without_blob_credentials(self):
+        observed = self.transfer("disconnect")
+        self.assertEqual([offset for offset, auth in observed], [0, 1024**2])
+
+    def test_corrupt_payload_never_becomes_complete_sdk(self):
+        self.transfer("corrupt")
+
+    def test_ignored_resume_range_is_rejected(self):
+        self.transfer("ignore-range")
+
+    def test_inconsistent_range_is_rejected(self):
+        self.transfer("bad-range")
+
+    def test_api_redirect_is_not_followed_with_credentials(self):
+        self.assertIsNone(
+            package.NoRedirect().redirect_request(
+                None, None, 302, "redirect", {}, "https://blob.invalid/path"
+            )
+        )
+
+    def test_api_authentication_stays_on_github_redirect_request(self):
+        redirect = urllib.error.HTTPError(
+            "https://api.github.com/",
+            302,
+            "redirect",
+            {"Location": "https://blob.invalid/raw?private=not-logged"},
+            None,
+        )
+        with patch.object(package.urllib.request, "build_opener") as factory:
+            factory.return_value.open.side_effect = redirect
+            result = package.github_artifact_request("42", "secret", location=True)
+            request = factory.return_value.open.call_args.args[0]
+            self.assertTrue(request.full_url.startswith("https://api.github.com/"))
+            self.assertEqual(request.get_header("Authorization"), "Bearer secret")
+            self.assertIs(factory.call_args.args[0], package.NoRedirect)
+            self.assertTrue(result.startswith("https://blob.invalid/"))
+
+    def test_disk_preflight_fails_before_blob_transfer(self):
+        selected = {
+            "name": "sdk-tests-123.tar.gz",
+            "bytes": 10,
+            "unpacked_bytes": 20,
+            "sha256": "a" * 64,
+            "run_id": "123",
+        }
+        artifact = {
+            "name": selected["name"],
+            "size_in_bytes": 10,
+            "workflow_run": {"id": 123},
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            package, "github_artifact_request", return_value=artifact
+        ), patch.object(
+            package.shutil, "disk_usage", return_value=SimpleNamespace(free=29)
+        ), patch.object(
+            package.urllib.request, "urlopen"
+        ) as blob:
+            with self.assertRaisesRegex(RuntimeError, "Insufficient disk"):
+                package.download_raw_archive(
+                    selected, Path(tmp), "42", "secret", margin=0
+                )
+            blob.assert_not_called()
 
 
 class IntegrityTest(unittest.TestCase):
