@@ -62,6 +62,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    get_sanitizer_variant_for_trigger,
     get_wsl_test_runner,
     select_build_runner,
 )
@@ -290,6 +291,11 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Short repository name (e.g., "TheRock", "rocm-libraries", "rocm-systems").
+    # Always set: derived from external_repo JSON when present, otherwise from
+    # GITHUB_REPOSITORY. Used for sanitizer trigger lookups and other repo-aware logic.
+    repository_name: str = ""
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -419,6 +425,17 @@ class CIInputs:
                 "Windows", windows_test_labels, build_stages, allowed_labels
             )
 
+        # Derive repository_name: for external repos, parse from EXTERNAL_REPO
+        # JSON (same blob that should_skip_ci and main() also parse for other
+        # fields). For TheRock itself, use GITHUB_REPOSITORY.
+        external_repo_raw = os.environ.get("EXTERNAL_REPO", "")
+        if external_repo_raw:
+            repository_name = (
+                json.loads(external_repo_raw).get("repository", "").split("/")[-1]
+            )
+        else:
+            repository_name = os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
+
         inputs = CIInputs(
             run_id=run_id,
             event_name=event_name,
@@ -450,7 +467,8 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
-            external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            external_repo=external_repo_raw,
+            repository_name=repository_name,
         )
         inputs.validate()
         return inputs
@@ -847,19 +865,7 @@ def should_skip_ci(
     # from the TOML config. This allows external repos to skip TheRock CI when only
     # docs/metadata files are changed.
     if ci_inputs.external_repo:
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as e:
-            raise ValueError(
-                f"Invalid external_repo JSON: {ci_inputs.external_repo!r}"
-            ) from e
-
-        if not isinstance(external_repo, dict):
-            raise ValueError(
-                f"external_repo must be a JSON object, got: {type(external_repo).__name__}"
-            )
-
-        repo_name = external_repo.get("repository", "").split("/")[-1]
+        external_repo = json.loads(ci_inputs.external_repo)
 
         # Get changed files via helper function (uses API or git diff)
         changed_files = get_changed_files_for_external_repo(external_repo)
@@ -871,7 +877,9 @@ def should_skip_ci(
             skip_ci_patterns = load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
         # Evaluate skip logic
-        if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
+        if not is_ci_run_required(
+            changed_files, skip_ci_patterns, ci_inputs.repository_name
+        ):
             print("  External repo build: CI can be skipped")
             return True
 
@@ -1523,6 +1531,7 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     triggers: set[str] = set()
 
     # Event-based triggers (mutually exclusive)
+    # External repos use workflow_call, so the caller's event propagates here.
     # Note: workflow_dispatch handled separately in _should_run_tests_for_family
     if ci_inputs.is_schedule:
         triggers.add("nightly")
@@ -1537,6 +1546,48 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
         triggers.add("submodule_bump")
 
     return triggers
+
+
+def _resolve_sanitizer_variant(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> str | None:
+    """Return the sanitizer variant for the current (source, trigger) pair, or None.
+
+    Uses ci_inputs to determine the repository and trigger type, then looks up
+    the matching sanitizer variant from amdgpu_family_matrix.py config. This
+    logic is uniform for both external repos and TheRock submodule bumps.
+    """
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+    if not current_triggers:
+        return None
+
+    # Determine source(s) to check against sanitizer_triggers config.
+    # External repos: single source from ci_inputs.repository_name.
+    # TheRock submodule bumps: each changed submodule basename is a source.
+    # TheRock non-submodule triggers: use repository_name (e.g., "TheRock").
+    sources: list[str] = []
+    if ci_inputs.external_repo:
+        sources = [ci_inputs.repository_name]
+    elif "submodule_bump" in current_triggers:
+        if git_context.changed_files is None or git_context.submodule_paths is None:
+            return None
+        changed_submodules = set(git_context.submodule_paths) & set(
+            git_context.changed_files
+        )
+        sources = [path.rsplit("/", 1)[-1] for path in changed_submodules]
+    else:
+        # TheRock non-submodule triggers (e.g., nightly, presubmit)
+        sources = [ci_inputs.repository_name]
+
+    for source in sources:
+        for trigger in current_triggers:
+            variant = get_sanitizer_variant_for_trigger(source, trigger)
+            if variant:
+                print(f"  Sanitizer rule matched: {source} + {trigger} -> {variant}")
+                return variant
+
+    return None
 
 
 def _should_run_tests_for_family(
@@ -1676,24 +1727,20 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
+            # host-asan runs on the regular test pool (not sandbox) since it
+            # only instruments host code and doesn't need the ASAN-specific
+            # sandbox runners that full asan/asan-debug require.
             if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
             else:
-                test_runs_on = ""
+                # Keep the regular test-runs-on runner (already set above)
                 print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: using regular runner for host-asan: "
+                    f"{test_runs_on}"
                 )
         elif "asan" in build_variant:
             # Only run full ASAN tests on scheduled or workflow_dispatch runs
@@ -2005,20 +2052,27 @@ def expand_build_configs(
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
+    # ASAN variant selection priority:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
     # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 3. Sanitizer trigger rules -> variant from sanitizer_triggers in all_build_variants
+    #    (source-specific: maps (repo/submodule, trigger) to the right variant)
+    # 4. No match -> skip (sanitizers only run when a rule matches)
     if build_variant == "asan":
         if "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+        else:
+            # Check sanitizer trigger rules for source-specific variant
+            resolved = _resolve_sanitizer_variant(ci_inputs, git_context)
+            if resolved:
+                build_variant = resolved
+                print(f"  Using {build_variant} variant " f"(sanitizer trigger rule)")
+            else:
+                print("  No sanitizer trigger rule matched, skipping ASAN build")
+                return BuildConfigs(linux=None, windows=None)
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -2207,22 +2261,7 @@ def main():
 
     # Check if this is an external repo build (e.g., rocm-libraries calling TheRock workflows)
     if ci_inputs.external_repo:
-        # External repo: use repo name for stage reuse analysis.
-        # external_repo is JSON like {"repository":"ROCm/rocm-libraries","ref":"..."}
-        try:
-            external_repo = json.loads(ci_inputs.external_repo)
-        except (json.JSONDecodeError, TypeError) as exc:
-            raise ValueError(
-                f"EXTERNAL_REPO contains invalid JSON: {ci_inputs.external_repo!r}"
-            ) from exc
-
-        repo_full_name = external_repo.get("repository", "")
-        if not repo_full_name:
-            raise ValueError(
-                f"EXTERNAL_REPO missing 'repository' field: {ci_inputs.external_repo!r}"
-            )
-        external_repo_name = repo_full_name.split("/")[-1]
-        git_context = GitContext.from_external_repo(external_repo_name)
+        git_context = GitContext.from_external_repo(ci_inputs.repository_name)
     elif (ci_inputs.is_pull_request or ci_inputs.is_push) and ci_inputs.base_ref:
         # 'pull_request' and 'push' events can use the list of changed files
         # compared to the "prior commit" to affect job selections/options.
