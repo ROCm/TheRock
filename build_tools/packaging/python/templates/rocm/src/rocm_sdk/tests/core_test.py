@@ -118,14 +118,13 @@ class ROCmCoreTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if (
-                "opencl" in str(so_path)
-                or "oclruntime" in so_path.name
-                or "oclperf" in so_path.name
-                or "oclgl" in so_path.name
+            if "share/opencl/ocltst" in so_path.as_posix() or any(
+                tag in so_path.name for tag in ("oclruntime", "oclperf", "oclgl")
             ):
-                # OpenCL ICD comes from the distro; oclruntime/oclperf are
-                # test-only libraries that depend on libOpenCL.
+                # ocltst harness libraries use their own search path and are not
+                # loaded standalone. The OpenCL runtime under lib/opencl is no
+                # longer skipped: it now ships here rather than coming from the
+                # distro, so it must load.
                 continue
 
             extra_setup = ""

@@ -408,6 +408,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     binaries = json_pkg_config["binaries"]
     core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
     llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+    opencl_icd = is_key_defined(json_pkg_config, "opencl_icd")
 
     unsupported_scripts = set(scripts) - EXEC_SCRIPTS
     if unsupported_scripts:
@@ -435,6 +436,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
         "binaries": binaries,
         "core_symlinks": core_symlinks,
         "llvm_symlinks": llvm_symlinks,
+        "opencl_icd": opencl_icd,
     }
 
     deb_dir = Path(deb_dir)
