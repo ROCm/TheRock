@@ -1,0 +1,30 @@
+{
+  "source_sha": "326231041b9ee4dcacfb08f0979298bacc7c3635",
+  "workflow": ".github/workflows/multi_arch_build_native_linux_packages.yml",
+  "job": "build_native_packages",
+  "step": "Build Packages",
+  "script": "# GFX architectures are auto-detected from the artifact directory\n# (populated by --expand-family-to-targets in the fetch step).\n# KPACK_SPLIT_ARTIFACTS is auto-detected from therock_manifest.json.\nprefix=()\nif [[ \"${NORMAL_VALIDATION}\" == \"true\" ]]; then\n  prefix=(python build_tools/profile_build.py --output output/normal-validation/profile --)\nfi\n\"${prefix[@]}\" python ./build_tools/packaging/linux/build_package.py \\\n  --dest-dir \"output/packages\" \\\n  --rocm-version \"${ROCM_VERSION}\" \\\n  --artifacts-dir \"output/artifacts\" \\\n  --pkg-type \"${NATIVE_PACKAGE_TYPE}\" \\\n  --version-suffix \"${PACKAGE_BUILD_SUFFIX}\" \\\n  --build-variant \"${BUILD_VARIANT}\"\n",
+  "script_sha256": "d30a8ed9105f5076b392aefefda48f9f033d4be7763fdc5cdc615390c6aeaf14",
+  "run_body_sha256": "a8f83d5458ab26a601cf60a55f97a5fb767dd2ebd69572707f37d5ebb7cba0a3",
+  "records": [
+    {
+      "run_id": 41230700832,
+      "job_id": 124639340282,
+      "package_type": "deb",
+      "raw_log_sha256": "76b112ca82037958262b63f5266a4ebede986ef1434d23bc82ba27ed8783ffb7",
+      "first_script_line": 2063,
+      "last_script_line": 2076,
+      "effective_shell": "sh -e {0}"
+    },
+    {
+      "run_id": 41230700832,
+      "job_id": 124639340325,
+      "package_type": "rpm",
+      "raw_log_sha256": "114e60aadf39231ee56d6491f789b05ac9ef05360eefce954a0dd8031d6ed1c3",
+      "first_script_line": 2064,
+      "last_script_line": 2077,
+      "effective_shell": "sh -e {0}"
+    }
+  ],
+  "scope": "Exact actual runner-resolved script, ANSI/timestamp prefixes removed. No workload execution in host fixtures."
+}

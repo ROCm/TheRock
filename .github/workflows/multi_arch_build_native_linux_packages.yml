@@ -240,6 +240,7 @@ jobs:
 
       - name: Build Packages
         id: build-packages
+        shell: bash
         run: |
           # GFX architectures are auto-detected from the artifact directory
           # (populated by --expand-family-to-targets in the fetch step).
