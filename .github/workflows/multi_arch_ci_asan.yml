@@ -1,123 +1,147 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI ASAN
-
-on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
+name: Original RPM install instrumentation repair v2 (01a19119)
+run-name: Native RPM-only v2 ${{ inputs.mode }} producer ${{ inputs.producer_run_id }} (01a19119)
+'on':
   workflow_dispatch:
     inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
+      mode:
+        type: choice
+        required: true
+        options:
+        - baseline
+        - joint
+      producer_run_id:
+        type: choice
+        required: true
+        options:
+        - '41211496307'
+        - '41212843218'
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
-  setup:
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
-      build_pytorch: false
-      build_jax: false
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_asan_summary:
-    name: CI ASAN Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-26.04
+  native_install:
+    name: Native RPM ${{ matrix.os_profile }} repair v2
+    runs-on: linux-gfx950-1gpu-ccs-ossci-rocm
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os_profile: rhel8
+          image: registry.access.redhat.com/ubi8/ubi:8.10@sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b
+        - os_profile: rhel10
+          image: registry.access.redhat.com/ubi10/ubi:10.1@sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1
+        - os_profile: sles16
+          image: registry.suse.com/bci/bci-base:16.0@sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843
+    container:
+      image: ${{ matrix.image }}
+      options: --device /dev/kfd --device /dev/dri
+    env:
+      PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+      REPO_URL: https://therock-ci-artifacts.s3.amazonaws.com/${{ inputs.producer_run_id }}-linux/packages/rpm/x86_64
+      GPG_KEY_URL: ''
+      OS_PROFILE: ${{ matrix.os_profile }}
+      PKG_TYPE: rpm
+      RELEASE_TYPE: ci
+      GFX_ARCH: gfx950
+      INSTALL_PREFIX: /opt/rocm/core
+      TEST_TYPE: sanity
+      BUILD_VARIANT: asan-debug
+      PERF_REQUESTED_RUNNER: linux-gfx950-1gpu-ccs-ossci-rocm
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
-        with:
-          persist-credentials: false
+    - name: Install Git before checkout without changing stock test settings
+      run: "case \"${OS_PROFILE}\" in\n  sles*) zypper refresh; zypper install -y git ca-certificates ;;\n  *) dnf install -y --allowerasing\
+        \ git ca-certificates ;;\nesac\ngit --version\n"
+    - name: Install System Prerequisites
+      run: "echo \"Installing prerequisites for ${PKG_TYPE} on container\"\n\nif [ \"${PKG_TYPE}\" = \"deb\" ]; then\n  sudo apt update\n\
+        \  sudo apt install -y \\\n    wget \\\n    curl \\\n    ca-certificates \\\n    gpg \\\n    lsb-release \\\n    binutils\n\
+        \  if [ \"$TEST_TYPE\" = \"full\" ] || [ \"$TEST_TYPE\" = \"comprehensive\" ]; then\n    echo \"Extra OS packages for --test-type\
+        \ full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils\"\n    sudo apt install -y pciutils kmod apt-utils\n  fi\nelif [[\
+        \ \"${OS_PROFILE}\" == sles* ]]; then\n  # SLES prerequisites (uses BCI base - zypper)\n  zypper refresh\n  zypper install -y\
+        \ \\\n    wget \\\n    curl \\\n    ca-certificates \\\n    gpg2 \\\n    lsb-release \\\n    update-alternatives \\\n    binutils\n\
+        \  if [ \"$TEST_TYPE\" = \"full\" ] || [ \"$TEST_TYPE\" = \"comprehensive\" ]; then\n    echo \"Extra OS packages for --test-type\
+        \ full/comprehensive on SLES (e.g. rdhc): pciutils, kmod\"\n    zypper install -y pciutils kmod\n  fi\nelse\n  # rpm (non-SLES\
+        \ on RHEL/UBI); --allowerasing for curl vs curl-minimal on UBI\n  dnf install -y --allowerasing \\\n    wget \\\n    curl \\\
+        \n    ca-certificates \\\n    gnupg2 \\\n    dnf-plugins-core \\\n    binutils\n  if [ \"$TEST_TYPE\" = \"full\" ] || [ \"$TEST_TYPE\"\
+        \ = \"comprehensive\" ]; then\n    echo \"Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod\"\
+        \n    dnf install -y --allowerasing pciutils kmod\n  fi\nfi\n"
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: 'false'
+        repository: ROCm/TheRock
+        ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+    - name: Checkout immutable experiment assets
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        repository: ROCm/TheRock
+        ref: ${{ github.sha }}
+        persist-credentials: 'false'
+        path: .perf-instrumentation
+    - name: Setup Python and install runtime
+      run: "bash build_tools/packaging/linux/setup_python_cmd.sh \\\n  --os-profile \"${OS_PROFILE}\" \\\n  --install-runtime \\\n \
+        \ --output-format github\n"
+    - name: Install Python Dependencies
+      run: '# Use venv for all distros for consistency and future-proofing (PEP 668)
 
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
-        run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+        $PYTHON_CMD -m venv /tmp/test-venv
+
+        /tmp/test-venv/bin/python -m pip install --upgrade pip
+
+        /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
+
+        echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
+
+        '
+    - name: Verify frozen source and record full-run context
+      id: perf_context
+      env:
+        PERF_MODE: ${{ inputs.mode }}
+        PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+        PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+        PERF_REQUESTED_RUNNER: linux-gfx950-1gpu-ccs-ossci-rocm
+      run: '"${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label test_native_linux_packages_install
+
+        '
+    - name: Qualify original producer and read-only RPM repository
+      id: producer
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: $PYTHON_CMD .perf-instrumentation/build_tools/perf_native_repair/native_probe.py prepare
+    - name: Package Installation Test
+      run: 'echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
+
+        $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
+
+        '
+      id: install
+    - name: Verify installed RPM ELF payload digests before uninstall
+      run: $PYTHON_CMD .perf-instrumentation/build_tools/perf_native_repair/native_probe.py installed
+    - name: Package Uninstall Test
+      if: ${{ always() && steps.install.outcome == 'success' }}
+      run: 'echo "UNINSTALL TEST - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
+
+        $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_uninstall_test.py -vv --tb=long -s
+
+        '
+      id: uninstall
+    - name: Verify original repository metadata remains unchanged
+      if: ${{ always() && steps.producer.outcome == 'success' }}
+      run: $PYTHON_CMD .perf-instrumentation/build_tools/perf_native_repair/native_probe.py final
+    - name: Record final full-run provenance
+      if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+      run: '"${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+        '
+    - name: Retain full-run investigation evidence
+      if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.perf_context.outputs.artifact_name }}
+        path: .perf-full
+        include-hidden-files: 'true'
+        retention-days: '14'
+        compression-level: '1'
