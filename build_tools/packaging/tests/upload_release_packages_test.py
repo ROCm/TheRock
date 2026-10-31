@@ -227,6 +227,7 @@ class StructuredUploadTest(unittest.TestCase):
 
             self.assertTrue(args.multi_arch)
             self.assertEqual(args.bucket, "")
+            self.assertEqual(args.python_index, "whl-next-asan")
             self.assertEqual(args.tarball_bucket, "therock-repo-amd-nightly-core")
             self.assertEqual(args.tarball_bucket_prefix, "v5/rocm/core/tarball-asan/")
 
