@@ -53,6 +53,8 @@ enum Phase {
   cleanup,
   teardown,
   db_initialize,
+  aot_begin,
+  aot_commit,
   COUNT
 };
 inline constexpr const char *names[] = {"queue_wait",
@@ -79,7 +81,9 @@ inline constexpr const char *names[] = {"queue_wait",
                                         "final_copy",
                                         "cleanup",
                                         "teardown",
-                                        "db_initialize"};
+                                        "db_initialize",
+                                        "aot_begin",
+                                        "aot_commit"};
 static_assert(sizeof(names) / sizeof(names[0]) == COUNT);
 struct Metric {
   std::atomic<unsigned long long> count{0}, ns{0}, max_ns{0}, active{0};

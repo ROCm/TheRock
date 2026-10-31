@@ -1,0 +1,100 @@
+diff --git a/projects/rocfft/library/src/include/rtc_cache.h b/projects/rocfft/library/src/include/rtc_cache.h
+index 059f95b..1779ff1 100644
+--- a/projects/rocfft/library/src/include/rtc_cache.h
++++ b/projects/rocfft/library/src/include/rtc_cache.h
+@@ -104,6 +104,9 @@ struct RTCCache
+     // many compilations in parallel when building the library
+     void enable_write_mostly();
+ 
++    // Experimental AOT-only transaction boundary; caller must have no active workers.
++    void private_aot_transaction(bool begin);
++
+     // write out kernels in the current cache to the output path.
+     // this copies the kernels in a consistent order and clears out
+     // the timestamp fields so that the resulting file is a
+diff --git a/projects/rocfft/library/src/rocfft_aot_helper.cpp b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+index 96b95c8..f621b47 100644
+--- a/projects/rocfft/library/src/rocfft_aot_helper.cpp
++++ b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+@@ -18,6 +18,7 @@
+ // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ // THE SOFTWARE.
+ 
++#include "../../shared/aot_transaction.h"
+ #include "../../shared/build_profile.h"
+ #include <functional>
+ #include <iostream>
+@@ -766,6 +767,13 @@ int main(int argc, char** argv)
+     for(int i = 4; i < argc; ++i)
+         gpu_archs.push_back(argv[i]);
+ 
++    // Opt-in experiment only for the helper-owned default intermediate, never
++    // a caller-supplied cache or the library's general runtime cache.
++    const bool batch_transaction
++        = rbp::private_aot_batch_requested(rocfft_getenv("ROCFFT_AOT_BATCH_TRANSACTION"),
++                                           temp_cache_file,
++                                           std::filesystem::exists("rocfft_temp_cache.db"));
++
+     // Default to using a persistent file in the current dir if no
+     // cache file was given
+     if(temp_cache_file.empty())
+@@ -785,6 +793,7 @@ int main(int argc, char** argv)
+     for(unsigned char byte : generator_sum())
+         profile_sum << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+     rbp::property("generator_sum", profile_sum.str());
++    rbp::property("aot_batch_transaction", batch_transaction ? "1" : "0");
+ 
+     // force RTC to use the temporary cache file
+     rocfft_setenv("ROCFFT_RTC_CACHE_PATH", temp_cache_file.c_str());
+@@ -799,6 +808,12 @@ int main(int argc, char** argv)
+         RTCCache::single->enable_write_mostly();
+     }
+ 
++    if(batch_transaction)
++    {
++        rbp::Scope phase(rbp::aot_begin);
++        RTCCache::single->private_aot_transaction(true);
++    }
++
+     CompileQueue queue;
+ 
+     static const size_t NUM_THREADS = rocfft_concurrency();
+@@ -865,6 +880,14 @@ int main(int argc, char** argv)
+             threads[i].join();
+     }
+ 
++    // Include the durable final commit in the measured helper lifetime, before
++    // copying/cleaning the outputs. All workers/futures have completed stores.
++    if(batch_transaction)
++    {
++        rbp::Scope phase(rbp::aot_commit);
++        RTCCache::single->private_aot_transaction(false);
++    }
++
+     // write the output file using what we collected in the temporary
+     // cache
+     {
+diff --git a/projects/rocfft/library/src/rtc_cache.cpp b/projects/rocfft/library/src/rtc_cache.cpp
+index f878208..f5e22fc 100644
+--- a/projects/rocfft/library/src/rtc_cache.cpp
++++ b/projects/rocfft/library/src/rtc_cache.cpp
+@@ -18,6 +18,7 @@
+ // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ // THE SOFTWARE.
+ 
++#include "../../shared/aot_transaction.h"
+ #include "../../shared/build_profile.h"
+ #include "../../shared/concurrency.h"
+ #include "../../shared/environment.h"
+@@ -855,6 +856,11 @@ void RTCCache::enable_write_mostly()
+     }
+ }
+ 
++void RTCCache::private_aot_transaction(bool begin)
++{
++    rbp::private_aot_transaction(db_user, begin);
++}
++
+ void RTCCache::write_aot_cache(const std::string&              output_path,
+                                const std::array<char, 32>&     generator_sum,
+                                const std::vector<std::string>& gpu_archs)

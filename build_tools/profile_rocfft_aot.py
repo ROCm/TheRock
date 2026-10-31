@@ -33,6 +33,11 @@ PATCH_FILES = {
     "projects/rocfft/shared/work_queue.h",
     "projects/rocfft/shared/subprocess.h",
 }
+BATCH_PATCH_FILES = {
+    "projects/rocfft/library/src/rocfft_aot_helper.cpp",
+    "projects/rocfft/library/src/rtc_cache.cpp",
+    "projects/rocfft/library/src/include/rtc_cache.h",
+}
 KNOBS = [
     "OMP_NUM_THREADS",
     "ROCFFT_RTC_MAX_SUBPROCESSES",
@@ -40,6 +45,7 @@ KNOBS = [
     "ROCFFT_RTC_CACHE_READ_DISABLE",
     "ROCFFT_RTC_CACHE_WRITE_DISABLE",
     "ROCFFT_LAYER",
+    "ROCFFT_AOT_BATCH_TRANSACTION",
 ]
 
 
@@ -107,9 +113,9 @@ def cache_values(path: Path) -> dict[str, str]:
     }
 
 
-def patch_paths(text: str) -> set[str]:
+def patch_paths(text: str, expected: set[str] = PATCH_FILES) -> set[str]:
     paths = re.findall(r"^diff --git a/(\S+) b/\1$", text, re.MULTILINE)
-    if set(paths) != PATCH_FILES or len(paths) != len(PATCH_FILES):
+    if set(paths) != expected or len(paths) != len(expected):
         raise ValueError(
             "Instrumentation patch must touch only the reviewed host-side files"
         )
@@ -257,6 +263,12 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
         ROOT
         / "patches/build-profile/rocm-libraries/0001-rocfft-aot-phase-diagnostics.patch"
     )
+    batch_patch = (
+        ROOT
+        / "patches/build-profile/rocm-libraries/0002-rocfft-private-aot-transaction.patch"
+    )
+    batch_header = ROOT / "build_tools/diagnostics/rocfft_aot_transaction.h"
+    patch_paths(batch_patch.read_text(), BATCH_PATCH_FILES)
     header = ROOT / "build_tools/diagnostics/rocfft_profile.h"
     patch_paths(patch.read_text())
     source = libraries / "projects/rocfft"
@@ -268,13 +280,18 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
     capture(["git", "apply", "--check", str(patch)], libraries, env)
     capture(["git", "apply", str(patch)], libraries, env)
     shutil.copyfile(header, destination)
+    capture(["git", "apply", "--check", str(batch_patch)], libraries, env)
+    capture(["git", "apply", str(batch_patch)], libraries, env)
+    shutil.copyfile(batch_header, source / "shared/aot_transaction.h")
     after = generator_inputs(source)
     if before != after:
         raise ValueError("Instrumentation changed a generator_sum checksum input")
     changed = set(capture(["git", "diff", "--name-only"], libraries, env).splitlines())
-    if changed != PATCH_FILES:
+    if changed != PATCH_FILES | BATCH_PATCH_FILES:
         raise ValueError(f"Unexpected source edits: {changed}")
     shutil.copyfile(patch, output / patch.name)
+    shutil.copyfile(batch_patch, output / batch_patch.name)
+    shutil.copyfile(batch_header, output / batch_header.name)
     shutil.copyfile(header, output / header.name)
     (output / "applied-source.diff").write_text(
         capture(["git", "diff", "--binary"], libraries, env)
@@ -287,6 +304,8 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
             ).strip(),
             "patch_sha256": digest(patch),
             "header_sha256": digest(header),
+            "transaction_patch_sha256": digest(batch_patch),
+            "transaction_header_sha256": digest(batch_header),
             "generator_inputs_unchanged": True,
             "generator_inputs": before,
             "note": "git apply only; source HEAD and .smrev are not rewritten",
@@ -306,6 +325,10 @@ def save_tree(build: Path, output: Path, prefix: str, env: dict[str, str]) -> No
             dest = output / prefix / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, dest)
+    for path in (build / "CMakeFiles").glob("*/*Compiler.cmake"):
+        dest = output / prefix / path.relative_to(build)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, dest)
     for tool, args in [("commands", ["-t", "commands"]), ("graph", ["-t", "graph"])]:
         (output / prefix / f"ninja-{tool}.txt").write_text(
             capture(["ninja", "-C", str(build), *args], ROOT, env)
@@ -532,14 +555,20 @@ def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
     save_tree(nested, output, "rocfft-generated", env)
 
 
-def collect_cache_outputs(nested: Path, output: Path) -> None:
+def collect_cache_outputs(
+    nested: Path, output: Path, batch_first: bool = False
+) -> None:
     inventories = []
     for arch in ARCHES:
         path = nested / f"library/src/rocfft_kernel_cache_{arch}.db"
         if not path.is_file():
             raise ValueError(f"Missing required shipped cache: {arch}")
         info = inventory_database(path, output / f"inventory-{arch}.jsonl")
-        if info["arches"] != [arch] or info["quick_check"] != [("ok",)]:
+        if (
+            info["arches"] != [arch]
+            or info["quick_check"] != [("ok",)]
+            or info["entries"] != 17204
+        ):
             raise ValueError(f"Invalid cache output: {arch}")
         inventories.append(info)
     write_json(output / "cache-inventories.json", inventories)
@@ -550,6 +579,18 @@ def collect_cache_outputs(nested: Path, output: Path) -> None:
         last = json.loads(path.read_text().splitlines()[-1])
         if last["event"] != "complete":
             raise ValueError(f"Incomplete phase trace: {path.name}")
+        if (
+            last["counters"]["cache_misses"] != 17204
+            or last["counters"]["store_errors"]
+        ):
+            raise ValueError(
+                f"Changed compilation coverage or failed cache stores: {path.name}"
+            )
+        expected_batch = "1" if batch_first and last["arch"] == ARCHES[0] else "0"
+        if last["properties"].get("aot_batch_transaction") != expected_batch:
+            raise ValueError(
+                f"Unexpected first/later helper transaction policy: {path.name}"
+            )
         completed.append(last["arch"])
         generator_sums.add(last["properties"].get("generator_sum"))
     if sorted(completed) != ARCHES:
@@ -576,10 +617,21 @@ def collect_cache_outputs(nested: Path, output: Path) -> None:
     )
 
 
+def require_fresh_private_cache(nested: Path) -> None:
+    cache = nested / "library/src/rocfft_temp_cache.db"
+    if cache.exists() or cache.is_symlink():
+        raise ValueError("AOT trial requires a fresh, helper-owned temporary database")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
     parser.add_argument("--output", type=Path, default=ROOT / "build/logs/rocfft-aot")
+    parser.add_argument(
+        "--batch-private-aot",
+        action="store_true",
+        help="Opt-in first-fresh-helper transaction discriminator; later/runtime caches unchanged",
+    )
     args = parser.parse_args()
     env = dict(os.environ)
     require_ci(env)
@@ -625,6 +677,7 @@ def main() -> None:
         runner_name=env.get("RUNNER_NAME"),
         run_id=env.get("GITHUB_RUN_ID"),
         original_rtc_knobs={name: env.get(name) for name in KNOBS},
+        aot_transaction_mode="batch" if args.batch_private_aot else "autocommit",
         initial_resource_limits=limits,
         uid=os.getuid(),
         euid=os.geteuid(),
@@ -639,9 +692,14 @@ def main() -> None:
     nested = None
     try:
         nested = prepare(build, output, env)
-        # No process-mode/worker/cache-policy overrides: only the diagnostic output is enabled.
+        require_fresh_private_cache(nested)
+        # Worker/process/compilation policy stays fixed; transaction trial is explicit.
         child_env = dict(env)
         child_env["ROCFFT_BUILD_PROFILE_DIR"] = str(output / "phases")
+        # Override inherited trial settings: the CLI is the recorded control.
+        child_env["ROCFFT_AOT_BATCH_TRANSACTION"] = (
+            "1" if args.batch_private_aot else "0"
+        )
         for name in [
             "GH_TOKEN",
             "GITHUB_TOKEN",
@@ -681,7 +739,9 @@ def main() -> None:
                 ),
                 (
                     "semantic_cache_outputs",
-                    lambda: collect_cache_outputs(nested, output),
+                    lambda: collect_cache_outputs(
+                        nested, output, args.batch_private_aot
+                    ),
                 ),
                 (
                     "packaging_tests",

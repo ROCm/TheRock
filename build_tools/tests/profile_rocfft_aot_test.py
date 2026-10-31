@@ -23,6 +23,17 @@ SPEC.loader.exec_module(trial)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_trial_refuses_existing_private_database_without_removing_it(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            trial.require_fresh_private_cache(root)
+            cache = root / "library/src/rocfft_temp_cache.db"
+            cache.parent.mkdir(parents=True)
+            cache.write_bytes(b"preexisting private database")
+            with self.assertRaisesRegex(ValueError, "fresh, helper-owned"):
+                trial.require_fresh_private_cache(root)
+            self.assertEqual(cache.read_bytes(), b"preexisting private database")
+
     def test_compiler_normal_variable_is_resolved_and_conflicts_fail(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -200,6 +211,25 @@ class ControllerTests(unittest.TestCase):
             "kgen_logic_files",
         ]:
             self.assertNotIn("+" + forbidden, text)
+
+    def test_transaction_patch_is_limited_to_reviewed_host_files(self):
+        text = (
+            ROOT
+            / "patches/build-profile/rocm-libraries/0002-rocfft-private-aot-transaction.patch"
+        ).read_text()
+        self.assertEqual(
+            trial.patch_paths(text, trial.BATCH_PATCH_FILES), trial.BATCH_PATCH_FILES
+        )
+        additions = "\n".join(
+            line[1:]
+            for line in text.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        self.assertIn("rbp::private_aot_batch_requested", additions)
+        self.assertIn("rbp::Scope phase(rbp::aot_commit)", additions)
+        self.assertNotIn("synchronous", additions)
+        self.assertNotIn("ROCFFT_RTC_MAX_SUBPROCESSES", additions)
+        self.assertNotIn("generator_sum()", additions)
 
     def test_generator_input_fingerprints_detect_content_changes(self):
         with tempfile.TemporaryDirectory() as raw:

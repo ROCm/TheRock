@@ -21,6 +21,10 @@ on:
         type: boolean
         default: false
         description: "Diagnostic only: full math-stage context with rocFFT AOT phase timing"
+      profile_rocfft_aot_batch_transaction:
+        type: boolean
+        default: false
+        description: "Diagnostic only: batch first fresh AOT helper; later helpers unchanged"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -98,6 +102,9 @@ on:
   workflow_call:
     inputs:
       profile_rocfft_aot:
+        type: boolean
+        default: false
+      profile_rocfft_aot_batch_transaction:
         type: boolean
         default: false
       linux_amdgpu_families:
@@ -300,9 +307,12 @@ jobs:
       - name: Prepare SDK and profile math stage with original seven AOT commands
         env:
           GH_TOKEN: ${{ github.token }}
+          ROCFFT_AOT_BATCH_TRIAL: ${{ inputs.profile_rocfft_aot_batch_transaction }}
         run: |
+          args=()
+          if [[ "$ROCFFT_AOT_BATCH_TRIAL" == "true" ]]; then args+=(--batch-private-aot); fi
           python -u build_tools/profile_rocfft_aot.py --build-dir "$BUILD_DIR" \
-            --output "$BUILD_DIR/logs/rocfft-aot"
+            --output "$BUILD_DIR/logs/rocfft-aot" "${args[@]}"
       - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

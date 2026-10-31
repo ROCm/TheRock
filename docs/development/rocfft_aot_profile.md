@@ -167,3 +167,88 @@ python -m unittest build_tools.tests.profile_rocfft_aot_test -v
 The host C++ compiler is discovered as `g++` or `clang++`; alternatively set
 `ROCFFT_PROFILE_TEST_CXX` to a JSON argument array such as `["zig", "c++"]`.
 The workflow requires the real host fixture to compile and pass.
+
+## I-029 private transaction discriminator (default off)
+
+Run41195235975 measured896.133s inside the first helper's17,204 serialized
+SQLite stores, versus33.7–34.2s in later helpers. Nearby independent thread
+snapshots show193 futex waiters and one journal-commit waiter during almost
+zero container CPU. This identifies the serialized store path; it does not
+isolate fsync from connection, checkpoint, allocation or competing storage work.
+
+The optional `profile_rocfft_aot_batch_transaction` input applies only inside
+`profile_rocfft_aot` diagnostic mode. It passes `--batch-private-aot` to the
+controller. Both settings use the same diagnostic source patch and fixed SDK;
+the explicit CLI sets `ROCFFT_AOT_BATCH_TRANSACTION` to0 or1 in the measured
+child. The recorded mode overrides inherited settings. Normal builds do not
+apply these diagnostic patches.
+
+Only the first helper with an absent default temporary DB is eligible. Later
+architecture helpers retain the original growing shared private DB and original
+autocommit behavior; no database is reset between architectures. A controller
+guard rejects a preexisting or symlinked temp DB before the stage starts.
+The candidate begins a single `BEGIN IMMEDIATE` transaction before workers
+start, commits after all workers finish, and then performs the original output
+copy and cleanup. Separate `aot_begin` and `aot_commit` phases include the final
+durable commit in helper wall/CPU totals. WAL, synchronousFULL, busy timeout,
+checkpoint policy, worker count, generator inputs and compile commands stay
+unchanged. The switch refuses nonempty caller-supplied temporary paths; only
+the AOT helper's default regenerable intermediate is eligible. The library's
+general runtime cache never calls the transaction boundary.
+
+This is a reviewable experiment, not a production optimization or validated
+speedup. Risks include larger WAL/transaction working sets, file growth, lock
+duration and loss of an unfinished private batch on interruption. SQLite rolls
+back an unfinished transaction; the helper must fail on begin/commit errors.
+The final output is copied only after successful commit. The default helper
+directory must have exclusive ownership, as in the original serial architecture
+chain. Never run concurrent AOT helpers in the same temporary-cache directory.
+
+For a controlled discriminator, build the helper once with both source patches
+and retain its binary/compiler hashes. In the same TheRock CI allocation, run
+balanced autocommit/batch pairs in separate freshly created private directories,
+using the original helper argv with an empty temporary-path argument, fixed
+RTC-helper path, architecture and environment. Time the complete helper,
+including commit/copy/teardown. Use equal initial compiler-cache state; a second
+run's warm HIPRTC/COMGR or filesystem cache must not be called an optimization.
+Do not compare an all-fresh-seven baseline to the original shared-DB chain.
+The first-architecture trial answers the immediate question; keep the full
+seven-architecture chain and original math-stage concurrency for final validation,
+with batching applied only to the first fresh helper and later helpers unchanged.
+
+Required evidence: store-query and final-commit traces, exact self/waited-child
+CPU, resource/pressure/working-set traces,17,204 compiled/store entries per
+architecture, unchanged generator checksum, read-only SQLite quick_check, and
+equal sorted key/code-blob inventories between controls. Raw database byte
+identity is useful but semantic identity is required because page layout may
+differ. Do not sum overlapping mutex waits or promise896s of CI savings.
+Existing packaging checks and applicable GPU/runtime checks must still pass.
+The current prior diagnostic has no retained semantic inventories because its
+postprocessor failed, so a new controlled pair must establish that reference.
+
+The metadata regression is corrected separately: compiler identity uses generated
+`CMakeCXXCompiler.cmake` when the toolchain variable is absent from CMakeCache.
+Independent postchecks all run and retain their status before any failure is
+raised. Hidden Ninja logs and install logs are retained. A failed metadata check
+continues to fail the job; it no longer discards later semantic output evidence.
+
+The standalone host transaction fixture tests the actual candidate header with
+real SQLite: private-path guard, cross-connection visibility, code-blob identity,
+FULL policy, an authorizer-injected commit failure and close-time rollback.
+For a reproducible host-only check, build SQLite3.51.3 from the same pinned
+rocFFT source URL
+`https://www.sqlite.org/2026/sqlite-amalgamation-3510300.zip`, SHA3-256
+`ced02ff9738970f338c9c8e269897b554bcda73f6cf1029d49459e1324dbeaea`.
+Compile `sqlite3.c` as C with `SQLITE_OMIT_LOAD_EXTENSION`, then set the paths:
+
+```bash
+export ROCFFT_PROFILE_TEST_CXX='["clang++"]'
+export ROCFFT_AOT_TEST_SQLITE_DIR=/private/fixture/sqlite-amalgamation-3510300
+export ROCFFT_AOT_TEST_SQLITE_LIB=/private/fixture/sqlite3.o
+python -m unittest build_tools.tests.profile_rocfft_aot_test \
+  build_tools.tests.rocfft_aot_transaction_test -v
+```
+
+This fixture is host correctness coverage, not a local ROCm performance run.
+The SQLite fixture explicitly skips when its declared build inputs are absent;
+the original required host profiler fixture remains required in CI.
