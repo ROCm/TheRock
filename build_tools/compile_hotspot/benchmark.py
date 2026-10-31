@@ -109,6 +109,68 @@ def entries(names: set[str]) -> dict:
     return selected
 
 
+def reconfigure_ck() -> None:
+    """Replay TheRock's configure edge with a fresh cache, retaining its inputs.
+
+    A direct second configure reused Threads detection state and added -pthread.
+    The root edge supplies the original environment, init/toolchain files and
+    project arguments. Only these two owned files are reset; no build is run.
+    """
+    expected = diagnostic.BUILD / "math-libs/composable_kernel/build"
+    if diagnostic.CK.resolve() != expected.resolve():
+        raise RuntimeError("Refusing to reset an unexpected CK build directory")
+    cache = diagnostic.CK / "CMakeCache.txt"
+    stamp = diagnostic.CK.parent / "stamp/configure.stamp"
+    if not cache.is_file() or not stamp.is_file():
+        raise RuntimeError("Baseline CK configuration must exist before reset")
+    if cache.is_symlink() or stamp.is_symlink():
+        raise RuntimeError("Expected regular owned CK configuration files")
+    edge = diagnostic.run(
+        [
+            "ninja",
+            "-C",
+            str(diagnostic.BUILD),
+            "-t",
+            "commands",
+            "composable_kernel+configure",
+        ]
+    )
+    for flag, filename in (
+        ("-DCMAKE_TOOLCHAIN_FILE=", "_toolchain.cmake"),
+        ("-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=", "_init.cmake"),
+    ):
+        if flag + str(diagnostic.CK.parent / filename) not in edge:
+            raise RuntimeError("TheRock CK configure edge is missing its pinned inputs")
+    (diagnostic.OUT / "candidate-configure-edge.txt").write_text(edge)
+    shutil.copy2(cache, diagnostic.OUT / "candidate-pre-reset-CMakeCache.txt")
+    diagnostic.save(
+        "candidate-configure-reset.json",
+        {
+            "removed_files": [
+                diagnostic.fingerprint(cache),
+                diagnostic.fingerprint(stamp),
+            ]
+        },
+    )
+    cache.unlink()
+    stamp.unlink()
+    diagnostic.run(
+        [
+            "cmake",
+            "--build",
+            str(diagnostic.BUILD),
+            "--target",
+            "composable_kernel+configure",
+            "--",
+            "-v",
+        ],
+        log="candidate-configure.log",
+    )
+    if not cache.is_file() or not stamp.is_file():
+        raise RuntimeError("TheRock did not regenerate the CK configuration")
+    shutil.copy2(cache, diagnostic.OUT / "candidate-post-reset-CMakeCache.txt")
+
+
 def benchmark() -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("Run trials on the dedicated CI runner")
@@ -177,10 +239,7 @@ def benchmark() -> None:
         state = wanted
 
     set_state("candidate")
-    diagnostic.run(
-        ["cmake", "-S", str(CK_SOURCE), "-B", str(diagnostic.CK)],
-        log="candidate-configure.log",
-    )
+    reconfigure_ck()
     candidate = entries({Path(p).name for p in cpp_paths})
     candidate_headers = {
         str(p.relative_to(diagnostic.CK)): diagnostic.fingerprint(p)
