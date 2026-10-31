@@ -206,6 +206,8 @@ def copy_file(source, destination):
 def archive_proof(archive, candidate):
     ar, nm = cache_value(CK, "CMAKE_AR"), cache_value(CK, "CMAKE_NM")
     members = diagnostic.run([ar, "t", str(archive)]).splitlines()
+    native_archive = CK / "lib/libdevice_conv_operations.a"
+    native_members = diagnostic.run([ar, "t", str(native_archive)]).splitlines()
     proof_dir = OUT / "integration-archive-proof"
     proof_dir.mkdir()
     proof = []
@@ -214,17 +216,23 @@ def archive_proof(archive, candidate):
         if not path.is_absolute():
             path = Path(entry["directory"]) / path
         member = path.name
-        if members.count(member) != 1:
+        if members.count(member) != 1 or native_members.count(member) != 1:
             raise RuntimeError(f"Expected unique archive member {member}")
         extracted = proof_dir / member
         with extracted.open("wb") as stream:
             subprocess.run([ar, "p", str(archive), member], stdout=stream, check=True)
         actual, archived = diagnostic.fingerprint(path), diagnostic.fingerprint(extracted)
-        if actual["sha256"] != archived["sha256"]:
-            raise RuntimeError(f"Staged archive member differs from compiled object {name}")
+        native_object = proof_dir / (member + ".native")
+        with native_object.open("wb") as stream:
+            subprocess.run([ar, "p", str(native_archive), member], stdout=stream, check=True)
+        native = diagnostic.fingerprint(native_object)
+        if actual["sha256"] != native["sha256"]:
+            raise RuntimeError(f"Native archive member differs from compiled object {name}")
         symbols = diagnostic.run([nm, "--demangle", str(extracted)])
         (proof_dir / (member + ".symbols.txt")).write_text(symbols)
-        proof.append({"source": name, "object": actual, "archive_member": archived})
+        proof.append({"source": name, "object": actual, "native_archive_member": native,
+                      "staged_archive_member": archived,
+                      "install_changed_bytes": actual["sha256"] != archived["sha256"]})
     public = (proof_dir / (diagnostic.SOURCE + ".o.symbols.txt")).read_text()
     for suffix in ("noshuffle", "nongrouped_match"):
         symbol = "detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_" + suffix + "_instances"
@@ -234,7 +242,9 @@ def archive_proof(archive, candidate):
         symbols = (proof_dir / (helper + ".o.symbols.txt")).read_text()
         if not any(re.search(r"\s[TW]\s", line) and symbol in line for line in symbols.splitlines()):
             raise RuntimeError(f"Helper archive member does not define {symbol}")
-    result = {"archive": diagnostic.fingerprint(archive), "members": members, "changed_members": proof}
+    result = {"archive": diagnostic.fingerprint(archive), "native_archive": diagnostic.fingerprint(native_archive),
+              "members": members, "changed_members": proof,
+              "install_note": "The normal stage install may strip debug information; byte identity is required between compiled objects and native archive members, then helper reachability is checked in the installed archive."}
     save("archive-proof.json", result)
     return result
 
@@ -268,6 +278,9 @@ def link_contract(args, candidate, archive, utility):
 def package(args, context, imported, archives, candidate, measurements):
     archive = STAGE / "lib/libdevice_conv_operations.a"
     proof = archive_proof(archive, candidate)
+    consumer_archive = BUILD / "math-libs/composable_kernel/dist/lib/libdevice_conv_operations.a"
+    if diagnostic.fingerprint(consumer_archive)["sha256"] != diagnostic.fingerprint(archive)["sha256"]:
+        raise RuntimeError("CK dist archive consumed by MIOpen differs from the staged archive")
     utilities = list(CK.rglob("libutility.a"))
     if len(utilities) != 1:
         raise RuntimeError(f"Expected one CK utility archive, got {utilities}")
@@ -295,9 +308,10 @@ def package(args, context, imported, archives, candidate, measurements):
             path = path if path.is_absolute() else MIOPEN / path
             responses[str(path)] = path.read_text()
     expanded = link + "\n" + "\n".join(responses.values())
-    if str(archive) not in expanded:
+    if str(consumer_archive) not in expanded:
         raise RuntimeError("Consumer link command does not name the actual rebuilt CK archive")
     save("plugin-link.json", {"command": link, "response_files": responses,
+                              "consumer_archive": str(consumer_archive),
                               "archive_sha256": diagnostic.fingerprint(archive)["sha256"]})
     (OUT / "integration-plugin-dynamic.txt").write_text(diagnostic.run(["readelf", "-d", str(plugin)]))
     contract = link_contract(args, candidate, archive, utility)
