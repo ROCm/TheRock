@@ -1,0 +1,560 @@
+diff --git a/projects/rocfft/library/src/rocfft_aot_helper.cpp b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+index d324dd8..96b95c8 100644
+--- a/projects/rocfft/library/src/rocfft_aot_helper.cpp
++++ b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+@@ -18,6 +18,7 @@
+ // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ // THE SOFTWARE.
+ 
++#include "../../shared/build_profile.h"
+ #include <functional>
+ #include <iostream>
+ #include <thread>
+@@ -45,7 +46,8 @@ namespace std
+     namespace filesystem = experimental::filesystem;
+ }
+ #endif
+-namespace fs = std::filesystem;
++namespace fs  = std::filesystem;
++namespace rbp = rocfft_build_profile;
+ 
+ struct WorkItem
+ {
+@@ -771,6 +773,19 @@ int main(int argc, char** argv)
+         temp_cache_file = "rocfft_temp_cache.db";
+     }
+ 
++    rbp::Session profile_session(
++        gpu_archs.empty() ? "none" : gpu_archs.front(), temp_cache_file, output_cache_file);
++    for(const char* knob : {"OMP_NUM_THREADS",
++                            "ROCFFT_RTC_MAX_SUBPROCESSES",
++                            "ROCFFT_RTC_PROCESS",
++                            "ROCFFT_RTC_CACHE_READ_DISABLE",
++                            "ROCFFT_RTC_CACHE_WRITE_DISABLE"})
++        rbp::property(knob, rocfft_getenv(knob));
++    std::ostringstream profile_sum;
++    for(unsigned char byte : generator_sum())
++        profile_sum << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
++    rbp::property("generator_sum", profile_sum.str());
++
+     // force RTC to use the temporary cache file
+     rocfft_setenv("ROCFFT_RTC_CACHE_PATH", temp_cache_file.c_str());
+ 
+@@ -778,13 +793,16 @@ int main(int argc, char** argv)
+     // an in-memory DB which will always be empty
+     rocfft_setenv("ROCFFT_RTC_SYS_CACHE_PATH", ":memory:");
+ 
+-    RTCCache::single = std::make_unique<RTCCache>();
+-
+-    RTCCache::single->enable_write_mostly();
++    {
++        rbp::Scope phase(rbp::db_initialize);
++        RTCCache::single = std::make_unique<RTCCache>();
++        RTCCache::single->enable_write_mostly();
++    }
+ 
+     CompileQueue queue;
+ 
+-    static const size_t      NUM_THREADS = rocfft_concurrency();
++    static const size_t NUM_THREADS = rocfft_concurrency();
++    rbp::property("aot_workers", std::to_string(NUM_THREADS));
+     std::vector<std::thread> threads;
+     threads.reserve(NUM_THREADS);
+     for(size_t i = 0; i < NUM_THREADS; ++i)
+@@ -821,24 +839,43 @@ int main(int argc, char** argv)
+         });
+     }
+ 
+-    build_stockham_function_pool(queue);
+-    build_realcomplex(queue);
+-    build_twiddle(queue);
+-    build_solution_kernels(queue);
++    {
++        rbp::Scope phase(rbp::producer_stockham);
++        build_stockham_function_pool(queue);
++    }
++    {
++        rbp::Scope phase(rbp::producer_realcomplex);
++        build_realcomplex(queue);
++    }
++    {
++        rbp::Scope phase(rbp::producer_twiddle);
++        build_twiddle(queue);
++    }
++    {
++        rbp::Scope phase(rbp::producer_solution);
++        build_solution_kernels(queue);
++    }
+ 
+     // signal end of results with empty work items
+     for(size_t i = 0; i < NUM_THREADS; ++i)
+         queue.push({});
+-    for(size_t i = 0; i < NUM_THREADS; ++i)
+-        threads[i].join();
++    {
++        rbp::Scope phase(rbp::workers_join);
++        for(size_t i = 0; i < NUM_THREADS; ++i)
++            threads[i].join();
++    }
+ 
+     // write the output file using what we collected in the temporary
+     // cache
+-    RTCCache::single->write_aot_cache(output_cache_file, generator_sum(), gpu_archs);
++    {
++        rbp::Scope phase(rbp::final_copy);
++        RTCCache::single->write_aot_cache(output_cache_file, generator_sum(), gpu_archs);
++    }
+ 
+     // try to shrink the temp cache file to 10 GiB
+     try
+     {
++        rbp::Scope phase(rbp::cleanup);
+         RTCCache::single->cleanup_cache(static_cast<sqlite3_int64>(10) * 1024 * 1024 * 1024);
+     }
+     // the build should still succeed even if we fail to shrink the temp cache
+@@ -847,7 +884,10 @@ int main(int argc, char** argv)
+         std::cerr << "warning: failed to shrink temp cache" << std::endl;
+     }
+ 
+-    RTCCache::single.reset();
++    {
++        rbp::Scope phase(rbp::teardown);
++        RTCCache::single.reset();
++    }
+ 
+     return 0;
+ }
+diff --git a/projects/rocfft/library/src/rtc_cache.cpp b/projects/rocfft/library/src/rtc_cache.cpp
+index 2845840..f878208 100644
+--- a/projects/rocfft/library/src/rtc_cache.cpp
++++ b/projects/rocfft/library/src/rtc_cache.cpp
+@@ -18,6 +18,7 @@
+ // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ // THE SOFTWARE.
+ 
++#include "../../shared/build_profile.h"
+ #include "../../shared/concurrency.h"
+ #include "../../shared/environment.h"
+ 
+@@ -38,7 +39,8 @@
+ #include <semaphore>
+ #include <set>
+ 
+-namespace fs = std::filesystem;
++namespace fs  = std::filesystem;
++namespace rbp = rocfft_build_profile;
+ 
+ std::unique_ptr<RTCCache> RTCCache::single;
+ 
+@@ -71,7 +73,10 @@ public:
+         : sem_(sem)
+     {
+         if(sem_)
++        {
++            rbp::Scope phase(rbp::semaphore_wait);
+             sem_->acquire();
++        }
+     }
+ 
+     ~semaphore_guard()
+@@ -80,10 +85,10 @@ public:
+             sem_->release();
+     }
+ 
+-    semaphore_guard(const semaphore_guard&) = delete;
++    semaphore_guard(const semaphore_guard&)            = delete;
+     semaphore_guard& operator=(const semaphore_guard&) = delete;
+     semaphore_guard(semaphore_guard&&)                 = delete;
+-    semaphore_guard& operator=(semaphore_guard&&) = delete;
++    semaphore_guard& operator=(semaphore_guard&&)      = delete;
+ 
+ private:
+     std::counting_semaphore<>* sem_;
+@@ -113,6 +118,8 @@ static unsigned int get_max_subprocesses()
+     // initialize semaphore once with the determined count
+     std::call_once(semaphore_init_flag, [max_subprocesses]() {
+         subprocess_semaphore = std::make_unique<std::counting_semaphore<>>(max_subprocesses);
++        if(rbp::enabled())
++            rbp::state().semaphore_capacity.store(max_subprocesses);
+ 
+         if(LOG_RTC_ENABLED())
+         {
+@@ -333,7 +340,7 @@ std::vector<char> RTCCache::db_file::get_code_object(const std::string&
+     if(cache_read_disabled || !db || !get_stmt)
+         return code;
+ 
+-    std::lock_guard<std::mutex> lock(get_mutex);
++    rbp::Lock lock(get_mutex, rbp::get_mutex_wait, rbp::get_mutex_hold);
+ 
+     auto s = get_stmt.get();
+     sqlite3_reset(s);
+@@ -348,8 +355,17 @@ std::vector<char> RTCCache::db_file::get_code_object(const std::string&
+     {
+         throw std::runtime_error(std::string("get_code_object bind: ") + sqlite3_errmsg(db.get()));
+     }
+-    if(sqlite3_step(s) == SQLITE_ROW)
++    int profile_result;
+     {
++        rbp::Scope phase(rbp::get_query);
++        profile_result = sqlite3_step(s);
++    }
++    rbp::add(profile_result == SQLITE_ROW ? rbp::state().get_rows : rbp::state().get_other);
++    if((profile_result & 255) == SQLITE_BUSY || (profile_result & 255) == SQLITE_LOCKED)
++        rbp::add(rbp::state().get_busy);
++    if(profile_result == SQLITE_ROW)
++    {
++        rbp::Scope phase(rbp::get_copy);
+         // cache hit, get the value out
+         int         nbytes = sqlite3_column_bytes(s, 0);
+         const char* data   = static_cast<const char*>(sqlite3_column_blob(s, 0));
+@@ -385,7 +401,7 @@ void RTCCache::db_file::store_code_object(const std::string&          kernel_nam
+     if(cache_write_disabled || !db || !store_stmt)
+         return;
+ 
+-    std::lock_guard<std::mutex> lock(store_mutex);
++    rbp::Lock lock(store_mutex, rbp::store_mutex_wait, rbp::store_mutex_hold);
+ 
+     auto s = store_stmt.get();
+     sqlite3_reset(s);
+@@ -402,8 +418,16 @@ void RTCCache::db_file::store_code_object(const std::string&          kernel_nam
+         throw std::runtime_error(std::string("store_code_object bind: ")
+                                  + sqlite3_errmsg(db.get()));
+     }
+-    if(sqlite3_step(s) != SQLITE_DONE)
++    int profile_result;
++    {
++        rbp::Scope phase(rbp::store_query);
++        profile_result = sqlite3_step(s);
++    }
++    if((profile_result & 255) == SQLITE_BUSY || (profile_result & 255) == SQLITE_LOCKED)
++        rbp::add(rbp::state().store_busy);
++    if(profile_result != SQLITE_DONE)
+     {
++        rbp::add(rbp::state().store_errors);
+         std::cerr << "Error: failed to store code object for " << kernel_name << ": "
+                   << sqlite3_errmsg(db.get()) << std::endl;
+         // some kind of problem storing the row?  log it
+@@ -469,21 +493,21 @@ rocfft_status RTCCache::deserialize(const void* buffer, size_t buffer_len_bytes)
+     // update the real db with the temp contents.
+     sql_err           = sqlite3_exec(db_user,
+                            "INSERT OR REPLACE INTO cache_v1 ("
+-                           "    kernel_name,"
+-                           "    arch,"
+-                           "    hip_version,"
+-                           "    generator_sum,"
+-                           "    timestamp,"
+-                           "    code"
+-                           ")"
+-                           "SELECT"
+-                           "    kernel_name,"
+-                           "    arch,"
+-                           "    hip_version,"
+-                           "    generator_sum,"
+-                           "    timestamp,"
+-                           "    code "
+-                           "FROM deserialized.cache_v1",
++                                     "    kernel_name,"
++                                     "    arch,"
++                                     "    hip_version,"
++                                     "    generator_sum,"
++                                     "    timestamp,"
++                                     "    code"
++                                     ")"
++                                     "SELECT"
++                                     "    kernel_name,"
++                                     "    arch,"
++                                     "    hip_version,"
++                                     "    generator_sum,"
++                                     "    timestamp,"
++                                     "    code "
++                                     "FROM deserialized.cache_v1",
+                            nullptr,
+                            nullptr,
+                            nullptr);
+@@ -545,6 +569,7 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+ 
+     if(!code.empty())
+     {
++        rbp::add(rbp::state().cache_hits);
+         // cache hit
+         try
+         {
+@@ -568,12 +593,17 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+         }
+     }
+ 
++    rbp::add(rbp::state().cache_misses);
+     // callbacks are always potentially enabled, and activated by
+     // checking the enable_callbacks variable later
+     std::string kernel_src{"#define ROCFFT_CALLBACKS_ENABLED\n"};
+ 
+     auto generate_begin = std::chrono::steady_clock::now();
+-    kernel_src += generate_src(kernel_name);
++    {
++        rbp::Scope phase(rbp::generate);
++        kernel_src += generate_src(kernel_name);
++    }
++    rbp::add(rbp::state().source_bytes, kernel_src.size());
+     auto generate_end = std::chrono::steady_clock::now();
+ 
+     if(LOG_RTC_ENABLED())
+@@ -604,18 +634,23 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+             semaphore_guard guard(subprocess_semaphore.get());
+ 
+             compile_begin = std::chrono::steady_clock::now();
+-            code          = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
++            {
++                rbp::Scope phase(rbp::subprocess_compile);
++                code = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
++            }
+             break;
+         }
+-        catch(std::exception&)
++        catch(std::exception& profile_exception)
+         {
++            rbp::failure(profile_exception.what());
++            rbp::add(rbp::state().fallbacks);
+             // if subprocess had a problem, ignore it and
+             // fall through to forced-in-process compile
+         }
+     }
+     case RTCProcessType::FORCE_IN_PROCESS:
+     {
+-        std::lock_guard<std::mutex> lck(compile_lock);
++        rbp::Lock lck(compile_lock, rbp::inprocess_lock_wait, rbp::inprocess_compile);
+         compile_begin = std::chrono::steady_clock::now();
+         code          = compile_inprocess(kernel_src, gpu_arch);
+         break;
+@@ -627,7 +662,10 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+         if(lock.owns_lock())
+         {
+             compile_begin = std::chrono::steady_clock::now();
+-            code          = compile_inprocess(kernel_src, gpu_arch);
++            {
++                rbp::Scope phase(rbp::inprocess_compile);
++                code = compile_inprocess(kernel_src, gpu_arch);
++            }
+             lock.unlock();
+         }
+         else
+@@ -640,7 +678,7 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+             // for the same CPU
+             if(max_procs == 1)
+             {
+-                std::lock_guard<std::mutex> lck(compile_lock);
++                rbp::Lock lck(compile_lock, rbp::inprocess_lock_wait, rbp::inprocess_compile);
+                 compile_begin = std::chrono::steady_clock::now();
+                 code          = compile_inprocess(kernel_src, gpu_arch);
+             }
+@@ -653,14 +691,19 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+                     semaphore_guard guard(subprocess_semaphore.get());
+ 
+                     compile_begin = std::chrono::steady_clock::now();
+-                    code          = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
++                    {
++                        rbp::Scope phase(rbp::subprocess_compile);
++                        code = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
++                    }
+                 }
+-                catch(std::exception&)
++                catch(std::exception& profile_exception)
+                 {
++                    rbp::failure(profile_exception.what());
++                    rbp::add(rbp::state().fallbacks);
+                     // subprocess still didn't work, re-acquire lock
+                     // and fall back to in-process if something went
+                     // wrong
+-                    std::lock_guard<std::mutex> lck(compile_lock);
++                    rbp::Lock lck(compile_lock, rbp::inprocess_lock_wait, rbp::inprocess_compile);
+                     compile_begin = std::chrono::steady_clock::now();
+                     code          = compile_inprocess(kernel_src, gpu_arch);
+                 }
+@@ -669,6 +712,7 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+     }
+     }
+     auto compile_end = std::chrono::steady_clock::now();
++    rbp::add(rbp::state().code_bytes, code.size());
+ 
+     if(LOG_RTC_ENABLED())
+     {
+@@ -699,7 +743,9 @@ struct PendingCompileCleanup
+     {
+         if(RTCCache::single)
+         {
+-            std::lock_guard<std::mutex> lock(RTCCache::single->pending_compiles_mutex);
++            rbp::Lock lock(RTCCache::single->pending_compiles_mutex,
++                           rbp::pending_mutex_wait,
++                           rbp::pending_mutex_hold);
+             RTCCache::single->pending_compiles.erase(key);
+         }
+     }
+@@ -734,10 +780,13 @@ std::vector<char> RTCCache::cached_compile(const std::string&                ker
+     if(RTCCache::single)
+     {
+         // check the map of pending work for this compile
+-        std::lock_guard<std::mutex> lock(RTCCache::single->pending_compiles_mutex);
+-        auto                        pc = RTCCache::single->pending_compiles.find(key);
++        rbp::Lock lock(RTCCache::single->pending_compiles_mutex,
++                       rbp::pending_mutex_wait,
++                       rbp::pending_mutex_hold);
++        auto      pc = RTCCache::single->pending_compiles.find(key);
+         if(pc == RTCCache::single->pending_compiles.end())
+         {
++            rbp::add(rbp::state().pending_new);
+             // not in the pending map, so add a future and launch the
+             // work to look up the kernel in the cache or compile it.
+             auto compile = [=](std::promise<std::vector<char>> compile_promise) {
+@@ -762,6 +811,10 @@ std::vector<char> RTCCache::cached_compile(const std::string&                ker
+ 
+             cleanup.emplace(key);
+         }
++        else
++        {
++            rbp::add(rbp::state().pending_shared);
++        }
+         result = pc->second;
+     }
+     else
+@@ -772,6 +825,7 @@ std::vector<char> RTCCache::cached_compile(const std::string&                ker
+             kernel_name, gpu_arch, generate_src, generator_sum, forced_rtc_helper));
+         result = p.get_future();
+     }
++    rbp::Scope phase(rbp::future_wait);
+     return result.get();
+ }
+ 
+@@ -787,6 +841,18 @@ void RTCCache::enable_write_mostly()
+     // ignore error here - WAL is helpful, but we can still proceed
+     // even if enabling it fails
+     sqlite3_step(wal_stmt.get());
++    if(rbp::enabled())
++    {
++        for(const char* pragma :
++            {"journal_mode", "synchronous", "wal_autocheckpoint", "page_size", "page_count"})
++        {
++            auto query  = prepare_stmt(db_user, (std::string("PRAGMA ") + pragma).c_str());
++            int  result = sqlite3_step(query.get());
++            auto value  = result == SQLITE_ROW ? sqlite3_column_text(query.get(), 0) : nullptr;
++            rbp::property(std::string("sqlite_") + pragma,
++                          value ? reinterpret_cast<const char*>(value) : std::to_string(result));
++        }
++    }
+ }
+ 
+ void RTCCache::write_aot_cache(const std::string&              output_path,
+diff --git a/projects/rocfft/shared/subprocess.h b/projects/rocfft/shared/subprocess.h
+index 5e4cfa9..3329a06 100644
+--- a/projects/rocfft/shared/subprocess.h
++++ b/projects/rocfft/shared/subprocess.h
+@@ -29,6 +29,8 @@
+ #include <windows.h>
+ #pragma pop_macro("WIN32_LEAN_AND_MEAN")
+ #else
++#include "build_profile.h"
++#include <cerrno>
+ #include <fcntl.h>
+ #include <poll.h>
+ #include <spawn.h>
+@@ -57,8 +59,8 @@ struct file_handle_wrapper
+     // no copies, moves
+     file_handle_wrapper(const file_handle_wrapper&) = delete;
+     file_handle_wrapper(file_handle_wrapper&&)      = delete;
+-    void operator=(const file_handle_wrapper&) = delete;
+-    void operator=(file_handle_wrapper&&) = delete;
++    void operator=(const file_handle_wrapper&)      = delete;
++    void operator=(file_handle_wrapper&&)           = delete;
+     ~file_handle_wrapper()
+     {
+         this->close();
+@@ -322,13 +324,25 @@ static std::vector<char> execute_subprocess(const std::string&              exe,
+ #else
+     int stdin_fds[2] = {-1, -1};
+     if(pipe2(stdin_fds, O_CLOEXEC) != 0)
++    {
++        const int profile_pipe_errno = errno;
++        rocfft_build_profile::error_code(rocfft_build_profile::state().pipe_errors,
++                                         rocfft_build_profile::state().last_pipe_errno,
++                                         profile_pipe_errno);
+         throw std::runtime_error("failed to create stdin pipe");
++    }
+     file_handle_wrapper child_stdin_read(stdin_fds[0]);
+     file_handle_wrapper child_stdin_write(stdin_fds[1]);
+ 
+     int stdout_fds[2] = {-1, -1};
+     if(pipe2(stdout_fds, O_CLOEXEC) != 0)
++    {
++        const int profile_pipe_errno = errno;
++        rocfft_build_profile::error_code(rocfft_build_profile::state().pipe_errors,
++                                         rocfft_build_profile::state().last_pipe_errno,
++                                         profile_pipe_errno);
+         throw std::runtime_error("failed to create stdout pipe");
++    }
+     file_handle_wrapper child_stdout_read(stdout_fds[0]);
+     file_handle_wrapper child_stdout_write(stdout_fds[1]);
+ 
+@@ -356,6 +370,9 @@ static std::vector<char> execute_subprocess(const std::string&              exe,
+     posix_spawn_file_actions_destroy(&spawn_file_actions);
+     if(spawn_result != 0)
+     {
++        rocfft_build_profile::error_code(rocfft_build_profile::state().spawn_errors,
++                                         rocfft_build_profile::state().last_spawn_errno,
++                                         spawn_result);
+         throw std::runtime_error("failed to spawn child process");
+     }
+ 
+@@ -429,7 +446,21 @@ static std::vector<char> execute_subprocess(const std::string&              exe,
+     // wait for the child process
+     int wait_status = 0;
+     if(waitpid(pid, &wait_status, 0) != pid)
++    {
++        const int profile_wait_errno = errno;
++        rocfft_build_profile::error_code(rocfft_build_profile::state().wait_errors,
++                                         rocfft_build_profile::state().last_wait_errno,
++                                         profile_wait_errno);
+         throw std::runtime_error("failed to wait for child process");
++    }
++    if(WIFSIGNALED(wait_status))
++        rocfft_build_profile::error_code(rocfft_build_profile::state().child_signals,
++                                         rocfft_build_profile::state().last_child_signal,
++                                         WTERMSIG(wait_status));
++    else if(WIFEXITED(wait_status) && WEXITSTATUS(wait_status) != 0)
++        rocfft_build_profile::error_code(rocfft_build_profile::state().nonzero_exits,
++                                         rocfft_build_profile::state().last_child_exit,
++                                         WEXITSTATUS(wait_status));
+     subprocess_failed = WIFSIGNALED(wait_status) || WEXITSTATUS(wait_status) != 0;
+ #endif
+ 
+diff --git a/projects/rocfft/shared/work_queue.h b/projects/rocfft/shared/work_queue.h
+index e13fc41..5351867 100644
+--- a/projects/rocfft/shared/work_queue.h
++++ b/projects/rocfft/shared/work_queue.h
+@@ -20,6 +20,7 @@
+ 
+ #pragma once
+ 
++#include "build_profile.h"
+ #include <condition_variable>
+ #include <mutex>
+ #include <queue>
+@@ -30,15 +31,21 @@ struct WorkQueue
+     {
+         std::unique_lock<std::mutex> lock(queueMutex);
+         items.emplace(std::move(i));
++        rocfft_build_profile::add(rocfft_build_profile::state().queued);
++        rocfft_build_profile::add(rocfft_build_profile::state().queue_depth);
+         emptyWait.notify_all();
+     }
+     _WorkItem pop()
+     {
++        rocfft_build_profile::Scope  phase(rocfft_build_profile::queue_wait);
+         std::unique_lock<std::mutex> lock(queueMutex);
+         while(items.empty())
+             emptyWait.wait(lock);
+         _WorkItem item(items.front());
+         items.pop();
++        rocfft_build_profile::add(rocfft_build_profile::state().popped);
++        if(rocfft_build_profile::enabled())
++            rocfft_build_profile::state().queue_depth.fetch_sub(1, std::memory_order_relaxed);
+         return item;
+     }
+ 
