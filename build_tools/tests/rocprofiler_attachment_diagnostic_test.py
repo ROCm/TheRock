@@ -207,6 +207,42 @@ class ScopeTests(unittest.TestCase):
                 with self.subTest(component_field=key), self.assertRaises(ValueError):
                     probe.guard(nested, self.env, component=True)
 
+    def test_actual_dispatch_payload_omits_only_expected_empty_strings(self):
+        fixture = (
+            Path(__file__).parent
+            / "fixtures/rocprofiler_attachment_dispatch_inputs.json"
+        )
+        actual = json.loads(fixture.read_text())
+        # The retained payload's source is fixed1f2c; mock only its SHA binding.
+        actual["ref"] = self.sha
+        missing = set(self.inputs) - set(actual)
+        self.assertEqual(
+            missing,
+            {
+                "quartz_tracking_id",
+                "test_runs_on_cpu",
+                "changed_projects",
+                "skip_stages",
+            },
+        )
+        with mock.patch.object(probe, "git", side_effect=self.git):
+            probe.guard(actual, self.env)
+            for key in missing:
+                for value in [None, "unexpected", False, 0]:
+                    with self.subTest(key=key, value=value), self.assertRaises(
+                        ValueError
+                    ):
+                        probe.guard({**actual, key: value}, self.env)
+            for key in [
+                "artifact_run_id",
+                "tests_enabled",
+                "sanity_check_only_for_family",
+            ]:
+                changed = dict(actual)
+                changed.pop(key)
+                with self.subTest(missing_required=key), self.assertRaises(ValueError):
+                    probe.guard(changed, self.env)
+
     def test_reject_other_repository_source_run_and_scope(self):
         with mock.patch.object(probe, "git", side_effect=self.git):
             for key, value in [

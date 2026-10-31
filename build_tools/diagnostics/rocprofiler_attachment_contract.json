@@ -3,7 +3,7 @@
   "artifact_run_id": "41230700832",
   "product_head_sha": "5b7cb88373362ab80dc0f19605915e534f4158aa",
   "source_rocm_systems_sha": "a10dca087065a82f15ea89dc7d6fdd3c6bb2c246",
-  "branch": "users/sa-faizal/build-profile-41147801272-profiler-attachment",
+  "branch": "users/sa-faizal/build-profile-41147801272-profiler-attachment-fix",
   "runner": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
   "component": {
     "additional_requirements_files": [

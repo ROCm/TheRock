@@ -1,0 +1,16 @@
+{
+  "artifact_group": "multi-arch-release",
+  "artifact_run_id": "41230700832",
+  "amdgpu_families": "gfx94X-dcgpu",
+  "amdgpu_targets": "gfx942",
+  "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+  "tests_enabled": true,
+  "sanity_check_only_for_family": false,
+  "test_type": "comprehensive",
+  "test_labels": "[\"test:rocprofiler-sdk\"]",
+  "release_type": "ci",
+  "repository": "ROCm/TheRock",
+  "ref": "1f2c62cba17cffc861d371a99ae2ee3b7607d447",
+  "build_variant": "release",
+  "profile_attachment_diagnostic": true
+}

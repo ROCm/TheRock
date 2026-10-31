@@ -154,9 +154,10 @@ def guard(inputs: dict, env: dict, component: bool = False) -> dict:
         if json.loads(inputs.get("test_labels", "null")) != ["test:rocprofiler-sdk"]:
             raise ValueError("diagnostic selection is not profiler-only")
     for name, value in fixed.items():
-        if (isinstance(value, bool) and inputs.get(name) is not value) or inputs.get(
-            name
-        ) != value:
+        # GitHub omits empty strings from toJSON(inputs) on workflow_dispatch.
+        # Explicit null, nonempty replacements and missing nonempty values fail.
+        actual = inputs.get(name, "" if value == "" else None)
+        if (isinstance(value, bool) and actual is not value) or actual != value:
             raise ValueError("fixed diagnostic input mismatch: " + name)
     state["validated_inputs"] = inputs
     return state
