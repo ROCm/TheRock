@@ -43,6 +43,16 @@ def check_deadline(deadline: float) -> None:
         raise RuntimeError("Diagnostic runtime budget exhausted")
 
 
+def require_rock_ci() -> None:
+    if (
+        os.getenv("GITHUB_ACTIONS") != "true"
+        or os.getenv("GITHUB_REPOSITORY") != "ROCm/TheRock"
+    ):
+        raise RuntimeError(
+            "Full preprocessing comparisons execute only in ROCm/TheRock CI"
+        )
+
+
 def check_links(root: Path) -> None:
     """Reject escaping directory/config links and cycles before conversion.
 
@@ -74,14 +84,24 @@ def check_links(root: Path) -> None:
 
 
 def manifest(
-    root: Path, output: Path, deadline: float, dynamic: bool = False
+    root: Path,
+    output: Path,
+    deadline: float,
+    dynamic: bool = False,
+    copied_hashes: dict[str, tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     """Hash physical entries; post-conversion equivalence excludes timestamps."""
+    if dynamic and copied_hashes:
+        raise ValueError(
+            "Post-conversion verification requires full destination readback"
+        )
     started = time.monotonic()
     content, mtimes = hashlib.sha256(), hashlib.sha256()
     dynamic_hash = hashlib.sha256()
     counts = dict(files=0, directories=0, symlinks=0, elf=0, configs=0, bytes=0)
     readelf_errors = []
+    content_read_bytes = 0
+    source_stream_hashes_used = 0
     with output.open("w", encoding="utf-8") as stream:
         for directory, dirs, files in os.walk(root, followlinks=False):
             dirs.sort()
@@ -105,15 +125,29 @@ def manifest(
                     counts["directories"] += 1
                 elif stat.S_ISREG(info.st_mode):
                     file_hash = hashlib.sha256()
-                    with path.open("rb") as source:
-                        first = source.read(1024 * 1024)
-                        file_hash.update(first)
-                        while chunk := source.read(1024 * 1024):
-                            check_deadline(deadline)
-                            file_hash.update(chunk)
-                    record.update(
-                        kind="file", size=info.st_size, sha256=file_hash.hexdigest()
-                    )
+                    copied = (copied_hashes or {}).get(relative)
+                    if copied is not None:
+                        # The full source stream was hashed while writing this
+                        # independent file, then fsynced. Check destination size
+                        # and magic without reading its payload a second time.
+                        if copied[1] != info.st_size:
+                            raise RuntimeError(f"Copied payload length changed: {path}")
+                        with path.open("rb") as source:
+                            first = source.read(4)
+                        file_digest = copied[0]
+                        content_read_bytes += len(first)
+                        source_stream_hashes_used += 1
+                    else:
+                        with path.open("rb") as source:
+                            first = source.read(1024 * 1024)
+                            file_hash.update(first)
+                            content_read_bytes += len(first)
+                            while chunk := source.read(1024 * 1024):
+                                check_deadline(deadline)
+                                file_hash.update(chunk)
+                                content_read_bytes += len(chunk)
+                        file_digest = file_hash.hexdigest()
+                    record.update(kind="file", size=info.st_size, sha256=file_digest)
                     counts["files"] += 1
                     counts["bytes"] += info.st_size
                     emit_hash(mtimes, dict(path=relative, mtime_ns=info.st_mtime_ns))
@@ -156,6 +190,8 @@ def manifest(
         dynamic_sha256=dynamic_hash.hexdigest(),
         readelf_errors=readelf_errors,
         counts=counts,
+        content_read_bytes=content_read_bytes,
+        source_stream_hashes_used=source_stream_hashes_used,
         wall_s=time.monotonic() - started,
     )
 
@@ -166,6 +202,7 @@ def copy_tree(
     expected_bytes: int,
     deadline: float,
     owned: bool = False,
+    inline_hashes: dict[str, tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
     if (
         work.resolve() == pristine.resolve()
@@ -187,6 +224,7 @@ def copy_tree(
     counters = dict(
         reflink_files=0,
         copied_files=0,
+        copied_payload_bytes=0,
         fsynced_files=0,
         free_before_bytes=free,
         required_bytes=required,
@@ -210,11 +248,19 @@ def copy_tree(
                 errno.EPERM,
             ):
                 raise
+            copied_hash = hashlib.sha256()
+            copied_bytes = 0
             with open(source, "rb") as src, open(destination, "wb") as dst:
                 while chunk := src.read(1024 * 1024):
                     check_deadline(deadline)
                     dst.write(chunk)
+                    copied_hash.update(chunk)
+                    copied_bytes += len(chunk)
+            if inline_hashes is not None:
+                relative = Path(destination).relative_to(work).as_posix()
+                inline_hashes[relative] = (copied_hash.hexdigest(), copied_bytes)
             counters["copied_files"] += 1
+            counters["copied_payload_bytes"] += copied_bytes
         shutil.copystat(source, destination, follow_symlinks=False)
         # Keep deferred copy-data writes outside the timed conversion as well.
         with open(destination, "rb") as target:
@@ -365,6 +411,7 @@ def main() -> None:
     if args.worker:
         convert_worker(args.worker, args.root, args.output)
         return
+    require_rock_ci()
     pristine, output = args.root.resolve(), args.output.resolve()
     if not pristine.is_dir() or output == pristine or pristine in output.parents:
         parser.error("Output must be outside an existing pristine artifact tree")
@@ -399,20 +446,39 @@ def main() -> None:
             initial=initial,
             source_sha256={k: digest(v.read_bytes()) for k, v in source_paths.items()},
             ci={
-                k: os.getenv(k) for k in ["GITHUB_SHA", "GITHUB_RUN_ID", "RUNNER_NAME"]
+                k: os.getenv(k)
+                for k in [
+                    "GITHUB_SHA",
+                    "GITHUB_RUN_ID",
+                    "GITHUB_REPOSITORY",
+                    "GITHUB_ACTIONS",
+                    "RUNNER_NAME",
+                ]
             },
             scope="Actual conversion only timed; copies, full hashes and dynamic verification outside",
             cache_state="No cache dropping; all copies/reset verification precede each timed pass",
+            input_verification="Fallback copy streams are fully SHA256-hashed during transfer; destination size/magic/metadata checked. Reflinks receive full destination hashing. Every post-conversion file is fully read back and hashed.",
             max_wall_seconds=args.max_wall_seconds,
         )
         dump(output / "metadata.json", metadata)
         rows = []
         for index, method in enumerate("ABBA"):
             check_deadline(deadline)
+            inline_hashes: dict[str, tuple[str, int]] = {}
             copies = copy_tree(
-                pristine, work, initial["counts"]["bytes"], deadline, owned=index > 0
+                pristine,
+                work,
+                initial["counts"]["bytes"],
+                deadline,
+                owned=index > 0,
+                inline_hashes=inline_hashes,
             )
-            before = manifest(work, output / f"pass-{index}-input.jsonl", deadline)
+            before = manifest(
+                work,
+                output / f"pass-{index}-input.jsonl",
+                deadline,
+                copied_hashes=inline_hashes,
+            )
             if before["content_sha256"] != initial["content_sha256"]:
                 raise RuntimeError(
                     "Reset work copy does not match pristine content/modes/links"

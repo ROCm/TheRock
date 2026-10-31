@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import importlib.util
+from contextlib import redirect_stdout
+import errno
+import io
 import json
 import os
 from pathlib import Path
@@ -23,6 +26,85 @@ spec.loader.exec_module(preprocess)
 
 
 class PreprocessTest(unittest.TestCase):
+    def test_controller_requires_the_rock_actions_environment(self):
+        for actions, repository in [
+            ("false", "ROCm/TheRock"),
+            ("true", "ROCm/rockrel"),
+            ("", "ROCm/TheRock"),
+        ]:
+            with patch.dict(
+                os.environ, {"GITHUB_ACTIONS": actions, "GITHUB_REPOSITORY": repository}
+            ):
+                with self.assertRaisesRegex(RuntimeError, "ROCm/TheRock CI"):
+                    preprocess.require_rock_ci()
+        with patch.dict(
+            os.environ, {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "ROCm/TheRock"}
+        ):
+            preprocess.require_rock_ci()
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux fallback-copy verification")
+    def test_fallback_copy_hash_avoids_redundant_input_payload_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            pristine, work = base / "artifacts", base / "preprocess-work"
+            pristine.mkdir()
+            payload = b"text" + b"x" * 1000000
+            (pristine / "payload").write_bytes(payload)
+            deadline = time.monotonic() + 30
+            expected = preprocess.manifest(pristine, base / "original.jsonl", deadline)
+            copied_hashes = {}
+            with patch("fcntl.ioctl", side_effect=OSError(errno.EOPNOTSUPP, "fixture")):
+                copies = preprocess.copy_tree(
+                    pristine, work, len(payload), deadline, inline_hashes=copied_hashes
+                )
+            self.assertEqual(copies["copied_payload_bytes"], len(payload))
+            self.assertEqual(copies["fsynced_files"], 1)
+            real_open = Path.open
+
+            class BoundedReader:
+                def __init__(self, stream):
+                    self.stream = stream
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    self.stream.close()
+
+                def read(self, size=-1):
+                    if not 0 <= size <= 4:
+                        raise AssertionError("Redundant destination payload read")
+                    return self.stream.read(size)
+
+            def opened(path, mode="r", *args, **kwargs):
+                stream = real_open(path, mode, *args, **kwargs)
+                return (
+                    BoundedReader(stream)
+                    if mode == "rb" and work in path.parents
+                    else stream
+                )
+
+            with patch.object(Path, "open", autospec=True, side_effect=opened):
+                verified = preprocess.manifest(
+                    work, base / "input.jsonl", deadline, copied_hashes=copied_hashes
+                )
+            self.assertEqual(verified["content_sha256"], expected["content_sha256"])
+            self.assertEqual(verified["content_read_bytes"], 4)
+            self.assertEqual(verified["source_stream_hashes_used"], 1)
+            post = preprocess.manifest(
+                work, base / "post.jsonl", deadline, dynamic=True
+            )
+            self.assertEqual(post["content_read_bytes"], len(payload))
+            self.assertEqual(post["content_sha256"], expected["content_sha256"])
+            with self.assertRaisesRegex(ValueError, "full destination readback"):
+                preprocess.manifest(
+                    work,
+                    base / "invalid.jsonl",
+                    deadline,
+                    dynamic=True,
+                    copied_hashes=copied_hashes,
+                )
+
     @unittest.skipUnless(
         sys.platform == "linux"
         and all(shutil.which(t) for t in ["cc", "readelf", "patchelf"]),
@@ -183,19 +265,17 @@ class PreprocessTest(unittest.TestCase):
             )
             self.assertIn("(RUNPATH)", original_tags)
             output = base / "diagnostics"
-            run = subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPT),
-                    "--root",
-                    str(pristine),
-                    "--output",
-                    str(output),
-                ],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            # This tiny local unit fixture exercises the controller functions;
+            # the real CLI remains restricted to TheRock Actions.
+            with patch.object(
+                sys,
+                "argv",
+                [str(SCRIPT), "--root", str(pristine), "--output", str(output)],
+            ), patch.object(preprocess, "require_rock_ci") as guard, redirect_stdout(
+                io.StringIO()
+            ):
+                preprocess.main()
+            guard.assert_called_once()
             summary = json.loads((output / "summary.json").read_text())
             self.assertTrue(summary["validated"])
             self.assertTrue(summary["pristine_unchanged"])
