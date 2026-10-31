@@ -237,6 +237,35 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends binutils patchelf zstd
+      - name: Preflight owned directory metadata before fetching inputs
+        if: ${{ inputs.profile_package_preprocess }}
+        run: |
+          python - <<'PY'
+          import json, os, stat, subprocess, tempfile
+          from pathlib import Path
+          workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          output = workspace / 'output/scan-diagnostics'
+          output.mkdir(parents=True, exist_ok=True)
+          result = dict(euid=os.geteuid(), egid=os.getegid(), groups=os.getgroups())
+          try:
+              with tempfile.TemporaryDirectory(prefix='.preprocess-mode-probe-', dir=workspace) as temporary:
+                  probe = Path(temporary) / 'directory'
+                  probe.mkdir()
+                  assert probe.resolve() == probe and workspace in probe.parents
+                  assert probe.stat().st_uid == os.geteuid()
+                  result['inherited_gid'] = probe.stat().st_gid
+                  command = ['/usr/bin/sudo', '-n', '--', '/usr/bin/chmod', '2755', '--', str(probe)]
+                  result['command'] = command
+                  subprocess.run(command, check=True)
+                  result['restored_mode'] = stat.S_IMODE(probe.stat().st_mode)
+                  assert result['restored_mode'] == 0o2755
+                  result['status'] = 'passed'
+          except Exception as error:
+              result.update(status='failed', error=str(error))
+              raise
+          finally:
+              (output / 'permissions-preflight.json').write_text(json.dumps(result, indent=2))
+          PY
       - name: Fetch read-only historical inputs
         env:
           # Selects the existing public input bucket only for this fetch step.
@@ -324,6 +353,35 @@ jobs:
           pip install pyelftools==0.33 boto3==1.39.15 jinja2==3.1.6 pyzstd==0.19.1 psutil==7.1.3
           sudo apt-get update
           sudo apt-get install -y llvm-20 rpm debhelper-compat build-essential dpkg-dev createrepo-c patchelf zstd
+      - name: Preflight optional snapshot metadata before fetching inputs
+        if: ${{ inputs.profile_deb_reset_mode == 'snapshot' }}
+        run: |
+          python - <<'PY'
+          import json, os, stat, subprocess, tempfile
+          from pathlib import Path
+          workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+          output = workspace / 'output/scan-diagnostics'
+          output.mkdir(parents=True, exist_ok=True)
+          result = dict(euid=os.geteuid(), egid=os.getegid(), groups=os.getgroups())
+          try:
+              with tempfile.TemporaryDirectory(prefix='.preprocess-mode-probe-', dir=workspace) as temporary:
+                  probe = Path(temporary) / 'directory'
+                  probe.mkdir()
+                  assert probe.resolve() == probe and workspace in probe.parents
+                  assert probe.stat().st_uid == os.geteuid()
+                  result['inherited_gid'] = probe.stat().st_gid
+                  command = ['/usr/bin/sudo', '-n', '--', '/usr/bin/chmod', '2755', '--', str(probe)]
+                  result['command'] = command
+                  subprocess.run(command, check=True)
+                  result['restored_mode'] = stat.S_IMODE(probe.stat().st_mode)
+                  assert result['restored_mode'] == 0o2755
+                  result['status'] = 'passed'
+          except Exception as error:
+              result.update(status='failed', error=str(error))
+              raise
+          finally:
+              (output / 'permissions-preflight.json').write_text(json.dumps(result, indent=2))
+          PY
       - name: Fetch all historical inputs read-only
         env:
           RELEASE_TYPE: nightly
