@@ -47,6 +47,13 @@ def fingerprint(path: Path) -> dict:
     return {"path": str(path), "bytes": path.stat().st_size, "sha256": h.hexdigest()}
 
 
+def stage_arguments(text: str) -> list[str]:
+    """configure_stage emits shell-quoted fragments, including semicolon lists."""
+    return [
+        arg for line in text.splitlines() for arg in shlex.split(line, comments=True)
+    ]
+
+
 def configure(args: argparse.Namespace) -> None:
     if run(["git", "rev-parse", "HEAD"]).strip() != SOURCE_SHA:
         raise RuntimeError("Product source does not match pinned SHA")
@@ -132,10 +139,10 @@ def configure(args: argparse.Namespace) -> None:
             f"--output-cmake-args={arg_file}",
         ]
     )
+    # Stock normal Linux CI deliberately uses no preset; the superbuild defaults
+    # to Release. linux-release-package would change this to RelWithDebInfo.
     preset = (
-        "linux-release-asan-debug"
-        if args.variant == "asan-debug"
-        else "linux-release-package"
+        ["--preset=linux-release-asan-debug"] if args.variant == "asan-debug" else []
     )
     argv = [
         "cmake",
@@ -144,8 +151,8 @@ def configure(args: argparse.Namespace) -> None:
         "-S",
         ".",
         "-GNinja",
-        f"--preset={preset}",
-        *arg_file.read_text().splitlines(),
+        *preset,
+        *stage_arguments(arg_file.read_text()),
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=9",
         "-DLLVM_PARALLEL_LINK_JOBS=4",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
