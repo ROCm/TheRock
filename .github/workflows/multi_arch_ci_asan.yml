@@ -52,8 +52,20 @@ jobs:
         run: pip install -r requirements.txt
       - name: Configure CK from pinned dependencies
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py configure
-      - name: Replay uninstrumented and profiled object separately
-        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay
+      - name: Profile isolated object
+        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode profile
+      - name: Publish compiler traces immediately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-compile-profile-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: |
+            compile-hotspot-evidence/
+            !compile-hotspot-evidence/*.o
+          if-no-files-found: error
+          retention-days: 14
+      - name: Replay isolated object without compiler instrumentation
+        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode uninstrumented
       - name: Retain raw diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -219,7 +219,7 @@ def measure(argv: list[str], cwd: Path, name: str) -> None:
         raise RuntimeError(f"{name} failed with exit code {code}")
 
 
-def replay() -> None:
+def replay(mode: str, variant: str) -> None:
     database = json.loads(run(["ninja", "-t", "compdb", "-x"], cwd=CK))
     matches = [
         entry for entry in database if Path(entry.get("file", "")).name == SOURCE
@@ -258,6 +258,10 @@ def replay() -> None:
             "normalization": "Only workspace root and disabled ccache launcher removed.",
         },
     )
+    if variant == "asan-debug" and old != new:
+        raise RuntimeError(
+            "ASan command differs; inspect historical-command-comparison.json"
+        )
     cwd = Path(entry["directory"])
     target = entry["output"]
     (OUT / "target-graph.dot").write_text(run(["ninja", "-t", "graph", target], cwd=CK))
@@ -274,18 +278,24 @@ def replay() -> None:
     if not source_path.is_absolute():
         source_path = cwd / source_path
     save("source-file.json", fingerprint(source_path))
-    for name, extra in (
-        ("uninstrumented", []),
-        ("profile", ["-ftime-trace", "-ftime-report"]),
-    ):
-        command = list(argv)
-        for flag, extension in (("-o", ".o"), ("-MF", ".d")):
-            if flag in command:
-                command[command.index(flag) + 1] = str(OUT / (name + extension))
-        command += extra
-        measure(command, cwd, name)
+    traces = OUT / "time-traces"
+    traces.mkdir(exist_ok=True)
+    command = list(argv)
+    for flag, extension in (("-o", ".o"), ("-MF", ".d")):
+        if flag in command:
+            command[command.index(flag) + 1] = str(OUT / (mode + extension))
+    if mode == "profile":
+        command += [f"-ftime-trace={traces}/", "-ftime-report"]
+    measure(command, cwd, mode)
+    if mode == "profile":
+        trace_files = list(traces.rglob("*.json"))
+        save("trace-files.json", [fingerprint(path) for path in trace_files])
+        if not trace_files:
+            raise RuntimeError(
+                "No compiler time traces retained after successful profile"
+            )
     save(
-        "result.json",
+        mode + "-result.json",
         {"status": "diagnostic replay completed", "optimization_claim": False},
     )
 
@@ -293,6 +303,9 @@ def replay() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["configure", "replay"])
+    parser.add_argument(
+        "--mode", choices=["profile", "uninstrumented"], default="profile"
+    )
     parser.add_argument("--baseline-run-id", default=os.getenv("BASELINE_RUN_ID"))
     parser.add_argument(
         "--variant",
@@ -307,7 +320,7 @@ def main() -> None:
             parser.error("A numeric baseline run ID is required")
         configure(args)
     else:
-        replay()
+        replay(args.mode, args.variant)
 
 
 if __name__ == "__main__":
