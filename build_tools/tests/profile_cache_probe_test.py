@@ -219,6 +219,11 @@ class CacheProbeTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
         self.assertEqual(job["steps"][-1]["if"], "always()")
+        self.assertEqual(job["steps"][0]["id"], "paths")
+        self.assertIn('realpath "$CACHE_PROBE_OUTPUT"', job["steps"][0]["run"])
+        self.assertEqual(
+            job["steps"][-1]["with"]["path"], "${{ steps.paths.outputs.diagnostics }}/"
+        )
 
 
 if __name__ == "__main__":
