@@ -281,7 +281,9 @@ Compiler append-option overrides and verbose COMGR logging are rejected rather
 than silently changing the measured work. Only a specific nonsecret knob
 allowlist is recorded.
 
-After review/push of one exact trial SHA, launch four independent full-stage
+The following first-only recipe describes the frozen2550 experiment. It is
+retained for reproduction; use the owned-chain discriminator below for a new
+whole-chain comparison. After review/push of one exact trial SHA, launch four independent full-stage
 allocations in A/B/B/A order. A is `profile_rocfft_aot=true` with
 `profile_rocfft_aot_batch_transaction=false`; B changes only the latter totrue.
 Use `multi_arch_ci.yml`, the same pinned branch/SHA, SDK41190705863, fixed82
@@ -302,5 +304,68 @@ subsequent shared-DB helpers, rocFFT project time and stage time separately.
 Two samples per arm describe observed variation; they do not support precise
 confidence intervals or universal speedup claims. A slow/failed allocation must
 be explained from traces, not silently discarded. GPU correctness remains
-unvalidated when the exact gfx103X pool is unavailable; do not substitute another
-GPU without recording a distinct validation scope.
+unvalidated: the pinned gfx103X test configuration has empty `test-runs-on`.
+That does not prove physical runner absence. Do not substitute another GPU
+without recording a distinct validation scope.
+
+### Owned growing-chain discriminator (I-029)
+
+The first-only candidate in TheRock run41202568671 retained all seven shipped
+DB hashes but moved most of the serialized store delay to the next autocommit
+helper. Its first helper improved by880s, while the measured math stage improved
+by105s and the complete job was39s longer than run41200240578. One pair is not
+a replicated end-to-end speedup. The next discriminator batches each helper's
+stores within the same growing, private regenerable intermediate, preserving
+all seven architecture outputs and the original helper chain.
+
+`profile_rocfft_aot_cache_mode` defaults to `legacy`; normal CI and the previous
+boolean first-only behavior remain unchanged. New choices are
+`owned-autocommit`, `owned-first`, and `owned-all`. Combining an owned choice
+with the legacy batching boolean is rejected. The controller creates one new
+directory below the original `library/src` on the same filesystem, writes a
+random nonsecret ownership ID, and records its run ID, marker hash and device.
+The private DB is absent initially and reused without resets by all seven
+original Ninja commands. No CMake/source pointer, required target, architecture,
+kernel generator input, worker count or RTC compile-selection policy changes.
+
+The helper accepts an owned path only with an empty original temp-cache argv,
+an absolute canonical parent, a matching regular single-link owner marker, and
+no symlink or hardlink substitution of DB/WAL/SHM files. This guards accidental
+reuse, not adversarial concurrent modification. `ROCFFT_AOT_BATCH_TRANSACTION=all`
+requires ownership; it begins before workers and commits after their join,
+before output copy and cleanup. Existing runtime/custom-path cache behavior is
+unchanged. WAL, FULL synchronous policy, auto-checkpoint and busy policy remain
+unchanged; each durable COMMIT is included in the trace and helper wall time.
+
+After parent review of one exact new SHA, compare independent allocations in
+A/B/B/A order, waiting for each to complete. Set `profile_rocfft_aot=true`, keep
+`profile_rocfft_aot_batch_transaction=false`, and select
+`profile_rocfft_aot_cache_mode=owned-autocommit` for A or `owned-all` for B.
+Both arms run the same source/header/binary and use the same SDK41190705863,
+package version82, pinned container, prod runner label, original full math-stage
+context and initially empty private COMGR directory. Their only policy
+difference is the explicit transaction setting. Random owner/path identities
+and actual hardware/allocation metadata necessarily differ and are recorded.
+These are independent-host repetitions, not a same-host crossover.
+
+Require completed traces for each architecture with17,204 generated/compiled/
+stored kernels, unchanged generator checksum, zero subprocess/fallback/store
+errors, expected begin/commit counts and unchanged WAL/FULL settings. Allow the
+subprocess/in-process split to vary under the unchanged try-lock policy. Require
+all seven shipped key/code-blob inventories and raw DB hashes to agree between
+arms. The final owned temp DB must pass `quick_check` and contain120,428 rows:
+17,204 for each of the seven architectures. Record first-absent/later-present DB
+state, marker identity, final file hash/size and ownership. Retain all49 existing
+packaging/linkage checks; GPU numerical execution remains a separate unpassed
+validation requirement. Compare helper store plus COMMIT, project/stage wall,
+exact self/child CPU, I/O and complete job time separately. Never add overlapping
+thread timers or infer savings from higher utilization alone.
+
+Local host fixtures cover fresh/reused ownership, mode conflicts, bad markers,
+custom-path rejection, real symlink/hardlink DB and sidecar guards, unchanged
+legacy defaults, FULL visibility, real COMMIT failure and close-time rollback.
+Controller fixtures check unique creation/no deletion, complete worksets and
+failure/policy guards. Linux host fixtures exercise actual filesystem guards;
+they neither compile ROCm nor execute GPU binaries. This is a default-off
+diagnostic candidate for the current investigation, not a proposed release
+durability-policy change or an already validated optimization.

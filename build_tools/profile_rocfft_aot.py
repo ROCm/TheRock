@@ -2,6 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 """Run an opt-in, all-seven-architecture rocFFT AOT diagnostic in TheRock CI."""
+
 import argparse
 import collections
 import datetime
@@ -16,8 +17,10 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "5b7cb88373362ab80dc0f19605915e534f4158aa"
@@ -46,6 +49,8 @@ KNOBS = [
     "ROCFFT_RTC_CACHE_WRITE_DISABLE",
     "ROCFFT_LAYER",
     "ROCFFT_AOT_BATCH_TRANSACTION",
+    "ROCFFT_AOT_PRIVATE_CACHE_PATH",
+    "ROCFFT_AOT_PRIVATE_CACHE_ID",
     "AMD_COMGR_CACHE",
     "AMD_COMGR_CACHE_DIR",
     "AMD_COMGR_CACHE_POLICY",
@@ -284,6 +289,12 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
         / "patches/build-profile/rocm-libraries/0002-rocfft-private-aot-transaction.patch"
     )
     batch_header = ROOT / "build_tools/diagnostics/rocfft_aot_transaction.h"
+    owned_patch = (
+        ROOT / "patches/build-profile/rocm-libraries/0003-rocfft-owned-aot-chain.patch"
+    )
+    patch_paths(
+        owned_patch.read_text(), {"projects/rocfft/library/src/rocfft_aot_helper.cpp"}
+    )
     patch_paths(batch_patch.read_text(), BATCH_PATCH_FILES)
     header = ROOT / "build_tools/diagnostics/rocfft_profile.h"
     patch_paths(patch.read_text())
@@ -298,6 +309,8 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
     shutil.copyfile(header, destination)
     capture(["git", "apply", "--check", str(batch_patch)], libraries, env)
     capture(["git", "apply", str(batch_patch)], libraries, env)
+    capture(["git", "apply", "--check", str(owned_patch)], libraries, env)
+    capture(["git", "apply", str(owned_patch)], libraries, env)
     shutil.copyfile(batch_header, source / "shared/aot_transaction.h")
     after = generator_inputs(source)
     if before != after:
@@ -307,6 +320,7 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
         raise ValueError(f"Unexpected source edits: {changed}")
     shutil.copyfile(patch, output / patch.name)
     shutil.copyfile(batch_patch, output / batch_patch.name)
+    shutil.copyfile(owned_patch, output / owned_patch.name)
     shutil.copyfile(batch_header, output / batch_header.name)
     shutil.copyfile(header, output / header.name)
     (output / "applied-source.diff").write_text(
@@ -322,6 +336,7 @@ def install_instrumentation(libraries: Path, output: Path, env: dict[str, str]) 
             "header_sha256": digest(header),
             "transaction_patch_sha256": digest(batch_patch),
             "transaction_header_sha256": digest(batch_header),
+            "owned_chain_patch_sha256": digest(owned_patch),
             "generator_inputs_unchanged": True,
             "generator_inputs": before,
             "note": "git apply only; source HEAD and .smrev are not rewritten",
@@ -572,7 +587,11 @@ def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
 
 
 def collect_cache_outputs(
-    nested: Path, output: Path, batch_first: bool = False
+    nested: Path,
+    output: Path,
+    batch_first: bool = False,
+    cache_mode: str = "legacy",
+    owned_cache: dict | None = None,
 ) -> None:
     inventories = []
     for arch in ARCHES:
@@ -592,21 +611,36 @@ def collect_cache_outputs(
     completed = []
     generator_sums = set()
     for path in traces:
-        last = json.loads(path.read_text().splitlines()[-1])
+        lines = path.read_text().splitlines()
+        first, last = json.loads(lines[0]), json.loads(lines[-1])
         if last["event"] != "complete":
             raise ValueError(f"Incomplete phase trace: {path.name}")
-        if (
-            last["counters"]["cache_misses"] != 17204
-            or last["counters"]["store_errors"]
-        ):
-            raise ValueError(
-                f"Changed compilation coverage or failed cache stores: {path.name}"
+        expected_batch = (
+            "1"
+            if cache_mode == "owned-all"
+            or (
+                (batch_first or cache_mode == "owned-first")
+                and last["arch"] == ARCHES[0]
             )
-        expected_batch = "1" if batch_first and last["arch"] == ARCHES[0] else "0"
+            else "0"
+        )
         if last["properties"].get("aot_batch_transaction") != expected_batch:
-            raise ValueError(
-                f"Unexpected first/later helper transaction policy: {path.name}"
-            )
+            raise ValueError(f"Unexpected helper transaction policy: {path.name}")
+        validate_helper_completion(last, expected_batch)
+        if owned_cache and (
+            last["properties"].get("aot_private_cache_owned") != "1"
+            or last["properties"].get("aot_private_cache_path") != owned_cache["path"]
+            or owned_cache["path"] not in last["files"]
+        ):
+            raise ValueError(f"Helper did not retain the one owned chain: {path.name}")
+        if owned_cache:
+            initial_bytes = first["files"].get(owned_cache["path"])
+            if (last["arch"] == ARCHES[0] and initial_bytes is not None) or (
+                last["arch"] != ARCHES[0] and not initial_bytes
+            ):
+                raise ValueError(
+                    f"Fresh/growing private chain was not preserved: {path.name}"
+                )
         completed.append(last["arch"])
         generator_sums.add(last["properties"].get("generator_sum"))
     if sorted(completed) != ARCHES:
@@ -621,6 +655,8 @@ def collect_cache_outputs(
         raise ValueError(
             "Shipped cache generator_sum disagrees with the helper's recorded checksum"
         )
+    if owned_cache:
+        write_json(output / "owned-cache-after.json", verify_owned_cache(owned_cache))
     write_json(
         output / "helper-binaries.json",
         [
@@ -633,10 +669,127 @@ def collect_cache_outputs(
     )
 
 
+def validate_helper_completion(last: dict, expected_batch: str) -> None:
+    phases, counters, properties = last["phases"], last["counters"], last["properties"]
+    failures = [
+        "store_errors",
+        "subprocess_failures",
+        "fallbacks",
+        "pipe_errors",
+        "spawn_errors",
+        "wait_errors",
+        "nonzero_exits",
+        "child_signals",
+    ]
+    if (
+        last["event"] != "complete"
+        or counters["cache_misses"] != 17204
+        or any(counters[name] for name in failures)
+        or last["bounded_subprocess_errors"]
+        or any(phase["active"] for phase in phases.values())
+        or any(
+            phases[name]["completed"] != 17204
+            for name in ["generate", "store_query", "store_mutex_hold"]
+        )
+        or phases["subprocess_compile"]["completed"]
+        + phases["inprocess_compile"]["completed"]
+        != 17204
+        or any(
+            phases[name]["completed"] != int(expected_batch)
+            for name in ["aot_begin", "aot_commit"]
+        )
+        or properties.get("sqlite_journal_mode") != "wal"
+        or properties.get("sqlite_synchronous") != "2"
+    ):
+        raise ValueError(
+            f"Changed helper work, failure/fallback, incomplete transaction, or SQLite policy: {last['arch']}"
+        )
+
+
 def require_fresh_private_cache(nested: Path) -> None:
     cache = nested / "library/src/rocfft_temp_cache.db"
     if cache.exists() or cache.is_symlink():
         raise ValueError("AOT trial requires a fresh, helper-owned temporary database")
+    for arch in ARCHES:
+        output = nested / f"library/src/rocfft_kernel_cache_{arch}.db"
+        if output.exists() or output.is_symlink():
+            raise ValueError(
+                "AOT trial requires all seven shipped outputs to be absent"
+            )
+
+
+def transaction_setting(cache_mode: str, batch_first: bool) -> str:
+    if cache_mode not in ("legacy", "owned-autocommit", "owned-first", "owned-all"):
+        raise ValueError(f"Unknown AOT cache mode: {cache_mode}")
+    if batch_first and cache_mode != "legacy":
+        raise ValueError(
+            "Legacy batching flag cannot be combined with an owned cache mode"
+        )
+    return (
+        "all"
+        if cache_mode == "owned-all"
+        else ("1" if batch_first or cache_mode == "owned-first" else "0")
+    )
+
+
+def prepare_owned_cache(nested: Path, env: dict[str, str], run_id: str) -> dict:
+    """Create, never adopt/reset, a private directory on the original cache filesystem."""
+    require_fresh_private_cache(nested)
+    parent = nested / "library/src"
+    parent.mkdir(parents=True, exist_ok=True)
+    directory = Path(
+        tempfile.mkdtemp(prefix="rocfft-profile-chain-", dir=parent)
+    ).resolve()
+    owner_id = uuid.uuid4().hex
+    marker = directory / ".rocfft-aot-owner"
+    with marker.open("x", encoding="ascii", newline="\n") as stream:
+        stream.write(owner_id + "\n")
+    cache = directory / "rocfft_temp_cache.db"
+    env["ROCFFT_AOT_PRIVATE_CACHE_PATH"] = str(cache)
+    env["ROCFFT_AOT_PRIVATE_CACHE_ID"] = owner_id
+    return dict(
+        path=str(cache),
+        marker=str(marker),
+        marker_sha256=digest(marker),
+        owner_id=owner_id,
+        run_id=run_id,
+        initial_exists=cache.exists(),
+        device=directory.stat().st_dev,
+        original_parent_device=parent.stat().st_dev,
+        directory_mode=oct(directory.stat().st_mode & 0o777),
+        naming_pattern="library/src/rocfft-profile-chain-*/rocfft_temp_cache.db",
+        scope="one newly created private DB, growing across all seven original helpers",
+    )
+
+
+def verify_owned_cache(info: dict, entries_per_arch: int = 17204) -> dict:
+    path, marker = Path(info["path"]), Path(info["marker"])
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or path.stat().st_nlink != 1
+        or marker.is_symlink()
+        or marker.stat().st_nlink != 1
+        or marker.read_bytes() != (info["owner_id"] + "\n").encode()
+        or digest(marker) != info["marker_sha256"]
+        or path.stat().st_dev != info["original_parent_device"]
+    ):
+        raise ValueError("Owned chain identity changed")
+    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
+        integrity = db.execute("PRAGMA quick_check").fetchall()
+        counts = dict(db.execute("SELECT arch,count(*) FROM cache_v1 GROUP BY arch"))
+    if integrity != [("ok",)] or counts != dict.fromkeys(ARCHES, entries_per_arch):
+        raise ValueError(
+            f"Owned chain did not preserve all seven architecture worksets: {counts}"
+        )
+    return dict(
+        **info,
+        quick_check=integrity,
+        entries_by_arch=counts,
+        entries=sum(counts.values()),
+        bytes=path.stat().st_size,
+        file_sha256=digest(path),
+    )
 
 
 def compiler_cache_inventory(path: Path) -> dict:
@@ -686,11 +839,18 @@ def main() -> None:
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
     parser.add_argument("--output", type=Path, default=ROOT / "build/logs/rocfft-aot")
     parser.add_argument(
+        "--cache-mode",
+        choices=["legacy", "owned-autocommit", "owned-first", "owned-all"],
+        default="legacy",
+        help="Explicit private-chain control; legacy preserves previous CLI behavior",
+    )
+    parser.add_argument(
         "--batch-private-aot",
         action="store_true",
         help="Opt-in first-fresh-helper transaction discriminator; later/runtime caches unchanged",
     )
     args = parser.parse_args()
+    batch_setting = transaction_setting(args.cache_mode, args.batch_private_aot)
     env = dict(os.environ)
     require_ci(env)
     import resource
@@ -735,13 +895,19 @@ def main() -> None:
         runner_name=env.get("RUNNER_NAME"),
         run_id=env.get("GITHUB_RUN_ID"),
         original_rtc_knobs={name: env.get(name) for name in KNOBS},
-        aot_transaction_mode="batch" if args.batch_private_aot else "autocommit",
+        aot_transaction_mode="batch" if batch_setting != "0" else "autocommit",
+        aot_cache_mode=args.cache_mode,
+        aot_transaction_setting=batch_setting,
         initial_resource_limits=limits,
         uid=os.getuid(),
         euid=os.geteuid(),
-        dataset="Fresh allocation/build; default persistent temporary-cache path. Initial sizes recorded per helper.",
+        dataset=(
+            "Fresh allocation/build; original shared default temp path."
+            if args.cache_mode == "legacy"
+            else "Fresh allocation/build; newly owned same-filesystem temp DB shared across all seven helpers."
+        ),
         limitations=[
-            "Diagnostic only, no speedup comparison.",
+            "Diagnostic trial; comparison requires matching controls and repeated allocations.",
             "Overlapping timers are not additive elapsed time.",
             "Full math-stage context retained; source instrumentation touches rocFFT host files only.",
         ],
@@ -766,6 +932,15 @@ def main() -> None:
     try:
         nested = prepare(build, output, env)
         require_fresh_private_cache(nested)
+        owned_cache = None
+        # Never inherit another run's owner/path; this controller owns its creation.
+        env.pop("ROCFFT_AOT_PRIVATE_CACHE_PATH", None)
+        env.pop("ROCFFT_AOT_PRIVATE_CACHE_ID", None)
+        if args.cache_mode != "legacy":
+            owned_cache = prepare_owned_cache(nested, env, manifest["run_id"])
+            manifest["owned_cache"] = owned_cache
+            write_json(output / "owned-cache-before.json", owned_cache)
+            write_json(output / "manifest.json", manifest)
         (output / "ccache-before.txt").write_text(
             capture(["ccache", "--show-stats"], ROOT, env)
         )
@@ -777,9 +952,7 @@ def main() -> None:
         child_env = dict(env)
         child_env["ROCFFT_BUILD_PROFILE_DIR"] = str(output / "phases")
         # Override inherited trial settings: the CLI is the recorded control.
-        child_env["ROCFFT_AOT_BATCH_TRANSACTION"] = (
-            "1" if args.batch_private_aot else "0"
-        )
+        child_env["ROCFFT_AOT_BATCH_TRANSACTION"] = batch_setting
         for name in [
             "GH_TOKEN",
             "GITHUB_TOKEN",
@@ -827,7 +1000,11 @@ def main() -> None:
                 (
                     "semantic_cache_outputs",
                     lambda: collect_cache_outputs(
-                        nested, output, args.batch_private_aot
+                        nested,
+                        output,
+                        args.batch_private_aot,
+                        args.cache_mode,
+                        owned_cache,
                     ),
                 ),
                 (

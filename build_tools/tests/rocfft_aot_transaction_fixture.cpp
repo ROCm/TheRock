@@ -28,8 +28,92 @@ static int deny_commit(void *, int action, const char *operation, const char *,
              ? SQLITE_DENY
              : SQLITE_OK;
 }
+static void owned_chain_guards(const std::filesystem::path &root) {
+  namespace fs = std::filesystem;
+  const std::string id(32, 'a');
+  const auto directory = fs::canonical(root) / "owned";
+  fs::create_directory(directory);
+  const auto path = directory / "rocfft_temp_cache.db";
+  const auto marker = directory / ".rocfft-aot-owner";
+  auto write_marker = [&](const std::string &text) {
+    std::ofstream stream(marker, std::ios::binary | std::ios::trunc);
+    stream << text;
+  };
+  auto reject = [&](const std::string &supplied, const std::string &cache,
+                    const std::string &owner) {
+    bool failed = false;
+    try {
+      select_private_aot_cache(supplied, cache, owner);
+    } catch (const std::exception &) {
+      failed = true;
+    }
+    assert(failed);
+  };
+  reject("", path.string(), id); // Missing marker must not create/adopt it.
+  write_marker(id + "\n");
+  const auto first = select_private_aot_cache("", path.string(), id);
+  assert(first.owned && !first.existed && first.path == path.string());
+  assert(private_aot_batch_requested("all", "", false, first.owned));
+  std::ofstream(path, std::ios::binary) << "growing private DB";
+  const auto later = select_private_aot_cache("", path.string(), id);
+  assert(later.owned && later.existed);
+  assert(private_aot_batch_requested("all", "", true, later.owned));
+  assert(!private_aot_batch_requested("1", "", true, later.owned));
+  assert(!private_aot_batch_requested("0", "", true, later.owned));
+  reject("custom.db", path.string(), id);
+  reject("", path.string(), std::string(32, 'A'));
+  reject("", "", id);
+  reject("", (directory / "other.db").string(), id);
+  reject("", "relative/rocfft_temp_cache.db", id);
+  write_marker(id + "\nextra");
+  reject("", path.string(), id);
+  write_marker(id + "x");
+  reject("", path.string(), id);
+  write_marker(id + "\n");
+  bool failed = false;
+  try {
+    private_aot_batch_requested("all", "", false);
+  } catch (const std::invalid_argument &) {
+    failed = true;
+  }
+  assert(failed);
+  const auto alias = directory / "alias";
+  for (const auto &guarded : {marker, path, fs::path(path.string() + "-wal"),
+                              fs::path(path.string() + "-shm")}) {
+    if (!fs::exists(guarded))
+      std::ofstream(guarded) << "private sidecar";
+    fs::create_hard_link(guarded, alias);
+    reject("", path.string(), id);
+    fs::remove(alias);
+    // Real symlink guards are mandatory on Linux. Windows developer accounts
+    // may lack symlink privileges; report that separately rather than faking
+    // it.
+    fs::rename(guarded, alias);
+    std::error_code error;
+    fs::create_symlink(alias, guarded, error);
+    if (!error) {
+      reject("", path.string(), id);
+      fs::remove(guarded);
+    } else {
+#ifndef _WIN32
+      assert(!error);
+#else
+      std::cout << "Windows symlink fixture unavailable: " << error.message()
+                << '\n';
+#endif
+    }
+    fs::rename(alias, guarded);
+  }
+  assert(select_private_aot_cache("", path.string(), id).existed);
+  assert(select_private_aot_cache("custom.db", "", "").path == "custom.db");
+  // Guard validation neither rewrites nor truncates a growing chain.
+  std::ifstream original(path);
+  std::string content((std::istreambuf_iterator<char>(original)), {});
+  assert(content == "growing private DB");
+}
 int main(int argc, char **argv) {
   assert(argc == 2);
+  owned_chain_guards(std::filesystem::path(argv[1]).parent_path());
   assert(!private_aot_batch_requested("", "custom.db", true));
   assert(!private_aot_batch_requested("0", "", false));
   assert(private_aot_batch_requested("1", "", false));

@@ -1,0 +1,31 @@
+diff --git a/projects/rocfft/library/src/rocfft_aot_helper.cpp b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+index f621b47..caeed4e 100644
+--- a/projects/rocfft/library/src/rocfft_aot_helper.cpp
++++ b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+@@ -769,10 +769,16 @@ int main(int argc, char** argv)
+ 
+     // Opt-in experiment only for the helper-owned default intermediate, never
+     // a caller-supplied cache or the library's general runtime cache.
++    const auto private_cache
++        = rbp::select_private_aot_cache(temp_cache_file,
++                                        rocfft_getenv("ROCFFT_AOT_PRIVATE_CACHE_PATH"),
++                                        rocfft_getenv("ROCFFT_AOT_PRIVATE_CACHE_ID"));
+     const bool batch_transaction
+         = rbp::private_aot_batch_requested(rocfft_getenv("ROCFFT_AOT_BATCH_TRANSACTION"),
+                                            temp_cache_file,
+-                                           std::filesystem::exists("rocfft_temp_cache.db"));
++                                           private_cache.existed,
++                                           private_cache.owned);
++    temp_cache_file = private_cache.path;
+ 
+     // Default to using a persistent file in the current dir if no
+     // cache file was given
+@@ -794,6 +800,8 @@ int main(int argc, char** argv)
+         profile_sum << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
+     rbp::property("generator_sum", profile_sum.str());
+     rbp::property("aot_batch_transaction", batch_transaction ? "1" : "0");
++    rbp::property("aot_private_cache_owned", private_cache.owned ? "1" : "0");
++    rbp::property("aot_private_cache_path", temp_cache_file);
+ 
+     // force RTC to use the temporary cache file
+     rocfft_setenv("ROCFFT_RTC_CACHE_PATH", temp_cache_file.c_str());

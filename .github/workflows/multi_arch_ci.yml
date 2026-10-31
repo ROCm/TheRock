@@ -25,6 +25,11 @@ on:
         type: boolean
         default: false
         description: "Diagnostic only: batch first fresh AOT helper; later helpers unchanged"
+      profile_rocfft_aot_cache_mode:
+        type: choice
+        default: legacy
+        options: [legacy, owned-autocommit, owned-first, owned-all]
+        description: "Diagnostic only: explicit private growing-chain comparison mode"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -107,6 +112,9 @@ on:
       profile_rocfft_aot_batch_transaction:
         type: boolean
         default: false
+      profile_rocfft_aot_cache_mode:
+        type: string
+        default: legacy
       linux_amdgpu_families:
         type: string
         default: ""
@@ -309,11 +317,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ROCFFT_AOT_BATCH_TRIAL: ${{ inputs.profile_rocfft_aot_batch_transaction }}
+          ROCFFT_AOT_CACHE_MODE: ${{ inputs.profile_rocfft_aot_cache_mode }}
         run: |
           args=()
           if [[ "$ROCFFT_AOT_BATCH_TRIAL" == "true" ]]; then args+=(--batch-private-aot); fi
           python -u build_tools/profile_rocfft_aot.py --build-dir "$BUILD_DIR" \
-            --output "$BUILD_DIR/logs/rocfft-aot" "${args[@]}"
+            --output "$BUILD_DIR/logs/rocfft-aot" --cache-mode "$ROCFFT_AOT_CACHE_MODE" "${args[@]}"
       - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

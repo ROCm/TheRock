@@ -23,6 +23,135 @@ SPEC.loader.exec_module(trial)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_helper_guard_rejects_lost_work_fallback_missing_commit_and_policy_change(
+        self,
+    ):
+        import copy
+
+        row = dict(
+            event="complete",
+            arch="gfx1030",
+            bounded_subprocess_errors=[],
+            properties={"sqlite_journal_mode": "wal", "sqlite_synchronous": "2"},
+            counters=dict.fromkeys(
+                [
+                    "store_errors",
+                    "subprocess_failures",
+                    "fallbacks",
+                    "pipe_errors",
+                    "spawn_errors",
+                    "wait_errors",
+                    "nonzero_exits",
+                    "child_signals",
+                ],
+                0,
+            ),
+            phases={
+                name: {"completed": count, "active": 0}
+                for name, count in [
+                    ("generate", 17204),
+                    ("store_query", 17204),
+                    ("store_mutex_hold", 17204),
+                    ("subprocess_compile", 16000),
+                    ("inprocess_compile", 1204),
+                    ("aot_begin", 1),
+                    ("aot_commit", 1),
+                ]
+            },
+        )
+        row["counters"]["cache_misses"] = 17204
+        trial.validate_helper_completion(row, "1")
+        for group, name, value in [
+            ("counters", "spawn_errors", 1),
+            ("counters", "fallbacks", 1),
+            ("properties", "sqlite_synchronous", "1"),
+        ]:
+            bad = copy.deepcopy(row)
+            bad[group][name] = value
+            with self.assertRaisesRegex(ValueError, "Changed helper work"):
+                trial.validate_helper_completion(bad, "1")
+        for name in [
+            "store_query",
+            "store_mutex_hold",
+            "subprocess_compile",
+            "aot_commit",
+        ]:
+            bad = copy.deepcopy(row)
+            bad["phases"][name]["completed"] -= 1
+            with self.assertRaisesRegex(ValueError, "Changed helper work"):
+                trial.validate_helper_completion(bad, "1")
+        bad = copy.deepcopy(row)
+        bad["phases"]["aot_commit"]["active"] = 1
+        with self.assertRaises(ValueError):
+            trial.validate_helper_completion(bad, "1")
+        # Compile mode may legitimately shift; total work must remain identical.
+        row["phases"]["subprocess_compile"]["completed"] = 15000
+        row["phases"]["inprocess_compile"]["completed"] = 2204
+        trial.validate_helper_completion(row, "1")
+        with self.assertRaises(ValueError):
+            trial.validate_helper_completion(row, "0")
+
+    def test_owned_modes_are_explicit_and_legacy_switch_stays_unchanged(self):
+        self.assertEqual(trial.transaction_setting("legacy", False), "0")
+        self.assertEqual(trial.transaction_setting("legacy", True), "1")
+        for mode, setting in [
+            ("owned-autocommit", "0"),
+            ("owned-first", "1"),
+            ("owned-all", "all"),
+        ]:
+            self.assertEqual(trial.transaction_setting(mode, False), setting)
+            with self.assertRaisesRegex(ValueError, "cannot be combined"):
+                trial.transaction_setting(mode, True)
+        with self.assertRaisesRegex(ValueError, "Unknown"):
+            trial.transaction_setting("surprise", False)
+
+    def test_owned_chain_is_new_same_filesystem_and_never_resets_previous_chain(self):
+        with tempfile.TemporaryDirectory() as raw:
+            nested = Path(raw)
+            env = {
+                "ROCFFT_AOT_PRIVATE_CACHE_PATH": "inherited-other-run",
+                "KEEP": "same",
+            }
+            first = trial.prepare_owned_cache(nested, env, "fixture-run")
+            path = Path(first["path"])
+            self.assertFalse(path.exists())
+            self.assertEqual(first["device"], first["original_parent_device"])
+            self.assertEqual(path.parent.parent, nested.resolve() / "library/src")
+            self.assertEqual(env["ROCFFT_AOT_PRIVATE_CACHE_ID"], first["owner_id"])
+            self.assertEqual(
+                Path(first["marker"]).read_text(), first["owner_id"] + "\n"
+            )
+            path.write_bytes(b"first chain must survive")
+            second = trial.prepare_owned_cache(nested, env, "fixture-run")
+            self.assertNotEqual(first["path"], second["path"])
+            self.assertNotEqual(first["owner_id"], second["owner_id"])
+            self.assertFalse(Path(second["path"]).exists())
+            self.assertEqual(path.read_bytes(), b"first chain must survive")
+            self.assertEqual(env["KEEP"], "same")
+            shipped = nested / "library/src/rocfft_kernel_cache_gfx1030.db"
+            shipped.write_bytes(b"already generated")
+            with self.assertRaisesRegex(ValueError, "all seven shipped outputs"):
+                trial.prepare_owned_cache(nested, env, "fixture-run")
+            self.assertEqual(shipped.read_bytes(), b"already generated")
+
+    def test_owned_chain_requires_all_seven_worksets_and_unchanged_marker(self):
+        with tempfile.TemporaryDirectory() as raw:
+            info = trial.prepare_owned_cache(Path(raw), {}, "fixture")
+            with closing(sqlite3.connect(info["path"])) as db, db:
+                db.execute("CREATE TABLE cache_v1(arch TEXT)")
+                db.executemany(
+                    "INSERT INTO cache_v1 VALUES(?)", [(a,) for a in trial.ARCHES]
+                )
+            result = trial.verify_owned_cache(info, entries_per_arch=1)
+            self.assertEqual(result["entries"], 7)
+            with closing(sqlite3.connect(info["path"])) as db, db:
+                db.execute("DELETE FROM cache_v1 WHERE arch='gfx1036'")
+            with self.assertRaisesRegex(ValueError, "all seven architecture worksets"):
+                trial.verify_owned_cache(info, entries_per_arch=1)
+            Path(info["marker"]).write_text("another-run\n")
+            with self.assertRaisesRegex(ValueError, "identity changed"):
+                trial.verify_owned_cache(info, entries_per_arch=1)
+
     def test_private_comgr_cache_replaces_inherited_path_and_refuses_reuse(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -262,6 +391,17 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn("synchronous", additions)
         self.assertNotIn("ROCFFT_RTC_MAX_SUBPROCESSES", additions)
         self.assertNotIn("generator_sum()", additions)
+        owned = (
+            ROOT
+            / "patches/build-profile/rocm-libraries/0003-rocfft-owned-aot-chain.patch"
+        ).read_text()
+        self.assertEqual(
+            trial.patch_paths(
+                owned, {"projects/rocfft/library/src/rocfft_aot_helper.cpp"}
+            ),
+            {"projects/rocfft/library/src/rocfft_aot_helper.cpp"},
+        )
+        self.assertNotIn("rtc_compile.cpp", owned)
 
     def test_generator_input_fingerprints_detect_content_changes(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -324,6 +464,9 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn("id-token: write", job)
         self.assertNotIn("secrets:", job)
         self.assertIn("if: always()", job)
+        self.assertIn("default: legacy", text)
+        self.assertIn("shell: bash", job)
+        self.assertIn('--cache-mode "$ROCFFT_AOT_CACHE_MODE"', job)
 
 
 class HostAggregationTests(unittest.TestCase):
