@@ -6,6 +6,10 @@ run-name: CK ${{ inputs.build_variant }} compilation diagnostic (01a193c1)
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        type: choice
+        default: diagnostic
+        options: [diagnostic, benchmark]
       build_variant:
         type: choice
         default: asan-debug
@@ -19,8 +23,8 @@ permissions:
   actions: read
 jobs:
   diagnostic:
-    runs-on: aws-linux-scale-rocm-prod
-    timeout-minutes: 180
+    runs-on: ${{ inputs.operation == 'benchmark' && 'aws-linux-scale-rocm-large' || 'aws-linux-scale-rocm-prod' }}
+    timeout-minutes: 360
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
     env:
@@ -53,9 +57,10 @@ jobs:
       - name: Configure CK from pinned dependencies
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py configure
       - name: Profile isolated object
+        if: inputs.operation == 'diagnostic'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode profile
       - name: Publish compiler traces immediately
-        if: always()
+        if: always() && inputs.operation == 'diagnostic'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ck-compile-profile-${{ inputs.build_variant }}-${{ github.run_id }}
@@ -65,7 +70,24 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Replay isolated object without compiler instrumentation
+        if: inputs.operation == 'diagnostic'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode uninstrumented
+      - name: Run paired original and split object-group trials
+        if: inputs.operation == 'benchmark'
+        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/benchmark.py run
+      - name: Retain exact objects and headers for GPU contract validation
+        if: always() && inputs.operation == 'benchmark'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-compile-objects-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: |
+            compile-hotspot-evidence/benchmarks/B2/
+            compile-hotspot-evidence/benchmarks/C2/
+            build/math-libs/composable_kernel/build/include/
+            rocm-libraries/projects/composablekernel/include/
+            rocm-libraries/projects/composablekernel/library/include/
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain raw diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -74,6 +96,8 @@ jobs:
           path: |
             compile-hotspot-evidence/
             !compile-hotspot-evidence/*.o
+            !compile-hotspot-evidence/**/*.o
+            !compile-hotspot-evidence/**/*.dwo
             build/logs/
           if-no-files-found: error
           retention-days: 14
