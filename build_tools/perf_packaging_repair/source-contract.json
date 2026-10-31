@@ -1,0 +1,18 @@
+{
+  "source_sha": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+  "package_json_base_sha256": "734f7937ce6ee5e140042672b087a37f47e0d2367963abecaacb3202acb6910d",
+  "package_json_patched_sha256": "9693941b1f02c33c0304a9b4d054a48ba940e10734c6737b14ea3817a437f3b7",
+  "patch_sha256": "a3f0e720d76b55341e69b9cbf1561345734e6a35f542e21cb35ce053c5836267",
+  "semantic_changes": {
+    "amdrocm-profiler-base": {
+      "Disable_DWZ": "True"
+    }
+  },
+  "preserved": "All other JSON entries/values; compilation/debug/sanitizer flags unchanged",
+  "source_evidence": {
+    "deb_package.py": "006e6f13c76b85355bda0e7f04419e18d26574d584e8ce2ef426cf5f31c994a6",
+    "debian_rules.j2": "bbc49ce03c14fbedd321c4b73987bbc0c185d1fd13a4fc9e7c5c176853b635b4",
+    "packaging_utils.py": "a699f119d55fcb61c9fb0f9da6e39e961c5edfa78f19122e7817a4a875e21706",
+    "BUILD_TOPOLOGY.toml": "e2d162431de6934db388fb2b01e9abc4d6aaf4ba0aa3ace8dbaef8fe49ff81b1"
+  }
+}

@@ -1,123 +1,81 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI ASAN
-
+name: Targeted profiler DEB preservation repair (01a19119)
+run-name: Profiler DEB-only ${{ inputs.mode }} producer ${{ inputs.producer_run_id }} (01a19119)
 on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
+      mode:
+        type: choice
+        required: true
+        options: [baseline, joint]
+      producer_run_id:
+        type: choice
+        required: true
+        options: ['41211496307', '41212843218']
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
-  setup:
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
-      build_pytorch: false
-      build_jax: false
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_asan_summary:
-    name: CI ASAN Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-26.04
+  profiler_deb:
+    runs-on: aws-linux-scale-rocm-large
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+    env:
+      MODE: ${{ inputs.mode }}
+      PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+      AWS_EC2_METADATA_DISABLED: 'true'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - name: Install Git before checkout
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git ca-certificates
+      - name: Checkout frozen product source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
           persist-credentials: false
-
-      - name: Evaluate workflow results
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - name: Install unchanged packaging requirements
+        run: |
+          pip install pyelftools==0.33 boto3==1.39.15 jinja2==3.1.6 pyzstd==0.19.1
+          sudo apt-get install -y llvm-20 rpm debhelper-compat build-essential dpkg-dev createrepo-c patchelf
+      - name: Qualify original producer and fetch only required immutable inputs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python .perf-instrumentation/build_tools/perf_packaging_repair/probe.py prepare
+      - name: Record original profiler ELF text and full debug sections
+        run: python .perf-instrumentation/build_tools/perf_packaging_repair/probe.py before
+      - name: Build only profiler DEB using existing supported DWZ exclusion
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          python ./build_tools/packaging/linux/build_package.py \
+            --dest-dir output/packages \
+            --rocm-version '10.3.0~dev20261031' \
+            --artifacts-dir output/artifacts \
+            --pkg-type deb \
+            --version-suffix "${PRODUCER_RUN_ID}" \
+            --build-variant asan-debug \
+            --target gfx950 \
+            --pkg-names amdrocm-profiler-base
+      - name: Verify original text and debug payload plus package metadata
+        run: python .perf-instrumentation/build_tools/perf_packaging_repair/probe.py after
+      - name: Retain evidence and package logs without publishing products
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: profiler-deb-repair-${{ inputs.mode }}-01a19119
+          path: |
+            .profiler-deb-evidence/*.json
+            output/logs
+          retention-days: 14
+          compression-level: 1
