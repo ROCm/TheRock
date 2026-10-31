@@ -1,0 +1,12 @@
+--- a/build_tools/packaging/linux/package.json
++++ b/build_tools/packaging/linux/package.json
+@@ -1631,7 +1631,8 @@
+       }
+     ],
+     "Postinstall": "True",
+-    "Gfxarch": "False"
++    "Gfxarch": "False",
++    "Disable_DWZ": "True"
+   },
+   {
+     "Package": "amdrocm-profiler-test",
