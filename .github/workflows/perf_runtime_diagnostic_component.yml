@@ -1,0 +1,272 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test component
+
+on:
+  workflow_call:
+    inputs:
+      performance_focused_only:
+        type: boolean
+        default: false
+      performance_mode:
+        type: string
+        default: ''
+      artifact_run_id:
+        type: string
+        default: ""
+      artifact_group:
+        type: string
+      amdgpu_families:
+        type: string
+      amdgpu_targets:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+      component:
+        type: string
+      release_type:
+        type: string
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
+        type: string
+        default: "release"
+      default_container_image:
+        type: string
+        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39"
+      quartz_tracking_id:
+        type: string
+        default: ""
+
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test_component:
+    name: >-
+      Test ${{ fromJSON(inputs.component).job_name }}
+      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+      (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
+      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+    runs-on: ${{ inputs.test_runs_on }}
+    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
+    timeout-minutes: 60
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+    container:
+      # If the component has specified an alternate image, honor that option.
+      # Otherwise use the default image.
+      # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
+      image: >- # zizmor: ignore[unpinned-images]
+        ${{ inputs.platform != 'windows' &&
+            (fromJSON(inputs.component).container_image || inputs.default_container_image)
+            || null
+        }}
+      # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
+      # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
+      # and any job-specific options
+      options: ${{ fromJSON(inputs.component).container_options }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The shard array is based on "total_shards" from "fetch_test_configurations.py"
+        # The test executable will shard based on the array. (ex: [1, 2, 3, 4] = four test shards)
+        shard: ${{ inputs.performance_focused_only && fromJSON('[1]') || fromJSON(inputs.component).shard_arr }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      QUARTZ_REPORTING_WORKFLOW: test_component.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_ARTIFACTS_DIR: "./build"
+      THEROCK_BIN_DIR: "./build/bin"
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
+      PERF_MODE: ${{ inputs.performance_mode }}
+    steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          sparse-checkout: build_tools
+          path: "prejob"
+
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        timeout-minutes: 5
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
+      - name: Pre-job cleanup GPU processes on Linux
+        if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 5
+        run: bash ./prejob/build_tools/github_actions/cleanup_processes.sh
+
+      - name: Checking repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+
+      - name: Qualify original producer and fetch immutable identity sidecar
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .perf-instrumentation/build_tools/perf_diagnostic/diagnose.py qualify
+
+      - name: Run setup test environment workflow
+        timeout-minutes: ${{ contains(inputs.build_variant, 'asan') && 60 || 15 }}
+        env:
+          RETRY_THIS_STEP: "true"
+          STEP_TIMEOUT_MINUTES: ${{ contains(inputs.build_variant, 'asan') && '60' || '15' }}
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
+          ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          python ./build_tools/health_status.py
+
+        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+        # Must run before sanity check so ASAN_RUNTIME_PATH is available for LD_PRELOAD
+      - name: Enable sanitizer-specific test flags
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
+        run: |
+          python ./build_tools/github_actions/configure_asan_env.py \
+            --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
+
+      - name: Driver / GPU sanity check
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
+        timeout-minutes: 3
+        env:
+          # Preload ASAN runtime so Python can load ASAN-instrumented libraries
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          # The probes load instrumented ROCm libraries, so LeakSanitizer reports
+          # whatever those leak at exit and the probe returns non-zero. This step
+          # answers "is the driver and GPU functional", not "is the runtime
+          # leak-free". Extends rather than replaces, to keep the options set by
+          # configure_asan_env.py; scoped here so component tests still run with
+          # leak detection enabled.
+          ASAN_OPTIONS: ${{ env.ASAN_OPTIONS }}:detect_leaks=0
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
+      - name: Setup Additional Requirements
+        env:
+          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+        run: |
+          python ./build_tools/install_additional_requirements.py \
+            --requirements-files "${REQUIREMENTS_FILES}"
+
+
+      # Set thread limits from KUBE_CPU_REQUEST (Kubernetes-injected) to avoid oversubscription.
+      # Must be done at runtime since container env vars aren't in GitHub's env context.
+      - name: Set thread limits
+        run: |
+          if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
+            CPU_COUNT="${KUBE_CPU_REQUEST%.*}"
+            echo "OPENBLAS_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "OMP_NUM_THREADS=${CPU_COUNT}" >> $GITHUB_ENV
+            echo "Thread limits set: OPENBLAS_NUM_THREADS=${CPU_COUNT}, OMP_NUM_THREADS=${CPU_COUNT} (from KUBE_CPU_REQUEST=${KUBE_CPU_REQUEST})"
+          else
+            echo "KUBE_CPU_REQUEST not set, thread limits not configured"
+          fi
+
+      - name: ABBA filter diagnostic with four independent stock-runner children
+        id: filter_series
+        timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
+          TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
+          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          # General CI debug mode. runner.debug == '1' when a job is re-run with
+          # GitHub's "Enable debug logging" checkbox. Used to force turning debug
+          # options on.
+          THEROCK_CI_DEBUG: ${{ runner.debug == '1' && '1' || '0' }}
+          # ROCM_KPACK_DEBUG turns on the kpack loader's per-test diagnostics.
+          # Most components enable it (default "1"); a few opt out via their
+          # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
+          # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
+          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
+          # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
+          # leave it empty. #3587
+          # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
+          # whose Windows memory path OOMs some tests (e.g. rocsparse bsr*0 graph_test).
+          # Default unset components to the platform backend, mirroring the runtime fix
+          # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
+          RETRY_THIS_STEP: "true"
+          RETRY_COUNT: "1"
+          RETRY_DELAY: "7"
+          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+          STEP_NAME: >-
+            Test ${{ fromJSON(inputs.component).job_name }}
+            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
+            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+        # This input is intentionally a shell program from fetch_test_configurations.py,
+        # including command chains and per-command environment assignments. Callers
+        # must be trusted to select code, just as they select repository/ref above.
+        run: | # zizmor: ignore[template-injection]
+          python3 .perf-instrumentation/build_tools/perf_diagnostic/diagnose.py series
+
+      - name: Post-job cleanup GPU processes on Linux
+        if: ${{ always() && runner.os == 'Linux' }}
+        timeout-minutes: 5
+        run: bash ./build_tools/github_actions/cleanup_processes.sh
+
+      - name: Post-job cleanup processes on Windows
+        if: ${{ always() && runner.os == 'Windows' }}
+        timeout-minutes: 5
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+
+      - name: Retain ABBA diagnostic evidence and original failed outcomes
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: runtime-filter-control-${{ inputs.performance_mode }}-${{ inputs.artifact_run_id }}
+          path: .runtime-filter-control
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
