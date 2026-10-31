@@ -974,6 +974,8 @@ class TestRealCommittedPolicies(unittest.TestCase):
         "rocgdb-cpu",
         "rocgdb-gpu",
         "rocr-debug-agent",
+        "rocr-debug-agent-cpu",
+        "rocr-debug-agent-gpu",
     }
 
     def _select_for_external_project(self, project: str) -> set[str]:
