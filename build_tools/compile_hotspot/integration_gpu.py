@@ -42,6 +42,28 @@ def contained(root, relative):
     return path
 
 
+def resolve_asan_runtime(compiler, sdk):
+    runtimes = set()
+    for name in ("libclang_rt.asan.so", "libclang_rt.asan-x86_64.so"):
+        path = Path(
+            subprocess.check_output(
+                [str(compiler), f"-print-file-name={name}"], text=True
+            ).strip()
+        )
+        if path.is_absolute() and path.is_file():
+            path = path.resolve()
+            if not path.is_relative_to(sdk.resolve()):
+                raise RuntimeError(
+                    "Compiler resolved an ASan runtime outside the pinned SDK"
+                )
+            runtimes.add(path)
+    if len(runtimes) != 1:
+        raise RuntimeError(
+            f"Expected one pinned shared ASan runtime, got {sorted(runtimes)}"
+        )
+    return runtimes.pop()
+
+
 class Validation:
     def __init__(self, args):
         self.args = args
@@ -93,6 +115,7 @@ class Validation:
                 raise RuntimeError(f"Bundle symlink mismatch: {relative}")
         self.save("producer-manifest.json", m)
         baseline = json.loads(self.args.baseline_contract_provenance.read_text())
+        self.baseline_provenance = baseline
         context = baseline["producer_context"]
         for key in ("source_sha", "variant", "baseline_run_id"):
             if str(context[key]) != str(m[key]):
@@ -217,10 +240,21 @@ class Validation:
             self.env["ASAN_SYMBOLIZER_PATH"] = str(
                 self.sdk / "lib/llvm/bin/llvm-symbolizer"
             )
-            runtimes = list((self.sdk / "lib/llvm").rglob("libclang_rt.asan-x86_64.so"))
-            if len(runtimes) != 1:
-                raise RuntimeError("Expected one pinned shared ASan runtime")
-            libdirs.append(runtimes[0].parent)
+            compiler = self.sdk / "lib/llvm/bin/clang++"
+            if digest(compiler) != self.manifest["compiler_sha256"]:
+                raise RuntimeError(
+                    "Fetched compiler does not match the producer compiler"
+                )
+            runtime = resolve_asan_runtime(compiler, self.sdk)
+            runtime_hash = digest(runtime)
+            if runtime_hash != self.baseline_provenance["sanitizer_runtime_sha256"]:
+                raise RuntimeError(
+                    "Selected ASan runtime differs from the paired baseline"
+                )
+            self.save(
+                "asan-runtime.json", {"path": str(runtime), "sha256": runtime_hash}
+            )
+            libdirs.append(runtime.parent)
         self.env.update(
             {
                 "LD_LIBRARY_PATH": ":".join(str(p) for p in libdirs if p.is_dir()),
