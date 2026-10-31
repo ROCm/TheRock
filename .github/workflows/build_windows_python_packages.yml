@@ -144,7 +144,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -226,7 +226,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

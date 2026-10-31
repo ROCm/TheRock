@@ -177,7 +177,7 @@ jobs:
 
       - name: "Quartz - started - test rpm/deb install"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -203,8 +203,12 @@ jobs:
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
           python build_tools/packaging/linux/get_url_repo_params.py extract-gfx-arch \
             --artifact-group "${ARTIFACT_GROUP}"
-          python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
-            --os-profile "${OS_PROFILE}"
+          if [[ "${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation }}" == "true" ]]; then
+            python build_tools/normal_ci_validation.py install-image --os-profile "${OS_PROFILE}"
+          else
+            python build_tools/packaging/linux/get_url_repo_params.py get-container-image \
+              --os-profile "${OS_PROFILE}"
+          fi
 
           # Using Minimal GPU passthrough for native install basic verification (rocminfo).
           # Device nodes are required so rocminfo can reach the AMDGPU driver on
@@ -230,6 +234,8 @@ jobs:
       # is dynamic across os_profile (multi-OS install matrix, SLES /etc/group).
       options: ${{ needs.prepare_install_context.outputs.container_gpu_options }}
     env:
+      NORMAL_REQUESTED_RUNNER: ${{ inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm' }}
+      NORMAL_IMAGE_PIN: ${{ needs.prepare_install_context.outputs.container_image }}
       REPO_URL: ${{ inputs.package_install_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
       OS_PROFILE: ${{ inputs.os_profile }}
@@ -309,6 +315,10 @@ jobs:
           /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
 
+      - name: Capture normal install identity
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: $PYTHON_CMD build_tools/normal_ci_validation.py capture --output normal-validation/install.json
+
       - name: Package Installation Test
         run: |
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
@@ -321,8 +331,18 @@ jobs:
           echo "UNINSTALL TEST - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_uninstall_test.py -vv --tb=long -s
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-install-${{ inputs.os_profile }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/
+
   notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
     needs: [prepare_install_context, test_native_linux_packages_install]
     name: "Quartz - completed - test rpm/deb install"
     runs-on: ubuntu-26.04

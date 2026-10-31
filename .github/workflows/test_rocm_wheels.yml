@@ -121,6 +121,8 @@ jobs:
       run:
         shell: bash
     env:
+      NORMAL_REQUESTED_RUNNER: ${{ inputs.test_runs_on }}
+      NORMAL_IMAGE_PIN: ${{ inputs.container_image_url || 'native-controller' }}
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
@@ -170,6 +172,10 @@ jobs:
             --index-url="${PACKAGE_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
+
+      - name: Capture normal wheel-test identity
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output normal-validation/wheel-test.json
 
       - name: Show installed packages (libraries)
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
@@ -267,3 +273,13 @@ jobs:
         timeout-minutes: 5
         run: |
           rocprof-compute analyze --verify-deps
+
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-wheel-test-${{ inputs.amdgpu_family }}-${{ inputs.python_version }}-${{ inputs.container_image_name }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/

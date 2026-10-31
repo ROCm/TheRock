@@ -128,6 +128,9 @@ jobs:
       kpack_split: ${{ steps.upload.outputs.kpack_split }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
+      NORMAL_REQUESTED_RUNNER: ${{ inputs.build_runs_on }}
+      NORMAL_VALIDATION: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      NORMAL_IMAGE_PIN: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
       QUARTZ_REPORTING_WORKFLOW: build_portable_linux_python_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm Python packages"
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
@@ -145,7 +148,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -190,9 +193,17 @@ jobs:
               --output-dir="${ARTIFACTS_DIR}"
           fi
 
+      - name: Capture Python package tool identity
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output normal-validation/before-build.json
+
       - name: Build Python packages
         run: |
-          python ./build_tools/build_python_packages.py \
+          prefix=()
+          if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
+            prefix=(python build_tools/profile_build.py --output normal-validation/profile --)
+          fi
+          "${prefix[@]}" python ./build_tools/build_python_packages.py \
             --artifact-dir="${ARTIFACTS_DIR}" \
             --dest-dir="${PACKAGES_DIR}" \
             --version="${PACKAGE_VERSION}" \
@@ -216,6 +227,16 @@ jobs:
             --run-id="${{ github.run_id }}" \
             ${{ inputs.multiarch_index && '--multiarch' || '' }}
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-python-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/
+
       - name: Capture job summary
         id: summary
         if: always()
@@ -223,7 +244,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

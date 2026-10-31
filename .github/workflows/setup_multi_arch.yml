@@ -181,10 +181,10 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
-      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
-      rocm_msi_package_version: ${{ steps.rocm_package_version.outputs.rocm_msi_package_version }}
+      rocm_package_version: ${{ steps.normal_controls.outputs.rocm_package_version || steps.rocm_package_version.outputs.rocm_package_version }}
+      rocm_deb_package_version: ${{ steps.normal_controls.outputs.rocm_deb_package_version || steps.rocm_package_version.outputs.rocm_deb_package_version }}
+      rocm_rpm_package_version: ${{ steps.normal_controls.outputs.rocm_rpm_package_version || steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version: ${{ steps.normal_controls.outputs.rocm_msi_package_version || steps.rocm_package_version.outputs.rocm_msi_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     env:
@@ -196,7 +196,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -222,9 +222,14 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: 7624a5e209cec569bbed38dad7071fa7393cb52b
+          ref: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && '7624a5e209cec569bbed38dad7071fa7393cb52b' || 'main' }}
           path: ci-config
-        continue-on-error: true
+        continue-on-error: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' }}
+
+      - name: Establish normal comparison controls
+        id: normal_controls
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py setup --config ci-config --output normal-validation/setup.json
 
       # Checkout external repo config (skip-ci-config.toml) for path-based CI skip.
       # This sparse checkout fetches only the .github directory to minimize checkout time.
@@ -297,6 +302,7 @@ jobs:
       # Other scripts upload "ci" and "dev release" packages to different
       # buckets, use different ccache namespaces, etc.
       - name: Compute package version
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' }}
         id: rocm_package_version
         env:
           CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
@@ -308,6 +314,16 @@ jobs:
             --override-git-sha="${CHECKOUT_COMMIT}" \
             --build-variant="${BUILD_VARIANT}"
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-setup-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/
+
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
@@ -317,7 +333,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

@@ -80,8 +80,7 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    # Profiling branch: hold the large-runner label fixed across comparisons.
-    runs-on: aws-windows-scale-rocm-prod-mix
+    runs-on: ${{ inputs.build_runs_on_large }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -110,7 +109,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -239,20 +238,9 @@ jobs:
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
-      - name: Verify profiling tools
-        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test -v
-
       - name: Build stage
         run: |
-          python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile" -- \
-            cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
-
-      - name: Preserve generated build evidence
-        if: ${{ !cancelled() }}
-        run: |
-          python build_tools/capture_build_graph.py \
-            --build-dir "${BUILD_DIR}" \
-            --output "${BUILD_DIR}/logs/build-graph.tar.gz"
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Run build tests (Comgr, blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
@@ -307,7 +295,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

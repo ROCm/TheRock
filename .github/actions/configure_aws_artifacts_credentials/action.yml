@@ -18,8 +18,16 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Enforce CI-only destination for normal validation
+      id: normal_guard
+      if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      shell: bash
+      env:
+        RELEASE_TYPE: ${{ inputs.release_type }}
+      run: python build_tools/normal_ci_validation.py guard
+
     - name: Determine IAM role
-      if: ${{ always() }}
+      if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' || steps.normal_guard.outcome == 'success') }}
       id: iam
       shell: bash
       env:
@@ -29,7 +37,7 @@ runs:
           --release-type "${INPUTS_RELEASE_TYPE}"
 
     - name: Configure AWS Credentials
-      if: ${{ always() && steps.iam.outputs.iam_role != '' }}
+      if: ${{ always() && steps.iam.outputs.iam_role != '' && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' || steps.normal_guard.outcome == 'success') }}
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         aws-region: ${{ steps.iam.outputs.aws_region }}

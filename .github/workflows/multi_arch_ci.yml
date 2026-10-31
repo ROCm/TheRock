@@ -17,6 +17,20 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_normal_validation:
+        type: boolean
+        default: false
+        description: 'Controlled normal Linux gfx94x+gfx103x comparison; no product change applied.'
+      profile_normal_case:
+        type: choice
+        default: baseline
+        options: [baseline, candidate]
+        description: 'Metadata label only; both arms share controls and no optimization is integrated.'
+      profile_normal_cache_regime:
+        type: choice
+        default: ci-readonly
+        options: [ci-readonly, private-cold]
+        description: 'Use identical regime in both arms; remote read-only is warm/mixed only if actual keys/hits establish it.'
       # --- Build targets ---
       linux_amdgpu_families:
         type: string

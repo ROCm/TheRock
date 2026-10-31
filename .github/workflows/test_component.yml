@@ -81,6 +81,8 @@ jobs:
       run:
         shell: bash
     env:
+      NORMAL_REQUESTED_RUNNER: ${{ inputs.test_runs_on }}
+      NORMAL_IMAGE_PIN: ${{ fromJSON(inputs.component).container_image || inputs.default_container_image || 'native-controller' }}
       QUARTZ_REPORTING_WORKFLOW: test_component.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test ROCm component"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -94,7 +96,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -201,6 +203,10 @@ jobs:
             echo "KUBE_CPU_REQUEST not set, thread limits not configured"
           fi
 
+      - name: Capture normal component identity
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output normal-validation/component.json
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -274,6 +280,16 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-component-${{ inputs.amdgpu_families }}-${{ fromJSON(inputs.component).job_name }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/
+
       - name: Capture job summary
         id: summary
         if: always()
@@ -281,7 +297,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

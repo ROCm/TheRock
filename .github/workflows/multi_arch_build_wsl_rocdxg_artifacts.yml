@@ -69,6 +69,10 @@ jobs:
       run:
         shell: bash
     env:
+      NORMAL_VALIDATION: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      NORMAL_IMAGE_PIN: native-windows-controller
+      NORMAL_REQUESTED_RUNNER: 'group:ROCR-Runtime-libhsakmt-WSL'
+      TEATIME_PROFILE_CPU: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && '1' || '' }}
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_wsl_rocdxg_artifacts.yml
@@ -83,12 +87,12 @@ jobs:
       # misparses during nested subproject configure.
       THEROCK_WSL_WIN_SDK_MOUNT: /opt/winsdk-shared
       # Injects Windows env vars into WSL
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:STAGE_NAME:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
+      WSLENV: NORMAL_VALIDATION:TEATIME_PROFILE_CPU:THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:STAGE_NAME:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -167,6 +171,10 @@ jobs:
         run: |
           gh auth setup-git --hostname github.com
           python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
+
+      - name: Capture normal WSL controller identity
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output normal-validation/controller.json
 
       - name: Set up WSL with Ubuntu
         uses: Vampire/setup-wsl@d1da7f2c0322a5ee4f24975344f67fc0f5baf364 # v7.0.0
@@ -287,13 +295,19 @@ jobs:
             -w "${wsl_src_dir}" \
             -e "WSL_BUILD_DIR=${wsl_build_dir}" \
             -e ROCM_PACKAGE_VERSION \
+            -e NORMAL_VALIDATION \
+            -e TEATIME_PROFILE_CPU \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
               git config --global --add safe.directory "*"
               pip install -r requirements.txt
               ${{ steps.stage_config.outputs.pip_install_cmd && format('pip install {0}', steps.stage_config.outputs.pip_install_cmd) || 'true' }}
-              cmake -B "${WSL_BUILD_DIR}" -S . -G Ninja \
+              prefix=()
+              if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
+                prefix=(python build_tools/profile_build.py --output "${WSL_BUILD_DIR}/logs/profile-configure" --)
+              fi
+              "${prefix[@]}" cmake -B "${WSL_BUILD_DIR}" -S . -G Ninja \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
@@ -317,12 +331,19 @@ jobs:
             --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
             -w "${wsl_src_dir}" \
+            -e NORMAL_VALIDATION \
+            -e TEATIME_PROFILE_CPU \
             -e "STAGE_NAME=${stage_name}" \
             -e "WSL_BUILD_DIR=${wsl_build_dir}" \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
-              cmake --build "${WSL_BUILD_DIR}" --target "stage-${STAGE_NAME}" -- -k 0
+              prefix=()
+              if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
+                pip install psutil==7.1.3
+                prefix=(python build_tools/profile_build.py --output "${WSL_BUILD_DIR}/logs/profile" --)
+              fi
+              "${prefix[@]}" cmake --build "${WSL_BUILD_DIR}" --target "stage-${STAGE_NAME}" -- -k 0
             '
 
       - name: Report
@@ -371,6 +392,16 @@ jobs:
             --build-dir="${wsl_build_dir}" \
             --amdgpu-family=""
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-wsl-controller-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            normal-validation/
+
       - name: Capture job summary
         id: summary
         if: always()
@@ -378,7 +409,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed

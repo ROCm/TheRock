@@ -83,8 +83,7 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    # Hold heavy-stage comparisons fixed; preserve caller sizing for other stages.
-    runs-on: ${{ (inputs.stage_name == 'compiler-runtime' || inputs.stage_name == 'math-libs' || inputs.stage_name == 'comm-libs') && 'aws-linux-scale-rocm-prod' || inputs.build_runs_on }}
+    runs-on: ${{ inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -104,7 +103,10 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
-      TEATIME_PROFILE_CPU: 1
+      NORMAL_REQUESTED_RUNNER: ${{ inputs.build_runs_on }}
+      NORMAL_VALIDATION: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      NORMAL_IMAGE_PIN: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
+      TEATIME_PROFILE_CPU: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && '1' || '' }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
@@ -113,7 +115,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -154,6 +156,10 @@ jobs:
             --release-type "${RELEASE_TYPE}" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
+
+      - name: Establish explicit comparison cache regime
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py cache --output build/logs/normal-validation/cache.json
 
       - name: Runner health status
         run: |
@@ -196,6 +202,14 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Record reviewed preconfigure extension point
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py preconfigure --output build/logs/normal-validation/product-hook.json
+
+      - name: Capture source and tool identities
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output build/logs/normal-validation/before-configure.json
+
       - name: Configure
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration and the caller-provided preset/external repo options
@@ -205,7 +219,11 @@ jobs:
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
-          cmake -B "${BUILD_DIR}" -S . -GNinja \
+          prefix=()
+          if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
+            prefix=(python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile-configure" -- python build_tools/normal_ci_validation.py run --)
+          fi
+          "${prefix[@]}" cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -217,19 +235,27 @@ jobs:
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Verify profiling tools
-        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test -v
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test build_tools.tests.normal_ci_validation_test -v
 
       - name: Build stage
         run: |
-          python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile" -- \
-            cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          prefix=()
+          if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
+            prefix=(python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile" -- python build_tools/normal_ci_validation.py run --)
+          fi
+          "${prefix[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Preserve generated build evidence
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
         run: |
           python build_tools/capture_build_graph.py \
             --build-dir "${BUILD_DIR}" \
             --output "${BUILD_DIR}/logs/build-graph.tar.gz"
+
+      - name: Capture produced SDK identity
+        if: ${{ !cancelled() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        run: python build_tools/normal_ci_validation.py capture --output build/logs/normal-validation/after-build.json
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
@@ -291,6 +317,18 @@ jobs:
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
 
+      - name: Retain common comparison diagnostics
+        if: ${{ always() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-validation-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            build/logs/normal-validation/
+            build/logs/profile*/
+            build/logs/build-graph.tar.gz
+
       - name: Capture job summary
         id: summary
         if: always()
@@ -298,7 +336,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
