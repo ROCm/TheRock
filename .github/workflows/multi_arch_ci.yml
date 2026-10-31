@@ -17,6 +17,15 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_package_deb:
+        type: boolean
+        default: false
+        description: "Controlled full DEB AB/BA; no source build or publication"
+      profile_deb_reset_mode:
+        type: choice
+        default: refetch
+        options: [snapshot, refetch]
+        description: "Verified compact snapshot, or explicit immutable re-fetch reset when storage requires it"
       profile_package_scan:
         type: boolean
         default: false
@@ -101,6 +110,12 @@ on:
           reuse and test filtering (empty = run all tests).
   workflow_call:
     inputs:
+      profile_package_deb:
+        type: boolean
+        default: false
+      profile_deb_reset_mode:
+        type: string
+        default: refetch
       profile_package_scan:
         type: boolean
         default: false
@@ -176,7 +191,7 @@ concurrency:
 
 jobs:
   setup:
-    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess }}
+    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess && !inputs.profile_package_deb }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -274,6 +289,116 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  profile_package_deb:
+    name: Full DEB comparison (${{ matrix.order }})
+    if: ${{ inputs.profile_package_deb && github.repository == 'ROCm/TheRock' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        order: [AB, BA]
+    runs-on: aws-linux-scale-rocm-small
+    timeout-minutes: 420
+    permissions:
+      contents: read
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+    env:
+      FIRST_METHOD: ${{ matrix.order == 'AB' && 'A' || 'B' }}
+      SECOND_METHOD: ${{ matrix.order == 'AB' && 'B' || 'A' }}
+      CASE_ORDER: ${{ matrix.order }}
+      RESET_MODE: ${{ inputs.profile_deb_reset_mode || 'refetch' }}
+      AWS_EC2_METADATA_DISABLED: 'true'
+    steps:
+      - name: Check out triggering diagnostic revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install stock packaging and diagnostic prerequisites
+        run: |
+          pip install pyelftools==0.33 boto3==1.39.15 jinja2==3.1.6 pyzstd==0.19.1 psutil==7.1.3
+          sudo apt-get update
+          sudo apt-get install -y llvm-20 rpm debhelper-compat build-essential dpkg-dev createrepo-c patchelf zstd
+      - name: Fetch all historical inputs read-only
+        env:
+          RELEASE_TYPE: nightly
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id=41147801272 --run-github-repo=ROCm/rockrel --stage=all \
+            --amdgpu-families='gfx94X-dcgpu;gfx110X-all;gfx1151;gfx120X-all;gfx125X-dcgpu;gfx90a;gfx950-dcgpu;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx117X-all' \
+            --expand-family-to-targets --output-dir=output
+      - name: Record this run's fetched input ownership
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path('output/artifacts').resolve()
+          receipt = Path('output/scan-diagnostics/input-ownership.json')
+          receipt.parent.mkdir(parents=True, exist_ok=True)
+          receipt.write_text(json.dumps(dict(repository=os.environ['GITHUB_REPOSITORY'], run_id=os.environ['GITHUB_RUN_ID'], sha=os.environ['GITHUB_SHA'], root=str(root))))
+          PY
+      - name: Record exact inputs and gate complete-workload capacity
+        run: |
+          python build_tools/packaging/linux/benchmark_full_deb.py \
+            --action prepare --order "$CASE_ORDER" --reset-mode "$RESET_MODE" --max-wall-seconds 21600
+      - name: First complete DEB build and blocking checks
+        id: first_case
+        run: python build_tools/packaging/linux/benchmark_full_deb.py --action case --method "$FIRST_METHOD"
+      - name: Retain first complete or partial package repository
+        id: first_packages
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-deb-${{ matrix.order }}-first-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/deb-case/packages/
+            output/deb-case/logs/
+          compression-level: 0
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove first owned case only after verified retention
+        if: ${{ success() && steps.first_case.outcome == 'success' && steps.first_packages.outputs.artifact-id != '' }}
+        env:
+          RETAINED_ARTIFACT_ID: ${{ steps.first_packages.outputs.artifact-id }}
+        run: python build_tools/packaging/linux/benchmark_full_deb.py --action cleanup --artifact-id "$RETAINED_ARTIFACT_ID"
+      - name: Second complete DEB build and exact comparison
+        id: second_case
+        run: python build_tools/packaging/linux/benchmark_full_deb.py --action case --method "$SECOND_METHOD"
+      - name: Retain second complete or partial package repository
+        id: second_packages
+        if: ${{ always() && steps.second_case.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-deb-${{ matrix.order }}-second-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/deb-case/packages/
+            output/deb-case/logs/
+          compression-level: 0
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove second owned case only after verified retention
+        if: ${{ success() && steps.second_case.outcome == 'success' && steps.second_packages.outputs.artifact-id != '' }}
+        env:
+          RETAINED_ARTIFACT_ID: ${{ steps.second_packages.outputs.artifact-id }}
+        run: python build_tools/packaging/linux/benchmark_full_deb.py --action cleanup --artifact-id "$RETAINED_ARTIFACT_ID"
+      - name: Recover and verify original pristine input
+        if: ${{ always() && hashFiles('output/scan-diagnostics/deb/state.json') != '' }}
+        run: python build_tools/packaging/linux/benchmark_full_deb.py --action finish
+      - name: Retain all diagnostic evidence including failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: full-deb-diagnostics-${{ matrix.order }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/scan-diagnostics/
+          compression-level: 1
+          if-no-files-found: warn
+          retention-days: 14
+
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
@@ -319,7 +444,7 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess && !inputs.profile_package_deb && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
@@ -334,6 +459,7 @@ jobs:
       - windows_build_and_test
       - manifest_diff
       - profile_package_scan
+      - profile_package_deb
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
