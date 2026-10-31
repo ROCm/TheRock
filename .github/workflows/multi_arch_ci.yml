@@ -17,6 +17,10 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_comm_links:
+        type: boolean
+        default: false
+        description: "Run only the controlled rocSHMEM link replay; prepare required objects once, skip normal stages"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -93,6 +97,9 @@ on:
           reuse and test filtering (empty = run all tests).
   workflow_call:
     inputs:
+      profile_comm_links:
+        type: boolean
+        default: false
       linux_amdgpu_families:
         type: string
         default: ""
@@ -162,6 +169,7 @@ concurrency:
 
 jobs:
   setup:
+    if: ${{ !inputs.profile_comm_links }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -179,6 +187,82 @@ jobs:
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_native_windows: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_windows }}
       build_stages: ${{ inputs.build_stages || '' }}
+
+  profile_comm_links:
+    name: Controlled rocSHMEM links (${{ matrix.label }})
+    if: ${{ inputs.profile_comm_links && github.repository == 'ROCm/TheRock' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: forward
+            order: '1,2'
+          - label: reverse
+            order: '2,1'
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
+    env:
+      RELEASE_TYPE: ci
+      STAGE_NAME: comm-libs
+      DIST_AMDGPU_FAMILIES: gfx94X-dcgpu
+      AMDGPU_FAMILIES: ''
+      ROCM_PACKAGE_VERSION: 10.3.0.dev0+82d5e8c176ce0cc00b5fd1cf631ce7790be8992b
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      TEATIME_FORCE_INTERACTIVE: '0'
+      TEATIME_PROFILE_CPU: '1'
+    steps:
+      - name: Check out triggering diagnostic revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Install baseline requirements and profiler
+        run: |
+          pip install -r requirements.txt
+          pip install psutil==7.1.3 msgpack==1.1.2 zstandard==0.25.0
+      - name: Configure CI ccache without changing trust domain
+        run: |
+          python build_tools/setup_ccache.py --release-type ci \
+            --dir "$(dirname "$CCACHE_CONFIGPATH")" \
+            --local-path "$GITHUB_WORKSPACE/.container-cache/ccache"
+      - name: Fetch the exact baseline inbound artifacts
+        env:
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id=41189458499 --run-github-repo=ROCm/TheRock \
+            --stage=comm-libs --amdgpu-families='' --output-dir=build --bootstrap
+      - name: Fetch pinned sources for the targeted prerequisites
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh auth setup-git --hostname github.com
+          python build_tools/fetch_sources.py --stage comm-libs --jobs 12 --depth 1
+      - name: Configure the unchanged baseline comm stage
+        run: |
+          python - <<'PY'
+          import os, shlex, subprocess, sys
+          args = subprocess.check_output([sys.executable, 'build_tools/configure_stage.py', '--stage=comm-libs', '--amdgpu-families=', '--dist-amdgpu-families=gfx94X-dcgpu', '--manylinux', '--oneline'], text=True)
+          subprocess.run(['cmake', '-B', 'build', '-S', '.', '-GNinja', '-DTHEROCK_PACKAGE_VERSION=' + os.environ['ROCM_PACKAGE_VERSION'], '-DTHEROCK_ROCJITSU_TEST_JOBS=16', '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache', '-DCMAKE_HIP_COMPILER_LAUNCHER=ccache', *shlex.split(args)], check=True)
+          PY
+      - name: Prepare only required objects and compare final link edges
+        env:
+          LINK_CASE_ORDER: ${{ matrix.order }}
+        run: python build_tools/profile_rocshmem_links.py --max-wall-seconds 12600 --order "$LINK_CASE_ORDER"
+      - name: Retain commands, fixed object bytes, linked binaries and profiles
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocshmem-link-diagnostics-${{ matrix.label }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/comm-link-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -225,7 +309,7 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    if: ${{ !inputs.profile_comm_links && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
@@ -239,6 +323,7 @@ jobs:
       - linux_build_and_test
       - windows_build_and_test
       - manifest_diff
+      - profile_comm_links
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
