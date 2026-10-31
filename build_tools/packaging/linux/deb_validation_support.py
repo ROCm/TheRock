@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import stat
 import subprocess
 import tarfile
 import time
@@ -33,6 +34,39 @@ def file_hash(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             hashed.update(chunk)
     return hashed.hexdigest()
+
+
+def apt_state_file_hashes(
+    apt_directory: Path = Path("/etc/apt"),
+    lists_directory: Path = Path("/var/lib/apt/lists"),
+) -> list[dict]:
+    """Hash repository/configuration inputs; only the volatile APT lock is metadata.
+
+    The lists lock is a synchronization inode, not package-index content, and
+    may be root-readable only after sudo apt-get. Do not relax permissions or
+    silently ignore unreadable configuration/index files.
+    """
+    records = []
+    for directory in [apt_directory, lists_directory]:
+        for path in sorted(directory.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            info = path.stat()
+            record = dict(path=str(path), size=info.st_size)
+            if path == lists_directory / "lock":
+                record.update(
+                    sha256=None,
+                    hash_status="not_hashed_volatile_apt_lock",
+                    reason="APT coordination inode, not package index/configuration content",
+                    mode=stat.S_IMODE(info.st_mode),
+                    uid=info.st_uid,
+                    gid=info.st_gid,
+                    mtime_ns=info.st_mtime_ns,
+                )
+            else:
+                record.update(sha256=file_hash(path), hash_status="hashed")
+            records.append(record)
+    return records
 
 
 def hardlink_groups(root: Path, manifest: Path) -> list[list[str]]:

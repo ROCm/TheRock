@@ -366,18 +366,7 @@ def prepare(args) -> None:
             ["dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${Architecture}\n"]
         )
     )
-    apt_files = []
-    for directory in [Path("/etc/apt"), Path("/var/lib/apt/lists")]:
-        for path in sorted(directory.rglob("*")):
-            if path.is_file() and not path.is_symlink():
-                apt_files.append(
-                    dict(
-                        path=str(path),
-                        size=path.stat().st_size,
-                        sha256=support.file_hash(path),
-                    )
-                )
-    pre.dump(output / "apt-state-file-hashes.json", apt_files)
+    pre.dump(output / "apt-state-file-hashes.json", support.apt_state_file_hashes())
     versions = {}
     for tool in [
         "dpkg-buildpackage",

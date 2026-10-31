@@ -34,6 +34,59 @@ DEB_TOOLS = LINUX and all(
 
 
 class FullDebTest(unittest.TestCase):
+    def test_apt_capture_records_only_exact_lock_without_reading_it(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            apt, lists = base / "etc/apt", base / "var/lib/apt/lists"
+            apt.mkdir(parents=True)
+            (lists / "nested").mkdir(parents=True)
+            for path, data in [
+                (apt / "sources.list", b"deb example stable main"),
+                (lists / "Packages", b"Package: fixture\n"),
+                (lists / "lock", b""),
+                (lists / "nested/lock", b"not the reserved lock"),
+            ]:
+                path.write_bytes(data)
+            original_hash = support.file_hash
+
+            def guarded_hash(path):
+                if path == lists / "lock":
+                    raise PermissionError("Root-only APT synchronization lock")
+                return original_hash(path)
+
+            with patch.object(support, "file_hash", side_effect=guarded_hash) as hashed:
+                records = support.apt_state_file_hashes(apt, lists)
+            self.assertEqual(hashed.call_count, 3)
+            by_path = {r["path"]: r for r in records}
+            lock = by_path[str(lists / "lock")]
+            self.assertEqual(lock["hash_status"], "not_hashed_volatile_apt_lock")
+            self.assertIsNone(lock["sha256"])
+            self.assertEqual(lock["size"], 0)
+            self.assertEqual(lock["uid"], (lists / "lock").stat().st_uid)
+            self.assertEqual(lock["gid"], (lists / "lock").stat().st_gid)
+            self.assertEqual(lock["mtime_ns"], (lists / "lock").stat().st_mtime_ns)
+            self.assertIn("coordination inode", lock["reason"])
+            for path in [
+                apt / "sources.list",
+                lists / "Packages",
+                lists / "nested/lock",
+            ]:
+                self.assertEqual(by_path[str(path)]["hash_status"], "hashed")
+                self.assertEqual(by_path[str(path)]["sha256"], original_hash(path))
+
+    def test_apt_capture_does_not_hide_unreadable_repository_content(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            apt, lists = base / "apt", base / "lists"
+            apt.mkdir()
+            lists.mkdir()
+            (lists / "Packages").write_bytes(b"Package: fixture\n")
+            with patch.object(
+                support, "file_hash", side_effect=PermissionError("fixture")
+            ):
+                with self.assertRaises(PermissionError):
+                    support.apt_state_file_hashes(apt, lists)
+
     def controls(self, directory, stack):
         for module, name in [
             (deb, "datetime"),
