@@ -307,6 +307,27 @@ class SnapshotReset:
         self.run(
             command, self.output / ("restore-" + str(len(self.operations)) + ".log")
         )
+        # GNU tar can clear setgid on directories when extracting without
+        # ownership privileges. Reapply the exact verified archive modes after
+        # all descendants exist; the caller still checks the full manifest.
+        restored_directory_modes = 0
+        for name, record in sorted(
+            self.records.items(),
+            key=lambda item: len(PurePosixPath(item[0]).parts),
+            reverse=True,
+        ):
+            if record["kind"] != "directory":
+                continue
+            deadline_check(self.deadline)
+            path = destination / name
+            info = path.lstat()
+            if not stat.S_ISDIR(info.st_mode):
+                raise RuntimeError("Restored directory changed type")
+            if stat.S_IMODE(info.st_mode) != record["mode"]:
+                path.chmod(record["mode"])
+                restored_directory_modes += 1
+                if stat.S_IMODE(path.lstat().st_mode) != record["mode"]:
+                    raise RuntimeError("Cannot restore exact snapshot directory mode")
         # Keep deferred extraction writes outside the actual conversion timer.
         for directory, _, files in os.walk(destination, followlinks=False):
             for name in files:
@@ -326,6 +347,7 @@ class SnapshotReset:
             command=command,
             free_before_bytes=free,
             required_bytes=required,
+            restored_directory_modes=restored_directory_modes,
         )
 
     def recover_pristine(self):

@@ -39,6 +39,7 @@ class SnapshotTest(unittest.TestCase):
         (root / "rocm.cfg").write_text("--enable-new-dtags\n")
         (root / "sub/payload").chmod(0o640)
         if sys.platform == "linux":
+            (root / "sub").chmod(0o2755)
             os.link(root / "sub/payload", root / "hardlink")
             (root / "alias").symlink_to("sub", target_is_directory=True)
             (root / "filelink").symlink_to("sub/payload")
@@ -123,6 +124,29 @@ class SnapshotTest(unittest.TestCase):
                 self.assertEqual(recovered[key], initial[key], key)
             self.assertFalse(reset.work.exists())
             self.assertEqual(reset.hash_archive(), digest)
+
+    @unittest.skipUnless(LINUX_TOOLS, "requires Linux GNU tar and zstd")
+    def test_restore_reapplies_setgid_modes_cleared_by_tar(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, output, initial, reset = self.create(Path(temporary))
+            reset.prepare()
+            original = reset.run
+
+            def drop_setgid(command, log):
+                original(command, log)
+                if "--extract" in command:
+                    (reset.work / "sub").chmod(0o755)
+
+            with patch.object(reset, "run", side_effect=drop_setgid):
+                operation = reset.restore(reset.work)
+            self.assertEqual(operation["restored_directory_modes"], 1)
+            restored = benchmark.manifest(
+                reset.work, output / "restored.jsonl", reset.deadline
+            )
+            for key in ["content_sha256", "mtime_sha256", "counts"]:
+                self.assertEqual(restored[key], initial[key], key)
+            reset.recover_pristine()
+            self.assertEqual((root / "sub").stat().st_mode & 0o7777, 0o2755)
 
     @unittest.skipUnless(LINUX_TOOLS, "requires Linux GNU tar and zstd")
     def test_corrupt_stream_never_deletes_original_and_changed_archive_cannot_restore(
