@@ -99,6 +99,32 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(len(components), 1)
         self.assertEqual(components[0]["job_name"], "hipblas")
 
+    def test_hipkernelprovider_standard_selection_provisions_sdk(self):
+        for platform, family in [("linux", "gfx94X-dcgpu"), ("windows", "gfx110X-all")]:
+            with self.subTest(platform=platform):
+                sys.argv = ["fetch_test_configurations.py", f"--platform={platform}"]
+                os.environ.update(
+                    AMDGPU_FAMILIES=family,
+                    TEST_TYPE="standard",
+                    TEST_LABELS='["test:hipkernelprovider"]',
+                    PROJECTS_TO_TEST="hipkernelprovider",
+                )
+                fetch_test_configurations.run()
+                components = self._get_components()
+                self.assertEqual(
+                    [c["job_name"] for c in components], ["hipkernelprovider"]
+                )
+                config = components[0]
+                self.assertIn("test_hipkernelprovider.py", config["test_script"])
+                self.assertIn("--hipkernelprovider", config["fetch_artifact_args"])
+                self.assertIn("--tests", config["fetch_artifact_args"])
+                requirement_files = config["additional_requirements_files"]
+                self.assertEqual(len(requirement_files), 1)
+                requirements = (
+                    Path(__file__).resolve().parents[3] / requirement_files[0]
+                ).read_text(encoding="utf-8")
+                self.assertIn("rocm-sdk-core>=7.9.0rc1", requirements.splitlines())
+
     def test_sanity_follows_skipped_stages(self):
         # The same stage allowlist must apply to sanity even when project and
         # label filters select unrelated component tests.
