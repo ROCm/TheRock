@@ -1,0 +1,24 @@
+{
+  "run_id": 41230700832,
+  "job_id": 124639623921,
+  "observed_gdb_argv_line": 1397,
+  "observed_gdb": "/__w/TheRock/TheRock/build/bin/rocgdb",
+  "lookup_source": "https://raw.githubusercontent.com/ROCm/rocgdb/003062db3007894472038e57ac223e81d10420df/.github/scripts/test_rocgdb.py",
+  "lookup_source_sha256": "82586667ea67085c1598c4191cbcb3fe6310adcfe1e1c7b162e561bc1d7d30d1",
+  "lookup_source_lines": [
+    1539,
+    1578
+  ],
+  "scope": "GDB argv is observed. LLVM/library lookup roots are source-declared candidates. No installed member inventory or active provider closure was retained in this component receipt. Payload paths below are inert scanner fixtures within those roots, not measured active providers.",
+  "inert_paths": [
+    "build/bin/rocgdb",
+    "build/lib/llvm/bin/amdclang++",
+    "build/lib/llvm/bin/clang-24",
+    "build/lib/llvm/bin/clang-linker-wrapper",
+    "build/lib/libamd_comgr.so.3",
+    "build/lib/libhiprtc.so.7",
+    "build/lib64/libhsa-runtime64.so.1",
+    "build/lib/llvm/lib/x86_64-unknown-linux-gnu/libclang_rt.builtins.so",
+    "build/lib/llvm/amdgcn/bitcode/ocml.bc"
+  ]
+}

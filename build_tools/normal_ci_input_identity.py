@@ -65,6 +65,51 @@ PROVIDER_KEYS = {
 }
 
 
+def visible_cgroups():
+    """Resolve visible cgroup-v2 ancestors using only the Python standard library."""
+
+    def read(path):
+        try:
+            return Path(path).read_text().strip()
+        except (OSError, UnicodeError):
+            return None
+
+    membership, mounts = read("/proc/self/cgroup"), read("/proc/self/mountinfo")
+    if not membership or not mounts:
+        return [], {"status": "unavailable_or_non_linux"}
+    for line in membership.splitlines():
+        hierarchy, controllers, member = line.split(":", 2)
+        if hierarchy != "0" or controllers:
+            continue
+        for line in mounts.splitlines():
+            left, _, right = line.partition(" - ")
+            if right.split()[0] != "cgroup2":
+                continue
+            fields = left.split()
+            root, mount = Path(fields[3].replace("\\040", " ")), Path(
+                fields[4].replace("\\040", " ")
+            )
+            try:
+                relative = Path(member).relative_to(root)
+            except ValueError:
+                if member == "/":
+                    relative = Path(".")
+                else:
+                    continue
+            current, paths = mount / relative, []
+            while current == mount or mount in current.parents:
+                paths.append(current)
+                if current == mount:
+                    return paths, {
+                        "status": "v2_visible_hierarchy",
+                        "membership": member,
+                        "mount_root": str(root),
+                        "mountpoint": str(mount),
+                    }
+                current = current.parent
+    return [], {"status": "v1_or_unresolved", "membership": membership}
+
+
 def file_identity(path, fingerprint):
     p = Path(path)
     row = {"path": str(p)}
@@ -195,8 +240,9 @@ def generated_inputs(build, fingerprint):
     )
 
 
-def sdk_inputs(build, fingerprint):
-    rows, roots = [], []
+def sdk_inputs(build, fingerprint, max_entries=100000, max_bytes=16 * 1024**3):
+    rows, roots, errors, limits_reached = [], [], [], []
+    visited, selected_bytes, complete = 0, 0, True
     executables = {
         "clang",
         "clang++",
@@ -207,38 +253,123 @@ def sdk_inputs(build, fingerprint):
         "clang-linker-wrapper",
         "rocfft_rtc_helper",
         "rocfft_aot_helper",
+        "rocgdb",
+        "gdb",
     }
-    for relative in SDK_ROOTS:
+    scan_roots = [(relative, "nested-dist", True) for relative in SDK_ROOTS]
+    scan_roots += [("math-libs/rocFFT", "runtime-helper", True)]
+    scan_roots += [
+        (relative, "installed-tools", False)
+        for relative in ["bin", "llvm/bin", "lib/llvm/bin"]
+    ]
+    scan_roots += [
+        (relative, "installed-providers", False) for relative in ["lib", "lib64"]
+    ]
+    scan_roots += [
+        (relative, "installed-providers", True)
+        for relative in ["llvm/lib", "lib/llvm/lib"]
+    ]
+    scan_roots += [("lib/llvm/amdgcn/bitcode", "installed-bitcode", True)]
+    for relative, layout, recursive in scan_roots:
         root = build / relative
-        roots.append(dict(path=str(root), exists=root.is_dir()))
+        roots.append(dict(path=str(root), exists=root.is_dir(), layout=layout))
         if not root.is_dir():
             continue
-        for directory, _, names in os.walk(root, followlinks=False):
-            for name in names:
+
+        def walk_error(error):
+            errors.append(dict(path=str(error.filename), error=str(error)))
+
+        for directory, directories, names in os.walk(
+            root, followlinks=False, onerror=walk_error
+        ):
+            directories[:] = sorted(directories) if recursive else []
+            for name in sorted(names):
+                visited += 1
+                if visited > max_entries:
+                    complete = False
+                    limits_reached.append("max_entries")
+                    break
                 p = Path(directory) / name
-                if (
-                    name in executables
-                    or name.startswith("clang-")
-                    or p.suffix in {".bc", ".so", ".dll", ".dylib"}
-                    or ".so." in name
-                ):
-                    row = file_identity(p, fingerprint)
-                    row["sdk_root"] = relative
-                    rows.append(row)
-    for directory, _, names in (
-        os.walk(build / "math-libs/rocFFT", followlinks=False)
-        if (build / "math-libs/rocFFT").is_dir()
-        else []
-    ):
-        for name in names:
-            if name in {"rocfft_rtc_helper", "rocfft_aot_helper"}:
-                row = file_identity(Path(directory) / name, fingerprint)
-                row["sdk_root"] = "rocFFT active runtime helper"
+                tool = name.removesuffix(".exe") in executables or name.startswith(
+                    "clang-"
+                )
+                library = p.suffix in {".so", ".dll", ".dylib"} or ".so." in name
+                selected = tool or library or p.suffix == ".bc"
+                if layout == "runtime-helper":
+                    selected = name in {"rocfft_rtc_helper", "rocfft_aot_helper"}
+                elif layout == "installed-tools":
+                    selected = name.removesuffix(".exe") in executables or bool(
+                        re.fullmatch(r"clang-\d+(?:\.exe)?", name)
+                    )
+                elif layout == "installed-providers":
+                    selected = library and name.startswith(
+                        (
+                            "libLLVM",
+                            "libclang",
+                            "libamd_comgr",
+                            "libhiprtc",
+                            "libamdhip64",
+                            "libhsa-runtime64",
+                        )
+                    )
+                elif layout == "installed-bitcode":
+                    selected = p.suffix == ".bc"
+                if not selected:
+                    continue
+                try:
+                    size = p.stat().st_size
+                except OSError:
+                    size = 0
+                if selected_bytes + size > max_bytes:
+                    complete = False
+                    limits_reached.append("max_selected_logical_bytes")
+                    break
+                row = file_identity(p, fingerprint)
+                row.update(
+                    sdk_root=(
+                        "rocFFT active runtime helper"
+                        if layout == "runtime-helper"
+                        else relative
+                    ),
+                    layout=layout,
+                )
+                row["entry_kind"] = "symlink" if p.is_symlink() else "file"
+                if p.is_symlink():
+                    row["link_target"] = os.readlink(p)
+                if row["status"] != "file":
+                    errors.append(
+                        dict(path=str(p), error=row.get("error", row["status"]))
+                    )
+                selected_bytes += size
                 rows.append(row)
+            if not complete:
+                break
+        if not complete:
+            break
     return dict(
         roots=roots,
         files=rows,
-        scope="LLVM plus separate COMGR/CLR/HIPRTC/HSA runtime candidate closure; active loader selection queried separately",
+        complete=complete and not errors,
+        errors=errors,
+        limits=dict(max_entries=max_entries, max_selected_logical_bytes=max_bytes),
+        limits_reached=limits_reached,
+        scanned_entries=visited,
+        selected_logical_bytes=selected_bytes,
+        tool_presence={
+            name: [
+                row["path"]
+                for row in rows
+                if Path(row["path"]).name.removesuffix(".exe") == name
+            ]
+            for name in [
+                "rocgdb",
+                "clang",
+                "clang++",
+                "clang-linker-wrapper",
+                "rocfft_rtc_helper",
+            ]
+        },
+        scope="Selected SDK candidate files in nested dist and installed views; installed scans select tools, LLVM bitcode and compiler/RTC/HSA providers, excluding unrelated math libraries. Completeness covers this selection only; absent roots/tools remain explicit. Actual active loader selection is separate.",
     )
 
 

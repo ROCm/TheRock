@@ -12,6 +12,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,7 @@ from normal_ci_input_identity import (
     sdk_inputs,
     workspace_storage_identity,
     io_limit_files,
+    visible_cgroups,
 )
 
 PRODUCT_SHA = "5b7cb88373362ab80dc0f19605915e534f4158aa"
@@ -501,9 +503,7 @@ def capture(args, inputs):
             else None
         ),
     )
-    from profile_build import cgroups
-
-    visible_groups, group_scope = cgroups()
+    visible_groups, group_scope = visible_cgroups()
     data["allocation"]["workspace_storage"] = workspace_storage_identity(workspace)
     data["allocation"]["io_limits"] = io_limit_files(visible_groups)
     data["allocation"]["io_limits"]["cgroup_resolution"] = group_scope
@@ -523,6 +523,8 @@ def capture(args, inputs):
         "ccache",
         "clang",
         "clang++",
+        "gcc",
+        "g++",
         "ld.lld",
         "patchelf",
         "readelf",
@@ -624,22 +626,43 @@ def capture(args, inputs):
             )
     build = workspace / "build"
     data["generated_build_inputs"] = generated_inputs(build, fingerprint)
+    sdk_start = time.monotonic()
+    fingerprints_before_sdk = len(captured_hashes)
     data["sdk_runtime_inputs"] = sdk_inputs(build, fingerprint)
+    data["sdk_runtime_inputs"]["capture_wall_s"] = time.monotonic() - sdk_start
+    data["sdk_runtime_inputs"]["new_unique_fingerprint_inputs"] = (
+        len(captured_hashes) - fingerprints_before_sdk
+    )
     loader_candidates = set()
     for row in data["generated_build_inputs"]["fields"]:
         identity = row.get("identity", {})
         if row["role"] == "generated-compiler" and identity.get("status") == "file":
             loader_candidates.add(identity["resolved_path"])
     for row in data["sdk_runtime_inputs"]["files"]:
-        if row.get("status") == "file" and any(
-            key in Path(row["path"]).name
-            for key in [
-                "libamd_comgr",
-                "libhiprtc",
-                "libamdhip64",
-                "libhsa-runtime64",
-                "rocfft_rtc_helper",
-            ]
+        name = Path(row["path"]).name.removesuffix(".exe")
+        if row.get("status") == "file" and (
+            name
+            in {
+                "rocgdb",
+                "gdb",
+                "clang",
+                "clang++",
+                "amdclang",
+                "amdclang++",
+                "ld.lld",
+                "clang-linker-wrapper",
+            }
+            or re.fullmatch(r"clang-\d+", name)
+            or any(
+                key in Path(row["path"]).name
+                for key in [
+                    "libamd_comgr",
+                    "libhiprtc",
+                    "libamdhip64",
+                    "libhsa-runtime64",
+                    "rocfft_rtc_helper",
+                ]
+            )
         ):
             loader_candidates.add(row["resolved_path"])
     data["resolved_loader_providers"] = [

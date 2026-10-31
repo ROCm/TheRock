@@ -154,40 +154,9 @@ def read(path):
 
 
 def cgroups():
-    membership, mounts = read("/proc/self/cgroup"), read("/proc/self/mountinfo")
-    if not membership or not mounts:
-        return [], {"status": "unavailable_or_non_linux"}
-    for line in membership.splitlines():
-        h, controllers, member = line.split(":", 2)
-        if h != "0" or controllers:
-            continue
-        for line in mounts.splitlines():
-            left, _, right = line.partition(" - ")
-            if right.split()[0] != "cgroup2":
-                continue
-            f = left.split()
-            root, mount = Path(f[3].replace("\\040", " ")), Path(
-                f[4].replace("\\040", " ")
-            )
-            try:
-                relative = Path(member).relative_to(root)
-            except ValueError:
-                if member == "/":
-                    relative = Path(".")
-                else:
-                    continue
-            current, paths = mount / relative, []
-            while current == mount or mount in current.parents:
-                paths.append(current)
-                if current == mount:
-                    return paths, {
-                        "status": "v2_visible_hierarchy",
-                        "membership": member,
-                        "mount_root": str(root),
-                        "mountpoint": str(mount),
-                    }
-                current = current.parent
-    return [], {"status": "v1_or_unresolved", "membership": membership}
+    from normal_ci_input_identity import visible_cgroups
+
+    return visible_cgroups()
 
 
 GROUP_FILES = (
