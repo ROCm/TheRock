@@ -292,7 +292,7 @@ def main() -> int:
             f"{pytorch_dir}/test/test_unary_ufuncs.py",
             f"{pytorch_dir}/test/test_binary_ufuncs.py",
             f"{pytorch_dir}/test/test_autograd.py",
-            f"-k={tests_to_skip}",
+            #f"-k={tests_to_skip}",
             # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
             # -n numprocesses, --numprocesses=numprocesses
             #         Shortcut for '--dist=load --tx=NUM*popen'.
