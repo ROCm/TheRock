@@ -341,6 +341,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
     DESCRIPTOR artifact-hipkernelprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
