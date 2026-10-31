@@ -7,12 +7,10 @@ r"""Upload a built amd-repo-setup package to the per-run outputs.
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
-The destination is
-``{run_id}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}``
-(e.g. ``12345678901-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm``).
-It sits outside ``packages/<format>/``, so release promotion
-(``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
-repo.amd.com is a separate step.
+The destination is ``WorkflowOutputRoot.repo_setup_package()`` (see that method
+for the layout). ``publish_rocm_to_release_buckets.py`` then publishes it to
+``v5/amd-repo-setup/`` in the release bucket, separately from the package
+repositories.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
@@ -41,7 +39,6 @@ if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
-from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_api import gha_set_output
 
@@ -136,11 +133,7 @@ def upload(args: argparse.Namespace) -> str:
     """
     package = find_package(args.dest_dir, args.pkg_type)
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    dest = StorageLocation(
-        root.bucket,
-        f"{root.prefix}/amd-repo-setup/{args.os_profile}"
-        f"/amd-repo-setup-{args.tier}.{args.pkg_type}",
-    )
+    dest = root.repo_setup_package(args.os_profile, args.tier, args.pkg_type)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,
     # and an s3:// URI would describe an upload that did not happen.
