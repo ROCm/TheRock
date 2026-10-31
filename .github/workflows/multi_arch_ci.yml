@@ -21,6 +21,10 @@ on:
         type: boolean
         default: false
         description: "Run only the read-only ELF scan diagnostic on historical artifacts; skip builds and tests"
+      profile_package_preprocess:
+        type: boolean
+        default: false
+        description: "Compare actual RPATH preprocessing on pristine-derived copies (ABBA); skip builds and tests"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -100,6 +104,9 @@ on:
       profile_package_scan:
         type: boolean
         default: false
+      profile_package_preprocess:
+        type: boolean
+        default: false
       linux_amdgpu_families:
         type: string
         default: ""
@@ -169,7 +176,7 @@ concurrency:
 
 jobs:
   setup:
-    if: ${{ !inputs.profile_package_scan }}
+    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -189,10 +196,10 @@ jobs:
       build_stages: ${{ inputs.build_stages || '' }}
 
   profile_package_scan:
-    name: Read-only package ELF scan diagnostic
-    if: ${{ inputs.profile_package_scan && github.repository == 'ROCm/TheRock' }}
+    name: ${{ inputs.profile_package_preprocess && 'Actual package preprocessing comparison' || 'Read-only package ELF scan diagnostic' }}
+    if: ${{ (inputs.profile_package_scan || inputs.profile_package_preprocess) && github.repository == 'ROCm/TheRock' }}
     runs-on: aws-linux-scale-rocm-small
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
     container:
@@ -210,6 +217,11 @@ jobs:
           python-version: '3.12'
       - name: Install diagnostic requirements
         run: pip install boto3==1.39.15 pyzstd==0.19.1 psutil==7.1.3
+      - name: Install actual preprocessing tools
+        if: ${{ inputs.profile_package_preprocess }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils patchelf
       - name: Fetch read-only historical inputs
         env:
           # Selects the existing public input bucket only for this fetch step.
@@ -225,6 +237,7 @@ jobs:
             --expand-family-to-targets \
             --output-dir=output
       - name: Compare read-only ELF scans in repeated ABBA order
+        if: ${{ !inputs.profile_package_preprocess }}
         run: |
           python build_tools/profile_build.py \
             --output output/scan-diagnostics/profile -- \
@@ -232,11 +245,18 @@ jobs:
               --root output/artifacts \
               --output output/scan-diagnostics/scan \
               --blocks 3
+      - name: Compare actual preprocessing on independently reset copies
+        if: ${{ inputs.profile_package_preprocess }}
+        run: |
+          python build_tools/packaging/linux/benchmark_package_preprocess.py \
+            --root output/artifacts \
+            --output output/scan-diagnostics/preprocess \
+            --max-wall-seconds 12600
       - name: Upload diagnostic results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: package-scan-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: package-${{ inputs.profile_package_preprocess && 'preprocess' || 'scan' }}-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: output/scan-diagnostics/
           if-no-files-found: warn
           retention-days: 14
@@ -286,7 +306,7 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ !inputs.profile_package_scan && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+    if: ${{ !inputs.profile_package_scan && !inputs.profile_package_preprocess && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
