@@ -298,13 +298,30 @@ def replay(mode: str, variant: str) -> None:
         )
         driver_text = plan.stdout + plan.stderr
         (OUT / "profile-driver-plan.txt").write_text(driver_text)
-        lld_commands = [line for line in driver_text.splitlines() if "ld.lld" in line]
-        if len(lld_commands) != 1 or not all(
-            value in lld_commands[0]
-            for value in ("--time-trace", f"--time-trace-file={lld_trace}")
-        ):
+        device_links = [
+            line
+            for line in driver_text.splitlines()
+            if "ld.lld" in line or "clang-linker-wrapper" in line
+        ]
+        forwarded = False
+        if len(device_links) == 1:
+            tokens = shlex.split(device_links[0])
+            if "clang-linker-wrapper" in device_links[0]:
+                forwarded = all(
+                    any(
+                        token.startswith("--device-linker=") and token.endswith(flag)
+                        for token in tokens
+                    )
+                    for flag in ("=--time-trace", f"=--time-trace-file={lld_trace}")
+                )
+            else:
+                forwarded = all(
+                    flag in tokens
+                    for flag in ("--time-trace", f"--time-trace-file={lld_trace}")
+                )
+        if not forwarded:
             raise RuntimeError(
-                "Driver did not forward time tracing to exactly one device LLD invocation"
+                "Driver did not forward time tracing to exactly one device linker or linker-wrapper"
             )
     measure(command, cwd, mode)
     if mode == "profile":
