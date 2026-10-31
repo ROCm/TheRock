@@ -186,6 +186,8 @@ class CommStageTests(unittest.TestCase):
             with patch.object(
                 evidence, "collect_phase_cpu", side_effect=ValueError("metadata")
             ), patch.object(evidence, "collect_graphs"), patch.object(
+                trial.auxiliary, "retain"
+            ), patch.object(
                 evidence, "retain_link_inputs"
             ), patch.object(
                 evidence, "retain_outputs", return_value={}
@@ -198,7 +200,7 @@ class CommStageTests(unittest.TestCase):
             ) as ctest:
                 result = trial.postchecks(root, root, 1, {}, time.monotonic() + 10)
             self.assertEqual(result[0]["status"], "failed")
-            self.assertEqual(len(result), 7)
+            self.assertEqual(len(result), 8)
             self.assertTrue(all(r["status"] == "passed" for r in result[1:]))
             rccl.assert_called_once()
             ctest.assert_called_once()

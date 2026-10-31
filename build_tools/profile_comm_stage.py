@@ -22,6 +22,7 @@ import sys
 import time
 
 import comm_stage_evidence as evidence
+import comm_stage_auxiliary as auxiliary
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = "82d5e8c176ce0cc00b5fd1cf631ce7790be8992b"
@@ -347,6 +348,10 @@ def postchecks(
         (
             "graphs_compile_headers_objects",
             lambda: evidence.collect_graphs(build, output, width, deadline),
+        ),
+        (
+            "dependency_archives_and_rccl_resource_bytes",
+            lambda: auxiliary.retain(build, output, deadline),
         ),
         (
             "rocshmem_fixed_link_inputs",
