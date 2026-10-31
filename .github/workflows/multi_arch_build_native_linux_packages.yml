@@ -215,6 +215,10 @@ jobs:
           sudo apt-get install -y dpkg-dev createrepo-c
           sudo apt-get install -y patchelf
 
+      - name: Require HIPIFY Debian symlink preservation
+        if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && inputs.native_package_type == 'deb' }}
+        run: python build_tools/packaging/linux/hipify_deb_fixture.py --output output/normal-validation/hipify-dh-perl-fixture.json
+
       - name: Fetch Artifacts for all GPU families
         run: |
           # Use artifact_manager.py for consistent multi-arch artifact fetching
