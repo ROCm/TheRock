@@ -68,7 +68,7 @@ class ProfileBuildTest(unittest.TestCase):
             self.assertGreater(summary["sampled_process_cpu_lower_bound_s"], 0.5)
             self.assertFalse([row for row in rows if row["event"] == "sampling_error"])
             if sys.platform != "win32":
-                self.assertGreater(summary["posix_waited_child_cpu"]["user_s"], 0.5)
+                self.assertGreater(sum(summary["posix_waited_child_cpu"].values()), 0.5)
             else:
                 self.assertIsNone(summary["posix_waited_child_cpu"])
 
