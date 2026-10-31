@@ -1,0 +1,132 @@
+diff --git a/projects/rocfft/library/src/include/rtc_cache.h b/projects/rocfft/library/src/include/rtc_cache.h
+index 059f95b..786f143 100644
+--- a/projects/rocfft/library/src/include/rtc_cache.h
++++ b/projects/rocfft/library/src/include/rtc_cache.h
+@@ -104,6 +104,10 @@ struct RTCCache
+     // many compilations in parallel when building the library
+     void enable_write_mostly();
+ 
++    // Opt-in helper-owned regenerable cache only; never general runtime policy.
++    void        normal_aot_transaction(bool begin);
++    std::string normal_aot_policy();
++
+     // write out kernels in the current cache to the output path.
+     // this copies the kernels in a consistent order and clears out
+     // the timestamp fields so that the resulting file is a
+diff --git a/projects/rocfft/library/src/rocfft_aot_helper.cpp b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+index d324dd8..7bc8d1f 100644
+--- a/projects/rocfft/library/src/rocfft_aot_helper.cpp
++++ b/projects/rocfft/library/src/rocfft_aot_helper.cpp
+@@ -26,6 +26,7 @@ using namespace std::placeholders;
+ 
+ #include "../../shared/concurrency.h"
+ #include "../../shared/environment.h"
++#include "../../shared/normal_aot_transaction.h"
+ #include "../../shared/work_queue.h"
+ #include "function_pool.h"
+ #include "rtc_cache.h"
+@@ -764,6 +765,10 @@ int main(int argc, char** argv)
+     for(int i = 4; i < argc; ++i)
+         gpu_archs.push_back(argv[i]);
+ 
++    rocfft_build_profile::NormalAotContext normal_aot(temp_cache_file, gpu_archs);
++    if(normal_aot.enabled)
++        temp_cache_file = normal_aot.cache.path;
++
+     // Default to using a persistent file in the current dir if no
+     // cache file was given
+     if(temp_cache_file.empty())
+@@ -782,6 +787,16 @@ int main(int argc, char** argv)
+ 
+     RTCCache::single->enable_write_mostly();
+ 
++    if(normal_aot.enabled)
++    {
++        normal_aot.before_policy = RTCCache::single->normal_aot_policy();
++        if(normal_aot.batch)
++        {
++            RTCCache::single->normal_aot_transaction(true);
++            normal_aot.began = true;
++        }
++    }
++
+     CompileQueue queue;
+ 
+     static const size_t      NUM_THREADS = rocfft_concurrency();
+@@ -832,6 +847,16 @@ int main(int argc, char** argv)
+     for(size_t i = 0; i < NUM_THREADS; ++i)
+         threads[i].join();
+ 
++    if(normal_aot.enabled)
++    {
++        if(normal_aot.batch)
++        {
++            RTCCache::single->normal_aot_transaction(false);
++            normal_aot.committed = true;
++        }
++        normal_aot.after_policy = RTCCache::single->normal_aot_policy();
++    }
++
+     // write the output file using what we collected in the temporary
+     // cache
+     RTCCache::single->write_aot_cache(output_cache_file, generator_sum(), gpu_archs);
+@@ -849,5 +874,7 @@ int main(int argc, char** argv)
+ 
+     RTCCache::single.reset();
+ 
++    normal_aot.publish_success(output_cache_file);
++
+     return 0;
+ }
+diff --git a/projects/rocfft/library/src/rtc_cache.cpp b/projects/rocfft/library/src/rtc_cache.cpp
+index 2845840..4025af4 100644
+--- a/projects/rocfft/library/src/rtc_cache.cpp
++++ b/projects/rocfft/library/src/rtc_cache.cpp
+@@ -20,6 +20,7 @@
+ 
+ #include "../../shared/concurrency.h"
+ #include "../../shared/environment.h"
++#include "../../shared/normal_aot_transaction.h"
+ 
+ #include "library_path.h"
+ #include "logging.h"
+@@ -607,8 +608,9 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+             code          = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
+             break;
+         }
+-        catch(std::exception&)
++        catch(std::exception& e)
+         {
++            rocfft_build_profile::note_normal_fallback(e.what());
+             // if subprocess had a problem, ignore it and
+             // fall through to forced-in-process compile
+         }
+@@ -655,8 +657,9 @@ static std::vector<char> cached_compile_impl(const std::string&                k
+                     compile_begin = std::chrono::steady_clock::now();
+                     code          = compile_subprocess(kernel_src, gpu_arch, forced_rtc_helper);
+                 }
+-                catch(std::exception&)
++                catch(std::exception& e)
+                 {
++                    rocfft_build_profile::note_normal_fallback(e.what());
+                     // subprocess still didn't work, re-acquire lock
+                     // and fall back to in-process if something went
+                     // wrong
+@@ -789,6 +792,17 @@ void RTCCache::enable_write_mostly()
+     sqlite3_step(wal_stmt.get());
+ }
+ 
++void RTCCache::normal_aot_transaction(bool begin)
++{
++    // Called only before workers start or after all workers have joined.
++    rocfft_build_profile::private_aot_transaction(db_user, begin);
++}
++
++std::string RTCCache::normal_aot_policy()
++{
++    return rocfft_build_profile::private_aot_policy(db_user);
++}
++
+ void RTCCache::write_aot_cache(const std::string&              output_path,
+                                const std::array<char, 32>&     generator_sum,
+                                const std::vector<std::string>& gpu_archs)
