@@ -221,7 +221,7 @@ jobs:
         if: ${{ inputs.profile_package_preprocess }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends binutils patchelf
+          sudo apt-get install -y --no-install-recommends binutils patchelf zstd
       - name: Fetch read-only historical inputs
         env:
           # Selects the existing public input bucket only for this fetch step.
@@ -236,6 +236,17 @@ jobs:
             --amdgpu-families='gfx94X-dcgpu;gfx110X-all;gfx1151;gfx120X-all;gfx125X-dcgpu;gfx90a;gfx950-dcgpu;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx117X-all' \
             --expand-family-to-targets \
             --output-dir=output
+      - name: Record ownership of this run's fetched preprocessing input
+        if: ${{ inputs.profile_package_preprocess }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path('output/artifacts').resolve()
+          receipt = Path('output/scan-diagnostics/input-ownership.json')
+          receipt.parent.mkdir(parents=True, exist_ok=True)
+          receipt.write_text(json.dumps(dict(repository=os.environ['GITHUB_REPOSITORY'], run_id=os.environ['GITHUB_RUN_ID'], sha=os.environ['GITHUB_SHA'], root=str(root))))
+          PY
       - name: Compare read-only ELF scans in repeated ABBA order
         if: ${{ !inputs.profile_package_preprocess }}
         run: |
@@ -251,6 +262,8 @@ jobs:
           python build_tools/packaging/linux/benchmark_package_preprocess.py \
             --root output/artifacts \
             --output output/scan-diagnostics/preprocess \
+            --snapshot-reset \
+            --input-ownership-file output/scan-diagnostics/input-ownership.json \
             --max-wall-seconds 12600
       - name: Upload diagnostic results
         if: always()

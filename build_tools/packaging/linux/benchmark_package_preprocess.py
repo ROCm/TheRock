@@ -102,6 +102,8 @@ def manifest(
     readelf_errors = []
     content_read_bytes = 0
     source_stream_hashes_used = 0
+    allocated_inodes = set()
+    unique_allocated_file_bytes = largest_elf_bytes = 0
     with output.open("w", encoding="utf-8") as stream:
         for directory, dirs, files in os.walk(root, followlinks=False):
             dirs.sort()
@@ -124,6 +126,12 @@ def manifest(
                     record.update(kind="directory")
                     counts["directories"] += 1
                 elif stat.S_ISREG(info.st_mode):
+                    inode = (info.st_dev, info.st_ino)
+                    if inode not in allocated_inodes:
+                        allocated_inodes.add(inode)
+                        unique_allocated_file_bytes += (
+                            getattr(info, "st_blocks", 0) * 512
+                        )
                     file_hash = hashlib.sha256()
                     copied = (copied_hashes or {}).get(relative)
                     if copied is not None:
@@ -150,12 +158,12 @@ def manifest(
                     record.update(kind="file", size=info.st_size, sha256=file_digest)
                     counts["files"] += 1
                     counts["bytes"] += info.st_size
-                    emit_hash(mtimes, dict(path=relative, mtime_ns=info.st_mtime_ns))
                     if path.name == "rocm.cfg":
                         counts["configs"] += 1
                         record["compiler_config"] = True
                     if first[:4] == b"\x7fELF":
                         counts["elf"] += 1
+                        largest_elf_bytes = max(largest_elf_bytes, info.st_size)
                         if dynamic:
                             run = subprocess.run(
                                 ["readelf", "-d", str(path)],
@@ -181,9 +189,13 @@ def manifest(
                                 readelf_errors.append(entry)
                 else:
                     raise RuntimeError(f"Unsupported special file in artifacts: {path}")
-                stream.write(json.dumps(record, sort_keys=True) + "\n")
                 # Dynamic tags are checked independently; compare exact file content too.
                 emit_hash(content, {k: v for k, v in record.items() if k != "dynamic"})
+                # Retain exact times for archive/reset verification, while allowing
+                # post-conversion timestamps to vary across equivalent passes.
+                record["mtime_ns"] = info.st_mtime_ns
+                emit_hash(mtimes, dict(path=relative, mtime_ns=info.st_mtime_ns))
+                stream.write(json.dumps(record, sort_keys=True) + "\n")
     return dict(
         content_sha256=content.hexdigest(),
         mtime_sha256=mtimes.hexdigest(),
@@ -192,6 +204,8 @@ def manifest(
         counts=counts,
         content_read_bytes=content_read_bytes,
         source_stream_hashes_used=source_stream_hashes_used,
+        unique_allocated_file_bytes=unique_allocated_file_bytes,
+        largest_elf_bytes=largest_elf_bytes,
         wall_s=time.monotonic() - started,
     )
 
@@ -405,6 +419,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--worker", type=Path)
     parser.add_argument("--max-wall-seconds", type=int, default=12600)
+    parser.add_argument("--snapshot-reset", action="store_true")
+    parser.add_argument("--input-ownership-file", type=Path)
     args = parser.parse_args()
     if sys.platform != "linux":
         parser.error("Actual preprocessing diagnostics require Linux")
@@ -420,12 +436,26 @@ def main() -> None:
         parser.error(
             "Use fresh diagnostic output/work paths; existing paths are never adopted"
         )
+    snapshot_module = None
+    if args.snapshot_reset:
+        if args.input_ownership_file is None:
+            parser.error("Snapshot mode requires this run's fetch ownership receipt")
+        spec = importlib.util.spec_from_file_location(
+            "package_preprocess_snapshot",
+            Path(__file__).with_name("package_preprocess_snapshot.py"),
+        )
+        snapshot_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(snapshot_module)
+        snapshot_module.validate_ownership(pristine, args.input_ownership_file)
     output.mkdir(parents=True)
     started = time.monotonic()
     deadline = started + args.max_wall_seconds
+    snapshot = None
     try:
         tools = {}
-        for tool in ["readelf", "patchelf"]:
+        for tool in ["readelf", "patchelf"] + (
+            ["tar", "zstd"] if args.snapshot_reset else []
+        ):
             if not shutil.which(tool):
                 raise RuntimeError(f"Required tool missing: {tool}")
             tools[tool] = subprocess.check_output(
@@ -456,23 +486,49 @@ def main() -> None:
                 ]
             },
             scope="Actual conversion only timed; copies, full hashes and dynamic verification outside",
-            cache_state="No cache dropping; all copies/reset verification precede each timed pass",
-            input_verification="Fallback copy streams are fully SHA256-hashed during transfer; destination size/magic/metadata checked. Reflinks receive full destination hashing. Every post-conversion file is fully read back and hashed.",
+            cache_state="No cache dropping; all restores/copies and input verification precede each timed pass",
+            input_verification=(
+                "Archive stream matches original full manifest before owned input removal. Each restored tree receives full content/mode/link/nanosecond-mtime verification; every post-conversion file receives full readback."
+                if args.snapshot_reset
+                else "Fallback copy streams are fully SHA256-hashed during transfer; destination size/magic/metadata checked. Reflinks receive full destination hashing. Every post-conversion file is fully read back and hashed."
+            ),
             max_wall_seconds=args.max_wall_seconds,
+            reset_mode=(
+                "verified-compact-snapshot"
+                if args.snapshot_reset
+                else "independent-copy"
+            ),
         )
         dump(output / "metadata.json", metadata)
+        if args.snapshot_reset:
+            snapshot = snapshot_module.SnapshotReset(
+                pristine,
+                work,
+                output / "snapshot",
+                initial,
+                output / "pristine-before.jsonl",
+                deadline,
+            )
+            snapshot.prepare()
         rows = []
+        recovery_reserve_s = 0
         for index, method in enumerate("ABBA"):
             check_deadline(deadline)
             inline_hashes: dict[str, tuple[str, int]] = {}
-            copies = copy_tree(
-                pristine,
-                work,
-                initial["counts"]["bytes"],
-                deadline,
-                owned=index > 0,
-                inline_hashes=inline_hashes,
-            )
+            reset_started = time.monotonic()
+            if snapshot:
+                copies = snapshot.restore(work)
+            else:
+                copies = copy_tree(
+                    pristine,
+                    work,
+                    initial["counts"]["bytes"],
+                    deadline,
+                    owned=index > 0,
+                    inline_hashes=inline_hashes,
+                )
+            copies["total_reset_wall_s"] = time.monotonic() - reset_started
+            check_links(work)
             before = manifest(
                 work,
                 output / f"pass-{index}-input.jsonl",
@@ -483,17 +539,27 @@ def main() -> None:
                 raise RuntimeError(
                     "Reset work copy does not match pristine content/modes/links"
                 )
+            if snapshot and before["mtime_sha256"] != initial["mtime_sha256"]:
+                raise RuntimeError(
+                    "Snapshot restore did not preserve nanosecond mtimes"
+                )
             if index == 0:
+                if snapshot:
+                    recovery_reserve_s = max(
+                        300, 2 * (copies["total_reset_wall_s"] + before["wall_s"])
+                    )
                 estimate = (
                     (time.monotonic() - started)
-                    + 3 * (copies["wall_s"] + before["wall_s"])
+                    + 3 * (copies["total_reset_wall_s"] + before["wall_s"])
                     + 5 * initial["wall_s"]
                     + 4 * 720
+                    + recovery_reserve_s
                 )
                 dump(
                     output / "planning-estimate.json",
                     dict(
                         estimated_total_s=estimate,
+                        recovery_reserve_s=recovery_reserve_s,
                         note="Conservative planning estimate, not measured conversion performance",
                     ),
                 )
@@ -502,11 +568,17 @@ def main() -> None:
                         "Observed copy/hash costs exceed planned runtime budget; use the retained procedure"
                     )
             pass_output = output / f"pass-{index}-{method}"
+            if deadline - time.monotonic() <= recovery_reserve_s:
+                raise RuntimeError(
+                    "Stop conversions to retain the measured pristine recovery reserve"
+                )
             conversion = run_conversion(
                 source_paths[method],
                 work,
                 pass_output,
-                timeout=min(1800, max(1, deadline - time.monotonic())),
+                timeout=min(
+                    1800, max(1, deadline - time.monotonic() - recovery_reserve_s)
+                ),
             )
             after = manifest(
                 work, output / f"pass-{index}-post.jsonl", deadline, dynamic=True
@@ -537,6 +609,9 @@ def main() -> None:
                 raise RuntimeError(
                     "Conversion decisions/log messages differ across passes"
                 )
+        if snapshot:
+            snapshot.recover_pristine()
+            snapshot.hash_archive()
         final = manifest(pristine, output / "pristine-after.jsonl", deadline)
         if any(
             final[k] != initial[k] for k in ["content_sha256", "mtime_sha256", "counts"]
@@ -548,15 +623,42 @@ def main() -> None:
                 validated=True,
                 passes=rows,
                 pristine_unchanged=True,
+                pristine_recovered_from_verified_snapshot=bool(snapshot),
+                snapshot_archive_sha256=snapshot.archive_sha256 if snapshot else None,
                 post_content_modes_links_and_dynamic_tags_equal=True,
                 total_diagnostic_wall_s=time.monotonic() - started,
                 limitation="Conversion-only comparison, not complete packaging or CI speedup",
             ),
         )
     except Exception as error:
+        recovery = None
+        if snapshot and snapshot.original_removed:
+            try:
+                snapshot.recover_pristine()
+                recovered = manifest(
+                    pristine, output / "pristine-recovered.jsonl", deadline
+                )
+                recovery = dict(
+                    restored=True,
+                    matched=all(
+                        recovered[k] == initial[k]
+                        for k in ["content_sha256", "mtime_sha256", "counts"]
+                    ),
+                )
+            except Exception as recovery_error:
+                recovery = dict(
+                    restored=False,
+                    error=str(recovery_error),
+                    archive=str(snapshot.archive),
+                    verified_archive_sha256=snapshot.archive_sha256,
+                )
         dump(
             output / "failure.json",
-            dict(error=str(error), elapsed_s=time.monotonic() - started),
+            dict(
+                error=str(error),
+                elapsed_s=time.monotonic() - started,
+                recovery=recovery,
+            ),
         )
         raise
 
