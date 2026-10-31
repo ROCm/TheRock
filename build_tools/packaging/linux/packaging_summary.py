@@ -6,8 +6,8 @@
 ``write_build_manifest`` keeps the human ``built_packages.txt`` inventory
 (filenames under Created Packages) and also writes ``built_packages.json``:
 a structured claim of control-field metadata read from each Created
-``.deb`` / ``.rpm`` on disk. The JSON claim is for a later pre-upload
-verify step; presence-only verify continues to use the text manifest.
+``.deb`` / ``.rpm`` on disk. Pre-upload verify uses the text manifest for
+presence and the JSON claim for control-field comparison.
 """
 
 import json
@@ -25,8 +25,9 @@ MANIFEST_TXT_NAME = "built_packages.txt"
 MANIFEST_JSON_NAME = "built_packages.json"
 MANIFEST_SCHEMA_VERSION = 1
 
-# Control fields ROCm packaging writes / that pre-upload may later compare.
-# Empty values are stored as "" so the key set stays stable for consumers.
+# Control fields written into built_packages.json and compared at pre-upload
+# (native_linux_package_pre_upload_test). Empty values are "" so the key set
+# stays stable for consumers.
 DEB_CONTROL_FIELDS: tuple[str, ...] = (
     "Package",
     "Version",
@@ -232,7 +233,8 @@ def collect_created_package_claims(
 
     Each record has ``filename`` and either ``control`` (field map) or ``error``.
     Per-package probe failures are recorded (not raised) so the text inventory
-    and remaining claims still get written; presence verify catches missing files.
+    and remaining claims still get written. Pre-upload treats claim ``error``
+    as a hard failure; missing files fail the presence gate.
     """
     claims: list[PackageClaim] = []
     for name in sorted(filenames):
@@ -275,7 +277,11 @@ def build_manifest_document(
 def write_build_manifest_json(
     config: PackageConfig, pkg_list: PackageList
 ) -> Path | None:
-    """Write ``built_packages.json`` next to the text manifest. Returns path or None."""
+    """Write ``built_packages.json`` next to the text manifest.
+
+    Returns the written path, or ``None`` if write fails (soft-fail: package
+    build continues; pre-upload fails closed when the claim file is missing).
+    """
     manifest_json = Path(config.dest_dir) / MANIFEST_JSON_NAME
     try:
         doc = build_manifest_document(config, pkg_list)
@@ -292,18 +298,17 @@ def write_build_manifest_json(
 
 
 def write_build_manifest(config: PackageConfig, pkg_list: PackageList) -> None:
-    """Write ``built_packages.txt`` and enriched ``built_packages.json`` claim.
+    """Write ``built_packages.txt`` and ``built_packages.json`` claim.
 
-    The text file remains filename-only (presence inventory). The JSON file
-    records control fields (Package/Name, Version, Depends/Requires, and other
-    relation/metadata fields) read from each Created artifact for later
-    pre-upload verification.
+    - Text: filename-only Created Packages inventory (presence gate).
+    - JSON: control fields (Package/Name, Version, Depends/Requires, and other
+      relation/metadata fields) read from each Created artifact via
+      :func:`read_package_control_fields`. Pre-upload re-reads the same fields
+      and compares claim ↔ live.
 
     Parameters:
-    config: Configuration object containing package metadata
-    pkg_list: List of all packages attempted/built/skipped
-
-    Returns: None
+        config: Configuration object containing package metadata.
+        pkg_list: Packages attempted / built / skipped / failed.
     """
     logger.debug("write_build_manifest")
 

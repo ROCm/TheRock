@@ -2,13 +2,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for pre-upload verify and its ``built_packages`` claim inputs.
+"""Unit tests for pre-upload verify and ``built_packages`` claim inputs.
 
 Covers:
-- Presence-only checks against ``built_packages.txt``
-  (``native_linux_package_pre_upload_test.py``).
-- Enriched ``built_packages.json`` written by ``packaging_summary`` (control
-  fields pre-upload will compare in a follow-up).
+- Presence checks against ``built_packages.txt``
+- Claim ↔ live control-field checks against ``built_packages.json``
+  (Version, Depends/Requires, and related fields)
+- ``packaging_summary.write_build_manifest`` JSON claim shape
 
 Run::
 
@@ -54,6 +54,12 @@ amdrocm-ck
 amdrocm-optional
 """
 
+_SAMPLE_CREATED = (
+    "amdrocm-core-sdk7.15_7.15.0-1_amd64.deb",
+    "amdrocm-core-sdk7.15-gfx1100_7.15.0-1_amd64.deb",
+    "amdrocm-fft7.15_7.15.0-1_amd64.deb",
+)
+
 
 def _cli_args(packages_dir: Path, *extra: str) -> list[str]:
     """Build minimal CLI argv for ``verify.main`` against ``packages_dir``."""
@@ -77,6 +83,48 @@ def _package_config(dest: Path, *, pkg_type: str = "deb") -> PackageConfig:
         gfx_arch="gfx1100",
         versioned_pkg=True,
     )
+
+
+def _deb_control(**overrides: str) -> dict[str, str]:
+    """Minimal DEB claim ``control`` dict matching ``DEB_CONTROL_FIELDS`` keys."""
+    control = {name: "" for name in summary.DEB_CONTROL_FIELDS}
+    control.update(
+        {
+            "Package": "amdrocm-fft7.15",
+            "Version": "7.15.0-1",
+            "Architecture": "amd64",
+            "Depends": "amdrocm-runtime7.15, libc6",
+            "Priority": "optional",
+            "Section": "devel",
+            "Maintainer": "AMD",
+            "Homepage": "https://rocm.docs.amd.com",
+        }
+    )
+    control.update(overrides)
+    return control
+
+
+def _write_claim(
+    dest: Path,
+    packages: list[dict[str, object]],
+    *,
+    pkg_type: str = "deb",
+) -> Path:
+    """Write a schema-valid ``built_packages.json`` for CLI/API tests."""
+    path = dest / summary.MANIFEST_JSON_NAME
+    doc = {
+        "schema_version": summary.MANIFEST_SCHEMA_VERSION,
+        "pkg_type": pkg_type,
+        "rocm_version": "7.15.0",
+        "version_suffix": "1",
+        "gfx_arch": "gfx1100",
+        "build_date_utc": "2026-01-01T00:00:00+00:00",
+        "packages": packages,
+        "failed": [],
+        "skipped": [],
+    }
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
 
 
 class ParseBuiltPackageNamesTest(unittest.TestCase):
@@ -155,21 +203,47 @@ class FormatReportTextTest(unittest.TestCase):
         self.assertIn("Overall result: PASS", text)
         self.assertIn("built_packages.txt", text)
 
+    def test_includes_control_mismatches(self) -> None:
+        """Control section lists field mismatches when present."""
+        presence = verify.ManifestVerifyResult(expected=["a.deb"], found=["a.deb"])
+        control = verify.ControlVerifyResult(
+            checked=["a.deb"],
+            mismatches=[
+                verify.ControlFieldMismatch(
+                    filename="a.deb",
+                    field="Depends",
+                    claimed="libc6",
+                    actual="libc6 (>= 2.34)",
+                )
+            ],
+        )
+        text = verify.format_report_text(
+            presence,
+            Path("/tmp/built_packages.txt"),
+            control=control,
+            claim_path=Path("/tmp/built_packages.json"),
+        )
+        self.assertIn("Overall result: FAIL", text)
+        self.assertIn("Depends", text)
+        self.assertIn("claimed='libc6'", text)
+
 
 class RunCliTest(unittest.TestCase):
-    """CLI exit codes for presence verification."""
+    """CLI exit codes for presence + claim loading."""
 
-    def test_pass_when_files_exist(self) -> None:
-        """Exit ``0`` when every Created filename exists under packages-dir."""
+    @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
+    def test_pass_when_files_exist(self, mock_read: MagicMock) -> None:
+        """Exit ``0`` when Created files exist and control fields match the claim."""
+        control = _deb_control()
+        mock_read.return_value = dict(control)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "built_packages.txt").write_text(SAMPLE_MANIFEST, encoding="utf-8")
-            for name in (
-                "amdrocm-core-sdk7.15_7.15.0-1_amd64.deb",
-                "amdrocm-core-sdk7.15-gfx1100_7.15.0-1_amd64.deb",
-                "amdrocm-fft7.15_7.15.0-1_amd64.deb",
-            ):
+            packages = []
+            for name in _SAMPLE_CREATED:
                 (root / name).write_bytes(b"x")
+                packages.append({"filename": name, "control": dict(control)})
+            _write_claim(root, packages)
             self.assertEqual(verify.main(_cli_args(root)), 0)
 
     def test_missing_package_fails(self) -> None:
@@ -177,6 +251,13 @@ class RunCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "built_packages.txt").write_text(SAMPLE_MANIFEST, encoding="utf-8")
+            _write_claim(
+                root,
+                [
+                    {"filename": name, "control": _deb_control()}
+                    for name in _SAMPLE_CREATED
+                ],
+            )
             self.assertEqual(verify.main(_cli_args(root)), 1)
 
     def test_missing_manifest_is_config_error(self) -> None:
@@ -184,32 +265,113 @@ class RunCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(verify.main(_cli_args(Path(tmp))), 2)
 
+    def test_missing_claim_json_is_config_error(self) -> None:
+        """Exit ``2`` when ``built_packages.json`` is absent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "built_packages.txt").write_text(
+                "# Created Packages:\na.deb\n",
+                encoding="utf-8",
+            )
+            (root / "a.deb").write_bytes(b"x")
+            self.assertEqual(verify.main(_cli_args(root)), 2)
+
+
+class ControlFieldVerifyTest(unittest.TestCase):
+    """Claim ↔ live control-field comparison (Depends, Version, related fields)."""
+
+    @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
+    def test_cli_pass_when_claim_matches_live(self, mock_read: MagicMock) -> None:
+        """Exit ``0`` when Depends/Version and related fields match the claim."""
+        control = _deb_control()
+        mock_read.return_value = dict(control)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
+            (root / "built_packages.txt").write_text(
+                f"# Created Packages:\n{fname}\n",
+                encoding="utf-8",
+            )
+            (root / fname).write_bytes(b"x")
+            _write_claim(root, [{"filename": fname, "control": control}])
+            self.assertEqual(verify.main(_cli_args(root)), 0)
+            mock_read.assert_called()
+
+    @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
+    def test_depends_mismatch_fails(self, mock_read: MagicMock) -> None:
+        """Exit ``1`` when live Depends differs from the claim."""
+        claimed = _deb_control(Depends="amdrocm-runtime7.15, libc6")
+        mock_read.return_value = _deb_control(Depends="amdrocm-runtime7.15")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
+            (root / "built_packages.txt").write_text(
+                f"# Created Packages:\n{fname}\n",
+                encoding="utf-8",
+            )
+            (root / fname).write_bytes(b"x")
+            _write_claim(root, [{"filename": fname, "control": claimed}])
+            self.assertEqual(verify.main(_cli_args(root)), 1)
+
+    @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
+    def test_claim_probe_error_fails_verify(self, mock_read: MagicMock) -> None:
+        """Exit ``1`` when the claim recorded a soft-fail probe error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fname = "broken.deb"
+            (root / "built_packages.txt").write_text(
+                f"# Created Packages:\n{fname}\n",
+                encoding="utf-8",
+            )
+            (root / fname).write_bytes(b"x")
+            _write_claim(
+                root,
+                [{"filename": fname, "error": "dpkg-deb failed"}],
+            )
+            self.assertEqual(verify.main(_cli_args(root)), 1)
+            mock_read.assert_not_called()
+
+    def test_verify_control_fields_reports_version_mismatch(self) -> None:
+        """Direct API: Version mismatch is recorded with claimed vs actual."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fname = "a.deb"
+            (root / fname).write_bytes(b"x")
+            claims = {
+                fname: {
+                    "filename": fname,
+                    "control": _deb_control(Version="7.15.0-1"),
+                }
+            }
+            with patch(
+                "native_linux_package_pre_upload_test.summary.read_package_control_fields",
+                return_value=_deb_control(Version="7.15.0-2"),
+            ):
+                result = verify.verify_control_fields(
+                    root,
+                    [fname],
+                    claims,
+                    pkg_type="deb",
+                )
+        self.assertFalse(result.passed)
+        self.assertEqual(len(result.mismatches), 1)
+        self.assertEqual(result.mismatches[0].field, "Version")
+        self.assertEqual(result.mismatches[0].claimed, "7.15.0-1")
+        self.assertEqual(result.mismatches[0].actual, "7.15.0-2")
+
 
 class EnrichedPackageSummaryClaimTest(unittest.TestCase):
-    """``packaging_summary`` JSON claim used by future pre-upload field checks."""
+    """``packaging_summary.write_build_manifest`` JSON claim shape for pre-upload."""
 
     @patch("packaging_summary.read_package_control_fields")
     def test_write_build_manifest_emits_json_claim_for_pre_upload(
         self, mock_read: MagicMock
     ) -> None:
         """TXT inventory stays filename-only; JSON carries control fields."""
-        mock_read.return_value = {
-            "Package": "amdrocm-fft7.15",
-            "Version": "7.15.0-1",
-            "Architecture": "amd64",
-            "Depends": "amdrocm-runtime7.15, libc6",
-            "Pre-Depends": "",
-            "Recommends": "amdrocm-optional7.15",
-            "Suggests": "",
-            "Provides": "",
-            "Replaces": "",
-            "Conflicts": "",
-            "Breaks": "",
-            "Priority": "optional",
-            "Section": "devel",
-            "Maintainer": "AMD",
-            "Homepage": "https://rocm.docs.amd.com",
-        }
+        mock_read.return_value = _deb_control(
+            Depends="amdrocm-runtime7.15, libc6",
+            Recommends="amdrocm-optional7.15",
+        )
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp)
             fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
