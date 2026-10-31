@@ -188,8 +188,30 @@ class Validation:
         if self.sdk.exists():
             raise RuntimeError("SDK directory must be fresh to exclude stale libraries")
         names = self.manifest["imported_artifacts"]
-        if {"miopen", "composable-kernel"} & set(names):
-            raise RuntimeError("Untouched artifact list includes changed products")
+        sys.path.insert(0, str(self.root / "build_tools"))
+        from _therock_utils.build_topology import BuildTopology
+
+        topology = BuildTopology(str(self.root / "BUILD_TOPOLOGY.toml"))
+        logical = (
+            topology.get_inbound_artifacts("math-libs")
+            | topology.get_produced_artifacts("math-libs")
+        ) - {"miopen", "composable-kernel"}
+        logical_only = {"core-hipinfo", "spdlog", "sysdeps-libmnl", "sysdeps-libnl"}
+        reasons = self.manifest["logical_only_artifacts"]
+        if (
+            len(logical) != 37
+            or set(self.manifest["requested_logical_artifacts"]) != logical
+            or set(reasons) != logical_only
+            or not all(
+                isinstance(value, str) and value.strip() for value in reasons.values()
+            )
+            or set(names) != logical - logical_only
+            or len(names) != 33
+            or "sysdeps" not in names
+        ):
+            raise RuntimeError(
+                "Dependency manifest differs from pinned Linux physical artifact closure"
+            )
         self.fetch(names, {"lib", "run", "dev"}, self.sdk, "fetch-untouched")
         self.fetch(["miopen"], {"run", "test"}, self.sdk, "fetch-miopen-tests")
         data_sdk = self.sdk.with_name(self.sdk.name + "-baseline-miopen-data")
