@@ -55,9 +55,11 @@ def capture(build_dir: Path, output: Path) -> None:
                         )
                     archive.add(destination, arcname=str(relative / destination.name))
             for path in sorted(build_dir.rglob("*")):
-                if path.is_file() and (
+                # Source trees can contain inaccessible Windows entries. Only
+                # inspect files in the diagnostic's declared generated-file set.
+                if (
                     path.name == ".ninja_log" or path.suffix == ".ninja"
-                ):
+                ) and path.is_file():
                     archive.add(
                         path,
                         arcname=str(Path("generated") / path.relative_to(build_dir)),

@@ -8,6 +8,7 @@ import shutil
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "capture_build_graph.py"
 spec = importlib.util.spec_from_file_location("capture_build_graph", SCRIPT)
@@ -29,7 +30,21 @@ class CaptureBuildGraphTest(unittest.TestCase):
                 encoding="utf-8",
             )
             output = root / "build" / "logs" / "graph.tar.gz"
-            capture_build_graph.capture(root / "build", output)
+            blocked = root / "build" / "blocked-source-entry"
+            blocked.touch()
+            is_file = Path.is_file
+
+            def generated_file_only(path):
+                if path == blocked:
+                    raise PermissionError(
+                        "Unrelated source entry must not be inspected"
+                    )
+                return is_file(path)
+
+            with patch.object(
+                Path, "is_file", autospec=True, side_effect=generated_file_only
+            ):
+                capture_build_graph.capture(root / "build", output)
             with tarfile.open(output) as archive:
                 self.assertIn("generated/example/build/build.ninja", archive.getnames())
                 compdb = json.load(archive.extractfile("example/build/compdb.txt"))
