@@ -116,6 +116,9 @@ on:
         default: ""
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       artifact_group:
         type: string
       artifact_run_id:
@@ -170,6 +173,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 
@@ -184,24 +188,21 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: "Quartz - started - test ROCm artifacts"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: test_artifacts.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -209,7 +210,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: 7624a5e209cec569bbed38dad7071fa7393cb52b
           path: ci-config
         continue-on-error: true
 
@@ -217,6 +218,16 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.12
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label configure_test_matrix
 
       - name: "Determine test dependencies"
         id: test_deps
@@ -249,13 +260,43 @@ jobs:
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
 
+      - name: Require real numerical component and sanity matrices
+        env:
+          PERF_TEST_COMPONENTS: ${{ steps.configure.outputs.components }}
+          PERF_TEST_SANITY: ${{ steps.configure.outputs.sanity_component }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py assert-test-matrix
+
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
     if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -291,8 +332,8 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: './.github/workflows/test_component.yml'
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -305,12 +346,12 @@ jobs:
       #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
         ${{
+          (matrix.components.linux_cpu_runner && matrix.components.test_runner) ||
+          (matrix.components.multi_gpu_runner != '' && matrix.components.multi_gpu_runner) ||
           (github.event_name == 'workflow_dispatch' &&
             !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
-          (matrix.components.multi_gpu_runner != '' &&
-            matrix.components.multi_gpu_runner) ||
           matrix.components.test_runner
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
@@ -321,20 +362,3 @@ jobs:
       build_variant: ${{ inputs.build_variant }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [configure_test_matrix, test_sanity_check, test_components]
-    name: "Quartz - completed - test ROCm artifacts"
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - completed - test ROCm artifacts"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: completed
-          reporting_workflow: test_artifacts.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

@@ -1,0 +1,316 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Notes on security:
+#   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
+#   * Higher-trust push/manual runs and https://github.com/ROCm/rockrel also supply secrets.
+
+name: Extra focused solver numerics
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_group:
+        description: >-
+          Artifact group name used to fetch build artifacts
+          (e.g., "multi-arch-release").
+        type: string
+      artifact_run_id:
+        description: >-
+          Workflow run ID to retrieve build artifacts from (e.g., from a
+          Multi-Arch CI run). Required for manual dispatch since this workflow
+          only runs tests and has no build artifacts of its own.
+        type: string
+        required: true
+      amdgpu_families:
+        description: >-
+          GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
+          "gfx950-dcgpu", "gfx120X-all", "gfx125X-dcgpu"). This selects
+          which GPU family the tests target.
+        type: string
+      amdgpu_targets:
+        description: >-
+          Specific GPU targets within a family (e.g., "gfx942", "gfx1100").
+          Leave empty to use the default targets for the selected family.
+        type: string
+        default: ""
+      test_runs_on:
+        description: >-
+          GitHub Actions runner label for GPU tests. When empty, GPU tests
+          are skipped. A WSL runner (label containing "wsl") tests the Linux
+          build under WSL.
+        type: string
+      test_runs_on_cpu:
+        description: "CPU test runner label (for components that don't need GPU)"
+        type: string
+        default: ""
+      tests_enabled:
+        description: "Whether tests should run (true when any runner is available)"
+        type: boolean
+        default: true
+      sanity_check_only_for_family:
+        description: >-
+          When true, only run sanity check tests and skip all component tests.
+        type: boolean
+        default: false
+      test_type:
+        description: >-
+          Test tier controlling depth and duration of testing.
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: standard
+      test_labels:
+        description: >-
+          Directly select which test components to run by name, e.g.
+          "test:rocblas,test:hipblas" or '["test:rocblas"]'. Only the listed
+          components are tested. Leave empty to run all. When combined with
+          changed_projects, the effective test set is the intersection of
+          both filters.
+        type: string
+      changed_projects:
+        description: >-
+          Comma-separated list of changed projects used for dependency-graph
+          scoping (e.g., "rocblas,hipblas"). Tests run for the listed projects
+          AND their downstream consumers. Leave empty to run all. When combined
+          with test_labels, the effective test set is the intersection of both
+          filters.
+        type: string
+        default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
+        type: string
+        default: ""
+      release_type:
+        description: 'Release type for the artifacts being tested.'
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: choice
+        options:
+          - release
+          - asan
+          - asan-debug
+          - host-asan
+          - host-asan-debug
+        default: release
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      performance_mode:
+        type: string
+        default: ''
+      artifact_group:
+        type: string
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+      amdgpu_targets:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+      test_runs_on_cpu:
+        type: string
+        default: ""
+      tests_enabled:
+        type: boolean
+        default: true
+      sanity_check_only_for_family:
+        type: boolean
+        default: false
+      test_type:
+        type: string
+      test_labels:
+        type: string
+      changed_projects:
+        type: string
+        default: ""
+      skip_stages:
+        description: "Build stages excluded from the build and artifact reuse (comma-separated)"
+        type: string
+        default: ""
+      release_type:
+        type: string
+        default: ci
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+      ref:
+        description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
+        type: string
+      build_variant:
+        description: "Build variant (e.g., release, asan)."
+        type: string
+        default: "release"
+      quartz_tracking_id:
+        type: string
+        default: ""
+  push:
+    branches:
+      - ADHOCBUILD
+
+permissions:
+  contents: read
+  actions: read
+
+run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
+
+jobs:
+  configure_test_matrix:
+    name: "Configure test matrix (${{ inputs.amdgpu_families }}${{ contains(inputs.test_runs_on, 'wsl') && ', WSL' || '' }})"
+    if: ${{ inputs.tests_enabled }}
+    runs-on: ubuntu-26.04
+    outputs:
+      sanity_component: ${{ steps.configure.outputs.sanity_component }}
+      components: ${{ steps.configure.outputs.components }}
+      focused_component: ${{ steps.focused.outputs.component }}
+      platform: ${{ steps.configure.outputs.platform }}
+      shard_arr: ${{ steps.configure.outputs.shard_arr }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+
+      - name: Checkout CI config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ROCm/therock-ci-config
+          ref: 7624a5e209cec569bbed38dad7071fa7393cb52b
+          path: ci-config
+        continue-on-error: true
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label focused_configure_test_matrix
+
+      - name: "Determine test dependencies"
+        id: test_deps
+        # Reads the committed consumer graph directly (no fetch/configure); kept
+        # in sync by test_consumer_graph_drift.yml.
+        shell: bash
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./test_tools/determine_rocm_test_dependencies.py \
+            --changed-projects "$CHANGED_PROJECTS" \
+            --gha-output
+
+      - name: "Configuring CI options"
+        id: configure
+        env:
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          TEST_LABELS: ${{ inputs.test_labels }}
+          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          SKIP_STAGES: ${{ inputs.skip_stages }}
+          CI_CONFIG_PATH: ci-config
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          # Pass the policy-gated GPU runner label. When empty, GPU tests are gated
+          # but CPU-only tests (linux_cpu_runner: True) can still run.
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+          TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
+        run: |
+          python ./build_tools/github_actions/fetch_test_configurations.py \
+            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
+
+      - name: Require real numerical component and sanity matrices
+        env:
+          PERF_TEST_COMPONENTS: ${{ steps.configure.outputs.components }}
+          PERF_TEST_SANITY: ${{ steps.configure.outputs.sanity_component }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py assert-test-matrix
+
+      - name: Select real configured solver component
+        id: focused
+        env:
+          PERF_TEST_COMPONENTS: ${{ steps.configure.outputs.components }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py focused-component
+
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
+  focused_solver:
+    needs: configure_test_matrix
+    uses: ./.github/workflows/test_component.yml
+    with:
+      performance_mode: ${{ inputs.performance_mode }}
+      performance_focused_only: true
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: linux
+      component: ${{ needs.configure_test_matrix.outputs.focused_component }}
+      release_type: ci
+      repository: ROCm/TheRock
+      ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+      build_variant: asan-debug

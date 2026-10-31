@@ -1,0 +1,241 @@
+--- a/projects/rocsolver/library/src/specialized/roclapack_getf2_specialized_kernels.hpp
++++ b/projects/rocsolver/library/src/specialized/roclapack_getf2_specialized_kernels.hpp
+@@ -545,8 +545,14 @@
+ *************************************************************/
+ 
+ /** launcher of getf2_small_kernel **/
++#ifdef ROCSOLVER_SHARD_GETF2_SMALL
++template <int SHARD, typename T, typename I, typename INFO, typename U>
++rocblas_status getf2_run_small_shard(
++#else
+ template <typename T, typename I, typename INFO, typename U>
+-rocblas_status getf2_run_small(rocblas_handle handle,
++rocblas_status getf2_run_small(
++#endif
++rocblas_handle handle,
+                                const I m,
+                                const I n,
+                                U A,
+@@ -563,6 +569,18 @@
+                                I* permut_idx,
+                                const rocblas_stride stride)
+ {
++#ifdef ROCSOLVER_SHARD_GETF2_SMALL
++#define RUN_LUFACT_SMALL(DIM) \
++    if constexpr(((DIM) - 1) / 16 == SHARD) { \
++        if(pivot) \
++            ROCSOLVER_LAUNCH_KERNEL((getf2_small_kernel<DIM, T>), grid, block, lmemsize, stream, m, A, \
++                                    shiftA, lda, strideA, ipiv, shiftP, strideP, info, batch_count, \
++                                    offset, permut_idx, stride); \
++        else \
++            ROCSOLVER_LAUNCH_KERNEL((getf2_npvt_small_kernel<DIM, T>), grid, block, lmemsize, stream, \
++                                    m, A, shiftA, lda, strideA, info, batch_count, offset); \
++    } else { ROCSOLVER_UNREACHABLE(); }
++#else
+ #define RUN_LUFACT_SMALL(DIM)                                                                      \
+     if(pivot)                                                                                      \
+         ROCSOLVER_LAUNCH_KERNEL((getf2_small_kernel<DIM, T>), grid, block, lmemsize, stream, m, A, \
+@@ -571,6 +589,7 @@
+     else                                                                                           \
+         ROCSOLVER_LAUNCH_KERNEL((getf2_npvt_small_kernel<DIM, T>), grid, block, lmemsize, stream,  \
+                                 m, A, shiftA, lda, strideA, info, batch_count, offset)
++#endif
+ 
+     // determine sizes
+     I opval[] = {GETF2_OPTIM_NGRP};
+@@ -667,6 +686,79 @@
+     return rocblas_status_success;
+ }
+ 
++#undef RUN_LUFACT_SMALL
++
++#ifdef ROCSOLVER_SHARD_GETF2_SMALL
++#define ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(SHARD, T, I, INFO, U) \
++    template rocblas_status getf2_run_small_shard<SHARD, T, I, INFO, U>( \
++        rocblas_handle handle, const I m, const I n, U A, const rocblas_stride shiftA, \
++        const I lda, const rocblas_stride strideA, I* ipiv, const rocblas_stride shiftP, \
++        const rocblas_stride strideP, INFO* info, const I batch_count, const bool pivot, \
++        const I offset, I* permut_idx, const rocblas_stride stride)
++
++// Keep every original scalar/batch specialization while distributing the
++// 64 dimension-specialized device kernels across four independent commands.
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, rocblas_float_complex, rocblas_int, rocblas_int, rocblas_float_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, double, rocblas_int, rocblas_int, double*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, double, rocblas_int, rocblas_int, double*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, double, rocblas_int, rocblas_int, double*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, double, rocblas_int, rocblas_int, double*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, double, rocblas_int, rocblas_int, double* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, double, rocblas_int, rocblas_int, double* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, double, rocblas_int, rocblas_int, double* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, double, rocblas_int, rocblas_int, double* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, float, rocblas_int, rocblas_int, float*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, float, rocblas_int, rocblas_int, float*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, float, rocblas_int, rocblas_int, float*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, float, rocblas_int, rocblas_int, float*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, float, rocblas_int, rocblas_int, float* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, float, rocblas_int, rocblas_int, float* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, float, rocblas_int, rocblas_int, float* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, float, rocblas_int, rocblas_int, float* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(0, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(1, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(2, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex* const*);
++extern ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(3, rocblas_double_complex, rocblas_int, rocblas_int, rocblas_double_complex* const*);
++
++template <typename T, typename I, typename INFO, typename U>
++rocblas_status getf2_run_small(rocblas_handle handle,
++                               const I m,
++                               const I n,
++                               U A,
++                               const rocblas_stride shiftA,
++                               const I lda,
++                               const rocblas_stride strideA,
++                               I* ipiv,
++                               const rocblas_stride shiftP,
++                               const rocblas_stride strideP,
++                               INFO* info,
++                               const I batch_count,
++                               const bool pivot,
++                               const I offset,
++                               I* permut_idx,
++                               const rocblas_stride stride)
++{
++    if(n <= 16)
++        return getf2_run_small_shard<0, T, I, INFO, U>(handle, m, n, A, shiftA, lda, strideA, ipiv, shiftP, strideP, info, batch_count, pivot, offset, permut_idx, stride);
++    if(n <= 32)
++        return getf2_run_small_shard<1, T, I, INFO, U>(handle, m, n, A, shiftA, lda, strideA, ipiv, shiftP, strideP, info, batch_count, pivot, offset, permut_idx, stride);
++    if(n <= 48)
++        return getf2_run_small_shard<2, T, I, INFO, U>(handle, m, n, A, shiftA, lda, strideA, ipiv, shiftP, strideP, info, batch_count, pivot, offset, permut_idx, stride);
++        return getf2_run_small_shard<3, T, I, INFO, U>(handle, m, n, A, shiftA, lda, strideA, ipiv, shiftP, strideP, info, batch_count, pivot, offset, permut_idx, stride);
++}
++#endif
++
+ /** launcher of getf2_panel_kernel **/
+ template <typename T, typename I, typename INFO, typename U>
+ rocblas_status getf2_run_panel(rocblas_handle handle,
+@@ -767,12 +859,17 @@
+     Instantiation macros
+ *************************************************************/
+ 
++#if defined(ROCSOLVER_SHARD_GETF2_SMALL) && defined(ROCSOLVER_GETF2_SMALL_SHARD)
++#define INSTANTIATE_GETF2_SMALL(T, I, INFO, U) \
++    ROCSOLVER_INSTANTIATE_GETF2_SMALL_SHARD(ROCSOLVER_GETF2_SMALL_SHARD, T, I, INFO, U)
++#else
+ #define INSTANTIATE_GETF2_SMALL(T, I, INFO, U)                                           \
+     template rocblas_status getf2_run_small<T, I, INFO, U>(                              \
+         rocblas_handle handle, const I m, const I n, U A, const rocblas_stride shiftA,   \
+         const I lda, const rocblas_stride strideA, I* ipiv, const rocblas_stride shiftP, \
+         const rocblas_stride strideP, INFO* info, const I batch_count, const bool pivot, \
+         const I offset, I* permut_idx, const rocblas_stride stride)
++#endif
+ #define INSTANTIATE_GETF2_PANEL(T, I, INFO, U)                                           \
+     template rocblas_status getf2_run_panel<T, I, INFO, U>(                              \
+         rocblas_handle handle, const I m, const I n, U A, const rocblas_stride shiftA,   \
+--- a/projects/rocsolver/library/src/CMakeLists.txt
++++ b/projects/rocsolver/library/src/CMakeLists.txt
+@@ -380,6 +380,28 @@
+   )
+ endif()
+ 
++# Separate the two existing complex-double getri explicit instantiations.
++# This preserves both pointer forms and every dimension specialization.
++option(ROCSOLVER_SPLIT_GETRI_Z "Split complex-double getri compilation" OFF)
++if(OPTIMAL AND ROCSOLVER_SPLIT_GETRI_Z)
++  list(APPEND rocsolver_specialized_source
++    specialized/roclapack_getri_specialized_kernels_z_batched.cpp)
++endif()
++
++# Experimental compile-granularity change: preserve all 64 dimensions and
++# original dispatch symbols, but compile 16 dimensions per helper command.
++option(ROCSOLVER_SHARD_GETF2_SMALL "Shard getf2 small-kernel compilation" OFF)
++if(OPTIMAL AND ROCSOLVER_SHARD_GETF2_SMALL)
++  foreach(_kind s d c z sb db cb zb)
++    foreach(_shard RANGE 0 3)
++      set(_src "${CMAKE_CURRENT_BINARY_DIR}/getf2-small-shards/${_kind}_${_shard}.cpp")
++      file(WRITE "${_src}"
++        "#define ROCSOLVER_GETF2_SMALL_SHARD ${_shard}\n#include \"${CMAKE_CURRENT_SOURCE_DIR}/specialized/roclapack_getf2_small_${_kind}.cpp\"\n")
++      list(APPEND rocsolver_specialized_source "${_src}")
++    endforeach()
++  endforeach()
++endif()
++
+ # Asynchronous logger option
+ # Note: this does not mean abolsutely asynchronous, just less synchronous
+ option(ROCSOLVER_USE_ASYNC_LOGGER "Enable asynchronous HIP event-based logger (reduces GPU synchronizations)" ON)
+@@ -423,6 +445,14 @@
+   ${rocsolver_lapack_source}
+   ${rocsolver_refact_source}
+ )
++
++if(OPTIMAL AND ROCSOLVER_SHARD_GETF2_SMALL)
++  target_compile_definitions(rocsolver PRIVATE ROCSOLVER_SHARD_GETF2_SMALL=1)
++endif()
++
++if(OPTIMAL AND ROCSOLVER_SPLIT_GETRI_Z)
++  target_compile_definitions(rocsolver PRIVATE ROCSOLVER_SPLIT_GETRI_Z=1)
++endif()
+ 
+ add_library(roc::rocsolver ALIAS rocsolver)
+ 
+--- a/projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z.cpp
++++ b/projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z.cpp
+@@ -34,6 +34,8 @@
+ *************************************************************/
+ 
+ INSTANTIATE_GETRI_SMALL(rocblas_double_complex, rocblas_double_complex*);
++#ifndef ROCSOLVER_SPLIT_GETRI_Z
+ INSTANTIATE_GETRI_SMALL(rocblas_double_complex, rocblas_double_complex* const*);
++#endif
+ 
+ ROCSOLVER_END_NAMESPACE
+--- /dev/null
++++ b/projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z_batched.cpp
+@@ -0,0 +1,38 @@
++/* **************************************************************************
++ * Copyright (C) 2019-2024 Advanced Micro Devices, Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ *
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ * *************************************************************************/
++
++#include "roclapack_getri_specialized_kernels.hpp"
++
++ROCSOLVER_BEGIN_NAMESPACE
++
++/*************************************************************
++    Instantiate the batched-pointer form separately when enabled
++*************************************************************/
++
++INSTANTIATE_GETRI_SMALL(rocblas_double_complex, rocblas_double_complex* const*);
++
++ROCSOLVER_END_NAMESPACE

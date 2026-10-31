@@ -6,6 +6,9 @@ name: Test Native Linux Packages Install
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       package_install_url:
         description: "Package installation URL (includes architecture subdirectory for RPM)."
         required: true
@@ -145,6 +148,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
@@ -175,23 +179,30 @@ jobs:
           fi
           echo "Using runner label: ${RUNNER}"
 
-      - name: "Quartz - started - test rpm/deb install"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: test_native_linux_packages_install.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label prepare_install_context
 
       - name: Derive package type, GPU architecture, and container image
         id: derive
@@ -215,6 +226,30 @@ jobs:
           # (Ubuntu, RHEL/UBI, SLES BCI), Extend based on specific os_profile needs.
           CONTAINER_GPU_OPTIONS="--device /dev/kfd --device /dev/dri"
           echo "container_gpu_options=${CONTAINER_GPU_OPTIONS}" >> $GITHUB_OUTPUT
+
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
@@ -291,8 +326,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Setup Python and install runtime
         run: |
@@ -309,6 +352,16 @@ jobs:
           /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
           echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> $GITHUB_ENV
 
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          "${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label test_native_linux_packages_install
+
       - name: Package Installation Test
         run: |
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
@@ -321,20 +374,27 @@ jobs:
           echo "UNINSTALL TEST - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_uninstall_test.py -vv --tb=long -s
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [prepare_install_context, test_native_linux_packages_install]
-    name: "Quartz - completed - test rpm/deb install"
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - completed - test rpm/deb install"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          "${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          reporting_workflow: test_native_linux_packages_install.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+

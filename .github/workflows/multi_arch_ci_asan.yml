@@ -1,96 +1,44 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI ASAN
-
+name: Full HEAD baseline or joint validation (01a19119)
+run-name: Full HEAD ${{ inputs.mode }} validation (01a19119)
 on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
+      mode:
+        type: choice
+        required: true
+        default: baseline
+        options: [baseline, joint]
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
   setup:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      performance_mode: ${{ inputs.mode }}
+      build_variant: asan-debug
+      release_type: ci
+      repository: ROCm/TheRock
+      ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+      linux_amdgpu_families: gfx950
+      windows_amdgpu_families: none
+      pr_labels: ''
+      stage_reuse_mode: 'off'
+      build_stages: ''
+      prebuilt_stages: ''
+      baseline_run_id: ''
       build_python_packages: false
       build_pytorch: false
       build_jax: false
-
   linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
     with:
+      performance_mode: ${{ inputs.mode }}
+      performance_gpu_runner: linux-gfx950-1gpu-ccs-ossci-rocm
+      release_type: ci
+      repository: ROCm/TheRock
+      ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
@@ -99,25 +47,50 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
+      actions: read
       id-token: write
-
   ci_asan_summary:
-    name: CI ASAN Summary
     if: always()
-    needs:
-      - setup
-      - linux_build_and_test
+    needs: [setup, linux_build_and_test]
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
-      - name: Evaluate workflow results
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+      - name: Evaluate every full-workflow result
         env:
           GITHUB_TOKEN: ${{ github.token }}
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+        run: python3 build_tools/github_actions/workflow_summary.py --needs-json "${NEEDS_JSON}"
+
+  extra_focused_numerics:
+    needs: [setup, linux_build_and_test]
+    uses: ./.github/workflows/full_focused_gpu.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(needs.setup.outputs.linux_build_config).per_family_info }}
+    with:
+      performance_mode: ${{ inputs.mode }}
+      artifact_group: ${{ fromJSON(needs.setup.outputs.linux_build_config).artifact_group }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
+      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      tests_enabled: true
+      test_type: ${{ matrix.family_info.test_type || needs.setup.outputs.test_type }}
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
+      release_type: ci
+      repository: ROCm/TheRock
+      ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+      build_variant: asan-debug
+  investigation_summary:
+    if: always()
+    needs: [ci_asan_summary, extra_focused_numerics]
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require stock and additional investigation checks
+        env:
+          STOCK_RESULT: ${{ needs.ci_asan_summary.result }}
+          FOCUSED_RESULT: ${{ needs.extra_focused_numerics.result }}
+        run: test "$STOCK_RESULT" = success && test "$FOCUSED_RESULT" = success

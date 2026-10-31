@@ -19,6 +19,9 @@ name: Build Stage Artifacts
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       stage_name:
         type: string
         required: true
@@ -79,6 +82,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build_stage:
@@ -89,6 +93,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
+      actions: read
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
@@ -109,24 +114,21 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
 
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checkout Repository
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
@@ -159,6 +161,16 @@ jobs:
 
       # Note: no AWS credentials should be needed here since our CI buckets
       # all currently have public read access.
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label build_stage
+
       - name: Fetch inbound artifacts
         run: |
           python build_tools/artifact_manager.py fetch \
@@ -194,6 +206,9 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Apply recorded common and candidate source inputs
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py prepare-stage
+
       - name: Configure
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration and the caller-provided preset/external repo options
@@ -203,6 +218,7 @@ jobs:
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
+          mapfile -t perf_args < .perf-full/configure-args.txt
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
@@ -212,11 +228,12 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            "${perf_args[@]}"
 
       - name: Build stage
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py stage-build
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
@@ -262,12 +279,20 @@ jobs:
       #   * This script fails if `build_dir / "artifacts"` does not exist. That's useful
       #     if the build succeeded but did not produce artifacts. That's _not_ useful
       #     if the workflow failed or was cancelled before the build even started though.
+      - name: Guard CI-only run-scoped artifact destination
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py guard-ci --label 20
+
       - name: Push stage artifacts
         run: |
           python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
+
+      - name: Guard CI-only run-scoped artifact destination
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py guard-ci --label 22
 
       - name: Upload stage logs
         if: ${{ always() }}
@@ -283,15 +308,27 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
