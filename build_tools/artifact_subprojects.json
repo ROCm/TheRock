@@ -41,9 +41,6 @@
   "core-hiptests": [
     "hip-tests"
   ],
-  "core-hrr": [
-    "hrr"
-  ],
   "core-kpack": [
     "rocm-kpack"
   ],

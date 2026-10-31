@@ -93,7 +93,6 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
-      "hrr",
       "libhipcxx",
       "miopen",
       "miopenprovider",
@@ -224,9 +223,6 @@
     "consumers": []
   },
   "hipthreads": {
-    "consumers": []
-  },
-  "hrr": {
     "consumers": []
   },
   "kfdtest": {
