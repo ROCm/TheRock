@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 import profile as diagnostic
-from benchmark import arguments, common_flags, entries
+from benchmark import arguments, common_flags, entries, reconfigure_ck
 
 HERE = Path(__file__).resolve().parent
 ROOT, BUILD, OUT, CK = diagnostic.ROOT, diagnostic.BUILD, diagnostic.OUT, diagnostic.CK
@@ -91,7 +91,7 @@ def fetch_dependencies(args):
     run([sys.executable, "build_tools/artifact_manager.py", "fetch", "--stage=all",
          "--run-id=" + args.baseline_run_id, "--run-github-repo=ROCm/TheRock", "--platform=linux",
          "--amdgpu-families=gfx950", "--amdgpu-targets=gfx950", "--bootstrap",
-         "--exclude-artifacts=" + ",".join(sorted(excluded)), "--exclude-components=dbg,doc,test",
+         "--exclude-artifacts=" + ",".join(sorted(excluded)), "--exclude-components=dbg,doc",
          "--output-dir=" + str(BUILD), "--download-cache-dir=" + str(CACHE)], "fetch-dependencies")
     archives, found, roots = [], set(), set()
     for path in sorted(CACHE.rglob("*.tar.*")):
@@ -177,7 +177,7 @@ def configure(args):
     paths = patch_paths(patch.read_text())
     run(["git", "apply", "--check", str(patch)], "patch-check", LIBRARIES)
     run(["git", "apply", str(patch)], "patch", LIBRARIES)
-    run(["cmake", "-S", str(CK_SOURCE), "-B", str(CK)], "ck-reconfigure")
+    reconfigure_ck()
     candidate = entries(NAMES)
     candidate_headers = {str(p.relative_to(CK)): diagnostic.fingerprint(p)["sha256"]
                          for p in (CK / "include").rglob("*") if p.is_file()}
