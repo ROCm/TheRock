@@ -102,6 +102,7 @@ from packaging_utils import (  # noqa: E402
     is_gfxarch_package,
     is_key_defined,
     update_package_name,
+    version_to_str,
     PackageCollisionError,
     validate_package_roots,
     expand_kpack_meta_dependencies,
@@ -1030,6 +1031,36 @@ class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
             "amdrocm-core", replace(cfg, versioned_pkg=True, gfx_arch=TEST_GFX_TARGET)
         )
         self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
+
+
+class VersionToStrTest(unittest.TestCase):
+    """``version_to_str`` must ignore deb/rpm package version suffixes."""
+
+    def test_numeric_versions(self) -> None:
+        for version, expected in (
+            ("7.10.0", "71000"),
+            ("10.1.0", "100100"),
+            ("7.1", "70100"),
+            ("7.1.1.1", "70101"),
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(version_to_str(version), expected)
+
+    def test_package_version_suffixes_ignored(self) -> None:
+        for version in (
+            "7.10.0~dev20251203",
+            "7.10.0~20251203gf689a8e",
+            "7.10.0~pre2",
+            "7.10.0~rc2",
+            "7.10.0~20251021",
+            "7.10.0~20260811.bkc.20260814",
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(version_to_str(version), "71000")
+
+    def test_non_numeric_version_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            version_to_str("abc.1.0")
 
 
 # ---------------------------------------------------------------------------
