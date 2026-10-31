@@ -17,6 +17,10 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_package_scan:
+        type: boolean
+        default: false
+        description: "Run only the read-only ELF scan diagnostic on historical artifacts; skip builds and tests"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -93,6 +97,9 @@ on:
           reuse and test filtering (empty = run all tests).
   workflow_call:
     inputs:
+      profile_package_scan:
+        type: boolean
+        default: false
       linux_amdgpu_families:
         type: string
         default: ""
@@ -162,6 +169,7 @@ concurrency:
 
 jobs:
   setup:
+    if: ${{ !inputs.profile_package_scan }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -179,6 +187,59 @@ jobs:
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_native_windows: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_windows }}
       build_stages: ${{ inputs.build_stages || '' }}
+
+  profile_package_scan:
+    name: Read-only package ELF scan diagnostic
+    if: ${{ inputs.profile_package_scan && github.repository == 'ROCm/TheRock' }}
+    runs-on: aws-linux-scale-rocm-small
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+    steps:
+      - name: Check out triggering diagnostic revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install diagnostic requirements
+        run: pip install boto3==1.39.15 pyzstd==0.19.1 psutil==7.1.3
+      - name: Fetch read-only historical inputs
+        env:
+          # Selects the existing public input bucket only for this fetch step.
+          RELEASE_TYPE: nightly
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          python -c "import sys; sys.path.insert(0, 'build_tools'); from _therock_utils.workflow_outputs import WorkflowOutputRoot; root = WorkflowOutputRoot.from_workflow_run(run_id='41147801272', platform='linux', github_repository='ROCm/rockrel'); assert root.bucket == 'therock-nightly-artifacts' and root.prefix == '41147801272-linux', root; print(root.root().s3_uri)"
+          python build_tools/artifact_manager.py fetch \
+            --run-id=41147801272 \
+            --run-github-repo=ROCm/rockrel \
+            --stage=all \
+            --amdgpu-families='gfx94X-dcgpu;gfx110X-all;gfx1151;gfx120X-all;gfx125X-dcgpu;gfx90a;gfx950-dcgpu;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx117X-all' \
+            --expand-family-to-targets \
+            --output-dir=output
+      - name: Compare read-only ELF scans in repeated ABBA order
+        run: |
+          python build_tools/profile_build.py \
+            --output output/scan-diagnostics/profile -- \
+            python build_tools/packaging/linux/benchmark_elf_scan.py \
+              --root output/artifacts \
+              --output output/scan-diagnostics/scan \
+              --blocks 3
+      - name: Upload diagnostic results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-scan-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/scan-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -225,7 +286,7 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    if: ${{ !inputs.profile_package_scan && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
@@ -239,6 +300,7 @@ jobs:
       - linux_build_and_test
       - windows_build_and_test
       - manifest_diff
+      - profile_package_scan
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
