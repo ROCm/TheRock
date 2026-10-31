@@ -1,0 +1,31 @@
+# Built Packages Manifest
+
+# Package Type: DEB
+# ROCm Version: 7.11.0~20251224
+# Graphics Architecture: gfx94x
+# Build Date: 2026-01-17 00:16:24 UTC
+# Total Attempted: 35
+# Successfully Built: 20
+# Skipped: 15
+
+# Successfully Built Packages (with version and architecture):
+amdrocm-amdsmi7.11
+amdrocm-base7.11
+amdrocm-core-dev7.11-gfx94x
+amdrocm-core-sdk7.11-gfx94x
+amdrocm-core7.11-gfx94x
+amdrocm-developer-tools7.11
+amdrocm-dnn-dev7.11-gfx94x
+amdrocm-dnn7.11-gfx94x
+amdrocm-hipify7.11
+amdrocm-llvm-dev7.11
+amdrocm-llvm7.11
+amdrocm-math-common7.11
+amdrocm-opencl-dev7.11
+amdrocm-opencl7.11
+amdrocm-profiler-base7.11
+amdrocm-profiler7.11
+amdrocm-runtime-dev7.11
+amdrocm-runtime7.11
+amdrocm-sysdeps7.11
+amdrocm7.11-gfx94x
