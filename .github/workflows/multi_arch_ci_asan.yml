@@ -83,6 +83,7 @@ jobs:
           path: |
             compile-hotspot-evidence/benchmarks/B2/
             compile-hotspot-evidence/benchmarks/C2/
+            compile-hotspot-evidence/link-support/
             build/math-libs/composable_kernel/build/include/
             rocm-libraries/projects/composablekernel/include/
             rocm-libraries/projects/composablekernel/library/include/

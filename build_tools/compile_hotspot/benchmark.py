@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -192,6 +193,10 @@ def benchmark() -> None:
             "order": ["B1", "C1", "C2", "B2"],
             "candidate_parallelism_cap": 3,
             "compiler_instrumentation": False,
+            "compiler": {
+                **diagnostic.fingerprint(Path(baseline_argv[0])),
+                "version": diagnostic.run([baseline_argv[0], "--version"]),
+            },
             "cache": "CCACHE_DISABLE=1; OS cache uncontrolled",
             "patch": diagnostic.fingerprint(PATCH),
             "baseline_commands": baseline,
@@ -275,6 +280,23 @@ def benchmark() -> None:
         )
         diagnostic.save("benchmark-summary.json", summary)
     set_state("candidate")
+    # Small host utility support is compiled outside all timed trials.
+    diagnostic.run(
+        ["ninja", "-C", str(diagnostic.CK), "utility"], log="utility-build.log"
+    )
+    utilities = list(diagnostic.CK.rglob("libutility.a"))
+    if len(utilities) != 1:
+        raise RuntimeError(f"Expected one CK utility archive, found {utilities}")
+    support = diagnostic.OUT / "link-support"
+    support.mkdir(exist_ok=True)
+    shutil.copy2(utilities[0], support / "libutility.a")
+    diagnostic.save(
+        "link-support/manifest.json",
+        {
+            "utility": diagnostic.fingerprint(utilities[0]),
+            "scope": "Built after all measured trials; excluded from compile-group metrics.",
+        },
+    )
     diagnostic.save(
         "benchmark-complete.json",
         {
