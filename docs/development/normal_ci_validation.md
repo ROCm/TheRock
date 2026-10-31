@@ -95,6 +95,42 @@ incorrectly narrow the inherited event during actionlint checks.
 
 ## Acceptance and remaining gaps
 
+Runtime input receipts distinguish ambient PATH tools from generated CMake
+compiler selections, including the CLR-provided Clang used by rocFFT. They hash
+separate LLVM, AMD COMGR, CLR/HIPRTC and HSA runtime candidate trees and query
+loader providers for generated tools and relevant runtime helpers/libraries.
+Unavailable files, unresolved dependencies and loader-query failures remain
+explicit. Equality of an LLVM driver alone is not equality of the RTC compiler.
+
+The common profiler's optional `--capture-rtc-inputs` observes only
+`rocfft_aot_helper` and `rocfft_rtc_helper`. It records the reviewed nonsecret
+RTC/COMGR/append-option allowlist and loaded-library paths/stat identities,
+without reading provider contents during the measured build. Observed provider
+files are hashed afterward and checked against their sampled stat identities.
+Sampler cost is recorded in its own section. This is positive sampled evidence;
+short-lived processes may be missed, and Linux process environment snapshots
+may omit a parent's post-exec `setenv`. Child RTC exec inherits those overrides.
+No whole environment or unrelated process environment is dumped.
+
+Ambient RTC/COMGR knobs and metadata-only cache inventories are separate from
+ccache policy. Generated Ninja command overrides and source-defined AOT cache
+arguments are recorded separately. The Linux default COMGR location is a
+candidate derived from XDG/HOME and the pinned implementation's `/comgr`
+suffix; locality can disable it. The observer does not manufacture a private
+fresh cache, change pruning, or infer enabled caching from HOME alone. A
+pre-stage inventory is not a guaranteed per-helper initial state if other work
+can populate the cache. Future I-029 integration must declare and verify an
+identical appropriate runtime-cache contract in both arms, or retain this
+normal-regime difference from the targeted diagnostic cohort explicitly.
+
+`build_tools/normal_ci_declared_inputs.json` is initially empty. A future
+reviewed product hook must declare every patch and copied source input by
+workspace-relative path and exact SHA256, with optional `cases` and `stages`
+selectors. This captures new untracked diagnostic headers without sweeping
+generated outputs or secrets. Capture retains a mismatched receipt and fails;
+unchanged HEAD/tracked diff cannot hide a changed declared header. No product
+patch or copied input is registered by the common-control preparation.
+
 Before combining balanced baseline/candidate pairs, require matching source and
 SDK fingerprints, generated commands/architectures, cache regime and **actual
 critical-command cache outcomes**, requested/actual runner allocation, tool and

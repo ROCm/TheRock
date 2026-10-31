@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: MIT
 """Sample a build process tree: --output build/logs/profile -- cmake --build build.
 
-Requires psutil. Records commands/cwd, never environment variables. Do not pass
+Requires psutil. Records commands/cwd. Optional --capture-rtc-inputs records only
+the reviewed nonsecret RTC knob allowlist for the two named rocFFT helpers; no
+general environment dump. Do not pass
 secrets in command arguments. Sampled CPU misses short-lived processes; POSIX
 waited-child CPU is reported separately, without adding sampled CPU to it.
 """
@@ -248,6 +250,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True)
     parser.add_argument("--interval", type=float, default=1.0)
+    parser.add_argument("--capture-rtc-inputs", action="store_true")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     cmd = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -287,6 +290,7 @@ def main():
         cgroup=info,
         cgroup_initial=before_groups,
         interval_s=args.interval,
+        rtc_input_capture_enabled=args.capture_rtc_inputs,
         effective_capacity_visible_upper_bound_cpus=(
             None if sys.platform == "win32" else capacity(affinity, before_groups)
         ),
@@ -355,17 +359,37 @@ def main():
                             cwd = p.cwd()
                         except psutil.Error:
                             cwd = None
+                        command = p.cmdline()
                         emit(
                             "process",
                             identity=identity,
                             pid=p.pid,
                             ppid=p.ppid(),
                             create_time=p.create_time(),
-                            command=p.cmdline(),
+                            command=command,
                             cwd=cwd,
                             name=p.name(),
                         )
                         known.add(identity)
+                        if (
+                            args.capture_rtc_inputs
+                            and command
+                            and Path(command[0]).name
+                            in {"rocfft_aot_helper", "rocfft_rtc_helper"}
+                        ):
+                            from normal_ci_input_identity import observed_rtc_process
+
+                            receipt = measure(
+                                "rtc_input_metadata",
+                                lambda: observed_rtc_process(p, command),
+                            )
+                            if receipt is not None:
+                                emit(
+                                    "rtc_process_inputs",
+                                    identity=identity,
+                                    pid=p.pid,
+                                    receipt=receipt,
+                                )
                     t = p.cpu_times()
                     cpu = (
                         t.user + t.system

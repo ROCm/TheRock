@@ -221,7 +221,7 @@ jobs:
           fi
           prefix=()
           if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
-            prefix=(python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile-configure" -- python build_tools/normal_ci_validation.py run --)
+            prefix=(python build_tools/profile_build.py --capture-rtc-inputs --output "${BUILD_DIR}/logs/profile-configure" -- python build_tools/normal_ci_validation.py run --)
           fi
           "${prefix[@]}" cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
@@ -236,13 +236,13 @@ jobs:
 
       - name: Verify profiling tools
         if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
-        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test build_tools.tests.normal_ci_validation_test -v
+        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test build_tools.tests.normal_ci_validation_test build_tools.tests.normal_ci_input_identity_test -v
 
       - name: Build stage
         run: |
           prefix=()
           if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
-            prefix=(python build_tools/profile_build.py --output "${BUILD_DIR}/logs/profile" -- python build_tools/normal_ci_validation.py run --)
+            prefix=(python build_tools/profile_build.py --capture-rtc-inputs --output "${BUILD_DIR}/logs/profile" -- python build_tools/normal_ci_validation.py run --)
           fi
           "${prefix[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 

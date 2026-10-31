@@ -17,6 +17,17 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from normal_ci_input_identity import (
+    declared_sources,
+    generated_inputs,
+    loader_dependencies,
+    observed_provider_identities,
+    query_loader,
+    runtime_cache_state,
+    sdk_inputs,
+)
+
 PRODUCT_SHA = "5b7cb88373362ab80dc0f19605915e534f4158aa"
 VERSION_ORIGIN_SHA = "82d5e8c176ce0cc00b5fd1cf631ce7790be8992b"
 CONFIG_SHA = "7624a5e209cec569bbed38dad7071fa7393cb52b"
@@ -267,7 +278,11 @@ def capture(args, inputs):
     def fingerprint(path):
         resolved = path.resolve()
         stat = resolved.stat()
-        key = (str(resolved), stat.st_size, stat.st_mtime_ns)
+        key = (
+            (stat.st_dev, stat.st_ino) if stat.st_ino else str(resolved),
+            stat.st_size,
+            stat.st_mtime_ns,
+        )
         if key not in captured_hashes:
             captured_hashes[key] = digest(resolved)
             after = resolved.stat()
@@ -296,6 +311,7 @@ def capture(args, inputs):
             ]
         },
         "tools": {},
+        "path_tools_scope": "ambient PATH only; active generated CMake selections captured separately",
         "source": {},
     }
     image = os.environ.get("NORMAL_IMAGE_PIN", "")
@@ -424,26 +440,51 @@ def capture(args, inputs):
             data[executable + "_inventory"] = dict(
                 returncode=result.returncode, stdout=result.stdout
             )
-    data["sdk_inputs"] = []
-    sdk = workspace / "build/compiler/amd-llvm/dist"
-    if sdk.exists():
-        names = {"clang", "clang++", "amdclang++", "ld.lld", "clang-linker-wrapper"}
-        for p in sorted(sdk.rglob("*")):
-            if p.is_file() and (
-                p.suffix == ".bc"
-                or p.name in names
-                or p.name.endswith(".so")
-                or ".so." in p.name
-            ):
-                data["sdk_inputs"].append(
-                    dict(
-                        path=p.relative_to(workspace).as_posix(),
-                        bytes=p.stat().st_size,
-                        sha256=fingerprint(p),
-                    )
-                )
+    build = workspace / "build"
+    data["generated_build_inputs"] = generated_inputs(build, fingerprint)
+    data["sdk_runtime_inputs"] = sdk_inputs(build, fingerprint)
+    loader_candidates = set()
+    for row in data["generated_build_inputs"]["fields"]:
+        identity = row.get("identity", {})
+        if row["role"] == "generated-compiler" and identity.get("status") == "file":
+            loader_candidates.add(identity["resolved_path"])
+    for row in data["sdk_runtime_inputs"]["files"]:
+        if row.get("status") == "file" and any(
+            key in Path(row["path"]).name
+            for key in [
+                "libamd_comgr",
+                "libhiprtc",
+                "libamdhip64",
+                "libhsa-runtime64",
+                "rocfft_rtc_helper",
+            ]
+        ):
+            loader_candidates.add(row["resolved_path"])
+    data["resolved_loader_providers"] = [
+        loader_dependencies(Path(binary), fingerprint, query_loader)
+        for binary in sorted(loader_candidates)
+    ]
+    data["observed_runtime_provider_inputs"] = observed_provider_identities(
+        build / "logs/profile/samples.jsonl", fingerprint
+    )
+    data["runtime_loader_environment"] = {
+        key: os.environ.get(key) for key in ["LD_LIBRARY_PATH", "LD_PRELOAD"]
+    }
+    data["rtc_comgr_cache_snapshot"] = runtime_cache_state(
+        workspace, os.environ, sys.platform
+    )
+    data["rtc_comgr_cache_snapshot"]["capture_phase"] = args.output.stem
+    data["declared_source_inputs"] = declared_sources(
+        workspace,
+        Path(__file__).with_name("normal_ci_declared_inputs.json"),
+        inputs.get("profile_normal_case", "baseline"),
+        fingerprint,
+        stage=os.environ.get("STAGE_NAME"),
+    )
     data["capture_wall_s"] = time.monotonic() - start
     save(args.output, data)
+    if not data["declared_source_inputs"]["valid"]:
+        raise ValueError("declared source/patch input mismatch; receipt retained")
 
 
 def main():
