@@ -222,7 +222,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: 7624a5e209cec569bbed38dad7071fa7393cb52b
           path: ci-config
         continue-on-error: true
 
