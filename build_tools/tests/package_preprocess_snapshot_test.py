@@ -5,9 +5,11 @@ from contextlib import redirect_stdout
 import importlib.util
 import io
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -124,6 +126,131 @@ class SnapshotTest(unittest.TestCase):
                 self.assertEqual(recovered[key], initial[key], key)
             self.assertFalse(reset.work.exists())
             self.assertEqual(reset.hash_archive(), digest)
+
+    @unittest.skipUnless(LINUX_TOOLS, "requires Linux GNU tar and zstd")
+    def test_privilege_failure_is_preflighted_before_archive_or_input_removal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _, _, reset = self.create(Path(temporary))
+            chmod = Path.chmod
+
+            def strip_setgid(path, mode, *args, **kwargs):
+                if path.name == "directory" and mode & 0o2000:
+                    mode &= ~0o2000
+                return chmod(path, mode, *args, **kwargs)
+
+            with patch.object(Path, "chmod", strip_setgid), patch.object(
+                reset, "run", side_effect=RuntimeError("fixture sudo unavailable")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "sudo unavailable"):
+                    reset.prepare()
+            self.assertTrue(root.exists())
+            self.assertFalse(reset.archive.exists())
+            self.assertFalse(reset.original_removed)
+            self.assertEqual(reset.operations[-1]["status"], "failed")
+
+    @unittest.skipUnless(LINUX_TOOLS, "requires Linux GNU tar and zstd")
+    def test_privileged_mode_paths_reject_escape_and_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _, _, reset = self.create(Path(temporary))
+            for path in [root.parent, root / "alias"]:
+                with self.assertRaisesRegex(RuntimeError, "Unsafe privileged"):
+                    reset.sudo_directory_modes(
+                        root, [path], 0o2755, root.parent / "log"
+                    )
+            reset.owned[root] = (-1, -1)
+            with self.assertRaisesRegex(RuntimeError, "Unowned"):
+                reset.sudo_directory_modes(root, [root], 0o2755, root.parent / "log")
+
+    @unittest.skipUnless(
+        LINUX_TOOLS
+        and hasattr(os, "geteuid")
+        and os.geteuid() == 0
+        and Path("/usr/bin/sudo").exists(),
+        "root fixture needed to create a foreign-group directory without changing sudo policy",
+    )
+    def test_real_unprivileged_foreign_group_roundtrip_with_guarded_chmod(self):
+        # The parent executes only the child's guarded chmod requests. The child
+        # has a real non-root UID and no supplementary groups; no sudoers edits.
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root, output, initial, reset = self.create(base)
+            for path in [base, *base.rglob("*")]:
+                mode = path.lstat().st_mode & 0o7777
+                os.chown(path, 65533, 65534, follow_symlinks=False)
+                if not path.is_symlink():
+                    os.chmod(path, mode)
+            root.parent.chmod(0o2755)
+            parent, child = multiprocessing.Pipe()
+            pid = os.fork()
+            if pid == 0:
+                parent.close()
+                try:
+                    os.setgroups([])
+                    os.setgid(65533)
+                    os.setuid(65533)
+                    original = reset.run
+
+                    def mediated(command, log):
+                        if command[0] == "/usr/bin/sudo":
+                            child.send(dict(command=command))
+                            if not child.recv():
+                                raise RuntimeError("Privileged fixture chmod failed")
+                            log.write_text("fixture parent executed guarded chmod\n")
+                        else:
+                            original(command, log)
+
+                    reset.run = mediated
+                    reset.prepare()
+                    reset.restore(reset.work)
+                    restored = benchmark.manifest(
+                        reset.work, output / "restored.jsonl", reset.deadline
+                    )
+                    for key in ["content_sha256", "mtime_sha256", "counts"]:
+                        assert restored[key] == initial[key], key
+                    reset.recover_pristine()
+                    recovered = benchmark.manifest(
+                        root, output / "recovered.jsonl", reset.deadline
+                    )
+                    for key in ["content_sha256", "mtime_sha256", "counts"]:
+                        assert recovered[key] == initial[key], key
+                    child.send(dict(done=True))
+                    child.close()
+                    os._exit(0)
+                except BaseException as error:
+                    child.send(dict(error=str(error)))
+                    child.close()
+                    os._exit(1)
+            child.close()
+            count = 0
+            finished = False
+            try:
+                while True:
+                    self.assertTrue(parent.poll(30), "Foreign-group fixture timed out")
+                    message = parent.recv()
+                    self.assertNotIn("error", message, message)
+                    if message.get("done"):
+                        finished = True
+                        break
+                    command = message["command"]
+                    self.assertEqual(
+                        command[:6],
+                        ["/usr/bin/sudo", "-n", "--", "/usr/bin/chmod", "2755", "--"],
+                    )
+                    for name in command[6:]:
+                        path = Path(name)
+                        self.assertTrue(
+                            base in path.resolve().parents and path.is_dir()
+                        )
+                    completed = subprocess.run(command, capture_output=True)
+                    parent.send(completed.returncode == 0)
+                    count += 1
+                self.assertGreaterEqual(count, 3)  # preflight + work + recovery
+            finally:
+                parent.close()
+                if not finished:
+                    os.kill(pid, signal.SIGKILL)
+                _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
 
     @unittest.skipUnless(LINUX_TOOLS, "requires Linux GNU tar and zstd")
     def test_restore_reapplies_setgid_modes_cleared_by_tar(self):

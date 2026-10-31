@@ -3,6 +3,7 @@
 """Owned, verified compact resets for the package preprocessing diagnostic."""
 
 from decimal import Decimal
+from collections import defaultdict
 import hashlib
 import json
 import os
@@ -12,6 +13,7 @@ import signal
 import stat
 import subprocess
 import tarfile
+import tempfile
 import time
 
 
@@ -228,6 +230,9 @@ class SnapshotReset:
                         "Absolute directory/config symlink changes meaning after snapshot reset"
                     )
         free, required = self.disk_check()
+        # Exercise the actual inherited filesystem group before archiving or
+        # deleting input. A normal-user chmod can silently clear setgid.
+        self.preflight_directory_modes()
         started = time.monotonic()
         command = [
             "tar",
@@ -266,6 +271,84 @@ class SnapshotReset:
         self.original_removed = True
         self.remove_owned(self.root)
         self.disk_check(expanded=True)
+
+    def sudo_directory_modes(self, destination, paths, mode, log):
+        """Privileged chmod only, on physical directories this instance owns."""
+        if (
+            destination not in self.owned
+            or destination.resolve() != destination
+            or self.inode(destination) != self.owned[destination]
+        ):
+            raise RuntimeError("Unowned directory-mode restoration root")
+        for path in paths:
+            if (
+                path.resolve() != path
+                or (path != destination and destination not in path.parents)
+                or not stat.S_ISDIR(path.lstat().st_mode)
+            ):
+                raise RuntimeError("Unsafe privileged directory-mode path")
+        command = [
+            "/usr/bin/sudo",
+            "-n",
+            "--",
+            "/usr/bin/chmod",
+            format(mode, "o"),
+            "--",
+            *map(str, paths),
+        ]
+        self.run(command, log)
+        for path in paths:
+            if stat.S_IMODE(path.lstat().st_mode) != mode:
+                raise RuntimeError(
+                    "Privileged chmod could not restore exact directory mode"
+                )
+        return command
+
+    def preflight_directory_modes(self):
+        started = time.monotonic()
+        modes = sorted(
+            {
+                r["mode"]
+                for r in self.records.values()
+                if r["kind"] == "directory" and r["mode"] & 0o6000
+            }
+        )
+        result = dict(
+            status="passed",
+            euid=os.geteuid(),
+            egid=os.getegid(),
+            groups=os.getgroups(),
+            special_modes=modes,
+            privileged_commands=[],
+        )
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix=".preprocess-mode-probe-", dir=self.root.parent
+            ) as temporary:
+                owned = Path(temporary).resolve()
+                self.owned[owned] = self.inode(owned)
+                try:
+                    probe = owned / "directory"
+                    probe.mkdir()
+                    result["inherited_gid"] = probe.stat().st_gid
+                    for index, mode in enumerate(modes):
+                        probe.chmod(mode)
+                        if stat.S_IMODE(probe.stat().st_mode) != mode:
+                            result["privileged_commands"].append(
+                                self.sudo_directory_modes(
+                                    owned,
+                                    [probe],
+                                    mode,
+                                    self.output / f"mode-preflight-{index}.log",
+                                )
+                            )
+                finally:
+                    self.owned.pop(owned, None)
+        except Exception as error:
+            result.update(status="failed", error=str(error))
+            raise
+        finally:
+            self.record("directory-modes-preflight", started, **result)
 
     def remove_owned(self, path):
         deadline_check(self.deadline)
@@ -311,6 +394,7 @@ class SnapshotReset:
         # ownership privileges. Reapply the exact verified archive modes after
         # all descendants exist; the caller still checks the full manifest.
         restored_directory_modes = 0
+        privileged_modes = defaultdict(list)
         for name, record in sorted(
             self.records.items(),
             key=lambda item: len(PurePosixPath(item[0]).parts),
@@ -324,10 +408,25 @@ class SnapshotReset:
             if not stat.S_ISDIR(info.st_mode):
                 raise RuntimeError("Restored directory changed type")
             if stat.S_IMODE(info.st_mode) != record["mode"]:
-                path.chmod(record["mode"])
+                try:
+                    path.chmod(record["mode"])
+                except PermissionError:
+                    pass
                 restored_directory_modes += 1
                 if stat.S_IMODE(path.lstat().st_mode) != record["mode"]:
-                    raise RuntimeError("Cannot restore exact snapshot directory mode")
+                    privileged_modes[record["mode"]].append(path)
+        commands = []
+        for mode, paths in privileged_modes.items():
+            for begin in range(0, len(paths), 64):
+                commands.append(
+                    self.sudo_directory_modes(
+                        destination,
+                        paths[begin : begin + 64],
+                        mode,
+                        self.output
+                        / f"mode-restore-{len(self.operations)}-{len(commands)}.log",
+                    )
+                )
         # Keep deferred extraction writes outside the actual conversion timer.
         for directory, _, files in os.walk(destination, followlinks=False):
             for name in files:
@@ -348,6 +447,8 @@ class SnapshotReset:
             free_before_bytes=free,
             required_bytes=required,
             restored_directory_modes=restored_directory_modes,
+            privileged_directory_modes=sum(map(len, privileged_modes.values())),
+            privileged_chmod_commands=commands,
         )
 
     def recover_pristine(self):
