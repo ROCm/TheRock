@@ -7,11 +7,11 @@ Reproduces a test failure from CI.
 Usage:
     # Linux (uses Docker)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx94X --test-script "python test.py" --platform linux
+        --amdgpu-family gfx94X --test-script "python test.py"
 
     # Windows (bare metal, requires admin PowerShell)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx110X --test-script "python test.py" --platform windows
+        --amdgpu-family gfx110X --test-script "python test.py"
 
     # Setup only (drops into shell)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
@@ -21,6 +21,8 @@ Usage:
 import argparse
 import os
 import platform
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -69,33 +71,61 @@ def check_docker() -> bool:
     return result.returncode == 0
 
 
+def build_source_checkout_command(args: argparse.Namespace) -> str:
+    """Clone the CI source tree, including a PR merge commit when available."""
+    source_url = f"https://github.com/{args.source_repository}.git"
+    command = f"git clone {shlex.quote(source_url)} TheRock && cd TheRock"
+    if args.source_sha:
+        fetch_sha = f"git fetch origin {shlex.quote(args.source_sha)}"
+        if args.source_ref:
+            fetch_ref = f"git fetch origin {shlex.quote(args.source_ref)}"
+            fetch_sha = f"({fetch_sha} || {fetch_ref})"
+        command += (
+            f" && {fetch_sha}"
+            f" && git checkout --detach {shlex.quote(args.source_sha)}"
+        )
+    return command
+
+
 def build_reproduction_command(args: argparse.Namespace) -> str:
     """Build the command string for reproduction."""
-    cmd = (
-        f"python build_tools/github_actions/reproduce_test_failure.py "
-        f"--run-id {args.run_id} "
-        f"--repository {args.repository} "
-        f"--amdgpu-family {args.amdgpu_family} "
-        f'--test-script "{args.test_script}"'
-    )
+    cmd = [
+        "python",
+        "build_tools/github_actions/reproduce_test_failure.py",
+        "--run-id",
+        args.run_id,
+        "--repository",
+        args.repository,
+        "--source-repository",
+        args.source_repository,
+        "--amdgpu-family",
+        args.amdgpu_family,
+        "--test-script",
+        args.test_script,
+    ]
+    if args.source_sha:
+        cmd.extend(["--source-sha", args.source_sha])
+    if args.source_ref:
+        cmd.extend(["--source-ref", args.source_ref])
+    if args.container_image and not is_windows:
+        cmd.extend(["--container-image", args.container_image])
     if args.amdgpu_targets:
-        cmd += f" --amdgpu-targets {args.amdgpu_targets}"
+        cmd.extend(["--amdgpu-targets", args.amdgpu_targets])
     if args.output_dir != "build":
-        cmd += f' --output-dir "{args.output_dir}"'
+        cmd.extend(["--output-dir", args.output_dir])
     if args.shard_index != "1":
-        cmd += f" --shard-index {args.shard_index}"
+        cmd.extend(["--shard-index", args.shard_index])
     if args.total_shards != "1":
-        cmd += f" --total-shards {args.total_shards}"
+        cmd.extend(["--total-shards", args.total_shards])
     if args.test_type != "full":
-        cmd += f" --test-type {args.test_type}"
+        cmd.extend(["--test-type", args.test_type])
     if args.fetch_artifact_args:
-        cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
+        cmd.append(f"--fetch-artifact-args={args.fetch_artifact_args}")
     if args.additional_requirements_files:
-        cmd += (
-            " --additional-requirements-files="
-            f'"{args.additional_requirements_files}"'
+        cmd.append(
+            f"--additional-requirements-files={args.additional_requirements_files}"
         )
-    return cmd
+    return shlex.join(cmd)
 
 
 def append_additional_requirements_step(
@@ -137,7 +167,7 @@ def run_linux(args: argparse.Namespace) -> int:
         ),
         (
             "Cloning TheRock",
-            "git clone https://github.com/ROCm/TheRock.git && cd TheRock",
+            build_source_checkout_command(args),
         ),
         ("Creating virtual environment", "uv venv .venv && source .venv/bin/activate"),
         ("Installing dependencies", "uv pip install -r requirements-test.txt"),
@@ -198,6 +228,23 @@ def run_linux(args: argparse.Namespace) -> int:
 
 def run_windows(args: argparse.Namespace) -> int:
     """Run reproduction on bare metal for Windows."""
+    if args.source_sha:
+        try:
+            checkout = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            checkout = ""
+        if checkout.lower() != args.source_sha.lower():
+            print(
+                f"ERROR: Source checkout is {checkout or 'unknown'}; "
+                f"expected {args.source_sha}. Run the printed checkout commands first."
+            )
+            return 1
+
     all_packages = ["chocolatey", "git", "python", "cmake", "ninja", "ccache", "uv"]
 
     # Check which packages are already installed
@@ -369,7 +416,22 @@ def run_windows(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reproduce a test failure from CI")
     parser.add_argument("--run-id", required=True, help="GitHub Actions run ID")
-    parser.add_argument("--repository", required=True, help="GitHub repository")
+    parser.add_argument(
+        "--repository", required=True, help="GitHub repository containing CI artifacts"
+    )
+    parser.add_argument(
+        "--source-repository",
+        default="ROCm/TheRock",
+        help="GitHub repository checked out by the CI test job",
+    )
+    parser.add_argument(
+        "--source-sha", default="", help="Exact source commit tested by CI"
+    )
+    parser.add_argument(
+        "--source-ref",
+        default="",
+        help="CI checkout ref, used if the source SHA is not directly fetchable",
+    )
     parser.add_argument("--amdgpu-family", required=True, help="AMDGPU family")
     parser.add_argument(
         "--amdgpu-targets",
@@ -405,10 +467,16 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.source_repository):
+        parser.error("--source-repository must be a GitHub owner/repository name")
+    if args.source_sha and not re.fullmatch(r"[0-9a-fA-F]{40}", args.source_sha):
+        parser.error("--source-sha must be a 40-character Git commit SHA")
+    if args.source_ref and not args.source_sha:
+        parser.error("--source-ref requires --source-sha")
 
     if args.print_cmd:
-        print("To reproduce this failure, run:")
-        print("  git clone https://github.com/ROCm/TheRock.git && cd TheRock")
+        print("To reproduce this failure, run in Bash (Git Bash on Windows):")
+        print(f"  {build_source_checkout_command(args)}")
         print(f"  {build_reproduction_command(args)}")
         return 0
 
