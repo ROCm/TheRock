@@ -1,0 +1,15 @@
+{
+  "run_id": 41226293919,
+  "job_id": 124613032465,
+  "artifact_id": 13051399563,
+  "archive_zip_sha256": "6fc230e0f543bebbb248e7f31101e63fa375a681428bc0fc3eb22016e057035c",
+  "graph_member": "build-graph.tar.gz",
+  "graph_member_sha256": "dddb0ddf121d6d2d53efb093b9461b7db8e53757dd1162886ad936255492ff35",
+  "root_commands_sha256": "ba2635dd36c980754f9d7ffe4bc36f118e9e4278855ab0a591051be8f5afc4e7",
+  "actual_rocfft_configure_command": "cd /__w/TheRock/TheRock/build/math-libs/rocFFT/build && /opt/python/cp312-cp312/bin/python3.12 /__w/TheRock/TheRock/build_tools/teatime.py --log-timestamps --label rocFFT\\ configure --interactive /__w/TheRock/TheRock/build/logs/rocFFT_configure.log -- /usr/local/therock-tools/bin/cmake -E env --unset=ROCM_PATH --unset=ROCM_DIR --unset=HIP_PATH --unset=HIP_DIR -- /usr/local/therock-tools/bin/cmake -GNinja -B/__w/TheRock/TheRock/build/math-libs/rocFFT/build -S/__w/TheRock/TheRock/rocm-libraries/projects/rocfft -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/__w/TheRock/TheRock/build/math-libs/rocFFT/stage -DTHEROCK_STAGE_INSTALL_ROOT=/__w/TheRock/TheRock/build/math-libs/rocFFT/stage -DCMAKE_TOOLCHAIN_FILE=/__w/TheRock/TheRock/build/math-libs/rocFFT/_toolchain.cmake -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/__w/TheRock/TheRock/build/math-libs/rocFFT/_init.cmake -DHIP_PLATFORM=amd -DROCM_PATH= -DROCM_DIR= -DBUILD_CLIENTS=OFF -DBUILD_SHARED_LIBS=ON -DUSE_HIPRAND=ON -DROCFFT_KERNEL_CACHE_ENABLE=ON -DBUILD_CLIENTS_TESTS=ON -DBUILD_CLIENTS_BENCH=ON && /usr/local/therock-tools/bin/cmake -E touch /__w/TheRock/TheRock/build/math-libs/rocFFT/build/compile_commands.json && /usr/local/therock-tools/bin/cmake -E touch /__w/TheRock/TheRock/build/math-libs/rocFFT/stamp/configure.stamp && /usr/local/therock-tools/bin/cmake -E copy /__w/TheRock/TheRock/build/math-libs/rocFFT/build/compile_commands.json /__w/TheRock/TheRock/build/compile_commands_fragment_rocFFT.json",
+  "configure_command_sha256": "8c8c0951c34aecb48a552995929b0a9b5297aa7e933d49e54bdcd59f29bcbe65",
+  "actual_toolchain_path": "/__w/TheRock/TheRock/build/math-libs/rocFFT/_toolchain.cmake",
+  "source_property": "cmake/therock_subproject.cmake:531 THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE=${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake",
+  "workspace_prefix": "/__w/TheRock/TheRock",
+  "scope": "Exact retained generated command. Tests replace only the workspace prefix and inspect an inert Ninja edge; they never execute this command."
+}

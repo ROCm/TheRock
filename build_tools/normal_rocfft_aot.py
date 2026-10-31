@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -216,6 +217,60 @@ def check_toolchain(path: Path) -> None:
         raise ValueError("Generated rocFFT targets differ from the validated seven")
 
 
+def generated_toolchain(build: Path, nested: Path, libraries: Path) -> dict:
+    """Read the original root configure edge without configuring/building it."""
+    target = "math-libs/rocFFT/stamp/configure.stamp"
+    command = subprocess.check_output(
+        ["ninja", "-C", str(build), "-t", "commands", "-s", target], text=True
+    ).strip()
+    lines = command.splitlines()
+    if len(lines) != 1:
+        raise ValueError("Expected exactly one original rocFFT configure command")
+    tokens = shlex.split(command)
+
+    def argument(option: str) -> str:
+        values = []
+        for index, token in enumerate(tokens):
+            if token == option:
+                if index + 1 >= len(tokens):
+                    raise ValueError(f"Missing configure argument: {option}")
+                values.append(tokens[index + 1])
+            elif token.startswith(option):
+                values.append(token[len(option) :])
+        if len(values) != 1:
+            raise ValueError(f"Expected one original configure argument: {option}")
+        return values[0]
+
+    if (
+        Path(argument("-B")).resolve() != nested.resolve()
+        or Path(argument("-S")).resolve() != (libraries / "projects/rocfft").resolve()
+    ):
+        raise ValueError("Generated rocFFT configure source/build paths differ")
+    definitions = [token[2:] for token in tokens if token.startswith("-D")]
+    toolchains = [
+        value
+        for definition in definitions
+        for key, separator, value in [definition.partition("=")]
+        if separator and key.split(":", 1)[0] == "CMAKE_TOOLCHAIN_FILE"
+    ]
+    if len(toolchains) != 1 or not Path(toolchains[0]).is_absolute():
+        raise ValueError("Expected one absolute generated rocFFT toolchain path")
+    toolchain = Path(toolchains[0])
+    if toolchain.is_symlink() or not toolchain.resolve().is_relative_to(
+        nested.parent.resolve()
+    ):
+        raise ValueError("Generated rocFFT toolchain escaped its project directory")
+    check_toolchain(toolchain)
+    return dict(
+        target=target,
+        command=command,
+        command_sha256=hashlib.sha256(command.encode()).hexdigest(),
+        toolchain=str(toolchain),
+        toolchain_sha256=digest(toolchain),
+        scope="Original root Ninja configure command inspected only; no configure/build executed",
+    )
+
+
 def cache_inventory(path: Path) -> dict:
     # Complete private metadata: deliberately no generic100k cap.
     records = []
@@ -257,7 +312,7 @@ def prepare_product(
     source = json.loads((output / "source-control.json").read_text())
     verify_source(libraries, source)
     nested = build / "math-libs/rocFFT/build"
-    check_toolchain(build / "math-libs/rocFFT/build_toolchain.cmake")
+    toolchain = generated_toolchain(build, nested, libraries)
     require_fresh_outputs(nested)
     parent = nested / "library/src"
     parent.mkdir(parents=True, exist_ok=True)
@@ -289,6 +344,7 @@ def prepare_product(
         run_attempt=env.get("GITHUB_RUN_ATTEMPT"),
         build=str(build),
         nested=str(nested),
+        generated_toolchain=toolchain,
         owner_id=owner_id,
         path=str(private),
         marker=str(marker),

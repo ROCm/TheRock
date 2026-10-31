@@ -1,0 +1,5 @@
+# These diagnostic payloads are verified against committed LF blob hashes.
+/patches/build-profile/rocm-libraries/0004-rocfft-normal-private-aot.patch text eol=lf
+/patches/build-profile/normal-stack/therock-native-link-control.patch text eol=lf
+/patches/build-profile/normal-stack/rocshmem-native-link-control.patch text eol=lf
+/patches/build-profile/normal-stack/bounded-elf-probe.patch text eol=lf

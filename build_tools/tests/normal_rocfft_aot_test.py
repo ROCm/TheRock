@@ -4,11 +4,13 @@
 
 from contextlib import closing
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
 import sqlite3
 import shutil
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -40,8 +42,8 @@ def fixture_prepare(root, case):
     output = build / "logs/normal-validation/rocfft-aot"
     output.mkdir(parents=True)
     product.save(output / "source-control.json", {"host_fixture": True})
-    toolchain = build / "math-libs/rocFFT/build_toolchain.cmake"
-    toolchain.parent.mkdir(parents=True)
+    fixture_configure_edge(root, root / "source")
+    toolchain = build / "math-libs/rocFFT/_toolchain.cmake"
     toolchain.write_text(
         "set(GPU_TARGETS "
         + ";".join(product.ARCHES)
@@ -54,7 +56,84 @@ def fixture_prepare(root, case):
     return build, output, state
 
 
+def fixture_configure_edge(root, libraries):
+    fixture = json.loads(
+        (
+            ROOT / "build_tools/tests/fixtures/normal_rocfft_configure_command.json"
+        ).read_text()
+    )
+    original = fixture["actual_rocfft_configure_command"]
+    if (
+        hashlib.sha256(original.encode()).hexdigest()
+        != fixture["configure_command_sha256"]
+    ):
+        raise AssertionError("Retained command provenance changed")
+    command = original.replace(
+        fixture["workspace_prefix"], shlex.quote(root.as_posix())
+    )
+    # Only the source directory differs in older host fixtures' inert layout.
+    command = command.replace(
+        shlex.quote(root.as_posix()) + "/rocm-libraries/projects/rocfft",
+        shlex.quote((libraries / "projects/rocfft").as_posix()),
+    )
+    build = root / "build"
+    toolchain = build / "math-libs/rocFFT/_toolchain.cmake"
+    toolchain.parent.mkdir(parents=True, exist_ok=True)
+    toolchain.write_text(
+        "set(GPU_TARGETS "
+        + ";".join(product.ARCHES)
+        + ' CACHE STRING "From super-project" FORCE)\n'
+    )
+    (build / "build.ninja").write_text(
+        "rule configure_rocfft\n  command = "
+        + command
+        + "\nbuild math-libs/rocFFT/stamp/configure.stamp: configure_rocfft\n"
+    )
+    return command, toolchain
+
+
 class ProductTests(unittest.TestCase):
+    def test_actual_configure_edge_selects_toolchain_without_executing_or_configuring(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / "workspace with spaces"
+            libraries = root / "rocm-libraries"
+            command, toolchain = fixture_configure_edge(root, libraries)
+            nested = root / "build/math-libs/rocFFT/build"
+            # An attractive wrong basename must never be selected as a fallback.
+            wrong = toolchain.with_name("build_toolchain.cmake")
+            wrong.write_text('set(GPU_TARGETS gfx942 CACHE STRING "wrong" FORCE)')
+            before = {p.relative_to(root) for p in root.rglob("*")}
+            receipt = product.generated_toolchain(root / "build", nested, libraries)
+            self.assertEqual(receipt["command"], command)
+            self.assertEqual(Path(receipt["toolchain"]), toolchain)
+            self.assertEqual(receipt["toolchain_sha256"], product.digest(toolchain))
+            self.assertFalse(nested.exists())
+            self.assertEqual(before, {p.relative_to(root) for p in root.rglob("*")})
+            # A real property/command change is followed, not another basename guess.
+            renamed = toolchain.with_name("original_generated_toolchain.cmake")
+            toolchain.rename(renamed)
+            graph = root / "build/build.ninja"
+            graph.write_text(
+                graph.read_text().replace(
+                    "/_toolchain.cmake", "/original_generated_toolchain.cmake"
+                )
+            )
+            self.assertEqual(
+                Path(
+                    product.generated_toolchain(root / "build", nested, libraries)[
+                        "toolchain"
+                    ]
+                ),
+                renamed,
+            )
+            with self.assertRaises(subprocess.CalledProcessError):
+                product.generated_toolchain(root / "missing-build", nested, libraries)
+            graph.write_text(graph.read_text().replace("-B", "-Bwrong-", 1))
+            with self.assertRaisesRegex(ValueError, "source/build paths"):
+                product.generated_toolchain(root / "build", nested, libraries)
+
     def test_default_and_other_families_stages_do_not_select_product(self):
         self.assertFalse(product.selected(False, {}, "win32"))
         for name, value in [

@@ -33,6 +33,10 @@ The selected job's normal configuration must produce all seven original AOT
 commands and their sequential dependency edges. The helper argv, target names,
 worker policy, output paths and final copy/cleanup calls are unchanged. The
 controller checks generated Ninja commands and edges after the build.
+Preparation reads the original root Ninja configure edge with `ninja -t commands -s`; it follows that command's source, build and toolchain paths and validates
+the seven `GPU_TARGETS`. It does not execute the configure edge or build any
+dependency before the normal timed Build command. The selected command and
+toolchain hashes are retained in `prepared.json`.
 
 Before the build, prepare exclusively creates an owned directory beside the
 original temporary DB, a random 32-hex ownership marker, an empty receipt directory,
@@ -102,6 +106,10 @@ use committed LF Git-blob hashes, matching Linux checkout/application bytes.
 Register the patch as a tracked input and the copied target as an explicitly
 hashed source input in both cases. The common-controls integration registers these inputs with product, stage and
 family selectors; changing the source payload requires updating those exact hashes.
+The four declared tracked diagnostic patches have exact-path `text eol=lf`
+attributes, so their raw checkout hashes also match in the Windows WSL controller.
+Other files retain their ordinary checkout policy. No hash check normalizes bytes
+or accepts a CRLF payload as equivalent.
 
 ## Host/source checks
 
@@ -111,6 +119,14 @@ rollback before output copy, seven growing-cache outputs, ownership alias reject
 legacy custom-path no-op behavior and end receipts. Python checks reject changed
 run identity, fallback/commit failures, changed target sets and preexisting outputs.
 A synthetic 100,005-entry inventory catches accidental reuse of a 100k cap.
+The configure-path regression uses the exact retained command from the failed
+[normal baseline](https://github.com/ROCm/TheRock/actions/runs/41226293919), with
+artifact and command hashes in its fixture. Real Ninja inspection of an inert
+edge proves no configure/build runs, follows a changed generated toolchain path,
+and rejects changed source/build paths. A separate real Git `core.autocrlf=true`
+checkout fixture checks all four raw payload hashes, preserves CRLF conversion
+for unselected text, and proves a deliberately altered payload still fails the
+unchanged hash gate.
 
 ```bash
 export ROCFFT_PROFILE_TEST_CXX='["g++"]'
