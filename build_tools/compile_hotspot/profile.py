@@ -218,11 +218,31 @@ def measure(argv: list[str], cwd: Path, name: str) -> None:
         raise RuntimeError(f"{name} failed with exit code {code}")
 
 
+def is_object_compilation(entry: dict, source_name: str) -> bool:
+    """Exclude clang-tidy/custom rules that use the same source as input."""
+    if not entry.get("output", "").endswith(".o"):
+        return False
+    argv = shlex.split(entry.get("command", ""))
+    if argv.count("-c") != 1:
+        return False
+    index = argv.index("-c")
+    return index + 1 < len(argv) and Path(argv[index + 1]).name == source_name
+
+
 def replay(mode: str, variant: str) -> None:
     database = json.loads(run(["ninja", "-t", "compdb", "-x"], cwd=CK))
-    matches = [
+    relevant = [
         entry for entry in database if Path(entry.get("file", "")).name == SOURCE
     ]
+    matches = [entry for entry in relevant if is_object_compilation(entry, SOURCE)]
+    save(
+        "compdb-selection.json",
+        {
+            "selected": matches,
+            "rejected": [entry for entry in relevant if entry not in matches],
+            "criterion": "Object output ending .o and exactly one -c of the expected source basename",
+        },
+    )
     if len(matches) != 1:
         raise RuntimeError(f"Expected one command for {SOURCE}, got {len(matches)}")
     entry = matches[0]

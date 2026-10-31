@@ -90,12 +90,20 @@ def entries(names: set[str]) -> dict:
         diagnostic.run(["ninja", "-t", "compdb", "-x"], cwd=diagnostic.CK)
     )
     selected = {}
+    rejected = []
     for entry in database:
         name = Path(entry.get("file", "")).name
         if name in names:
+            if not diagnostic.is_object_compilation(entry, name):
+                rejected.append(entry)
+                continue
             if name in selected:
                 raise RuntimeError(f"Duplicate command: {name}")
             selected[name] = entry
+    diagnostic.save(
+        f"benchmark-compdb-selection-{len(names)}.json",
+        {"selected": selected, "rejected": rejected},
+    )
     if set(selected) != names:
         raise RuntimeError(f"Missing CMake-discovered sources: {names - set(selected)}")
     return selected
