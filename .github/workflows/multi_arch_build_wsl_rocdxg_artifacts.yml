@@ -76,7 +76,6 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
-      EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
@@ -111,7 +110,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Checkout external repository
-        if: ${{ inputs.external_repo_config != '' }}
+        if: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source }}
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -164,6 +163,7 @@ jobs:
         timeout-minutes: 30
         env:
           GH_TOKEN: ${{ github.token }}
+          EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].fetch_sources_args || '' }}
         run: |
           gh auth setup-git --hostname github.com
           python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1 ${EXTERNAL_FETCH_SOURCES_ARGS}
@@ -298,8 +298,7 @@ jobs:
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
                 ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
-                ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
-                ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
+                ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].cmake_options || '' }} \
                 ${{ steps.stage_config.outputs.cmake_args }}
             '
 

@@ -9,6 +9,11 @@ This script determines build configuration settings based on the external reposi
 being built (rocm-libraries, rocm-systems, etc.). It outputs GitHub Actions variables
 that control checkout steps, patches, and build options.
 
+This runs once, in the CI setup job, and resolves the repository into a
+config_json blob that is threaded through the build workflows as an input.
+config_json carries a "stages" map precomputing what every build stage needs,
+so a build stage only indexes that map by its own name.
+
 Usage:
     python detect_external_repo_config.py --repository <repository_name>
 
@@ -18,9 +23,6 @@ Examples:
 
     # Config for rocm-systems:
     python build_tools/github_actions/detect_external_repo_config.py --repository rocm-systems
-
-    # Include a workspace path to produce an extra_cmake_options entry:
-    python build_tools/github_actions/detect_external_repo_config.py --repository rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo"
 
 Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
@@ -35,8 +37,11 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
 
 
@@ -87,6 +92,88 @@ def get_repo_config(repo_name: str) -> Dict[str, Any]:
         )
 
     return REPO_CONFIGS[repo_name]
+
+
+def build_fetch_sources_args(
+    skip_submodules: List[str], dvc_projects: List[str]
+) -> str:
+    """Builds the fetch_sources.py argument string for an external repo."""
+    parts = []
+    if skip_submodules:
+        parts.append(f"--skip-submodules {' '.join(skip_submodules)}")
+    if dvc_projects:
+        parts.append(f"--dvc-projects {' '.join(dvc_projects)}")
+    return " ".join(parts)
+
+
+def build_stage_configs(
+    *,
+    repo_name: str,
+    checkout_path: str,
+    source_package: str,
+    source_stages: List[str],
+    extra_cmake_options: str,
+) -> Dict[str, Dict[str, Any]]:
+    """Resolves what every build stage needs from the external repo.
+
+    Every stage gets an entry so a build workflow can look itself up with a
+    single `fromJSON(config).stages[stage_name]` index. Stages outside
+    'source_stages' skip the checkout, the -DTHEROCK_<REPO>_SOURCE_DIR= option,
+    and the DVC pull rooted in the (absent) external checkout.
+    """
+    repo_config = get_repo_config(repo_name)
+    skip_submodules = repo_config.get("skip_submodules", [])
+    dvc_projects = repo_config.get("dvc_projects", [])
+
+    def resolve(stage_name: str) -> Dict[str, Any]:
+        needs_source = stage_name in source_stages
+
+        cmake_options = []
+        if needs_source:
+            cmake_options.append(
+                f"-DTHEROCK_{source_package}_SOURCE_DIR={checkout_path}"
+            )
+        # Configures the build as a whole, so it applies to every stage,
+        # including the ones that never read the external sources.
+        if extra_cmake_options:
+            cmake_options.append(extra_cmake_options)
+
+        return {
+            "needs_source": needs_source,
+            "cmake_options": " ".join(cmake_options),
+            "fetch_sources_args": build_fetch_sources_args(
+                skip_submodules,
+                (
+                    dvc_projects
+                    if needs_source
+                    else [p for p in dvc_projects if p != checkout_path]
+                ),
+            ),
+        }
+
+    return {
+        stage_name: resolve(stage_name)
+        for stage_name in sorted(get_topology().get_all_stage_names())
+    }
+
+
+def get_source_stages(repo_name: str) -> List[str]:
+    """Returns the build stages that need this external repo's sources.
+
+    A stage needs the repo when one of its submodules appears in the stage's
+    source sets (see BUILD_TOPOLOGY.toml). Checking out a monorepo such as
+    rocm-libraries takes several minutes, so every other stage skips it.
+    """
+    repo_submodules = set(get_repo_config(repo_name).get("skip_submodules", []))
+    topology = get_topology()
+    return sorted(
+        stage_name
+        for stage_name in topology.get_all_stage_names()
+        if any(
+            submodule.name in repo_submodules
+            for submodule in topology.get_submodules_for_stage(stage_name)
+        )
+    )
 
 
 @lru_cache()
@@ -424,18 +511,13 @@ def main(argv=None):
         checkout_path = f"external-{args.repository}"
 
         # Generate fetch_sources_args from skip_submodules and dvc_projects
-        fetch_args_parts = []
-        if "skip_submodules" in config and config["skip_submodules"]:
-            skip_args = " ".join(config["skip_submodules"])
-            fetch_args_parts.append(f"--skip-submodules {skip_args}")
-        if "dvc_projects" in config and config["dvc_projects"]:
-            dvc_args = " ".join(config["dvc_projects"])
-            fetch_args_parts.append(f"--dvc-projects {dvc_args}")
-
-        if fetch_args_parts:
-            config["fetch_sources_args"] = " ".join(fetch_args_parts)
+        fetch_sources_args = build_fetch_sources_args(
+            config.get("skip_submodules", []), config.get("dvc_projects", [])
+        )
+        if fetch_sources_args:
+            config["fetch_sources_args"] = fetch_sources_args
             print(
-                f"Generated fetch_sources_args: {config['fetch_sources_args']}",
+                f"Generated fetch_sources_args: {fetch_sources_args}",
                 file=sys.stderr,
             )
 
@@ -468,16 +550,25 @@ def main(argv=None):
                     file=sys.stderr,
                 )
 
+        source_stages = get_source_stages(args.repository)
+        print(f"Build stages needing {args.repository} sources: {source_stages}")
+
+        # Only the fields the workflows read. Anything that feeds into a single
+        # build stage lives under "stages" instead, resolved per stage here.
         config_json = {
             "repository": final_source_repo,
             "ref": source_ref,
             "checkout_path": checkout_path,
-            "source_package": source_package,
             "submodule_path": config["submodule_path"],
-            "fetch_sources_args": config.get("fetch_sources_args", ""),
-            "extra_cmake_options": extra_cmake_options,
             "projects": projects,
             "family_overrides": family_overrides,
+            "stages": build_stage_configs(
+                repo_name=args.repository,
+                checkout_path=checkout_path,
+                source_package=source_package,
+                source_stages=source_stages,
+                extra_cmake_options=extra_cmake_options,
+            ),
         }
         config["config_json"] = json.dumps(config_json)
         print(
