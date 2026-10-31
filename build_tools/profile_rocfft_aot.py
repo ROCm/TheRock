@@ -214,10 +214,12 @@ class WaitObserver:
                                 row["process_discovery_errors"].append(
                                     type(error).__name__
                                 )
-                    active_wall += time.monotonic() - active_start
                     row["observer_cpu_s"] = time.thread_time() - cpu_start
-                    row["observer_active_wall_s"] = (
-                        active_wall + time.monotonic() - active_start
+                    # A row cannot include the cost of its own serialization/flush.
+                    # Report completed samples here; the final summary includes all.
+                    row["observer_active_wall_s"] = active_wall
+                    row["observer_active_wall_scope"] = (
+                        "completed_previous_samples_including_write_flush"
                     )
                     stream.write(json.dumps(row) + "\n")
                     stream.flush()
@@ -231,6 +233,7 @@ class WaitObserver:
                 samples=count,
                 thread_cpu_s=time.thread_time() - cpu_start,
                 active_wall_s=active_wall,
+                active_wall_scope="completed_sample_bodies_including_write_flush_excluding_wait",
                 lifetime_wall_s=time.monotonic() - started,
                 limitations="Observer is read-only, namespace-scoped and misses waits between snapshots.",
             )

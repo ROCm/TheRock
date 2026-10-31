@@ -124,6 +124,9 @@ ledger without adding overlapping measurements.
 
 The phase sampler's own thread CPU is reported in each trace. External wait
 observer CPU, active probe wall time and lifetime wall time are separate artifacts.
+Active wall time counts each completed probe body, including JSON write/flush,
+once and excludes the one-second wait. Each row reports the cumulative total for
+previously completed bodies; the final summary includes every completed body.
 The host fixture reports50,000-scope timing-loop cost with and without an enabled
 session, and tests a real blocked mutex, exception unwinding and prompt shutdown.
 These are overhead observations, not a matched full-build perturbation estimate.

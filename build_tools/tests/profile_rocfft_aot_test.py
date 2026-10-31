@@ -8,9 +8,11 @@ from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -21,6 +23,74 @@ SPEC.loader.exec_module(trial)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_observer_counts_probe_and_serialized_io_once_and_excludes_wait(self):
+        clock = SimpleNamespace(now=0.0)
+        rows = []
+
+        class SlowStream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+            def write(self, text):
+                rows.append(json.loads(text))
+                clock.now += 2.0
+
+            def flush(self):
+                clock.now += 3.0
+
+        class StopAfterTwo:
+            stopped, waits = False, 0
+
+            def is_set(self):
+                return self.stopped
+
+            def wait(self, seconds):
+                clock.now += seconds
+                self.waits += 1
+                self.stopped = self.waits == 2
+
+        def probe_timestamp():
+            clock.now += 1.0
+            return "fixture"
+
+        observer = trial.WaitObserver(Path("rocfft_aot_helper"), Path("unused"))
+        observer.stop = StopAfterTwo()
+        fake_psutil = SimpleNamespace(
+            Process=lambda: SimpleNamespace(children=lambda **_: []), Error=RuntimeError
+        )
+        with patch.dict(
+            sys.modules,
+            {
+                "psutil": fake_psutil,
+                "profile_build": SimpleNamespace(cgroups=lambda: ([], {})),
+            },
+        ), patch.object(trial, "write_json"), patch.object(
+            trial.Path, "open", return_value=SlowStream()
+        ), patch.object(
+            trial, "utc", side_effect=probe_timestamp
+        ), patch.object(
+            trial.time, "monotonic", side_effect=lambda: clock.now
+        ), patch.object(
+            trial.time, "thread_time", return_value=0.0
+        ):
+            observer._run()
+        # Each body costs 1s probe + 2s serialization/write + 3s flush.
+        self.assertNotIn("error", observer.summary)
+        self.assertEqual(observer.summary["samples"], 2)
+        self.assertEqual(observer.summary["active_wall_s"], 12.0)
+        self.assertEqual(observer.summary["lifetime_wall_s"], 14.0)
+        self.assertEqual([r["observer_active_wall_s"] for r in rows], [0.0, 6.0])
+        self.assertTrue(
+            all(
+                r["observer_active_wall_scope"]
+                == "completed_previous_samples_including_write_flush"
+                for r in rows
+            )
+        )
+
     def test_wait_channel_reader_is_bounded_and_reports_missing_data(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
