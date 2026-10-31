@@ -71,3 +71,59 @@ function(therock_patch_linked_lib)
     endif()
   endforeach()
 endfunction()
+
+
+# RCCL force-sets Release flags to -O3 after the toolchain file, which drops
+# host -Oz. That overwrite happens before add_subdirectory, so put the flag
+# back at the end of this directory. Compile rules read the cache at generate
+# time. Do not re-add -DNDEBUG: RCCL drops it on purpose.
+function(therock_asan_compact_restore_host_oz)
+  if(NOT THEROCK_ASAN_COMPACT)
+    return()
+  endif()
+  foreach(_var IN ITEMS CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE)
+    if("${${_var}}" MATCHES "(^|[ \t])-Xarch_host[ \t]+-Oz([ \t]|$)")
+      continue()
+    endif()
+    set("${_var}" "${${_var}} -Xarch_host -Oz" CACHE STRING "Release flags" FORCE)
+  endforeach()
+endfunction()
+
+
+# Re-apply host -Oz after this subproject's CMakeLists overwrites Release flags.
+function(therock_asan_compact_preserve_host_oz)
+  if(NOT THEROCK_ASAN_COMPACT)
+    return()
+  endif()
+  cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL therock_asan_compact_restore_host_oz)
+endfunction()
+
+
+# --offload-compress for HIP code compiled as C++ via hip::device.
+# CMAKE_HIP_FLAGS never applies to those targets, and a global C++ flag warns
+# on ordinary C++ files.
+function(therock_asan_compact_add_offload_compress dir)
+  if(NOT THEROCK_ASAN_COMPACT)
+    return()
+  endif()
+  therock_get_all_targets(_targets "${dir}")
+  foreach(_tgt IN LISTS _targets)
+    if(NOT TARGET "${_tgt}")
+      continue()
+    endif()
+    get_target_property(_type "${_tgt}" TYPE)
+    if(_type STREQUAL "INTERFACE_LIBRARY" OR _type STREQUAL "UTILITY")
+      continue()
+    endif()
+    get_target_property(_libs "${_tgt}" LINK_LIBRARIES)
+    get_target_property(_iface "${_tgt}" INTERFACE_LINK_LIBRARIES)
+    set(_joined "${_libs};${_iface}")
+    if(NOT _joined MATCHES "(^|;)hip::device(;|$)")
+      continue()
+    endif()
+    # Target option, not a global flag string, so it is not copied into
+    # custom commands that cannot evaluate generator expressions.
+    target_compile_options("${_tgt}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX,HIP>:--offload-compress>")
+    message(STATUS "ASAN compact: --offload-compress on ${_tgt} (links hip::device)")
+  endforeach()
+endfunction()
