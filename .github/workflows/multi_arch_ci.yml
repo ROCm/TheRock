@@ -17,6 +17,15 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_comm_stage:
+        type: boolean
+        default: false
+        description: "Fresh full COMM-stage link-only comparison; no publication"
+      profile_comm_stage_link_jobs:
+        type: choice
+        default: "1"
+        options: ["1", "2"]
+        description: "Only rocSHMEM's two final native link widths; parent schedules1/2/2/1"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -93,6 +102,12 @@ on:
           reuse and test filtering (empty = run all tests).
   workflow_call:
     inputs:
+      profile_comm_stage:
+        type: boolean
+        default: false
+      profile_comm_stage_link_jobs:
+        type: string
+        default: "1"
       linux_amdgpu_families:
         type: string
         default: ""
@@ -162,6 +177,7 @@ concurrency:
 
 jobs:
   setup:
+    if: ${{ !inputs.profile_comm_stage }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -179,6 +195,57 @@ jobs:
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
       build_native_windows: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_windows }}
       build_stages: ${{ inputs.build_stages || '' }}
+
+  profile_comm_stage:
+    name: Full COMM stage (native link width ${{ inputs.profile_comm_stage_link_jobs }})
+    if: ${{ inputs.profile_comm_stage && github.repository == 'ROCm/TheRock' }}
+    runs-on: aws-linux-scale-rocm-prod
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
+    env:
+      RELEASE_TYPE: ci
+      CCACHE_READONLY: '1'
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      TEATIME_FORCE_INTERACTIVE: '0'
+      TEATIME_PROFILE_CPU: '1'
+      AWS_EC2_METADATA_DISABLED: 'true'
+      LINK_JOBS: ${{ inputs.profile_comm_stage_link_jobs || '1' }}
+    steps:
+      - name: Checkout reviewed common diagnostic revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 64
+      - name: Install common requirements
+        run: pip install -r requirements.txt
+      - name: Configure read-only CI cache
+        shell: bash
+        run: |
+          python build_tools/setup_ccache.py --release-type ci \
+            --dir "$(dirname "$CCACHE_CONFIGPATH")" \
+            --local-path "$GITHUB_WORKSPACE/.container-cache/ccache" \
+            --log-dir "$GITHUB_WORKSPACE/.container-cache/ccache-logs" --init
+      - name: Test full-stage controls and link-only product fixture
+        run: python -m unittest build_tools.tests.profile_comm_stage_test build_tools.tests.rocshmem_native_link_options_test -v
+      - name: Fresh complete COMM configure build artifacts and checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -u build_tools/profile_comm_stage.py --link-jobs "$LINK_JOBS" --max-wall-seconds 10800
+      - name: Retain complete evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: comm-stage-width-${{ inputs.profile_comm_stage_link_jobs }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/logs/comm-stage/
+          include-hidden-files: true
+          compression-level: 1
+          if-no-files-found: warn
+          retention-days: 14
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
@@ -225,7 +292,7 @@ jobs:
     name: Manifest Diff
     # Refs are auto-derived from push / pull_request events only.
     # For manual runs, dispatch manifest-diff.yml directly with explicit refs.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    if: ${{ !inputs.profile_comm_stage && (github.event_name == 'pull_request' || github.event_name == 'push') }}
     uses: ./.github/workflows/manifest-diff.yml
     permissions:
       contents: read
@@ -239,6 +306,7 @@ jobs:
       - linux_build_and_test
       - windows_build_and_test
       - manifest_diff
+      - profile_comm_stage
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

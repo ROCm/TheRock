@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/ROCm/rocm-systems/a10dca087065a82f15ea89dc7d6fdd3c6bb2c246/projects/rocshmem/CMakeLists.txt",
+    "file": "source/projects__rocshmem__CMakeLists.txt",
+    "sha256": "074ae96c5748cc8819fd3bc03df0b3f2d57a24d44c01e98d1ff63e435fb01baf"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/ROCm/rocm-systems/a10dca087065a82f15ea89dc7d6fdd3c6bb2c246/projects/rocshmem/tests/functional_tests/CMakeLists.txt",
+    "file": "source/projects__rocshmem__tests__functional_tests__CMakeLists.txt",
+    "sha256": "ed60e8cae07bb4c6b5b2b4207085e1f49d1bb9e24a39e01a76d4efbbb16a88c3"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/ROCm/rocm-systems/a10dca087065a82f15ea89dc7d6fdd3c6bb2c246/projects/rocshmem/tools/CMakeLists.txt",
+    "file": "source/projects__rocshmem__tools__CMakeLists.txt",
+    "sha256": "a05c5437702afdd20a79bcfde6e74e5efbd6d428cc96848241cff0348ad8fd24"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/ROCm/rocm-systems/a10dca087065a82f15ea89dc7d6fdd3c6bb2c246/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake",
+    "file": "source/projects__rocshmem__tests__functional_tests__CMakeDeviceBitcodeTester.cmake",
+    "sha256": "accadc372f68b1f2cafa0391204092d213c14146b9a1be14a8601964b3f17c3e"
+  }
+]
