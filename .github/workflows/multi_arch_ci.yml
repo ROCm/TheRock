@@ -305,6 +305,7 @@ jobs:
       - name: Verify diagnostic guards and aggregation
         run: python -m unittest build_tools.tests.profile_rocfft_aot_test -v
       - name: Prepare SDK and profile math stage with original seven AOT commands
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           ROCFFT_AOT_BATCH_TRIAL: ${{ inputs.profile_rocfft_aot_batch_transaction }}
