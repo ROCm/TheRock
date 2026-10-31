@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Task-only diagnostic entrypoint; not intended as a product workflow change.
 name: CK compilation diagnostic (01a193c1)
-run-name: CK ${{ inputs.build_variant }} compilation diagnostic (01a193c1)
+run-name: CK ${{ inputs.build_variant }} ${{ inputs.operation }} (01a193c1)
 on:
   workflow_dispatch:
     inputs:
@@ -38,6 +38,10 @@ jobs:
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: '*'
     steps:
+      - name: Install and verify measurement tools before setup
+        run: |
+          yum install -y time
+          /usr/bin/time -v true
       - name: Checkout frozen product source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
