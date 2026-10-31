@@ -1,123 +1,97 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI ASAN
-
-on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
+name: Controlled specialized solver compilation (01a19119)
+run-name: HEAD solver joint candidate three controlled pairs (01a19119)
+"on":
   workflow_dispatch:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
-  setup:
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
-      build_pytorch: false
-      build_jax: false
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_asan_summary:
-    name: CI ASAN Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-26.04
+  solver-pair:
+    runs-on: aws-linux-scale-rocm-large
+    timeout-minutes: 360
+    strategy:
+      fail-fast: true
+      max-parallel: 3
+      matrix:
+        include:
+          - pair: 1
+            first: baseline
+            second: candidate
+          - pair: 2
+            first: candidate
+            second: baseline
+          - pair: 3
+            first: baseline
+            second: candidate
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
+    env:
+      CCACHE_DISABLE: '1'
+      TEATIME_FORCE_INTERACTIVE: '0'
+      PERF_PAIR_ID: '${{ matrix.pair }}'
+      PERF_TRIAL_ORDER: '${{ matrix.first }}-then-${{ matrix.second }}'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - name: Checkout instrumentation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+          path: probe
+      - name: Checkout frozen Rock CI HEAD source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+          persist-credentials: false
+          path: source
+      - name: Install dependencies and copy reviewed experiment assets
+        working-directory: source
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          git config --global --add safe.directory "$PWD"
+          pip install -r requirements.txt
+          mkdir -p build_tools/perf_probe/records
+          cp ../probe/build_tools/perf_probe/command_trace.py build_tools/perf_probe/
+          cp ../probe/build_tools/perf_probe/collect_build_perf.py build_tools/perf_probe/
+          cp ../probe/build_tools/perf_probe/bootstrap-codeobj.patch build_tools/perf_probe/
+          cp ../probe/experiments/joint/run_experiment.sh build_tools/perf_probe/
+          cp ../probe/experiments/joint/phase_probes.py build_tools/perf_probe/
+          cp ../probe/experiments/joint/records/*.json build_tools/perf_probe/records/
+          cp ../probe/experiments/compiler/trace_getf2.py build_tools/perf_probe/
+          cp ../probe/experiments/compiler/rocsolver-specialized-shards.patch build_tools/perf_probe/
+      - name: Prerequisites, fixture and early compiler/linker capability checks
+        working-directory: source
+        run: bash build_tools/perf_probe/run_experiment.sh prepare
+      - name: First full cold-object solver trial (${{ matrix.first }})
+        working-directory: source
+        run: bash build_tools/perf_probe/run_experiment.sh '${{ matrix.first }}'
+      - name: Second full cold-object solver trial (${{ matrix.second }})
+        working-directory: source
+        run: bash build_tools/perf_probe/run_experiment.sh '${{ matrix.second }}'
+      - name: Compare installed outputs and public ELF contract
+        working-directory: source
+        run: bash build_tools/perf_probe/run_experiment.sh compare
+      - name: Four concurrent isolated control/trace probes on restored original source
+        if: matrix.pair == 1
+        working-directory: source
+        run: bash build_tools/perf_probe/run_experiment.sh probes
+      - name: Archive evidence, excluding private object bytes
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, tarfile
+          root = pathlib.Path('source')
+          def keep(member):
+              if member.name.startswith('perf-phase-probes/') and member.name.endswith('.o'):
+                  return None
+              return member
+          name = 'joint-solver-perf-' + os.environ['PERF_PAIR_ID'] + '.tar.gz'
+          with tarfile.open(name, 'w:gz') as archive:
+              for pattern in ('perf-*', 'build/logs'):
+                  for path in root.glob(pattern):
+                      archive.add(path, arcname=str(path.relative_to(root)), recursive=True, filter=keep)
+          PY
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: joint-solver-perf-pair-${{ matrix.pair }}-01a19119
+          path: joint-solver-perf-${{ matrix.pair }}.tar.gz
+          retention-days: 14
+          compression-level: 0
