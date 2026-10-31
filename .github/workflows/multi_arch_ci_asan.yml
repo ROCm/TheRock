@@ -9,7 +9,11 @@ on:
       operation:
         type: choice
         default: diagnostic
-        options: [diagnostic, benchmark]
+        options: [diagnostic, benchmark, integration]
+      baseline_contract_run_id:
+        type: string
+        default: ''
+        description: Successful paired benchmark/GPU run for archive integration comparison
       build_variant:
         type: choice
         default: asan-debug
@@ -23,7 +27,7 @@ permissions:
   actions: read
 jobs:
   diagnostic:
-    runs-on: ${{ inputs.operation == 'benchmark' && 'aws-linux-scale-rocm-large' || 'aws-linux-scale-rocm-prod' }}
+    runs-on: ${{ inputs.operation != 'diagnostic' && 'aws-linux-scale-rocm-large' || 'aws-linux-scale-rocm-prod' }}
     timeout-minutes: 360
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
@@ -59,7 +63,22 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
       - name: Configure CK from pinned dependencies
+        if: inputs.operation != 'integration'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py configure
+      - name: Rebuild actual CK archive and MIOpen consumer
+        if: inputs.operation == 'integration'
+        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/integration.py --variant "${BUILD_VARIANT}" --baseline-run-id "${BASELINE_RUN_ID}"
+      - name: Package exact rebuilt libraries and archive contract
+        if: inputs.operation == 'integration'
+        run: tar -czf integration-bundle.tar.gz -C integration-bundle .
+      - name: Upload rebuilt integration products
+        if: inputs.operation == 'integration'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-miopen-integration-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: integration-bundle.tar.gz
+          if-no-files-found: error
+          retention-days: 14
       - name: Profile isolated object
         if: inputs.operation == 'diagnostic'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode profile
@@ -166,5 +185,86 @@ jobs:
           path: |
             ck-gpu-evidence/
             !ck-gpu-evidence/*.o
+          if-no-files-found: error
+          retention-days: 14
+
+  consumer_contract:
+    needs: diagnostic
+    if: inputs.operation == 'integration'
+    runs-on: linux-gfx950-1gpu-ccs-ossci-rocm
+    timeout-minutes: 180
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
+      options: >-
+        --user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576
+        --security-opt seccomp=unconfined --group-add video
+        --device /dev/kfd --device /dev/dri
+        --group-add 993 --group-add 992 --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST
+    env:
+      RELEASE_TYPE: ci
+      BUILD_VARIANT: ${{ inputs.build_variant }}
+      BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+      BASELINE_CONTRACT_RUN_ID: ${{ inputs.baseline_contract_run_id }}
+      GH_TOKEN: ${{ github.token }}
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: '*'
+    steps:
+      - name: Checkout frozen product tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+          persist-credentials: false
+          set-safe-directory: false
+      - name: Checkout exact integration tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: .compile-hotspot-instrumentation
+          persist-credentials: false
+          set-safe-directory: false
+      - name: Fetch this run's rebuilt integration products
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ck-miopen-integration-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: integration-products
+      - name: Fetch paired baseline GPU results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ck-gpu-contract-${{ inputs.build_variant }}-${{ inputs.baseline_contract_run_id }}
+          run-id: ${{ inputs.baseline_contract_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-contract
+      - name: Fetch paired benchmark provenance
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: ck-compile-diagnostic-${{ inputs.build_variant }}-${{ inputs.baseline_contract_run_id }}
+          run-id: ${{ inputs.baseline_contract_run_id }}
+          github-token: ${{ github.token }}
+          path: baseline-protocol
+      - name: Restore exact product modes and symlinks
+        run: |
+          mkdir integration-bundle
+          tar -xzf integration-products/integration-bundle.tar.gz -C integration-bundle
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Run archive contract and MIOpen quick standard and focused tests
+        run: |
+          python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/integration_gpu.py \
+            --variant "${BUILD_VARIANT}" --baseline-run-id "${BASELINE_RUN_ID}" \
+            --producer-run-id "${GITHUB_RUN_ID}" \
+            --baseline-contract-run-id "${BASELINE_CONTRACT_RUN_ID}" \
+            --baseline-contract-log baseline-contract/baseline-numeric.log \
+            --baseline-contract-provenance baseline-contract/provenance.json \
+            --baseline-benchmark-protocol baseline-protocol/compile-hotspot-evidence/benchmark-protocol.json
+      - name: Retain integration test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-miopen-consumer-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: integration-gpu-evidence/
           if-no-files-found: error
           retention-days: 14
