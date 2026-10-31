@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_blas_b" Directory="amdrocm_blas_b">
+    <Component Id="c_amdrocm_blas_b_h.dll" Guid="*">
+      <File Id="f_amdrocm_blas_b_h.dll" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/bin/hipblas.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_b_hcr.txt" Guid="*">
+      <File Id="f_amdrocm_blas_b_hcr.txt" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/bin/hipblas_clients_readme.txt" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_b_l.dll" Guid="*">
+      <File Id="f_amdrocm_blas_b_l.dll" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/bin/libhipblaslt.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_b_r.dll" Guid="*">
+      <File Id="f_amdrocm_blas_b_r.dll" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/bin/rocblas.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_b_rcr.txt" Guid="*">
+      <File Id="f_amdrocm_blas_b_rcr.txt" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/bin/rocblas_clients_readme.txt" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\hipblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_sdh" Directory="amdrocm_blas_sdh">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/share/doc/hipblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\rocblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_sdr" Directory="amdrocm_blas_sdr">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/share/doc/rocblas/*.*" />
+  </ComponentGroup>
+
+</Include>
