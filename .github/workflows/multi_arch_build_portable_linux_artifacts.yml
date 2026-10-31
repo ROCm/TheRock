@@ -83,8 +83,8 @@ permissions:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    # Profiling branch: hold the large-runner label fixed across comparisons.
-    runs-on: aws-linux-scale-rocm-prod
+    # Hold heavy-stage comparisons fixed; preserve caller sizing for other stages.
+    runs-on: ${{ (inputs.stage_name == 'compiler-runtime' || inputs.stage_name == 'math-libs' || inputs.stage_name == 'comm-libs') && 'aws-linux-scale-rocm-prod' || inputs.build_runs_on }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
