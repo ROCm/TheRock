@@ -96,11 +96,54 @@ class ContextTest(unittest.TestCase):
             ("pr_labels", "test_filter:quick"),
             ("profile_normal_validation", "false"),
             ("profile_normal_cache_regime", "merge-trust-domains"),
+            ("profile_normal_product", "unknown-product"),
         ]:
             modified = event()
             modified["inputs"][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
                 CONTROL.validate_context(self.env, modified)
+
+    def test_product_preconfigure_is_same_source_in_both_arms_and_none_is_inert(self):
+        import normal_rocfft_aot
+
+        env = {
+            **self.env,
+            "NORMAL_VALIDATION": "true",
+            "STAGE_NAME": "math-libs",
+            "AMDGPU_FAMILIES": "gfx103X-all",
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            args = argparse.Namespace(output=root / "product-hook.json")
+            env["GITHUB_WORKSPACE"] = str(root)
+            inputs = event()["inputs"]
+            with patch.dict(os.environ, env), patch.object(
+                CONTROL.sys, "platform", "linux"
+            ), patch.object(
+                normal_rocfft_aot,
+                "apply_product",
+                return_value={"patch": "same-reviewed.patch"},
+            ) as apply:
+                off = CONTROL.preconfigure(args, inputs)
+                self.assertFalse(off["applied_in_this_job"])
+                apply.assert_not_called()
+                inputs["profile_normal_product"] = "rocfft-private-batch"
+                for case in ["baseline", "candidate"]:
+                    inputs["profile_normal_case"] = case
+                    selected = CONTROL.preconfigure(args, inputs)
+                    self.assertTrue(selected["applied_in_this_job"])
+                    self.assertEqual(
+                        selected["product_patches"], ["same-reviewed.patch"]
+                    )
+                    self.assertFalse(selected["source_git_commit_mutations"])
+                self.assertEqual(apply.call_args_list[0], apply.call_args_list[1])
+                self.assertEqual(apply.call_args.args[0], root / "rocm-libraries")
+                apply.reset_mock()
+                with patch.dict(os.environ, {"AMDGPU_FAMILIES": "gfx94X-dcgpu"}):
+                    self.assertFalse(
+                        CONTROL.preconfigure(args, inputs)["applied_in_this_job"]
+                    )
+                apply.assert_not_called()
 
     def test_runner_override_preserves_gpu_and_unrelated_configuration(self):
         original = {
@@ -304,6 +347,58 @@ class WorkflowTest(unittest.TestCase):
         )
         self.assertEqual(len(CONTROL.GITLINKS), 11)
         self.assertTrue(all("@sha256:" in v for v in CONTROL.INSTALL_IMAGES.values()))
+
+    def test_product_workflow_prepare_and_success_gate_preserve_normal_graph(self):
+        inputs = workflow("multi_arch_ci.yml")["on"]["workflow_dispatch"]["inputs"]
+        self.assertEqual(inputs["profile_normal_product"]["default"], "none")
+        self.assertEqual(
+            inputs["profile_normal_product"]["options"],
+            ["none", "rocfft-private-batch"],
+        )
+        parsed = workflow("multi_arch_build_portable_linux_artifacts.yml")
+        job = parsed["jobs"]["build_stage"]
+        steps = job["steps"]
+        indexes = {step["name"]: i for i, step in enumerate(steps)}
+        names = [
+            "Fetch sources",
+            "Apply requested scoped normal product and record inputs",
+            "Capture source and tool identities",
+            "Configure",
+            "Prepare owned rocFFT runtime caches",
+            "Build stage",
+            "Require complete rocFFT transaction and output checks",
+            "Test Packaging",
+            "Push stage artifacts",
+        ]
+        positions = [indexes[name] for name in names]
+        self.assertEqual(positions, sorted(positions))
+        for name in [
+            "Prepare owned rocFFT runtime caches",
+            "Require complete rocFFT transaction and output checks",
+        ]:
+            step = steps[indexes[name]]
+            for required in [
+                "success()",
+                "profile_normal_validation == 'true'",
+                "profile_normal_product == 'rocfft-private-batch'",
+                "inputs.stage_name == 'math-libs'",
+                "inputs.amdgpu_family == 'gfx103X-all'",
+            ]:
+                self.assertIn(required, step["if"])
+            self.assertNotIn("continue-on-error", step)
+        validation = steps[
+            indexes["Require complete rocFFT transaction and output checks"]
+        ]
+        self.assertIn("steps.build_stage.outcome == 'success'", validation["if"])
+        build = steps[indexes["Build stage"]]
+        self.assertEqual(build["id"], "build_stage")
+        self.assertIn(
+            "--target stage-${STAGE_NAME} therock-artifacts -- -k 0", build["run"]
+        )
+        retention = steps[indexes["Retain common comparison diagnostics"]]
+        self.assertIn("always()", retention["if"])
+        self.assertIn("build/logs/normal-validation/", retention["with"]["path"])
+        self.assertEqual(job["env"]["AMDGPU_FAMILIES"], "${{ inputs.amdgpu_family }}")
 
     def test_failed_destination_guard_blocks_always_credential_steps(self):
         action = yaml.load(

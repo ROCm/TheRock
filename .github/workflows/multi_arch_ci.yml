@@ -20,12 +20,17 @@ on:
       profile_normal_validation:
         type: boolean
         default: false
-        description: 'Controlled normal Linux gfx94x+gfx103x comparison; no product change applied.'
+        description: 'Controlled normal Linux gfx94x+gfx103x comparison; product selection defaults to none.'
       profile_normal_case:
         type: choice
         default: baseline
         options: [baseline, candidate]
-        description: 'Metadata label only; both arms share controls and no optimization is integrated.'
+        description: 'Baseline/candidate label; both arms share the selected product source and common controls.'
+      profile_normal_product:
+        type: choice
+        default: none
+        options: [none, rocfft-private-batch]
+        description: 'Optional reviewed product; rocFFT changes only owned AOT transactions in Linux gfx103X math.'
       profile_normal_cache_regime:
         type: choice
         default: ci-readonly

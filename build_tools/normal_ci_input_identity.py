@@ -384,12 +384,65 @@ def runtime_cache_state(workspace, env, platform):
     )
 
 
-def declared_sources(workspace, manifest, case, fingerprint, stage=None, family=None):
+def workspace_storage_identity(workspace, sysfs_root=Path("/sys/dev/block")):
+    """Narrow device identity only; no mount or unrelated environment sweep."""
+    row = dict(path=str(workspace))
+    try:
+        device = workspace.stat().st_dev
+        row["st_dev"] = device
+        if not hasattr(os, "major"):
+            row["status"] = "device major/minor unavailable on this platform"
+            return row
+        major, minor = os.major(device), os.minor(device)
+        entry = sysfs_root / f"{major}:{minor}"
+        row.update(major=major, minor=minor, sysfs_path=str(entry))
+        if entry.exists():
+            row.update(
+                status="visible sysfs block device",
+                resolved_sysfs_path=str(entry.resolve()),
+            )
+        else:
+            row["status"] = (
+                "no sysfs block device for workspace st_dev; backing storage unresolved"
+            )
+    except OSError as error:
+        row.update(status="unavailable", error=str(error))
+    return row
+
+
+def io_limit_files(paths):
+    """Every visible cgroup io.max, including explicit absent/denied receipts."""
+    rows = []
+    for parent in paths:
+        path = parent / "io.max"
+        try:
+            rows.append(dict(path=str(path), status="read", text=path.read_text()))
+        except OSError as error:
+            rows.append(dict(path=str(path), status="unavailable", error=str(error)))
+    return dict(
+        files=rows,
+        scope="visible cgroup hierarchy only; hidden ancestor limits remain unknown",
+    )
+
+
+def declared_sources(
+    workspace, manifest, case, fingerprint, stage=None, family=None, product="none"
+):
     data = json.loads(manifest.read_text(encoding="utf-8"))
     receipts, valid = [], True
     for kind in ["patches", "copied_inputs"]:
         for entry in data.get(kind, []):
             if case not in entry.get("cases", ["baseline", "candidate"]):
+                continue
+            if "products" in entry and product not in entry["products"]:
+                receipts.append(
+                    dict(
+                        kind=kind,
+                        path=entry["path"],
+                        status="outside declared product scope",
+                        products=entry["products"],
+                    )
+                )
                 continue
             if "stages" in entry and stage not in entry["stages"]:
                 receipts.append(
@@ -444,6 +497,7 @@ def declared_sources(workspace, manifest, case, fingerprint, stage=None, family=
         manifest_sha256=fingerprint(manifest),
         stage=stage,
         family=family,
+        product=product,
         valid=valid,
         files=receipts,
         scope="explicit reviewed source/patch paths only, including untracked copied headers; no untracked-tree or secret sweep",

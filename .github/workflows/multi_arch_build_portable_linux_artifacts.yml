@@ -105,6 +105,7 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       NORMAL_REQUESTED_RUNNER: ${{ inputs.build_runs_on }}
       NORMAL_VALIDATION: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      NORMAL_CASE: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_case || 'baseline' }}
       NORMAL_IMAGE_PIN: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb
       TEATIME_PROFILE_CPU: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && '1' || '' }}
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
@@ -202,7 +203,7 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
-      - name: Record reviewed preconfigure extension point
+      - name: Apply requested scoped normal product and record inputs
         if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
         run: python build_tools/normal_ci_validation.py preconfigure --output build/logs/normal-validation/product-hook.json
 
@@ -238,13 +239,22 @@ jobs:
         if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
         run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test build_tools.tests.normal_ci_validation_test build_tools.tests.normal_ci_input_identity_test -v
 
+      - name: Prepare owned rocFFT runtime caches
+        if: ${{ success() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && fromJSON(toJSON(github.event.inputs)).profile_normal_product == 'rocfft-private-batch' && inputs.stage_name == 'math-libs' && inputs.amdgpu_family == 'gfx103X-all' }}
+        run: python build_tools/normal_rocfft_aot.py prepare --enable --case "${NORMAL_CASE}" --github-env
+
       - name: Build stage
+        id: build_stage
         run: |
           prefix=()
           if [[ "${NORMAL_VALIDATION}" == "true" ]]; then
             prefix=(python build_tools/profile_build.py --capture-rtc-inputs --output "${BUILD_DIR}/logs/profile" -- python build_tools/normal_ci_validation.py run --)
           fi
           "${prefix[@]}" cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+
+      - name: Require complete rocFFT transaction and output checks
+        if: ${{ success() && steps.build_stage.outcome == 'success' && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && fromJSON(toJSON(github.event.inputs)).profile_normal_product == 'rocfft-private-batch' && inputs.stage_name == 'math-libs' && inputs.amdgpu_family == 'gfx103X-all' }}
+        run: python build_tools/normal_rocfft_aot.py validate --enable --case "${NORMAL_CASE}"
 
       - name: Preserve generated build evidence
         if: ${{ !cancelled() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}

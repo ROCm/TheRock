@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Common controls for the opt-in normal two-family CI comparison.
 
-No product optimization is applied. Commands execute only inside TheRock Actions.
+Product support is explicitly selected and default-off. Commands execute only inside TheRock Actions.
 Unit fixtures may call the pure validation/configuration functions directly.
 """
 
@@ -26,6 +26,8 @@ from normal_ci_input_identity import (
     query_loader,
     runtime_cache_state,
     sdk_inputs,
+    workspace_storage_identity,
+    io_limit_files,
 )
 
 PRODUCT_SHA = "5b7cb88373362ab80dc0f19605915e534f4158aa"
@@ -101,6 +103,11 @@ def validate_context(env, event):
         "private-cold",
     ]:
         raise ValueError("unknown comparison cache regime")
+    if inputs.get("profile_normal_product", "none") not in [
+        "none",
+        "rocfft-private-batch",
+    ]:
+        raise ValueError("unknown normal comparison product")
     if env.get("RELEASE_TYPE", "ci") != "ci":
         raise ValueError("release destinations forbidden in normal validation")
     return inputs
@@ -221,7 +228,7 @@ def setup(args):
             versions=VERSIONS,
             package_build_suffix=PACKAGE_SUFFIX,
             installed_image_pins=INSTALL_IMAGES,
-            source_patch_policy="No product patch applied; preserve submodule HEAD/history",
+            source_patch_policy="Explicit default-off selection; apply reviewed dirty patches identically in both arms without changing source HEAD/history",
             recorded_source_gitlinks=GITLINKS,
             cache_policy="explicit ci-readonly preferred or distinct private-cold; no shared writes",
         ),
@@ -271,6 +278,73 @@ def cache(args, inputs):
     )
 
 
+def product_selected(inputs, env, platform):
+    return (
+        inputs.get("profile_normal_product", "none") == "rocfft-private-batch"
+        and platform == "linux"
+        and env.get("STAGE_NAME") == "math-libs"
+        and env.get("AMDGPU_FAMILIES", "").casefold() == "gfx103x-all"
+    )
+
+
+def preconfigure(args, inputs):
+    import normal_rocfft_aot as rocfft
+
+    requested = inputs.get("profile_normal_product", "none")
+    applied = product_selected(inputs, os.environ, sys.platform)
+    source = None
+    if applied:
+        rocfft.selected(True, os.environ, sys.platform)
+        workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+        source = rocfft.apply_product(
+            workspace / "rocm-libraries", args.output.parent / "rocfft-aot"
+        )
+    receipt = dict(
+        case=inputs.get("profile_normal_case", "baseline"),
+        requested_product=requested,
+        applied_in_this_job=applied,
+        applied_scope="linux/math-libs/gfx103X-all" if applied else None,
+        product_patches=[source["patch"]] if source else [],
+        compiler_option_changes=[],
+        source_git_commit_mutations=False,
+        runtime_cache_contract=(
+            "fresh private COMGR and owned growing seven-helper AOT DB in both arms; ccache remains separate"
+            if applied
+            else "original runtime cache policy"
+        ),
+    )
+    save(args.output, receipt)
+    return receipt
+
+
+def product_metadata(workspace, inputs):
+    requested = inputs.get("profile_normal_product", "none")
+    applied = product_selected(inputs, os.environ, sys.platform)
+    receipt = dict(
+        requested=requested,
+        applied_in_this_job=applied,
+        scope="linux/math-libs/gfx103X-all" if applied else None,
+    )
+    if applied:
+        import normal_rocfft_aot as rocfft
+
+        path = workspace / "build/logs/normal-validation/rocfft-aot/source-control.json"
+        source = json.loads(path.read_text(encoding="utf-8"))
+        rocfft.verify_source(workspace / "rocm-libraries", source)
+        receipt.update(
+            source_control_sha256=digest(path),
+            source_patch_sha256=source["patch_sha256"],
+            copied_header_sha256=source["header_sha256"],
+            expected_runtime_mode=(
+                "all"
+                if inputs.get("profile_normal_case", "baseline") == "candidate"
+                else "0"
+            ),
+            cache_contract="fresh private COMGR in both arms, separate from ccache",
+        )
+    return receipt
+
+
 def capture(args, inputs):
     start = time.monotonic()
     captured_hashes = {}
@@ -294,7 +368,7 @@ def capture(args, inputs):
     data = {
         "product_sha": PRODUCT_SHA,
         "case": inputs.get("profile_normal_case", "baseline"),
-        "candidate_patch": "none integrated; case is a label only",
+        "product_selection": product_metadata(workspace, inputs),
         "ci": {
             key: os.environ.get(key)
             for key in [
@@ -325,6 +399,12 @@ def capture(args, inputs):
             else None
         ),
     )
+    from profile_build import cgroups
+
+    visible_groups, group_scope = cgroups()
+    data["allocation"]["workspace_storage"] = workspace_storage_identity(workspace)
+    data["allocation"]["io_limits"] = io_limit_files(visible_groups)
+    data["allocation"]["io_limits"]["cgroup_resolution"] = group_scope
     for path in [
         "/etc/os-release",
         "/proc/self/cgroup",
@@ -481,6 +561,7 @@ def capture(args, inputs):
         fingerprint,
         stage=os.environ.get("STAGE_NAME"),
         family=os.environ.get("AMDGPU_FAMILIES"),
+        product=inputs.get("profile_normal_product", "none"),
     )
     data["capture_wall_s"] = time.monotonic() - start
     save(args.output, data)
@@ -513,18 +594,7 @@ def main():
     elif args.command == "capture":
         capture(args, inputs)
     elif args.command == "preconfigure":
-        # Deliberate extension point: later reviewed product patches belong here,
-        # after stock source fetch and before configure, without advancing source HEAD.
-        # This common-control commit applies none and does not change compile flags.
-        save(
-            args.output,
-            dict(
-                case=inputs.get("profile_normal_case", "baseline"),
-                product_patches=[],
-                compiler_option_changes=[],
-                source_git_commit_mutations=False,
-            ),
-        )
+        preconfigure(args, inputs)
     elif args.command == "install-image":
         output({"container_image": INSTALL_IMAGES[args.os_profile]})
     elif args.command == "run":

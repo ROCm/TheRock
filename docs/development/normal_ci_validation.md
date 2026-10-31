@@ -7,13 +7,23 @@ and tests, native DEB/RPM and actual install/uninstall checks. It selects exactl
 gfx94x and gfx103x; Windows, PyTorch and JAX are explicitly outside this selection.
 It does not validate the historical complete multi-platform matrix.
 
-No optimization is integrated. `profile_normal_case` labels baseline/candidate
-evidence only. The preconfigure extension point records an empty product patch
-and option list; it changes neither source nor flags. Future product candidates
-require a separate review and must preserve source Git provenance where practical.
-Apply reviewed dirty patches after normal source fetch rather than advancing a
-large source repository's HEAD just to carry diagnostics. Retain actual patch/file
-hashes, existing project history and generated version metadata in both arms.
+`profile_normal_product` explicitly selects `none` (default) or
+`rocfft-private-batch`. Both arms retain common controls and identical selected
+product source. The rocFFT selection applies a reviewed dirty patch/header in
+Linux gfx103X math only, preserving rocm-libraries HEAD/branch/history and the
+seven original AOT commands, targets and dependency chain. Baseline retains
+owned-cache autocommit; candidate batches each helper's writes with a durable
+COMMIT before copying its shipped output. Other stages/families retain stock
+source/runtime behavior. No product is applied when the selection is `none`.
+
+The selected math job prepares a fresh private COMGR cache and one owned growing
+AOT DB in BOTH arms. This is an explicit common runtime-cache contract, separate
+from ccache's CI-readonly/private-cold choice and from a stock persistent COMGR
+cache. The default COMGR pruning and WAL/FULL policies remain unchanged. Actual
+cache outcomes/compiler keys/provider fingerprints must still qualify comparisons.
+Source receipts and common captures record requested versus applied scope; source
+inputs are patched/copied after normal fetch without advancing source history.
+See [the product controls and host checks](normal_rocfft_aot.md).
 
 The controller rejects local execution, other repositories, non-dispatch events,
 different families/stage selections, stage reuse and narrowed tests. Both arms
@@ -23,6 +33,7 @@ must use these inputs:
 {
   "profile_normal_validation": "true",
   "profile_normal_case": "baseline",
+  "profile_normal_product": "none",
   "profile_normal_cache_regime": "ci-readonly",
   "linux_amdgpu_families": "gfx94x,gfx103x",
   "windows_amdgpu_families": "",
@@ -40,8 +51,9 @@ must use these inputs:
 }
 ```
 
-Change only the case label for a control twin; a later reviewed optimization must
-declare its own change separately. This documentation does not dispatch a run.
+For a product comparison, select `rocfft-private-batch` identically in both arms
+and change only the case label. `none` compares common controls without applying
+a product. This documentation does not dispatch a run.
 
 ## Common controls
 
@@ -119,19 +131,48 @@ candidate derived from XDG/HOME and the pinned implementation's `/comgr`
 suffix; locality can disable it. The observer does not manufacture a private
 fresh cache, change pruning, or infer enabled caching from HOME alone. A
 pre-stage inventory is not a guaranteed per-helper initial state if other work
-can populate the cache. Future I-029 integration must declare and verify an
-identical appropriate runtime-cache contract in both arms, or retain this
-normal-regime difference from the targeted diagnostic cohort explicitly.
+can populate the cache. The selected I-029 product additionally prepares and
+verifies a fresh private cache contract in both arms; it does not infer that
+contract from this generic snapshot. Its postcheck retains complete private
+COMGR metadata, separately from the generic observer's capped inventory.
 
-`build_tools/normal_ci_declared_inputs.json` is initially empty. A future
-reviewed product hook must declare every patch and copied source input by
-workspace-relative path and exact SHA256, with optional `cases`, `stages` and
-`families` selectors. Family names compare case-insensitively while retaining
-the complete family ID, so a gfx103X-only header is not required in gfx94X math.
-This captures new untracked diagnostic headers without sweeping
-generated outputs or secrets. Capture retains a mismatched receipt and fails;
-unchanged HEAD/tracked diff cannot hide a changed declared header. No product
-patch or copied input is registered by the common-control preparation.
+`build_tools/normal_ci_declared_inputs.json` registers the reviewed I-029 patch
+and copied header by exact committed LF SHA256. Optional `cases`, `products`,
+`stages` and `families` selectors are explicit. Family IDs compare
+case-insensitively while retaining their complete suffix. An absent header is
+not required for product `none`, gfx94X math, or another stage, but is a failing
+input for selected gfx103X math. This captures untracked copied inputs without
+sweeping generated outputs or secrets; mismatches retain a receipt and fail.
+The source helper checks unchanged generator inputs and AOT CMake independently.
+
+Preparation occurs after top-level Configure and before Build. Required output
+validation runs after a successful Build and before normal packaging/artifact
+acceptance. All seven receipts, successful candidate COMMITs, zero fallback
+errors, WAL/FULL settings, 17,204 entries per architecture, generator checksum,
+SQLite quick checks and raw/semantic payload inventories must pass. Existing
+stock checks and job dependencies remain present. Partial product logs live
+inside the always-uploaded normal-validation directory. A failed build or
+validation cannot establish product correctness; GPU numerical checks remain
+separate. The reduced-instrumentation normal product has not yet been executed
+or measured by these local fixture checks.
+
+Common allocation receipts also record workspace `st_dev`, device major/minor and
+its resolved sysfs block-device path when visible, plus every visible cgroup
+`io.max`. Overlay/unmapped devices, missing files and permission errors remain
+explicit; no backing disk or hidden ancestor quota is inferred. Periodic profiler
+samples retain `io.max` too. This is metadata only, not a general mount sweep.
+
+Post-build Ninja evidence additionally retains raw, command-referenced RCCL
+`@device_build/<arch>/link_objects.rsp` bodies and SHA256s. These are Python-written
+custom response files, which `compdb -x` does not reconstruct from Ninja rules.
+Only build-contained regular single-link stable files are admitted: at most128,
+8MiB each and32MiB total. Missing/unsafe/changed/oversize references are explicit
+capture failures and do not establish complete input parity. Payloads are retained
+inside the existing build-graph archive; no input is executed or modified. The
+fixture also retains all25 actual executed RCCL custom-link commands from the
+recorded compiler baseline, their SHA256/Ninja command hashes, and checks all25
+response paths after only a workspace-prefix remap into an inert temporary tree.
+Dummy object-list contents are never passed to a compiler.
 
 Before combining balanced baseline/candidate pairs, require matching source and
 SDK fingerprints, generated commands/architectures, cache regime and **actual

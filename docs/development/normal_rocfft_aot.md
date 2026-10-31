@@ -1,7 +1,7 @@
 # I-029 private rocFFT AOT transactions in normal CI
 
 This is a default-off product support layer for the controlled normal workflow.
-It is not yet wired into that workflow. The source patch is applied identically
+The workflow selects it explicitly with default-off `profile_normal_product`. The source patch is applied identically
 in both arms; only the helper runtime transaction setting differs. Its scope is
 Linux `math-libs`, exactly `gfx103X-all` (gfx1030 through gfx1036). Windows,
 gfx94X, other stages and ordinary builds retain their original behavior.
@@ -58,7 +58,7 @@ logs. A fallback invalidates the comparison rather than changing fallback policy
 
 ## Integration calls and gates
 
-The integrating workflow supplies the existing common nonsecret environment:
+The normal workflow supplies the existing common nonsecret environment:
 `GITHUB_ACTIONS=true`, `GITHUB_REPOSITORY=ROCm/TheRock`, `NORMAL_VALIDATION=true`,
 `STAGE_NAME=math-libs`, `AMDGPU_FAMILIES=gfx103X-all`, `RELEASE_TYPE=ci`, plus the
 current run ID/attempt. Use the same case for all calls in a job:
@@ -98,8 +98,8 @@ The copied-header declaration must be scoped to `math-libs` **and** `gfx103X-all
 gfx94X has a different retained architecture set. Patch/header declarations must
 use committed LF Git-blob hashes, matching Linux checkout/application bytes.
 Register the patch as a tracked input and the copied target as an explicitly
-hashed source input in both cases. The integrating common-controls commit owns
-that registry and workflow wiring; these files deliberately do not edit them.
+hashed source input in both cases. The common-controls integration registers these inputs with product, stage and
+family selectors; changing the source payload requires updating those exact hashes.
 
 ## Host/source checks
 

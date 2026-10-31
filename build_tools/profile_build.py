@@ -9,6 +9,7 @@ general environment dump. Do not pass
 secrets in command arguments. Sampled CPU misses short-lived processes; POSIX
 waited-child CPU is reported separately, without adding sampled CPU to it.
 """
+
 import argparse
 import datetime
 import json
@@ -199,6 +200,7 @@ GROUP_FILES = (
     "memory.events",
     "memory.pressure",
     "io.stat",
+    "io.max",
     "io.pressure",
 )
 

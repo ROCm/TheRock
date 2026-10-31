@@ -1,4 +1,34 @@
 {
-  "patches": [],
-  "copied_inputs": []
+  "patches": [
+    {
+      "path": "patches/build-profile/rocm-libraries/0004-rocfft-normal-private-aot.patch",
+      "sha256": "81ca4e0ea266e4601af2460b4eb7cf5023a19e38b6958dfadac02c2a9ef16726",
+      "cases": [
+        "baseline",
+        "candidate"
+      ],
+      "products": [
+        "rocfft-private-batch"
+      ]
+    }
+  ],
+  "copied_inputs": [
+    {
+      "path": "rocm-libraries/projects/rocfft/shared/normal_aot_transaction.h",
+      "sha256": "1b77518f41872fbe67dc47735a98390cfc48644f2bb53f9dfd0c84954a2b9974",
+      "cases": [
+        "baseline",
+        "candidate"
+      ],
+      "stages": [
+        "math-libs"
+      ],
+      "families": [
+        "gfx103X-all"
+      ],
+      "products": [
+        "rocfft-private-batch"
+      ]
+    }
+  ]
 }

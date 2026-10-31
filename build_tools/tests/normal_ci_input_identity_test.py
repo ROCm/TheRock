@@ -211,6 +211,79 @@ class InputIdentityTest(unittest.TestCase):
         )
         self.assertFalse(missing_selected["valid"])
 
+    def test_workspace_device_and_visible_io_limits_have_explicit_unavailable_state(
+        self,
+    ):
+        sysfs = self.root / "sysfs"
+        device = sysfs / "240:9"
+        device.mkdir(parents=True)
+        with patch.object(
+            IDENTITY.os, "major", return_value=240, create=True
+        ), patch.object(IDENTITY.os, "minor", return_value=9, create=True):
+            row = IDENTITY.workspace_storage_identity(self.root, sysfs)
+            self.assertEqual(row["st_dev"], self.root.stat().st_dev)
+            self.assertEqual(row["major"], 240)
+            self.assertEqual(row["resolved_sysfs_path"], str(device.resolve()))
+            device.rmdir()
+            missing = IDENTITY.workspace_storage_identity(self.root, sysfs)
+            self.assertIn("backing storage unresolved", missing["status"])
+        group = self.file("cgroup/visible/io.max", "240:9 rbps=1000 wbps=max\n").parent
+        limits = IDENTITY.io_limit_files([group, group / "absent"])
+        self.assertEqual(limits["files"][0]["text"], "240:9 rbps=1000 wbps=max\n")
+        self.assertEqual(limits["files"][1]["status"], "unavailable")
+        self.assertFalse((group / "absent").exists())
+
+    def test_product_selector_does_not_require_header_for_none_or_other_family(self):
+        header = self.file("rocm-libraries/projects/rocfft/private.h", "owned header")
+        manifest = self.file(
+            "declared.json",
+            json.dumps(
+                {
+                    "copied_inputs": [
+                        {
+                            "path": header.relative_to(self.root).as_posix(),
+                            "sha256": digest(header),
+                            "cases": ["baseline", "candidate"],
+                            "stages": ["math-libs"],
+                            "families": ["gfx103X-all"],
+                            "products": ["rocfft-private-batch"],
+                        }
+                    ]
+                }
+            ),
+        )
+        selected = IDENTITY.declared_sources(
+            self.root,
+            manifest,
+            "baseline",
+            digest,
+            "math-libs",
+            "gfx103x-all",
+            "rocfft-private-batch",
+        )
+        self.assertTrue(selected["valid"])
+        self.assertEqual(selected["product"], "rocfft-private-batch")
+        header.unlink()
+        for product, family, expected in [
+            ("none", "gfx103X-all", "product"),
+            ("rocfft-private-batch", "gfx94X-dcgpu", "family"),
+        ]:
+            receipt = IDENTITY.declared_sources(
+                self.root, manifest, "candidate", digest, "math-libs", family, product
+            )
+            self.assertTrue(receipt["valid"])
+            self.assertIn(expected, receipt["files"][0]["status"])
+        missing = IDENTITY.declared_sources(
+            self.root,
+            manifest,
+            "candidate",
+            digest,
+            "math-libs",
+            "gfx103X-all",
+            "rocfft-private-batch",
+        )
+        self.assertFalse(missing["valid"])
+
     def test_declared_escape_rejected_and_cache_inventory_is_read_only(self):
         manifest = self.file(
             "declared.json",
