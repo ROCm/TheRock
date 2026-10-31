@@ -125,8 +125,10 @@ normal-regime difference from the targeted diagnostic cohort explicitly.
 
 `build_tools/normal_ci_declared_inputs.json` is initially empty. A future
 reviewed product hook must declare every patch and copied source input by
-workspace-relative path and exact SHA256, with optional `cases` and `stages`
-selectors. This captures new untracked diagnostic headers without sweeping
+workspace-relative path and exact SHA256, with optional `cases`, `stages` and
+`families` selectors. Family names compare case-insensitively while retaining
+the complete family ID, so a gfx103X-only header is not required in gfx94X math.
+This captures new untracked diagnostic headers without sweeping
 generated outputs or secrets. Capture retains a mismatched receipt and fails;
 unchanged HEAD/tracked diff cannot hide a changed declared header. No product
 patch or copied input is registered by the common-control preparation.

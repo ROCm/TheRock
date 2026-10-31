@@ -177,6 +177,40 @@ class InputIdentityTest(unittest.TestCase):
         self.assertTrue(out_of_scope["valid"])
         self.assertIn("outside declared stage", out_of_scope["files"][0]["status"])
 
+    def test_family_specific_header_is_required_only_for_selected_math_job(self):
+        header = self.file("rocm-libraries/projects/rocfft/private.h", "owned header")
+        manifest = self.file(
+            "declared.json",
+            json.dumps(
+                {
+                    "copied_inputs": [
+                        {
+                            "path": header.relative_to(self.root).as_posix(),
+                            "sha256": digest(header),
+                            "stages": ["math-libs"],
+                            "families": ["gfx103X-all"],
+                        }
+                    ]
+                }
+            ),
+        )
+        selected = IDENTITY.declared_sources(
+            self.root, manifest, "baseline", digest, "math-libs", "gfx103x-all"
+        )
+        self.assertTrue(selected["valid"])
+        header.unlink()
+        other_family = IDENTITY.declared_sources(
+            self.root, manifest, "baseline", digest, "math-libs", "gfx94X-dcgpu"
+        )
+        self.assertTrue(other_family["valid"])
+        self.assertEqual(
+            other_family["files"][0]["status"], "outside declared family scope"
+        )
+        missing_selected = IDENTITY.declared_sources(
+            self.root, manifest, "baseline", digest, "math-libs", "gfx103X-all"
+        )
+        self.assertFalse(missing_selected["valid"])
+
     def test_declared_escape_rejected_and_cache_inventory_is_read_only(self):
         manifest = self.file(
             "declared.json",

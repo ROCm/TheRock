@@ -384,7 +384,7 @@ def runtime_cache_state(workspace, env, platform):
     )
 
 
-def declared_sources(workspace, manifest, case, fingerprint, stage=None):
+def declared_sources(workspace, manifest, case, fingerprint, stage=None, family=None):
     data = json.loads(manifest.read_text(encoding="utf-8"))
     receipts, valid = [], True
     for kind in ["patches", "copied_inputs"]:
@@ -398,6 +398,18 @@ def declared_sources(workspace, manifest, case, fingerprint, stage=None):
                         path=entry["path"],
                         status="outside declared stage scope",
                         stages=entry["stages"],
+                    )
+                )
+                continue
+            if "families" in entry and (family or "").casefold() not in {
+                value.casefold() for value in entry["families"]
+            }:
+                receipts.append(
+                    dict(
+                        kind=kind,
+                        path=entry["path"],
+                        status="outside declared family scope",
+                        families=entry["families"],
                     )
                 )
                 continue
@@ -431,6 +443,7 @@ def declared_sources(workspace, manifest, case, fingerprint, stage=None):
         manifest=str(manifest),
         manifest_sha256=fingerprint(manifest),
         stage=stage,
+        family=family,
         valid=valid,
         files=receipts,
         scope="explicit reviewed source/patch paths only, including untracked copied headers; no untracked-tree or secret sweep",

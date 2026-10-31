@@ -480,6 +480,7 @@ def capture(args, inputs):
         inputs.get("profile_normal_case", "baseline"),
         fingerprint,
         stage=os.environ.get("STAGE_NAME"),
+        family=os.environ.get("AMDGPU_FAMILIES"),
     )
     data["capture_wall_s"] = time.monotonic() - start
     save(args.output, data)
