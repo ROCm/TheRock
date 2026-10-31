@@ -1,0 +1,13 @@
+--- a/build_tools/packaging/linux/runpath_to_rpath.py
++++ b/build_tools/packaging/linux/runpath_to_rpath.py
+@@ -45,7 +45,9 @@
+                 continue
+             # Quick ELF magic check before invoking readelf/patchelf
+             try:
+-                if filepath.read_bytes()[:4] != b"\x7fELF":
++                with filepath.open("rb") as stream:
++                    magic = stream.read(4)
++                if magic != b"\x7fELF":
+                     continue
+             except OSError:
+                 continue

@@ -1,0 +1,21 @@
+diff --git a/comm-libs/CMakeLists.txt b/comm-libs/CMakeLists.txt
+index 7d6fae71d..dc5daf2ba 100644
+--- a/comm-libs/CMakeLists.txt
++++ b/comm-libs/CMakeLists.txt
+@@ -180,6 +180,8 @@ if(THEROCK_ENABLE_ROCSHMEM)
+ endif()
+ 
+ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
++  set(THEROCK_ROCSHMEM_NATIVE_LINK_JOBS "1" CACHE STRING
++    "rocSHMEM final native link architecture concurrency (compilation unchanged)")
+   ##############################################################################
+   # rocSHMEM
+   ##############################################################################
+@@ -201,6 +203,7 @@ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
+     # High latency LTO link of a single library.
+     BACKGROUND_BUILD
+     CMAKE_ARGS
++      -DROCSHMEM_NATIVE_LINK_JOBS=${THEROCK_ROCSHMEM_NATIVE_LINK_JOBS}
+       -DCMAKE_VERBOSE_MAKEFILE=OFF
+       -DUSE_RO=ON
+       -DUSE_IPC=ON
