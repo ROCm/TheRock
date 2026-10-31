@@ -57,6 +57,20 @@ class CaptureBuildGraphTest(unittest.TestCase):
                 self.assertEqual(manifest["failures"], [])
 
     @unittest.skipUnless(shutil.which("ninja"), "Ninja required")
+    def test_failed_command_enumeration_cannot_claim_complete_empty_responses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary) / "build"
+            build.mkdir()
+            (build / "build.ninja").write_text("not a valid Ninja edge\n")
+            output = build / "logs/graph.tar.gz"
+            capture_build_graph.capture(build, output)
+            with tarfile.open(output) as archive:
+                manifest = json.load(archive.extractfile("capture-manifest.json"))
+            self.assertTrue(any(r["tool"] == "commands" for r in manifest["failures"]))
+            self.assertEqual(manifest["custom_response_file_count"], 0)
+            self.assertFalse(manifest["custom_response_files_complete"])
+
+    @unittest.skipUnless(shutil.which("ninja"), "Ninja required")
     def test_actual_rccl_custom_link_response_body_is_preserved_not_compdb_expanded(
         self,
     ):

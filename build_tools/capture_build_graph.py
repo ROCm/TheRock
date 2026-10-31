@@ -57,20 +57,26 @@ def read_custom_response(path: Path, build_dir: Path) -> bytes:
         data = stream.read(MAX_CUSTOM_RSP_BYTES + 1)
         after = os.fstat(stream.fileno())
 
-    def identity(value):
-        return (
+    def identity(value, cross_api=False):
+        fields = (
             value.st_dev,
             value.st_ino,
             value.st_size,
             value.st_mtime_ns,
             value.st_ctime_ns,
         )
+        # Windows path stat and descriptor stat can expose different ctime
+        # semantics. Keep ctime checks within each API, and retain full cross-
+        # API checks on POSIX; inode/device/size/mtime still bind the Windows FD.
+        return fields[:-1] if cross_api and os.name == "nt" else fields
 
+    final = path.stat()
     if (
         len(data) != before.st_size
-        or identity(before) != identity(opened)
+        or identity(before, True) != identity(opened, True)
         or identity(opened) != identity(after)
-        or identity(after) != identity(path.stat())
+        or identity(after, True) != identity(final, True)
+        or identity(before) != identity(final)
     ):
         raise ValueError("custom response changed during capture")
     return data
@@ -182,8 +188,10 @@ def capture(build_dir: Path, output: Path) -> None:
                 "custom_response_files": custom_receipts,
                 "custom_response_file_count": len(custom_paths),
                 "custom_response_bytes": custom_bytes,
-                "custom_response_files_complete": len(custom_paths)
-                == len(custom_receipts)
+                "custom_response_files_complete": not any(
+                    row.get("tool") == "commands" for row in failures
+                )
+                and len(custom_paths) == len(custom_receipts)
                 and all(row["status"] == "retained" for row in custom_receipts),
                 "custom_response_scope": "Only command-referenced link_objects.rsp; missing/unsafe/changed/oversize bodies stay explicit, never a complete-parity claim",
             }
