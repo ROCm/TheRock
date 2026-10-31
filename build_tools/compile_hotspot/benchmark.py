@@ -151,6 +151,12 @@ def benchmark() -> None:
     baseline_sources = {
         p: diagnostic.fingerprint(LIBRARIES / p) for p in (ORIGINAL, cmake_path)
     }
+    source_headers = {
+        str(p.relative_to(diagnostic.ROOT)): diagnostic.fingerprint(p)
+        for include_root in (CK_SOURCE / "include", CK_SOURCE / "library/include")
+        for p in include_root.rglob("*")
+        if p.is_file()
+    }
     state = "baseline"
 
     def set_state(wanted: str) -> None:
@@ -204,6 +210,7 @@ def benchmark() -> None:
             "baseline_sources": baseline_sources,
             "candidate_sources": candidate_sources,
             "generated_headers": generated_headers,
+            "source_headers": source_headers,
             "limits": "Isolated object group; no stage improvement inferred. Identical wrappers/RSS sampling in both arms.",
         },
     )
