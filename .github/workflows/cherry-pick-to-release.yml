@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name: Cherry-pick to release
+run-name: "Cherry-pick to ${{ inputs.repository }}:${{ inputs.release_branch }}"
 
 on:
   workflow_dispatch:
@@ -35,11 +36,76 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: "cherry-pick-to-release-${{ inputs.repository }}-${{ inputs.release_branch }}-${{ inputs.jira_id }}"
+  cancel-in-progress: false
+
 jobs:
-  register:
-    name: Register workflow
+  cherry_pick:
+    name: "${{ inputs.repository }} :: ${{ inputs.release_branch }}"
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
-      - name: Registration placeholder
-        run: echo "Cherry-pick to release workflow is not enabled yet."
+      - name: Generate rocm-systems App token
+        if: inputs.repository == 'rocm-systems'
+        id: systems-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          owner: ROCm
+          repositories: rocm-systems
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Generate TheRock App token
+        if: inputs.repository == 'TheRock'
+        id: therock-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          owner: ROCm
+          repositories: TheRock
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Generate rocm-libraries App token
+        if: inputs.repository == 'rocm-libraries'
+        id: libraries-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
+          private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
+          owner: ROCm
+          repositories: rocm-libraries
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Check out TheRock automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cherry-pick commits
+        env:
+          CHERRY_PICK_REPOSITORY: ${{ inputs.repository }}
+          CHERRY_PICK_COMMITS: ${{ inputs.commits }}
+          CHERRY_PICK_RELEASE_BRANCH: ${{ inputs.release_branch }}
+          CHERRY_PICK_JIRA_ID: ${{ inputs.jira_id }}
+          CHERRY_PICK_DRY_RUN: ${{ inputs.dry_run }}
+          GITHUB_APP_TOKEN: ${{ steps.therock-token.outputs.token || steps.systems-token.outputs.token || steps.libraries-token.outputs.token }}
+          GITHUB_APP_SLUG: ${{ steps.therock-token.outputs.app-slug || steps.systems-token.outputs.app-slug || steps.libraries-token.outputs.app-slug }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_ACTOR: ${{ github.actor }}
+        run: python3 build_tools/github_actions/cherry_pick_to_release.py
