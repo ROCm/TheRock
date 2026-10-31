@@ -1,0 +1,61 @@
+{
+  "libraries_gitlink": "f4e24d58b3f313f1a31068def1e35376e43c2f49",
+  "joint_patch_sha256": "b74891bd117138d0e922407bf4cc24c1ee0482f08c685de0c1b36b662cb3aab9",
+  "files": [
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getf2_specialized_kernels.hpp",
+      "base_sha256": "d7f3c4fce8eaa28ff0879aa56e7aa571a499c9828fb52980c9852574c336346c",
+      "candidate_sha256": "cc956cb5b01adc7c871cb480696334ff95220ec9a149510459d357ab4963ccba",
+      "old_CRLF_candidate_sha256": "ef591ecc81950cadd6c0eef275153e67f44b0282a3e85792f53b68293c22fe32",
+      "base_git_blob_oid_derived_from_cached_bytes": "472ebaa7cc9f4bdffeeaa0d8f94f1e96e8b4b855",
+      "candidate_git_blob_oid": "be06c97e346fdf66d10f1049c0a8022417af845f",
+      "candidate_bytes": 34049,
+      "candidate_LF": 885,
+      "candidate_CRLF": 0,
+      "old_expected_exactly_reproduced_by_core_autocrlf_true": true,
+      "cached_base_git_tree_membership_independently_verified_offline": false
+    },
+    {
+      "path": "projects/rocsolver/library/src/CMakeLists.txt",
+      "base_sha256": "ded5a580468da4eb9aeb50443f6bff3718e0375e8882dd875245c7ada6b863f7",
+      "candidate_sha256": "710725d2fa41dcb4c1054c222be1183f0a1671c0d777d685dd3fccd6b271d1d7",
+      "old_CRLF_candidate_sha256": "210bcd87c7b0fd249105b6e309797686c1a5a52cdafc9c32b69140067b17e576",
+      "base_git_blob_oid_derived_from_cached_bytes": "cc79a099510eb6c593261d80f36093a802e0c9c7",
+      "candidate_git_blob_oid": "d422dc093d01671f07da9386478809050c383fe7",
+      "candidate_bytes": 22303,
+      "candidate_LF": 621,
+      "candidate_CRLF": 0,
+      "old_expected_exactly_reproduced_by_core_autocrlf_true": true,
+      "cached_base_git_tree_membership_independently_verified_offline": false
+    },
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z.cpp",
+      "base_sha256": "db153c2d2e1e5f53b97440c4aff629048af909e9bf11afd7b897d49d6bf49c13",
+      "candidate_sha256": "804c5bef11f213d7b3387ddaa7a055b224eb71866ccbf905eab38e51e5bc7996",
+      "old_CRLF_candidate_sha256": "96e8ca863c4d150b577b5878c56bfbe94e4501b0f80ffb7e8b57d17834441075",
+      "base_git_blob_oid_derived_from_cached_bytes": "f0208fb1244c028e9b986e48730e5dd7cda8b9c6",
+      "candidate_git_blob_oid": "e842d379db9fd1235d9c5bbe81121bec17ae225c",
+      "candidate_bytes": 1998,
+      "candidate_LF": 41,
+      "candidate_CRLF": 0,
+      "old_expected_exactly_reproduced_by_core_autocrlf_true": true,
+      "cached_base_git_tree_membership_independently_verified_offline": false
+    },
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z_batched.cpp",
+      "base_sha256": null,
+      "candidate_sha256": "961f142412c639290bede7091d95c16f07ef7ea6af1c8e5226c344309b433e20",
+      "old_CRLF_candidate_sha256": "42cf173af1cfc4ed3ed2ee6a5f3aac517b79b71ffacefab5864abb175138f896",
+      "base_git_blob_oid_derived_from_cached_bytes": null,
+      "candidate_git_blob_oid": "40c941c18d2cdd6ff174ba76ee18d07fb7156072",
+      "candidate_bytes": 1904,
+      "candidate_LF": 38,
+      "candidate_CRLF": 0,
+      "old_expected_exactly_reproduced_by_core_autocrlf_true": true,
+      "cached_base_git_tree_membership_independently_verified_offline": false
+    }
+  ],
+  "local_apply_check": true,
+  "linux_faithful_fixture": true,
+  "fixture_provenance": "Raw cached BASE bytes match every preimage SHA enforced by the passing CI apply guard; fixed patch b748 with explicit core.autocrlf=false/core.eol=lf. Offline cached Git-tree membership is not independently available; early CI must verify live f4e Git blobs before bootstrap."
+}

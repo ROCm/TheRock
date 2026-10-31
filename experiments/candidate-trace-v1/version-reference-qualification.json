@@ -1,0 +1,9 @@
+{
+  "reference_kind": "Reconstructed, not original header bytes captured in pair1",
+  "source_template_sha256": "4b6d0a1975d31f6fbe0ef08af12e9361773b21d206432dd0956758ba2301f04d",
+  "source_revision": "f4e24d58b3f313f1a31068def1e35376e43c2f49",
+  "reference_candidate_sha256": "219440f24f2423d0e916bfdfc179aeb2d3bd6b948c93398b2d2b4ae999c74737",
+  "reference_method": "Pinned rocsolver-version.h.in and CMake configure logs; ROCSOLVER_VERSION_TWEAK=f4e24d58-dirty",
+  "proof_path": "evidence/new-runs/41199411426/analysis/cuid-proof/version-evidence/reconstructed-version-proof.json",
+  "qualification": "New actual generated header must equal this qualified reconstruction; retain new actual header and macros. Do not re-label the reconstructed pair1 reference as measured original bytes."
+}

@@ -1,0 +1,52 @@
+{
+  "run_id": 41199411426,
+  "pair": 1,
+  "archive": "C:\\Users\\safaizal\\codex-tasks\\therock-perf-41073351087-01a19119\\evidence\\new-runs\\41199411426\\artifacts\\joint-solver-perf-pair-1-01a19119\\joint-solver-perf-1.tar.gz",
+  "records": {
+    "getri_z_batched": {
+      "member": "perf-commands-candidate/1793455156483332774-476883-84069ac8.json",
+      "raw_record_sha256": "60ee9a6ea8b081b934b8bb20d7470d866759daaf3641e8c64655bc75b7fdde7d",
+      "source": "/__w/TheRock/TheRock/source/rocm-libraries/projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z_batched.cpp",
+      "wall_s": 1687.142779485
+    },
+    "getri_z": {
+      "member": "perf-commands-candidate/1793455156486361474-476878-9405880e.json",
+      "raw_record_sha256": "1a98112b1ea495637e525a3976fc4071801256e260b0deec25608368fb5654dd",
+      "source": "/__w/TheRock/TheRock/source/rocm-libraries/projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z.cpp",
+      "wall_s": 1689.443374472
+    },
+    "getf2_c_3": {
+      "member": "perf-commands-candidate/1793455156492365984-476895-5970d885.json",
+      "raw_record_sha256": "8370d65f00859b7c59f2b8155eab28566c35fee06760613ee440215018e3ced6",
+      "source": "/__w/TheRock/TheRock/source/build/math-libs/BLAS/rocSOLVER/build/library/src/getf2-small-shards/c_3.cpp",
+      "wall_s": 2156.625426304
+    }
+  },
+  "all_c_shards": [
+    {
+      "source": "/__w/TheRock/TheRock/source/build/math-libs/BLAS/rocSOLVER/build/library/src/getf2-small-shards/c_2.cpp",
+      "wall_s": 852.405676357,
+      "member": "perf-commands-candidate/1793455156483284034-476894-21aa0010.json"
+    },
+    {
+      "source": "/__w/TheRock/TheRock/source/build/math-libs/BLAS/rocSOLVER/build/library/src/getf2-small-shards/c_0.cpp",
+      "wall_s": 50.288747518,
+      "member": "perf-commands-candidate/1793455156486272954-476892-ca7ace1b.json"
+    },
+    {
+      "source": "/__w/TheRock/TheRock/source/build/math-libs/BLAS/rocSOLVER/build/library/src/getf2-small-shards/c_1.cpp",
+      "wall_s": 277.933144134,
+      "member": "perf-commands-candidate/1793455156487962699-476893-4c6c09f0.json"
+    },
+    {
+      "source": "/__w/TheRock/TheRock/source/build/math-libs/BLAS/rocSOLVER/build/library/src/getf2-small-shards/c_3.cpp",
+      "wall_s": 2156.625426304,
+      "member": "perf-commands-candidate/1793455156492365984-476895-5970d885.json"
+    }
+  ],
+  "actual_compilation_database": {
+    "member": "perf-candidate/ninja/math-libs/BLAS/rocSOLVER/build/compile_commands.json",
+    "full_member_sha256": "84178f374f55bc3af56fcf19138d8dd14644e63c786dace53a5f0760d706440d",
+    "three_sources_and_normalized_flags_match": true
+  }
+}
