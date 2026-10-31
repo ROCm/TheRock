@@ -42,57 +42,17 @@ s3://{bucket}/{external_repo}{run_id}-{platform}/
 
 ### Directory structure
 
-There are two CI pipeline architectures with different log layouts:
-
-- **Single-stage CI** (`ci.yml`) — one monolithic build per artifact group.
-  Logs from all subprojects land in a single flat directory.
-- **Multi-arch CI** (`multi_arch_ci.yml`) — the build is split into stages
-  (compiler-runtime, runtime-tests, math-libs, etc.). Each stage runs as a
-  separate job and uploads its own logs, organized by stage name and GPU family.
+Multi-arch CI (`multi_arch_ci.yml`) splits the build into stages
+(compiler-runtime, runtime-tests, math-libs, etc.). Each stage runs as a
+separate job and uploads its own logs, organized by stage name and GPU family.
 
 `artifact_group` is the CI matrix variant, composed of a target family plus an
 optional variant suffix (e.g., `gfx94X-dcgpu`, `gfx94X-dcgpu-asan`). It is
-used as the subdirectory key for logs, manifests, and packages. Artifact
+used as the subdirectory key for logs and manifests. Python packages share
+the `python/` directory for each run and platform. Artifact
 filenames contain the `target_family` (e.g., `gfx94X`); see
 [#3381](https://github.com/ROCm/TheRock/issues/3381) for ongoing work to
 propagate artifact group naming consistently.
-
-#### Single-stage CI layout
-
-```
-{prefix}/
-    {artifact_name}_{component}_{target_family}.tar.xz
-    {artifact_name}_{component}_{target_family}.tar.xz.sha256sum
-    index-{artifact_group}.html
-
-    logs/{artifact_group}/
-        {subproject}_build.log
-        {subproject}_configure.log
-        {subproject}_install.log
-        ninja_logs.tar.gz
-        build_observability.html          (when generated)
-        index.html
-        therock-build-prof/               (resource profiling subdirectory)
-            comp-summary.html
-            comp-summary.md
-        comp-summary.html                 (flattened copy for direct linking)
-        comp-summary.md                   (flattened copy for direct linking)
-
-    manifests/{artifact_group}/
-        therock_manifest.json
-
-    python/{artifact_group}/
-        *.whl
-        *.tar.gz
-        index.html
-
-    tarballs/
-        therock-dist-{platform}-{family}-{version}.tar.gz
-```
-
-The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
-(uploaded as part of the recursive directory upload) and at the log root
-(uploaded explicitly for direct linking).
 
 #### Multi-arch CI layout
 
@@ -140,11 +100,9 @@ families in parallel, producing identically-named log files (e.g.,
         *.msi                                   (one per package, e.g. amdrocm-runtime.msi)
 
     python/
-        *.whl                                   (generic wheels, e.g., rocm_sdk_core)
-        {amdgpu_family}/
-            *.whl                               (per-family wheels, e.g., rocm_sdk_devel)
-            *.tar.gz                            (sdist)
-            index.html
+        *.whl                                   (host and per-target wheels)
+        *.tar.gz                                (sdists)
+        index.html                              (generated server-side)
 
     tarballs/
         therock-dist-{platform}-{family}-{version}.tar.gz
@@ -177,9 +135,9 @@ Example for a run with compiler-runtime + runtime-tests + math-libs stages:
         ninja_logs.tar.gz
 ```
 
-Artifacts in multi-arch CI use `.tar.zst` compression (vs `.tar.xz` in
-single-stage CI) and are managed by `artifact_manager.py`, not
-`post_build_upload.py`. Index pages for logs are generated server-side.
+> [!NOTE]
+> Index pages for each directory (logs, packages, etc.) are generated
+> server-side.
 
 ### Bucket selection
 
@@ -260,7 +218,7 @@ root.native_linux_packages(
 root.native_windows_packages(
     pkg_type="msi"
 )  # {run_id}-windows/packages/msi — loose .msi installers
-root.python_packages(artifact_group="gfx110X-all")
+root.python_packages()
 root.tarballs()
 ```
 
@@ -308,7 +266,7 @@ To add a new output type:
 | [`upload_package_repo.py`](/build_tools/packaging/windows/upload_package_repo.py)          | `WorkflowOutputRoot.native_windows_packages()` for msi installers             |
 | [`post_stage_upload.py`](/build_tools/github_actions/post_stage_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for multi-arch stage logs             |
 | [`upload_tarballs.py`](/build_tools/github_actions/upload_tarballs.py)                     | `WorkflowOutputRoot` + `StorageBackend` for tarballs                          |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index           |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and sdists          |
 | [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests                 |
 | [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend)     |
 

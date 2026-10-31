@@ -113,7 +113,6 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       linux_amdgpu_families: ${{ fromJSON(inputs.build_config).linux_amdgpu_families }}
       windows_amdgpu_families: ${{ fromJSON(inputs.build_config).windows_amdgpu_families }}
-      multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
       release_type: ${{ inputs.release_type }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
@@ -158,14 +157,11 @@ jobs:
           product: core
 
       - name: Copy to release buckets
-        env:
-          KPACK_SPLIT: ${{ needs.build_python_packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="${BUILD_RELEASE_TYPE}" \
-            --kpack-split="${KPACK_SPLIT}" \
             --structured
 
   trigger_test_artifacts_per_family:
