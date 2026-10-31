@@ -1,0 +1,156 @@
+{
+  "source_sha": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+  "requested_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+  "producers": {
+    "baseline": {
+      "run_id": 41211496307,
+      "rpm_build_job_id": 124604240541,
+      "profiles": {
+        "rhel8": {
+          "job_id": 124607090531,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-sq56l",
+          "image_tag": "registry.access.redhat.com/ubi8/ubi:8.10",
+          "image_digest": "sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b",
+          "pinned_image": "registry.access.redhat.com/ubi8/ubi:8.10@sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b",
+          "raw_log": "evidence/new-runs/41211496307/raw-logs/job-124607090531.log",
+          "raw_log_sha256": "fb5a213968406550255531402738fabfbd2bb475b73b8b50a41347c68fd42d9b",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        },
+        "rhel10": {
+          "job_id": 124607101926,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-l2ddm",
+          "image_tag": "registry.access.redhat.com/ubi10/ubi:10.1",
+          "image_digest": "sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1",
+          "pinned_image": "registry.access.redhat.com/ubi10/ubi:10.1@sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1",
+          "raw_log": "evidence/new-runs/41211496307/raw-logs/job-124607101926.log",
+          "raw_log_sha256": "49a63da4782c374b38a32d82a72c39eb70a3b3e1088dbccedcb3b3b9d5162a59",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        },
+        "sles16": {
+          "job_id": 124607094620,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-65qhv",
+          "image_tag": "registry.suse.com/bci/bci-base:16.0",
+          "image_digest": "sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843",
+          "pinned_image": "registry.suse.com/bci/bci-base:16.0@sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843",
+          "raw_log": "evidence/new-runs/41211496307/raw-logs/job-124607094620.log",
+          "raw_log_sha256": "bf881fee4df8b63961d28138b8aa681d3481fa1477e18d5c25a6ed762c490ab8",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41211496307-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        }
+      }
+    },
+    "joint": {
+      "run_id": 41212843218,
+      "rpm_build_job_id": 124604023687,
+      "profiles": {
+        "rhel8": {
+          "job_id": 124606874889,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-sxtf9",
+          "image_tag": "registry.access.redhat.com/ubi8/ubi:8.10",
+          "image_digest": "sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b",
+          "pinned_image": "registry.access.redhat.com/ubi8/ubi:8.10@sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b",
+          "raw_log": "evidence/new-runs/41212843218/raw-logs/job-124606874889.log",
+          "raw_log_sha256": "20c6dd3ac438e4a166709f3a8fc9ebd2dab1a9959e11b783974e0c5a7f798278",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        },
+        "rhel10": {
+          "job_id": 124606879848,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-rwm2z",
+          "image_tag": "registry.access.redhat.com/ubi10/ubi:10.1",
+          "image_digest": "sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1",
+          "pinned_image": "registry.access.redhat.com/ubi10/ubi:10.1@sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1",
+          "raw_log": "evidence/new-runs/41212843218/raw-logs/job-124606879848.log",
+          "raw_log_sha256": "ee66782b56bbd35259504aca98f0eec3b099d3e5db374ecf064f247e95126ab3",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        },
+        "sles16": {
+          "job_id": 124606883692,
+          "repo_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+          "original_runner_labels": [
+            "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          ],
+          "original_runner_name": "linux-gfx942-1gpu-ccs-csp-ossci-rocm-runner-mcwkr",
+          "image_tag": "registry.suse.com/bci/bci-base:16.0",
+          "image_digest": "sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843",
+          "pinned_image": "registry.suse.com/bci/bci-base:16.0@sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843",
+          "raw_log": "evidence/new-runs/41212843218/raw-logs/job-124606883692.log",
+          "raw_log_sha256": "aa6f3f3916ddc40b21e9d49120b4776611bac3946a7d37fed139989762b940c6",
+          "original_inputs": {
+            "package_install_url": "https://therock-ci-artifacts.s3.amazonaws.com/41212843218-linux/packages/rpm/x86_64",
+            "artifact_group": "gfx950-dcgpu",
+            "test_type": "sanity",
+            "build_variant": "asan-debug",
+            "run_uninstall": "true",
+            "ref": "5b7cb88373362ab80dc0f19605915e534f4158aa",
+            "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+          },
+          "original_error": "FileNotFoundError: git, before installation/uninstallation assertions"
+        }
+      }
+    }
+  }
+}
