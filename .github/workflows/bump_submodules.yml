@@ -99,7 +99,7 @@ jobs:
 
       - name: Install prerequisites
         run: |
-          pip install requests
+          pip install -r build_tools/github_actions/requirements-bump.txt
 
       # The script authenticates temporary clones and pushes with SYSTEMS_TOKEN or LIBRARIES_TOKEN
       # from the GitHub App token steps above; it does not use checkout credentials.
