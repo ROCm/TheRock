@@ -1,10 +1,29 @@
-﻿# Copyright Advanced Micro Devices, Inc.
+# Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-# Task-only manual harness preflight, not a product workflow change.
-name: CK baseline harness smoke (01a193c1)
-run-name: Untouched release CK contract preflight (01a193c1)
+# Task-only manual GPU validation, not a product workflow change.
+name: CK GPU validation (01a193c1)
+run-name: CK ${{ inputs.mode }} GPU validation (01a193c1)
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Untouched published archive smoke, or exact existing benchmark objects
+        type: choice
+        options: [smoke, benchmark]
+        default: smoke
+      benchmark_run_id:
+        description: Object producer run (release 41246404678; ASan 41246400850)
+        type: string
+        default: ''
+      build_variant:
+        description: Variant of the existing measured objects
+        type: choice
+        options: [release, asan-debug]
+        default: release
+      baseline_run_id:
+        description: Matching runtime (release 41149779244; ASan 41211496307)
+        type: string
+        default: '41149779244'
 permissions:
   contents: read
   actions: read
@@ -24,6 +43,9 @@ jobs:
     env:
       RELEASE_TYPE: ci
       CCACHE_DISABLE: '1'
+      BENCHMARK_RUN_ID: ${{ inputs.benchmark_run_id }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
+      BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
       GH_TOKEN: ${{ github.token }}
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: safe.directory
@@ -36,24 +58,65 @@ jobs:
           ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
           persist-credentials: false
           set-safe-directory: false
-      - name: Checkout exact smoke assets
+      - name: Checkout exact validation assets
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           path: .compile-hotspot-instrumentation
           persist-credentials: false
           set-safe-directory: false
+      - name: Check benchmark validation inputs
+        if: inputs.mode == 'benchmark'
+        run: |
+          python3 - <<'PY'
+          import os
+          expected = {'release': '41149779244', 'asan-debug': '41211496307'}
+          assert os.environ['BENCHMARK_RUN_ID'].isdecimal(), 'benchmark_run_id is required'
+          assert os.environ['BASELINE_RUN_ID'] == expected[os.environ['BUILD_VARIANT']], 'Variant/runtime mismatch'
+          PY
+      - name: Fetch exact existing benchmark objects
+        if: inputs.mode == 'benchmark'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          repository: ROCm/TheRock
+          run-id: ${{ inputs.benchmark_run_id }}
+          name: ck-compile-objects-${{ inputs.build_variant }}-${{ inputs.benchmark_run_id }}
+          path: ck-objects
+      - name: Fetch matching benchmark commands and measurements
+        if: inputs.mode == 'benchmark'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          github-token: ${{ github.token }}
+          repository: ROCm/TheRock
+          run-id: ${{ inputs.benchmark_run_id }}
+          name: ck-compile-diagnostic-${{ inputs.build_variant }}-${{ inputs.benchmark_run_id }}
+          path: ck-evidence
       - name: Install Python dependencies
         run: pip install -r requirements.txt
       - name: Compile and run untouched baseline archive contract
+        if: inputs.mode == 'smoke'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/baseline_smoke.py
+      - name: Link and test existing measured objects with the current harness
+        if: inputs.mode == 'benchmark'
+        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/gpu_contract.py
       - name: Retain baseline harness evidence
-        if: always()
+        if: always() && inputs.mode == 'smoke'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ck-baseline-smoke-${{ github.run_id }}
           path: |
             baseline-smoke-evidence/
             !baseline-smoke-evidence/baseline-contract
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain independent GPU validation and producer provenance
+        if: always() && inputs.mode == 'benchmark'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-gpu-contract-${{ inputs.build_variant }}-${{ github.run_id }}
+          path: |
+            ck-gpu-evidence/
+            !ck-gpu-evidence/*.o
           if-no-files-found: error
           retention-days: 14

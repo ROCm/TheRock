@@ -10,6 +10,7 @@ import re
 import shlex
 import subprocess
 import sys
+import urllib.request
 
 ROOT = Path.cwd().resolve()
 HERE = Path(__file__).resolve().parent
@@ -41,6 +42,62 @@ def run(argv: list[str], label: str, env: dict | None = None) -> None:
     result.check_returncode()
 
 
+def verify_producer(context: dict) -> tuple[dict, dict]:
+    benchmark_run = os.environ.get("BENCHMARK_RUN_ID") or os.environ["GITHUB_RUN_ID"]
+    if not benchmark_run.isdecimal():
+        raise RuntimeError("BENCHMARK_RUN_ID must be a numeric GitHub Actions run ID")
+    for key, expected in (
+        ("run_id", benchmark_run),
+        ("variant", os.environ["BUILD_VARIANT"]),
+        ("baseline_run_id", os.environ["BASELINE_RUN_ID"]),
+    ):
+        if str(context[key]) != expected:
+            raise RuntimeError(f"Build artifact provenance mismatch: {key}")
+    if benchmark_run == os.environ["GITHUB_RUN_ID"]:
+        if context["instrumentation_sha"] != os.environ["GITHUB_SHA"]:
+            raise RuntimeError("Same-run producer instrumentation SHA mismatch")
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/ROCm/TheRock/actions/runs/{benchmark_run}",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        metadata = json.load(response)
+    if (
+        str(metadata["id"]) != benchmark_run
+        or metadata["head_sha"] != context["instrumentation_sha"]
+        or metadata["repository"]["full_name"].lower() != "rocm/therock"
+    ):
+        raise RuntimeError("Producer context differs from GitHub run metadata")
+    # Overall conclusion may be failure because the original GPU job failed;
+    # benchmark-complete.json and trial measurements validate the build below.
+    producer = {
+        key: metadata[key]
+        for key in (
+            "id",
+            "head_sha",
+            "head_branch",
+            "run_attempt",
+            "status",
+            "conclusion",
+            "html_url",
+        )
+    }
+    validation = {
+        "run_id": os.environ["GITHUB_RUN_ID"],
+        "instrumentation_sha": os.environ["GITHUB_SHA"],
+        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+        "benchmark_run_id": benchmark_run,
+        "repository": os.environ.get("GITHUB_REPOSITORY", "ROCm/TheRock"),
+    }
+    save("producer-run-metadata.json", producer)
+    save("validation-context.json", validation)
+    return producer, validation
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     contexts = list(EVIDENCE.rglob("context.json"))
@@ -48,20 +105,18 @@ def main() -> None:
         raise RuntimeError("Expected exactly one build context")
     evidence = contexts[0].parent
     context = json.loads(contexts[0].read_text())
-    for key, expected in (
-        ("run_id", os.environ["GITHUB_RUN_ID"]),
-        ("instrumentation_sha", os.environ["GITHUB_SHA"]),
-        ("variant", os.environ["BUILD_VARIANT"]),
-        ("baseline_run_id", os.environ["BASELINE_RUN_ID"]),
-    ):
-        if str(context[key]) != expected:
-            raise RuntimeError(f"Build artifact provenance mismatch: {key}")
+    producer_metadata, validation_context = verify_producer(context)
     if context["source_sha"] != "5b7cb88373362ab80dc0f19605915e534f4158aa":
         raise RuntimeError("Product source changed")
     protocol = json.loads((evidence / "benchmark-protocol.json").read_text())
     summary = json.loads((evidence / "benchmark-summary.json").read_text())
     if [row["trial"] for row in summary] != ["B1", "C1", "C2", "B2"]:
         raise RuntimeError("Paired benchmark incomplete")
+    complete = json.loads((evidence / "benchmark-complete.json").read_text())
+    if complete["status"] != "complete" or any(
+        item["exit_code"] != 0 for row in summary for item in row["objects_measured"]
+    ):
+        raise RuntimeError("Producer did not complete successful paired measurements")
     original_source = next(iter(protocol["baseline_sources"].values()))["path"]
     old_root = original_source.split("/rocm-libraries/")[0]
     selected = {}
@@ -199,6 +254,9 @@ def main() -> None:
         "provenance.json",
         {
             "producer_context": context,
+            "producer_run_metadata": producer_metadata,
+            "validation_context": validation_context,
+            "benchmark_protocol_sha256": digest(evidence / "benchmark-protocol.json"),
             "producer_root": old_root,
             "compiler_sha256": digest(compiler),
             "utility_sha256": digest(utility),

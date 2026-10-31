@@ -120,8 +120,35 @@ class Validation:
         for key in ("source_sha", "variant", "baseline_run_id"):
             if str(context[key]) != str(m[key]):
                 raise RuntimeError(f"Contract baseline provenance mismatch: {key}")
-        if str(context["run_id"]) != self.args.baseline_contract_run_id:
+        if str(context["run_id"]) != self.args.baseline_benchmark_run_id:
             raise RuntimeError("Baseline contract came from a different benchmark run")
+        validation = baseline.get("validation_context")
+        if validation is None:
+            if (
+                self.args.baseline_contract_run_id
+                != self.args.baseline_benchmark_run_id
+            ):
+                raise RuntimeError(
+                    "Cross-run GPU contract has no validation provenance"
+                )
+        else:
+            producer = baseline["producer_run_metadata"]
+            if (
+                str(validation["run_id"]) != self.args.baseline_contract_run_id
+                or str(validation["benchmark_run_id"])
+                != self.args.baseline_benchmark_run_id
+                or not validation["instrumentation_sha"]
+                or validation["repository"].lower() != "rocm/therock"
+                or str(producer["id"]) != self.args.baseline_benchmark_run_id
+                or producer["head_sha"] != context["instrumentation_sha"]
+            ):
+                raise RuntimeError(
+                    "GPU validation and benchmark producer provenance mismatch"
+                )
+            if baseline["benchmark_protocol_sha256"] != digest(
+                self.args.baseline_benchmark_protocol
+            ):
+                raise RuntimeError("GPU validation used a different benchmark protocol")
         if baseline["harness_source_sha256"] != digest(HERE / "ck_f32_contract.cpp"):
             raise RuntimeError("Baseline used a different contract source")
         if baseline["compiler_sha256"] != m["compiler_sha256"]:
@@ -549,11 +576,16 @@ def main():
     parser.add_argument("--baseline-contract-log", type=Path, required=True)
     parser.add_argument("--baseline-contract-provenance", type=Path, required=True)
     parser.add_argument("--baseline-benchmark-protocol", type=Path, required=True)
+    parser.add_argument(
+        "--baseline-benchmark-run-id", default=os.getenv("BASELINE_BENCHMARK_RUN_ID")
+    )
     args = parser.parse_args()
     if not args.baseline_contract_run_id:
         parser.error(
             "--baseline-contract-run-id or BASELINE_CONTRACT_RUN_ID is required"
         )
+    if not args.baseline_benchmark_run_id:
+        args.baseline_benchmark_run_id = args.baseline_contract_run_id
     Validation(args).main()
 
 
