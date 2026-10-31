@@ -1,0 +1,23 @@
+{
+  "validation": "Static syntax, YAML shape and record provenance only; no builds, dispatch or performance trials executed.",
+  "sha256": {
+    "experiments\\joint\\run_experiment.sh": "0ae03ef47774979fc07d33a9900550213e10313976661d16c59ebe83f7806c66",
+    "experiments\\joint\\phase_probes.py": "0d0470ec8ea56650d36ff28a3035bd7714e0fc98d452619b5f8f8f063ba0a2f7",
+    "experiments\\joint\\workflow.yml": "bce5da1aec27a371a950905adb87da3fec0e247f90968fb7ec7ebbed07d14ac9",
+    "experiments\\compiler\\trace_getf2.py": "ce9b55c2f63c2f1b7c8051a3ea15e83cf0b9470065ab020c351b4fe9c0bfd123",
+    "experiments\\compiler\\rocsolver-specialized-shards.patch": "b74891bd117138d0e922407bf4cc24c1ee0482f08c685de0c1b36b662cb3aab9"
+  },
+  "orders": [
+    "baseline->candidate",
+    "candidate->baseline",
+    "baseline->candidate"
+  ],
+  "root_review": {
+    "utc": "2026-10-31T12:02:03.701628+00:00",
+    "python_syntax": "passed",
+    "bash_syntax": "passed",
+    "yaml_permissions_matrix": "passed",
+    "added_guards": "Linux Actions; identical compiler/linker binary hashes and runtime/CPU visibility within pair",
+    "runtime_performance": "not executed"
+  }
+}
