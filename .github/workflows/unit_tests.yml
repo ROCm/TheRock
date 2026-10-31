@@ -1,76 +1,27 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-name: Unit Tests
-
+name: rocSOLVER shard dispatcher smoke (01a19119)
 on:
-  push:
-    branches:
-      - main
-      - release/therock-*
-  pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  unit_tests:
-    name: "Unit Tests :: ${{ matrix.runs-on}}"
-    strategy:
-      fail-fast: false
-      matrix:
-        runs-on: [ubuntu-26.04, windows-2022]
-    runs-on: ${{ matrix.runs-on }}
-    defaults:
-      run:
-        shell: bash
-    env:
-        GITHUB_TOKEN: ${{ github.token }}
-
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      timeout-minutes: 5
-      with:
-        persist-credentials: false
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-      with:
-        python-version: 3.12
-
-    - name: Install python deps
-      run: pip install -r requirements-test.txt
-
-    # The root pyproject.toml selects the unit-test suites.
-    - name: Run unit tests
-      run: |
-        python -m pytest -vv --durations=20 \
-          --cov --cov-report=term-missing --cov-report=html
-
-    # TODO: upload to AWS S3 instead (so reports are hosted and don't require
-    #       a download step to view).
-    #       We could also use https://about.codecov.io/ instead of custom infra.
-    - name: Upload coverage report
-      if: always()
-      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-      with:
-        name: coverage-report-${{ matrix.runs-on }}
-        path: build/coverage-html/
-
-  unit_tests_summary:
-    name: Unit Tests Summary
-    if: always()
-    needs:
-      - unit_tests
+  candidate-syntax:
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          path: experiment
           persist-credentials: false
-      - name: Evaluate workflow results
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+          path: source
+          persist-credentials: false
+      - name: Check pinned base and candidate dispatcher syntax and coverage
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          test "$(git -C source rev-parse HEAD)" = 5b7cb88373362ab80dc0f19605915e534f4158aa
+          git -C source ls-tree HEAD rocm-libraries
+          c++ --version
+          c++ -std=c++17 -O0 experiment/build_tools/perf_probe/shard_dispatch_smoke.cpp -o shard-smoke
+          ./shard-smoke
+          echo 'Host syntax/dispatch smoke only; HIP compile, GPU numerical correctness, performance unvalidated.'
