@@ -132,7 +132,6 @@ def configure(args: argparse.Namespace) -> None:
             sys.executable,
             "build_tools/configure_stage.py",
             "--stage=math-libs",
-            "--artifacts=composable-kernel",
             "--amdgpu-families=gfx950",
             "--dist-amdgpu-families=gfx950",
             "--manylinux",
@@ -285,10 +284,33 @@ def replay(mode: str, variant: str) -> None:
         if flag in command:
             command[command.index(flag) + 1] = str(OUT / (mode + extension))
     if mode == "profile":
-        command += [f"-ftime-trace={traces}/", "-ftime-report"]
+        lld_trace = traces / "device-lld.json"
+        command += [
+            f"-ftime-trace={traces}/",
+            "-ftime-report",
+            "-Xoffload-linker",
+            "--time-trace",
+            "-Xoffload-linker",
+            f"--time-trace-file={lld_trace}",
+        ]
+        plan = subprocess.run(
+            [*command, "-###"], cwd=cwd, capture_output=True, text=True, check=True
+        )
+        driver_text = plan.stdout + plan.stderr
+        (OUT / "profile-driver-plan.txt").write_text(driver_text)
+        lld_commands = [line for line in driver_text.splitlines() if "ld.lld" in line]
+        if len(lld_commands) != 1 or not all(
+            value in lld_commands[0]
+            for value in ("--time-trace", f"--time-trace-file={lld_trace}")
+        ):
+            raise RuntimeError(
+                "Driver did not forward time tracing to exactly one device LLD invocation"
+            )
     measure(command, cwd, mode)
     if mode == "profile":
         trace_files = list(traces.rglob("*.json"))
+        if not (traces / "device-lld.json").is_file():
+            raise RuntimeError("Device LLD time trace missing after successful profile")
         save("trace-files.json", [fingerprint(path) for path in trace_files])
         if not trace_files:
             raise RuntimeError(
