@@ -9,7 +9,15 @@ on:
       operation:
         type: choice
         default: diagnostic
-        options: [diagnostic, benchmark, integration]
+        options: [diagnostic, benchmark, integration, consumer]
+      integration_producer_run_id:
+        type: string
+        default: ''
+        description: Existing integration build run for consumer-only validation
+      baseline_benchmark_run_id:
+        type: string
+        default: ''
+        description: Measured object producer if GPU validation used a separate run
       baseline_contract_run_id:
         type: string
         default: ''
@@ -27,6 +35,7 @@ permissions:
   actions: read
 jobs:
   diagnostic:
+    if: inputs.operation != 'consumer'
     runs-on: ${{ inputs.operation != 'diagnostic' && 'aws-linux-scale-rocm-large' || 'aws-linux-scale-rocm-prod' }}
     timeout-minutes: 360
     container:
@@ -190,7 +199,7 @@ jobs:
 
   consumer_contract:
     needs: diagnostic
-    if: inputs.operation == 'integration'
+    if: always() && inputs.baseline_contract_run_id != '' && ((inputs.operation == 'integration' && needs.diagnostic.result == 'success') || inputs.operation == 'consumer')
     runs-on: linux-gfx950-1gpu-ccs-ossci-rocm
     timeout-minutes: 180
     container:
@@ -207,6 +216,8 @@ jobs:
       BUILD_VARIANT: ${{ inputs.build_variant }}
       BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
       BASELINE_CONTRACT_RUN_ID: ${{ inputs.baseline_contract_run_id }}
+      BASELINE_BENCHMARK_RUN_ID: ${{ inputs.baseline_benchmark_run_id || inputs.baseline_contract_run_id }}
+      INTEGRATION_PRODUCER_RUN_ID: ${{ inputs.integration_producer_run_id || github.run_id }}
       GH_TOKEN: ${{ github.token }}
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: safe.directory
@@ -229,7 +240,9 @@ jobs:
       - name: Fetch this run's rebuilt integration products
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: ck-miopen-integration-${{ inputs.build_variant }}-${{ github.run_id }}
+          name: ck-miopen-integration-${{ inputs.build_variant }}-${{ inputs.integration_producer_run_id || github.run_id }}
+          run-id: ${{ inputs.integration_producer_run_id || github.run_id }}
+          github-token: ${{ github.token }}
           path: integration-products
       - name: Fetch paired baseline GPU results
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -241,8 +254,8 @@ jobs:
       - name: Fetch paired benchmark provenance
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: ck-compile-diagnostic-${{ inputs.build_variant }}-${{ inputs.baseline_contract_run_id }}
-          run-id: ${{ inputs.baseline_contract_run_id }}
+          name: ck-compile-diagnostic-${{ inputs.build_variant }}-${{ inputs.baseline_benchmark_run_id || inputs.baseline_contract_run_id }}
+          run-id: ${{ inputs.baseline_benchmark_run_id || inputs.baseline_contract_run_id }}
           github-token: ${{ github.token }}
           path: baseline-protocol
       - name: Restore exact product modes and symlinks
@@ -255,8 +268,9 @@ jobs:
         run: |
           python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/integration_gpu.py \
             --variant "${BUILD_VARIANT}" --baseline-run-id "${BASELINE_RUN_ID}" \
-            --producer-run-id "${GITHUB_RUN_ID}" \
+            --producer-run-id "${INTEGRATION_PRODUCER_RUN_ID}" \
             --baseline-contract-run-id "${BASELINE_CONTRACT_RUN_ID}" \
+            --baseline-benchmark-run-id "${BASELINE_BENCHMARK_RUN_ID}" \
             --baseline-contract-log baseline-contract/baseline-numeric.log \
             --baseline-contract-provenance baseline-contract/provenance.json \
             --baseline-benchmark-protocol baseline-protocol/compile-hotspot-evidence/benchmark-protocol.json
