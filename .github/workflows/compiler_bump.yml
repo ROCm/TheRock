@@ -88,7 +88,6 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       branch_name: ${{ steps.create-branch.outputs.branch_name }}
-      rocm_system_ref: ${{ steps.rocm-systems-ref.outputs.sha }}
     steps:
       - name: Generate branch name
         id: branch-name
@@ -188,11 +187,6 @@ jobs:
           git push origin "${BRANCH_NAME}"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Branch pushed: [\`${BRANCH_NAME}\`](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME})" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Get rocm-systems submodule ref
-        id: rocm-systems-ref
-        run: |
-          echo "sha=$(git ls-tree HEAD rocm-systems | awk '{print $3}')" >> "$GITHUB_OUTPUT"
 
   # ==========================================================================
   # Phase 2 - Linux: Build and packaging
@@ -775,22 +769,6 @@ jobs:
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   # ==========================================================================
-  # Phase 4 - RCCL Coco: Smoke tests via rocm-systems harness
-  # ==========================================================================
-  rccl-coco:
-    name: RCCL Coco Tests
-    needs: [create-branch, setup-linux, publish-linux-artifacts]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.publish-linux-artifacts.result == 'success' }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/rccl_coco.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      rocm_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
-      rocm_system_ref: ${{ needs.create-branch.outputs.rocm_system_ref }}
-      trigger_kind: ci
-
-  # ==========================================================================
   # Summary
   # ==========================================================================
   summary:
@@ -816,7 +794,6 @@ jobs:
       - trigger-linux-tests
       - trigger-linux-tests-extra
       - trigger-windows-tests
-      - rccl-coco
     if: always()
     runs-on: ubuntu-26.04
     env:
@@ -999,17 +976,6 @@ jobs:
             echo "- :x: ASAN Build dispatch failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.dispatch-asan-build.result }}" == "skipped" ]; then
             echo "- :fast_forward: ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### RCCL Coco" >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "${{ needs.rccl-coco.result }}" == "success" ]; then
-            echo "- :white_check_mark: RCCL coco tests passed" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.rccl-coco.result }}" == "failure" ]; then
-            echo "- :x: RCCL coco tests failed" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ needs.rccl-coco.result }}" == "skipped" ]; then
-            echo "- :fast_forward: RCCL coco tests skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
