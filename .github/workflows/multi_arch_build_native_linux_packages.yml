@@ -160,6 +160,7 @@ jobs:
     env:
       NORMAL_REQUESTED_RUNNER: ${{ inputs.build_runs_on }}
       NORMAL_VALIDATION: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
+      NORMAL_CASE: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_case || 'baseline' }}
       NORMAL_IMAGE_PIN: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
       PACKAGE_BUILD_SUFFIX: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && '41147801272' || (inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id) }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
@@ -227,6 +228,10 @@ jobs:
             --expand-family-to-targets \
             --output-dir="${{ env.OUTPUT_DIR }}"
 
+      - name: Apply scoped native ELF product source
+        if: ${{ success() && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && fromJSON(toJSON(github.event.inputs)).profile_normal_product == 'leading-build-stack' }}
+        run: python build_tools/normal_leading_stack.py apply-elf --enable --case "${NORMAL_CASE}" --output output/normal-validation/leading-stack-elf
+
       - name: Capture native package tool identity
         if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
         run: |
@@ -251,8 +256,12 @@ jobs:
             --version-suffix "${PACKAGE_BUILD_SUFFIX}" \
             --build-variant "${BUILD_VARIANT}"
 
+      - name: Require unchanged native ELF product source
+        if: ${{ success() && steps['build-packages'].outcome == 'success' && fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' && fromJSON(toJSON(github.event.inputs)).profile_normal_product == 'leading-build-stack' }}
+        run: python build_tools/normal_leading_stack.py validate-elf --enable --case "${NORMAL_CASE}" --output output/normal-validation/leading-stack-elf
+
       # Presence check: Created Packages in built_packages.txt must exist on disk.
-      # Blocking — failure skips simulate-install / upload.
+      # Blocking â€” failure skips simulate-install / upload.
       - name: Pre-upload build package verification
         if: ${{ inputs.enable_pre_upload_build_verify }}
         id: pre-upload-build-verify

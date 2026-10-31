@@ -106,6 +106,7 @@ def validate_context(env, event):
     if inputs.get("profile_normal_product", "none") not in [
         "none",
         "rocfft-private-batch",
+        "leading-build-stack",
     ]:
         raise ValueError("unknown normal comparison product")
     if env.get("RELEASE_TYPE", "ci") != "ci":
@@ -228,7 +229,7 @@ def setup(args):
             versions=VERSIONS,
             package_build_suffix=PACKAGE_SUFFIX,
             installed_image_pins=INSTALL_IMAGES,
-            source_patch_policy="Explicit default-off selection; apply reviewed dirty patches identically in both arms without changing source HEAD/history",
+            source_patch_policy="Default-off reviewed dirty changes preserve source HEAD/history; RTC source is common, stack COMM default and native ELF module have documented case-specific variants",
             recorded_source_gitlinks=GITLINKS,
             cache_policy="explicit ci-readonly preferred or distinct private-cold; no shared writes",
         ),
@@ -280,10 +281,29 @@ def cache(args, inputs):
 
 def product_selected(inputs, env, platform):
     return (
-        inputs.get("profile_normal_product", "none") == "rocfft-private-batch"
+        inputs.get("profile_normal_product", "none")
+        in ("rocfft-private-batch", "leading-build-stack")
         and platform == "linux"
         and env.get("STAGE_NAME") == "math-libs"
         and env.get("AMDGPU_FAMILIES", "").casefold() == "gfx103x-all"
+    )
+
+
+def comm_product_selected(inputs, env, platform):
+    return (
+        inputs.get("profile_normal_product", "none") == "leading-build-stack"
+        and platform == "linux"
+        and env.get("STAGE_NAME") == "comm-libs"
+        and not env.get("AMDGPU_FAMILIES")
+    )
+
+
+def native_elf_product_selected(inputs, env, platform):
+    return (
+        inputs.get("profile_normal_product", "none") == "leading-build-stack"
+        and platform == "linux"
+        and env.get("GITHUB_JOB") == "build_native_packages"
+        and env.get("NATIVE_PACKAGE_TYPE") in ("deb", "rpm")
     )
 
 
@@ -299,12 +319,49 @@ def preconfigure(args, inputs):
         source = rocfft.apply_product(
             workspace / "rocm-libraries", args.output.parent / "rocfft-aot"
         )
+    comm_source = None
+    if comm_product_selected(inputs, os.environ, sys.platform):
+        import normal_leading_stack as stack
+
+        stack.controls(
+            os.environ,
+            {"inputs": inputs},
+            inputs.get("profile_normal_case", "baseline"),
+            "apply-comm",
+            sys.platform,
+        )
+        workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+        comm_source = stack.apply_comm(
+            workspace,
+            args.output.parent / "leading-stack-comm",
+            inputs.get("profile_normal_case", "baseline"),
+            os.environ,
+        )
     receipt = dict(
         case=inputs.get("profile_normal_case", "baseline"),
         requested_product=requested,
-        applied_in_this_job=applied,
-        applied_scope="linux/math-libs/gfx103X-all" if applied else None,
-        product_patches=[source["patch"]] if source else [],
+        applied_in_this_job=applied or comm_source is not None,
+        applied_scope=(
+            "linux/math-libs/gfx103X-all"
+            if applied
+            else ("linux/comm-libs/all31" if comm_source else None)
+        ),
+        product_patches=(
+            [source["patch"]]
+            if source
+            else (
+                [row["path"] for row in comm_source["payloads"]] if comm_source else []
+            )
+        ),
+        expected_source_relation=(
+            "Same RTC patch/header in both arms; runtime0/all"
+            if applied
+            else (
+                comm_source["candidate_change"]
+                if comm_source
+                else "no scoped product source changes"
+            )
+        ),
         compiler_option_changes=[],
         source_git_commit_mutations=False,
         runtime_cache_contract=(
@@ -341,6 +398,51 @@ def product_metadata(workspace, inputs):
                 else "0"
             ),
             cache_contract="fresh private COMGR in both arms, separate from ccache",
+            expected_source_relation="Same RTC patch/header in both arms; runtime0/all",
+        )
+    elif comm_product_selected(inputs, os.environ, sys.platform):
+        import normal_leading_stack as stack
+
+        directory = workspace / "build/logs/normal-validation/leading-stack-comm"
+        source = stack.verify_source(
+            workspace,
+            directory,
+            inputs.get("profile_normal_case", "baseline"),
+            os.environ,
+        )
+        receipt.update(
+            applied_in_this_job=True,
+            scope="linux/comm-libs/all31",
+            source_control_sha256=digest(directory / "source-control.json"),
+            source_hashes=source["source_hashes"],
+            systems_identity=source["systems_identity"],
+            stock_smrev_sha256=source["stock_patch_state"]["sha256"],
+            expected_native_width=source["width"],
+            expected_source_relation=source["candidate_change"],
+        )
+    elif native_elf_product_selected(inputs, os.environ, sys.platform):
+        import normal_leading_stack as stack
+
+        directory = workspace / "output/normal-validation/leading-stack-elf"
+        source = stack.verify_source(
+            workspace,
+            directory,
+            inputs.get("profile_normal_case", "baseline"),
+            os.environ,
+        )
+        receipt.update(
+            applied_in_this_job=True,
+            scope="linux/native-" + os.environ["NATIVE_PACKAGE_TYPE"],
+            source_control_sha256=digest(directory / "source-control.json"),
+            source_hashes=source["source_hashes"],
+            expected_source_relation="Baseline original ELF probe; candidate exact bounded-four-byte source patch",
+            source_patch_applied=inputs.get("profile_normal_case", "baseline")
+            == "candidate",
+            source_variant=(
+                "bounded-four-byte-probe"
+                if inputs.get("profile_normal_case", "baseline") == "candidate"
+                else "original-probe"
+            ),
         )
     return receipt
 

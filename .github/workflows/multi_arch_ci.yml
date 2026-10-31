@@ -25,12 +25,12 @@ on:
         type: choice
         default: baseline
         options: [baseline, candidate]
-        description: 'Baseline/candidate label; both arms share the selected product source and common controls.'
+        description: 'Baseline/candidate variant; common controls plus documented RTC runtime, COMM default and ELF source differences.'
       profile_normal_product:
         type: choice
         default: none
-        options: [none, rocfft-private-batch]
-        description: 'Optional reviewed product; rocFFT changes only owned AOT transactions in Linux gfx103X math.'
+        options: [none, rocfft-private-batch, leading-build-stack]
+        description: 'Default none; rocFFT-only or leading stack of owned RTC batching, native link width and bounded ELF probing.'
       profile_normal_cache_regime:
         type: choice
         default: ci-readonly

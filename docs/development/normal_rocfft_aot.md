@@ -5,6 +5,8 @@ The workflow selects it explicitly with default-off `profile_normal_product`. Th
 in both arms; only the helper runtime transaction setting differs. Its scope is
 Linux `math-libs`, exactly `gfx103X-all` (gfx1030 through gfx1036). Windows,
 gfx94X, other stages and ordinary builds retain their original behavior.
+Selecting `leading-build-stack` also enables separate scoped COMM/ELF changes;
+this RTC component keeps the same scope and source/runtime controls.
 
 The motivating four-run diagnostic used all seven original growing-cache helpers
 and observed a 46.49% lower mean math-stage wall time, with 4.98% more aggregate

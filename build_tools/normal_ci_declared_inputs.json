@@ -8,7 +8,41 @@
         "candidate"
       ],
       "products": [
-        "rocfft-private-batch"
+        "rocfft-private-batch",
+        "leading-build-stack"
+      ]
+    },
+    {
+      "path": "patches/build-profile/normal-stack/therock-native-link-control.patch",
+      "sha256": "e9c8de9b3f3804fe88186a4b7453bf4fa43c6388d8524171347a65d1361e621a",
+      "cases": [
+        "baseline",
+        "candidate"
+      ],
+      "products": [
+        "leading-build-stack"
+      ]
+    },
+    {
+      "path": "patches/build-profile/normal-stack/rocshmem-native-link-control.patch",
+      "sha256": "8b21193ef9f4287f522b8bd8648e7487a183165422460e6ffa8eb84e02676746",
+      "cases": [
+        "baseline",
+        "candidate"
+      ],
+      "products": [
+        "leading-build-stack"
+      ]
+    },
+    {
+      "path": "patches/build-profile/normal-stack/bounded-elf-probe.patch",
+      "sha256": "777edbf4581659833190bc047c4e6314ba25381b7bf72f0bfd07b7a1a05b98b1",
+      "cases": [
+        "baseline",
+        "candidate"
+      ],
+      "products": [
+        "leading-build-stack"
       ]
     }
   ],
@@ -27,7 +61,8 @@
         "gfx103X-all"
       ],
       "products": [
-        "rocfft-private-batch"
+        "rocfft-private-batch",
+        "leading-build-stack"
       ]
     }
   ]

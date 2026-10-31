@@ -7,14 +7,24 @@ and tests, native DEB/RPM and actual install/uninstall checks. It selects exactl
 gfx94x and gfx103x; Windows, PyTorch and JAX are explicitly outside this selection.
 It does not validate the historical complete multi-platform matrix.
 
-`profile_normal_product` explicitly selects `none` (default) or
-`rocfft-private-batch`. Both arms retain common controls and identical selected
-product source. The rocFFT selection applies a reviewed dirty patch/header in
-Linux gfx103X math only, preserving rocm-libraries HEAD/branch/history and the
-seven original AOT commands, targets and dependency chain. Baseline retains
-owned-cache autocommit; candidate batches each helper's writes with a durable
-COMMIT before copying its shipped output. Other stages/families retain stock
-source/runtime behavior. No product is applied when the selection is `none`.
+`profile_normal_product` has three explicit choices. `none` remains the default.
+Both arms retain common instrumentation/controls; the stack has documented
+case-specific source differences rather than a claim that all source bytes match.
+
+| Selection              | Baseline                                                                                                  | Candidate                                                                                                | Scope                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `none`                 | Original product source/runtime behavior                                                                  | Same original behavior                                                                                   | Common controls only                                                     |
+| `rocfft-private-batch` | Common RTC source patch/header, owned AOT autocommit                                                      | Same RTC source patch/header, per-helper durable transactions                                            | Linux gfx103X math only                                                  |
+| `leading-build-stack`  | RTC baseline above; common rocSHMEM link-option patch/pass-through with ROOT default1; original ELF probe | RTC candidate above; same rocSHMEM patch/pass-through with ROOT default2; exact bounded ELF source patch | RTC gfx103X math, generic all31-target COMM, native DEB/RPM respectively |
+
+Every product preserves source HEAD/branch/history. COMM's original stock ROCR
+patch metadata stays unchanged; the helper separately records actual modified
+source hashes and the original `.smrev`. RTC keeps the seven original AOT
+commands/targets/dependencies and WAL/FULL. COMM retains all31 architectures and
+only its two final native link options change. Native packaging retains its full
+inputs, worker/compressor settings and stock tests. No product is applied for
+`none`. Required validation after successful build precedes normal acceptance;
+partial receipts remain in existing always-uploaded comparison diagnostics.
 
 The selected math job prepares a fresh private COMGR cache and one owned growing
 AOT DB in BOTH arms. This is an explicit common runtime-cache contract, separate
@@ -23,7 +33,8 @@ cache. The default COMGR pruning and WAL/FULL policies remain unchanged. Actual
 cache outcomes/compiler keys/provider fingerprints must still qualify comparisons.
 Source receipts and common captures record requested versus applied scope; source
 inputs are patched/copied after normal fetch without advancing source history.
-See [the product controls and host checks](normal_rocfft_aot.md).
+See [the RTC controls and host checks](normal_rocfft_aot.md) and
+[the COMM/ELF source controls](normal_leading_stack.md).
 
 The controller rejects local execution, other repositories, non-dispatch events,
 different families/stage selections, stage reuse and narrowed tests. Both arms
@@ -51,7 +62,8 @@ must use these inputs:
 }
 ```
 
-For a product comparison, select `rocfft-private-batch` identically in both arms
+For a product comparison, select `rocfft-private-batch` or `leading-build-stack`
+identically in both arms
 and change only the case label. `none` compares common controls without applying
 a product. This documentation does not dispatch a run.
 
@@ -136,12 +148,14 @@ verifies a fresh private cache contract in both arms; it does not infer that
 contract from this generic snapshot. Its postcheck retains complete private
 COMGR metadata, separately from the generic observer's capped inventory.
 
-`build_tools/normal_ci_declared_inputs.json` registers the reviewed I-029 patch
-and copied header by exact committed LF SHA256. Optional `cases`, `products`,
+`build_tools/normal_ci_declared_inputs.json` registers the reviewed RTC patch/
+copied header and all three stack patch payloads by exact committed LF SHA256. Optional `cases`, `products`,
 `stages` and `families` selectors are explicit. Family IDs compare
 case-insensitively while retaining their complete suffix. An absent header is
 not required for product `none`, gfx94X math, or another stage, but is a failing
-input for selected gfx103X math. This captures untracked copied inputs without
+input for selected gfx103X math in either enabled product mode. COMM and ELF
+helpers additionally retain and validate their case-specific resulting source
+hashes; those files are expected to differ exactly as the table states. This captures untracked copied inputs without
 sweeping generated outputs or secrets; mismatches retain a receipt and fail.
 The source helper checks unchanged generator inputs and AOT CMake independently.
 

@@ -145,6 +145,142 @@ class ContextTest(unittest.TestCase):
                     )
                 apply.assert_not_called()
 
+    def test_stack_selection_routes_only_original_comm_and_gfx103x_math_jobs(self):
+        import normal_leading_stack as stack
+        import normal_rocfft_aot as rocfft
+
+        inputs = {**event()["inputs"], "profile_normal_product": "leading-build-stack"}
+        CONTROL.validate_context(self.env, {"inputs": inputs})
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            args = argparse.Namespace(output=root / "product-hook.json")
+            env = {
+                **self.env,
+                "GITHUB_WORKSPACE": str(root),
+                "NORMAL_VALIDATION": "true",
+                "GITHUB_RUN_ID": "fixture",
+                "GITHUB_RUN_ATTEMPT": "1",
+                "STAGE_NAME": "comm-libs",
+                "AMDGPU_FAMILIES": "",
+            }
+            with patch.dict(os.environ, env), patch.object(
+                CONTROL.sys, "platform", "linux"
+            ), patch.object(
+                stack, "controls", return_value=True
+            ) as guard, patch.object(
+                stack,
+                "apply_comm",
+                return_value={
+                    "payloads": [{"path": "root.patch"}, {"path": "systems.patch"}],
+                    "candidate_change": "ROOT default1->2 only",
+                },
+            ) as comm, patch.object(
+                rocfft, "apply_product", return_value={"patch": "rtc.patch"}
+            ) as rtc:
+                for case in ["baseline", "candidate"]:
+                    inputs["profile_normal_case"] = case
+                    receipt = CONTROL.preconfigure(args, inputs)
+                    self.assertEqual(receipt["applied_scope"], "linux/comm-libs/all31")
+                    self.assertIn("default1->2", receipt["expected_source_relation"])
+                self.assertEqual(
+                    comm.call_args_list[0].args[0], comm.call_args_list[1].args[0]
+                )
+                self.assertEqual(
+                    [c.args[2] for c in comm.call_args_list], ["baseline", "candidate"]
+                )
+                self.assertEqual(guard.call_count, 2)
+                rtc.assert_not_called()
+                with patch.dict(
+                    os.environ,
+                    {"STAGE_NAME": "math-libs", "AMDGPU_FAMILIES": "gfx103X-all"},
+                ):
+                    receipt = CONTROL.preconfigure(args, inputs)
+                    self.assertEqual(receipt["product_patches"], ["rtc.patch"])
+                    self.assertIn("Same RTC", receipt["expected_source_relation"])
+                self.assertEqual(rtc.call_count, 1)
+                with patch.dict(
+                    os.environ,
+                    {"STAGE_NAME": "math-libs", "AMDGPU_FAMILIES": "gfx94X-dcgpu"},
+                ):
+                    self.assertFalse(
+                        CONTROL.preconfigure(args, inputs)["applied_in_this_job"]
+                    )
+                self.assertEqual(rtc.call_count, 1)
+
+    def test_stack_metadata_records_actual_case_specific_source_variants(self):
+        import normal_leading_stack as stack
+
+        inputs = {**event()["inputs"], "profile_normal_product": "leading-build-stack"}
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            comm_dir = root / "build/logs/normal-validation/leading-stack-comm"
+            native_dir = root / "output/normal-validation/leading-stack-elf"
+            for directory in [comm_dir, native_dir]:
+                directory.mkdir(parents=True)
+                (directory / "source-control.json").write_text("{}")
+            env = {
+                "STAGE_NAME": "comm-libs",
+                "AMDGPU_FAMILIES": "",
+                "GITHUB_JOB": "build_stage",
+            }
+            with patch.dict(os.environ, env), patch.object(
+                CONTROL.sys, "platform", "linux"
+            ), patch.object(stack, "verify_source") as verify:
+                for case, width in [("baseline", 1), ("candidate", 2)]:
+                    inputs["profile_normal_case"] = case
+                    verify.return_value = {
+                        "source_hashes": {
+                            "comm-libs/CMakeLists.txt": case + "-different-source"
+                        },
+                        "systems_identity": {"head": "same-stock-patched-head"},
+                        "stock_patch_state": {"sha256": "same-marker"},
+                        "width": width,
+                        "candidate_change": "Only ROOT default1->2",
+                    }
+                    metadata = CONTROL.product_metadata(root, inputs)
+                    self.assertEqual(metadata["expected_native_width"], width)
+                    self.assertEqual(
+                        metadata["source_hashes"]["comm-libs/CMakeLists.txt"],
+                        case + "-different-source",
+                    )
+                with patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_JOB": "build_native_packages",
+                        "STAGE_NAME": "",
+                        "NATIVE_PACKAGE_TYPE": "deb",
+                    },
+                ):
+                    verify.return_value = {
+                        "source_hashes": {"ELF": "candidate-bounded"}
+                    }
+                    metadata = CONTROL.product_metadata(root, inputs)
+                    self.assertIn(
+                        "Baseline original", metadata["expected_source_relation"]
+                    )
+                    self.assertEqual(metadata["scope"], "linux/native-deb")
+                    self.assertTrue(metadata["source_patch_applied"])
+                    self.assertEqual(
+                        metadata["source_variant"], "bounded-four-byte-probe"
+                    )
+                    inputs["profile_normal_case"] = "baseline"
+                    metadata = CONTROL.product_metadata(root, inputs)
+                    self.assertFalse(metadata["source_patch_applied"])
+                    self.assertEqual(metadata["source_variant"], "original-probe")
+                verify.reset_mock()
+                with patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_JOB": "test_component",
+                        "STAGE_NAME": "",
+                        "NATIVE_PACKAGE_TYPE": "deb",
+                    },
+                ):
+                    self.assertFalse(
+                        CONTROL.product_metadata(root, inputs)["applied_in_this_job"]
+                    )
+                verify.assert_not_called()
+
     def test_runner_override_preserves_gpu_and_unrelated_configuration(self):
         original = {
             "build_runners": {
@@ -353,7 +489,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(inputs["profile_normal_product"]["default"], "none")
         self.assertEqual(
             inputs["profile_normal_product"]["options"],
-            ["none", "rocfft-private-batch"],
+            ["none", "rocfft-private-batch", "leading-build-stack"],
         )
         parsed = workflow("multi_arch_build_portable_linux_artifacts.yml")
         job = parsed["jobs"]["build_stage"]
@@ -380,7 +516,7 @@ class WorkflowTest(unittest.TestCase):
             for required in [
                 "success()",
                 "profile_normal_validation == 'true'",
-                "profile_normal_product == 'rocfft-private-batch'",
+                'contains(fromJSON(\'["rocfft-private-batch","leading-build-stack"]\')',
                 "inputs.stage_name == 'math-libs'",
                 "inputs.amdgpu_family == 'gfx103X-all'",
             ]:
@@ -399,6 +535,64 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("always()", retention["if"])
         self.assertIn("build/logs/normal-validation/", retention["with"]["path"])
         self.assertEqual(job["env"]["AMDGPU_FAMILIES"], "${{ inputs.amdgpu_family }}")
+
+    def test_stack_comm_and_native_elf_required_success_gates_and_failure_retention(
+        self,
+    ):
+        stage = workflow("multi_arch_build_portable_linux_artifacts.yml")["jobs"][
+            "build_stage"
+        ]
+        steps = stage["steps"]
+        index = {s["name"]: i for i, s in enumerate(steps)}
+        check = steps[index["Require complete scoped COMM product checks"]]
+        self.assertLess(index["Build stage"], index[check["name"]])
+        self.assertLess(index[check["name"]], index["Test Packaging"])
+        for value in [
+            "success()",
+            "steps.build_stage.outcome == 'success'",
+            "profile_normal_product == 'leading-build-stack'",
+            "inputs.stage_name == 'comm-libs'",
+            "inputs.amdgpu_family == ''",
+        ]:
+            self.assertIn(value, check["if"])
+        self.assertNotIn("continue-on-error", check)
+        native = workflow("multi_arch_build_native_linux_packages.yml")["jobs"][
+            "build_native_packages"
+        ]
+        steps = native["steps"]
+        index = {s["name"]: i for i, s in enumerate(steps)}
+        order = [
+            "Apply scoped native ELF product source",
+            "Capture native package tool identity",
+            "Build Packages",
+            "Require unchanged native ELF product source",
+            "Pre-upload build package verification",
+            "Simulated install Test",
+            "Build Package repository",
+            "Upload Package repo to S3",
+        ]
+        positions = [index[n] for n in order]
+        self.assertEqual(positions, sorted(positions))
+        check = steps[index["Require unchanged native ELF product source"]]
+        self.assertIn("steps['build-packages'].outcome == 'success'", check["if"])
+        self.assertIn("success()", check["if"])
+        self.assertNotIn("continue-on-error", check)
+        self.assertIn(
+            "profile_normal_product == 'leading-build-stack'",
+            steps[index["Apply scoped native ELF product source"]]["if"],
+        )
+        for name in [
+            "Apply scoped native ELF product source",
+            "Require unchanged native ELF product source",
+        ]:
+            self.assertIn(
+                "--output output/normal-validation/leading-stack-elf",
+                steps[index[name]]["run"],
+            )
+        retained = steps[index["Retain common comparison diagnostics"]]
+        self.assertIn("always()", retained["if"])
+        self.assertIn("output/normal-validation/", retained["with"]["path"])
+        self.assertIn("NORMAL_CASE", native["env"])
 
     def test_failed_destination_guard_blocks_always_credential_steps(self):
         action = yaml.load(

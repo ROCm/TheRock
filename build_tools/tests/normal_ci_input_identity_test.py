@@ -215,17 +215,26 @@ class InputIdentityTest(unittest.TestCase):
         self,
     ):
         sysfs = self.root / "sysfs"
-        device = sysfs / "240:9"
+        # Windows cannot create a colon filename. Keep real directory existence
+        # checks while mapping the simulated Linux sysfs key to a portable path.
+        device = sysfs / "device-fixture"
         device.mkdir(parents=True)
+
+        class FixtureSysfs:
+            def __truediv__(self, name):
+                assert name == "240:9"
+                return device
+
+        visible_sysfs = FixtureSysfs()
         with patch.object(
             IDENTITY.os, "major", return_value=240, create=True
         ), patch.object(IDENTITY.os, "minor", return_value=9, create=True):
-            row = IDENTITY.workspace_storage_identity(self.root, sysfs)
+            row = IDENTITY.workspace_storage_identity(self.root, visible_sysfs)
             self.assertEqual(row["st_dev"], self.root.stat().st_dev)
             self.assertEqual(row["major"], 240)
             self.assertEqual(row["resolved_sysfs_path"], str(device.resolve()))
             device.rmdir()
-            missing = IDENTITY.workspace_storage_identity(self.root, sysfs)
+            missing = IDENTITY.workspace_storage_identity(self.root, visible_sysfs)
             self.assertIn("backing storage unresolved", missing["status"])
         group = self.file("cgroup/visible/io.max", "240:9 rbps=1000 wbps=max\n").parent
         limits = IDENTITY.io_limit_files([group, group / "absent"])
@@ -283,6 +292,74 @@ class InputIdentityTest(unittest.TestCase):
             "rocfft-private-batch",
         )
         self.assertFalse(missing["valid"])
+
+    def test_real_registry_stack_lf_payloads_and_scoped_rtc_header(self):
+        manifest = ROOT / "build_tools/normal_ci_declared_inputs.json"
+        declared = json.loads(manifest.read_text())
+        self.assertEqual(len(declared["patches"]), 4)
+        for row in declared["patches"]:
+            self.assertIn("leading-build-stack", row["products"])
+            path = self.root / row["path"]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Simulate Linux Git checkout bytes in this portable host fixture.
+            path.write_bytes((ROOT / row["path"]).read_bytes().replace(b"\r\n", b"\n"))
+            self.assertEqual(digest(path), row["sha256"])
+        copied = declared["copied_inputs"][0]
+        self.assertEqual(
+            set(copied["products"]), {"rocfft-private-batch", "leading-build-stack"}
+        )
+        for product, stage, family in [
+            ("none", "math-libs", "gfx103X-all"),
+            ("leading-build-stack", "comm-libs", ""),
+            ("leading-build-stack", "math-libs", "gfx94X-dcgpu"),
+        ]:
+            self.assertTrue(
+                IDENTITY.declared_sources(
+                    self.root, manifest, "baseline", digest, stage, family, product
+                )["valid"]
+            )
+        self.assertFalse(
+            IDENTITY.declared_sources(
+                self.root,
+                manifest,
+                "candidate",
+                digest,
+                "math-libs",
+                "gfx103X-all",
+                "leading-build-stack",
+            )["valid"]
+        )
+        header = self.root / copied["path"]
+        header.parent.mkdir(parents=True, exist_ok=True)
+        header.write_bytes(
+            (ROOT / "build_tools/diagnostics/rocfft_normal_aot.h")
+            .read_bytes()
+            .replace(b"\r\n", b"\n")
+        )
+        for product in ["rocfft-private-batch", "leading-build-stack"]:
+            self.assertTrue(
+                IDENTITY.declared_sources(
+                    self.root,
+                    manifest,
+                    "candidate",
+                    digest,
+                    "math-libs",
+                    "gfx103X-all",
+                    product,
+                )["valid"]
+            )
+        header.write_bytes(header.read_bytes() + b"changed header")
+        self.assertFalse(
+            IDENTITY.declared_sources(
+                self.root,
+                manifest,
+                "candidate",
+                digest,
+                "math-libs",
+                "gfx103X-all",
+                "leading-build-stack",
+            )["valid"]
+        )
 
     def test_declared_escape_rejected_and_cache_inventory_is_read_only(self):
         manifest = self.file(

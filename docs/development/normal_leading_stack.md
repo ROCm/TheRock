@@ -1,13 +1,13 @@
 # Leading-build-stack source support (not enabled)
 
-`build_tools/normal_leading_stack.py` prepares source and output gates for the
-future normal-CI selector `leading-build-stack`. This helper does not alter any
-workflow, main controller, declared-input manifest, job graph, enabled test,
-cache policy or architecture. No product is selected by default, and the helper
-never dispatches a workflow or builds a target. Parent integration must review
-and wire it together with the separately reviewed I-029 support before a common
-normal comparison begins. Full-COMM repetition and full-DEB validation are still
-pending; this support code claims no new performance or correctness result.
+`build_tools/normal_leading_stack.py` supplies source and output gates for the
+explicit normal-CI selector `leading-build-stack`. The workflow wires it together
+with I-029 before the first controlled normal cohort. `none` remains the default,
+and `rocfft-private-batch` remains a separately selectable RTC-only mode.
+Jobs/dependencies, stock tests, GPU policy, cache regimes, CI-only destinations
+and Quartz guards remain unchanged. No normal cohort is launched by these files;
+full-COMM repetition/full-DEB and normal end-to-end acceptance remain separate
+requirements. This support code claims no new speedup or GPU correctness result.
 
 ## COMM source contract
 
@@ -56,7 +56,7 @@ comparison and later normal end-to-end checks.
 
 ## Calls and acceptance
 
-The future workflow supplies `NORMAL_VALIDATION=true`, CI release destinations,
+The normal workflow supplies `NORMAL_VALIDATION=true`, CI release destinations,
 TheRock Actions/dispatch/current run metadata and the matching dispatch product
 and case. Default-off invocation needs no event or source mutation. Enabled calls
 reject foreign repositories, local execution, other product/case inputs and a
@@ -72,9 +72,11 @@ python build_tools/normal_leading_stack.py apply-elf --enable --case baseline --
 python build_tools/normal_leading_stack.py validate-elf --enable --case baseline --output output/normal-validation/leading-stack-elf
 ```
 
-Candidate changes only the case argument. The future main controller owns the
-product selector and scoped call order; it must not call both apply functions in
-a nonselected job. Each validation requires the current run/attempt/case, unchanged
+Candidate changes only the case argument. The main preconfigure hook applies
+COMM source only in its generic comm-libs job. Native apply runs before native
+identity/build capture, with required validation immediately after successful
+package build. RTC preparation/validation is independently scoped to gfx103X
+math. Other jobs do not attempt to validate absent product receipts. Each validation requires the current run/attempt/case, unchanged
 source identities and payloads. COMM additionally requires ROOT and nested native
 widths1/2, unchanged global HIP width1, successful generated parallel capability
 for candidate, and all31 original targets. Both expanded native final-link argv
@@ -84,7 +86,7 @@ retain original command text/argv, Ninja records and native file hashes.
 Compilation edges may not gain the native link override. ELF validation is an
 unchanged-source gate only, not package-content acceptance.
 
-Parent wiring must require successful build and CURRENT validation exit before
+Workflow gates require successful build and CURRENT validation exit before
 acceptance, keep all stock checks, and always retain partial source/product logs.
 Compare source/SDK identities, actual cache keys/outcomes, all output inventories,
 actual allocations and enabled correctness checks between arms. Do not normalize
