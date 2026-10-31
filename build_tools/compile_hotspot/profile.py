@@ -305,13 +305,15 @@ def replay(mode: str, variant: str) -> None:
             command[command.index(flag) + 1] = str(OUT / (mode + extension))
     if mode == "profile":
         lld_trace = traces / "device-lld.json"
+        linker_help = run([str(compiler.parent / "ld.lld"), "--help"])
+        (OUT / "device-linker-help.txt").write_text(linker_help)
+        if "--time-trace=" not in linker_help:
+            raise RuntimeError("Pinned ELF linker does not support named time traces")
         command += [
             f"-ftime-trace={traces}/",
             "-ftime-report",
             "-Xoffload-linker",
-            "--time-trace",
-            "-Xoffload-linker",
-            f"--time-trace-file={lld_trace}",
+            f"--time-trace={lld_trace}",
         ]
         plan = subprocess.run(
             [*command, "-###"], cwd=cwd, capture_output=True, text=True, check=True
@@ -332,12 +334,12 @@ def replay(mode: str, variant: str) -> None:
                         token.startswith("--device-linker=") and token.endswith(flag)
                         for token in tokens
                     )
-                    for flag in ("=--time-trace", f"=--time-trace-file={lld_trace}")
+                    for flag in (f"=--time-trace={lld_trace}",)
                 )
             else:
                 forwarded = all(
                     flag in tokens
-                    for flag in ("--time-trace", f"--time-trace-file={lld_trace}")
+                    for flag in (f"--time-trace={lld_trace}",)
                 )
         if not forwarded:
             raise RuntimeError(
