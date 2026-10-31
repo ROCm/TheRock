@@ -29,6 +29,11 @@ Other arguments:
   time in seconds since start, and a header/trailer will be added with more
   timing information.
 
+Set `TEATIME_PROFILE_CPU=1` to append one CPU_PROFILE JSON record to the phase
+log. POSIX subprocess mode measures waited-child CPU, excluding teatime CPU;
+pipeline/non-POSIX modes report unavailable CPU. Surviving descendants may be
+absent. Never sum nested parent/child phase records. Default logging is unchanged.
+
 CI systems can set `TEATIME_LABEL_GH_GROUP=1` in the environment, which will
 cause labeled console output to be printed using GitHub Actions group markers
 instead of line prefixes. This causes the output to show in the log viewer
@@ -126,10 +131,77 @@ class OutputSink:
             self.log_file.flush()
 
 
+def _start_cpu_profile(label: str | None, subprocess_mode: bool):
+    if os.getenv("TEATIME_PROFILE_CPU") != "1":
+        return None
+    profile = {
+        "schema_version": 1,
+        "label": label,
+        "cwd": os.getcwd(),
+        "teatime_pid": os.getpid(),
+        "child_pid": None,
+        "status": "unavailable_pipeline",
+        "scope": "POSIX waited children and descendants reaped through their wait chain; excludes teatime CPU",
+        "limitations": [
+            "Escaped, surviving, or unreaped descendants may be absent.",
+            "Do not add parent phase records to nested child phase records or sampled CPU.",
+        ],
+    }
+    if subprocess_mode:
+        profile["status"] = "unavailable_non_posix"
+        if os.name == "posix":
+            try:
+                import resource
+
+                before = resource.getrusage(resource.RUSAGE_CHILDREN)
+                profile["before"] = (before.ru_utime, before.ru_stime)
+                profile["status"] = "measured_posix_waited_children"
+            except (ImportError, AttributeError, OSError) as error:
+                profile["status"] = "unavailable_resource"
+                profile["error"] = str(error)
+    profile["start_monotonic"] = time.monotonic()
+    return profile
+
+
+def _finish_cpu_profile(profile, sink: OutputSink, rc: int | None, child_pid=None):
+    if profile is None:
+        return
+    import json
+
+    profile["phase_wall_s"] = time.monotonic() - profile.pop("start_monotonic")
+    before = profile.pop("before", None)
+    profile.update(
+        child_pid=child_pid,
+        exit_code=rc,
+        child_user_s=None,
+        child_system_s=None,
+        child_total_s=None,
+    )
+    if before is not None and child_pid is not None:
+        try:
+            import resource
+
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            user, system = after.ru_utime - before[0], after.ru_stime - before[1]
+            profile.update(
+                child_user_s=user, child_system_s=system, child_total_s=user + system
+            )
+        except (ImportError, AttributeError, OSError) as error:
+            profile.update(status="unavailable_resource", error=str(error))
+    elif child_pid is None and rc is None:
+        profile["status"] = "unavailable_launch_failed"
+    if sink.log_file is not None:
+        sink.log_file.write(
+            ("CPU_PROFILE\t" + json.dumps(profile, sort_keys=True) + "\n").encode()
+        )
+        sink.log_file.flush()
+
+
 def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: OutputSink):
     child: subprocess.Popen | None = None
     if child_arg_list is None:
         # Pipeline mode.
+        profile = _start_cpu_profile(args.label, False)
         child_stream = sys.stdin.buffer
     else:
         # Subprocess mode.
@@ -138,9 +210,14 @@ def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: Output
             sink.log_file.write(
                 f"EXEC\t{os.getcwd()}\t{child_arg_list_pretty}\n".encode()
             )
-        child = subprocess.Popen(
-            child_arg_list, stderr=subprocess.STDOUT, stdout=subprocess.PIPE
-        )
+        profile = _start_cpu_profile(args.label, True)
+        try:
+            child = subprocess.Popen(
+                child_arg_list, stderr=subprocess.STDOUT, stdout=subprocess.PIPE
+            )
+        except BaseException:
+            _finish_cpu_profile(profile, sink, None)
+            raise
         child_stream = child.stdout
 
     try:
@@ -151,10 +228,13 @@ def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: Output
             child.terminate()
     if child:
         rc = child.wait()
+        _finish_cpu_profile(profile, sink, rc, child.pid)
         if rc != 0 and not args.interactive:
             # Dump all output on failure.
             sys.stdout.buffer.write(sink.out.getvalue())
         sys.exit(rc)
+    else:
+        _finish_cpu_profile(profile, sink, 0)
 
 
 def main(cl_args: list[str]):

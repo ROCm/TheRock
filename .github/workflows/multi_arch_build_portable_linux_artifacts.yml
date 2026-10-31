@@ -104,6 +104,7 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
+      TEATIME_PROFILE_CPU: 1
       EXTERNAL_FETCH_SOURCES_ARGS: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).fetch_sources_args || '' }}
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
@@ -216,7 +217,7 @@ jobs:
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Verify profiling tools
-        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test -v
+        run: python -m unittest build_tools.tests.profile_build_test build_tools.tests.capture_build_graph_test build_tools.tests.teatime_profile_cpu_test -v
 
       - name: Build stage
         run: |
