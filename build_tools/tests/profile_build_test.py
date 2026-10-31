@@ -71,6 +71,20 @@ class ProfileBuildTest(unittest.TestCase):
                 self.assertGreater(sum(summary["posix_waited_child_cpu"].values()), 0.5)
             else:
                 self.assertIsNone(summary["posix_waited_child_cpu"])
+                metadata = json.loads((output / "metadata.json").read_text())
+                self.assertIsNone(
+                    metadata["effective_capacity_visible_upper_bound_cpus"]
+                )
+                self.assertIsInstance(metadata["windows_cpu_groups_and_job"], dict)
+                samples = [row for row in rows if row["event"] == "sample"]
+                self.assertTrue(samples)
+                self.assertTrue(
+                    all(
+                        p["threads"] is None
+                        for row in samples
+                        for p in row["processes"]
+                    )
+                )
 
     def test_immediate_exit_and_launch_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
