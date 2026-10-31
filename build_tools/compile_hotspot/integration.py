@@ -33,6 +33,14 @@ REBUILT = {"composable-kernel", "miopen"}
 HELPER_TARGETS = {"therock-googletest": "googletest", "therock-eigen": "eigen",
                   "therock-frugally-deep": "frugally-deep",
                   "therock-FunctionalPlus": "FunctionalPlus", "therock-nlohmann-json": "nlohmann-json"}
+LOGICAL_ONLY_ARTIFACTS = {
+    "core-hipinfo": "Pinned core/CMakeLists.txt publishes this only under WIN32",
+    "spdlog": "Pinned third-party/spdlog/CMakeLists.txt has no artifact provider; not a CK/MIOpen dependency",
+    "sysdeps-libmnl": "Published within sysdeps dev/lib; verify its actual stage root",
+    "sysdeps-libnl": "Published within sysdeps dev/lib; verify its actual stage root",
+}
+BUNDLED_SYSDEPS_ROOTS = {"third-party/sysdeps/linux/libmnl/build/stage",
+                         "third-party/sysdeps/linux/libnl/build/stage"}
 SOURCE_DIR = "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/"
 NAMES = {diagnostic.SOURCE, diagnostic.SOURCE.replace("_instance.cpp", "_noshuffle_instance.cpp"),
          diagnostic.SOURCE.replace("_instance.cpp", "_nongrouped_match_instance.cpp")}
@@ -89,11 +97,30 @@ def fetch_dependencies(args):
     from _therock_utils.build_topology import BuildTopology
     from _therock_utils.artifacts import ArtifactName
     from _therock_utils.archive_util import open_archive_for_read
+    from _therock_utils.artifact_backend import create_backend_from_env
     topology = BuildTopology(str(ROOT / "BUILD_TOPOLOGY.toml"))
-    imported = (topology.get_inbound_artifacts("math-libs") | topology.get_produced_artifacts("math-libs")) - REBUILT
+    logical = (topology.get_inbound_artifacts("math-libs") | topology.get_produced_artifacts("math-libs")) - REBUILT
+    if len(logical) != 37 or not set(LOGICAL_ONLY_ARTIFACTS).issubset(logical):
+        raise RuntimeError("Pinned logical dependency closure changed")
+    imported = logical - set(LOGICAL_ONLY_ARTIFACTS)
     excluded = set(topology.artifacts) - imported
-    if len(imported) != 37 or not REBUILT.issubset(excluded):
+    if len(imported) != 33 or not REBUILT.issubset(excluded):
         raise RuntimeError("Pinned dependency closure changed")
+    backend = create_backend_from_env(run_id=args.baseline_run_id,
+                                      github_repository="ROCm/TheRock", platform="linux")
+    published = backend.list_artifacts()
+    available = {entry.name for filename in published
+                 if (entry := ArtifactName.from_filename(filename)) is not None
+                 and entry.target_family in {"generic", "gfx950"}
+                 and entry.component not in {"dbg", "doc"}}
+    save("dependency-plan.json", {"baseline_uri": backend.base_uri, "published_archives": published,
+                                 "requested_logical_artifacts": sorted(logical),
+                                 "imported_artifacts": sorted(imported),
+                                 "logical_only_artifacts": LOGICAL_ONLY_ARTIFACTS})
+    if imported - available:
+        raise RuntimeError(f"Required published artifacts absent before fetch: {sorted(imported - available)}")
+    if set(LOGICAL_ONLY_ARTIFACTS) & available:
+        raise RuntimeError("Pinned logical-only artifact assumptions changed; reinspect published metadata")
     run([sys.executable, "build_tools/artifact_manager.py", "fetch", "--stage=all",
          "--run-id=" + args.baseline_run_id, "--run-github-repo=ROCm/TheRock", "--platform=linux",
          "--amdgpu-families=gfx950", "--amdgpu-targets=gfx950", "--bootstrap",
@@ -117,6 +144,8 @@ def fetch_dependencies(args):
         archives.append({**diagnostic.fingerprint(path), "artifact": name.name, "roots": manifest})
     if found != imported:
         raise RuntimeError(f"Missing imported artifacts: {sorted(imported - found)}")
+    if not BUNDLED_SYSDEPS_ROOTS.issubset(roots):
+        raise RuntimeError("Published sysdeps payload omitted required bundled libmnl/libnl roots")
     check_markers(roots)
     save("dependencies.json", {"imported_artifacts": sorted(imported), "archives": archives})
     return sorted(imported), archives, roots
@@ -336,6 +365,8 @@ def package(args, context, imported, archives, candidate, measurements):
         elif path.is_file():
             files[relative] = diagnostic.fingerprint(path)["sha256"]
     manifest = {**context, "libraries_sha": LIBRARIES_SHA, "imported_artifacts": imported,
+                "requested_logical_artifacts": sorted(set(imported) | set(LOGICAL_ONLY_ARTIFACTS)),
+                "logical_only_artifacts": LOGICAL_ONLY_ARTIFACTS,
                 "dependency_archives": archives, "files": files, "symlinks": symlinks,
                 "plugin_path": "lib/" + plugin.name, "miopen_library_path": "lib/" + miopen.name,
                 "ck_archive_path": "ck/lib/libdevice_conv_operations.a", "contract": contract,
