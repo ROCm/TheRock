@@ -282,6 +282,7 @@ jobs:
       BUILD_DIR: build
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.container-cache
+      RELEASE_TYPE: ci
       CCACHE_READONLY: 1
       TEATIME_FORCE_INTERACTIVE: 0
       TEATIME_PROFILE_CPU: 1
