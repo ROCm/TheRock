@@ -333,6 +333,27 @@ class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_lookup_finds_a_variant_run_by_its_workflow_run_id(self, mock_retrieve):
+        """A -<variant> suffix stays in the prefix but not in the API lookup."""
+        mock_retrieve.return_value = (
+            "ROCm-rocm-libraries/",
+            "therock-ci-artifacts-external",
+        )
+        root = WorkflowOutputRoot.from_workflow_run(
+            run_id="99999-coverage",
+            platform="linux",
+            github_repository="ROCm/rocm-libraries",
+            lookup_workflow_run=True,
+        )
+        self.assertEqual(root.prefix, "ROCm-rocm-libraries/99999-coverage-linux")
+        mock_retrieve.assert_called_once_with(
+            github_repository="ROCm/rocm-libraries",
+            workflow_run_id="99999",
+            workflow_run=None,
+            release_type=None,
+        )
+
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_with_workflow_run_dict(self, mock_retrieve):
         """When workflow_run is provided, it's passed through (no API call)."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
