@@ -27,12 +27,14 @@ BUNDLE = ROOT / "integration-bundle"
 LIBRARIES_SHA = "f4e24d58b3f313f1a31068def1e35376e43c2f49"
 BASELINES = {"release": "41149779244", "asan-debug": "41211496307"}
 REBUILT = {"composable-kernel", "miopen"}
-# These native MIOpen BUILD_DEPS are outside the pinned math-stage artifact
-# closure. Four have no artifacts; nlohmann-json's optional artifact is not an
-# inbound math-stage artifact. Their source URLs/hashes remain pinned by TheRock.
+# Native MIOpen helpers and the prebuilt rocprofiler-sdk's runtime closure are
+# outside the pinned math-stage artifact payloads. nlohmann-json's optional
+# artifact is not inbound; the others have no artifact provider at this pin.
+# Their source URLs/hashes remain pinned by TheRock.
 HELPER_TARGETS = {"therock-googletest": "googletest", "therock-eigen": "eigen",
                   "therock-frugally-deep": "frugally-deep",
-                  "therock-FunctionalPlus": "FunctionalPlus", "therock-nlohmann-json": "nlohmann-json"}
+                  "therock-FunctionalPlus": "FunctionalPlus", "therock-nlohmann-json": "nlohmann-json",
+                  "therock-fmt": "fmt", "therock-yaml-cpp": "yaml-cpp"}
 LOGICAL_ONLY_ARTIFACTS = {
     "core-hipinfo": "Pinned core/CMakeLists.txt publishes this only under WIN32",
     "spdlog": "Pinned third-party/spdlog/CMakeLists.txt has no artifact provider; not a CK/MIOpen dependency",
@@ -202,6 +204,10 @@ def configure(args):
          "-DMIOpen_CMAKE_ARGS=-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"], "configure")
     check_markers(roots)
     check_planned_builds()
+    # CK+configure stages rocprofiler-sdk's runtime dependencies even when that
+    # SDK is prebuilt. Measure these helpers before the configure edge can build
+    # them implicitly, keeping their setup out of the affected-target timing.
+    helper_setup = measured(["cmake", "--build", str(BUILD), "--target", *HELPER_TARGETS], "helper-setup")
     run(["cmake", "--build", str(BUILD), "--target", "composable_kernel+configure"], "ck-configure")
     baseline = entries({diagnostic.SOURCE})[diagnostic.SOURCE]
     generated_headers = {str(p.relative_to(CK)): diagnostic.fingerprint(p)["sha256"]
@@ -229,7 +235,7 @@ def configure(args):
     save("source-contract.json", {"baseline": baseline, "candidate": candidate,
                                  "generated_headers": generated_headers,
                                  "source_files": [diagnostic.fingerprint(LIBRARIES / p) for p in paths]})
-    return context, imported, archives, candidate
+    return context, imported, archives, candidate, helper_setup
 
 
 def copy_file(source, destination):
@@ -386,10 +392,8 @@ def main():
     if os.getenv("GITHUB_ACTIONS") != "true":
         raise RuntimeError("This producer requires the pinned CI container")
     os.environ["CCACHE_DISABLE"] = "1"
-    context, imported, archives, candidate = configure(args)
-    measurements = {}
-    measurements["unimported_helper_setup"] = measured(
-        ["cmake", "--build", str(BUILD), "--target", *HELPER_TARGETS], "helper-setup")
+    context, imported, archives, candidate, helper_setup = configure(args)
+    measurements = {"unimported_helper_setup": helper_setup}
     measurements["ck_archive_and_stage"] = measured(["cmake", "--build", str(BUILD), "--target", "composable_kernel"], "ck-build")
     measurements["miopen_configure"] = measured(["cmake", "--build", str(BUILD), "--target", "MIOpen+configure"], "miopen-configure")
     measurements["miopen_native_consumer"] = measured(["cmake", "--build", str(MIOPEN), "--target",
