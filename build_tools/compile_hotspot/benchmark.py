@@ -109,11 +109,19 @@ def benchmark() -> None:
     if diagnostic.run([*git, "status", "--porcelain"]).strip():
         raise RuntimeError("Library source must start clean")
     paths = re.findall(r"^\+\+\+ b/(.+)$", PATCH.read_text(), re.MULTILINE)
-    if len(paths) != 3 or len(set(paths)) != 3 or ORIGINAL not in paths:
-        raise RuntimeError("Expected exactly three patched translation units")
-    if any(
-        Path(p).parent != Path(ORIGINAL).parent or not p.endswith(".cpp") for p in paths
+    cmake_path = (Path(ORIGINAL).parent.parent / "CMakeLists.txt").as_posix()
+    cpp_paths = [p for p in paths if p.endswith(".cpp")]
+    if (
+        len(paths) != 4
+        or len(set(paths)) != 4
+        or ORIGINAL not in paths
+        or cmake_path not in paths
+        or len(cpp_paths) != 3
     ):
+        raise RuntimeError(
+            "Expected three translation units and their exact companion CMakeLists"
+        )
+    if any(Path(p).parent != Path(ORIGINAL).parent for p in cpp_paths):
         raise RuntimeError("Patch outside selected CK source directory")
     baseline = entries({diagnostic.SOURCE})
     baseline_argv = arguments(baseline[diagnostic.SOURCE]["command"])
@@ -139,7 +147,9 @@ def benchmark() -> None:
         for p in (diagnostic.CK / "include").rglob("*")
         if p.is_file()
     }
-    baseline_sources = {ORIGINAL: diagnostic.fingerprint(LIBRARIES / ORIGINAL)}
+    baseline_sources = {
+        p: diagnostic.fingerprint(LIBRARIES / p) for p in (ORIGINAL, cmake_path)
+    }
     state = "baseline"
 
     def set_state(wanted: str) -> None:
@@ -156,7 +166,7 @@ def benchmark() -> None:
         ["cmake", "-S", str(CK_SOURCE), "-B", str(diagnostic.CK)],
         log="candidate-configure.log",
     )
-    candidate = entries({Path(p).name for p in paths})
+    candidate = entries({Path(p).name for p in cpp_paths})
     candidate_headers = {
         str(p.relative_to(diagnostic.CK)): diagnostic.fingerprint(p)
         for p in (diagnostic.CK / "include").rglob("*")
@@ -205,7 +215,7 @@ def benchmark() -> None:
         if actual != expected:
             raise RuntimeError(f"Source hash mismatch: {trial}")
         if variant == "baseline" and any(
-            (LIBRARIES / p).exists() for p in paths if p != ORIGINAL
+            (LIBRARIES / p).exists() for p in paths if p not in baseline_sources
         ):
             raise RuntimeError("Candidate-only sources survived baseline restoration")
         directory = diagnostic.OUT / "benchmarks" / trial
