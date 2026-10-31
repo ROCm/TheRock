@@ -449,15 +449,28 @@ def prepare(build: Path, output: Path, env: dict[str, str]) -> Path:
     return build / "math-libs/rocFFT/build"
 
 
-def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
-    values = cache_values(nested / "CMakeCache.txt")
-    if values.get("ROCFFT_KERNEL_CACHE_ENABLE") != "ON":
-        raise ValueError("Required shipped AOT caches are disabled")
-    if values.get("GPU_TARGETS", "").split(";") != ARCHES:
-        raise ValueError(
-            f"Unexpected target architecture list: {values.get('GPU_TARGETS')}"
+def resolve_compiler(nested: Path) -> Path:
+    # Toolchain files may set this as a normal variable, not a cache entry.
+    candidates = set()
+    value = cache_values(nested / "CMakeCache.txt").get("CMAKE_CXX_COMPILER")
+    if value:
+        candidates.add(Path(value).resolve())
+    for metadata in (nested / "CMakeFiles").glob("*/CMakeCXXCompiler.cmake"):
+        match = re.search(
+            r'set\(CMAKE_CXX_COMPILER "([^"\n]+)"\)', metadata.read_text()
         )
-    compiler = Path(values["CMAKE_CXX_COMPILER"]).resolve()
+        if match:
+            candidates.add(Path(match[1]).resolve())
+    if len(candidates) != 1:
+        raise ValueError(f"Expected one actual generated C++ compiler: {candidates}")
+    compiler = candidates.pop()
+    if not compiler.is_file():
+        raise ValueError(f"Generated C++ compiler does not exist: {compiler}")
+    return compiler
+
+
+def record_sdk_identity(nested: Path, output: Path, env: dict[str, str]) -> None:
+    compiler = resolve_compiler(nested)
     write_json(
         output / "sdk-identity.json",
         {
@@ -474,6 +487,34 @@ def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
             ),
         },
     )
+
+
+def run_postchecks(checks: list[tuple[str, object]], output: Path) -> None:
+    """Retain independent evidence even when an earlier metadata check fails."""
+    results = []
+    for name, check in checks:
+        started = time.monotonic()
+        try:
+            check()
+            result = {"name": name, "result": "passed"}
+        except Exception as error:
+            result = {"name": name, "result": "failed", "error": repr(error)}
+        result["wall_s"] = time.monotonic() - started
+        results.append(result)
+        write_json(output / "postchecks.json", results)
+    failed = [r["name"] for r in results if r["result"] == "failed"]
+    if failed:
+        raise RuntimeError(f"Required postchecks failed: {failed}")
+
+
+def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
+    values = cache_values(nested / "CMakeCache.txt")
+    if values.get("ROCFFT_KERNEL_CACHE_ENABLE") != "ON":
+        raise ValueError("Required shipped AOT caches are disabled")
+    if values.get("GPU_TARGETS", "").split(";") != ARCHES:
+        raise ValueError(
+            f"Unexpected target architecture list: {values.get('GPU_TARGETS')}"
+        )
     commands = {}
     for arch in ARCHES:
         target = f"library/src/rocfft_kernel_cache_{arch}.db"
@@ -489,6 +530,50 @@ def verify_rocfft(nested: Path, output: Path, env: dict[str, str]) -> None:
         commands[arch] = command
     write_json(output / "original-helper-commands.json", commands)
     save_tree(nested, output, "rocfft-generated", env)
+
+
+def collect_cache_outputs(nested: Path, output: Path) -> None:
+    inventories = []
+    for arch in ARCHES:
+        path = nested / f"library/src/rocfft_kernel_cache_{arch}.db"
+        if not path.is_file():
+            raise ValueError(f"Missing required shipped cache: {arch}")
+        info = inventory_database(path, output / f"inventory-{arch}.jsonl")
+        if info["arches"] != [arch] or info["quick_check"] != [("ok",)]:
+            raise ValueError(f"Invalid cache output: {arch}")
+        inventories.append(info)
+    write_json(output / "cache-inventories.json", inventories)
+    traces = list((output / "phases").glob("*.jsonl"))
+    completed = []
+    generator_sums = set()
+    for path in traces:
+        last = json.loads(path.read_text().splitlines()[-1])
+        if last["event"] != "complete":
+            raise ValueError(f"Incomplete phase trace: {path.name}")
+        completed.append(last["arch"])
+        generator_sums.add(last["properties"].get("generator_sum"))
+    if sorted(completed) != ARCHES:
+        raise ValueError(
+            f"Must retain one completed helper trace for each architecture: {completed}"
+        )
+    if len(generator_sums) != 1 or None in generator_sums:
+        raise ValueError(
+            "Missing or inconsistent generator_sum across architecture helpers"
+        )
+    if any(set(info["generator_sums"]) != generator_sums for info in inventories):
+        raise ValueError(
+            "Shipped cache generator_sum disagrees with the helper's recorded checksum"
+        )
+    write_json(
+        output / "helper-binaries.json",
+        [
+            {"path": str(path), "sha256": digest(path)}
+            for path in [
+                nested / "library/src/rocfft_aot_helper",
+                nested / "library/src/rocfft_rtc_helper",
+            ]
+        ],
+    )
 
 
 def main() -> None:
@@ -587,53 +672,28 @@ def main() -> None:
                 ROOT,
                 child_env,
             )
-        verify_rocfft(nested, output, env)
-        run_logged(
-            ["ctest", "--test-dir", str(build), "--output-on-failure"],
-            output / "packaging-tests.log",
-            ROOT,
-            env,
-        )
-        inventories = []
-        for arch in ARCHES:
-            path = nested / f"library/src/rocfft_kernel_cache_{arch}.db"
-            if not path.is_file():
-                raise ValueError(f"Missing required shipped cache: {arch}")
-            info = inventory_database(path, output / f"inventory-{arch}.jsonl")
-            if info["arches"] != [arch] or info["quick_check"] != [("ok",)]:
-                raise ValueError(f"Invalid cache output: {arch}")
-            inventories.append(info)
-        write_json(output / "cache-inventories.json", inventories)
-        traces = list((output / "phases").glob("*.jsonl"))
-        completed = []
-        generator_sums = set()
-        for path in traces:
-            last = json.loads(path.read_text().splitlines()[-1])
-            if last["event"] != "complete":
-                raise ValueError(f"Incomplete phase trace: {path.name}")
-            completed.append(last["arch"])
-            generator_sums.add(last["properties"].get("generator_sum"))
-        if sorted(completed) != ARCHES:
-            raise ValueError(
-                f"Must retain one completed helper trace for each architecture: {completed}"
-            )
-        if len(generator_sums) != 1 or None in generator_sums:
-            raise ValueError(
-                "Missing or inconsistent generator_sum across architecture helpers"
-            )
-        if any(set(info["generator_sums"]) != generator_sums for info in inventories):
-            raise ValueError(
-                "Shipped cache generator_sum disagrees with the helper's recorded checksum"
-            )
-        write_json(
-            output / "helper-binaries.json",
+        run_postchecks(
             [
-                {"path": str(path), "sha256": digest(path)}
-                for path in [
-                    nested / "library/src/rocfft_aot_helper",
-                    nested / "library/src/rocfft_rtc_helper",
-                ]
+                ("sdk_identity", lambda: record_sdk_identity(nested, output, env)),
+                (
+                    "original_helper_commands",
+                    lambda: verify_rocfft(nested, output, env),
+                ),
+                (
+                    "semantic_cache_outputs",
+                    lambda: collect_cache_outputs(nested, output),
+                ),
+                (
+                    "packaging_tests",
+                    lambda: run_logged(
+                        ["ctest", "--test-dir", str(build), "--output-on-failure"],
+                        output / "packaging-tests.log",
+                        ROOT,
+                        env,
+                    ),
+                ),
             ],
+            output,
         )
         manifest["result"] = (
             "diagnostic_completed; packaging tests passed; optimization and GPU runtime correctness unvalidated"
@@ -643,12 +703,10 @@ def main() -> None:
             save_tree(nested, output, "rocfft-after", env)
         if (build / "build.ninja").is_file():
             save_tree(build, output, "root-after", env)
-        for path in (build / "logs").glob("*_build.log"):
-            if path.is_file():
-                shutil.copyfile(path, output / path.name)
-        for path in (build / "logs").glob("*_configure.log"):
-            if path.is_file():
-                shutil.copyfile(path, output / path.name)
+        for pattern in ["*_build.log", "*_configure.log", "*_install.log"]:
+            for path in (build / "logs").glob(pattern):
+                if path.is_file():
+                    shutil.copyfile(path, output / path.name)
         for path in build.rglob(".ninja_log"):
             if not path.is_relative_to(output):
                 dest = output / "all-ninja-logs" / path.relative_to(build)

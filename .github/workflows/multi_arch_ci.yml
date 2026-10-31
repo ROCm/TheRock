@@ -309,6 +309,7 @@ jobs:
         with:
           name: rocfft-aot-${{ github.run_attempt }}
           path: build/logs/rocfft-aot/
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
           compression-level: 6

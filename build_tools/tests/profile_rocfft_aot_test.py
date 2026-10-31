@@ -23,6 +23,61 @@ SPEC.loader.exec_module(trial)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_compiler_normal_variable_is_resolved_and_conflicts_fail(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            compiler = root / "SDK with spaces/clang++"
+            compiler.parent.mkdir()
+            compiler.write_bytes(b"fixture compiler")
+            (root / "CMakeCache.txt").write_text("GPU_TARGETS:STRING=gfx1030\n")
+            metadata = root / "CMakeFiles/3.31.6/CMakeCXXCompiler.cmake"
+            metadata.parent.mkdir(parents=True)
+            metadata.write_text(f'set(CMAKE_CXX_COMPILER "{compiler.as_posix()}")\n')
+            self.assertEqual(trial.resolve_compiler(root), compiler.resolve())
+            (root / "CMakeCache.txt").write_text(
+                f"CMAKE_CXX_COMPILER:FILEPATH={root / 'another-compiler'}\n"
+            )
+            with self.assertRaisesRegex(ValueError, "one actual generated"):
+                trial.resolve_compiler(root)
+
+    def test_failed_metadata_does_not_discard_semantic_output_checks(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            db = root / "cache.db"
+            with closing(sqlite3.connect(db)) as handle, handle:
+                handle.execute(
+                    "CREATE TABLE cache_v1(kernel_name,arch,hip_version,generator_sum,code,timestamp)"
+                )
+                handle.execute(
+                    "INSERT INTO cache_v1 VALUES(?,?,?,?,?,?)",
+                    ("kernel", "gfx1030", 123, b"g" * 32, b"code", 0),
+                )
+
+            def fail_metadata():
+                raise KeyError("CMAKE_CXX_COMPILER")
+
+            with self.assertRaisesRegex(RuntimeError, "sdk_identity"):
+                trial.run_postchecks(
+                    [
+                        ("sdk_identity", fail_metadata),
+                        (
+                            "cache_outputs",
+                            lambda: trial.inventory_database(
+                                db, root / "inventory.jsonl"
+                            ),
+                        ),
+                    ],
+                    root,
+                )
+            rows = (root / "inventory.jsonl").read_text().splitlines()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(
+                json.loads(rows[0])["code_sha256"],
+                trial.hashlib.sha256(b"code").hexdigest(),
+            )
+            checks = json.loads((root / "postchecks.json").read_text())
+            self.assertEqual([c["result"] for c in checks], ["failed", "passed"])
+
     def test_observer_counts_probe_and_serialized_io_once_and_excludes_wait(self):
         clock = SimpleNamespace(now=0.0)
         rows = []
