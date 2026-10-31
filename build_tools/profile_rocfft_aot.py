@@ -46,6 +46,13 @@ KNOBS = [
     "ROCFFT_RTC_CACHE_WRITE_DISABLE",
     "ROCFFT_LAYER",
     "ROCFFT_AOT_BATCH_TRANSACTION",
+    "AMD_COMGR_CACHE",
+    "AMD_COMGR_CACHE_DIR",
+    "AMD_COMGR_CACHE_POLICY",
+    "AMD_COMGR_DRIVER_OPTIONS_APPEND",
+    "AMD_COMGR_EMIT_VERBOSE_LOGS",
+    "HIPRTC_COMPILE_OPTIONS_APPEND",
+    "HIPRTC_LINK_OPTIONS_APPEND",
 ]
 
 
@@ -78,6 +85,15 @@ def require_ci(env: dict[str, str]) -> None:
         raise ValueError("CI bucket and read-only remote compiler cache are required")
     if env.get("ROCFFT_LAYER"):
         raise ValueError("Source-dumping ROCFFT logging must not be enabled")
+    for name in [
+        "AMD_COMGR_DRIVER_OPTIONS_APPEND",
+        "HIPRTC_COMPILE_OPTIONS_APPEND",
+        "HIPRTC_LINK_OPTIONS_APPEND",
+    ]:
+        if env.get(name):
+            raise ValueError(f"Uncontrolled compiler option override: {name}")
+    if env.get("AMD_COMGR_EMIT_VERBOSE_LOGS") not in (None, "", "0"):
+        raise ValueError("Verbose COMGR logging would perturb the measured workload")
 
 
 def capture(command: list[str], cwd: Path, env: dict[str, str]) -> str:
@@ -623,6 +639,48 @@ def require_fresh_private_cache(nested: Path) -> None:
         raise ValueError("AOT trial requires a fresh, helper-owned temporary database")
 
 
+def compiler_cache_inventory(path: Path) -> dict:
+    started = time.monotonic()
+    files = []
+    entries = list(path.rglob("*"))
+    for entry in entries:
+        if entry.is_symlink():
+            raise ValueError("Private COMGR cache contains an unexpected symlink")
+        if entry.is_file():
+            files.append(
+                {"path": str(entry.relative_to(path)), "bytes": entry.stat().st_size}
+            )
+    fs = os.statvfs(path) if hasattr(os, "statvfs") else None
+    return {
+        "path": str(path.resolve()),
+        "entry_count": len(entries),
+        "file_count": len(files),
+        "bytes": sum(item["bytes"] for item in files),
+        "files": sorted(files, key=lambda item: item["path"]),
+        "device": path.stat().st_dev,
+        "filesystem": (
+            {
+                name: getattr(fs, name)
+                for name in ("f_bsize", "f_frsize", "f_blocks", "f_bavail")
+            }
+            if fs
+            else None
+        ),
+        "scope": "COMGR disk command cache; page/inode/OS caches are not claimed cold",
+        "inventory_wall_s": time.monotonic() - started,
+    }
+
+
+def prepare_private_compiler_cache(build: Path, env: dict[str, str]) -> Path:
+    path = build / "rocfft-private-comgr-cache"
+    # Fresh means newly created, never a deletion/reset of a shared cache.
+    path.mkdir()
+    env["AMD_COMGR_CACHE"] = "1"
+    env["AMD_COMGR_CACHE_DIR"] = str(path.resolve())
+    env.pop("AMD_COMGR_CACHE_POLICY", None)  # exact pinned default pruning policy
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
@@ -689,10 +747,32 @@ def main() -> None:
         ],
     )
     write_json(output / "manifest.json", manifest)
+    write_json(
+        output / "allocation-hardware.json",
+        {
+            "uname": list(os.uname()),
+            "cpuinfo": explicit_read(Path("/proc/cpuinfo")),
+            "numa_online": explicit_read(Path("/sys/devices/system/node/online")),
+            "note": "Host-visible CPU inventory; effective allocation/affinity is in build-profile metadata.",
+        },
+    )
+    compiler_cache = prepare_private_compiler_cache(build, env)
+    manifest["controlled_comgr_knobs"] = {
+        name: env.get(name)
+        for name in ("AMD_COMGR_CACHE", "AMD_COMGR_CACHE_DIR", "AMD_COMGR_CACHE_POLICY")
+    }
+    write_json(output / "manifest.json", manifest)
     nested = None
     try:
         nested = prepare(build, output, env)
         require_fresh_private_cache(nested)
+        (output / "ccache-before.txt").write_text(
+            capture(["ccache", "--show-stats"], ROOT, env)
+        )
+        initial_cache = compiler_cache_inventory(compiler_cache)
+        write_json(output / "compiler-cache-before.json", initial_cache)
+        if initial_cache["entry_count"]:
+            raise ValueError("Private COMGR cache was populated during preparation")
         # Worker/process/compilation policy stays fixed; transaction trial is explicit.
         child_env = dict(env)
         child_env["ROCFFT_BUILD_PROFILE_DIR"] = str(output / "phases")
@@ -732,6 +812,13 @@ def main() -> None:
             )
         run_postchecks(
             [
+                (
+                    "compiler_cache_inventory",
+                    lambda: write_json(
+                        output / "compiler-cache-after.json",
+                        compiler_cache_inventory(compiler_cache),
+                    ),
+                ),
                 ("sdk_identity", lambda: record_sdk_identity(nested, output, env)),
                 (
                     "original_helper_commands",
@@ -763,6 +850,22 @@ def main() -> None:
             save_tree(nested, output, "rocfft-after", env)
         if (build / "build.ninja").is_file():
             save_tree(build, output, "root-after", env)
+        try:
+            (output / "ccache-after.txt").write_text(
+                capture(["ccache", "--show-stats"], ROOT, env)
+            )
+        except (OSError, subprocess.CalledProcessError) as error:
+            write_json(output / "ccache-after-error.json", {"error": repr(error)})
+        if not (output / "compiler-cache-after.json").is_file():
+            try:
+                write_json(
+                    output / "compiler-cache-after.json",
+                    compiler_cache_inventory(compiler_cache),
+                )
+            except (OSError, ValueError) as error:
+                write_json(
+                    output / "compiler-cache-after-error.json", {"error": repr(error)}
+                )
         for pattern in ["*_build.log", "*_configure.log", "*_install.log"]:
             for path in (build / "logs").glob(pattern):
                 if path.is_file():

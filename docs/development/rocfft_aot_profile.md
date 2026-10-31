@@ -252,3 +252,55 @@ python -m unittest build_tools.tests.profile_rocfft_aot_test \
 This fixture is host correctness coverage, not a local ROCm performance run.
 The SQLite fixture explicitly skips when its declared build inputs are absent;
 the original required host profiler fixture remains required in CI.
+
+### Compiler-cache control and repeated full-stage recipe
+
+The exact LLVM pin's
+[`comgr-env.cpp`215–241](https://github.com/ROCm/llvm-project/blob/e095f1b3becf0c1bfdc5e7647003d60976a2460b/amd/comgr/src/comgr-env.cpp#L215)
+enables the COMGR command cache by default. `AMD_COMGR_CACHE=0` disables it;
+`AMD_COMGR_CACHE_DIR` selects an explicit directory. The default path is the
+platform cache directory plus `comgr`.
+[`comgr-cache.cpp`139–186](https://github.com/ROCm/llvm-project/blob/e095f1b3becf0c1bfdc5e7647003d60976a2460b/amd/comgr/src/comgr-cache.cpp#L139)
+uses default pruning once per hour, up to75% available disk/5GiB.
+[`hiprtcInternal.cpp`192–233](https://github.com/ROCm/rocm-systems/blob/a10dca087065a82f15ea89dc7d6fdd3c6bb2c246/projects/clr/hipamd/src/hiprtc/hiprtcInternal.cpp#L192)
+and its compile helper route the inspected rocFFT HIPRTC path through COMGR.
+The inspected chain does not add a separate HIPRTC disk cache. This does not
+claim that all ROCm runtime APIs or OS caches are controlled by that directory.
+
+The controller now creates a new private COMGR directory before preparation,
+sets `AMD_COMGR_CACHE=1`, selects it with `AMD_COMGR_CACHE_DIR`, and unsets an
+inherited pruning-policy override so all controls use the pinned default. It
+refuses reuse rather than deleting any existing directory. Preparation must
+leave this directory empty; a recorded nonzero entry count fails before timing.
+The final inventory records file names/sizes and filesystem capacity/device
+without uploading cached compiler binaries. COMGR remains enabled and can warm
+naturally throughout the seven-helper chain. This common control differs from
+the earlier diagnostic's unrecorded ambient COMGR cache state: compare A/B
+within the new trial set, not new timings directly against the old job.
+Compiler append-option overrides and verbose COMGR logging are rejected rather
+than silently changing the measured work. Only a specific nonsecret knob
+allowlist is recorded.
+
+After review/push of one exact trial SHA, launch four independent full-stage
+allocations in A/B/B/A order. A is `profile_rocfft_aot=true` with
+`profile_rocfft_aot_batch_transaction=false`; B changes only the latter totrue.
+Use `multi_arch_ci.yml`, the same pinned branch/SHA, SDK41190705863, fixed82
+package version and `aws-linux-scale-rocm-prod` label. Prefer waiting for each
+job to finish before the next dispatch to avoid deliberately adding concurrent
+storage load. Record actual start order and allocation identities even if the
+scheduler changes launch order. No release, S3 publication or remote ccache
+write is part of this diagnostic.
+
+These are independent-host repetitions, not same-host ABBA. Check each run's
+compiler/header/source hashes, complete81 project configuration context,
+seven helpers, initial private-cache inventories, cpu.max/cpuset/PID limits,
+runner identity and resource traces before comparing. Require all seven sorted
+cache key/blob inventories to agree across A and B,17,204 entries/misses per
+architecture, unchanged generator checksums and passing postchecks. Compare
+first-helper store and final-commit time, complete first-helper wall/CPU,
+subsequent shared-DB helpers, rocFFT project time and stage time separately.
+Two samples per arm describe observed variation; they do not support precise
+confidence intervals or universal speedup claims. A slow/failed allocation must
+be explained from traces, not silently discarded. GPU correctness remains
+unvalidated when the exact gfx103X pool is unavailable; do not substitute another
+GPU without recording a distinct validation scope.

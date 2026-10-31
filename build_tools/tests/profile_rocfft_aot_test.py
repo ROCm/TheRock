@@ -23,6 +23,34 @@ SPEC.loader.exec_module(trial)
 
 
 class ControllerTests(unittest.TestCase):
+    def test_private_comgr_cache_replaces_inherited_path_and_refuses_reuse(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            shared = root / "shared-cache"
+            shared.mkdir()
+            sentinel = shared / "keep"
+            sentinel.write_bytes(b"shared state")
+            env = {
+                "AMD_COMGR_CACHE": "0",
+                "AMD_COMGR_CACHE_DIR": str(shared),
+                "AMD_COMGR_CACHE_POLICY": "arbitrary",
+            }
+            path = trial.prepare_private_compiler_cache(root, env)
+            self.assertEqual(env["AMD_COMGR_CACHE"], "1")
+            self.assertEqual(Path(env["AMD_COMGR_CACHE_DIR"]), path.resolve())
+            self.assertNotIn("AMD_COMGR_CACHE_POLICY", env)
+            self.assertEqual(trial.compiler_cache_inventory(path)["entry_count"], 0)
+            (path / "nested").mkdir()
+            (path / "nested/code").write_bytes(b"code bytes")
+            inventory = trial.compiler_cache_inventory(path)
+            self.assertEqual(
+                (inventory["entry_count"], inventory["file_count"], inventory["bytes"]),
+                (2, 1, 10),
+            )
+            with self.assertRaises(FileExistsError):
+                trial.prepare_private_compiler_cache(root, env)
+            self.assertEqual(sentinel.read_bytes(), b"shared state")
+
     def test_trial_refuses_existing_private_database_without_removing_it(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -189,6 +217,10 @@ class ControllerTests(unittest.TestCase):
                 ("RELEASE_TYPE", "nightly"),
                 ("CCACHE_READONLY", "0"),
                 ("ROCFFT_LAYER", "1"),
+                ("AMD_COMGR_DRIVER_OPTIONS_APPEND", "-O0"),
+                ("HIPRTC_COMPILE_OPTIONS_APPEND", "-O0"),
+                ("HIPRTC_LINK_OPTIONS_APPEND", "-v"),
+                ("AMD_COMGR_EMIT_VERBOSE_LOGS", "1"),
             ]:
                 with self.assertRaises(ValueError):
                     trial.require_ci({**env, key: bad})
