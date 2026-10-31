@@ -40,7 +40,7 @@ struct Buffer
 {
     void* ptr = nullptr;
     explicit Buffer(std::size_t size) { hip_check(hipMalloc(&ptr, size)); }
-    ~Buffer() { if(ptr) hipFree(ptr); }
+    ~Buffer() { if(ptr) (void)hipFree(ptr); }
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
 };
@@ -172,10 +172,11 @@ int main(int argc, char** argv)
         for(std::size_t i = 0; i < instances.size(); ++i)
         {
             const auto [group, specialization] = family(i);
+            const Op* instance = instances[i].get();
             // RTTI is the full template identity; GetTypeString can omit parameters.
             std::cout << "INSTANCE\t" << i << '\t' << group << '\t' << specialization
-                      << '\t' << std::quoted(typeid(*instances[i]).name())
-                      << '\t' << std::quoted(instances[i]->GetTypeString()) << '\n';
+                      << '\t' << std::quoted(typeid(*instance).name())
+                      << '\t' << std::quoted(instance->GetTypeString()) << '\n';
         }
         if(argc == 2 && std::string(argv[1]) == "--inventory") return 0;
         if(argc != 1) throw std::runtime_error("usage: ck_f32_contract [--inventory]");
