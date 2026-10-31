@@ -1,0 +1,27 @@
+{
+  "libraries_gitlink": "f4e24d58b3f313f1a31068def1e35376e43c2f49",
+  "joint_patch_sha256": "b74891bd117138d0e922407bf4cc24c1ee0482f08c685de0c1b36b662cb3aab9",
+  "files": [
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getf2_specialized_kernels.hpp",
+      "base_sha256": "d7f3c4fce8eaa28ff0879aa56e7aa571a499c9828fb52980c9852574c336346c",
+      "candidate_sha256": "ef591ecc81950cadd6c0eef275153e67f44b0282a3e85792f53b68293c22fe32"
+    },
+    {
+      "path": "projects/rocsolver/library/src/CMakeLists.txt",
+      "base_sha256": "ded5a580468da4eb9aeb50443f6bff3718e0375e8882dd875245c7ada6b863f7",
+      "candidate_sha256": "210bcd87c7b0fd249105b6e309797686c1a5a52cdafc9c32b69140067b17e576"
+    },
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z.cpp",
+      "base_sha256": "db153c2d2e1e5f53b97440c4aff629048af909e9bf11afd7b897d49d6bf49c13",
+      "candidate_sha256": "96e8ca863c4d150b577b5878c56bfbe94e4501b0f80ffb7e8b57d17834441075"
+    },
+    {
+      "path": "projects/rocsolver/library/src/specialized/roclapack_getri_specialized_kernels_z_batched.cpp",
+      "base_sha256": null,
+      "candidate_sha256": "42cf173af1cfc4ed3ed2ee6a5f3aac517b79b71ffacefab5864abb175138f896"
+    }
+  ],
+  "local_apply_check": true
+}
