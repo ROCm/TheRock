@@ -62,9 +62,9 @@ on:
         required: false
         default: 'ci'
     secrets:
-      RCCL_COCO_APP_ID:
+      ROCM_RCCL_COCO_DISPATCHER_APP_ID:
         required: true
-      RCCL_COCO_APP_PRIVATE_KEY:
+      ROCM_RCCL_COCO_DISPATCHER_PRIVATE_KEY:
         required: true
       RCCL_COCO_DB_URL:
         required: false
@@ -85,8 +85,8 @@ jobs:
       contents: read
     uses: ROCm/rocm-systems/.github/workflows/rccl-coco-run.yml@develop
     secrets:
-      APP_ID: ${{ secrets.RCCL_COCO_APP_ID }}
-      APP_PRIVATE_KEY: ${{ secrets.RCCL_COCO_APP_PRIVATE_KEY }}
+      APP_ID: ${{ secrets.ROCM_RCCL_COCO_DISPATCHER_APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.ROCM_RCCL_COCO_DISPATCHER_PRIVATE_KEY }}
       RCCL_COCO_DB_URL: ${{ secrets.RCCL_COCO_DB_URL }}
     with:
       job: ${{ matrix.job }}
