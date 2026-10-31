@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import replace
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -130,6 +131,9 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         dest_dir = package_dir / Path(build_config.install_prefix).relative_to("/")
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
+
+        if pkg_info.get("Package") == "amdrocm-hipify":
+            prepare_hipify_perl_shebang(dest_dir)
 
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
@@ -457,6 +461,56 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
                 f"Failed to generate Debian {script} script "
                 f"for package {pkg_name!r}"
             ) from exc
+
+
+def prepare_hipify_perl_shebang(install_dir: Path) -> bool:
+    """Prepare the copied real script before dh_perl can replace its alias.
+
+    dh_perl follows executable symlinks and uses Perl -i for env shebangs. If it
+    visits bin/hipify-perl first, -i replaces that link with a regular file.
+    Preparing the real target makes either traversal order preserve the alias;
+    standard dh_perl dependency processing still runs. Atomic replacement also
+    detaches staged hardlinks without modifying original artifact files.
+    """
+    install_dir = Path(install_dir)
+    alias = install_dir / "bin/hipify-perl"
+    target = install_dir / "libexec/hipify/hipify-perl"
+    if not (
+        alias.exists() or alias.is_symlink() or target.exists() or target.is_symlink()
+    ):
+        return False
+    root = install_dir.resolve()
+    if (
+        not alias.is_symlink()
+        or target.is_symlink()
+        or not target.is_file()
+        or not alias.parent.resolve().is_relative_to(root)
+        or not target.resolve().is_relative_to(root)
+        or alias.resolve() != target.resolve()
+    ):
+        raise RuntimeError("Unexpected copied HIPIFY Perl target/alias layout")
+    original = target.read_bytes()
+    prepared = re.sub(
+        rb"\A#![ \t]*/usr/bin/env[ \t]+perl(?=\s)",
+        b"#! /usr/bin/perl",
+        original,
+        count=1,
+    )
+    if prepared == original:
+        return False
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent, prefix=".hipify-perl-", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(prepared)
+        shutil.copystat(target, temporary, follow_symlinks=False)
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return True
 
 
 def copy_package_contents(source_dir, destination_dir):
