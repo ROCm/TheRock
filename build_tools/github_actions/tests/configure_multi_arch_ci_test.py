@@ -926,7 +926,7 @@ class TestDecideJobs(unittest.TestCase):
     def test_debug_tools_stage_allows_all_debugger_tests(self):
         self.assertEqual(
             cm._get_allowed_test_labels_for_stages(["debug-tools"]),
-            ["rocgdb", "rocr-debug-agent"],
+            ["amd-dbgapi", "rocgdb", "rocr-debug-agent"],
         )
 
     # TODO(#3433): Remove ASAN tests once ASAN tests are passing

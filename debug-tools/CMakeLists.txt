@@ -70,6 +70,13 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
   endif()
 
+  # Only build and link against GoogleTest when tests are requested, so
+  # the dependency isn't pulled in for non-testing configurations.
+  set(EXTRA_AMD_DBGAPI_BUILD_DEPS)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND EXTRA_AMD_DBGAPI_BUILD_DEPS therock-googletest)
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
@@ -78,9 +85,11 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       amd-llvm
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
+      "-DENABLE_TESTS=${THEROCK_BUILD_TESTING}"
       ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
+      ${EXTRA_AMD_DBGAPI_BUILD_DEPS}
     RUNTIME_DEPS
       amd-comgr
     INTERFACE_LINK_DIRS
@@ -119,6 +128,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       amd-comgr
       amd-dbgapi

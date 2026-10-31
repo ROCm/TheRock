@@ -639,6 +639,7 @@
   "therock-googletest": {
     "consumers": [
       "amd-comgr",
+      "amd-dbgapi",
       "amdsmi",
       "aqlprofile",
       "hipblas",

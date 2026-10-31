@@ -132,6 +132,7 @@ _EXTERNAL_SUBTREE_ALIASES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 _CI_TEST_SELECTOR_ALIASES = {
+    "amd-dbgapi": ["amd-dbgapi-cpu", "amd-dbgapi-gpu"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "miopen": ["miopen", "miopen-dbsync"],

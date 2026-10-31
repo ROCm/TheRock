@@ -185,7 +185,7 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],
     "cv-libs": ["rpp"],
     "media-libs": ["rocdecode", "rocjpeg"],
-    "debug-tools": ["rocgdb", "rocr-debug-agent"],
+    "debug-tools": ["amd-dbgapi", "rocgdb", "rocr-debug-agent"],
 }
 
 

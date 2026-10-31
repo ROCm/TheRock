@@ -556,7 +556,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "projects/cuid": "rdc",
                 "projects/hip": "hip-clr",
                 "projects/hipother": "hip-clr",
-                "projects/rocdbgapi": "amd-dbgapi",
+                "projects/rocdbgapi": ["amd-dbgapi-cpu", "amd-dbgapi-gpu"],
                 "projects/rocm-smi-lib": "rocm_smi_lib",
                 "projects/rocprofiler": "rocprofiler-sdk",
                 "shared/amdgpu-windows-interop": "hip-clr",
@@ -580,7 +580,10 @@ class TestCliInputParsing(_FixtureTestCase):
                         text=True,
                     )
                     self.assertEqual(proc.returncode, 0, proc.stderr)
-                    self.assertEqual(json.loads(proc.stdout.strip()), [expected])
+                    expected_list = (
+                        expected if isinstance(expected, list) else [expected]
+                    )
+                    self.assertEqual(json.loads(proc.stdout.strip()), expected_list)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
