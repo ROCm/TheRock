@@ -27,6 +27,12 @@ BUNDLE = ROOT / "integration-bundle"
 LIBRARIES_SHA = "f4e24d58b3f313f1a31068def1e35376e43c2f49"
 BASELINES = {"release": "41149779244", "asan-debug": "41211496307"}
 REBUILT = {"composable-kernel", "miopen"}
+# These native MIOpen BUILD_DEPS are outside the pinned math-stage artifact
+# closure. Four have no artifacts; nlohmann-json's optional artifact is not an
+# inbound math-stage artifact. Their source URLs/hashes remain pinned by TheRock.
+HELPER_TARGETS = {"therock-googletest": "googletest", "therock-eigen": "eigen",
+                  "therock-frugally-deep": "frugally-deep",
+                  "therock-FunctionalPlus": "FunctionalPlus", "therock-nlohmann-json": "nlohmann-json"}
 SOURCE_DIR = "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/"
 NAMES = {diagnostic.SOURCE, diagnostic.SOURCE.replace("_instance.cpp", "_noshuffle_instance.cpp"),
          diagnostic.SOURCE.replace("_instance.cpp", "_nongrouped_match_instance.cpp")}
@@ -121,6 +127,7 @@ def check_planned_builds():
     (OUT / "integration-planned-commands.txt").write_text(commands)
     unexpected = []
     allowed = {(BUILD / "math-libs/composable_kernel/build").resolve(), MIOPEN.resolve()}
+    allowed.update((BUILD / "third-party" / name / "build").resolve() for name in HELPER_TARGETS.values())
     for command in commands.splitlines():
         tokens = shlex.split(command)
         for index, token in enumerate(tokens[:-1]):
@@ -173,6 +180,10 @@ def configure(args):
     context["compiler_sha256"] = diagnostic.fingerprint(Path(arguments(baseline["command"])[0]))["sha256"]
     context["harness_source_sha256"] = diagnostic.fingerprint(HERE / "ck_f32_contract.cpp")["sha256"]
     context["rocm_libraries_sha"] = LIBRARIES_SHA
+    context["unimported_build_helpers"] = {
+        target: {"build_directory": str(BUILD / "third-party" / name / "build"),
+                 "source_declaration": diagnostic.fingerprint(ROOT / "third-party" / name / "CMakeLists.txt")}
+        for target, name in HELPER_TARGETS.items()}
     patch = HERE / "candidate.patch"
     paths = patch_paths(patch.read_text())
     run(["git", "apply", "--check", str(patch)], "patch-check", LIBRARIES)
@@ -346,6 +357,8 @@ def main():
     os.environ["CCACHE_DISABLE"] = "1"
     context, imported, archives, candidate = configure(args)
     measurements = {}
+    measurements["unimported_helper_setup"] = measured(
+        ["cmake", "--build", str(BUILD), "--target", *HELPER_TARGETS], "helper-setup")
     measurements["ck_archive_and_stage"] = measured(["cmake", "--build", str(BUILD), "--target", "composable_kernel"], "ck-build")
     measurements["miopen_configure"] = measured(["cmake", "--build", str(BUILD), "--target", "MIOpen+configure"], "miopen-configure")
     measurements["miopen_native_consumer"] = measured(["cmake", "--build", str(MIOPEN), "--target",
