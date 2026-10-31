@@ -26,6 +26,9 @@ name: Multi-Arch Build (Linux)
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       artifact_group:
         type: string
       matrix_per_family_json:
@@ -90,33 +93,15 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 
 jobs:
-  notify_quartz_start:
-    if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    name: "Quartz - started - build ROCm"
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - started - build ROCm"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: multi_arch_build_portable_linux.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
-  # ==========================================================================
-  # STAGE: compiler-runtime (generic)
-  # ==========================================================================
   compiler-runtime:
     if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') && !contains(inputs.skip_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: compiler-runtime
       stage_display_name: "Stage - Compiler Runtime"
       timeout_minutes: 480  # 8 hours (compiler is big)
@@ -131,6 +116,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -144,8 +130,8 @@ jobs:
         !contains(inputs.skip_stages, 'emulation')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: emulation
       stage_display_name: "Stage - Emulation"
       timeout_minutes: 240  # 4 hours
@@ -160,6 +146,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -175,8 +162,8 @@ jobs:
         !contains(inputs.skip_stages, 'runtime-tests')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: runtime-tests
       stage_display_name: "Stage - Runtime Tests"
       timeout_minutes: 120  # 2 hours
@@ -191,6 +178,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -206,8 +194,8 @@ jobs:
         !contains(inputs.skip_stages, 'wsl-rocdxg')
       }}
     uses: ./.github/workflows/multi_arch_build_wsl_rocdxg_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: wsl-rocdxg
       stage_display_name: "Stage - WSL ROCDXG"
       timeout_minutes: 120  # 2 hours
@@ -221,6 +209,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -245,8 +234,8 @@ jobs:
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: math-libs
       stage_display_name: "Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})"
       timeout_minutes: 480  # 8 hours
@@ -263,6 +252,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -281,8 +271,8 @@ jobs:
         !contains(inputs.skip_stages, 'comm-libs')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: comm-libs
       stage_display_name: "Stage - Comm Libs"
       timeout_minutes: 240  # 4 hours
@@ -298,6 +288,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -314,8 +305,8 @@ jobs:
         !contains(inputs.skip_stages, 'storage-libs')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: storage-libs
       stage_display_name: "Stage - Storage Libs"
       timeout_minutes: 240  # 4 hours
@@ -331,6 +322,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -346,8 +338,8 @@ jobs:
         !contains(inputs.skip_stages, 'debug-tools')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: debug-tools
       stage_display_name: "Stage - Debug Tools"
       timeout_minutes: 180  # 3 hours
@@ -362,6 +354,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -377,8 +370,8 @@ jobs:
         !contains(inputs.skip_stages, 'dctools-core')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: dctools-core
       stage_display_name: "Stage - DC Tools Core"
       timeout_minutes: 120  # 2 hours
@@ -393,6 +386,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -408,8 +402,8 @@ jobs:
         !contains(inputs.skip_stages, 'profiler-apps')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: profiler-apps
       stage_display_name: "Stage - Profiler Apps"
       timeout_minutes: 180  # 3 hours
@@ -424,6 +418,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -439,8 +434,8 @@ jobs:
         !contains(inputs.skip_stages, 'cv-libs')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: cv-libs
       stage_display_name: "Stage - CV Libs"
       timeout_minutes: 180  # 3 hours
@@ -455,6 +450,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -470,8 +466,8 @@ jobs:
         !contains(inputs.skip_stages, 'media-libs')
       }}
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      performance_mode: ${{ inputs.performance_mode }}
       stage_name: media-libs
       stage_display_name: "Stage - Media Libs"
       timeout_minutes: 180  # 3 hours
@@ -486,6 +482,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
+      actions: read
       id-token: write
 
   # ==========================================================================
@@ -526,20 +523,3 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: echo "${NEEDS_JSON}"
 
-  notify_quartz_completed:
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
-    name: "Quartz - completed - build ROCm"
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: "Quartz - completed - build ROCm"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: completed
-          reporting_workflow: multi_arch_build_portable_linux.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}

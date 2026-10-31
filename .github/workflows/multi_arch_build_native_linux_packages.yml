@@ -3,6 +3,9 @@ name: Build Multi-Arch Native Linux Packages
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       dist_amdgpu_families:
         description: "Semicolon-separated list of all GPU families (e.g., 'gfx94X-dcgpu;gfx120X-all')"
         required: true
@@ -73,6 +76,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}, ${{ inputs.dist_amdgpu_families }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
@@ -98,6 +102,7 @@ jobs:
     # Resolves parameters only; it needs no cloud credentials.
     permissions:
       contents: read
+      actions: read
     env:
       NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
@@ -111,24 +116,21 @@ jobs:
       gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
     steps:
-      - name: "Quartz - started - build amd-repo-setup"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: multi_arch_build_native_linux_packages.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checking out repository
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -138,6 +140,16 @@ jobs:
       - name: Install Python requirements
         run: pip install jinja2==3.1.6
 
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label resolve_repo_setup_params
+
       - name: Derive amd-repo-setup parameters
         id: derive
         run: |
@@ -146,9 +158,34 @@ jobs:
             --release-type "${RELEASE_TYPE}" \
             --run-id "${ARTIFACT_RUN_ID}"
 
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
   build_native_packages:
     permissions:
       contents: read
+      actions: read
       id-token: write # Authenticate to AWS to upload package repositories.
     name: Build ${{ inputs.native_package_type }} packages
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
@@ -172,24 +209,21 @@ jobs:
       PACKAGE_DIST_DIR: output/packages
       RELEASE_TYPE: ${{ inputs.release_type }}
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checking out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -209,6 +243,16 @@ jobs:
           sudo apt-get install -y rpm debhelper-compat build-essential
           sudo apt-get install -y dpkg-dev createrepo-c
           sudo apt-get install -y patchelf
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label build_native_packages
 
       - name: Fetch Artifacts for all GPU families
         run: |
@@ -267,6 +311,10 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
+      - name: Guard CI-only run-scoped artifact destination
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py guard-ci --label 11
+
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
@@ -280,22 +328,30 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
 
-  # Build the amd-repo-setup package for each OS profile of this package type,
-  # check its contents and upload it to this run's artifacts bucket, under
-  # amd-repo-setup/<os_profile>/.
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
   stage_repo_setup_package:
     name: Stage amd-repo-setup (${{ matrix.os_profile }})
     needs: [resolve_repo_setup_params]
@@ -310,6 +366,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       contents: read
+      actions: read
       id-token: write # Authenticate to AWS to upload the amd-repo-setup package.
     container:
       # get_url_repo_params.py manages image references for each OS profile.
@@ -332,8 +389,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Install system prerequisites
         run: |
@@ -358,6 +423,16 @@ jobs:
           # bin/ on PATH lets the credentials action run here and the package
           # upload from the job that built it.
           echo "/tmp/repo-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          "${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label stage_repo_setup_package
 
       - name: Build amd-repo-setup
         run: |
@@ -391,6 +466,10 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
+      - name: Guard CI-only run-scoped artifact destination
+        run: |
+          "${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py guard-ci --label 8
+
       - name: Upload amd-repo-setup
         id: upload-repo-setup-package
         run: |
@@ -403,22 +482,27 @@ jobs:
 
   # Report the amd-repo-setup jobs' result to Quartz. resolve_repo_setup_params reports
   # their start, so this runs only when that job ran.
-  notify_quartz_completed:
-    name: "Quartz - completed - build amd-repo-setup"
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' }}
-    needs: [resolve_repo_setup_params, stage_repo_setup_package]
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    continue-on-error: true
-    permissions:
-      contents: read
-    steps:
-      - name: "Quartz - completed - build amd-repo-setup"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          "${PYTHON_CMD:-python3}" .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          reporting_workflow: multi_arch_build_native_linux_packages.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_captured_outputs: ${{ toJSON(needs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+

@@ -6,6 +6,9 @@ name: Build WSL ROCDXG Artifacts
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       stage_name:
         type: string
         required: true
@@ -53,6 +56,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build_stage:
@@ -64,6 +68,7 @@ jobs:
       summary: ${{ steps.summary.outputs.summary }}
     permissions:
       contents: read
+      actions: read
       id-token: write
     defaults:
       run:
@@ -83,21 +88,9 @@ jobs:
       # misparses during nested subproject configure.
       THEROCK_WSL_WIN_SDK_MOUNT: /opt/winsdk-shared
       # Injects Windows env vars into WSL
-      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:STAGE_NAME:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
+      WSLENV: THEROCK_HOST_WORKSPACE/p:GITHUB_REPOSITORY:STAGE_NAME:GITHUB_EVENT_NAME:GITHUB_EVENT_PATH/p:GITHUB_ACTIONS:GITHUB_RUN_ID:GITHUB_SHA:RUNNER_NAME:PERF_MODE:CCACHE_DISABLE:KUBE_CPU_REQUEST:RELEASE_TYPE:MANYLINUX_IMAGE:THEROCK_WSL_WIN_SDK_MOUNT:THEROCK_WIN_SDK_SHARED/p
 
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
-      # Enable git longpaths before checkout (needed for external repos with long paths)
       - name: Enable git longpaths
         if: ${{ inputs.external_repo_config != '' }}
         run: git config --system core.longpaths true
@@ -107,8 +100,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Checkout external repository
         if: ${{ inputs.external_repo_config != '' }}
@@ -127,6 +128,16 @@ jobs:
 
       - name: Install python deps
         run: pip install -r requirements.txt
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label build_stage
 
       - name: Runner health status
         run: python build_tools/health_status.py
@@ -281,6 +292,9 @@ jobs:
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
+            -e CCACHE_DISABLE=1 \
+            -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_RUN_ID -e GITHUB_SHA \
+            -e RUNNER_NAME -e PERF_MODE -e KUBE_CPU_REQUEST \
             --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
             --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
@@ -293,6 +307,7 @@ jobs:
               git config --global --add safe.directory "*"
               pip install -r requirements.txt
               ${{ steps.stage_config.outputs.pip_install_cmd && format('pip install {0}', steps.stage_config.outputs.pip_install_cmd) || 'true' }}
+              python3 .perf-instrumentation/build_tools/perf_full/full_probe.py inner-limits --label wsl-configure
               cmake -B "${WSL_BUILD_DIR}" -S . -G Ninja \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
@@ -313,6 +328,9 @@ jobs:
           wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           docker run --rm \
+            -e CCACHE_DISABLE=1 \
+            -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_RUN_ID -e GITHUB_SHA \
+            -e RUNNER_NAME -e PERF_MODE -e KUBE_CPU_REQUEST \
             --mount "type=bind,src=${wsl_src_dir},dst=${wsl_src_dir}" \
             --mount "type=bind,src=${wsl_build_dir},dst=${wsl_build_dir}" \
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
@@ -322,6 +340,7 @@ jobs:
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
+              python3 .perf-instrumentation/build_tools/perf_full/full_probe.py inner-limits --label wsl-build
               cmake --build "${WSL_BUILD_DIR}" --target "stage-${STAGE_NAME}" -- -k 0
             '
 
@@ -355,6 +374,10 @@ jobs:
             --stage="${stage_name}" \
             --build-dir="${wsl_build_dir}"
 
+      - name: Guard CI-only run-scoped artifact destination
+        run: |
+          python .perf-instrumentation/build_tools/perf_full/full_probe.py guard-ci --label 25
+
       - name: Upload stage logs
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
         shell: wsl-bash {0}
@@ -376,15 +399,38 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Retain WSL inner-container limit snapshots
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        shell: wsl-bash {0}
+        run: |
+          wsl_src_dir="${HOME}/therock-wsl-rocdxg/src"
+          target="${THEROCK_HOST_WORKSPACE}/.perf-full/wsl-inner"
+          mkdir -p "${target}"
+          if test -d "${wsl_src_dir}/.perf-full"; then
+            find "${wsl_src_dir}/.perf-full" -maxdepth 1 -type f -name 'inner-*.json' -exec cp '{}' "${target}/" \;
+          fi
+
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+

@@ -1,0 +1,25 @@
+--- a/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/tests/codeobj/CMakeLists.txt
+@@ -43,10 +43,21 @@
+ set(_SYNCKERNEL_BUNDLE "${CMAKE_CURRENT_BINARY_DIR}/syncthreads_kernel_bundle.o")
+ set(_SYNCKERNEL_BIN "${CMAKE_CURRENT_BINARY_DIR}/syncthreads_kernel.bin")
+ 
++# Staged builds may keep HIP and device libraries in separate prefixes.
++set(CODEOBJ_HIP_PATH "" CACHE PATH "HIP installation for codeobj test fixture")
++set(CODEOBJ_HIP_DEVICE_LIB_PATH "" CACHE PATH "HIP device libraries for codeobj test fixture")
++set(_SYNCKERNEL_HIP_FLAGS)
++if(CODEOBJ_HIP_PATH)
++    list(APPEND _SYNCKERNEL_HIP_FLAGS "--hip-path=${CODEOBJ_HIP_PATH}")
++endif()
++if(CODEOBJ_HIP_DEVICE_LIB_PATH)
++    list(APPEND _SYNCKERNEL_HIP_FLAGS "--hip-device-lib-path=${CODEOBJ_HIP_DEVICE_LIB_PATH}")
++endif()
++
+ add_custom_command(
+     OUTPUT "${_SYNCKERNEL_BIN}"
+     COMMAND
+-        ${CODEOBJ_AMDCLANGPP} -x hip -ggdb --offload-arch=${_SYNCKERNEL_ARCH}
++        ${CODEOBJ_AMDCLANGPP} ${_SYNCKERNEL_HIP_FLAGS} -x hip -ggdb --offload-arch=${_SYNCKERNEL_ARCH}
+         --offload-device-only -c -fno-gpu-rdc -o "${_SYNCKERNEL_BUNDLE}"
+         "${_SYNCKERNEL_SRC}"
+     COMMAND

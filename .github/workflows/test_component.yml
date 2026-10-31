@@ -6,6 +6,12 @@ name: Test component
 on:
   workflow_call:
     inputs:
+      performance_focused_only:
+        type: boolean
+        default: false
+      performance_mode:
+        type: string
+        default: ''
       artifact_run_id:
         type: string
         default: ""
@@ -45,6 +51,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   test_component:
@@ -76,7 +83,7 @@ jobs:
       matrix:
         # The shard array is based on "total_shards" from "fetch_test_configurations.py"
         # The test executable will shard based on the array. (ex: [1, 2, 3, 4] = four test shards)
-        shard: ${{ fromJSON(inputs.component).shard_arr }}
+        shard: ${{ inputs.performance_focused_only && fromJSON('[1]') || fromJSON(inputs.component).shard_arr }}
     defaults:
       run:
         shell: bash
@@ -92,17 +99,6 @@ jobs:
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -127,14 +123,32 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label test_component
 
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+        timeout-minutes: ${{ contains(inputs.build_variant, 'asan') && 60 || 15 }}
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
+          STEP_TIMEOUT_MINUTES: ${{ contains(inputs.build_variant, 'asan') && '60' || '15' }}
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -203,6 +217,7 @@ jobs:
 
       - name: Test
         id: test
+        if: ${{ !inputs.performance_focused_only }}
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
@@ -239,6 +254,24 @@ jobs:
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
           ${{ fromJSON(inputs.component).test_script }}
+
+      - name: Require nonempty successful solver execution
+        if: ${{ !inputs.performance_focused_only && fromJSON(inputs.component).job_name == 'rocsolver' && steps.test.outcome == 'success' }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py verify-solver-tests
+
+      - name: Fetch exact producer SDK identity sidecar
+        if: ${{ inputs.performance_focused_only }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py fetch-identity
+
+      - name: Focused numerical validation beyond stock CI
+        if: ${{ inputs.performance_focused_only }}
+        timeout-minutes: 125
+        env:
+          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/run_focused.py --sdk-root build --source-root . --sdk-manifest .perf-full/solver-sdk-identity.json --output .perf-full/focused-numerics --budget-s 7200
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
@@ -279,15 +312,27 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+

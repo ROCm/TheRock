@@ -6,6 +6,9 @@ name: Setup (Multi-Arch)
 on:
   workflow_call:
     inputs:
+      performance_mode:
+        type: string
+        default: ''
       build_variant:
         type: string
         default: "release"
@@ -169,6 +172,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   actions: read # Required for stage reuse feature to query workflow runs
 
 jobs:
@@ -194,27 +198,24 @@ jobs:
       PRERELEASE_VERSION: ${{ inputs.prerelease_version }}
       EXTERNAL_REPO: ${{ inputs.external_repo }}
     steps:
-      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
-        with:
-          run_phase: started
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checking out repository
         id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
           # We need the parent commit to do a diff
           fetch-depth: 2
+
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
 
       - name: Checkout CI config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -222,7 +223,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: 7624a5e209cec569bbed38dad7071fa7393cb52b
           path: ci-config
         continue-on-error: true
 
@@ -245,6 +246,16 @@ jobs:
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
       # the "workflow_call" trigger for this file.
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.performance_mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: ${{ inputs.build_runs_on || inputs.test_runs_on || '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label setup
+
       - name: Configuring CI options
         id: configure
         env:
@@ -296,17 +307,15 @@ jobs:
       #
       # Other scripts upload "ci" and "dev release" packages to different
       # buckets, use different ccache namespaces, etc.
+      - name: Require complete matched build matrix
+        env:
+          PERF_BUILD_CONFIG: ${{ steps.configure.outputs.linux_build_config }}
+          PERF_TEST_TYPE: ${{ steps.configure.outputs.test_type }}
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py assert-build-matrix
+
       - name: Compute package version
         id: rocm_package_version
-        env:
-          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
-          BUILD_VARIANT: ${{ inputs.build_variant }}
-        run: |
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type="${BUILD_RELEASE_TYPE}" \
-            --prerelease-version="${PRERELEASE_VERSION}" \
-            --override-git-sha="${CHECKOUT_COMMIT}" \
-            --build-variant="${BUILD_VARIANT}"
+        run: python3 .perf-instrumentation/build_tools/perf_full/full_probe.py package-version
 
       - name: Detect external repo config
         id: external_repo_config
@@ -315,15 +324,27 @@ jobs:
           python ./build_tools/github_actions/detect_external_repo_config.py \
             --external-repo-json="${EXTERNAL_REPO}"
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain exact solver SDK identity for GPU consumers
+        if: ${{ always() && inputs.stage_name == 'math-libs' && hashFiles('.perf-full/solver-sdk-identity.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+          name: full-solver-identity-${{ inputs.performance_mode }}-${{ inputs.amdgpu_family }}
+          path: .perf-full/solver-sdk-identity.json
+          include-hidden-files: true
+          retention-days: 14
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+
