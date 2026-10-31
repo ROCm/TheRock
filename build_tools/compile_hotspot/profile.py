@@ -229,6 +229,26 @@ def is_object_compilation(entry: dict, source_name: str) -> bool:
     return index + 1 < len(argv) and Path(argv[index + 1]).name == source_name
 
 
+def normalize_trace_filenames(traces: Path) -> None:
+    """Preserve trace bytes while making HIP target-ID names artifact-safe."""
+    mappings = []
+    for path in sorted(traces.rglob("*.json")):
+        # Clang includes target IDs such as gfx950:xnack+ in its trace name.
+        # upload-artifact rejects colons even when its runner is Linux.
+        if ":" not in path.name:
+            continue
+        replacement = path.with_name(path.name.replace(":", "_colon_"))
+        if replacement.exists() or path.is_symlink():
+            raise RuntimeError(f"Cannot safely rename compiler trace: {path}")
+        before = fingerprint(path)
+        path.rename(replacement)
+        after = fingerprint(replacement)
+        if before["sha256"] != after["sha256"]:
+            raise RuntimeError("Trace bytes changed during filename normalization")
+        mappings.append({"compiler_output": before, "artifact_file": after})
+    save("trace-filename-mapping.json", mappings)
+
+
 def replay(mode: str, variant: str) -> None:
     database = json.loads(run(["ninja", "-t", "compdb", "-x"], cwd=CK))
     relevant = [
@@ -345,7 +365,11 @@ def replay(mode: str, variant: str) -> None:
             raise RuntimeError(
                 "Driver did not forward time tracing to exactly one device linker or linker-wrapper"
             )
-    measure(command, cwd, mode)
+    try:
+        measure(command, cwd, mode)
+    finally:
+        if mode == "profile":
+            normalize_trace_filenames(traces)
     if mode == "profile":
         trace_files = list(traces.rglob("*.json"))
         if not (traces / "device-lld.json").is_file():

@@ -71,6 +71,32 @@ jobs:
           set-safe-directory: false
       - name: Install Python dependencies
         run: pip install -r requirements.txt
+      - name: Verify HIP trace filename handling before compilation
+        if: inputs.operation == 'diagnostic'
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          path = Path('.compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py')
+          spec = importlib.util.spec_from_file_location('ck_profile_preflight', path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          folder = Path('trace-upload-preflight')
+          folder.mkdir()
+          contents = b'{"preflight": true}\n'
+          (folder / 'gfx950:xnack+.json').write_bytes(contents)
+          module.normalize_trace_filenames(folder)
+          assert (folder / 'gfx950_colon_xnack+.json').read_bytes() == contents
+          assert all(':' not in item.name for item in folder.iterdir())
+          PY
+      - name: Verify trace artifact upload before compilation
+        if: inputs.operation == 'diagnostic'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ck-trace-upload-preflight-${{ github.run_id }}
+          path: trace-upload-preflight/
+          if-no-files-found: error
+          retention-days: 14
       - name: Configure CK from pinned dependencies
         if: inputs.operation != 'integration'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py configure
@@ -101,9 +127,6 @@ jobs:
             !compile-hotspot-evidence/*.o
           if-no-files-found: error
           retention-days: 14
-      - name: Replay isolated object without compiler instrumentation
-        if: inputs.operation == 'diagnostic'
-        run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/profile.py replay --mode uninstrumented
       - name: Run paired original and split object-group trials
         if: inputs.operation == 'benchmark'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/benchmark.py run
