@@ -10,6 +10,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import urllib.request
 
 ROOT = Path.cwd().resolve()
@@ -37,8 +38,10 @@ def run(argv: list[str], label: str, env: dict | None = None) -> None:
     save(label + "-command.json", argv)
     print(shlex.join(argv), flush=True)
     with (OUT / (label + ".log")).open("w") as log:
+        started = time.monotonic()
         result = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
-    save(label + "-result.json", {"exit_code": result.returncode})
+        elapsed = time.monotonic() - started
+    save(label + "-result.json", {"exit_code": result.returncode, "elapsed_s": elapsed})
     result.check_returncode()
 
 
@@ -257,6 +260,10 @@ def main() -> None:
             "producer_run_metadata": producer_metadata,
             "validation_context": validation_context,
             "benchmark_protocol_sha256": digest(evidence / "benchmark-protocol.json"),
+            "combined_object_bytes": {
+                label: sum(path.stat().st_size for path in selected[trial])
+                for trial, label in (("B2", "baseline"), ("C2", "candidate"))
+            },
             "producer_root": old_root,
             "compiler_sha256": digest(compiler),
             "utility_sha256": digest(utility),
@@ -280,6 +287,7 @@ def main() -> None:
             "scope": "Exact isolated benchmark objects, not complete packaged CK/consumer validation.",
         },
     )
+    link_summary = {}
     for trial, label in (("B2", "baseline"), ("C2", "candidate")):
         binary = OUT / ("contract-" + label)
         run(
@@ -303,12 +311,31 @@ def main() -> None:
             {
                 "path": str(binary),
                 "sha256": digest(binary),
+                "bytes": binary.stat().st_size,
                 "objects": [
-                    {"path": str(path), "sha256": digest(path)}
+                    {
+                        "path": str(path),
+                        "sha256": digest(path),
+                        "bytes": path.stat().st_size,
+                    }
                     for path in selected[trial]
                 ],
             },
         )
+        link_summary[label] = {
+            "link_elapsed_s": json.loads(
+                (OUT / ("link-" + label + "-result.json")).read_text()
+            )["elapsed_s"],
+            "combined_object_bytes": sum(
+                path.stat().st_size for path in selected[trial]
+            ),
+            "final_binary_bytes": binary.stat().st_size,
+            "scope": "Compiler-driver link command wall time; same harness object, exact measured CK objects and flags. No CK source recompilation.",
+        }
+        save("link-summary.json", link_summary)
+        provenance = json.loads((OUT / "provenance.json").read_text())
+        provenance["link_summary"] = link_summary
+        save("provenance.json", provenance)
         run(["ldd", str(binary)], "dependencies-" + label, environment)
         run([str(binary), "--inventory"], label + "-inventory", environment)
         run([str(binary)], label + "-numeric", environment)
