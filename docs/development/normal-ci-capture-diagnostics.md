@@ -25,4 +25,12 @@ remain outside that claim. No source, product, cache or test policy is changed.
 
 Regression fixtures run the real guarded capture with `python -I -S`, proving
 `psutil` is unavailable, and exercise both SDK layouts, missing inputs, limits
-and exclusion of unrelated payloads without executing a compiler or ROCm binary.
+and exclusion of unrelated payloads. Capture performs ambient `--version`
+queries; no compilation or ROCm workload is run by these fixtures.
+
+The common revision also corrects inherited manual component routing: a CPU
+component keeps its configured CPU runner when called through the broader CI
+workflow. Direct `test_artifacts.yml` dispatch retains its explicit override;
+GPU overrides and configured multi-GPU routing remain unchanged. Test selection,
+flags and failure policy are unchanged. This is an intentional common runner
+correction for both comparison arms, not evidence of a product speedup.

@@ -111,7 +111,7 @@ def graph(root, case):
     )
     ninja, log = [], ["# ninja log v5"]
     for index, row in enumerate(LINKS["links"]):
-        command = row["command"].replace(LINKS["workspace_prefix"], str(root))
+        command = row["command"].replace(LINKS["workspace_prefix"], root.as_posix())
         assert (
             hashlib.sha256(row["command"].encode()).hexdigest() == row["command_sha256"]
         )
@@ -315,9 +315,12 @@ class LeadingStackTest(unittest.TestCase):
                 aa = results[0]["final_links"][target]["argv"]
                 bb = results[1]["final_links"][target]["argv"]
                 # Only fixture workspace prefixes differ between these independent roots.
-                aa = [a.replace(str(Path(raw) / "baseline"), "WORKSPACE") for a in aa]
+                aa = [
+                    a.replace((Path(raw) / "baseline").as_posix(), "WORKSPACE")
+                    for a in aa
+                ]
                 bb = [
-                    a.replace(str(Path(raw) / "candidate"), "WORKSPACE")
+                    a.replace((Path(raw) / "candidate").as_posix(), "WORKSPACE")
                     for a in bb
                     if a != "--offload-jobs=2"
                 ]
