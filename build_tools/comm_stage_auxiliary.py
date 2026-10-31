@@ -65,7 +65,7 @@ def retain(build: Path, output: Path, deadline: float) -> dict:
     evidence.save(summary_path, summary)
     try:
         paths = [build / relative for relative in ARCHIVES]
-        device = build / "comm-libs/rccl/build/device_build"
+        device = build / "comm-libs/rccl/build"
         if device.resolve(strict=True) != device.absolute():
             raise RuntimeError("RCCL sidecar directory must not alias another tree")
         resources = sorted(device.rglob("*.resources.json"))
@@ -168,7 +168,7 @@ def retain(build: Path, output: Path, deadline: float) -> dict:
             dependency_archives=len(ARCHIVES),
             rccl_resource_sidecars=len(resources),
             sidecar_scope=(
-                "All existing regular *.resources.json under device_build. "
+                "All existing regular *.resources.json under the RCCL build root. "
                 "Reconcile expected/executed coverage separately with retained "
                 "Ninja commands and resource aggregates."
             ),

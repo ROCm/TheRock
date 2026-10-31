@@ -27,7 +27,9 @@ class AuxiliaryEvidenceTests(unittest.TestCase):
             path.write_bytes(b"!<arch>\n" + bytes([index]) * 257)
             os.utime(path, ns=(1_700_000_000_123456789, 1_700_000_000_123456789))
         resource = (
-            build / "comm-libs/rccl/build/device_build/gfx900/kernel.resources.json"
+            build
+            / "comm-libs/rccl/build/src/CMakeFiles/rccl_device_gfx900.dir/__/hipify/gensrc"
+            / "specialized/specialized_allreduce_tree_simple_sum_f8e4m3_0_0_4.resources.json"
         )
         resource.parent.mkdir(parents=True)
         resource.write_bytes(b'{"vgpr_count": 16, "sgpr_count": 32}\n')
@@ -36,6 +38,9 @@ class AuxiliaryEvidenceTests(unittest.TestCase):
     def test_actual_compressed_payload_metadata_and_inputs_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             build, output, resource = self.fixture(Path(temporary))
+            # Actual retained RCCL compile -o path, not an invented sidecar
+            # directory. The driver writes splitext(output)[0]+'.resources.json'.
+            self.assertFalse((build / "comm-libs/rccl/build/device_build").exists())
             paths = [build / n for n in auxiliary.ARCHIVES] + [resource]
             before = {p: (p.read_bytes(), auxiliary._identity(p)) for p in paths}
             summary = auxiliary.retain(build, output, time.monotonic() + 30)
@@ -69,6 +74,7 @@ class AuxiliaryEvidenceTests(unittest.TestCase):
                         member.pax_headers["mtime"],
                         f"{ns // 10**9}.{ns % 10**9:09d}",
                     )
+            self.assertIn(resource.relative_to(build).as_posix(), manifest)
             for path in paths:
                 self.assertEqual(
                     before[path], (path.read_bytes(), auxiliary._identity(path))
