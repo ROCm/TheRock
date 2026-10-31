@@ -299,7 +299,9 @@ jobs:
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
       #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
-      #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
+      #      CPU-only components in a reusable call keep their per-component CPU runner.
+      #      A direct Test Artifacts dispatch may intentionally override that runner.
+      #      Reusable workflows inherit the caller's event and github.workflow_ref.
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
       #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
@@ -307,6 +309,8 @@ jobs:
         ${{
           (github.event_name == 'workflow_dispatch' &&
             !contains(github.actor, 'github-actions') &&
+            (matrix.components.linux_cpu_runner != true ||
+              startsWith(github.workflow_ref, format('{0}/.github/workflows/test_artifacts.yml@', github.repository))) &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&

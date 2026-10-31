@@ -1,0 +1,46 @@
+{
+  "source_run": 41230700832,
+  "source_sha": "326231041b9ee4dcacfb08f0979298bacc7c3635",
+  "failed_job": 124639623921,
+  "raw_log_sha256": "c990f03bac31ad83ea089daf73b68348ffe0f80e336b193cb9efccc31e647102",
+  "component_json_lines": [
+    28,
+    46
+  ],
+  "component": {
+    "additional_requirements_files": [],
+    "fetch_artifact_args": "--debug-tools --tests",
+    "timeout_minutes": 30,
+    "platform": [
+      "linux"
+    ],
+    "total_shards": 1,
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:e89ba4458be7add8ee1f8e398da9f3fd8816a0ad56d521054543916d4133184a",
+    "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --cap-add=SYS_PTRACE",
+    "job_name": "rocgdb-cpu",
+    "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
+    "linux_cpu_runner": true,
+    "test_type": "comprehensive",
+    "shard_arr": [
+      1
+    ],
+    "test_runner": "aws-linux-scale-rocm-prod"
+  },
+  "caller_context": {
+    "github": {
+      "event_name": "workflow_dispatch",
+      "actor": "sa-faizal",
+      "repository": "ROCm/TheRock",
+      "workflow_ref": "ROCm/TheRock/.github/workflows/multi_arch_ci.yml@refs/heads/users/sa-faizal/build-profile-41147801272-normal-validation-fix"
+    },
+    "inputs": {
+      "test_runs_on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+    }
+  },
+  "workflow_job": "test_components",
+  "original_expression": "${{\n  (github.event_name == 'workflow_dispatch' &&\n    !contains(github.actor, 'github-actions') &&\n    inputs.test_runs_on != '' &&\n    inputs.test_runs_on) ||\n  (matrix.components.multi_gpu_runner != '' &&\n    matrix.components.multi_gpu_runner) ||\n  matrix.components.test_runner\n}}",
+  "workflow_without_runner_expression_sha256": "017a2526fec53e1414b25e23efcacc9e2b4eb59374818d5a2445bfcb27bab9fc",
+  "expected_before": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+  "expected_after": "aws-linux-scale-rocm-prod",
+  "workflow_ref_scope": "Derived from retained run API path/event/branch and documented caller-context semantics, not a captured runtime environment variable"
+}
