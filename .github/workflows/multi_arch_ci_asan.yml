@@ -1,123 +1,108 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-# Notes on security:
-#   * As this runs on lower trust `pull_request` events it forwards
-#     no github secrets to child workflows.
-#   * Some child workflows are shared by releases where `secrets: inherit` is
-#     used to forward credentials for Quartz notifications.
-
-name: Multi-Arch CI ASAN
-
+name: Original artifact structure repair only (01a19119)
+run-name: Structure-only ${{ inputs.mode }} producer ${{ inputs.producer_run_id }} (01a19119)
 on:
-  # TODO: Enable postsubmit ASAN once we have capacity
-  # push:
-  #   branches:
-  #     - main
   workflow_dispatch:
     inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
-        default: ""
-      pr_labels:
-        type: string
-        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-        description: "Comma-separated build stages to skip (or 'all' for all stages); artifacts are copied from baseline_run_id instead"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
-  workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        default: ""
-      pr_labels:
-        type: string
-        default: ""
-      prebuilt_stages:
-        type: string
-        default: ""
-      baseline_run_id:
-        type: string
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
-
+      mode:
+        type: choice
+        required: true
+        options: [baseline, joint]
+      producer_run_id:
+        type: choice
+        required: true
+        options: ['41211496307', '41212843218']
 permissions:
   contents: read
-  actions: read # Required for stage reuse feature to query workflow runs
-
-concurrency:
-  # See https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-  #
-  # Only allow one run at a time for 'pull_request' events.
-  # Allow multiple runs for 'push' and 'workflow_dispatch'.
-  #
-  # `github.workflow`: each workflow gets its own concurrency group
-  # `github.head_ref`: the branch name (only defined for pull_request events)
-  # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
-
+  actions: read
 jobs:
-  setup:
-    uses: ./.github/workflows/setup_multi_arch.yml
-    with:
-      build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      pr_labels: ${{ inputs.pr_labels || '' }}
-      prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
-      baseline_run_id: ${{ inputs.baseline_run_id || '' }}
-      build_python_packages: false
-      build_pytorch: false
-      build_jax: false
-
-  linux_build_and_test:
-    name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_build_config != '' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    uses: ./.github/workflows/multi_arch_ci_linux.yml
-    with:
-      build_config: ${{ needs.setup.outputs.linux_build_config }}
-      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      rocm_deb_package_version: ${{ needs.setup.outputs.rocm_deb_package_version }}
-      rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-    permissions:
-      contents: read
-      id-token: write
-
-  ci_asan_summary:
-    name: CI ASAN Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-26.04
+  test_artifact_structure:
+    name: "Validate artifact structure"
+    runs-on: aws-linux-scale-rocm-large
+    container:
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+    env:
+      ARTIFACT_GITHUB_REPO: ROCm/TheRock
+      ARTIFACT_RUN_ID: "${{ inputs.producer_run_id }}"
+      AMDGPU_FAMILIES: gfx950-dcgpu
+      RELEASE_TYPE: ci
+      PLATFORM: linux
+      OUTPUT_ROOT: "${{ github.workspace }}"
+      THEROCK_ARTIFACTS_DIR: ${{ github.workspace }}/.download_cache
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Git before any checkout (prevent REST fallback)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+          git --version
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5
         with:
           persist-credentials: false
+          repository: ROCm/TheRock
+          ref: 5b7cb88373362ab80dc0f19605915e534f4158aa
 
-      - name: Evaluate workflow results
+      - name: Checkout immutable experiment assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: .perf-instrumentation
+
+      - name: Install test requirements
+        run: |
+          pip install -r requirements-test.txt
+
+      - name: Verify frozen source and record full-run context
+        id: perf_context
+        env:
+          PERF_MODE: ${{ inputs.mode }}
+          PERF_CONTEXT_JSON: ${{ toJSON(inputs) }}
+          PERF_MATRIX_JSON: ${{ toJSON(matrix) }}
+          PERF_REQUESTED_RUNNER: aws-linux-scale-rocm-large
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py preflight --label test_artifact_structure
+
+      - name: Qualify original producer and preserve real stock failures
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 .perf-instrumentation/build_tools/perf_repair/repair_guard.py
+
+      - name: Fetch artifact archives (no extract)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python build_tools/github_actions/workflow_summary.py \
-            --needs-json "${NEEDS_JSON}"
+          python ./build_tools/artifact_manager.py fetch \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+            --stage=all \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --platform="${PLATFORM}" \
+            --output-dir="${OUTPUT_ROOT}" \
+            --no-extract
+          # NOTE: artifact_manager.py appends /.download_cache to --output-dir
+          # in --no-extract mode, so pass OUTPUT_ROOT here so that
+          # artifacts land in THEROCK_ARTIFACTS_DIR ($OUTPUT_ROOT/.download_cache).
+
+      - name: Validate artifact structure
+        run: |
+          python -m pytest tests/test_artifact_structure.py \
+            -v --log-cli-level=info --timeout=300
+      - name: Record final full-run provenance
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        run: |
+          python3 .perf-instrumentation/build_tools/perf_full/full_probe.py finalize
+
+      - name: Retain full-run investigation evidence
+        if: ${{ always() && steps.perf_context.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.perf_context.outputs.artifact_name }}
+          path: .perf-full
+          include-hidden-files: true
+          retention-days: 14
+          compression-level: 1
+

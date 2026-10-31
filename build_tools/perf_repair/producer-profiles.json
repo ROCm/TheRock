@@ -1,0 +1,16 @@
+{
+  "baseline": {
+    "run_id": 41211496307,
+    "producer_instrumentation_sha": "17bf9b333993b6b12dd9ae867a9c16813cdfca0f",
+    "setup_artifact": "full-perf-baseline-setup-21c91ac1a9",
+    "setup_member_sha256": "33b344ad101e1384d9808a6d1d2ad3cd2f49c8faa4abbde7cdd4210eaaf1c418",
+    "reference_source": "evidence\\new-runs\\41211496307\\github-evidence\\full-perf-baseline-setup-21c91ac1a9\\build-matrix.json"
+  },
+  "joint": {
+    "run_id": 41212843218,
+    "producer_instrumentation_sha": "17bf9b333993b6b12dd9ae867a9c16813cdfca0f",
+    "setup_artifact": "full-perf-joint-setup-130dc00824",
+    "setup_member_sha256": "33b344ad101e1384d9808a6d1d2ad3cd2f49c8faa4abbde7cdd4210eaaf1c418",
+    "reference_source": "evidence\\new-runs\\41212843218\\github-evidence\\full-perf-joint-setup-130dc00824\\build-matrix.json"
+  }
+}
