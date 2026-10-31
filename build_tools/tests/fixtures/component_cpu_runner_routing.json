@@ -39,8 +39,9 @@
   },
   "workflow_job": "test_components",
   "original_expression": "${{\n  (github.event_name == 'workflow_dispatch' &&\n    !contains(github.actor, 'github-actions') &&\n    inputs.test_runs_on != '' &&\n    inputs.test_runs_on) ||\n  (matrix.components.multi_gpu_runner != '' &&\n    matrix.components.multi_gpu_runner) ||\n  matrix.components.test_runner\n}}",
-  "workflow_without_runner_expression_sha256": "017a2526fec53e1414b25e23efcacc9e2b4eb59374818d5a2445bfcb27bab9fc",
+  "workflow_without_runner_expression_sha256": "283402c2bb45b569893accf21d63beb8792db81dccc3d1de5a529edefa921968",
   "expected_before": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
   "expected_after": "aws-linux-scale-rocm-prod",
-  "workflow_ref_scope": "Derived from retained run API path/event/branch and documented caller-context semantics, not a captured runtime environment variable"
+  "workflow_ref_scope": "Derived from retained run API path/event/branch and documented caller-context semantics, not a captured runtime environment variable",
+  "diagnostic_branch_scope": "Expected workflow shape also includes explicit default-off attachment diagnostics; routing regression and original failed component remain unchanged."
 }

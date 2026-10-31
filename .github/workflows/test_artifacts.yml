@@ -114,6 +114,10 @@ on:
           set it manually.
         type: string
         default: ""
+      profile_attachment_diagnostic:
+        description: "Fixed-input CI-only rocprofiler attachment readiness diagnostic"
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       artifact_group:
@@ -164,6 +168,9 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      profile_attachment_diagnostic:
+        type: boolean
+        default: false
   push:
     branches:
       - ADHOCBUILD
@@ -186,7 +193,7 @@ jobs:
     steps:
       - name: "Quartz - started - test ROCm artifacts"
         continue-on-error: true
-        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+        if: ${{ (!inputs.profile_attachment_diagnostic && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && fromJSON(toJSON(github.event.inputs)).profile_attachment_diagnostic != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -218,6 +225,12 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Guard scoped attachment diagnostic
+        if: ${{ inputs.profile_attachment_diagnostic }}
+        env:
+          ATTACHMENT_INPUTS: ${{ toJSON(inputs) }}
+        run: python build_tools/profile_rocprofiler_attachment.py guard --inputs-json "$ATTACHMENT_INPUTS"
+
       - name: "Determine test dependencies"
         id: test_deps
         # Reads the committed consumer graph directly (no fetch/configure); kept
@@ -248,6 +261,23 @@ jobs:
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
+
+      - name: Validate attachment matrix before container scheduling
+        if: ${{ inputs.profile_attachment_diagnostic }}
+        env:
+          ATTACHMENT_INPUTS: ${{ toJSON(inputs) }}
+          ATTACHMENT_COMPONENTS: ${{ steps.configure.outputs.components }}
+          ATTACHMENT_SANITY: ${{ steps.configure.outputs.sanity_component }}
+        run: python build_tools/profile_rocprofiler_attachment.py matrix --inputs-json "$ATTACHMENT_INPUTS" --components-json "$ATTACHMENT_COMPONENTS" --sanity-json "$ATTACHMENT_SANITY"
+
+      - name: Retain attachment matrix contract
+        if: ${{ always() && inputs.profile_attachment_diagnostic }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: profiler-attachment-matrix-${{ github.run_id }}
+          path: attachment-matrix-contract.json
+          retention-days: 7
+          if-no-files-found: warn
 
   test_sanity_check:
     name: 'Test Sanity Check'
@@ -293,6 +323,7 @@ jobs:
     uses: './.github/workflows/test_component.yml'
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      profile_attachment_diagnostic: ${{ inputs.profile_attachment_diagnostic }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -326,7 +357,7 @@ jobs:
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
-    if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+    if: ${{ always() && (!inputs.profile_attachment_diagnostic && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && fromJSON(toJSON(github.event.inputs)).profile_attachment_diagnostic != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
     needs: [configure_test_matrix, test_sanity_check, test_components]
     name: "Quartz - completed - test ROCm artifacts"
     runs-on: ubuntu-26.04

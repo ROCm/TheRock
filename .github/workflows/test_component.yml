@@ -41,6 +41,9 @@ on:
       quartz_tracking_id:
         type: string
         default: ""
+      profile_attachment_diagnostic:
+        type: boolean
+        default: false
 
 
 permissions:
@@ -96,7 +99,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+        if: ${{ (!inputs.profile_attachment_diagnostic && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && fromJSON(toJSON(github.event.inputs)).profile_attachment_diagnostic != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -211,6 +214,8 @@ jobs:
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
+          ATTACHMENT_DIAGNOSTIC: ${{ inputs.profile_attachment_diagnostic && 'true' || 'false' }}
+          ATTACHMENT_INPUTS: ${{ toJSON(inputs) }}
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
@@ -244,7 +249,24 @@ jobs:
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
-          ${{ fromJSON(inputs.component).test_script }}
+          if [[ "${ATTACHMENT_DIAGNOSTIC}" == "true" ]]; then
+            python build_tools/profile_rocprofiler_attachment.py run --inputs-json "$ATTACHMENT_INPUTS"
+          else
+            ${{ fromJSON(inputs.component).test_script }}
+          fi
+
+      - name: Validate attachment diagnostic completeness
+        if: ${{ always() && inputs.profile_attachment_diagnostic }}
+        run: python build_tools/profile_rocprofiler_attachment.py check
+
+      - name: Retain attachment diagnostic evidence
+        if: ${{ always() && inputs.profile_attachment_diagnostic }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: profiler-attachment-${{ github.run_id }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: attachment-diagnostic/
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
@@ -297,7 +319,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+        if: ${{ always() && (!inputs.profile_attachment_diagnostic && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && fromJSON(toJSON(github.event.inputs)).profile_attachment_diagnostic != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
