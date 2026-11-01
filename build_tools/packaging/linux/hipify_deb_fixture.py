@@ -64,6 +64,11 @@ def run(command: list[str], cwd: Path, env: dict) -> subprocess.CompletedProcess
     return result
 
 
+def generate_control(case: Path, tools: dict, env: dict) -> subprocess.CompletedProcess:
+    """Match dpkg-buildpackage's fakeroot metadata context without real root."""
+    return run([tools["fakeroot"], tools["dh_gencontrol"], "-pfixture"], case, env)
+
+
 def run_case(base: Path, tools: dict, fixed: bool, order: str) -> dict:
     case = base / f"{fixed}-{order}"
     source = case / "input"
@@ -112,7 +117,7 @@ def run_case(base: Path, tools: dict, fixed: bool, order: str) -> dict:
         assert alias.is_symlink(), helper.stdout.decode(errors="replace")
     assert target.read_bytes() == PREPARED
     assert snapshot(source) == original
-    run([tools["dh_gencontrol"], "-pfixture"], case, env)
+    control = generate_control(case, tools, env)
     archive = case / "fixture.deb"
     run(
         [
@@ -151,6 +156,7 @@ def run_case(base: Path, tools: dict, fixed: bool, order: str) -> dict:
         depends=depends,
         substvars=substvars,
         helper_argv=command,
+        control_argv=control.args,
         helper_stdout=helper.stdout.decode(),
         helper_stderr=helper.stderr.decode(),
     )
@@ -170,11 +176,14 @@ def main() -> None:
         raise RuntimeError("Actual Debhelper fixture executes only in ROCm/TheRock CI")
     tools = {
         name: shutil.which(name)
-        for name in ["dh_perl", "dh_gencontrol", "dpkg-deb", "dpkg-query"]
+        for name in ["dh_perl", "dh_gencontrol", "dpkg-deb", "dpkg-query", "fakeroot"]
     }
     if not all(tools.values()):
-        raise RuntimeError("Fixture requires installed debhelper, dpkg-dev, and perl")
+        raise RuntimeError(
+            "Fixture requires installed debhelper, dpkg-dev, perl, and fakeroot"
+        )
     helper_sha = hashlib.sha256(Path(tools["dh_perl"]).read_bytes()).hexdigest()
+    fakeroot_sha = hashlib.sha256(Path(tools["fakeroot"]).read_bytes()).hexdigest()
     versions = subprocess.check_output(
         [
             tools["dpkg-query"],
@@ -182,6 +191,7 @@ def main() -> None:
             "-f=${binary:Package}\t${Version}\n",
             "debhelper",
             "perl",
+            "fakeroot",
             "dpkg",
         ],
         text=True,
@@ -209,6 +219,10 @@ def main() -> None:
             hashlib.sha256(Path(tools["dh_perl"]).read_bytes()).hexdigest()
             == helper_sha
         )
+        assert (
+            hashlib.sha256(Path(tools["fakeroot"]).read_bytes()).hexdigest()
+            == fakeroot_sha
+        )
         validated = True
     finally:
         report = dict(
@@ -216,6 +230,8 @@ def main() -> None:
             repository=os.getenv("GITHUB_REPOSITORY"),
             sha=os.getenv("GITHUB_SHA"),
             dh_perl_sha256=helper_sha,
+            fakeroot_path=tools["fakeroot"],
+            fakeroot_sha256=fakeroot_sha,
             installed_packages=versions,
             visitation_module_sha256=hashlib.sha256(FIND_MODULE.encode()).hexdigest(),
             cases=records,

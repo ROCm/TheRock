@@ -17,6 +17,10 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_native_fixture_only:
+        type: boolean
+        default: false
+        description: 'Run only the bounded native Debian functional fixture; never a performance baseline.'
       profile_normal_validation:
         type: boolean
         default: false
@@ -181,6 +185,7 @@ concurrency:
 
 jobs:
   setup:
+    if: ${{ !inputs.profile_native_fixture_only }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -252,7 +257,7 @@ jobs:
 
   ci_summary:
     name: CI Summary
-    if: always()
+    if: ${{ always() && !inputs.profile_native_fixture_only }}
     needs:
       - setup
       - linux_build_and_test
@@ -271,3 +276,74 @@ jobs:
         run: |
           python build_tools/github_actions/workflow_summary.py \
             --needs-json "${NEEDS_JSON}"
+
+  native_fixture_probe:
+    name: Native Debian functional fixture only
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only }}
+    runs-on: aws-linux-scale-rocm-small
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Require isolated functional fixture context
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          branch = "users/sa-faizal/build-profile-41147801272-normal-validation-fakeroot"
+          expected = {
+              "GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "ROCm/TheRock",
+              "GITHUB_ACTOR": "sa-faizal", "GITHUB_EVENT_NAME": "workflow_dispatch",
+              "GITHUB_REF": "refs/heads/" + branch,
+              "GITHUB_WORKFLOW_REF": "ROCm/TheRock/.github/workflows/multi_arch_ci.yml@refs/heads/" + branch,
+          }
+          if any(os.environ.get(key) != value for key, value in expected.items()):
+              raise SystemExit("Functional fixture repository/actor/event/ref guard failed")
+          source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if source != os.environ.get("GITHUB_SHA") or os.geteuid() == 0 or not __debug__:
+              raise SystemExit("Functional fixture requires exact checkout and non-root context with assertions enabled")
+          inputs = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())["inputs"]
+          enabled = inputs.get("profile_native_fixture_only")
+          normal = inputs.get("profile_normal_validation", "false")
+          if not (enabled is True or enabled == "true") or not (normal is False or normal == "false"):
+              raise SystemExit("Functional fixture must be explicit and cannot be a normal baseline")
+          output = Path("output/normal-validation")
+          output.mkdir(parents=True, exist_ok=True)
+          (output / "native-fixture-scope.json").write_text(json.dumps({"source_sha": source, "uid": os.geteuid(), "fixture_only": True, "normal_performance_validation": False, "context": expected}, indent=2) + "\n")
+          PY
+      - name: Install Python requirements
+        run: |
+          pip install pyelftools==0.33 boto3==1.39.15 jinja2==3.1.6 pyzstd==0.19.1
+      - name: Install System requirements
+        run: |
+          # Install the needed tools for creating rpm / deb packages
+          # Also install tools for creating repo files
+          sudo apt-get update
+          sudo apt-get install -y llvm-20
+          sudo apt-get install -y rpm debhelper-compat build-essential
+          sudo apt-get install -y dpkg-dev createrepo-c
+          sudo apt-get install -y patchelf
+      - name: Require HIPIFY Debian symlink preservation
+        run: python build_tools/packaging/linux/hipify_deb_fixture.py --output output/normal-validation/hipify-dh-perl-fixture.json
+      - name: Retain functional fixture diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: normal-native-fixture-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: output/normal-validation/

@@ -1,0 +1,13 @@
+{
+  "source_sha": "f71960bc0f76fb941ae7ff70a20752fabe155040",
+  "source_path": ".github/workflows/multi_arch_ci.yml",
+  "git_blob_sha256": "f979e3b7e16864dd4528557ae3808b93f54ff057c5a9d3902a3111da9ceb58d8",
+  "canonical_workflow_sha256": "b01f6b9190a0763fd373ce46d94272b53bbd4d865754c0b103f97771697feb4c",
+  "existing_jobs": [
+    "setup",
+    "linux_build_and_test",
+    "windows_build_and_test",
+    "manifest_diff",
+    "ci_summary"
+  ]
+}
