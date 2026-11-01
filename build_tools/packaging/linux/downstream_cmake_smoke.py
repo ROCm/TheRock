@@ -19,8 +19,9 @@ Exit codes:
        would be written inside the prefix, or configure returned non-zero.
     2: ``argparse`` usage error (missing prefix argument).
 
-This module has no skip path. The workflow ``if`` is what omits the step for
-``install`` and ``simulate``. Unit tests live in
+This module has no skip path. The workflow runs the step when
+``install_prefix`` is set. That input defaults to ``/opt/rocm/core``.
+Unit tests live in
 ``build_tools/packaging/linux/tests/downstream_cmake_smoke_test.py`` and run
 from ``.github/workflows/unit_tests.yml``.
 

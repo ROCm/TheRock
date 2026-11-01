@@ -329,12 +329,8 @@ jobs:
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
       - name: Downstream CMake smoke test
-        # Configure-only find_package(hip) and find_package(hipblaslt) against
-        # INSTALL_PREFIX. The helper has no skip path; this if is the only gate.
-        # install and simulate have no installed prefix. Empty, sanity, quick,
-        # standard, full, and comprehensive run it. Helper unit tests run in
-        # unit_tests.yml, not in this job.
-        if: ${{ inputs.test_type != 'install' && inputs.test_type != 'simulate' }}
+        # Confirms find_package(hip) and find_package(hipblaslt) succeed against the installed prefix.
+        if: ${{ inputs.install_prefix != '' }}
         run: |
           echo "CMAKE SMOKE - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
           $PYTHON_CMD build_tools/packaging/linux/downstream_cmake_smoke.py \
