@@ -1,0 +1,42 @@
+{
+  "source_run": 41271198901,
+  "source_sha": "60faab8d3d433d009f154c3e30f9fd8ac5cfda59",
+  "component": {
+    "additional_requirements_files": [
+      "build/share/rocprofiler-sdk/tests/requirements.txt",
+      "build_tools/github_actions/test_executable_scripts/requirements-test-ninja.txt"
+    ],
+    "job_name": "rocprofiler-sdk",
+    "fetch_artifact_args": "--tests",
+    "timeout_minutes": 20,
+    "test_script": "python build_tools/github_actions/test_executable_scripts/test_rocprofiler_sdk.py --enable-cdash",
+    "platform": [
+      "linux"
+    ],
+    "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add=SYS_PTRACE",
+    "total_shards_dict": {
+      "linux": 1
+    },
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:64f8d6e3e6dfd46e2b1b9321b99aa72fd09140025638e27e5a0d50acb0e69e89",
+    "exclude_family": {
+      "linux": [
+        "gfx125X-dcgpu"
+      ]
+    },
+    "test_type": "comprehensive",
+    "shard_arr": [
+      1
+    ],
+    "total_shards": 1,
+    "test_runner": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+  },
+  "cdash_execute": {
+    "id": "560548879",
+    "name": "tests.integration.execute.app-without-signal-handling-spawn",
+    "status": "FAILED",
+    "details": "Completed (Failed)",
+    "command": "/usr/bin/timeout \"--preserve-status\" \"--signal=INT\" \"3\" \"/__w/TheRock/TheRock/build/bin/rocprofv3\" \"--hip-trace\" \"--marker-trace\" \"--output-format\" \"json\" \"-d\" \"/__w/TheRock/TheRock/build/share/rocprofiler-sdk/tests/build/rocprofv3/signal-handler/without-signal-handling-spawn\" \"-o\" \"out_%pid%\" \"--\" \"/__w/TheRock/TheRock/build/share/rocprofiler-sdk/tests/build/bin/signal-handler/signal-handler-test\" \"--spawn\" \"--no-app-signal-handler\"",
+    "output": "",
+    "runningTime": 3.5
+  }
+}
