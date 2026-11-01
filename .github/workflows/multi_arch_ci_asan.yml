@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Task-only diagnostic entrypoint; not intended as a product workflow change.
 name: CK compilation diagnostic (01a193c1)
-run-name: CK ${{ inputs.build_variant }} ${{ inputs.operation }} (01a193c1)
+run-name: CK two-TU ${{ inputs.build_variant }} ${{ inputs.operation }} (01a193c1)
 on:
   workflow_dispatch:
     inputs:
@@ -127,7 +127,7 @@ jobs:
             !compile-hotspot-evidence/*.o
           if-no-files-found: error
           retention-days: 14
-      - name: Run paired original and split object-group trials
+      - name: Compare original, three-TU and two-TU object groups
         if: inputs.operation == 'benchmark'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/benchmark.py run
       - name: Retain exact objects and headers for GPU contract validation
@@ -138,6 +138,8 @@ jobs:
           path: |
             compile-hotspot-evidence/benchmarks/B2/
             compile-hotspot-evidence/benchmarks/C2/
+            compile-hotspot-evidence/benchmarks/T1/
+            compile-hotspot-evidence/benchmarks/T2/
             compile-hotspot-evidence/link-support/
             build/math-libs/composable_kernel/build/include/
             rocm-libraries/projects/composablekernel/include/

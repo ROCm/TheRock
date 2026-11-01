@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 LIBRARIES = diagnostic.ROOT / "rocm-libraries"
 CK_SOURCE = LIBRARIES / "projects/composablekernel"
 PATCH = HERE / "candidate.patch"
+REFERENCE_PATCH = HERE / "three-tu-reference.patch"
 ORIGINAL = (
     "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/"
     + diagnostic.SOURCE
@@ -183,17 +184,37 @@ def benchmark() -> None:
     cmake_path = (Path(ORIGINAL).parent.parent / "CMakeLists.txt").as_posix()
     cpp_paths = [p for p in paths if p.endswith(".cpp")]
     if (
-        len(paths) != 4
-        or len(set(paths)) != 4
+        len(paths) != 3
+        or len(set(paths)) != 3
         or ORIGINAL not in paths
         or cmake_path not in paths
-        or len(cpp_paths) != 3
+        or len(cpp_paths) != 2
     ):
         raise RuntimeError(
-            "Expected three translation units and their exact companion CMakeLists"
+            "Expected two translation units and their exact companion CMakeLists"
         )
     if any(Path(p).parent != Path(ORIGINAL).parent for p in cpp_paths):
         raise RuntimeError("Patch outside selected CK source directory")
+    reference_paths = re.findall(
+        r"^\+\+\+ b/(.+)$", REFERENCE_PATCH.read_text(), re.MULTILINE
+    )
+    reference_cpp_paths = [p for p in reference_paths if p.endswith(".cpp")]
+    if (
+        len(reference_paths) != 4
+        or len(set(reference_paths)) != 4
+        or ORIGINAL not in reference_paths
+        or cmake_path not in reference_paths
+        or len(reference_cpp_paths) != 3
+        or any(Path(p).parent != Path(ORIGINAL).parent for p in reference_cpp_paths)
+    ):
+        raise RuntimeError("Unexpected three-TU reference patch paths")
+    if (
+        diagnostic.fingerprint(REFERENCE_PATCH)["sha256"]
+        != "2c00276ac5cbb6a374f83201fa38879cbd59fb654bf8c619a5f72bc37715445d"
+    ):
+        raise RuntimeError(
+            "Three-TU reference differs from the previously measured patch"
+        )
     baseline = entries({diagnostic.SOURCE})
     baseline_argv = arguments(baseline[diagnostic.SOURCE]["command"])
     historical = json.loads(
@@ -233,9 +254,14 @@ def benchmark() -> None:
         nonlocal state
         if wanted == state:
             return
-        reverse = ["--reverse"] if wanted == "baseline" else []
-        diagnostic.run([*git, "apply", *reverse, "--check", str(PATCH)])
-        diagnostic.run([*git, "apply", *reverse, str(PATCH)])
+        patches = {"candidate": PATCH, "reference": REFERENCE_PATCH}
+        if state != "baseline":
+            diagnostic.run([*git, "apply", "--reverse", "--check", str(patches[state])])
+            diagnostic.run([*git, "apply", "--reverse", str(patches[state])])
+            state = "baseline"
+        if wanted != "baseline":
+            diagnostic.run([*git, "apply", "--check", str(patches[wanted])])
+            diagnostic.run([*git, "apply", str(patches[wanted])])
         state = wanted
 
     set_state("candidate")
@@ -260,11 +286,48 @@ def benchmark() -> None:
             )
             raise RuntimeError(f"Compiler flags changed: {name}")
     candidate_sources = {p: diagnostic.fingerprint(LIBRARIES / p) for p in paths}
+    set_state("reference")
+    reconfigure_ck()
+    reference = entries({Path(p).name for p in reference_cpp_paths})
+    reference_headers = {
+        str(p.relative_to(diagnostic.CK)): diagnostic.fingerprint(p)
+        for p in (diagnostic.CK / "include").rglob("*")
+        if p.is_file()
+    }
+    if reference_headers != generated_headers:
+        raise RuntimeError("Reference regeneration changed generated CK headers")
+    for name, entry in reference.items():
+        if common_flags(arguments(entry["command"])) != common_flags(baseline_argv):
+            raise RuntimeError(f"Reference compiler flags changed: {name}")
+    reference_sources = {
+        p: diagnostic.fingerprint(LIBRARIES / p) for p in reference_paths
+    }
+    trials = [
+        ("B1", "baseline"),
+        ("T1", "reference"),
+        ("C1", "candidate"),
+        ("C2", "candidate"),
+        ("T2", "reference"),
+        ("B2", "baseline"),
+    ]
+    sources_by_variant = {
+        "baseline": baseline_sources,
+        "candidate": candidate_sources,
+        "reference": reference_sources,
+    }
+    commands_by_variant = {
+        "baseline": baseline,
+        "candidate": candidate,
+        "reference": reference,
+    }
     diagnostic.save(
         "benchmark-protocol.json",
         {
-            "order": ["B1", "C1", "C2", "B2"],
+            "order": [trial for trial, _ in trials],
             "candidate_parallelism_cap": 3,
+            "variant_object_counts": {
+                name: len(commands) for name, commands in commands_by_variant.items()
+            },
             "compiler_instrumentation": False,
             "compiler": {
                 **diagnostic.fingerprint(Path(baseline_argv[0])),
@@ -272,34 +335,34 @@ def benchmark() -> None:
             },
             "cache": "CCACHE_DISABLE=1; OS cache uncontrolled",
             "patch": diagnostic.fingerprint(PATCH),
+            "reference_patch": diagnostic.fingerprint(REFERENCE_PATCH),
             "baseline_commands": baseline,
             "candidate_commands": candidate,
+            "reference_commands": reference,
             "baseline_sources": baseline_sources,
             "candidate_sources": candidate_sources,
+            "reference_sources": reference_sources,
             "generated_headers": generated_headers,
             "source_headers": source_headers,
-            "limits": "Isolated object group; no stage improvement inferred. Identical wrappers/RSS sampling in both arms.",
+            "limits": "Isolated object groups; no stage improvement inferred. Identical wrappers/RSS sampling in all three arms; two observations per arm, mirrored order, OS cache uncontrolled.",
         },
     )
     summary = []
-    for trial, variant in (
-        ("B1", "baseline"),
-        ("C1", "candidate"),
-        ("C2", "candidate"),
-        ("B2", "baseline"),
-    ):
+    for trial, variant in trials:
         set_state(variant)
-        expected = baseline_sources if variant == "baseline" else candidate_sources
+        expected = sources_by_variant[variant]
         actual = {p: diagnostic.fingerprint(LIBRARIES / p) for p in expected}
         if actual != expected:
             raise RuntimeError(f"Source hash mismatch: {trial}")
-        if variant == "baseline" and any(
-            (LIBRARIES / p).exists() for p in paths if p not in baseline_sources
+        if any(
+            (LIBRARIES / p).exists()
+            for p in set(paths + reference_paths)
+            if p not in expected
         ):
-            raise RuntimeError("Candidate-only sources survived baseline restoration")
+            raise RuntimeError(f"Other variant sources survived restoration: {trial}")
         directory = diagnostic.OUT / "benchmarks" / trial
         directory.mkdir(parents=True, exist_ok=False)
-        commands = baseline if variant == "baseline" else candidate
+        commands = commands_by_variant[variant]
         specs = []
         for name, entry in sorted(commands.items()):
             stem = Path(name).stem
@@ -354,6 +417,7 @@ def benchmark() -> None:
         )
         diagnostic.save("benchmark-summary.json", summary)
     set_state("candidate")
+    reconfigure_ck()
     # Small host utility support is compiled outside all timed trials.
     diagnostic.run(
         ["ninja", "-C", str(diagnostic.CK), "utility"], log="utility-build.log"

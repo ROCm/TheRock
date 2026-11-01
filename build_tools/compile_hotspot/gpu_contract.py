@@ -101,6 +101,68 @@ def verify_producer(context: dict) -> tuple[dict, dict]:
     return producer, validation
 
 
+def verify_trials(
+    protocol: dict, summary: list[dict], complete: dict
+) -> tuple[str, dict, dict]:
+    """Validate the fixed three-arm protocol and hash every retained arm."""
+    order = ["B1", "T1", "C1", "C2", "T2", "B2"]
+    counts = {"baseline": 1, "reference": 3, "candidate": 2}
+    variants = {"B": "baseline", "T": "reference", "C": "candidate"}
+    if protocol["order"] != order or [row["trial"] for row in summary] != order:
+        raise RuntimeError("Three-arm benchmark order/inventory mismatch")
+    if protocol["variant_object_counts"] != counts or complete["status"] != "complete":
+        raise RuntimeError("Three-arm benchmark protocol/counts incomplete")
+    original_source = next(iter(protocol["baseline_sources"].values()))["path"]
+    if "/rocm-libraries/" not in original_source:
+        raise RuntimeError("Unrecognized baseline source root")
+    old_root = original_source.split("/rocm-libraries/")[0]
+    selected, verified = {}, {}
+    for row in summary:
+        trial = row["trial"]
+        variant = variants[trial[0]]
+        commands = protocol[variant + "_commands"]
+        expected_names = {Path(name).with_suffix(".o").name for name in commands}
+        if len(commands) != counts[variant] or len(expected_names) != counts[variant]:
+            raise RuntimeError(f"Unexpected {variant} compile command inventory")
+        if (
+            row["variant"] != variant
+            or len(row["objects"]) != counts[variant]
+            or len(row["objects_measured"]) != counts[variant]
+            or row["group_measurement"]["exit_code"] != 0
+            or any(item["exit_code"] != 0 for item in row["objects_measured"])
+        ):
+            raise RuntimeError(f"Unsuccessful/incomplete benchmark trial: {trial}")
+        names = [Path(item["path"]).name for item in row["objects"]]
+        if len(set(names)) != len(names) or set(names) != expected_names:
+            raise RuntimeError(f"Object/command inventory mismatch: {trial}")
+        objects, records = [], []
+        for item in row["objects"]:
+            relative = Path(item["path"]).relative_to(old_root)
+            expected_parent = Path("compile-hotspot-evidence/benchmarks") / trial
+            if relative.parent != expected_parent:
+                raise RuntimeError(
+                    f"Object is not in its isolated trial directory: {trial}"
+                )
+            if trial not in {"B2", "C2", "T1", "T2"}:
+                continue
+            path = BUNDLE / relative
+            if digest(path) != item["sha256"] or path.stat().st_size != item["bytes"]:
+                raise RuntimeError(f"Object digest/size mismatch: {path}")
+            objects.append(path)
+            records.append(
+                {
+                    "path": str(relative),
+                    "sha256": item["sha256"],
+                    "bytes": item["bytes"],
+                }
+            )
+        if objects:
+            verified[trial] = {"variant": variant, "objects": records}
+        if trial in {"B2", "C2"}:
+            selected[trial] = objects
+    return old_root, selected, verified
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     contexts = list(EVIDENCE.rglob("context.json"))
@@ -113,28 +175,9 @@ def main() -> None:
         raise RuntimeError("Product source changed")
     protocol = json.loads((evidence / "benchmark-protocol.json").read_text())
     summary = json.loads((evidence / "benchmark-summary.json").read_text())
-    if [row["trial"] for row in summary] != ["B1", "C1", "C2", "B2"]:
-        raise RuntimeError("Paired benchmark incomplete")
     complete = json.loads((evidence / "benchmark-complete.json").read_text())
-    if complete["status"] != "complete" or any(
-        item["exit_code"] != 0 for row in summary for item in row["objects_measured"]
-    ):
-        raise RuntimeError("Producer did not complete successful paired measurements")
-    original_source = next(iter(protocol["baseline_sources"].values()))["path"]
-    old_root = original_source.split("/rocm-libraries/")[0]
-    selected = {}
-    for trial in ("B2", "C2"):
-        row = next(row for row in summary if row["trial"] == trial)
-        objects = []
-        for item in row["objects"]:
-            relative = Path(item["path"]).relative_to(old_root)
-            path = BUNDLE / relative
-            if digest(path) != item["sha256"]:
-                raise RuntimeError(f"Object digest mismatch: {path}")
-            objects.append(path)
-        if len(objects) != (1 if trial == "B2" else 3):
-            raise RuntimeError("Unexpected object count")
-        selected[trial] = objects
+    old_root, selected, verified_arms = verify_trials(protocol, summary, complete)
+    save("verified-benchmark-arms.json", verified_arms)
     for relative, item in protocol["generated_headers"].items():
         path = BUNDLE / "build/math-libs/composable_kernel/build" / relative
         if digest(path) != item["sha256"]:
@@ -260,6 +303,7 @@ def main() -> None:
             "producer_run_metadata": producer_metadata,
             "validation_context": validation_context,
             "benchmark_protocol_sha256": digest(evidence / "benchmark-protocol.json"),
+            "verified_benchmark_arms": verified_arms,
             "combined_object_bytes": {
                 label: sum(path.stat().st_size for path in selected[trial])
                 for trial, label in (("B2", "baseline"), ("C2", "candidate"))

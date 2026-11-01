@@ -44,8 +44,9 @@ LOGICAL_ONLY_ARTIFACTS = {
 BUNDLED_SYSDEPS_ROOTS = {"third-party/sysdeps/linux/libmnl/build/stage",
                          "third-party/sysdeps/linux/libnl/build/stage"}
 SOURCE_DIR = "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/"
-NAMES = {diagnostic.SOURCE, diagnostic.SOURCE.replace("_instance.cpp", "_noshuffle_instance.cpp"),
-         diagnostic.SOURCE.replace("_instance.cpp", "_nongrouped_match_instance.cpp")}
+HELPER_SUFFIXES = ("nongrouped_match",)
+NAMES = {diagnostic.SOURCE, *(diagnostic.SOURCE.replace("_instance.cpp", "_" + suffix + "_instance.cpp")
+                             for suffix in HELPER_SUFFIXES)}
 
 
 def save(name, value):
@@ -78,7 +79,7 @@ def cache_value(build, key):
 def patch_paths(text):
     paths = re.findall(r"^\+\+\+ b/(.*)$", text, re.M)
     expected = {SOURCE_DIR + "CMakeLists.txt", *(SOURCE_DIR + "xdl/" + name for name in NAMES)}
-    if len(paths) != 4 or set(paths) != expected:
+    if len(paths) != len(expected) or set(paths) != expected:
         raise RuntimeError(f"Unexpected product patch paths: {paths}")
     return paths
 
@@ -280,7 +281,7 @@ def archive_proof(archive, candidate):
                       "staged_archive_member": archived,
                       "install_changed_bytes": actual["sha256"] != archived["sha256"]})
     public = (proof_dir / (diagnostic.SOURCE + ".o.symbols.txt")).read_text()
-    for suffix in ("noshuffle", "nongrouped_match"):
+    for suffix in HELPER_SUFFIXES:
         symbol = "detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_" + suffix + "_instances"
         if not any(" U " in line and symbol in line for line in public.splitlines()):
             raise RuntimeError(f"Public archive member does not reference {symbol}")
