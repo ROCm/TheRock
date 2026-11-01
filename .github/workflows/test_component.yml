@@ -6,6 +6,9 @@ name: Test component
 on:
   workflow_call:
     inputs:
+      profile_required_recheck:
+        type: boolean
+        default: false
       artifact_run_id:
         type: string
         default: ""
@@ -96,7 +99,7 @@ jobs:
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+        if: ${{ (!inputs.profile_required_recheck && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: started
@@ -207,6 +210,13 @@ jobs:
         if: ${{ fromJSON(toJSON(github.event.inputs)).profile_normal_validation == 'true' }}
         run: python build_tools/normal_ci_validation.py capture --output normal-validation/component.json
 
+      - name: Capture required-test recheck identity
+        if: ${{ inputs.profile_required_recheck }}
+        env:
+          RECHECK_COMPONENT: ${{ inputs.component }}
+          RECHECK_SHARD: ${{ matrix.shard }}
+        run: python build_tools/profile_rocsolver_recheck.py before --output required-recheck/before.json
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -245,6 +255,25 @@ jobs:
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
           ${{ fromJSON(inputs.component).test_script }}
+
+      - name: Verify required-test recheck identity
+        if: ${{ always() && inputs.profile_required_recheck && steps.test.outcome != 'skipped' }}
+        env:
+          RECHECK_COMPONENT: ${{ inputs.component }}
+          RECHECK_SHARD: ${{ matrix.shard }}
+        run: python build_tools/profile_rocsolver_recheck.py after --output required-recheck/after.json
+
+      - name: Retain required-test recheck receipts
+        if: ${{ always() && inputs.profile_required_recheck }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: required-recheck-${{ fromJSON(inputs.component).job_name }}-${{ matrix.shard }}
+          path: |
+            required-recheck/
+            build/bin/rocsolver/Testing/Temporary/LastTest.log
+            build/bin/rocsolver/Testing/Temporary/LastTestsFailed.log
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
@@ -297,7 +326,7 @@ jobs:
 
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
-        if: ${{ always() && (fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
+        if: ${{ always() && (!inputs.profile_required_recheck && fromJSON(toJSON(github.event.inputs)).profile_normal_validation != 'true' && vars.NOTIFY_QUARTZ_ENABLED == 'true') }}
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
         with:
           run_phase: completed
