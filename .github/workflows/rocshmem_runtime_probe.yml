@@ -19,8 +19,68 @@ jobs:
         env:
           PROBE_INPUTS: ${{ toJSON(github.event.inputs) }}
         run: python build_tools/profile_rocshmem_runtime.py guard
-  rocshmem_runtime:
+  sanity:
     needs: guard
+    runs-on: linux-gfx942-8gpu-ossci-rocm
+    timeout-minutes: 210
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80
+      options: --user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add SYS_MODULE -v /lib/modules:/lib/modules
+    defaults:
+      run:
+        shell: bash
+    env:
+      OUTPUT_ARTIFACTS_DIR: ./build
+      THEROCK_BIN_DIR: ./build/bin
+      AMDGPU_FAMILIES: gfx94X-dcgpu
+      AMDGPU_TARGETS: gfx942
+      TEST_TYPE: comprehensive
+      TEST_COMPONENT: sanity
+      SHARD_INDEX: '1'
+      TOTAL_SHARDS: '1'
+      ROCM_KPACK_DEBUG: '1'
+      THEROCK_CI_DEBUG: '0'
+      GPU_ENABLE_PAL: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Original pre-job GPU cleanup
+        timeout-minutes: 5
+        run: bash build_tools/github_actions/cleanup_processes.sh
+      - name: Prepare original sanity artifact inputs
+        uses: ./.github/actions/setup_test_environment
+        with:
+          ARTIFACT_RUN_ID: ${{ needs.guard.outputs.artifact_run }}
+          ARTIFACT_GROUP: gfx94X-dcgpu
+          AMDGPU_TARGETS: gfx942
+          OUTPUT_ARTIFACTS_DIR: ./build
+          VENV_DIR: ${{ github.workspace }}/.venv
+          FETCH_ARTIFACT_ARGS: --sanity
+          RELEASE_TYPE: ci
+      - name: Preserve original thread-limit policy
+        run: |
+          if [[ -n "${KUBE_CPU_REQUEST:-}" ]]; then
+            echo "OPENBLAS_NUM_THREADS=${KUBE_CPU_REQUEST%.*}" >> "$GITHUB_ENV"
+            echo "OMP_NUM_THREADS=${KUBE_CPU_REQUEST%.*}" >> "$GITHUB_ENV"
+          fi
+      - name: Original driver GPU and kernel health check
+        run: python build_tools/print_driver_gpu_info.py
+      - name: Original sanity policy
+        timeout-minutes: 5
+        env:
+          RETRY_THIS_STEP: 'true'
+          RETRY_COUNT: '1'
+          RETRY_DELAY: '7'
+          STEP_TIMEOUT_MINUTES: '5'
+        run: python build_tools/github_actions/test_executable_scripts/test_sanity.py
+      - name: Original post-job GPU cleanup
+        if: ${{ always() }}
+        timeout-minutes: 5
+        run: bash build_tools/github_actions/cleanup_processes.sh
+  rocshmem_runtime:
+    needs: [guard, sanity]
     runs-on: linux-gfx942-8gpu-ossci-rocm
     timeout-minutes: 60
     container:
@@ -60,7 +120,7 @@ jobs:
           AMDGPU_TARGETS: gfx942
           OUTPUT_ARTIFACTS_DIR: ./build
           VENV_DIR: ${{ github.workspace }}/.venv
-          FETCH_ARTIFACT_ARGS: --sanity --rocshmem --tests
+          FETCH_ARTIFACT_ARGS: --rocshmem --tests
           RELEASE_TYPE: ci
       - name: Preserve original thread-limit policy
         run: |
@@ -72,8 +132,6 @@ jobs:
         run: python build_tools/print_driver_gpu_info.py
       - name: Require binary identities and actual HSA HIP prerequisites
         run: python build_tools/profile_rocshmem_runtime.py prepare
-      - name: Original sanity policy
-        run: python build_tools/github_actions/test_executable_scripts/test_sanity.py
       - name: Original comprehensive rocSHMEM policy with installed tool discovery
         timeout-minutes: 30
         env:

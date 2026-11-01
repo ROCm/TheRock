@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "runtime-probe"
-BRANCH = "users/sa-faizal/build-profile-41147801272-rocshmem-runtime-fix"
+BRANCH = "users/sa-faizal/build-profile-41147801272-rocshmem-runtime-context"
 RUNNER = "linux-gfx942-8gpu-ossci-rocm"
 CONTRACT = ROOT / "diagnostics/rocshmem_runtime_contract.json"
 

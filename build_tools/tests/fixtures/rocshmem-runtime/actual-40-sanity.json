@@ -1,0 +1,32 @@
+{
+  "source_run": 41261635745,
+  "actual_config_sha": "7624a5e209cec569bbed38dad7071fa7393cb52b",
+  "raw_log_sha256": "56fe327ee78b83ebcb890919edeee192d1541230677db2574b7663a9588fb8b1",
+  "raw_selection_line": 507,
+  "component": {
+    "additional_requirements_files": [],
+    "job_name": "sanity",
+    "skip_stages": [
+      "compiler-runtime"
+    ],
+    "fetch_artifact_args": "--sanity",
+    "timeout_minutes": 5,
+    "test_script": "python build_tools/github_actions/test_executable_scripts/test_sanity.py",
+    "platform": [
+      "linux",
+      "windows"
+    ],
+    "total_shards_dict": {
+      "linux": 1,
+      "windows": 1
+    },
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80",
+    "container_options": "--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+    "test_type": "comprehensive",
+    "shard_arr": [
+      1
+    ],
+    "total_shards": 1,
+    "test_runner": "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
+  }
+}

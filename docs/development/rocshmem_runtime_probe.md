@@ -11,6 +11,10 @@ VMM support, but the wrapper reported zero GPUs and unavailable VMM.
 The diagnostic uses the configured `linux-gfx942-8gpu-ossci-rocm` route and existing
 digest-pinned image/security settings. It checks the actual HSA and HIP counts,
 then runs the original sanity policy and original comprehensive rocSHMEM driver.
+Sanity uses its original separate f7 OpenCL-runtime image and security options;
+rocSHMEM keeps its original a13 base image. The actual run40 sanity component is
+retained as a regression fixture. These contexts must not be combined: the base
+image lacks sanity's system OpenCL loader, as failed probe41272130530 showed.
 Only the test subprocess gains the installed SDK's `build/bin` on PATH. Existing
 skip conditions, backends, tests, tolerances, and CTest commands remain intact.
 A successful result additionally requires nonzero executed tests and all 296

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 import importlib.util
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -20,6 +21,45 @@ spec.loader.exec_module(probe)
 
 
 class RuntimeProbeTest(unittest.TestCase):
+    def test_actual_sanity_context_and_separate_runtime_dependency(self):
+        recorded = json.loads(
+            (
+                ROOT
+                / "build_tools/tests/fixtures/rocshmem-runtime/actual-40-sanity.json"
+            ).read_text()
+        )
+        expected = recorded["component"]
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/rocshmem_runtime_probe.yml").read_text(),
+            Loader=yaml.BaseLoader,
+        )
+        sanity = workflow["jobs"]["sanity"]
+        runtime = workflow["jobs"]["rocshmem_runtime"]
+        self.assertEqual(recorded["source_run"], 41261635745)
+        self.assertEqual(sanity["container"]["image"], expected["container_image"])
+        self.assertEqual(sanity["container"]["options"], expected["container_options"])
+        step = next(
+            x for x in sanity["steps"] if x.get("name") == "Original sanity policy"
+        )
+        self.assertEqual(step["run"], expected["test_script"])
+        self.assertEqual(sanity["env"]["TEST_TYPE"], expected["test_type"])
+        fetch = next(
+            x
+            for x in sanity["steps"]
+            if x.get("uses") == "./.github/actions/setup_test_environment"
+        )
+        self.assertEqual(
+            fetch["with"]["FETCH_ARTIFACT_ARGS"], expected["fetch_artifact_args"]
+        )
+        self.assertEqual(runtime["needs"], ["guard", "sanity"])
+        self.assertIn(
+            "sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39",
+            runtime["container"]["image"],
+        )
+        self.assertNotIn(
+            "Original sanity policy", [x.get("name") for x in runtime["steps"]]
+        )
+
     def test_actions_pins_match_actual_stock_component_workflow(self):
         stock = yaml.load(
             (ROOT / ".github/workflows/test_component.yml").read_text(),
