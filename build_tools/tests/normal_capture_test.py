@@ -58,6 +58,26 @@ class CaptureTest(unittest.TestCase):
             build_jax="false",
         )
         event = self.file("event.json", json.dumps(dict(inputs=inputs)))
+        # The collector fails real Git errors closed; use an actual inert checkout.
+        for argv in [
+            ["init"],
+            ["add", "event.json"],
+            [
+                "-c",
+                "user.name=Capture Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-m",
+                "inert capture fixture",
+            ],
+        ]:
+            subprocess.run(
+                ["git", "-C", str(self.root), *argv], check=True, capture_output=True
+            )
+        checkout_sha = subprocess.check_output(
+            ["git", "-C", str(self.root), "rev-parse", "HEAD"], text=True
+        ).strip()
         output = self.root / "normal-validation/wheel-test.json"
         if sys.platform == "linux":
             target = self.file("build/lib/libhiprtc.so.7")
@@ -71,6 +91,7 @@ class CaptureTest(unittest.TestCase):
             GITHUB_EVENT_NAME="workflow_dispatch",
             GITHUB_EVENT_PATH=str(event),
             GITHUB_WORKSPACE=str(self.root),
+            GITHUB_SHA=checkout_sha,
             RELEASE_TYPE="ci",
             NORMAL_IMAGE_PIN="native-fixture",
             STAGE_NAME="wheel-tests",

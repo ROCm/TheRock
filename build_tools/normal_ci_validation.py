@@ -20,6 +20,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from normal_ci_input_identity import (
+    capture_source,
     declared_sources,
     generated_inputs,
     loader_dependencies,
@@ -542,75 +543,7 @@ def capture(args, inputs):
             version=version.stdout[:8192],
             returncode=version.returncode,
         )
-    for name, command in {
-        "checkout_sha": ["git", "rev-parse", "HEAD"],
-        "working_changes": ["git", "status", "--porcelain", "--untracked-files=no"],
-        "submodule_status": ["git", "submodule", "status", "--recursive"],
-        "checkout_tree": ["git", "ls-tree", "-r", "HEAD"],
-    }.items():
-        result = subprocess.run(command, cwd=workspace, capture_output=True, text=True)
-        data["source"][name] = dict(
-            returncode=result.returncode, stdout=result.stdout, stderr=result.stderr
-        )
-    data["source"]["recorded_product_gitlinks"] = GITLINKS
-    data["source"]["repositories"] = []
-    for relative in ["."] + list(GITLINKS):
-        repository = workspace / relative
-        if not (repository / ".git").exists():
-            continue
-        head = subprocess.check_output(
-            ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
-        ).strip()
-        diff = subprocess.check_output(
-            ["git", "-C", str(repository), "diff", "--binary", "HEAD"]
-        )
-        names = (
-            subprocess.check_output(
-                ["git", "-C", str(repository), "diff", "--name-only", "-z", "HEAD"]
-            )
-            .decode()
-            .split("\0")
-        )
-        files = []
-        for name in names:
-            path = repository / name
-            if name and path.is_file() and not path.is_symlink():
-                files.append(
-                    dict(path=name, sha256=fingerprint(path), bytes=path.stat().st_size)
-                )
-        data["source"]["repositories"].append(
-            dict(
-                path=relative,
-                head=head,
-                diff_sha256=hashlib.sha256(diff).hexdigest(),
-                changed_files=files,
-            )
-        )
-        history = subprocess.run(
-            ["git", "-C", str(repository), "rev-parse", "--is-shallow-repository"],
-            capture_output=True,
-            text=True,
-        )
-        data["source"]["repositories"][-1]["is_shallow"] = history.stdout.strip()
-        if relative == "rocm-systems":
-            version_commit = subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(repository),
-                    "log",
-                    "-1",
-                    "--format=%H",
-                    "--",
-                    "projects/clr",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            data["source"]["repositories"][-1]["clr_last_directory_commit"] = dict(
-                returncode=version_commit.returncode,
-                stdout=version_commit.stdout.strip(),
-            )
+    data["source"] = capture_source(workspace, GITLINKS, fingerprint, os.environ)
     data["python_packages"] = sorted(
         (d.metadata.get("Name", ""), d.version)
         for d in importlib.metadata.distributions()

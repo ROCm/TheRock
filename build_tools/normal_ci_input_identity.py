@@ -7,14 +7,274 @@ small inert file fixtures; no compiler or cache behavioral experiment is needed.
 """
 
 import hashlib
+import gzip
+import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
+import tarfile
+import urllib.parse
+import urllib.request
+
+
+def scoped_git(workspace, repository, *args):
+    """Trust only this verified repository, only for this child invocation."""
+    workspace, repository = workspace.resolve(strict=True), repository.resolve(
+        strict=True
+    )
+    if repository != workspace and workspace not in repository.parents:
+        raise ValueError("Git repository escapes verified workspace")
+    if not (repository / ".git").exists():
+        raise ValueError("Expected checked-out Git repository")
+    return [
+        "git",
+        "-c",
+        f"safe.directory={repository.as_posix()}",
+        "-C",
+        str(repository),
+        *args,
+    ]
+
+
+def download_checkout_archive(sha):
+    """Public immutable commit URL; no token, new dependency or extraction."""
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise ValueError("Full CI commit SHA required")
+    url = f"https://codeload.github.com/ROCm/TheRock/tar.gz/{sha}"
+    with urllib.request.urlopen(url, timeout=60) as response:
+        if response.geturl() != url:
+            raise ValueError("Unexpected commit-archive redirect")
+        data = response.read(32 * 1024**2 + 1)
+    if len(data) > 32 * 1024**2:
+        raise ValueError("Commit archive exceeds compressed capture bound")
+    return data
+
+
+def compare_checkout_archive(workspace, sha, data, fingerprint):
+    """Compare all archive-declared files, not an untracked/secret tree sweep."""
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or len(data) > 32 * 1024**2:
+        raise ValueError("Invalid commit archive identity/size")
+    workspace = workspace.resolve(strict=True)
+    prefix = f"TheRock-{sha}"
+    with gzip.GzipFile(fileobj=io.BytesIO(data)) as stream:
+        decoded = stream.read(128 * 1024**2 + 1)
+    if len(decoded) > 128 * 1024**2:
+        raise ValueError("Commit archive exceeds decoded capture bound")
+    rows, seen, total = [], set(), 0
+    with tarfile.open(fileobj=io.BytesIO(decoded), mode="r|") as archive:
+        for member in archive:
+            path = PurePosixPath(member.name)
+            if (
+                path.is_absolute()
+                or not path.parts
+                or path.parts[0] != prefix
+                or any(p in ("..", ".git") for p in path.parts)
+                or "\\" in member.name
+                or len(seen) >= 10000
+            ):
+                raise ValueError("Unsafe or oversized commit archive inventory")
+            relative = PurePosixPath(*path.parts[1:])
+            name = relative.as_posix()
+            if name in seen:
+                raise ValueError("Duplicate commit archive member")
+            seen.add(name)
+            if member.isdir():
+                continue
+            if not relative.parts or not (member.isfile() or member.issym()):
+                raise ValueError("Unsupported commit archive member")
+            total += member.size
+            if member.size > 16 * 1024**2 or total > 128 * 1024**2:
+                raise ValueError("Commit archive exceeds decoded capture bound")
+            local = workspace.joinpath(*relative.parts)
+            if any(
+                parent.is_symlink()
+                for parent in local.parents
+                if parent != workspace and workspace in parent.parents
+            ):
+                raise ValueError("Declared source has a symlink ancestor")
+            row = dict(path=name, archive_mode=member.mode)
+            if member.issym():
+                if not local.is_symlink() or str(local.readlink()) != member.linkname:
+                    raise ValueError(
+                        f"Checkout symlink differs from commit archive: {name}"
+                    )
+                row.update(kind="symlink", link_target=member.linkname)
+            else:
+                if local.is_symlink() or not local.is_file():
+                    raise ValueError(f"Checkout file missing/type changed: {name}")
+                hashed = hashlib.sha256()
+                stream = archive.extractfile(member)
+                count = 0
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hashed.update(chunk)
+                    count += len(chunk)
+                actual = fingerprint(local)
+                executable = bool(local.stat().st_mode & stat.S_IXUSR)
+                if (
+                    count != member.size
+                    or local.stat().st_size != count
+                    or actual != hashed.hexdigest()
+                    or executable != bool(member.mode & stat.S_IXUSR)
+                ):
+                    raise ValueError(
+                        f"Checkout bytes/mode differ from commit archive: {name}"
+                    )
+                row.update(
+                    kind="file", bytes=count, sha256=actual, executable=executable
+                )
+            rows.append(row)
+        if any(decoded[archive.offset :]):
+            raise ValueError("Unexpected trailing commit archive contents")
+    if not rows:
+        raise ValueError("Empty commit archive cannot verify a checkout")
+    return dict(
+        complete=True,
+        verified_files=len(rows),
+        logical_file_bytes=total,
+        archive_sha256=hashlib.sha256(data).hexdigest(),
+        files=rows,
+        caps=dict(
+            compressed_bytes=32 * 1024**2,
+            decoded_bytes=128 * 1024**2,
+            member_bytes=16 * 1024**2,
+            members=10000,
+        ),
+        scope="All exact-commit archive-declared root files/symlinks and executable bits; untracked files, Git history/HEAD, submodule contents and dirty state are not measured",
+    )
+
+
+def gitless_consumer_source(workspace, env, fingerprint, fetch=None):
+    """Only unchanged consumer checkouts may use an independently compared archive."""
+    if (
+        env.get("GITHUB_ACTIONS") != "true"
+        or env.get("GITHUB_REPOSITORY") != "ROCm/TheRock"
+        or env.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+        or env.get("GITHUB_JOB")
+        not in ("test_wheels", "test_native_linux_packages_install")
+    ):
+        raise ValueError(
+            "Missing Git is supported only for declared normal consumer jobs"
+        )
+    sha, run_id = env.get("GITHUB_SHA", ""), env.get("GITHUB_RUN_ID", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not run_id.isdecimal():
+        raise ValueError("Gitless source needs full CI commit and run identity")
+    links = {}
+    for key in ("REPO_URL", "PACKAGE_FIND_LINKS_URL"):
+        value = env.get(key, "")
+        if not value:
+            continue
+        parsed = urllib.parse.urlparse(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.netloc != "therock-ci-artifacts.s3.amazonaws.com"
+            or not parsed.path.startswith(f"/{run_id}-linux/")
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("Consumer artifact provenance is not this CI run")
+        links[key] = value
+    if not links:
+        raise ValueError(
+            "Gitless consumer requires same-run producer artifact reference"
+        )
+    compared = compare_checkout_archive(
+        workspace, sha, (fetch or download_checkout_archive)(sha), fingerprint
+    )
+    return dict(
+        mode="git-unavailable; exact-commit archive comparison",
+        measured_git_head=None,
+        ci_declared_sha=sha,
+        checkout_archive=compared,
+        archive_url=f"https://codeload.github.com/ROCm/TheRock/tar.gz/{sha}",
+        producer_references=dict(
+            run_id=run_id,
+            run_attempt=env.get("GITHUB_RUN_ATTEMPT"),
+            artifact_urls=links,
+            scope="CI-bound same-run artifact references; producer Git/SDK/output receipts must be reviewed separately",
+        ),
+        repositories=[],
+        working_changes=None,
+        submodule_status=None,
+        git_unavailable_scope="No Git HEAD/history/dirty/submodule claim; verified root files only",
+    )
+
+
+def capture_source(workspace, gitlinks, fingerprint, env):
+    """Measured Git source, or a strictly scoped verified consumer archive."""
+    workspace = workspace.resolve(strict=True)
+    if shutil.which("git") is None:
+        result = gitless_consumer_source(workspace, env, fingerprint)
+        result["recorded_product_gitlinks"] = gitlinks
+        result["recorded_product_gitlinks_scope"] = (
+            "Declared expected producer pins; submodule contents not verified in this Gitless consumer"
+        )
+        return result
+
+    def checked(repository, *args, text=True):
+        command = scoped_git(workspace, repository, *args)
+        return subprocess.run(command, capture_output=True, text=text, check=True)
+
+    top = checked(workspace, "rev-parse", "--show-toplevel").stdout.strip()
+    if Path(top).resolve() != workspace:
+        raise ValueError("Git toplevel does not match verified workspace")
+    source = dict(
+        mode="measured-git", repositories=[], recorded_product_gitlinks=gitlinks
+    )
+    for name, args in {
+        "checkout_sha": ["rev-parse", "HEAD"],
+        "working_changes": ["status", "--porcelain", "--untracked-files=no"],
+        "submodule_status": ["submodule", "status", "--recursive"],
+        "checkout_tree": ["ls-tree", "-r", "HEAD"],
+    }.items():
+        result = checked(workspace, *args)
+        source[name] = dict(
+            returncode=result.returncode, stdout=result.stdout, stderr=result.stderr
+        )
+    head = source["checkout_sha"]["stdout"].strip()
+    if env.get("GITHUB_SHA") and env["GITHUB_SHA"] != head:
+        raise ValueError("Measured Git HEAD differs from CI triggering SHA")
+    source.update(measured_git_head=head, ci_declared_sha=env.get("GITHUB_SHA"))
+    for relative in ["."] + list(gitlinks):
+        repository = workspace / relative
+        if not (repository / ".git").exists():
+            continue
+        head = checked(repository, "rev-parse", "HEAD").stdout.strip()
+        diff = checked(repository, "diff", "--binary", "HEAD", text=False).stdout
+        names = checked(repository, "diff", "--name-only", "-z", "HEAD").stdout.split(
+            "\0"
+        )
+        files = []
+        for name in names:
+            path = repository / name
+            if name and path.is_file() and not path.is_symlink():
+                files.append(
+                    dict(path=name, sha256=fingerprint(path), bytes=path.stat().st_size)
+                )
+        row = dict(
+            path=relative,
+            head=head,
+            diff_sha256=hashlib.sha256(diff).hexdigest(),
+            changed_files=files,
+            is_shallow=checked(
+                repository, "rev-parse", "--is-shallow-repository"
+            ).stdout.strip(),
+        )
+        if relative == "rocm-systems":
+            commit = checked(
+                repository, "log", "-1", "--format=%H", "--", "projects/clr"
+            )
+            row["clr_last_directory_commit"] = dict(
+                returncode=commit.returncode, stdout=commit.stdout.strip()
+            )
+        source["repositories"].append(row)
+    return source
+
 
 RTC_KNOBS = [
     "OMP_NUM_THREADS",
