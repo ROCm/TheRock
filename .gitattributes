@@ -6,3 +6,4 @@
 # Immutable diagnostic source fixtures retain exact upstream Git LF bytes.
 build_tools/tests/fixtures/rocshmem-runtime/multi_arch_ci-60fa.yml text eol=lf
 build_tools/tests/fixtures/rocshmem-runtime/test_wrapper.sh text eol=lf
+build_tools/tests/fixtures/rocshmem-runtime/actual-40-functional-CTestTestfile.cmake text eol=lf

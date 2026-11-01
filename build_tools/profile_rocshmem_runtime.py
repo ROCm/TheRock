@@ -15,9 +15,158 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "runtime-probe"
-BRANCH = "users/sa-faizal/build-profile-41147801272-rocshmem-runtime-context"
+BRANCH = "users/sa-faizal/build-profile-41147801272-rocshmem-runtime-heap"
 RUNNER = "linux-gfx942-8gpu-ossci-rocm"
 CONTRACT = ROOT / "diagnostics/rocshmem_runtime_contract.json"
+CTEST_PATH = "build/bin/rocshmem/tests/functional/CTestTestfile.cmake"
+CTEST_SHA = "d4965a4ed15fe00b4a17ba6777147ba85ac31cd0e68ddd95c02287f813b500f4"
+HEAP_BYTES = 24 * 1024**3
+MIN_FREE_BYTES = HEAP_BYTES + 8 * 1024**3
+HEAP_TESTS = (
+    "waveget_n2_w1_z64_v1073741824B_uuid",
+    "waveget_n2_w2_z64_v1073741824B_uuid",
+    "waveget_n2_w16_z1024_v1073741824B_uuid",
+    "wgget_n2_w1_z1024_v1073741824B_uuid",
+    "wgget_n2_w16_z1024_v1073741824B_uuid",
+    "waveput_n2_w1_z64_v1073741824B_uuid",
+    "waveput_n2_w2_z64_v1073741824B_uuid",
+    "waveput_n2_w16_z1024_v1073741824B_uuid",
+    "wgput_n2_w1_z1024_v1073741824B_uuid",
+    "wgput_n2_w16_z1024_v1073741824B_uuid",
+)
+
+
+def capacity_text(original: bytes) -> bytes:
+    """Change only ten infeasible heap capacities in the exact installed graph."""
+    if hashlib.sha256(original).hexdigest() != CTEST_SHA:
+        raise ValueError("Unexpected original installed CTest graph")
+    lines = original.splitlines(keepends=True)
+    for name in HEAP_TESTS:
+        selected = [
+            i
+            for i, line in enumerate(lines)
+            if line.startswith(f"add_test({name} ".encode())
+        ]
+        if len(selected) != 1:
+            raise ValueError("Missing or duplicated exact capacity test")
+        index = selected[0]
+        old = b'"ROCSHMEM_HEAP_SIZE=6442450944"'
+        if lines[index].count(old) != 1:
+            raise ValueError("Unexpected original per-test heap capacity")
+        lines[index] = lines[index].replace(
+            old, f'"ROCSHMEM_HEAP_SIZE={HEAP_BYTES}"'.encode()
+        )
+    return b"".join(lines)
+
+
+def capacity_file() -> Path:
+    path = ROOT / CTEST_PATH
+    if any(
+        part.is_symlink() for part in [path, *path.parents] if part.is_relative_to(ROOT)
+    ):
+        raise ValueError("Aliased installed CTest graph")
+    if (
+        not path.is_file()
+        or path.stat().st_nlink != 1
+        or not path.resolve().is_relative_to(ROOT.resolve())
+    ):
+        raise ValueError("Missing or escaping installed CTest graph")
+    return path
+
+
+def prepare_capacity() -> None:
+    path = capacity_file()
+    if (OUT / "heap-capacity.json").exists():
+        raise ValueError("Refuse to adopt a prior capacity mutation")
+    original = path.read_bytes()
+    updated = capacity_text(original)
+    (OUT / "original-CTestTestfile.cmake").write_bytes(original)
+    path.write_bytes(updated)
+    (OUT / "capacity-CTestTestfile.cmake").write_bytes(updated)
+    save(
+        "heap-capacity.json",
+        dict(
+            path=CTEST_PATH,
+            original_sha256=CTEST_SHA,
+            capacity_sha256=hashlib.sha256(updated).hexdigest(),
+            tests=list(HEAP_TESTS),
+            old_heap_bytes=6 * 1024**3,
+            heap_bytes=HEAP_BYTES,
+            payload_bytes_per_rank=20 * 1024**3,
+            ranks=2,
+            rank_device_mapping="SLR rank0->logical HIP0, rank1->logical HIP1; original CTest --parallel1",
+            scope="Only ten generated add_test heap fields; original native files, arguments, iteration counts, test properties and skip policy unchanged.",
+        ),
+    )
+
+
+def verify_capacity() -> None:
+    receipt = json.loads((OUT / "heap-capacity.json").read_text())
+    expected = capacity_text((OUT / "original-CTestTestfile.cmake").read_bytes())
+    if (
+        capacity_file().read_bytes() != expected
+        or hashlib.sha256(expected).hexdigest() != receipt["capacity_sha256"]
+    ):
+        raise ValueError("Generated capacity graph changed after preparation")
+
+
+def require_memory_budget(
+    record: dict, minimum_free_bytes: int = MIN_FREE_BYTES
+) -> None:
+    devices = record.get("devices", [])
+    if (
+        record.get("count_returncode") != 0
+        or record.get("count") != 8
+        or len(devices) != 8
+    ):
+        raise ValueError("Exactly eight measured HIP devices required")
+    for index, device in enumerate(devices):
+        if (
+            device.get("device") != index
+            or device.get("set_returncode") != 0
+            or device.get("memory_returncode") != 0
+            or type(device.get("free_bytes")) is not int
+            or type(device.get("total_bytes")) is not int
+            or not minimum_free_bytes <= device["free_bytes"] <= device["total_bytes"]
+        ):
+            raise ValueError("Insufficient or unavailable per-device heap headroom")
+
+
+def memory_budget(name: str, minimum_free_bytes: int = MIN_FREE_BYTES) -> dict:
+    # Separate child exits before SLR forks; never initialize HIP in its parent.
+    query = """
+import ctypes,json,sys
+h=ctypes.CDLL(sys.argv[1]); n=ctypes.c_int()
+h.hipGetDeviceCount.argtypes=[ctypes.POINTER(ctypes.c_int)]
+h.hipGetDeviceCount.restype=ctypes.c_int
+h.hipSetDevice.argtypes=[ctypes.c_int]; h.hipSetDevice.restype=ctypes.c_int
+h.hipMemGetInfo.argtypes=[ctypes.POINTER(ctypes.c_size_t),ctypes.POINTER(ctypes.c_size_t)]
+h.hipMemGetInfo.restype=ctypes.c_int
+r=h.hipGetDeviceCount(ctypes.byref(n)); devices=[]
+for index in range(min(max(n.value,0),8)):
+    free=ctypes.c_size_t(); total=ctypes.c_size_t()
+    selected=h.hipSetDevice(index)
+    measured=h.hipMemGetInfo(ctypes.byref(free),ctypes.byref(total)) if selected==0 else None
+    devices.append(dict(device=index,set_returncode=selected,memory_returncode=measured,free_bytes=free.value,total_bytes=total.value))
+print(json.dumps(dict(count_returncode=r,count=n.value,devices=devices)))
+"""
+    result = command(
+        [sys.executable, "-c", query, str(ROOT / "build/lib/libamdhip64.so")],
+        name,
+        provider_env(),
+    )
+    record = dict(
+        command=result,
+        observation=json.loads((OUT / (name + ".stdout")).read_text()),
+        required_free_bytes=minimum_free_bytes,
+        heap_bytes=HEAP_BYTES,
+        scope="Point-in-time free/total memory per logical HIP device, after stock cleanup.8GiB outside-heap margin; concurrent external allocations remain possible.",
+    )
+    save(name + ".json", record)
+    if result["returncode"]:
+        raise ValueError("HIP memory observation failed")
+    require_memory_budget(record["observation"], minimum_free_bytes)
+    return record
 
 
 def save(name: str, value: dict) -> None:
@@ -144,7 +293,39 @@ def parse_ctest(text: str) -> dict:
     return dict(selected=int(summaries[0]), passed=passed, skipped=skipped)
 
 
+def require_original_case_coverage(text: str) -> None:
+    original = json.loads(
+        (
+            ROOT / "build_tools/tests/fixtures/rocshmem-runtime/actual-45-outcomes.json"
+        ).read_text()
+    )["rows"]
+    pattern = r"^\s*\d+/\d+\s+Test\s+#(?P<id>\d+):\s+(?P<name>\S+)\s+\.+\s*(?P<status>Passed|\*{3}Skipped|\*{3}Failed)\s+"
+    actual = [
+        dict(id=int(m["id"]), name=m["name"], status=m["status"])
+        for m in re.finditer(pattern, text, re.MULTILINE)
+    ]
+    expected = {(row["id"], row["name"]): row["status"] for row in original}
+    if (
+        len(expected) != 296
+        or len(actual) != 296
+        or {(row["id"], row["name"]) for row in actual} != set(expected)
+    ):
+        raise ValueError("Original296 selected case identities changed")
+    for row in actual:
+        prior = expected[(row["id"], row["name"])]
+        if row["status"] != "Passed" and not (
+            prior == "***Skipped" and row["status"] == "***Skipped"
+        ):
+            raise ValueError(
+                "Required executed case failed or became skipped: " + row["name"]
+            )
+
+
 def prepare(contract: dict) -> None:
+    if os.getenv("ROCSHMEM_HEAP_ALLOCATOR_TYPE") not in (None, ""):
+        raise ValueError(
+            "Capacity diagnostic requires the unchanged default heap allocator"
+        )
     record = dict(
         contract_sha256=sha(CONTRACT),
         producer=contract,
@@ -166,6 +347,7 @@ def prepare(contract: dict) -> None:
                 "KUBE_CPU_REQUEST",
                 "OPENBLAS_NUM_THREADS",
                 "OMP_NUM_THREADS",
+                "ROCSHMEM_HEAP_ALLOCATOR_TYPE",
             ]
         },
         ambient_tools={
@@ -188,7 +370,7 @@ def prepare(contract: dict) -> None:
             )
             for name in ["cpu.max", "cpuset.cpus.effective", "memory.max", "pids.max"]
         },
-        difference="Only installed build/bin prepended to rocSHMEM subprocess PATH; no installed source, test, CTest or skip-policy changes.",
+        difference="Installed build/bin PATH discovery plus generated CTest heap6GiB->24GiB for exactlyten1GiB-volume cases. Native bytes, original argv/loops/volume, other286 selected cases and test/security/skip policies unchanged.",
     )
     save("before.json", record)
     record["identities"] = identities(contract)
@@ -232,11 +414,18 @@ def prepare(contract: dict) -> None:
         raise RuntimeError(
             "Actual HSA/HIP/management prerequisites do not expose8 GPUs"
         )
+    record["memory_headroom"] = memory_budget("hip-memory-prepare")
+    prepare_capacity()
+    save("before.json", record)
 
 
 def run_test() -> None:
     if not (OUT / "before.json").exists():
         raise RuntimeError("Missing preflight")
+    if os.getenv("ROCSHMEM_HEAP_ALLOCATOR_TYPE") not in (None, ""):
+        raise ValueError("Default heap allocator changed after preparation")
+    verify_capacity()
+    memory_budget("hip-memory-before-test")
     started = time.monotonic()
     argv = [
         sys.executable,
@@ -293,8 +482,10 @@ def main() -> None:
     elif args.mode == "test":
         run_test()
     else:
+        verify_capacity()
         after = identities(contract)
         save("after.json", after)
+        memory_budget("hip-memory-after-test", minimum_free_bytes=0)
         before = json.loads((OUT / "before.json").read_text())
         if before["identities"] != after:
             raise RuntimeError("Native files or loader providers changed")
@@ -302,6 +493,7 @@ def main() -> None:
         if code["returncode"]:
             raise RuntimeError("Original test command failed")
         outcomes = parse_ctest((OUT / code["stdout"]).read_text())
+        require_original_case_coverage((OUT / code["stdout"]).read_text())
         if outcomes["selected"] != 296:
             raise RuntimeError("Original comprehensive selection changed")
         save(
