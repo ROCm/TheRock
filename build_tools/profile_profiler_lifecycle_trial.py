@@ -46,11 +46,27 @@ def sequence(value: object) -> list[str]:
     return value if isinstance(value, list) else [str(value)]
 
 
-def fixture_closure(tests: list[dict], execute: str) -> list[str]:
+def fixture_closure(
+    tests: list[dict],
+    execute: str,
+    verified_build_dependencies: frozenset[str] = frozenset(),
+) -> list[str]:
     """Include fixture-dependent validations and all recursively required fixtures."""
-    by_name = {test["name"]: test for test in tests}
-    if len(by_name) != len(tests) or execute not in by_name:
+    if verified_build_dependencies - {"signal-handler-test"}:
+        raise ValueError("Unapproved non-CTest dependency resolution")
+    by_name = {}
+    for test in tests:
+        by_name.setdefault(test["name"], []).append(test)
+    if execute not in by_name or len(by_name[execute]) != 1:
         raise ValueError("Missing/duplicate original execution test")
+
+    def unique(name):
+        if len(by_name[name]) != 1:
+            raise ValueError(
+                "Ambiguous test in selected fixture/dependency namespace: " + name
+            )
+        return by_name[name][0]
+
     setups, cleanups = {}, {}
     for test in tests:
         props = properties(test)
@@ -59,7 +75,7 @@ def fixture_closure(tests: list[dict], execute: str) -> list[str]:
                 table.setdefault(fixture, set()).add(test["name"])
     selected = {execute}
     # Test execution produces the fixture consumed by its original validations.
-    produced = set(sequence(properties(by_name[execute]).get("FIXTURES_SETUP")))
+    produced = set(sequence(properties(unique(execute)).get("FIXTURES_SETUP")))
     if not produced:
         raise ValueError("Original execution has no validation fixture")
     for test in tests:
@@ -70,9 +86,11 @@ def fixture_closure(tests: list[dict], execute: str) -> list[str]:
     while True:
         previous = set(selected)
         for name in previous:
-            props = properties(by_name[name])
+            props = properties(unique(name))
             for dependency in sequence(props.get("DEPENDS")):
                 if dependency not in by_name:
+                    if dependency in verified_build_dependencies:
+                        continue
                     raise ValueError("Required named dependency is missing")
                 selected.add(dependency)
             for fixture in sequence(props.get("FIXTURES_REQUIRED")):
@@ -82,6 +100,39 @@ def fixture_closure(tests: list[dict], execute: str) -> list[str]:
                 selected.update(cleanups.get(fixture, set()))
         if selected == previous:
             return sorted(selected)
+
+
+def verify_build_target_alias(build: Path, app: Path, target: str, query: str) -> dict:
+    expected = build / "bin/signal-handler/signal-handler-test"
+    lines = [line.strip() for line in query.splitlines()]
+    if (
+        target != "signal-handler-test"
+        or app != expected
+        or not app.is_file()
+        or app.is_symlink()
+    ):
+        raise ValueError("Consumer build-target identity differs")
+    if lines.count(target + ":") != 1:
+        raise ValueError("Ninja query lacks one exact target namespace")
+    block = lines[lines.index(target + ":") + 1 :]
+    if "input: phony" not in block or "outputs:" not in block:
+        raise ValueError("Ninja alias shape differs")
+    inputs = block[block.index("input: phony") + 1 : block.index("outputs:")]
+    if app.relative_to(build).as_posix() not in inputs:
+        raise ValueError(
+            "Ninja target alias does not point to the original consumer app"
+        )
+    with app.open("rb") as stream:
+        if stream.read(4) != b"\x7fELF":
+            raise ValueError("Consumer app is not the expected native ELF")
+    return dict(
+        target=target,
+        path=str(app),
+        bytes=app.stat().st_size,
+        sha256=sha(app),
+        ninja_query_sha256=hashlib.sha256(query.encode()).hexdigest(),
+        scope="Original DEPENDS property retained; exact non-CTest build target proved via stock successful build, Ninja alias and consumer app bytes",
+    )
 
 
 def verify_execute(test: dict, contract: dict) -> None:
@@ -513,7 +564,31 @@ def run_trial(root: Path, contract: dict) -> int:
     tests = json.loads(show.stdout)["tests"]
     execute = next(t for t in tests if t["name"] == contract["original_execute_name"])
     verify_execute(execute, contract)
-    closure = fixture_closure(tests, execute["name"])
+    app = build / "bin/signal-handler/signal-handler-test"
+    ninja = shutil.which("ninja")
+    if not ninja:
+        raise ValueError("Original Ninja provider unavailable for target proof")
+    query = subprocess.run(
+        [ninja, "-C", str(build), "-t", "query", "signal-handler-test"],
+        cwd=driver.ROCPROFILER_SDK_TESTS_PATH,
+        env=driver.environ_vars,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    (output / "signal-handler-ninja-query.txt").write_text(
+        query.stdout, encoding="utf-8"
+    )
+    proof = verify_build_target_alias(build, app, "signal-handler-test", query.stdout)
+    proof.update(
+        ninja_query_command=query.args,
+        ninja_provider=ninja,
+        ninja_provider_sha256=sha(Path(ninja)),
+    )
+    save(output / "build-dependency-resolution.json", proof)
+    app_before = dict(path=proof["path"], bytes=proof["bytes"], sha256=proof["sha256"])
+    save(output / "consumer-built-app.json", app_before)
+    closure = fixture_closure(tests, execute["name"], frozenset({proof["target"]}))
     regex = "^(" + "|".join(re.escape(name) for name in closure) + ")$"
     command = [*base, "--no-tests=error", "--tests-regex", regex]
     selected = subprocess.run(
@@ -527,11 +602,6 @@ def run_trial(root: Path, contract: dict) -> int:
     if sorted(t["name"] for t in selected_data["tests"]) != closure:
         raise ValueError("Generated fixture closure and actual selected tests differ")
     save(output / "selected-original-tests.json", selected_data)
-    app = build / "bin/signal-handler/signal-handler-test"
-    if not app.is_file():
-        raise ValueError("Stock consumer-built signal handler application missing")
-    app_before = dict(path=str(app), bytes=app.stat().st_size, sha256=sha(app))
-    save(output / "consumer-built-app.json", app_before)
     test_output = build / "rocprofv3/signal-handler/without-signal-handling-spawn"
     expected = (
         root

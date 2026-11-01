@@ -1,5 +1,5 @@
 {
-  "branch": "users/sa-faizal/build-profile-41147801272-profiler-lifecycle",
+  "branch": "users/sa-faizal/build-profile-41147801272-profiler-lifecycle-fix",
   "artifact_run_id": "41271198901",
   "source_artifact_sha": "60faab8d3d433d009f154c3e30f9fd8ac5cfda59",
   "runner": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",

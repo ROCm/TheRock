@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 import copy
+import gzip
 import hashlib
 import json
 import os
@@ -22,6 +23,139 @@ import profile_profiler_lifecycle_trial as trial
 class LifecycleTrialTest(unittest.TestCase):
     def setUp(self):
         self.contract = json.loads(controller.CONTRACT.read_text())
+
+    def actual_tests(self):
+        path = (
+            ROOT / "build_tools/tests/fixtures/profiler_lifecycle_actual_2264.json.gz"
+        )
+        origin = json.loads(
+            path.with_name("profiler_lifecycle_actual_2264_origin.json").read_text()
+        )
+        compressed = path.read_bytes()
+        self.assertEqual(hashlib.sha256(compressed).hexdigest(), origin["gzip_sha256"])
+        data = gzip.decompress(compressed)
+        self.assertEqual(len(data), origin["uncompressed_bytes"])
+        self.assertEqual(
+            hashlib.sha256(data).hexdigest(), origin["uncompressed_sha256"]
+        )
+        tests = json.loads(data)["tests"]
+        self.assertEqual(len(tests), 2264)
+        self.assertEqual(len({t["name"] for t in tests}), 2262)
+        return tests
+
+    def test_complete_actual2264_fixture_selected_namespace_and_all_validators(self):
+        tests = self.actual_tests()
+        name = self.contract["original_execute_name"]
+        original = next(t for t in tests if t["name"] == name)
+        trial.verify_execute(original, self.contract)
+        self.assertIn("signal-handler-test", trial.properties(original)["DEPENDS"])
+        with self.assertRaises(ValueError):
+            trial.fixture_closure(tests, name)
+        closure = trial.fixture_closure(tests, name, frozenset({"signal-handler-test"}))
+        prefix = "tests.integration."
+        case = "app-without-signal-handling-spawn"
+        expected = [
+            prefix + "cleanup." + case,
+            prefix + "execute." + case,
+            *[
+                prefix + "validate." + case + "." + suffix
+                for suffix in [
+                    "test_clean_exit",
+                    "test_flushed_markers",
+                    "test_json_is_valid",
+                    "test_output_files_exist",
+                ]
+            ],
+        ]
+        self.assertEqual(closure, sorted(expected))
+        # Exact selected regex matches six records despite unrelated doctor duplicates.
+        regex = "^(" + "|".join(re.escape(n) for n in closure) + ")$"
+        self.assertEqual(
+            sorted(t["name"] for t in tests if re.fullmatch(regex, t["name"])),
+            sorted(expected),
+        )
+
+    def test_complete_actual_fixture_rejects_selected_duplicates_and_unknown_dependency(
+        self,
+    ):
+        tests = self.actual_tests()
+        name = self.contract["original_execute_name"]
+        for selected in [
+            name,
+            "tests.integration.cleanup.app-without-signal-handling-spawn",
+            "tests.integration.validate.app-without-signal-handling-spawn.test_clean_exit",
+        ]:
+            changed = [
+                *tests,
+                copy.deepcopy(next(t for t in tests if t["name"] == selected)),
+            ]
+            with self.subTest(selected=selected), self.assertRaises(ValueError):
+                trial.fixture_closure(changed, name, frozenset({"signal-handler-test"}))
+        changed = copy.deepcopy(tests)
+        original = next(t for t in changed if t["name"] == name)
+        next(p for p in original["properties"] if p["name"] == "DEPENDS")[
+            "value"
+        ].append("__unknown_build_dependency__")
+        with self.assertRaises(ValueError):
+            trial.fixture_closure(changed, name, frozenset({"signal-handler-test"}))
+        with self.assertRaises(ValueError):
+            trial.fixture_closure(
+                tests,
+                name,
+                frozenset({"signal-handler-test", "__unknown_build_dependency__"}),
+            )
+
+    def test_exact_consumer_alias_app_proof_and_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp)
+            app = build / "bin/signal-handler/signal-handler-test"
+            app.parent.mkdir(parents=True)
+            app.write_bytes(b"\x7fELFfixture")
+            query = "ninja: Entering directory\nsignal-handler-test:\n  input: phony\n    bin/signal-handler/signal-handler-test\n  outputs:\n"
+            proof = trial.verify_build_target_alias(
+                build, app, "signal-handler-test", query
+            )
+            self.assertEqual(
+                proof["sha256"], hashlib.sha256(app.read_bytes()).hexdigest()
+            )
+            for changed in [
+                query.replace(
+                    "bin/signal-handler/signal-handler-test", "bin/wrong-app"
+                ),
+                query.replace("signal-handler-test:", "wrong-target:"),
+                query.replace("input: phony", "input: unexpected"),
+            ]:
+                with self.assertRaises(ValueError):
+                    trial.verify_build_target_alias(
+                        build, app, "signal-handler-test", changed
+                    )
+            with self.assertRaises(ValueError):
+                trial.verify_build_target_alias(
+                    build, app.with_name("wrong-app"), "signal-handler-test", query
+                )
+
+    @unittest.skipUnless(shutil.which("ninja"), "Ninja source fixture unavailable")
+    def test_real_ninja_alias_resolution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = root / "build"
+            build.mkdir()
+            (build / "build.ninja").write_text(
+                "build signal-handler-test: phony bin/signal-handler/signal-handler-test\n"
+            )
+            app = build / "bin/signal-handler/signal-handler-test"
+            app.parent.mkdir(parents=True)
+            app.write_bytes(b"\x7fELFfixture")
+            query = subprocess.check_output(
+                ["ninja", "-C", str(build), "-t", "query", "signal-handler-test"],
+                text=True,
+            )
+            self.assertEqual(
+                trial.verify_build_target_alias(
+                    build, app, "signal-handler-test", query
+                )["path"],
+                str(app),
+            )
 
     def test_original_context_component_and_action_pins(self):
         import yaml
