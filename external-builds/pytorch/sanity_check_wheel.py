@@ -5,6 +5,23 @@
 import sys
 from pathlib import Path
 import re
+import zipfile
+
+# The error torchvision compiles in for each codec it was built without.
+CODEC_MISSING_RE = re.compile(
+    rb"torchvision not compiled with (libPNG|libpng|libjpeg|libwebp) support"
+)
+
+
+def missing_image_codecs(wheel: Path) -> list[str]:
+    """Returns the codecs torchvision's image extension was built without."""
+    missing = set()
+    with zipfile.ZipFile(wheel) as zf:
+        for name in zf.namelist():
+            if re.match(r"torchvision/image.*\.so$", name):
+                found = CODEC_MISSING_RE.findall(zf.read(name))
+                missing.update(m.decode().lower() for m in found)
+    return sorted(missing)
 
 
 def check_wheel(wheel: Path, expected_name: str):
@@ -23,6 +40,14 @@ def check_wheel(wheel: Path, expected_name: str):
     wheel_name_re = re.compile(rf"^{re.escape(expected_name)}-[\d\.]+.*\.whl$")
     if not wheel_name_re.match(wheel.name):
         print(f"WARNING: Wheel name {wheel.name} does not match typical pattern")
+
+    # Check 4: torchvision's image extension has its codecs. setup.py builds it
+    # without them (with only a warning) when the libraries aren't found.
+    if expected_name == "torchvision" and "linux" in wheel.name:
+        missing = missing_image_codecs(wheel)
+        if missing:
+            print(f"ERROR: Wheel {wheel.name} was built without {', '.join(missing)}")
+            sys.exit(1)
 
     print(f"Valid wheel: {wheel.name} ({size} bytes)")
 
