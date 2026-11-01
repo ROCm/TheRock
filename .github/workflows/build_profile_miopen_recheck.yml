@@ -1,0 +1,58 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Required MIOpen recheck
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  context:
+    if: ${{ github.repository == 'ROCm/TheRock' && github.actor == 'sa-faizal' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify fixed recheck context
+        run: python build_tools/profile_miopen_recheck.py context --output required-recheck/context.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() }}
+        with:
+          name: required-recheck-context
+          path: required-recheck/
+          if-no-files-found: error
+          retention-days: 14
+  sanity:
+    needs: context
+    uses: ./.github/workflows/test_component.yml
+    with:
+      profile_required_recheck: true
+      artifact_run_id: "41261635745"
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx94X-dcgpu
+      amdgpu_targets: gfx942
+      test_runs_on: linux-gfx942-1gpu-ccs-csp-ossci-rocm
+      platform: linux
+      release_type: ci
+      build_variant: release
+      ref: ${{ github.sha }}
+      component: >-
+        {"additional_requirements_files":[],"job_name":"sanity","skip_stages":["compiler-runtime"],"fetch_artifact_args":"--sanity","timeout_minutes":5,"test_script":"python build_tools/github_actions/test_executable_scripts/test_sanity.py","platform":["linux","windows"],"total_shards_dict":{"linux":1,"windows":1},"container_image":"ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80","container_options":"--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST --cap-add SYS_MODULE -v /lib/modules:/lib/modules","test_type":"comprehensive","shard_arr":[1],"total_shards":1,"test_runner":"linux-gfx942-1gpu-ccs-csp-ossci-rocm"}
+
+  miopen:
+    needs: sanity
+    uses: ./.github/workflows/test_component.yml
+    with:
+      profile_required_recheck: true
+      artifact_run_id: "41261635745"
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx94X-dcgpu
+      amdgpu_targets: gfx942
+      test_runs_on: linux-gfx942-1gpu-ccs-csp-ossci-rocm
+      platform: linux
+      release_type: ci
+      build_variant: release
+      ref: ${{ github.sha }}
+      component: >-
+        {"additional_requirements_files":[],"job_name":"miopen","fetch_artifact_args":"--blas --miopen --rand --tests","timeout_minutes":120,"test_script":"python build_tools/github_actions/test_executable_scripts/test_runner.py","platform":["linux","windows"],"total_shards_dict":{"linux":4,"windows":4},"exclude_family":{"linux":["gfx125X-dcgpu"]},"test_type":"comprehensive","shard_arr":[1,2,3,4],"total_shards":4,"test_runner":"linux-gfx942-1gpu-ccs-csp-ossci-rocm","container_options":"--user 0:0 --ulimit memlock=-1:-1 --ulimit nofile=1048576:1048576 --security-opt seccomp=unconfined --group-add video --device /dev/kfd --device /dev/dri --group-add 993 --group-add 992 --group-add 110 --env-file /etc/podinfo/gha-gpu-isolation-settings -e ROCR_VISIBLE_DEVICES -e KUBE_CPU_REQUEST"}

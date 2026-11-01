@@ -17,6 +17,10 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_miopen_recheck:
+        description: "Run only fixed original MIOpen prerequisite checks"
+        type: boolean
+        default: false
       profile_native_fixture_only:
         type: boolean
         default: false
@@ -184,8 +188,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  miopen_recheck:
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_miopen_recheck }}
+    uses: ./.github/workflows/build_profile_miopen_recheck.yml
+
   setup:
-    if: ${{ !inputs.profile_native_fixture_only }}
+    if: ${{ !inputs.profile_native_fixture_only && !inputs.profile_miopen_recheck }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -257,7 +265,7 @@ jobs:
 
   ci_summary:
     name: CI Summary
-    if: ${{ always() && !inputs.profile_native_fixture_only }}
+    if: ${{ always() && !inputs.profile_native_fixture_only && !inputs.profile_miopen_recheck }}
     needs:
       - setup
       - linux_build_and_test
@@ -279,7 +287,7 @@ jobs:
 
   native_fixture_probe:
     name: Native Debian functional fixture only
-    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only }}
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only && !inputs.profile_miopen_recheck }}
     runs-on: aws-linux-scale-rocm-small
     timeout-minutes: 15
     permissions:
