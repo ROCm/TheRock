@@ -68,7 +68,7 @@ def guard(env, contract, root):
 def selected_files(build):
     """Bounded candidate-file selection; loader query below is separate evidence."""
     selected = {build / "bin/rocsolver-test"}
-    roots = [build / "lib", build / "lib64", build / "bin/rocsolver"]
+    roots = [build / "lib", build / "lib64", build / "bin/rocsolver", build / ".kpack"]
     visited = 0
     for root in roots:
         if not root.is_dir():
@@ -82,16 +82,24 @@ def selected_files(build):
                 visited += 1
                 if visited > 10000:
                     raise ValueError("Required-test input scan exceeded bound")
-                if name.startswith(
-                    (
-                        "librocsolver",
-                        "librocblas",
-                        "libopenblas",
-                        "liblapack",
-                        "libblas",
-                        "libflame",
+                if (
+                    name.startswith(
+                        (
+                            "librocsolver",
+                            "librocblas",
+                            "libopenblas",
+                            "liblapack",
+                            "libblas",
+                            "libflame",
+                        )
                     )
-                ) or name.endswith(".cmake"):
+                    or name.endswith(".cmake")
+                    or (
+                        root.name == ".kpack"
+                        and name.startswith(("solver_lib_", "blas_lib_"))
+                        and name.endswith(".kpack")
+                    )
+                ):
                     selected.add(Path(directory) / name)
     return sorted(selected)
 
@@ -112,6 +120,9 @@ def capture_inputs(root, component):
     loaders = []
     queried = set()
     if component == "rocsolver":
+        for name in ("solver_lib_gfx942.kpack", "blas_lib_gfx942.kpack"):
+            if root / "build/.kpack" / name not in paths:
+                raise ValueError(f"Original gfx942 code pack is missing: {name}")
         for path in paths:
             if path.name == "rocsolver-test" or path.name.startswith(
                 ("librocsolver", "librocblas")

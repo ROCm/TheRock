@@ -154,6 +154,8 @@ class RecheckTest(unittest.TestCase):
                 "lib/librocsolver.so",
                 "lib/librocblas.so",
                 "lib/libopenblas.so",
+                ".kpack/solver_lib_gfx942.kpack",
+                ".kpack/blas_lib_gfx942.kpack",
                 "bin/rocsolver/CTestTestfile.cmake",
                 "lib/unrelated-large.dat",
             ]:
@@ -166,7 +168,7 @@ class RecheckTest(unittest.TestCase):
                 return_value=subprocess.CompletedProcess([], 0, "", ""),
             ):
                 before = module.capture_inputs(root, "rocsolver")
-                self.assertEqual(len(before["files"]), 5)
+                self.assertEqual(len(before["files"]), 7)
                 self.assertEqual(len(before["loader_queries"]), 3)
                 (root / "build/lib/libopenblas.so").write_bytes(b"different")
                 self.assertNotEqual(before, module.capture_inputs(root, "rocsolver"))
