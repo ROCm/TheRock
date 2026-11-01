@@ -1,0 +1,54 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Caller workflow: triggers the centralized ROCm PR Bot hosted in
+# ROCm/TheRock-PR-Bot. Drop this file into any repo that needs PR bot
+# coverage; no other changes are required.
+name: ROCm PR Bot Scan
+
+on:
+  # SECURITY: pull_request_target runs in the base-repo context so secrets
+  # are available even for fork PRs. The called workflow never checks out
+  # or executes PR head code directly.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  # Re-run when the required check workflow finishes so the results table flips
+  # from ⏳ Pending to ✅/❌ — without the bot ever waiting or polling. We use
+  # `workflow_run` (NOT `check_run`): GitHub deliberately suppresses `check_run`
+  # re-triggers for checks created by Actions' GITHUB_TOKEN (recursion guard),
+  # so the table would otherwise stay ⏳ until a human pushes/edits the PR.
+  # `workflow_run` is not suppressed and runs in the base-repo context with
+  # secrets. The watched name must match the pre-commit workflow's `name:`.
+  workflow_run:
+    workflows: ["pre-commit"]
+    types: [completed]
+
+# Caller must grant what the reusable workflow needs (callee cannot exceed it).
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+concurrency:
+  group: rocm-pr-bot-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  rocm-pr-bot:
+    # On workflow_run, only refresh for pre-commit runs tied to a PR. Push-to-
+    # main pre-commit runs have no PR; the bot resolves the PR from the head SHA
+    # and exits cleanly when none exists, so this just avoids a no-op job.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request'
+    uses: ROCm/TheRock-PR-Bot/.github/workflows/rocm-pr-bot.yml@32048e50b56623a5e411f22e25533575a8422262
+    with:
+      # CHECK-RUN name(s) this bot should track, as GitHub reports them — this is
+      # the pre-commit workflow's JOB-level `name:` ("Run hooks"), NOT the
+      # workflow name. Repos without a pre-commit check should omit this (leave
+      # it empty) so no permanently-pending row is shown.
+      required_check_runs: "Run hooks"
+    secrets:
+      ROCM_PR_BOT_APPID: ${{ secrets.ROCM_PR_BOT_APPID }}
+      ROCM_PRBOT_KEY: ${{ secrets.ROCM_PRBOT_KEY }}
