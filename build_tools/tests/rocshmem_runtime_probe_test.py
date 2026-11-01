@@ -20,6 +20,28 @@ spec.loader.exec_module(probe)
 
 
 class RuntimeProbeTest(unittest.TestCase):
+    def test_actions_pins_match_actual_stock_component_workflow(self):
+        stock = yaml.load(
+            (ROOT / ".github/workflows/test_component.yml").read_text(),
+            Loader=yaml.BaseLoader,
+        )
+        probe_workflow = yaml.load(
+            (ROOT / ".github/workflows/rocshmem_runtime_probe.yml").read_text(),
+            Loader=yaml.BaseLoader,
+        )
+        stock_pins = {
+            step["uses"].split("@")[0]: step["uses"]
+            for job in stock["jobs"].values()
+            for step in job.get("steps", [])
+            if step.get("uses", "").startswith("actions/")
+        }
+        for job in probe_workflow["jobs"].values():
+            for step in job.get("steps", []):
+                if step.get("uses", "").startswith("actions/"):
+                    self.assertEqual(
+                        step["uses"], stock_pins[step["uses"].split("@")[0]]
+                    )
+
     def test_installed_hash_mismatch_fails_before_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

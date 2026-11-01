@@ -91,7 +91,7 @@ jobs:
         run: python build_tools/profile_rocshmem_runtime.py finalize
       - name: Preserve partial functional evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@ed144a151c23956e969b4ec4bc8a62f66f7ec437 # v4.7.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rocshmem-runtime-probe
           path: |
