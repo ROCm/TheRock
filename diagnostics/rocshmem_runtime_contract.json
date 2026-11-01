@@ -1,0 +1,436 @@
+{
+  "artifact_run": 41261635745,
+  "artifact_source": "60faab8d3d433d009f154c3e30f9fd8ac5cfda59",
+  "installed_files": [
+    {
+      "path": "build/bin/rocshmem_info",
+      "bytes": 137747704,
+      "sha256": "1011ec5e2ef83ccfb138213488a40499d5222a60b33b97e80184cf3195aec042",
+      "images": [
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1010",
+          "architecture": "gfx1010",
+          "bytes": 4226288,
+          "sha256": "2f3f9c774dc33c34d407ff68f85dc60bd1e8689d16110691ae92ce3c1653a8d3"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1011",
+          "architecture": "gfx1011",
+          "bytes": 4226288,
+          "sha256": "124ac990f7d4247f128a80b6302d7ceef830726ffa2c88e17104889710065ab6"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1012",
+          "architecture": "gfx1012",
+          "bytes": 4226288,
+          "sha256": "7b8577a3b1c4d7d874b037939182a81b561741ff69593277cb5196f005dcf557"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1030",
+          "architecture": "gfx1030",
+          "bytes": 4173808,
+          "sha256": "984326cc6503787ff0e4f79a355980dc1997c402b6cb3922ecfcc80c15a3964f"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1031",
+          "architecture": "gfx1031",
+          "bytes": 4173808,
+          "sha256": "7ca89f904fd60ba0a2f48ca2cdef195c14efff181d1a02b8c599ddc58fbd156d"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1032",
+          "architecture": "gfx1032",
+          "bytes": 4173808,
+          "sha256": "3f5839dcf0e904f3c35fef3d740c63f887f8ce98f3f7c6de8cecf2e21476f3c3"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1033",
+          "architecture": "gfx1033",
+          "bytes": 4173808,
+          "sha256": "a00305262304fb4198579eaa40cbbb977894a96250fed252aa9dc5dd8d577915"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1034",
+          "architecture": "gfx1034",
+          "bytes": 4173808,
+          "sha256": "fec21ead936d667f639d378317f19949f7e22f68f9a22d31c897044509e2b454"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1035",
+          "architecture": "gfx1035",
+          "bytes": 4173808,
+          "sha256": "0c46ee0b3ac2e94625056f66318c3abe12cf1069b63b50e1771985937dc0f17a"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1036",
+          "architecture": "gfx1036",
+          "bytes": 4173808,
+          "sha256": "aec75ea19a6ad0ade6ca668b3712e270cc94d1f5024d3c957b8fad4faa2e34ee"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1100",
+          "architecture": "gfx1100",
+          "bytes": 4548752,
+          "sha256": "6f16ab047a36a77b4d8314e56d2c14f807c0b4d15254ca874bbc323c0f058fcc"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1101",
+          "architecture": "gfx1101",
+          "bytes": 4548752,
+          "sha256": "7c72ffec2c6e0193f84cc4e0dad9bb8c0bb8a9851d2e555789a6e9d469008a3e"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1102",
+          "architecture": "gfx1102",
+          "bytes": 4575888,
+          "sha256": "f8d98d77e0d2ea028f43110b76b34a89a4c4fce37bad2243b9ae3867acb161ac"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1103",
+          "architecture": "gfx1103",
+          "bytes": 4575888,
+          "sha256": "2b4037b326251d88f2568a54bde304d42d9057371ab3a75cdb13e1235571163a"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1150",
+          "architecture": "gfx1150",
+          "bytes": 4506256,
+          "sha256": "1e7855ecdd87531848fc5ebf51d0fb09f27f53dcef59e6bd6c5a6cf09a2f37c3"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1151",
+          "architecture": "gfx1151",
+          "bytes": 4481168,
+          "sha256": "57b083d0cd9ef8c78613fbcc8c6907bbde579aeb9544b5ee504c8016ff973ca5"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1152",
+          "architecture": "gfx1152",
+          "bytes": 4506256,
+          "sha256": "50622331390be923de7e9068c7da38b1af81bd0872e7becc8227454cf49a0c35"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1153",
+          "architecture": "gfx1153",
+          "bytes": 4506256,
+          "sha256": "c36e4fcade479f76605d7c7baaabb9b7f42224f2dc146c57537f3b4120f3f502"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1170",
+          "architecture": "gfx1170",
+          "bytes": 4502672,
+          "sha256": "d32e77b9a76c31489af0f5f2cedd3b22e51841a1d1a2b16c3956ee44b669ca4b"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1171",
+          "architecture": "gfx1171",
+          "bytes": 4502672,
+          "sha256": "c85660bd34ebb02871794751a3f34aed2912a22a2b866d3e7b5a10ce5a725eba"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1200",
+          "architecture": "gfx1200",
+          "bytes": 5149072,
+          "sha256": "8eadaa3c4b0d7b412518122f05fb1a301374653184d51d5bb64051cbcefe4335"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1201",
+          "architecture": "gfx1201",
+          "bytes": 5149072,
+          "sha256": "02562964c80ceb9a614107ec59adcadd8b5d5c608fd28df1d542ce3b59a22753"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1250",
+          "architecture": "gfx1250",
+          "bytes": 4309376,
+          "sha256": "09b972795680b28396c505d868957a2c648af9922fd64f3436e4247921bd1eb5"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1250-strict",
+          "architecture": "gfx1250-strict",
+          "bytes": 4302464,
+          "sha256": "b986094ce3ab567cc7366ddd2c1fe7becdad04352a180d8c8f1b345803f5540d"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx900",
+          "architecture": "gfx900",
+          "bytes": 4488688,
+          "sha256": "4864c6c46788127ee991c3c7238be990843f8905ad9a32adc8bbcf21bb1782eb"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx906",
+          "architecture": "gfx906",
+          "bytes": 4488688,
+          "sha256": "e412c4332d3e2e0f7256ea30613df050188ffdc3d56396c542f5112ce553f8a3"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx908",
+          "architecture": "gfx908",
+          "bytes": 4367600,
+          "sha256": "c2f3dc617d76376e556ae1ee4682a2377c22c846874b8e1aa590919b0abf9bbc"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx90a",
+          "architecture": "gfx90a",
+          "bytes": 4540736,
+          "sha256": "76f0e170e2bdac518053c40a2d76aa36b60fa023ac21d5cdda2d6730b29c8166"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx90c",
+          "architecture": "gfx90c",
+          "bytes": 4488688,
+          "sha256": "69a29e29e415a54ec7413634d9cf2663084bf2e97c2e2c7864b3011a472c7c52"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx942",
+          "architecture": "gfx942",
+          "bytes": 4460352,
+          "sha256": "a0ce9efc161d2b18559e6a590656d5fc9bda507da0775e23f09e7ad3aaea89d5"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx950",
+          "architecture": "gfx950",
+          "bytes": 4490304,
+          "sha256": "717371c50bf8ec51a5b91ed4b6c1f47d8d59d7c536411fce689229f1ff3f14e8"
+        }
+      ]
+    },
+    {
+      "path": "build/bin/rocshmem_functional_tests",
+      "bytes": 384128760,
+      "sha256": "24b2e26e79e1d59667b8fe4889c7fc8823953574f6312a6eaad9ddf18270f38d",
+      "images": [
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1010",
+          "architecture": "gfx1010",
+          "bytes": 11641128,
+          "sha256": "4fe95f7e0b6256ff2b8b5120fadbcc611997b5e82ca975dd146ac28993184123"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1011",
+          "architecture": "gfx1011",
+          "bytes": 11641128,
+          "sha256": "d83e6449882ebf3bbdc10f13dd99f52132369234a20dcc68c355f3245389b794"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1012",
+          "architecture": "gfx1012",
+          "bytes": 11641128,
+          "sha256": "28376bf3da8d5533391505b88cd8c77563b18003bfbfc9d427e8576e5339c83e"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1030",
+          "architecture": "gfx1030",
+          "bytes": 11137832,
+          "sha256": "a92094a35eddb0201cbda545140c79b249b3f3b74f2d7d24a573f1058cbed1ad"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1031",
+          "architecture": "gfx1031",
+          "bytes": 11137832,
+          "sha256": "e1537516d7fb5a66b8852c772229f789022dbeb885a49d87242106e68338e124"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1032",
+          "architecture": "gfx1032",
+          "bytes": 11137832,
+          "sha256": "48b839159018e3e5fd532f9e4feaa1b3c94afca7b6e0c8dd7dff761bc5034163"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1033",
+          "architecture": "gfx1033",
+          "bytes": 11137832,
+          "sha256": "c66d7d1430b10c20ce5ea62d25f45330108e05014b1adb2171f4fb43dce1bd70"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1034",
+          "architecture": "gfx1034",
+          "bytes": 11137832,
+          "sha256": "bb19273e8c6d9d14b9496b690ab8c838a78729e573524e0c2b376246cce685ab"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1035",
+          "architecture": "gfx1035",
+          "bytes": 11137832,
+          "sha256": "06edea3292dcb1927ec6f143c8e48bfba1212a042f5fa6d4df567ccdcf49587a"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1036",
+          "architecture": "gfx1036",
+          "bytes": 11137832,
+          "sha256": "1baef66f85e6a491ef1f45c7b6d43230820ff704b70fb166f5f5c568490c7d1c"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1100",
+          "architecture": "gfx1100",
+          "bytes": 13128040,
+          "sha256": "efc0b140bbb618ecaff2639ca2209253a1069772932e491011d6d06389a2e6aa"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1101",
+          "architecture": "gfx1101",
+          "bytes": 13122920,
+          "sha256": "cb67e0d8e562a1ed9a45036d32369e036363920929bf436aa51108d9da995da3"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1102",
+          "architecture": "gfx1102",
+          "bytes": 13182312,
+          "sha256": "02fdc0a715785668481cba14f8165aa4e913a182efb5b34566283664bc492891"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1103",
+          "architecture": "gfx1103",
+          "bytes": 13178216,
+          "sha256": "72e3d08561b225e5db2a7a08817233af6be5a7943e4642031e9fdaf9e498193d"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1150",
+          "architecture": "gfx1150",
+          "bytes": 13039464,
+          "sha256": "1d9c2005423d3001c344309dcdffaff08bba05370faf3021e67184ded8b16b55"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1151",
+          "architecture": "gfx1151",
+          "bytes": 12968552,
+          "sha256": "8f1489b0cc82d9b8a063c39ae67daccb4fe6fa275b350049f0b373623eaf4d26"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1152",
+          "architecture": "gfx1152",
+          "bytes": 13039464,
+          "sha256": "ab1572e5ea74a9a58180d4329c5006f6a2cf9c12f61ed2d6f74149ea56a6db31"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1153",
+          "architecture": "gfx1153",
+          "bytes": 13039464,
+          "sha256": "6409bcced2ef18b218aaabb6402ec0f9aee9f246ac10b4bc6f7293c16077eceb"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1170",
+          "architecture": "gfx1170",
+          "bytes": 13034856,
+          "sha256": "088944c27584b3f9fec75d359e2269bfd68eeafdc0f94eedd93c05d980c5965a"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1171",
+          "architecture": "gfx1171",
+          "bytes": 13034856,
+          "sha256": "601d16ec3df71fd1aa4b132085875fcaa55a108f982b8d8fbdbc4d7d60231ba9"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1200",
+          "architecture": "gfx1200",
+          "bytes": 14730600,
+          "sha256": "1a2e0b475db5102ceb7cb7aacb0c34acf1750218359f4a287c658e4b4d311abf"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1201",
+          "architecture": "gfx1201",
+          "bytes": 14730600,
+          "sha256": "62192d06f5d75c365dc834fc2941344860618f94020e39782458e8ae1bf26ec5"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1250",
+          "architecture": "gfx1250",
+          "bytes": 12683864,
+          "sha256": "ced27c73e30c60167f87771a77fc81be85a125a616a39ee2b3cec5398c3e99df"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx1250-strict",
+          "architecture": "gfx1250-strict",
+          "bytes": 12673624,
+          "sha256": "5b1df39a2621092b70b78e1f966a8298ebd6abed35ed3ef90bec6a27936afbdb"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx900",
+          "architecture": "gfx900",
+          "bytes": 11613480,
+          "sha256": "ad19bcc5ba5ba574aba428c86622761a0e764d2b495d9af67248004c00543f35"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx906",
+          "architecture": "gfx906",
+          "bytes": 11615016,
+          "sha256": "a3ea60afed1dda4e5669e5aaf0d9f0ebc5e0561220fb897944deac906eacfe21"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx908",
+          "architecture": "gfx908",
+          "bytes": 11409704,
+          "sha256": "131081c240c210df9147e2dbd1faa9883840e6a4983774076302b7fb581b2eee"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx90a",
+          "architecture": "gfx90a",
+          "bytes": 12252952,
+          "sha256": "f7e0823928981cb64eeafdeacf7ceb5e62c1ca7f69818d120eb2a3cf5988e086"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx90c",
+          "architecture": "gfx90c",
+          "bytes": 11613480,
+          "sha256": "eb6d36e540c2b3a54b7a11311ec1b87fc33b071b1dc058fb721fad6ec7f56625"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx942",
+          "architecture": "gfx942",
+          "bytes": 12157208,
+          "sha256": "ac5d5d15b22edf442543a7e5f0537195a26b4db9337a847af938c7be8b79617b"
+        },
+        {
+          "target_id": "hip-amdgcn-amd-amdhsa--gfx950",
+          "architecture": "gfx950",
+          "bytes": 12196376,
+          "sha256": "d2ca6ff2e0e3cb62ca02cdc44aa3cb2fa1cbc44f9c8ed514ff8baec8e84c4307"
+        }
+      ]
+    },
+    {
+      "path": "build/share/rocshmem/test_wrapper.sh",
+      "bytes": 10623,
+      "sha256": "36ea052caea920c938ff4e0d21a87e074ed4b4892a2336f86a4e20af896b8efc",
+      "origin": "Pinned rocm-systems a10 source, must match installed wrapper exactly"
+    },
+    {
+      "path": "build_tools/github_actions/test_executable_scripts/test_runner.py",
+      "bytes": 29270,
+      "sha256": "cd9d91d66b170f09be317d09b5fd68702cf2e4fdffff3a46c69d137ee829fc73",
+      "origin": "Unmodified TheRock60fa Git LF blob"
+    },
+    {
+      "path": "build_tools/github_actions/test_executable_scripts/test_sanity.py",
+      "bytes": 1671,
+      "sha256": "a63f6f7215718b0310d90caa3569cfef3a188a970244c0357623af0d67190b84",
+      "origin": "Unmodified TheRock60fa Git LF blob"
+    }
+  ],
+  "archive_provenance": [
+    {
+      "file": "rocshmem_run_generic.tar.zst",
+      "url": "https://therock-ci-artifacts.s3.amazonaws.com/41261635745-linux/rocshmem_run_generic.tar.zst",
+      "bytes": 6908557,
+      "etag": "\"68882786b175ea1fac2b21ed4dc95308\"",
+      "last_modified": "Sun, 01 Nov 2026 02:39:14 GMT",
+      "sha256": "84b4d54538de9de8fc2eb85808daa6dfa66964aa847fe89a90c3edaba95e0202",
+      "published_sha256_matches": true,
+      "checksum_url": "https://therock-ci-artifacts.s3.amazonaws.com/41261635745-linux/rocshmem_run_generic.tar.zst.sha256sum",
+      "retrieved_utc": "2026-11-01T03:06:10.971069+00:00"
+    },
+    {
+      "file": "rocshmem_test_generic.tar.zst",
+      "url": "https://therock-ci-artifacts.s3.amazonaws.com/41261635745-linux/rocshmem_test_generic.tar.zst",
+      "bytes": 293081482,
+      "etag": "\"7af5e7fb9e011d59a0ea0bb10cf79462-35\"",
+      "last_modified": "Sun, 01 Nov 2026 02:39:17 GMT",
+      "sha256": "22b185bf69e6a03f8129a6d7a76318ba828c7a25021fb054a54e272382a60fdf",
+      "published_sha256_matches": true,
+      "checksum_url": "https://therock-ci-artifacts.s3.amazonaws.com/41261635745-linux/rocshmem_test_generic.tar.zst.sha256sum",
+      "retrieved_utc": "2026-11-01T03:06:12.691013+00:00"
+    }
+  ],
+  "independent_native_inventory_sha256": "3ca5844833f1051a4eaa66a6506f96e18d97dee6b37c3b07cfa46413935d6a78",
+  "scope": "Functional recheck only; only installed-bin PATH corrected, source/test/skip semantics unchanged. Preflight HIP query warms runtime; timing is not a performance result."
+}

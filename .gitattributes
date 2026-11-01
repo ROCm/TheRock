@@ -3,3 +3,6 @@
 /patches/build-profile/normal-stack/therock-native-link-control.patch text eol=lf
 /patches/build-profile/normal-stack/rocshmem-native-link-control.patch text eol=lf
 /patches/build-profile/normal-stack/bounded-elf-probe.patch text eol=lf
+# Immutable diagnostic source fixtures retain exact upstream Git LF bytes.
+build_tools/tests/fixtures/rocshmem-runtime/multi_arch_ci-60fa.yml text eol=lf
+build_tools/tests/fixtures/rocshmem-runtime/test_wrapper.sh text eol=lf

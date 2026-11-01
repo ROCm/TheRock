@@ -17,6 +17,14 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_rocshmem_runtime_probe:
+        type: boolean
+        default: false
+        description: Functional-only rocSHMEM check of pinned existing artifacts.
+      profile_rocshmem_expected_sha:
+        type: string
+        default: ""
+        description: Exact frozen diagnostic source SHA.
       profile_native_fixture_only:
         type: boolean
         default: false
@@ -184,8 +192,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rocshmem_runtime_probe:
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_rocshmem_runtime_probe }}
+    uses: ./.github/workflows/rocshmem_runtime_probe.yml
+    permissions:
+      contents: read
   setup:
-    if: ${{ !inputs.profile_native_fixture_only }}
+    if: ${{ !inputs.profile_native_fixture_only && !inputs.profile_rocshmem_runtime_probe }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -257,7 +270,7 @@ jobs:
 
   ci_summary:
     name: CI Summary
-    if: ${{ always() && !inputs.profile_native_fixture_only }}
+    if: ${{ always() && !inputs.profile_native_fixture_only && !inputs.profile_rocshmem_runtime_probe }}
     needs:
       - setup
       - linux_build_and_test
@@ -279,7 +292,7 @@ jobs:
 
   native_fixture_probe:
     name: Native Debian functional fixture only
-    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only }}
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only && !inputs.profile_rocshmem_runtime_probe }}
     runs-on: aws-linux-scale-rocm-small
     timeout-minutes: 15
     permissions:
