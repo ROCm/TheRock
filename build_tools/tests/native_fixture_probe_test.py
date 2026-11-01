@@ -14,6 +14,7 @@ import unittest
 from unittest import mock
 
 import yaml
+from build_tools.tests.consumer_source_probe_test import project_default
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "build_tools/packaging/linux"
@@ -30,7 +31,7 @@ def workflow():
 
 class ProbeWorkflowTests(unittest.TestCase):
     def test_default_normal_workflow_is_exact_original_projection(self):
-        data = workflow()
+        data = project_default(workflow())
         baseline = json.loads(
             (
                 ROOT / "build_tools/tests/fixtures/native_fixture_probe_baseline.json"

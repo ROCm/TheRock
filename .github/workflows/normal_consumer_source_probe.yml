@@ -1,0 +1,160 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Normal consumer source-only probe
+on:
+  workflow_call:
+    inputs:
+      expected_sha:
+        type: string
+        required: true
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: aws-linux-scale-rocm-small
+    timeout-minutes: 10
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+    env:
+      EXPECTED_PROBE_SHA: ${{ inputs.expected_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Require isolated frozen source-only mode
+        run: python build_tools/profile_consumer_source_probe.py guard --expected-sha "$EXPECTED_PROBE_SHA" --output source-probe/guard.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: consumer-source-guard-${{ github.run_attempt }}
+          path: source-probe/
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Exact normal consumer job ID and wheel container options are intentional.
+  test_wheels:
+    needs: guard
+    runs-on: linux-gfx942-1gpu-ccs-csp-ossci-rocm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: wheel-ubuntu2404
+            image_name: ubuntu24.04
+            image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+          - context: wheel-ubi10
+            image_name: ubi10
+            image: ghcr.io/rocm/no_rocm_image_ubi10@sha256:d2b4f153ec2ea8176e86db25d8b0714137fd5429922278eec422a41d6084f36b
+    container:
+      image: ${{ matrix.image }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_PROBE_SHA: ${{ inputs.expected_sha }}
+      NORMAL_IMAGE_PIN: ${{ matrix.image }}
+      VENV_DIR: ${{ github.workspace }}/.venv
+      # SYNTHETIC reference for source guard only: never publish or fetch it.
+      PACKAGE_FIND_LINKS_URL: https://therock-ci-artifacts.s3.amazonaws.com/${{ github.run_id }}-linux/python/index.html
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        if: ${{ contains(matrix.image_name, 'ubuntu') }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Create normal wheel venv without SDK payload
+        run: python build_tools/setup_venv.py "$VENV_DIR" --activate-in-future-github-actions-steps
+      - name: Verify actual wheel source provenance
+        env:
+          PROBE_CONTEXT: ${{ matrix.context }}
+        run: python build_tools/profile_consumer_source_probe.py run --expected-sha "$EXPECTED_PROBE_SHA" --context "$PROBE_CONTEXT" --output source-probe/source.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: consumer-source-${{ matrix.context }}-${{ github.run_attempt }}
+          path: source-probe/
+          retention-days: 14
+          if-no-files-found: warn
+
+  test_native_linux_packages_install:
+    needs: guard
+    runs-on: linux-gfx942-1gpu-ccs-csp-ossci-rocm
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_profile: rhel8
+            image: registry.access.redhat.com/ubi8/ubi@sha256:c322aa68f2d630b36b9faab64094357f62720be2f56f7099376ca2d6c4fe389b
+          - os_profile: rhel10
+            image: registry.access.redhat.com/ubi10/ubi@sha256:15f0a6e2b448ac7aa24425c9ab541e6402dc32b782844a285ccaeffb1c938fe1
+          - os_profile: sles16
+            image: registry.suse.com/bci/bci-base@sha256:38bb07164a0b64c429a285e877277d618fa7531eccd0d31d34375b9ea247c843
+    container:
+      image: ${{ matrix.image }}
+      options: --device /dev/kfd --device /dev/dri
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_PROBE_SHA: ${{ inputs.expected_sha }}
+      NORMAL_IMAGE_PIN: ${{ matrix.image }}
+      OS_PROFILE: ${{ matrix.os_profile }}
+      PKG_TYPE: rpm
+      TEST_TYPE: sanity
+      # SYNTHETIC reference for source guard only: never publish or fetch it.
+      REPO_URL: https://therock-ci-artifacts.s3.amazonaws.com/${{ github.run_id }}-linux/packages/rpm/x86_64
+    steps:
+      - name: Install System Prerequisites
+        run: |
+          if [[ "${OS_PROFILE}" == sles* ]]; then
+            zypper refresh
+            zypper install -y wget curl ca-certificates gpg2 lsb-release update-alternatives binutils
+          else
+            dnf install -y --allowerasing wget curl ca-certificates gnupg2 dnf-plugins-core binutils
+          fi
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/TheRock
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Python and install runtime
+        run: bash build_tools/packaging/linux/setup_python_cmd.sh --os-profile "$OS_PROFILE" --install-runtime --output-format github
+      - name: Install Python Dependencies
+        run: |
+          "$PYTHON_CMD" -m venv /tmp/test-venv
+          /tmp/test-venv/bin/python -m pip install --upgrade pip
+          /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
+          echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> "$GITHUB_ENV"
+      - name: Verify actual native consumer source provenance
+        run: |
+          "$PYTHON_CMD" build_tools/profile_consumer_source_probe.py run --expected-sha "$EXPECTED_PROBE_SHA" --context "rpm-$OS_PROFILE" --output source-probe/source.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: consumer-source-rpm-${{ matrix.os_profile }}-${{ github.run_attempt }}
+          path: source-probe/
+          retention-days: 14
+          if-no-files-found: warn

@@ -17,6 +17,14 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      profile_consumer_source_probe:
+        type: boolean
+        default: false
+        description: 'Source-only actual consumer context probe; no SDK/build/test or performance claim.'
+      profile_consumer_expected_sha:
+        type: string
+        default: ''
+        description: 'Full frozen probe commit SHA; required only for source probe mode.'
       profile_native_fixture_only:
         type: boolean
         default: false
@@ -185,7 +193,7 @@ concurrency:
 
 jobs:
   setup:
-    if: ${{ !inputs.profile_native_fixture_only }}
+    if: ${{ !inputs.profile_native_fixture_only && !inputs.profile_consumer_source_probe }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -257,7 +265,7 @@ jobs:
 
   ci_summary:
     name: CI Summary
-    if: ${{ always() && !inputs.profile_native_fixture_only }}
+    if: ${{ always() && !inputs.profile_native_fixture_only && !inputs.profile_consumer_source_probe }}
     needs:
       - setup
       - linux_build_and_test
@@ -279,7 +287,7 @@ jobs:
 
   native_fixture_probe:
     name: Native Debian functional fixture only
-    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only }}
+    if: ${{ github.repository == 'ROCm/TheRock' && github.event_name == 'workflow_dispatch' && inputs.profile_native_fixture_only && !inputs.profile_consumer_source_probe }}
     runs-on: aws-linux-scale-rocm-small
     timeout-minutes: 15
     permissions:
@@ -347,3 +355,12 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
           path: output/normal-validation/
+
+  consumer_source_probe:
+    name: Consumer source provenance only
+    if: ${{ inputs.profile_consumer_source_probe }}
+    uses: ./.github/workflows/normal_consumer_source_probe.yml
+    permissions:
+      contents: read
+    with:
+      expected_sha: ${{ inputs.profile_consumer_expected_sha }}
