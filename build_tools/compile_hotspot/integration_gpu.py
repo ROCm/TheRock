@@ -64,6 +64,120 @@ def resolve_asan_runtime(compiler, sdk):
     return runtimes.pop()
 
 
+def identity_digest(names):
+    return hashlib.sha256(("\n".join(sorted(names)) + "\n").encode()).hexdigest()
+
+
+def gtest_inventory(text):
+    """Read top-level cases and identity-check interleaved subprocess GTests."""
+    selected, passed, skipped, nested_passed = [], [], {}, []
+    active, children, block = None, {}, []
+    totals, passes, skips, disabled = [], [], [], []
+    for raw in text.splitlines():
+        line = re.sub(r"^\d+:\s?", "", raw)
+        for pattern, values in (
+            (r"\[==========\] (\d+) tests? from .* ran\.", totals),
+            (r"\[\s*PASSED\s*\]\s+(\d+) tests?\.", passes),
+            (r"\[\s*SKIPPED\s*\]\s+(\d+) tests?, listed below:", skips),
+            (r"YOU HAVE (\d+) DISABLED TESTS", disabled),
+        ):
+            match = re.search(pattern, line)
+            if match:
+                values.append(int(match[1]))
+        start = re.match(r"\[ RUN\s*\]\s+(.+)$", line)
+        if start:
+            if active is not None:
+                children[start[1]] = children.get(start[1], 0) + 1
+            else:
+                if start[1] in selected:
+                    raise RuntimeError("Duplicate top-level GTest execution")
+                active, block = start[1], []
+                selected.append(active)
+            continue
+        done = re.match(r"\[\s*(OK|SKIPPED|FAILED)\s*\]\s+(.+?)\s+\([\d.]+ ms\)$", line)
+        if done:
+            name, status = done[2], done[1]
+            if status == "FAILED":
+                raise RuntimeError(f"Failed GTest: {name}")
+            if name != active:
+                if active is None or children.get(name, 0) == 0 or status != "OK":
+                    raise RuntimeError(f"Unmatched/unsuccessful child GTest: {name}")
+                children[name] -= 1
+                nested_passed.append(active + "::" + name)
+                continue
+            if any(children.values()):
+                raise RuntimeError("Parent GTest completed before its subprocess tests")
+            if status == "OK":
+                passed.append(name)
+            else:
+                reasons = []
+                for index, item in enumerate(block):
+                    if item.endswith(": Skipped"):
+                        reasons.extend(
+                            value.strip()
+                            for value in block[index + 1 :]
+                            if value.strip()
+                        )
+                skipped[name] = "\n".join(reasons)
+            active = None
+        elif active is not None:
+            block.append(line)
+    if (
+        active is not None
+        or any(children.values())
+        or not selected
+        or len(selected) != len(passed) + len(skipped)
+    ):
+        raise RuntimeError("Incomplete GTest identity inventory")
+    # Pinned standard tests spawn 64 concurrent one-case child GTest processes.
+    # Check their summaries as well as every start/completion identity.
+    if (
+        totals != [1] * len(nested_passed) + [len(selected)]
+        or passes != [1] * len(nested_passed) + [len(passed)]
+        or skips != ([len(skipped)] if skipped else [])
+    ):
+        raise RuntimeError("GTest identity inventory differs from reported totals")
+    if len(disabled) > 1:
+        raise RuntimeError("Multiple disabled-test summaries are not supported")
+    return {
+        "selected": sorted(selected),
+        "passed": sorted(passed),
+        "skipped": skipped,
+        "selected_sha256": identity_digest(selected),
+        "passed_sha256": identity_digest(passed),
+        "nested_passed": sorted(nested_passed),
+        "nested_passed_sha256": identity_digest(nested_passed),
+        "disabled_count": disabled[0] if disabled else 0,
+        "disabled_identity_limit": "Prior retained logs report only the disabled count, not disabled identities.",
+    }
+
+
+def compare_gtest_inventory(actual, expected):
+    differences = {}
+    for key in (
+        "selected_sha256",
+        "passed_sha256",
+        "nested_passed_sha256",
+        "disabled_count",
+    ):
+        if actual[key] != expected[key]:
+            differences[key] = {"expected": expected[key], "actual": actual[key]}
+    missing = sorted(set(expected["skipped"]) - set(actual["skipped"]))
+    new = sorted(set(actual["skipped"]) - set(expected["skipped"]))
+    changed = sorted(
+        name
+        for name in actual["skipped"].keys() & expected["skipped"].keys()
+        if actual["skipped"][name] != expected["skipped"][name]
+    )
+    if missing or new or changed:
+        differences["skips"] = {
+            "missing": missing,
+            "new": new,
+            "changed_reasons": changed,
+        }
+    return differences
+
+
 class Validation:
     def __init__(self, args):
         self.args = args
@@ -424,17 +538,67 @@ class Validation:
             raise RuntimeError(
                 f"{tier}: enumerated and executed CTest identities differ"
             )
-        skips = [
+        text = (self.out / (tier + ".log")).read_text(errors="replace")
+        inventory = gtest_inventory(text)
+        self.save(tier + "-gtest-inventory.json", inventory)
+        fixture_path = HERE / "consumer-release-fixture.json"
+        # This is a pinned prior three-TU consumer observation, not evidence
+        # that the untouched original passed these same consumer tests.
+        if (
+            digest(fixture_path)
+            != "4afe4dded9c02a27b0a3a305ba09075cacb4ba35c7cd93af447d5752c6760d9b"
+        ):
+            raise RuntimeError("Consumer identity fixture digest mismatch")
+        fixture = json.loads(fixture_path.read_text())
+        for key in (
+            "source_sha",
+            "rocm_libraries_sha",
+            "variant",
+            "baseline_run_id",
+            "compiler_sha256",
+        ):
+            if str(self.manifest[key]) != str(fixture["provenance"][key]):
+                raise RuntimeError(f"Consumer fixture is not valid for this {key}")
+        gpu_rows = [
             line
-            for line in (self.out / (tier + ".log"))
-            .read_text(errors="replace")
-            .splitlines()
-            if re.search(r"\[\s*SKIPPED\s*\]", line)
+            for line in (self.out / "baseline-numeric.log").read_text().splitlines()
+            if line.startswith("GPU\t")
         ]
-        self.save(tier + "-reported-gtest-skips.json", skips)
-        if code or skips:
+        if gpu_rows != ["GPU\t" + fixture["provenance"]["gpu"]]:
             raise RuntimeError(
-                f"Official {tier}: exit={code}; skipped GTests={len(skips)}"
+                "Consumer fixture GPU features differ from validated baseline"
+            )
+        expected = fixture["tiers"][tier]
+        wrappers = [
+            {
+                "name": test["name"],
+                "command": [Path(test["command"][0]).name, *test["command"][1:]],
+            }
+            for test in tests
+        ]
+        differences = compare_gtest_inventory(inventory, expected)
+        if wrappers != expected["ctest_wrappers"]:
+            differences["ctest_wrappers"] = {
+                "expected": expected["ctest_wrappers"],
+                "actual": wrappers,
+            }
+        report = {
+            "pass": code == 0 and not differences,
+            "exit_code": code,
+            "differences": differences,
+            "fixture_sha256": digest(fixture_path),
+            "fixture_provenance": fixture["provenance"],
+            "selected": len(inventory["selected"]),
+            "passed": len(inventory["passed"]),
+            "skipped": len(inventory["skipped"]),
+            "disabled_count": inventory["disabled_count"],
+            "test_binary_sha256": digest(self.sdk / "bin/miopen_gtest"),
+            "coverage_limit": fixture["coverage_limit"],
+        }
+        self.save(tier + "-fixture-comparison.json", report)
+        if not report["pass"]:
+            raise RuntimeError(
+                f"Official {tier}: exit={code}; exact identity/skip fixture mismatch"
             )
 
     def focused_solver(self):
