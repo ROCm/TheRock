@@ -78,6 +78,40 @@ set(MLIR_LINK_MLIR_DYLIB OFF)
 add_subdirectory(${LLVM_MONOREPO_DIR}/mlir tools/mlir EXCLUDE_FROM_ALL)
 add_subdirectory(${LLVM_MONOREPO_DIR}/flang flang)
 
+# amdflang is the amdllvm argv[0] dispatcher: it re-execs sibling `flang`.
+# Reuse amdllvm from the dependent amd-llvm install (do not build
+# clang/tools/amdllvm here). AMD_LLVM_BINARY_DIR is the find_package(LLVM)
+# install prefix (…/compiler/amd-llvm/stage/lib/llvm).
+set(_amdllvm_src
+  "${AMD_LLVM_BINARY_DIR}/bin/amdllvm${CMAKE_EXECUTABLE_SUFFIX}")
+if(NOT EXISTS "${_amdllvm_src}")
+  message(FATAL_ERROR
+    "amd-llvm-flang: expected amdllvm at ${_amdllvm_src} "
+    "(from RUNTIME_DEPS amd-llvm) to create amdflang")
+endif()
+
+set(_flang_bindir "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+add_custom_target(amdflang-sidecar ALL
+  DEPENDS flang
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "${_amdllvm_src}" "${_flang_bindir}/amdllvm${CMAKE_EXECUTABLE_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink
+    "amdllvm${CMAKE_EXECUTABLE_SUFFIX}"
+    "${_flang_bindir}/amdflang${CMAKE_EXECUTABLE_SUFFIX}"
+  COMMENT "Install amdflang -> amdllvm beside standalone flang"
+  VERBATIM
+)
+# TheRock INSTALL_DESTINATION is lib/llvm, so DESTINATION bin -> lib/llvm/bin.
+install(PROGRAMS "${_amdllvm_src}"
+  DESTINATION bin
+  RENAME "amdllvm${CMAKE_EXECUTABLE_SUFFIX}")
+install(CODE "
+  file(CREATE_LINK
+    \"amdllvm${CMAKE_EXECUTABLE_SUFFIX}\"
+    \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/amdflang${CMAKE_EXECUTABLE_SUFFIX}\"
+    SYMBOLIC)
+")
+
 if(TARGET FortranSupport AND TARGET MLIRBuiltinTypeInterfacesIncGen)
   add_dependencies(FortranSupport MLIRBuiltinTypeInterfacesIncGen)
 endif()

@@ -115,6 +115,14 @@ if(THEROCK_ENABLE_COMPILER)
     )
   endif()
 
+  # amd-llvm's lib/llvm/bin/amdflang is a decoy when Flang lives in
+  # amd-llvm-flang; find_program would hit amd-llvm first. Dist builds keep it.
+  if(THEROCK_ENABLE_FLANG_STANDALONE)
+    set(_therock_clang_enable_amdflang OFF)
+  else()
+    set(_therock_clang_enable_amdflang ${THEROCK_ENABLE_FLANG})
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     # RPATH is set by ROCm.cmake / TheRock.cmake; keep TheRock's post-hook from
@@ -146,6 +154,7 @@ if(THEROCK_ENABLE_COMPILER)
       # Keep examples in sync with the test toggle (cache defaults them OFF).
       -DLLVM_BUILD_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
       -DLLVM_INCLUDE_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
+      -DCLANG_ENABLE_AMDFLANG=${_therock_clang_enable_amdflang}
 
       ${_extra_llvm_cmake_args}
     BUILD_DEPS

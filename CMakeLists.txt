@@ -250,9 +250,9 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
 # Master Flang switch (Linux + COMPILER only). Path when ON:
-#   Default: fortran distribution.
-#   Opt-in standalone: FLANG_STANDALONE=ON and COMPILER_FORTRAN_DISTRIBUTION=OFF
-#   -> amd-llvm-flang. If both are ON, prefer the fortran distribution.
+#   Default: standalone amd-llvm-flang (FLANG_STANDALONE=ON).
+#   Opt-in dist: COMPILER_FORTRAN_DISTRIBUTION=ON and FLANG_STANDALONE=OFF.
+#   If both are ON, prefer standalone (disable the fortran distribution).
 cmake_dependent_option(THEROCK_ENABLE_FLANG
   "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON
   "THEROCK_ENABLE_COMPILER;NOT WIN32" OFF)
@@ -314,43 +314,37 @@ if(THEROCK_ENABLE_COMPILER)
   unset(_therock_amd_llvm_distribution)
 endif()
 
-# Prefer fortran distribution over standalone when both are enabled.
+# Prefer standalone over fortran distribution when both are enabled.
 if(THEROCK_ENABLE_FLANG
    AND THEROCK_ENABLE_FLANG_STANDALONE
    AND THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
   message(STATUS
     "FLANG_STANDALONE and COMPILER_FORTRAN_DISTRIBUTION both ON; "
-    "preferring fortran distribution (disabling standalone amd-llvm-flang)")
-  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
-    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
-  set(THEROCK_ENABLE_FLANG_STANDALONE OFF)
-endif()
-
-
-# If FLANG is on but neither delivery path was chosen (e.g. ENABLE_ALL with
-# standalone feature_default=false and dist left unset), default to the
-# fortran distribution so full-tree / non-stage configures still work.
-if(THEROCK_ENABLE_FLANG
-   AND NOT THEROCK_ENABLE_FLANG_STANDALONE
-   AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
-  message(STATUS
-    "FLANG=ON with no delivery path selected; "
-    "defaulting COMPILER_FORTRAN_DISTRIBUTION=ON")
-  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON CACHE BOOL
-    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)"
-    FORCE)
-  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION ON)
-  # Composition above may have run before dist was enabled; ensure fortran
-  # is in the amd-llvm distribution list.
+    "preferring standalone amd-llvm-flang (disabling fortran distribution)")
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION OFF CACHE BOOL
+    "Stage LLVM 'fortran' distribution for amd-llvm" FORCE)
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION OFF)
   if(THEROCK_ENABLE_COMPILER)
     set(_therock_amd_llvm_distribution "${THEROCK_AMD_LLVM_DISTRIBUTION}")
-    list(APPEND _therock_amd_llvm_distribution fortran)
-    list(REMOVE_DUPLICATES _therock_amd_llvm_distribution)
+    list(REMOVE_ITEM _therock_amd_llvm_distribution fortran)
     set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
       "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
       FORCE)
     unset(_therock_amd_llvm_distribution)
   endif()
+endif()
+
+
+# If FLANG is on but neither delivery path was chosen, default to standalone.
+if(THEROCK_ENABLE_FLANG
+   AND NOT THEROCK_ENABLE_FLANG_STANDALONE
+   AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "FLANG=ON with no delivery path selected; "
+    "defaulting FLANG_STANDALONE=ON")
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON)
 endif()
 
 message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
