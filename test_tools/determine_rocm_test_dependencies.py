@@ -49,7 +49,7 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "build_tools" / "github_actions")
 )
-from github_actions_api import gha_set_output
+from github_actions_api import gha_get_pr_labels, gha_set_output
 
 # Level -> BFS walk depth over `consumers` edges:
 #   depth 0    = self only
@@ -84,8 +84,14 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
     "shared/kpack": ["rocm-kpack"],
     "shared/machine-readable-isa": ["rocjitsu"],
-    # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
-    "shared/primbench": ["rocprim", "rocrand"],
+    # rocPRIM is built inside the unified hipCCL superbuild, so walk from the
+    # hipccl graph node; the hipccl selector alias maps it to the prim test jobs.
+    "shared/primbench": ["hipccl", "rocrand"],
+    # The standalone projects/{rocprim,hipcub,rocthrust} trees still exist but
+    # are built via the unified hipCCL superbuild, so edits there select hipccl.
+    "projects/rocprim": ["hipccl"],
+    "projects/hipcub": ["hipccl"],
+    "projects/rocthrust": ["hipccl"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -128,6 +134,7 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
     # The common GEMM suite is its own CI job. Aliasing here, rather than a
@@ -135,6 +142,10 @@ _CI_TEST_SELECTOR_ALIASES = {
     # tensilelite key lands in the result, not only when tensilelite itself
     # is the changed project.
     "tensilelite": ["tensilelite", "tensilelite-common"],
+    # rocPRIM, hipCUB and rocThrust build as one subproject (hipccl) but still
+    # run as three separate test jobs against the shared prim artifact.
+    "hipccl": ["rocprim", "hipcub", "rocthrust"],
+    "hipccl_tests": ["rocprim", "hipcub", "rocthrust"],
 }
 
 
@@ -668,7 +679,18 @@ def main():
             print("*")
         return
 
-    result = get_subprojects_to_test(changed, therock_dir, level=args.level)
+    # ci:no-downstream-test PR label overrides walk level to 5 (self only),
+    # so only the changed projects are tested without walking their downstream
+    # consumers.  The label takes precedence over any --level CLI arg.
+    level = args.level
+    if "ci:no-downstream-test" in gha_get_pr_labels():
+        level = 5
+        print(
+            "ci:no-downstream-test label detected, using level 5 (self only)",
+            file=sys.stderr,
+        )
+
+    result = get_subprojects_to_test(changed, therock_dir, level=level)
     ci_test_selectors = _to_ci_test_selectors(result)
     projects_to_test = ",".join(sorted(ci_test_selectors))
 

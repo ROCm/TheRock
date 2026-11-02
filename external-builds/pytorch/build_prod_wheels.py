@@ -1274,31 +1274,6 @@ def do_build_pytorch(
     run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
 
     build_command = [sys.executable, "-m", "build", "--wheel", "--no-isolation"]
-    pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
-    if "scikit_build_core.build" in pytorch_pyproject_text:
-        # scikit-build-core applies Git ignore rules when constructing the wheel,
-        # dropping generated, gitignored runtime files. This workaround can be
-        # removed once these fixes are merged and commonly available:
-        # https://github.com/pytorch/pytorch/pull/191625
-        # https://github.com/pytorch/pytorch/pull/191629
-        build_command.append(
-            "-Cwheel.force-include.torch/_rocm_init.py=torch/_rocm_init.py"
-        )
-        if is_windows:
-            build_command.append(
-                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
-                "torch/lib/libomp140.x86_64.dll"
-            )
-            if use_flash_attention:
-                # TODO: similar upstream fix for these and then drop here
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
-                    "torch/lib/aotriton_v2.dll"
-                )
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/liblzma.dll="
-                    "torch/lib/liblzma.dll"
-                )
 
     if is_windows:
         # PyPI `ninja` before 1.13.2 is unusable on Windows: 1.11.1 loops without

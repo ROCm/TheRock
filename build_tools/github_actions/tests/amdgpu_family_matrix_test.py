@@ -4,6 +4,7 @@
 
 """Tests for data invariants in amdgpu_family_matrix.py."""
 
+import json
 import os
 import sys
 import unittest
@@ -101,6 +102,29 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                 variants = entry[platform].get("build_variants", [])
                 if not variants:
                     self.fail(f"{target_name}/{platform} has empty build_variants")
+
+    def test_build_variants_are_defined_for_platform(self):
+        """Every listed build variant must have an all_build_variants entry."""
+        for target_name, entry in ALL_FAMILIES.items():
+            for platform in ("linux", "windows"):
+                if platform not in entry:
+                    continue
+                defined = amdgpu_family_matrix.all_build_variants.get(platform, {})
+                for variant in entry[platform]["build_variants"]:
+                    self.assertIn(
+                        variant, defined, f"{target_name}/{platform}: {variant}"
+                    )
+
+    def test_build_variant_presets_exist(self):
+        """Every build variant's CMake preset must exist in CMakePresets.json."""
+        presets_path = Path(__file__).parents[3] / "CMakePresets.json"
+        presets = json.loads(presets_path.read_text())
+        preset_names = {p["name"] for p in presets["configurePresets"]}
+        for platform, variants in amdgpu_family_matrix.all_build_variants.items():
+            for name, config in variants.items():
+                preset = config["build_variant_cmake_preset"]
+                if preset:
+                    self.assertIn(preset, preset_names, f"{platform}/{name}")
 
     def test_builds_on_trigger_non_empty(self):
         """Every platform entry must list at least one build trigger."""

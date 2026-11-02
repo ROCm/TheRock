@@ -57,6 +57,11 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       kpack_split:
         description: "'true' if this is a kpack-split flat build."
         type: string
@@ -106,11 +111,18 @@ on:
           - sccache
           - ccache
         default: sccache
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       build_runs_on:
         description: >-
           Build runner label. On workflow_dispatch, default to the self-hosted
           ROCm Linux pool so runs land on a runner with sccache/mirror access;
-          otherwise the runs-on expression falls back to 'ubuntu-24.04', which
+          otherwise the runs-on expression falls back to 'ubuntu-26.04', which
           cannot complete a full PyTorch build.
         type: string
         default: "aws-linux-scale-rocm-prod"
@@ -123,15 +135,16 @@ run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, 
 jobs:
   build_pytorch_wheels:
     name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
     env:
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
       PYTHON_VERSION: ${{ inputs.python_version }}
@@ -216,7 +229,7 @@ jobs:
 
       - name: Configure AWS Credentials for sccache
         if: ${{ steps.cache.outputs.cache_type == 'sccache' }}
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::324352301041:role/therock-ci
@@ -235,8 +248,16 @@ jobs:
         if: ${{ inputs.amdgpu_families != '' }}
         id: expand
         run: |
+          # Excluded implicit targets remain available when requested directly.
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform linux \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 

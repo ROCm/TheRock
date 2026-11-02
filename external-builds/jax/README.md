@@ -53,6 +53,7 @@ Support for JAX is provided via stable release branches from
 
 | JAX version | Linux                                                                                                   | Windows          |
 | ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.12.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.12.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.12.0) | ❌ Not supported |
 | 0.11.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.2) | ❌ Not supported |
 | 0.11.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.1) | ❌ Not supported |
 | 0.11.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.0) | ❌ Not supported |
@@ -75,7 +76,7 @@ This repository builds the following ROCm-enabled JAX artifacts:
 
 > [!NOTE]
 > jaxlib is **not built** for supported JAX versions (0.10.2+); it is installed
-> from upstream PyPI (e.g. `pip install jaxlib==0.11.2`). Only
+> from upstream PyPI (e.g. `pip install jaxlib==0.12.0`). Only
 > **`jax_rocm<major>_pjrt`** and **`jax_rocm<major>_plugin`** are built.
 
 ### How building with TheRock differs from upstream
@@ -102,13 +103,13 @@ from the TheRock multi-arch Python package index (the manylinux flow).
    git clone https://github.com/ROCm/jax.git
 
    pushd jax
-   git checkout rocm-jaxlib-v0.11.2
+   git checkout rocm-jaxlib-v0.12.0
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, or `0.11.2`
+   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, `0.11.2`, or `0.12.0`
    - **Python version**: e.g. `3.12`
    - **Package index**: the TheRock multi-arch Python package index.
 

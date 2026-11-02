@@ -22,7 +22,7 @@ concurrency:
 jobs:
   security:
     name: Security scan
-    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@3a1bd0da89771757df435817daae14d1635b7fdb # v1.0.1
+    uses: ROCm/rocm-security-gh/.github/workflows/security-baseline.yml@86901f5856e12c7211bc04d012ce80ee9a02b4b5 # v1.0.5
     with:
       report_formats: human
       bandit_config_path: build_tools/scan_tools/bandit.yml
@@ -36,7 +36,7 @@ jobs:
     if: always()
     needs:
       - security
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
