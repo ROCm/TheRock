@@ -543,10 +543,7 @@ test_matrix = {
     "rocgdb-gpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu",
-        # GPU debug tests share device state; parallel inferiors cause cascading
-        # failures and leave dozens of debug processes behind on gfx94X runners.
-        "timeout_minutes": 60,
-        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --toolchain llvm --tests gdb.rocm",
+        "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --toolchain llvm --tests gdb.rocm",
         "exclude_family": {
             "linux": [
                 # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
