@@ -4,23 +4,29 @@
 
 """Configure a throwaway CMake project against an installed ROCm prefix.
 
-Phase 1 of https://github.com/ROCm/TheRock/issues/9056. Call this after the
+Follow-up to https://github.com/ROCm/TheRock/issues/9056. Call this after the
 native DEB/RPM install in ``test_native_linux_packages_install.yml``. It does
 not install packages and does not compile or run a HIP program.
 
-The generated project calls ``find_package(hip CONFIG REQUIRED)`` and
-``find_package(hipblaslt CONFIG REQUIRED)``. hipBLASLt's installed config
-calls ``find_dependency(origami)`` and searches only beside its own CMake
-directory, so a missing origami ``dev`` component fails here.
+The generated project calls ``find_package(... CONFIG REQUIRED)`` for every
+CMake package config installed under ``<prefix>/lib/cmake``, except
+``SKIP_PACKAGES``. Those names are installed files that are not standalone
+downstream packages. ``hip`` and ``hipblaslt`` are required, so a prefix
+that does not ship those configs fails before configure. hipBLASLt's
+installed config calls ``find_dependency(origami)`` and searches only
+beside its own CMake directory, so a missing origami ``dev`` component
+fails here.
 
 Exit codes:
-    0: both ``find_package`` calls configured.
-    1: the prefix is missing, ``cmake`` is missing, the temporary project
-       would be written inside the prefix, or configure returned non-zero.
+    0: every discovered ``find_package`` call configured.
+    1: the prefix is missing, ``lib/cmake`` has no package configs, ``hip``
+       or ``hipblaslt`` is not among them, ``cmake`` is missing, the
+       temporary project would be written inside the prefix, or configure
+       returned non-zero.
     2: ``argparse`` usage error (missing prefix argument).
 
-This module has no skip path. The workflow runs the step when
-``install_prefix`` is set. That input defaults to ``/opt/rocm/core``.
+The workflow runs the step when ``install_prefix`` is set. That input
+defaults to ``/opt/rocm/core``. ``SKIP_PACKAGES`` is the only name filter.
 Unit tests live in
 ``build_tools/packaging/linux/tests/downstream_cmake_smoke_test.py`` and run
 from ``.github/workflows/unit_tests.yml``.
@@ -38,7 +44,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,8 +55,26 @@ CONFIGURE_TIMEOUT_SEC = 120
 # find_package(hip CONFIG) still requires HIP_PLATFORM.
 # https://github.com/ROCm/TheRock/issues/68
 HIP_PLATFORM = "amd"
-# hipblaslt's config finds origami. hipblas and rocblas are not required here.
-SMOKE_PACKAGES = ("hip", "hipblaslt")
+# Must be present before configure. hipblaslt's config finds origami beside
+# its own CMake directory, which is the #8643 failure this test still covers.
+REQUIRED_PACKAGES = ("hip", "hipblaslt")
+# Installed under lib/cmake, but not standalone downstream find_package targets.
+# A direct REQUIRED call fails configure. The public package that owns each
+# name is still discovered and configured.
+#   hip-lang: hip-config loads it. The direct call requires libclang_rt.builtins.
+#   hipblaslt-package: support file. No hipblaslt-packageConfig.cmake is installed.
+#   hiprand-fortran, rocrand-fortran: Fortran bindings. No public Config.cmake.
+#   rocprofiler-sdk-tests: expects unit-test files that the native prefix omits.
+SKIP_PACKAGES = frozenset(
+    {
+        "hip-lang",
+        "hipblaslt-package",
+        "hiprand-fortran",
+        "rocprofiler-sdk-tests",
+        "rocrand-fortran",
+    }
+)
+_CONFIG_SUFFIXES = ("-config.cmake", "Config.cmake")
 
 _CLI_EXAMPLES_EPILOG = """
 examples:
@@ -94,14 +118,62 @@ class ConfigureResult:
 ConfigureRunner = Callable[[list[str]], ConfigureResult]
 
 
-def render_cmake_lists() -> str:
+def cmake_package_name(config_path: Path) -> str | None:
+    """Return the ``find_package`` name for one installed config file.
+
+    ``hip-config.cmake`` is ``hip``. ``rocWMMAConfig.cmake`` is ``rocWMMA``.
+    Version files such as ``hip-config-version.cmake`` are not packages.
+
+    Args:
+        config_path: File under ``lib/cmake``.
+
+    Returns:
+        Package name, or None when the file is not a package config.
+    """
+    filename = config_path.name
+    for suffix in _CONFIG_SUFFIXES:
+        if filename.endswith(suffix) and len(filename) > len(suffix):
+            return filename[: -len(suffix)]
+    return None
+
+
+def discover_cmake_packages(prefix: Path) -> list[str]:
+    """Return installed CMake package names under ``prefix/lib/cmake``.
+
+    The names are sorted so the generated project is stable. Configs outside
+    ``lib/cmake`` are ignored. Names in ``SKIP_PACKAGES`` are omitted.
+
+    Args:
+        prefix: Resolved ROCm install prefix.
+
+    Returns:
+        Package names suitable for ``find_package(... CONFIG REQUIRED)``.
+    """
+    cmake_root = prefix / "lib" / "cmake"
+    if not cmake_root.is_dir():
+        return []
+    found: set[str] = set()
+    for config_path in cmake_root.rglob("*.cmake"):
+        if not config_path.is_file():
+            continue
+        package_name = cmake_package_name(config_path)
+        if package_name and package_name not in SKIP_PACKAGES:
+            found.add(package_name)
+    return sorted(found)
+
+
+def render_cmake_lists(package_names: Sequence[str]) -> str:
     """Return the configure-only consumer project.
 
     ``LANGUAGES CXX`` is required. ``hip-config`` calls
     ``find_dependency(Threads)``, and CMake's ``FindThreads`` errors when
     neither C nor CXX is enabled. The step still does not add a HIP target
-    or compile a program. ``message(STATUS)`` prints ``hip_VERSION`` and
-    ``hipblaslt_VERSION`` on cmake stdout after each ``find_package``.
+    or compile a program. ``message(STATUS)`` prints each package version
+    on cmake stdout after ``find_package``.
+
+    Args:
+        package_names: Installed package names, including ``hip`` and
+            ``hipblaslt``.
 
     Returns:
         ``CMakeLists.txt`` text.
@@ -111,7 +183,7 @@ def render_cmake_lists() -> str:
         "project(install_smoke_test LANGUAGES CXX)",
         "",
     ]
-    for package_name in SMOKE_PACKAGES:
+    for package_name in package_names:
         lines.append(f"find_package({package_name} CONFIG REQUIRED)")
         lines.append(
             f'message(STATUS "{package_name}_VERSION=${{{package_name}_VERSION}}")'
@@ -246,10 +318,10 @@ def _print_failure(
         print(result.stderr, file=sys.stderr)
 
 
-def _print_versions(stdout: str) -> None:
-    """Print ``hip_VERSION`` and ``hipblaslt_VERSION`` status lines from stdout."""
+def _print_versions(stdout: str, package_names: Sequence[str]) -> None:
+    """Print each discovered ``<package>_VERSION`` status line from stdout."""
     for line in stdout.splitlines():
-        if any(f"{package_name}_VERSION=" in line for package_name in SMOKE_PACKAGES):
+        if any(f"{package_name}_VERSION=" in line for package_name in package_names):
             print(line)
 
 
@@ -272,8 +344,14 @@ def _project_root(work_dir: Path | None) -> Iterator[Path]:
     yield project_root
 
 
-def _write_project(project_root: Path) -> tuple[Path, Path]:
+def _write_project(
+    project_root: Path, package_names: Sequence[str]
+) -> tuple[Path, Path]:
     """Write ``src/CMakeLists.txt`` and return the source and build directories.
+
+    Args:
+        project_root: Directory that will contain ``src`` and ``build``.
+        package_names: Installed packages emitted as ``find_package`` calls.
 
     Raises:
         RuntimeError: The lists file is missing or empty after the write.
@@ -283,7 +361,7 @@ def _write_project(project_root: Path) -> tuple[Path, Path]:
     source_dir.mkdir(parents=True, exist_ok=True)
     build_dir.mkdir(parents=True, exist_ok=True)
     cmake_lists = source_dir / "CMakeLists.txt"
-    cmake_lists.write_text(render_cmake_lists(), encoding="utf-8")
+    cmake_lists.write_text(render_cmake_lists(package_names), encoding="utf-8")
     if not cmake_lists.is_file() or cmake_lists.stat().st_size == 0:
         raise RuntimeError(f"Failed to write smoke project: {cmake_lists}")
     return source_dir, build_dir
@@ -311,13 +389,30 @@ def run_smoke(
             ``_run_cmake`` runs.
 
     Returns:
-        0 on success, 1 on a missing prefix, a missing ``cmake``, a missing
-        requested compiler, a project directory inside the prefix, or a
-        non-zero configure.
+        0 on success, 1 on a missing prefix, no installed CMake configs, a
+        missing ``hip`` or ``hipblaslt`` config, a missing ``cmake``, a
+        missing requested compiler, a project directory inside the prefix,
+        or a non-zero configure.
     """
     prefix = Path(install_prefix).resolve()
     if not prefix.is_dir():
         print(f"[FAIL] Install prefix is not a directory: {prefix}", file=sys.stderr)
+        return 1
+
+    package_names = discover_cmake_packages(prefix)
+    missing = [name for name in REQUIRED_PACKAGES if name not in package_names]
+    if not package_names or missing:
+        if not package_names:
+            print(
+                f"[FAIL] No CMake package configs under {prefix / 'lib' / 'cmake'}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "[FAIL] Installed prefix is missing CMake packages: "
+                + ", ".join(missing),
+                file=sys.stderr,
+            )
         return 1
 
     resolved_cmake = _resolve_cmake(cmake_executable)
@@ -346,7 +441,7 @@ def run_smoke(
                 file=sys.stderr,
             )
             return 1
-        source_dir, build_dir = _write_project(project_root)
+        source_dir, build_dir = _write_project(project_root, package_names)
         command = build_configure_command(
             cmake_executable=resolved_cmake,
             source_dir=source_dir,
@@ -360,7 +455,7 @@ def run_smoke(
             _print_failure(command, prefix, result)
             return 1
         print(f"[PASS] Downstream find_package smoke test passed for {prefix}")
-        _print_versions(result.stdout)
+        _print_versions(result.stdout, package_names)
         return 0
 
 
@@ -386,7 +481,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Configure a downstream find_package() smoke project against an "
-            "installed ROCm prefix. Run this after packages are installed."
+            "installed ROCm prefix. Every CMake package under lib/cmake is "
+            "configured. hip and hipblaslt are required."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
