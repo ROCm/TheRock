@@ -1,0 +1,67 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Refresh mirrored Python dependencies
+
+on:
+  schedule:
+    - cron: "0 6 1,15 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report S3 actions without writing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh mirrored Python dependencies | dev
+    if: ${{ github.repository == 'ROCm/TheRock' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BUCKET: therock-repo-amd-dev-core
+      DRY_RUN: ${{ inputs.dry_run || false }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python requirements
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::324352301041:role/therock-repo-dev-core
+
+      - name: Mirror and refresh dependencies
+        run: |
+          args=()
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python build_tools/packaging/python/mirror_python_dependencies.py mirror \
+            --bucket "${BUCKET}" \
+            --refresh-existing \
+            --source-revision "${GITHUB_SHA}" \
+            --summary-file "${GITHUB_STEP_SUMMARY}" \
+            "${args[@]}"
