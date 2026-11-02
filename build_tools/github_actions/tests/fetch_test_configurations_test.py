@@ -432,6 +432,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertIn("inc-noexc", self._selected_names())
 
+    def test_corefile_included_on_gfx942(self):
+        # Default AMDGPU_FAMILIES is gfx94X-dcgpu, whose gfx target is gfx942.
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        self.assertIn("rocgdb-corefile", self._selected_names())
+
+    def test_corefile_excluded_on_other_family(self):
+        os.environ["PROJECTS_TO_TEST"] = "rocgdb-corefile"
+        os.environ["AMDGPU_FAMILIES"] = "gfx1150"
+        self.assertNotIn("rocgdb-corefile", self._selected_names())
+
     # -----------------------
     # test_types tier gating
     # -----------------------
@@ -1206,8 +1216,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # TEST_LABEL_GROUPS expansion
     # -----------------------
 
-    def test_all_rocgdb_label_selects_cpu_and_gpu_jobs(self):
-        """test:rocgdb should expand to rocgdb-cpu and rocgdb-gpu."""
+    def test_all_rocgdb_label_selects_cpu_gpu_and_corefile_jobs(self):
+        """test:rocgdb should expand to rocgdb-cpu, rocgdb-gpu, and rocgdb-corefile."""
         with patch.dict(os.environ, {"TEST_LABELS": json.dumps(["test:rocgdb"])}):
             fetch_test_configurations.run()
             components = self._get_components()
@@ -1215,6 +1225,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
 
     def test_all_rocgdb_label_excludes_unrelated_jobs(self):
         """test:rocgdb should not include jobs outside the rocgdb group."""
@@ -1238,6 +1249,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertIn("rocgdb-cpu", names)
         self.assertIn("rocgdb-gpu", names)
+        self.assertIn("rocgdb-corefile", names)
         self.assertIn("rocblas", names)
 
     def test_unknown_group_label_is_treated_as_literal(self):
@@ -1261,6 +1273,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         "test:rocgdb",
                         "test:rocgdb-cpu",
                         "test:rocgdb-gpu",
+                        "test:rocgdb-corefile",
                     ]
                 )
             },
@@ -1271,6 +1284,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job_names = [job["job_name"] for job in components]
         self.assertEqual(job_names.count("rocgdb-cpu"), 1)
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
+        self.assertEqual(job_names.count("rocgdb-corefile"), 1)
 
     # -----------------------
     # mesa-fork labels

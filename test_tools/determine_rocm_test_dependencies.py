@@ -135,7 +135,7 @@ _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "miopen": ["miopen", "miopen-dbsync"],
-    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
+    "rocgdb": ["rocgdb-cpu", "rocgdb-gpu", "rocgdb-corefile"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
     # The common GEMM suite is its own CI job. Aliasing here, rather than a
     # test_include on [component.tensilelite], selects it wherever the
