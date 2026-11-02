@@ -1070,6 +1070,9 @@ test_matrix = {
         # External compilation needs dev artifacts (headers, CMake exports and
         # compiler). Selective component fetching currently omits those.
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocwmma_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {"linux": 1, "windows": 1},

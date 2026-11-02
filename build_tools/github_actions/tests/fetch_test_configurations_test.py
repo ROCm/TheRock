@@ -110,6 +110,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     self.assertEqual(install["total_shards"], 1)
                     self.assertTrue(install["linux_cpu_runner"])
                     self.assertNotIn("fetch_artifact_args", install)
+                    # Consumer builds need Ninja even on runners that do not
+                    # preinstall it. Check both platforms' generated jobs.
+                    self.assertIn(
+                        "build_tools/github_actions/test_executable_scripts/requirements-test-ninja.txt",
+                        install.get("additional_requirements_files", []),
+                    )
                     self.assertEqual("rocwmma" in jobs, label == "test:rocwmma")
 
     def test_rocwmma_install_requires_test_artifacts(self):
