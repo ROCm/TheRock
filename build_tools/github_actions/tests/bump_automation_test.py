@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import argparse
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +29,8 @@ from bump_automation import (
     GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
     handle_push,
+    handle_schedule,
+    parse_target_branch,
     latest_commit,
     LIBRARIES_BASELINE_GATE_JOB_NAME,
     RUN_JOBS_PAGE_SIZE,
@@ -725,10 +728,11 @@ class CloseStalePrsTest(unittest.TestCase):
                 "bump-rocm-systems-xyz5678",
             )
         ]
-        with patch("bump_automation.gh_api_paginate", return_value=prs):
+        with patch("bump_automation.gh_api_paginate", return_value=prs) as list_prs:
             with patch("bump_automation.gh_api") as mock_api:
                 close_stale_prs("rocm-systems", "abc1234567890", "token")
 
+        self.assertIn("&base=main&", list_prs.call_args.args[1])
         patch_calls = [
             c for c in mock_api.call_args_list if c.kwargs.get("method") == "PATCH"
         ]
@@ -1442,20 +1446,25 @@ class CreateTheRockBumpTest(unittest.TestCase):
     def test_skips_when_pr_already_open(self):
         """create_therock_bump must bail out without cloning when an open PR
         already targets the exact bump branch for the latest commit."""
-        with patch("bump_automation.latest_commit", return_value="abc1234567890"):
-            with patch(
-                "bump_automation.gh_api",
-                return_value=[{"number": 99}],
-            ) as mock_api:
-                with patch("bump_automation.tempfile.TemporaryDirectory") as mock_tmp:
-                    create_therock_bump("rocm-systems", "token")
+        for submodule in ("rocm-systems", "rocm-libraries"):
+            with self.subTest(submodule=submodule):
+                with patch(
+                    "bump_automation.latest_commit", return_value="abc1234567890"
+                ) as latest, patch(
+                    "bump_automation.gh_api", return_value=[{"number": 99}]
+                ) as mock_api, patch(
+                    "bump_automation.tempfile.TemporaryDirectory"
+                ) as mock_tmp:
+                    create_therock_bump(submodule, "token")
 
-        mock_tmp.assert_not_called()
-        # Only the open-PR check should have hit the API.
-        self.assertEqual(mock_api.call_count, 1)
-        endpoint = mock_api.call_args.args[1]
-        self.assertIn("pulls?state=open", endpoint)
-        self.assertIn("bump-rocm-systems-abc1234", endpoint)
+                latest.assert_called_once_with(f"ROCm/{submodule}", "token", None)
+                mock_tmp.assert_not_called()
+                # Only the open-PR check should have hit the API.
+                self.assertEqual(mock_api.call_count, 1)
+                endpoint = mock_api.call_args.args[1]
+                self.assertIn("pulls?state=open", endpoint)
+                self.assertIn(f"bump-{submodule}-abc1234", endpoint)
+                self.assertIn("&base=main", endpoint)
 
     def test_skips_when_submodule_already_at_latest(self):
         """create_therock_bump must bail out without cloning when the submodule
@@ -1536,22 +1545,9 @@ class HandleScheduleTest(unittest.TestCase):
 
             handle_schedule(tokens, "rocgdb")
 
-        mock_bump.assert_called_once_with("debug-tools/rocgdb/source", "rocgdb-token")
-
-    def test_rocgdb_does_not_invoke_other_submodules(self):
-        tokens = {
-            "systems": "systems-token",
-            "libraries": "libraries-token",
-            "rocgdb": "rocgdb-token",
-        }
-        with patch("bump_automation.create_therock_bump") as mock_bump:
-            from bump_automation import handle_schedule
-
-            handle_schedule(tokens, "rocgdb")
-
-        called_submodules = [c.args[0] for c in mock_bump.call_args_list]
-        self.assertNotIn("rocm-systems", called_submodules)
-        self.assertNotIn("rocm-libraries", called_submodules)
+        mock_bump.assert_called_once_with(
+            "debug-tools/rocgdb/source", "rocgdb-token", "main"
+        )
 
     def test_mesa_fork_maps_to_correct_submodule_and_token(self):
         """handle_schedule('mesa-fork') must call create_therock_bump with
@@ -1568,25 +1564,8 @@ class HandleScheduleTest(unittest.TestCase):
             handle_schedule(tokens, "mesa-fork")
 
         mock_bump.assert_called_once_with(
-            "third-party/sysdeps/common/mesa-fork", "mesa-fork-token"
+            "third-party/sysdeps/common/mesa-fork", "mesa-fork-token", "main"
         )
-
-    def test_mesa_fork_does_not_invoke_other_submodules(self):
-        tokens = {
-            "systems": "systems-token",
-            "libraries": "libraries-token",
-            "rocgdb": "rocgdb-token",
-            "mesa-fork": "mesa-fork-token",
-        }
-        with patch("bump_automation.create_therock_bump") as mock_bump:
-            from bump_automation import handle_schedule
-
-            handle_schedule(tokens, "mesa-fork")
-
-        called_submodules = [c.args[0] for c in mock_bump.call_args_list]
-        self.assertNotIn("rocm-systems", called_submodules)
-        self.assertNotIn("rocm-libraries", called_submodules)
-        self.assertNotIn("debug-tools/rocgdb/source", called_submodules)
 
 
 class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
@@ -1621,6 +1600,87 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
         mock_latest.assert_called_once_with(
             "ROCm/rocgdb", "token", "amd-staging-rocgdb-18"
         )
+
+
+class ReleaseBumpTest(unittest.TestCase):
+    def test_release_bump_uses_matching_source_and_pr_base(self):
+        target = "release/therock-10.2"
+
+        def git_output(cmd: list[str]) -> str:
+            if cmd[1] == "clone":
+                Path(cmd[-1]).mkdir()
+            if cmd[1] == "ls-tree":
+                return f"160000 commit {'b' * 40}\trocm-libraries"
+            return ""
+
+        with patch(
+            "bump_automation.gh_api",
+            side_effect=[[{"sha": "a" * 40}], [], {"number": 12}, {}],
+        ) as api, patch("bump_automation.run", side_effect=git_output) as run:
+            create_therock_bump("rocm-libraries", "token", target)
+
+        self.assertEqual(
+            api.call_args_list[0].args,
+            (
+                "token",
+                "repos/ROCm/rocm-libraries/commits?sha=release%2Ftherock-10.2",
+            ),
+        )
+        clone = next(c.args[0] for c in run.call_args_list if "clone" in c.args[0])
+        self.assertEqual(clone[clone.index("--branch") + 1], target)
+        pr_data = api.call_args_list[2].kwargs["data"]
+        self.assertEqual(pr_data["base"], target)
+        self.assertEqual(
+            pr_data["head"], "bump-rocm-libraries-release/therock-10.2-aaaaaaa"
+        )
+        endpoint = api.call_args_list[1].args[1]
+        self.assertIn("&base=release%2Ftherock-10.2", endpoint)
+        self.assertIn("bump-rocm-libraries-release%2Ftherock-10.2-aaaaaaa", endpoint)
+        run.assert_any_call(["git", "-C", "rocm-libraries", "checkout", "a" * 40])
+
+    def test_release_submodule_selection(self):
+        target = "release/bkc/therock-10.2"
+        systems = ("rocm-systems", "s", target)
+        libraries = ("rocm-libraries", "l", target)
+        for selection, expected in (
+            ("all", [systems, libraries]),
+            ("rocm-systems", [systems]),
+            ("rocm-libraries", [libraries]),
+            ("rocgdb", [("debug-tools/rocgdb/source", "r", target)]),
+            ("mesa-fork", [("third-party/sysdeps/common/mesa-fork", "m", target)]),
+        ):
+            with self.subTest(selection=selection):
+                with patch("bump_automation.create_therock_bump") as bump:
+                    handle_schedule(
+                        {
+                            "systems": "s",
+                            "libraries": "l",
+                            "rocgdb": "r",
+                            "mesa-fork": "m",
+                        },
+                        selection,
+                        target,
+                    )
+                self.assertEqual([c.args for c in bump.call_args_list], expected)
+
+
+class TargetBranchTest(unittest.TestCase):
+    def test_valid_targets(self):
+        for target in ("main", "release/therock-10.2", "release/bkc/therock-10.2"):
+            with self.subTest(target=target):
+                self.assertEqual(parse_target_branch(target), target)
+
+    def test_invalid_targets(self):
+        for target in (
+            "release/therock-",
+            "release/bkc/10.2",
+            "release/bkc/therock-",
+            "release/bkc/therock-foo..bar",
+        ):
+            with self.subTest(target=target), self.assertRaises(
+                argparse.ArgumentTypeError
+            ):
+                parse_target_branch(target)
 
 
 if __name__ == "__main__":
