@@ -20,9 +20,6 @@ skip_tests = {
         "transformers": [
             # Produces non-finite fp16 output on gfx1200.
             "test_multiheadattention_fastpath_fp16_head_dim_alignment_cuda",
-            # Multiple parameterizations produce gradient mismatches on gfx120x.
-            "test_mem_efficient_attention_attn_mask_vs_math_ref_grads",
-            "test_mem_efficient_attention_vs_math_ref_grads",
         ],
     },
 }
