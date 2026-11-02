@@ -25,7 +25,7 @@ from configure_asan_env import (
     resolve_asan_env,
 )
 
-# ASan is not supported on Windows. The skip marks that platform boundary.
+# Currently ASan is not supported on Windows. The skip marks that platform boundary.
 # The stubs happen to be POSIX shell scripts, but Windows support would mean
 # rewriting these tests, not just dropping the skip.
 requires_posix = unittest.skipIf(
