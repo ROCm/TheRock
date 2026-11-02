@@ -128,6 +128,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up .NET
+        # Hosted Windows images can omit dotnet; WiX v4 is a .NET global tool.
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '8.x'
+
       - name: Install Python requirements
         run: pip install -r requirements.txt
 
