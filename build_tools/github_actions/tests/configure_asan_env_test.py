@@ -25,10 +25,11 @@ from configure_asan_env import (
     resolve_asan_env,
 )
 
-# The runtime is located by executing a clang, which the tests stub with a
-# shell script. Windows has no equivalent shebang mechanism.
+# ASan is not supported on Windows. The skip marks that platform boundary.
+# The stubs happen to be POSIX shell scripts, but Windows support would mean
+# rewriting these tests, not just dropping the skip.
 requires_posix = unittest.skipIf(
-    os.name != "posix", "stub executables require a POSIX shell"
+    os.name != "posix", "ASan is not supported on Windows"
 )
 
 ARCH_RUNTIME = f"libclang_rt.asan-{platform.machine()}.so"
