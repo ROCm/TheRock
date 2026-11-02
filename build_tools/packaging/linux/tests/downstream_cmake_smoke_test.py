@@ -42,6 +42,19 @@ class DownstreamCmakeSmokeTest(unittest.TestCase):
         self.prefix = self.root / "opt" / "rocm" / "core-test"
         self.prefix.mkdir(parents=True)
         self.work_dir = self.root / "work"
+        self._plant_config("hip")
+        self._plant_config("hipblaslt")
+
+    def _plant_config(self, package_name: str, *, version_file: bool = False) -> None:
+        package_dir = self.prefix / "lib" / "cmake" / package_name
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / f"{package_name}-config.cmake").write_text(
+            "# test fixture\n", encoding="utf-8"
+        )
+        if version_file:
+            (package_dir / f"{package_name}-config-version.cmake").write_text(
+                "# test fixture\n", encoding="utf-8"
+            )
 
     def tearDown(self) -> None:
         self._temporary.cleanup()
@@ -56,10 +69,92 @@ class DownstreamCmakeSmokeTest(unittest.TestCase):
 
     def test_generated_project_finds_hip_and_hipblaslt(self) -> None:
         """The generated project enables CXX and requires hip and hipblaslt."""
-        contents = smoke.render_cmake_lists()
+        contents = smoke.render_cmake_lists(("hip", "hipblaslt"))
         self.assertIn("project(install_smoke_test LANGUAGES CXX)", contents)
         self.assertIn("find_package(hip CONFIG REQUIRED)", contents)
         self.assertIn("find_package(hipblaslt CONFIG REQUIRED)", contents)
+
+    def test_discovers_every_config_under_lib_cmake(self) -> None:
+        """Version files and configs outside lib/cmake are not packages."""
+        self._plant_config("rocblas", version_file=True)
+        wmma_dir = self.prefix / "lib" / "cmake" / "rocWMMA"
+        wmma_dir.mkdir(parents=True)
+        (wmma_dir / "rocWMMAConfig.cmake").write_text(
+            "# test fixture\n", encoding="utf-8"
+        )
+        share_dir = self.prefix / "share" / "cmake" / "ignored"
+        share_dir.mkdir(parents=True)
+        (share_dir / "ignored-config.cmake").write_text(
+            "# test fixture\n", encoding="utf-8"
+        )
+
+        self.assertEqual(
+            smoke.discover_cmake_packages(self.prefix),
+            ["hip", "hipblaslt", "rocWMMA", "rocblas"],
+        )
+        contents = smoke.render_cmake_lists(smoke.discover_cmake_packages(self.prefix))
+        self.assertIn("find_package(rocblas CONFIG REQUIRED)", contents)
+        self.assertIn("find_package(rocWMMA CONFIG REQUIRED)", contents)
+        self.assertNotIn("find_package(ignored CONFIG REQUIRED)", contents)
+
+    def test_skips_non_downstream_configs(self) -> None:
+        """Support, Fortran, and test configs are not direct find_package targets."""
+        for package_name in smoke.SKIP_PACKAGES:
+            self._plant_config(package_name)
+
+        discovered = smoke.discover_cmake_packages(self.prefix)
+        contents = smoke.render_cmake_lists(discovered)
+        for package_name in smoke.SKIP_PACKAGES:
+            self.assertNotIn(package_name, discovered)
+            self.assertNotIn(f"find_package({package_name} CONFIG REQUIRED)", contents)
+        self.assertIn("find_package(hip CONFIG REQUIRED)", contents)
+        self.assertIn("find_package(hipblaslt CONFIG REQUIRED)", contents)
+
+    def test_missing_required_package_fails(self) -> None:
+        """hipblaslt must be installed even when other configs are present."""
+        bare = self.root / "bare-prefix"
+        bare.mkdir()
+        package_dir = bare / "lib" / "cmake" / "hip"
+        package_dir.mkdir(parents=True)
+        (package_dir / "hip-config.cmake").write_text(
+            "# test fixture\n", encoding="utf-8"
+        )
+        called = False
+
+        def configure(_command: list[str]) -> smoke.ConfigureResult:
+            nonlocal called
+            called = True
+            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
+
+        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
+            return_code = smoke.run_smoke(
+                bare,
+                work_dir=self.work_dir,
+                run_configure=configure,
+            )
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(called)
+
+    def test_no_cmake_configs_fails(self) -> None:
+        """A prefix with no lib/cmake package configs fails before configure."""
+        empty = self.root / "empty-prefix"
+        empty.mkdir()
+        called = False
+
+        def configure(_command: list[str]) -> smoke.ConfigureResult:
+            nonlocal called
+            called = True
+            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
+
+        return_code = smoke.run_smoke(
+            empty,
+            work_dir=self.work_dir,
+            run_configure=configure,
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(called)
 
     def test_configure_argv_uses_resolved_prefix_and_hip_platform(self) -> None:
         """Configure follows a symlink prefix and sets HIP_PLATFORM=amd."""

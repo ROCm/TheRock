@@ -329,7 +329,7 @@ jobs:
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
       - name: Downstream CMake smoke test
-        # Confirms find_package(hip) and find_package(hipblaslt) succeed against the installed prefix.
+        # Confirms find_package succeeds for every CMake module installed under the prefix.
         if: ${{ inputs.install_prefix != '' }}
         run: |
           echo "CMAKE SMOKE - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
