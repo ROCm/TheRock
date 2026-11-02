@@ -304,10 +304,24 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError for conflicting build selections, test labels requiring
-        stages not in build_stages, or ci:run-wsl on a partial build without the
-        wsl-rocdxg stage.
+        Raises ValueError for conflicting build selections, ci:exactly without an
+        arch label, test labels requiring stages not in build_stages, or
+        ci:run-wsl on a partial build without the wsl-rocdxg stage.
         """
+        # ci:exactly drops the trigger defaults, so the arch labels become the
+        # whole selection. Without one, nothing would build and CI would report
+        # a green run that did no work.
+        if self.is_exactly and not any(
+            label.lower().startswith(("ci:gfx", "ci:build:gfx"))
+            or label == "ci:run-all-archs"
+            for label in self.pr_labels
+        ):
+            raise ValueError(
+                f"{EXACTLY_LABEL} requires at least one arch label "
+                f"(ci:gfx* or ci:build:gfx*), otherwise nothing would build. "
+                f"Add an arch label or remove {EXACTLY_LABEL}."
+            )
+
         for job in ("native-linux", "python-packages", "pytorch", "jax"):
             build_label = f"ci:build-{job}"
             skip_label = f"ci:skip-{job}"
@@ -995,15 +1009,9 @@ def _apply_arch_labels(
             target = label.lower().removeprefix("ci:").split("-")[0]
             gfx_targets.append((label, target))
 
-    # ci:exactly narrows CI to the attached labels; ci:run-all-archs widens it
-    # to every family. Honoring both is ambiguous, so reject the pair before
-    # applying either one.
-    if ci_inputs.is_exactly and has_run_all:
-        raise ValueError(f"{EXACTLY_LABEL} conflicts with ci:run-all-archs")
-
-    # 0. ci:exactly drops the trigger defaults so the gfx labels below are the
-    # only thing that selects families. Validated in select_targets() to ensure
-    # at least one family survives.
+    # 0. ci:exactly drops the trigger defaults so the labels below are the only
+    # thing that selects families. CIInputs.validate() guarantees at least one
+    # such label is present.
     if ci_inputs.is_exactly:
         linux_names.clear()
         windows_names.clear()
@@ -1243,16 +1251,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
                 f"ci:test:{target} label requires a corresponding build label "
                 f"(ci:{target} or ci:build:{target}). Tests depend on build artifacts."
             )
-
-    # ci:exactly removed the trigger defaults, so an empty selection means the
-    # PR carries no arch label at all. Fail loudly instead of reporting a green
-    # run that built nothing.
-    if ci_inputs.is_exactly and not linux_names and not windows_names:
-        raise ValueError(
-            f"{EXACTLY_LABEL} requires at least one arch label "
-            f"(ci:gfx* or ci:build:gfx*), otherwise nothing would build. "
-            f"Add an arch label or remove {EXACTLY_LABEL}."
-        )
 
     # TODO: For workflow_dispatch, a family requested for a specific platform
     # but not available there (e.g. gfx94x on windows) is silently dropped.

@@ -1364,10 +1364,10 @@ class TestSelectTargets(unittest.TestCase):
             pr_labels=["ci:exactly"],
         )
         with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
-            cm.select_targets(inputs)
+            inputs.validate()
 
-    def test_exactly_label_conflicts_with_run_all_archs(self):
-        """ci:exactly narrows the run while ci:run-all-archs widens it."""
+    def test_exactly_label_with_run_all_archs_runs_every_family(self):
+        """ci:run-all-archs is equivalent to labeling every arch by hand."""
         base = dict(
             run_id="12345",
             event_name="pull_request",
@@ -1375,18 +1375,18 @@ class TestSelectTargets(unittest.TestCase):
             base_ref="HEAD^",
             build_variant="release",
         )
-        # Each label on its own is fine.
-        cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx950"]))
-        cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:run-all-archs"]))
+        run_all = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:run-all-archs"]))
         for labels in (
             ["ci:exactly", "ci:run-all-archs"],
             ["ci:run-all-archs", "ci:exactly"],
         ):
             with self.subTest(labels=labels):
-                with self.assertRaisesRegex(
-                    ValueError, "ci:exactly conflicts with ci:run-all-archs"
-                ):
-                    cm.select_targets(cm.CIInputs(**base, pr_labels=labels))
+                inputs = cm.CIInputs(**base, pr_labels=labels)
+                # ci:run-all-archs satisfies the ci:exactly arch-label contract.
+                inputs.validate()
+                result = cm.select_targets(inputs)
+                self.assertEqual(result.linux_families, run_all.linux_families)
+                self.assertEqual(result.windows_families, run_all.windows_families)
 
     def test_exactly_label_ignored_for_push(self):
         """ci:exactly only applies to pull requests."""

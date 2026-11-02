@@ -93,8 +93,8 @@ and `ci:test:gfx...` labels the complete architecture selection.
 | `ci:exactly` + `ci:gfx950`               | gfx950 only                            |
 | `ci:exactly` + `ci:build:gfx950`         | gfx950 only, no tests                  |
 | `ci:exactly` + `ci:gfx950` + `ci:gfx94x` | gfx950 and gfx94x only                 |
+| `ci:exactly` + `ci:run-all-archs`        | All architectures                      |
 | `ci:exactly` (alone)                     | **Error**: no architecture would build |
-| `ci:exactly` + `ci:run-all-archs`        | **Error**: the labels contradict       |
 
 Only the architecture selection is narrowed. Package builds, `test:...`,
 `test_filter:...`, and `ci:platform:...` keep their usual meaning. Pull requests
