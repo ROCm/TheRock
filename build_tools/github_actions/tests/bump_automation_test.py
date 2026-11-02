@@ -8,12 +8,13 @@ import sys
 import tempfile
 import textwrap
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from bump_automation import (
     _baseline_gate_jobs_succeeded,
     _clone_url,
+    _GH_API_MAX_RETRIES,
     _list_run_jobs,
     _list_workflow_runs_for_head,
     close_stale_prs,
@@ -22,6 +23,7 @@ from bump_automation import (
     find_therock_workflow_files,
     generate_pr_body,
     get_baseline_run_id_from_merged_pr,
+    gh_api,
     GITHUB_SEARCH_PAGE_SIZE,
     GITHUB_SEARCH_RESULT_LIMIT,
     get_submodule_sha,
@@ -83,12 +85,81 @@ class LatestCommitTest(unittest.TestCase):
         with patch(
             "bump_automation.gh_api", return_value=[{"sha": "cafef00d"}]
         ) as mock_api:
-            sha = latest_commit("ROCm/rocgdb", "token", "amd-staging-rocgdb-16")
+            sha = latest_commit("ROCm/rocgdb", "token", "amd-staging-rocgdb-18")
         self.assertEqual(sha, "cafef00d")
         self.assertEqual(
             mock_api.call_args.args[1],
-            "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-16",
+            "repos/ROCm/rocgdb/commits?sha=amd-staging-rocgdb-18",
         )
+
+
+def _mock_response(status_code: int, json_data=None, text: str = ""):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.ok = 200 <= status_code < 400
+    resp.text = text or (str(json_data) if json_data else "")
+    resp.json.return_value = json_data
+    return resp
+
+
+class GhApiRetryTest(unittest.TestCase):
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_retries_on_502(self, mock_request, mock_sleep):
+        mock_request.side_effect = [
+            _mock_response(502, text="Bad Gateway"),
+            _mock_response(200, json_data={"ok": True}),
+        ]
+        result = gh_api("token", "repos/ROCm/TheRock/actions/runs")
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(mock_request.call_count, 2)
+        mock_sleep.assert_called_once_with(2)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_retries_on_503_and_504(self, mock_request, mock_sleep):
+        mock_request.side_effect = [
+            _mock_response(503, text="Service Unavailable"),
+            _mock_response(504, text="Gateway Timeout"),
+            _mock_response(200, json_data={"data": 1}),
+        ]
+        result = gh_api("token", "repos/ROCm/TheRock/something")
+        self.assertEqual(result, {"data": 1})
+        self.assertEqual(mock_request.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_raises_after_max_retries(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(502, text="Bad Gateway")
+        with self.assertRaises(RuntimeError) as ctx:
+            gh_api("token", "repos/ROCm/TheRock/actions/runs/123/jobs")
+        self.assertIn("502", str(ctx.exception))
+        self.assertEqual(mock_request.call_count, _GH_API_MAX_RETRIES)
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_post_does_not_retry_on_502(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(502, text="Bad Gateway")
+        with self.assertRaises(RuntimeError):
+            gh_api("token", "repos/ROCm/TheRock/issues/1/comments", method="POST")
+        mock_request.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @patch("bump_automation.time.sleep")
+    @patch("bump_automation.requests.request")
+    def test_get_does_not_retry_on_404(self, mock_request, mock_sleep):
+        mock_request.return_value = _mock_response(404, text="Not Found")
+        with self.assertRaises(RuntimeError):
+            gh_api("token", "repos/ROCm/TheRock/nonexistent")
+        mock_request.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @patch("bump_automation.requests.request")
+    def test_returns_none_on_204(self, mock_request):
+        mock_request.return_value = _mock_response(204)
+        result = gh_api("token", "repos/ROCm/TheRock/something", method="POST")
+        self.assertIsNone(result)
 
 
 def _gate_job(conclusion: str | None, name: str = LIBRARIES_BASELINE_GATE_JOB_NAME):
@@ -1366,134 +1437,6 @@ class HandlePushTest(unittest.TestCase):
         self.assertEqual(mock_close_ref.call_args.args[0], "ROCm/rocm-libraries")
         self.assertEqual(mock_close_ref.call_args.args[3], "assistant-librarian[bot]")
 
-    def test_only_submodule_bypasses_auto_detection(self):
-        """The manual workflow_dispatch replay path (bump_submodules.yml's
-        pin_before/pin_after inputs) passes only_submodule to target one
-        submodule directly; submodule_changed must never be consulted."""
-        with patch("bump_automation.submodule_changed") as mock_changed:
-            with patch(
-                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
-            ):
-                with patch("bump_automation.close_stale_prs", return_value=[]):
-                    with patch(
-                        "bump_automation.get_baseline_run_id_from_merged_pr",
-                        return_value=None,
-                    ):
-                        with patch("bump_automation.run"):
-                            with patch("bump_automation.os.chdir"):
-                                with patch(
-                                    "bump_automation.os.path.exists",
-                                    return_value=True,
-                                ):
-                                    with patch("bump_automation.update_ci_env_file"):
-                                        with patch(
-                                            "bump_automation.find_therock_workflow_files",
-                                            return_value=[],
-                                        ):
-                                            with patch(
-                                                "bump_automation.gh_api",
-                                                return_value={"number": 1},
-                                            ):
-                                                with patch(
-                                                    "bump_automation.close_stale_therock_ref_prs"
-                                                ):
-                                                    with patch(
-                                                        "bump_automation.create_therock_bump"
-                                                    ) as mock_bump:
-                                                        handle_push(
-                                                            "before",
-                                                            "after",
-                                                            {
-                                                                "systems": "systems-token",
-                                                                "libraries": "libraries-token",
-                                                            },
-                                                            only_submodule="rocm-libraries",
-                                                        )
-
-        mock_changed.assert_not_called()
-        mock_bump.assert_called_once_with("rocm-libraries", "libraries-token")
-
-    def test_only_submodule_translates_rocgdb_alias(self):
-        """--only-submodule's CLI-facing "rocgdb"/"mesa-fork" values are not
-        SUBMODULE_CONFIG keys (the real paths are nested); handle_push must
-        translate through ONLY_SUBMODULE_ALIASES or it KeyErrors indexing
-        SUBMODULE_CONFIG[changed]."""
-        with patch("bump_automation.submodule_changed") as mock_changed:
-            with patch(
-                "bump_automation.get_submodule_sha", return_value="oldsha1234567"
-            ):
-                with patch(
-                    "bump_automation.close_stale_prs", return_value=[]
-                ) as mock_close:
-                    with patch(
-                        "bump_automation.tempfile.TemporaryDirectory"
-                    ) as mock_tmp:
-                        handle_push(
-                            "before",
-                            "after",
-                            {
-                                "systems": "systems-token",
-                                "rocgdb": "rocgdb-token",
-                            },
-                            actions_token="actions-token",
-                            only_submodule="rocgdb",
-                        )
-
-        mock_changed.assert_not_called()
-        # rocgdb is submodule-only (no ref/pin files), so it must close stale
-        # PRs using the systems token and never clone an upstream repo.
-        mock_close.assert_called_once_with(
-            "debug-tools/rocgdb/source",
-            "oldsha1234567",
-            "systems-token",
-            actions_token="actions-token",
-        )
-        mock_tmp.assert_not_called()
-
-    def test_skip_next_bump_does_not_open_next_bump(self):
-        """The manual replay path sets skip_next_bump so it never opens a new
-        Bump <submodule> PR in TheRock after updating the downstream pin,
-        unlike a real push event which always opens the next bump PR."""
-        with patch("bump_automation.get_submodule_sha", return_value="oldsha1234567"):
-            with patch("bump_automation.close_stale_prs", return_value=[]):
-                with patch(
-                    "bump_automation.get_baseline_run_id_from_merged_pr",
-                    return_value=None,
-                ):
-                    with patch("bump_automation.run"):
-                        with patch("bump_automation.os.chdir"):
-                            with patch(
-                                "bump_automation.os.path.exists",
-                                return_value=True,
-                            ):
-                                with patch("bump_automation.update_ci_env_file"):
-                                    with patch(
-                                        "bump_automation.find_therock_workflow_files",
-                                        return_value=[],
-                                    ):
-                                        with patch(
-                                            "bump_automation.gh_api",
-                                            return_value={"number": 1},
-                                        ):
-                                            with patch(
-                                                "bump_automation.close_stale_therock_ref_prs"
-                                            ):
-                                                with patch(
-                                                    "bump_automation.create_therock_bump"
-                                                ) as mock_bump:
-                                                    handle_push(
-                                                        "before",
-                                                        "after",
-                                                        {
-                                                            "systems": "systems-token",
-                                                            "libraries": "libraries-token",
-                                                        },
-                                                        only_submodule="rocm-libraries",
-                                                        skip_next_bump=True,
-                                                    )
-
-        mock_bump.assert_not_called()
-
 
 class CreateTheRockBumpTest(unittest.TestCase):
     def test_skips_when_pr_already_open(self):
@@ -1676,7 +1619,7 @@ class CreateTheRockBumpRocgdbConfigTest(unittest.TestCase):
                                         )
 
         mock_latest.assert_called_once_with(
-            "ROCm/rocgdb", "token", "amd-staging-rocgdb-16"
+            "ROCm/rocgdb", "token", "amd-staging-rocgdb-18"
         )
 
 

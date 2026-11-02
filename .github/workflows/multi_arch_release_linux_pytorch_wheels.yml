@@ -221,6 +221,7 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      exclude_implicit_targets: ${{ matrix.exclude_implicit_targets }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       test_level: ${{ matrix.test_level }}
       python_version: ${{ matrix.python_version }}

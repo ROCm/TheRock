@@ -149,11 +149,11 @@ option(ENABLE_TESTS "Enable installation of ROCgdb testsuite files" OFF)
 # (NOTICES.txt, roccoremerge program/manpage).
 option(ROCGDB_UPSTREAM_BUILD "Building from upstream master (skips AMD-specific files)" OFF)
 
-# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py or
-# rocjitsu_emulator.py (e.g. an upstream branch), fetch both from ROCm/ROCgdb
-# amd-staging at configure time so that they can be installed into tests/rocgdb
-# for TheRock CI to invoke.
-option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py and rocjitsu_emulator.py from amd-staging if missing in source tree" OFF)
+# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py,
+# rocjitsu_emulator.py or rocgdb_emulate.py (e.g. an upstream branch), fetch
+# them from ROCm/ROCgdb amd-staging at configure time so that they can be
+# installed for TheRock CI to invoke.
+option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from amd-staging if missing in source tree" OFF)
 
 # Find standard build tools.
 find_program(MAKE_EXECUTABLE NAMES make REQUIRED)
@@ -734,6 +734,7 @@ if(BUILD_TESTING)
   endif()
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb-emulate")
 
   # Add build integrity tests to check if we have the files we want.
   message(STATUS "BUILD_TESTING set. Adding rocgdb installation integrity tests.")
@@ -799,11 +800,12 @@ if(BUILD_TESTING)
       USE_SOURCE_PERMISSIONS)
   endforeach()
 
-  # Install the CI wrapper that invokes the rocgdb testsuite, and the emulator
-  # module it imports for --emulate. Both are taken from the source tree. If
-  # either is missing and ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, both are fetched
-  # from the same amd-staging commit so the pair always matches.
-  set(ROCGDB_CI_SCRIPTS test_rocgdb.py rocjitsu_emulator.py)
+  # Install the CI wrapper that invokes the rocgdb testsuite, the emulator
+  # module it imports for --emulate, and rocgdb-emulate, which runs rocgdb
+  # inside a mirage session. All are taken from the source tree. If any is
+  # missing and ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, all are fetched from the
+  # same amd-staging commit so they always match.
+  set(ROCGDB_CI_SCRIPTS test_rocgdb.py rocjitsu_emulator.py rocgdb_emulate.py)
   set(ROCGDB_CI_SCRIPTS_DIR "${ROCGDB_SOURCE_DIR}/.github/scripts")
   set(missing_ci_scripts)
   foreach(script IN LISTS ROCGDB_CI_SCRIPTS)
@@ -832,6 +834,14 @@ if(BUILD_TESTING)
     FILES ${ROCGDB_CI_SCRIPTS_DIR}/rocjitsu_emulator.py
     DESTINATION tests/rocgdb
     COMPONENT tests
+  )
+
+  # Installed next to rocgdb, without the .py extension.
+  install(
+    PROGRAMS ${ROCGDB_CI_SCRIPTS_DIR}/rocgdb_emulate.py
+    DESTINATION bin
+    RENAME rocgdb-emulate
+    COMPONENT rocgdb
   )
 
   # Install the optional xfails ignore list, if present in the sources.

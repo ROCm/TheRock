@@ -56,6 +56,11 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       kpack_split:
         description: "'true' if this is a kpack-split flat build."
         type: string
@@ -85,6 +90,13 @@ on:
         description: PyTorch ref to checkout (typically "release/X.Y")
         type: string
         default: "release/2.13"
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       rocm_package_find_links_url:
         description: URL for pip --find-links to install ROCm packages (flat page; use this OR rocm_package_index_url)
         type: string
@@ -132,6 +144,7 @@ jobs:
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
@@ -266,8 +279,15 @@ jobs:
         if: ${{ inputs.amdgpu_families != '' }}
         id: expand
         run: |
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform windows \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 

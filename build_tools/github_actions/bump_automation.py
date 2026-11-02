@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -77,7 +78,7 @@ SUBMODULE_CONFIG = {
         # We will reuse the rocm-systems token for now.
         # Selects an entry in the tokens dictionary, not a literal credential.
         "token_key": "systems",  # nosec B105
-        "branch": "amd-staging-rocgdb-16",
+        "branch": "amd-staging-rocgdb-18",
         # Changes to rocgdb can run a limited matrix of CI jobs:
         #   * Build for all gfx archs
         #   * rocgdb tests only (no impact on other project builds/tests)
@@ -95,13 +96,6 @@ SUBMODULE_CONFIG = {
         #   * mesa-fork tests only (no impact on other project builds/tests)
         "labels": [*COMMON_CI_LABELS, "test:rocdecode", "test:rocjpeg"],
     },
-}
-
-# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
-# (their real paths are nested) to their SUBMODULE_CONFIG key.
-ONLY_SUBMODULE_ALIASES = {
-    "rocgdb": "debug-tools/rocgdb/source",
-    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
 }
 
 
@@ -131,25 +125,55 @@ def submodule_changed(before: str, after: str, path: str) -> bool:
     return bool(diff.strip())
 
 
+_GH_API_RETRYABLE_STATUSES = {502, 503, 504}
+_GH_API_MAX_RETRIES = 4
+_GH_API_RETRY_BACKOFF_BASE = 2  # seconds; doubles each attempt
+
+
 def gh_api(
     token: str, endpoint: str, method: str = "GET", data: dict | None = None
 ) -> Any:
-    """Make a GitHub API request and return the parsed JSON response."""
+    """Make a GitHub API request and return the parsed JSON response.
+
+    GET requests are retried on transient server errors (502/503/504) with
+    exponential backoff.  The run-jobs endpoint on large Multi-Arch CI runs
+    (~900 jobs) frequently returns 502 on individual pages; retrying lets
+    ``_list_run_jobs`` paginate through them reliably.
+    """
     url = f"https://api.github.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
 
-    response = requests.request(method, url, headers=headers, json=data)
+    last_response = None
+    attempts = _GH_API_MAX_RETRIES if method == "GET" else 1
+    for attempt in range(attempts):
+        response = requests.request(method, url, headers=headers, json=data)
+        if response.ok:
+            if response.status_code == 204 or not response.text:
+                return None
+            return response.json()
 
-    if not response.ok:
-        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
+        last_response = response
+        if (
+            response.status_code in _GH_API_RETRYABLE_STATUSES
+            and attempt < attempts - 1
+        ):
+            delay = _GH_API_RETRY_BACKOFF_BASE * (2**attempt)
+            print(
+                f"[WARN] GitHub API returned {response.status_code} for "
+                f"{method} {endpoint}; retrying in {delay}s "
+                f"(attempt {attempt + 1}/{attempts})"
+            )
+            time.sleep(delay)
+            continue
 
-    if response.status_code == 204 or not response.text:
-        return None
+        break
 
-    return response.json()
+    raise RuntimeError(
+        f"GitHub API failed: {last_response.status_code} {last_response.text}"
+    )
 
 
 LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
@@ -760,7 +784,7 @@ def create_therock_bump(submodule: str, token: str) -> None:
 
         # Fetch the exact target commit in the submodule. A plain depth-1 fetch
         # only retrieves the default branch tip, which misses commits that live
-        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-16).
+        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-18).
         print(f"[INFO] Fetching {latest[:7]} for {submodule}")
         run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
         run(["git", "-C", submodule, "checkout", latest])
@@ -818,23 +842,13 @@ def handle_push(
     after: str,
     tokens: dict[str, str],
     actions_token: str | None = None,
-    only_submodule: str | None = None,
-    skip_next_bump: bool = False,
 ) -> None:
-    """Push event: update TheRock refs, close stale PRs, create next bump PR.
-
-    `only_submodule` and `skip_next_bump` exist for the manual
-    `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
-    `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
-    function for one specific submodule without also opening a new "Bump
-    <submodule>" PR in TheRock. Real push events never set either.
-    """
-    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
-    if changed is None:
-        for path in SUBMODULE_CONFIG:
-            if submodule_changed(before, after, path):
-                changed = path
-                break
+    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
+    changed = None
+    for path in SUBMODULE_CONFIG:
+        if submodule_changed(before, after, path):
+            changed = path
+            break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
@@ -938,10 +952,6 @@ def handle_push(
 
     os.chdir(original_cwd)
 
-    if skip_next_bump:
-        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
-        return
-
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
     print(f"[INFO] Creating next bump PR for {changed} after merge")
@@ -963,27 +973,6 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
-    parser.add_argument(
-        "--only-submodule",
-        default=None,
-        choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
-        help=(
-            "Manual workflow_dispatch replay only: treat this submodule as "
-            "the one that changed between --before/--after, instead of "
-            "auto-detecting it. Lets an operator re-run the ref/pin-update "
-            "half of a push event (e.g. to pick up a bump_automation.py fix) "
-            "without a real submodule-bump commit landing on main."
-        ),
-    )
-    parser.add_argument(
-        "--skip-next-bump",
-        action="store_true",
-        help=(
-            "Manual workflow_dispatch replay only: don't open a new "
-            "Bump <submodule> PR in TheRock after updating the downstream "
-            "ref/pins. Real push events always open the next bump PR."
-        ),
-    )
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
@@ -1010,14 +999,7 @@ def main() -> None:
     elif args.event_type == "push":
         if not args.actions_token:
             parser.error("--actions_token is required when --event_type is push")
-        handle_push(
-            args.before,
-            args.after,
-            tokens,
-            actions_token=args.actions_token,
-            only_submodule=args.only_submodule,
-            skip_next_bump=args.skip_next_bump,
-        )
+        handle_push(args.before, args.after, tokens, actions_token=args.actions_token)
 
 
 if __name__ == "__main__":

@@ -84,8 +84,14 @@ _EXTERNAL_SUBTREE_ALIASES = {
     # emulation stack; kpack is the ROCm packaging tool (rocm-kpack).
     "shared/kpack": ["rocm-kpack"],
     "shared/machine-readable-isa": ["rocjitsu"],
-    # primbench is a benchmarking header library used by rocprim/rocrand benchmarks.
-    "shared/primbench": ["rocprim", "rocrand"],
+    # rocPRIM is built inside the unified hipCCL superbuild, so walk from the
+    # hipccl graph node; the hipccl selector alias maps it to the prim test jobs.
+    "shared/primbench": ["hipccl", "rocrand"],
+    # The standalone projects/{rocprim,hipcub,rocthrust} trees still exist but
+    # are built via the unified hipCCL superbuild, so edits there select hipccl.
+    "projects/rocprim": ["hipccl"],
+    "projects/hipcub": ["hipccl"],
+    "projects/rocthrust": ["hipccl"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -128,6 +134,7 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
     # The common GEMM suite is its own CI job. Aliasing here, rather than a
@@ -135,6 +142,10 @@ _CI_TEST_SELECTOR_ALIASES = {
     # tensilelite key lands in the result, not only when tensilelite itself
     # is the changed project.
     "tensilelite": ["tensilelite", "tensilelite-common"],
+    # rocPRIM, hipCUB and rocThrust build as one subproject (hipccl) but still
+    # run as three separate test jobs against the shared prim artifact.
+    "hipccl": ["rocprim", "hipcub", "rocthrust"],
+    "hipccl_tests": ["rocprim", "hipcub", "rocthrust"],
 }
 
 

@@ -36,6 +36,11 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
+        type: string
       test_amdgpu_families:
         description: >-
           Semicolon-separated AMD GPU families to run tests for (e.g.
@@ -117,6 +122,13 @@ on:
           build time via cmake/therock_amdgpu_targets.cmake.
         type: string
         required: true
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       test_amdgpu_families:
         description: >-
           Semicolon-separated AMD GPU families to run tests for (e.g.
@@ -226,13 +238,14 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -375,8 +388,16 @@ jobs:
       - name: Expand amdgpu families to gfx targets
         id: expand
         run: |
+          # Excluded implicit targets remain available when requested directly.
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform linux \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
