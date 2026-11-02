@@ -56,6 +56,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR .
+      FPRINT_SOURCE_DIR "${_source_dir}"
+      FPRINT_FILE_GLOBS
+        "${CMAKE_CURRENT_LIST_DIR}/*"
+        "${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py"
+        "${CMAKE_SOURCE_DIR}/patches/third-party/host-blas/*"
       INTERFACE_LINK_DIRS "lib/host-math/lib"
       # RPATH logic needs to know that executables/libs for this project are in
       # a non-default location.
@@ -98,6 +103,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR .
+      FPRINT_SOURCE_DIR "${_source_dir}"
+      FPRINT_FILE_GLOBS
+        "${CMAKE_CURRENT_LIST_DIR}/*"
+        "${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py"
+        "${CMAKE_SOURCE_DIR}/patches/third-party/host-blas/*"
       INTERFACE_LINK_DIRS "lib/host-math/lib"
       # RPATH logic needs to know that executables/libs for this project are in
       # a non-default location.
