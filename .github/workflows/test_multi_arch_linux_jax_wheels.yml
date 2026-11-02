@@ -342,7 +342,7 @@ jobs:
           if [ -n "${JAX_PLUGIN_VERSION}" ] && [ -n "${JAX_VERSION}" ]; then
             echo "Using versions passed from build workflow"
           else
-            pip install packaging
+            pip install packaging==25.0
 
             python build_tools/github_actions/compute_jax_package_version.py \
               --rocm-version "${ROCM_VERSION}" \
