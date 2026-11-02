@@ -19,6 +19,10 @@ import re
 import sys
 from dataclasses import dataclass
 
+# Letters, digits, and . _ + - only, so the value can be written to GITHUB_ENV.
+#   host-asan-debug -> accepted
+#   asan debug      -> rejected
+#   asan\nFOO=bar   -> rejected
 _VARIANT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 
@@ -26,7 +30,7 @@ _VARIANT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 class TorchWheelPlan:
     """What the wheel workflow should do for one build variant."""
 
-    checkout_companions: bool
+    build_torch_only: bool
     build_variant_arg: str
     split_torchvision: bool
     torch_only_arg: str
@@ -35,21 +39,26 @@ class TorchWheelPlan:
 def plan_for(variant: str) -> TorchWheelPlan:
     """Return the wheel-job plan for ``variant``.
 
-    An empty variant is the normal release build. A value that is not a single
-    token is rejected so it cannot be written into ``GITHUB_ENV``.
+    An empty variant is the normal release build. A value with a space or a
+    newline is rejected so it cannot be written into ``GITHUB_ENV``.
+    ``host-asan-debug`` is accepted. ``asan debug`` and ``asan\\nFOO=bar``
+    are not.
     """
     variant = variant.strip()
     if variant and _VARIANT_RE.fullmatch(variant) is None:
-        raise ValueError(f"build variant must be one token, got {variant!r}")
+        raise ValueError(
+            f"invalid build variant {variant!r}: "
+            "use one word like host-asan-debug, with no spaces or newlines"
+        )
     if "asan" in variant:
         return TorchWheelPlan(
-            checkout_companions=False,
+            build_torch_only=True,
             build_variant_arg=f"--build-variant={variant}",
             split_torchvision=False,
             torch_only_arg="--torch-only",
         )
     return TorchWheelPlan(
-        checkout_companions=True,
+        build_torch_only=False,
         build_variant_arg="",
         split_torchvision=True,
         torch_only_arg="",
@@ -58,10 +67,10 @@ def plan_for(variant: str) -> TorchWheelPlan:
 
 def github_env_lines(plan: TorchWheelPlan) -> list[str]:
     """Environment lines later workflow steps read."""
-    companions = "true" if plan.checkout_companions else "false"
+    torch_only = "true" if plan.build_torch_only else "false"
     split = "true" if plan.split_torchvision else "false"
     return [
-        f"PYTORCH_CHECKOUT_COMPANIONS={companions}",
+        f"PYTORCH_BUILD_TORCH_ONLY={torch_only}",
         f"PYTORCH_BUILD_VARIANT_ARG={plan.build_variant_arg}",
         f"PYTORCH_SPLIT_TORCHVISION={split}",
         f"PYTORCH_TORCH_ONLY_ARG={plan.torch_only_arg}",

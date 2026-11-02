@@ -321,8 +321,8 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          # AddressSanitizer variants build torch only.
-          if [[ "${PYTORCH_CHECKOUT_COMPANIONS}" == true ]]; then
+          # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
+          if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --repo-hashtag nightly \
               --no-commit-hipify
@@ -348,8 +348,8 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          # AddressSanitizer variants build torch only.
-          if [[ "${PYTORCH_CHECKOUT_COMPANIONS}" == true ]]; then
+          # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
+          if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --require-related-commit \
               --no-commit-hipify
