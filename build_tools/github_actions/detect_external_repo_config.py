@@ -41,8 +41,15 @@ from typing import Dict, Any, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from _therock_utils.branch_config import (
+    get_source_sets_for_artifact_groups,
+    load_branch_config,
+)
 from _therock_utils.build_topology import get_topology
 from github_actions_api import gha_set_output
+
+THEROCK_DIR = Path(__file__).resolve().parents[2]
+BRANCH_CONFIG_PATH = THEROCK_DIR / "BRANCH_CONFIG.json"
 
 
 # Repository configuration map
@@ -161,18 +168,41 @@ def get_source_stages(repo_name: str) -> List[str]:
     """Returns the build stages that need this external repo's sources.
 
     A stage needs the repo when one of its submodules appears in the stage's
-    source sets (see BUILD_TOPOLOGY.toml). Checking out a monorepo such as
-    rocm-libraries takes several minutes, so every other stage skips it.
+    source sets (see BUILD_TOPOLOGY.toml) or in the source sets selected
+    through BRANCH_CONFIG.json for the stage's artifact groups.  This mirrors
+    the logic in fetch_sources.py which combines both topology and branch
+    config source sets.
+
+    Checking out a monorepo such as rocm-libraries takes several minutes,
+    so every other stage skips it.
     """
     repo_submodules = set(get_repo_config(repo_name).get("skip_submodules", []))
     topology = get_topology()
-    return sorted(
-        stage_name
-        for stage_name in topology.get_all_stage_names()
+    branch_config = load_branch_config(BRANCH_CONFIG_PATH, topology)
+
+    def _stage_needs_repo(stage_name: str) -> bool:
+        # Submodules from topology source sets
         if any(
             submodule.name in repo_submodules
             for submodule in topology.get_submodules_for_stage(stage_name)
+        ):
+            return True
+        # Submodules from branch config source sets
+        stage = topology.build_stages[stage_name]
+        branch_source_set_names = get_source_sets_for_artifact_groups(
+            branch_config, stage.artifact_groups
         )
+        for ss_name in branch_source_set_names:
+            if ss_name in topology.source_sets:
+                for submodule in topology.source_sets[ss_name].submodules:
+                    if submodule.name in repo_submodules:
+                        return True
+        return False
+
+    return sorted(
+        stage_name
+        for stage_name in topology.get_all_stage_names()
+        if _stage_needs_repo(stage_name)
     )
 
 
