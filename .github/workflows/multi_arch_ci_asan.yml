@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Task-only diagnostic entrypoint; not intended as a product workflow change.
 name: CK compilation diagnostic (01a193c1)
-run-name: CK two-TU ${{ inputs.build_variant }} ${{ inputs.operation }} (01a193c1)
+run-name: CK kernel groups ${{ inputs.build_variant }} ${{ inputs.operation }} (01a193c1)
 on:
   workflow_dispatch:
     inputs:

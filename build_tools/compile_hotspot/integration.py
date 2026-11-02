@@ -44,7 +44,8 @@ LOGICAL_ONLY_ARTIFACTS = {
 BUNDLED_SYSDEPS_ROOTS = {"third-party/sysdeps/linux/libmnl/build/stage",
                          "third-party/sysdeps/linux/libnl/build/stage"}
 SOURCE_DIR = "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/"
-HELPER_SUFFIXES = ("nongrouped_match",)
+HELPER_SUFFIXES = ("kernel_group1", "nongrouped_match")
+PRIVATE_HEADER = diagnostic.SOURCE.replace("_instance.cpp", "_kernel_groups.hpp")
 NAMES = {diagnostic.SOURCE, *(diagnostic.SOURCE.replace("_instance.cpp", "_" + suffix + "_instance.cpp")
                              for suffix in HELPER_SUFFIXES)}
 
@@ -78,7 +79,8 @@ def cache_value(build, key):
 
 def patch_paths(text):
     paths = re.findall(r"^\+\+\+ b/(.*)$", text, re.M)
-    expected = {SOURCE_DIR + "CMakeLists.txt", *(SOURCE_DIR + "xdl/" + name for name in NAMES)}
+    expected = {SOURCE_DIR + "CMakeLists.txt", SOURCE_DIR + "xdl/" + PRIVATE_HEADER,
+                *(SOURCE_DIR + "xdl/" + name for name in NAMES)}
     if len(paths) != len(expected) or set(paths) != expected:
         raise RuntimeError(f"Unexpected product patch paths: {paths}")
     return paths
@@ -255,6 +257,9 @@ def archive_proof(archive, candidate):
     members = diagnostic.run([ar, "t", str(archive)]).splitlines()
     native_archive = CK / "lib/libdevice_conv_operations.a"
     native_members = diagnostic.run([ar, "t", str(native_archive)]).splitlines()
+    obsolete = diagnostic.SOURCE.replace("_instance.cpp", "_noshuffle_instance.cpp") + ".o"
+    if obsolete in members or obsolete in native_members:
+        raise RuntimeError("Old three-TU noshuffle member survived in candidate archive")
     proof_dir = OUT / "integration-archive-proof"
     proof_dir.mkdir()
     proof = []

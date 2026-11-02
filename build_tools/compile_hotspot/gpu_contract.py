@@ -20,6 +20,35 @@ EVIDENCE = ROOT / "ck-evidence"
 OUT = ROOT / "ck-gpu-evidence"
 SDK = ROOT / "ck-sdk"
 
+SOURCE_DIRECTORY = "projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/"
+SOURCE_NAME = "device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp"
+PRIVATE_HEADER = SOURCE_NAME.replace("_instance.cpp", "_kernel_groups.hpp")
+COMMAND_NAMES = {
+    "baseline": {SOURCE_NAME},
+    "reference": {
+        SOURCE_NAME,
+        *(
+            SOURCE_NAME.replace("_instance.cpp", "_" + suffix + "_instance.cpp")
+            for suffix in ("noshuffle", "nongrouped_match")
+        ),
+    },
+    "candidate": {
+        SOURCE_NAME,
+        *(
+            SOURCE_NAME.replace("_instance.cpp", "_" + suffix + "_instance.cpp")
+            for suffix in ("kernel_group1", "nongrouped_match")
+        ),
+    },
+}
+SOURCE_PATHS = {
+    variant: {
+        SOURCE_DIRECTORY + "CMakeLists.txt",
+        *(SOURCE_DIRECTORY + "xdl/" + name for name in names),
+    }
+    for variant, names in COMMAND_NAMES.items()
+}
+SOURCE_PATHS["candidate"].add(SOURCE_DIRECTORY + "xdl/" + PRIVATE_HEADER)
+
 
 def digest(path: Path) -> str:
     value = hashlib.sha256()
@@ -106,16 +135,39 @@ def verify_trials(
 ) -> tuple[str, dict, dict]:
     """Validate the fixed three-arm protocol and hash every retained arm."""
     order = ["B1", "T1", "C1", "C2", "T2", "B2"]
-    counts = {"baseline": 1, "reference": 3, "candidate": 2}
+    counts = {"baseline": 1, "reference": 3, "candidate": 3}
     variants = {"B": "baseline", "T": "reference", "C": "candidate"}
     if protocol["order"] != order or [row["trial"] for row in summary] != order:
         raise RuntimeError("Three-arm benchmark order/inventory mismatch")
     if protocol["variant_object_counts"] != counts or complete["status"] != "complete":
         raise RuntimeError("Three-arm benchmark protocol/counts incomplete")
-    original_source = next(iter(protocol["baseline_sources"].values()))["path"]
+    for variant, expected in SOURCE_PATHS.items():
+        if set(protocol[variant + "_sources"]) != expected:
+            raise RuntimeError(f"Unexpected {variant} source inventory")
+        if set(protocol[variant + "_commands"]) != COMMAND_NAMES[variant]:
+            raise RuntimeError(f"Unexpected {variant} command source inventory")
+    original_source = protocol["baseline_sources"][
+        SOURCE_DIRECTORY + "xdl/" + SOURCE_NAME
+    ]["path"]
     if "/rocm-libraries/" not in original_source:
         raise RuntimeError("Unrecognized baseline source root")
     old_root = original_source.split("/rocm-libraries/")[0]
+    libraries = old_root + "/rocm-libraries/"
+    for variant in SOURCE_PATHS:
+        for relative, fingerprint in protocol[variant + "_sources"].items():
+            if fingerprint["path"] != libraries + relative:
+                raise RuntimeError(
+                    f"Source fingerprint path mismatch: {variant}/{relative}"
+                )
+        for name, entry in protocol[variant + "_commands"].items():
+            expected = libraries + SOURCE_DIRECTORY + "xdl/" + name
+            argv = shlex.split(entry["command"])
+            if (
+                entry["file"] != expected
+                or argv.count("-c") != 1
+                or argv[argv.index("-c") + 1 : argv.index("-c") + 2] != [expected]
+            ):
+                raise RuntimeError(f"Compile command source mismatch: {variant}/{name}")
     selected, verified = {}, {}
     for row in summary:
         trial = row["trial"]
@@ -174,6 +226,12 @@ def main() -> None:
     if context["source_sha"] != "5b7cb88373362ab80dc0f19605915e534f4158aa":
         raise RuntimeError("Product source changed")
     protocol = json.loads((evidence / "benchmark-protocol.json").read_text())
+    for key, filename in (
+        ("patch", "candidate.patch"),
+        ("reference_patch", "three-tu-reference.patch"),
+    ):
+        if protocol[key]["sha256"] != digest(HERE / filename):
+            raise RuntimeError(f"Benchmark {key} differs from the validation checkout")
     summary = json.loads((evidence / "benchmark-summary.json").read_text())
     complete = json.loads((evidence / "benchmark-complete.json").read_text())
     old_root, selected, verified_arms = verify_trials(protocol, summary, complete)

@@ -1,48 +1,70 @@
 diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/CMakeLists.txt b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/CMakeLists.txt
-index 67bc0d8a8dbb65c073ddc665eec45801a5be9dfe..288547bc8b803cc60f331050bd817448bf37e801 100644
+index 67bc0d8a8dbb65c073ddc665eec45801a5be9dfe..8a92d6eeee53aedfe28b887152a22e2bd25f04ed 100644
 --- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/CMakeLists.txt
 +++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/CMakeLists.txt
-@@ -22,6 +22,7 @@ set(GROUPED_CONV2D_BWD_DATA_NHWGC
+@@ -22,6 +22,8 @@ set(GROUPED_CONV2D_BWD_DATA_NHWGC
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f16_optimized_loads_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_16_16_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
++   xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_group1_instance.cpp
 +   xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_nongrouped_match_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_optimized_loads_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_tf32_16_16_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_tf32_instance.cpp
 diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
-index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..49407d9bfd495712b07fb3619be31e019af4a0d7 100644
+index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..48d2aba718d06812c2279b10974a487f9658df82 100644
 --- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
 +++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
-@@ -9,6 +9,24 @@ namespace tensor_operation {
- namespace device {
- namespace instance {
+@@ -1,8 +1,7 @@
+ // Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+ // SPDX-License-Identifier: MIT
  
-+namespace detail {
-+
-+void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_nongrouped_match_instances(
-+    std::vector<std::unique_ptr<DeviceGroupedConvBwdDataMultipleD<2,
-+                                                                  NHWGK,
-+                                                                  GKYXC,
-+                                                                  Empty_Tuple,
-+                                                                  NHWGC,
-+                                                                  F32,
-+                                                                  F32,
-+                                                                  Empty_Tuple,
-+                                                                  F32,
-+                                                                  PassThrough,
-+                                                                  PassThrough,
-+                                                                  PassThrough>>>& instances);
-+
-+} // namespace detail
-+
- void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_instances(
-     std::vector<std::unique_ptr<DeviceGroupedConvBwdDataMultipleD<2,
-                                                                   NHWGK,
-@@ -59,24 +77,9 @@ void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_instances(
-                                        Empty_Tuple,
-                                        NHWGC,
-                                        ConvBwdDataFilter1x1Stride1Pad0>{});
+-#include "ck/library/tensor_operation_instance/add_device_operation_instance.hpp"
+-#include "ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_instance.hpp"
++#include "device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_groups.hpp"
+ 
+ namespace ck {
+ namespace tensor_operation {
+@@ -23,60 +22,23 @@ void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_instances(
+                                                                   PassThrough,
+                                                                   PassThrough>>>& instances)
+ {
+-    // 1. Default
+-    add_device_operation_instances(
+-        instances,
+-        device_grouped_conv_bwd_data_xdl_f32_instances<2,
+-                                                       NHWGK,
+-                                                       GKYXC,
+-                                                       Empty_Tuple,
+-                                                       NHWGC,
+-                                                       ConvBwdDataDefault>{});
+-    // 2. Filter1x1Stride1Pad0
+-    add_device_operation_instances(
+-        instances,
+-        device_grouped_conv_bwd_data_xdl_f32_instances<2,
+-                                                       NHWGK,
+-                                                       GKYXC,
+-                                                       Empty_Tuple,
+-                                                       NHWGC,
+-                                                       ConvBwdDataFilter1x1Stride1Pad0>{});
+-    // 3. Default -- noshuffle epilogue
+-    add_device_operation_instances(
+-        instances,
+-        device_grouped_conv_bwd_data_xdl_f32_noshuffle_instances<2,
+-                                                                 NHWGK,
+-                                                                 GKYXC,
+-                                                                 Empty_Tuple,
+-                                                                 NHWGC,
+-                                                                 ConvBwdDataDefault>{});
+-    // 4. Filter1x1Stride1Pad0 -- noshuffle epilogue
+-    add_device_operation_instances(instances,
+-                                   device_grouped_conv_bwd_data_xdl_f32_noshuffle_instances<
+-                                       2,
+-                                       NHWGK,
+-                                       GKYXC,
+-                                       Empty_Tuple,
+-                                       NHWGC,
+-                                       ConvBwdDataFilter1x1Stride1Pad0>{});
 -    // 5. Default -- nongrouped_match instances
 -    add_device_operation_instances(
 -        instances,
@@ -61,12 +83,167 @@ index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..49407d9bfd495712b07fb3619be31e01
 -                                       Empty_Tuple,
 -                                       NHWGC,
 -                                       ConvBwdDataFilter1x1Stride1Pad0>{});
++    detail::F32KernelSlots slots;
++    detail::fill_f32_kernel_slots<detail::GenericF32<ConvBwdDataDefault>, 0>(
++        slots, detail::GenericGroup0{});
++    detail::fill_f32_kernel_slots<detail::GenericF32<ConvBwdDataFilter1x1Stride1Pad0>, detail::GenericF32Count>(
++        slots, detail::GenericGroup0{});
++    detail::fill_f32_kernel_slots<detail::NoshuffleF32<ConvBwdDataDefault>, 2 * detail::GenericF32Count>(
++        slots, detail::NoshuffleGroup0{});
++    detail::fill_f32_kernel_slots<detail::NoshuffleF32<ConvBwdDataFilter1x1Stride1Pad0>, 2 * detail::GenericF32Count + detail::NoshuffleF32Count>(
++        slots, detail::NoshuffleGroup0{});
++    detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_kernel_group1_instances(slots);
 +
-+    // Keep the registration order while compiling the nongrouped family separately.
++    // Restore the original family, specialization, and tuple order.
++    for(auto& instance : slots)
++    {
++        instances.push_back(std::move(instance));
++    }
 +    detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_nongrouped_match_instances(instances);
  }
  
  } // namespace instance
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_group1_instance.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_group1_instance.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..b91cd1a76e47e9e888bbaebfaeaf7fc395f05e28
+--- /dev/null
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_group1_instance.cpp
+@@ -0,0 +1,31 @@
++// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++#include "device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_groups.hpp"
++
++namespace ck {
++namespace tensor_operation {
++namespace device {
++namespace instance {
++
++namespace detail {
++
++void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_kernel_group1_instances(F32KernelSlots& slots)
++{
++    fill_f32_kernel_slots<GenericF32<ConvBwdDataDefault>, 0>(
++        slots, GenericGroup1{});
++    fill_f32_kernel_slots<GenericF32<ConvBwdDataFilter1x1Stride1Pad0>, GenericF32Count>(
++        slots, GenericGroup1{});
++    fill_f32_kernel_slots<NoshuffleF32<ConvBwdDataDefault>, 2 * GenericF32Count>(
++        slots, NoshuffleGroup1{});
++    fill_f32_kernel_slots<NoshuffleF32<ConvBwdDataFilter1x1Stride1Pad0>, 2 * GenericF32Count + NoshuffleF32Count>(
++        slots, NoshuffleGroup1{});
++}
++
++} // namespace detail
++
++
++} // namespace instance
++} // namespace device
++} // namespace tensor_operation
++} // namespace ck
+diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_groups.hpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_groups.hpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..c5b9f66756604f27d802c14126ec2318fb89bc20
+--- /dev/null
++++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_kernel_groups.hpp
+@@ -0,0 +1,98 @@
++// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
++// SPDX-License-Identifier: MIT
++
++#pragma once
++
++#include <array>
++#include <memory>
++#include <tuple>
++#include <type_traits>
++#include <utility>
++#include <vector>
++
++#include "ck/library/tensor_operation_instance/gpu/grouped_conv_bwd_data/device_grouped_conv_bwd_data_xdl_instance.hpp"
++
++namespace ck {
++namespace tensor_operation {
++namespace device {
++namespace instance {
++
++namespace detail {
++
++using F32BaseOp = DeviceGroupedConvBwdDataMultipleD<2,
++                                                   NHWGK,
++                                                   GKYXC,
++                                                   Empty_Tuple,
++                                                   NHWGC,
++                                                   F32,
++                                                   F32,
++                                                   Empty_Tuple,
++                                                   F32,
++                                                   PassThrough,
++                                                   PassThrough,
++                                                   PassThrough>;
++
++template <ConvolutionBackwardDataSpecialization ConvSpec>
++using GenericF32 = device_grouped_conv_bwd_data_xdl_f32_instances<
++    2, NHWGK, GKYXC, Empty_Tuple, NHWGC, ConvSpec>;
++
++template <ConvolutionBackwardDataSpecialization ConvSpec>
++using NoshuffleF32 = device_grouped_conv_bwd_data_xdl_f32_noshuffle_instances<
++    2, NHWGK, GKYXC, Empty_Tuple, NHWGC, ConvSpec>;
++
++inline constexpr std::size_t GenericF32Count   = 17;
++inline constexpr std::size_t NoshuffleF32Count = 15;
++using F32KernelSlots =
++    std::array<std::unique_ptr<F32BaseOp>, 2 * (GenericF32Count + NoshuffleF32Count)>;
++
++// Keep shared single-group GEMM instantiations in one translation unit. Each
++// (BlockSize, MPerBlock, NPerBlock) tile bucket owns both epilogues and both
++// convolution specializations. These indices refer to the existing full tuples.
++using GenericGroup0 = std::index_sequence<1, 2, 3, 5, 7, 11, 12, 13, 14, 16>;
++using GenericGroup1 = std::index_sequence<0, 4, 6, 8, 9, 10, 15>;
++using NoshuffleGroup0 = std::index_sequence<0, 1, 3, 5, 9, 10, 11, 12, 14>;
++using NoshuffleGroup1 = std::index_sequence<2, 4, 6, 7, 8, 13>;
++
++template <std::size_t Size, std::size_t... Left, std::size_t... Right>
++constexpr bool covers_tuple_once(std::index_sequence<Left...>, std::index_sequence<Right...>)
++{
++    std::array<unsigned, Size> counts{};
++    ((++counts[Left]), ...);
++    ((++counts[Right]), ...);
++    for(auto count : counts)
++    {
++        if(count != 1)
++            return false;
++    }
++    return true;
++}
++
++static_assert(std::tuple_size_v<GenericF32<ConvBwdDataDefault>> == GenericF32Count);
++static_assert(std::tuple_size_v<GenericF32<ConvBwdDataFilter1x1Stride1Pad0>> == GenericF32Count);
++static_assert(std::tuple_size_v<NoshuffleF32<ConvBwdDataDefault>> == NoshuffleF32Count);
++static_assert(std::tuple_size_v<NoshuffleF32<ConvBwdDataFilter1x1Stride1Pad0>> == NoshuffleF32Count);
++static_assert(covers_tuple_once<GenericF32Count>(GenericGroup0{}, GenericGroup1{}));
++static_assert(covers_tuple_once<NoshuffleF32Count>(NoshuffleGroup0{}, NoshuffleGroup1{}));
++
++template <typename Instances, std::size_t Offset, std::size_t... Indices>
++void fill_f32_kernel_slots(F32KernelSlots& slots, std::index_sequence<Indices...>)
++{
++    static_assert((std::is_base_of_v<F32BaseOp, std::tuple_element_t<Indices, Instances>> && ...));
++    static_assert((std::is_default_constructible_v<std::tuple_element_t<Indices, Instances>> && ...));
++    // Name tuple elements without constructing the full tuple: unselected
++    // operator constructors and vtables must remain in their owning source.
++    ((slots[Offset + Indices] = std::make_unique<std::tuple_element_t<Indices, Instances>>()), ...);
++}
++
++void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_kernel_group1_instances(F32KernelSlots& slots);
++
++void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_nongrouped_match_instances(
++    std::vector<std::unique_ptr<F32BaseOp>>& instances);
++
++} // namespace detail
++
++
++} // namespace instance
++} // namespace device
++} // namespace tensor_operation
++} // namespace ck
 diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_nongrouped_match_instance.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_nongrouped_match_instance.cpp
 new file mode 100644
 index 0000000000000000000000000000000000000000..c8a1ecfe9d68d4689231342e43d2ff696417bf69

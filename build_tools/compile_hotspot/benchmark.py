@@ -183,15 +183,16 @@ def benchmark() -> None:
     paths = re.findall(r"^\+\+\+ b/(.+)$", PATCH.read_text(), re.MULTILINE)
     cmake_path = (Path(ORIGINAL).parent.parent / "CMakeLists.txt").as_posix()
     cpp_paths = [p for p in paths if p.endswith(".cpp")]
-    if (
-        len(paths) != 3
-        or len(set(paths)) != 3
-        or ORIGINAL not in paths
-        or cmake_path not in paths
-        or len(cpp_paths) != 2
-    ):
+    expected_paths = {
+        ORIGINAL,
+        ORIGINAL.replace("_instance.cpp", "_kernel_group1_instance.cpp"),
+        ORIGINAL.replace("_instance.cpp", "_nongrouped_match_instance.cpp"),
+        ORIGINAL.replace("_instance.cpp", "_kernel_groups.hpp"),
+        cmake_path,
+    }
+    if len(paths) != 5 or set(paths) != expected_paths or len(cpp_paths) != 3:
         raise RuntimeError(
-            "Expected two translation units and their exact companion CMakeLists"
+            "Expected three kernel-group sources, private header and companion CMakeLists"
         )
     if any(Path(p).parent != Path(ORIGINAL).parent for p in cpp_paths):
         raise RuntimeError("Patch outside selected CK source directory")
