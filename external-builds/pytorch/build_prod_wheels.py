@@ -1194,6 +1194,18 @@ def do_build_pytorch(
         }
     )
 
+    # CK SDPA for gfx1150/gfx1151 is opt-in in PyTorch (USE_ROCM_CK_SDPA_GFX11,
+    # OFF by default). Build it for gfx115X so the CK backend is available;
+    # AOTriton stays the runtime default. Torch refs without the option ignore it.
+    # An explicit USE_ROCM_CK_SDPA_GFX11 in the environment takes precedence.
+    rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
+    if (
+        use_flash_attention
+        and "USE_ROCM_CK_SDPA_GFX11" not in os.environ
+        and any(arch in ("gfx1150", "gfx1151") for arch in rocm_arch_list)
+    ):
+        env["USE_ROCM_CK_SDPA_GFX11"] = "ON"
+
     if is_windows:
         # Apply Windows-specific settings.
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
