@@ -1838,6 +1838,11 @@ function(_therock_cmake_subproject_setup_toolchain
     if(_generate_debug_info AND THEROCK_DEBUG_INFO_FLAGS)
       string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
       string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
+      # Native CMake HIP-language targets (enable_language(HIP) + add_executable())
+      # get their own CMAKE_HIP_FLAGS_INIT, separate from CMAKE_CXX_FLAGS_INIT, so
+      # without this they silently fall back to the compiler's default DWARF
+      # version instead of the super-project's pinned one.
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_HIP_FLAGS_INIT \" @THEROCK_DEBUG_INFO_FLAGS@\")\n")
     endif()
   endif()
 

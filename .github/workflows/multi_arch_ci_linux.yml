@@ -73,7 +73,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Install artifact manager dependencies
-        run: pip install boto3
+        run: pip install boto3==1.39.15
 
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
