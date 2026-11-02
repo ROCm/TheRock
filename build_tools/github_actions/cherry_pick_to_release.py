@@ -1,24 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Cherry-pick default-branch commits into a ROCm release branch.
-
-A conventional `git cherry-pick` workflow starts from a checked-out release
-branch. A full checkout materializes every tracked file even when the selected
-commit changes only a small number of them.
-
-This tool instead works directly with Git's stored objects. It clones the full
-commit history without checking out any files. For each source commit,
-`git merge-tree` calculates the directory tree that results from applying its
-change to the current release head. `git commit-tree` records that tree as a
-new commit whose parent is the current release head. The new commit then
-becomes the release head for the next pick.
-
-Repeating this process produces the same resulting trees and linear history
-shape as clean `git cherry-pick` operations without creating a working tree.
-Conflicts and empty picks fail the operation; the tool does not attempt to
-resolve them or publish a partial result.
-"""
+"""Coordinate release cherry-picks and publish their pull requests."""
 
 import argparse
 from collections.abc import Callable, Sequence
@@ -26,12 +9,32 @@ from dataclasses import dataclass, replace
 import os
 from pathlib import Path
 import re
-import subprocess
 import sys
 import tempfile
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
+
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, os.fspath(_BUILD_TOOLS_DIR))
+
+from git_cherry_pick import (
+    branch_exists,
+    BuiltCommit,
+    build_cherry_pick_commits,
+    check_git_version,
+    CherryPickConflictError,
+    CherryPickError,
+    clone_repository,
+    CommitIdentity,
+    CommitInfo,
+    PreparedCommit,
+    push_branch,
+    require_remote_branch,
+    resolve_commits,
+    validate_branch_name,
+    validate_commits,
+)
 from github_actions_api import (
     gha_append_step_summary,
     GitHubAPI,
@@ -41,7 +44,6 @@ from github_actions_api import (
 
 TARGET_OWNER = "ROCm"
 HOST_REPOSITORY = "ROCm/TheRock"
-MINIMUM_GIT_VERSION = (2, 41)
 MINIMUM_SHORT_SHA_LENGTH = 7
 FULL_SHA_LENGTH = 40
 SUPPORTED_REPOSITORIES = {
@@ -56,21 +58,7 @@ COMMIT_RE = re.compile(
 JIRA_RE = re.compile(r"^[A-Z][A-Z0-9_]*-[1-9][0-9]*$")
 REGULAR_RELEASE_RE = re.compile(r"^release/therock-([0-9]+\.[0-9]+)$")
 BKC_RELEASE_RE = re.compile(r"^release/bkc/therock-([0-9]+\.[0-9]+)-([0-9]{8})$")
-FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-
-
-class CherryPickError(RuntimeError):
-    """An expected validation or operational failure."""
-
-
-class CherryPickConflictError(CherryPickError):
-    """A cherry-pick that could not be merged cleanly."""
-
-    def __init__(self, commit: str, paths: list[str]) -> None:
-        self.commit = commit
-        self.paths = paths
-        details = ", ".join(paths) if paths else "unknown paths"
-        super().__init__(f"Commit {commit} conflicts in: {details}")
+CHERRY_PICK_MESSAGE_PREFIX = "Cherry-picks commit"
 
 
 class GitHubClient(Protocol):
@@ -96,29 +84,6 @@ class ReleaseInfo:
     @property
     def is_bkc(self) -> bool:
         return self.bkc_date is not None
-
-
-@dataclass(frozen=True)
-class BotIdentity:
-    name: str
-    email: str
-
-
-@dataclass(frozen=True)
-class CommitInfo:
-    sha: str
-    parent: str
-    subject: str
-    message: str
-    author_name: str
-    author_email: str
-    author_date: str
-
-
-@dataclass(frozen=True)
-class BuiltCommit:
-    source: CommitInfo
-    sha: str
 
 
 @dataclass(frozen=True)
@@ -240,7 +205,10 @@ def build_commit_message(
     original_message: str,
 ) -> str:
     """Build the exact message for one generated cherry-pick commit."""
-    header = f"Cherry-picks commit {commit} into the ROCm {release_label} branch.\n\n"
+    header = (
+        f"{CHERRY_PICK_MESSAGE_PREFIX} {commit} into the ROCm "
+        f"{release_label} branch.\n\n"
+    )
     if jira_id is not None:
         header += f"JIRA ID: {jira_id}\n\n"
     return header + original_message
@@ -285,60 +253,6 @@ def build_pr_body(
     return "\n".join(lines)
 
 
-def _run_git(
-    repo: Path | None,
-    args: Sequence[str],
-    *,
-    input_text: str | None = None,
-    check: bool = True,
-    extra_env: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess[str]:
-    command = ["git"]
-    if repo is not None:
-        command.extend(["-C", os.fspath(repo)])
-    command.extend(args)
-    env = os.environ.copy()
-    if extra_env is not None:
-        env.update(extra_env)
-    try:
-        result = subprocess.run(
-            command,
-            input=input_text,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-        )
-    except OSError as exc:
-        operation = args[0] if args else "command"
-        raise CherryPickError(f"Could not execute git {operation}: {exc}") from exc
-    if check and result.returncode != 0:
-        operation = args[0] if args else "command"
-        detail = result.stderr.strip() or result.stdout.strip() or "no details"
-        raise CherryPickError(f"git {operation} failed: {detail}")
-    return result
-
-
-def check_git_version() -> tuple[int, int]:
-    """Require Git support for `merge-tree` and `GIT_ATTR_SOURCE`."""
-    result = _run_git(None, ["--version"])
-    match = re.search(r"git version ([0-9]+)\.([0-9]+)", result.stdout)
-    if match is None:
-        raise CherryPickError(f"Could not parse Git version from {result.stdout!r}")
-    version = (int(match.group(1)), int(match.group(2)))
-    if version < MINIMUM_GIT_VERSION:
-        required = ".".join(str(part) for part in MINIMUM_GIT_VERSION)
-        actual = ".".join(str(part) for part in version)
-        raise CherryPickError(f"Git {required} or newer is required; found {actual}")
-    return version
-
-
-def _validate_branch_name(branch: str, description: str) -> None:
-    result = _run_git(None, ["check-ref-format", "--branch", branch], check=False)
-    if result.returncode != 0:
-        raise CherryPickError(f"Invalid {description} branch name {branch!r}")
-
-
 def target_metadata(api: GitHubClient, repository: str) -> str:
     """Return and validate the selected target repository's default branch."""
     url = f"https://api.github.com/repos/{TARGET_OWNER}/{repository}"
@@ -353,11 +267,11 @@ def target_metadata(api: GitHubClient, repository: str) -> str:
         raise CherryPickError(
             f"Metadata for {TARGET_OWNER}/{repository} has no valid default_branch"
         )
-    _validate_branch_name(default_branch, "default")
+    validate_branch_name(default_branch, "default")
     return default_branch
 
 
-def bot_identity(api: GitHubClient, app_slug: str) -> BotIdentity:
+def bot_identity(api: GitHubClient, app_slug: str) -> CommitIdentity:
     """Resolve the GitHub App bot account's commit identity."""
     login = f"{app_slug}[bot]"
     url = f"https://api.github.com/users/{quote(login, safe='')}"
@@ -385,7 +299,7 @@ def bot_identity(api: GitHubClient, app_slug: str) -> BotIdentity:
                 f"Bot response for {login} has neither a usable email nor numeric ID"
             )
         email = f"{account_id}+{response_login}@users.noreply.github.com"
-    return BotIdentity(name=login, email=email)
+    return CommitIdentity(name=login, email=email)
 
 
 def create_pull_request(
@@ -427,348 +341,6 @@ def create_pull_request(
             f"Created pull request response has malformed html_url {html_url!r}"
         )
     return html_url
-
-
-def clone_target(
-    repository: str, target_path: Path, clone_url: str | None = None
-) -> None:
-    """Create a full-history, commit-only clone without a working tree."""
-    public_url = clone_url or f"https://github.com/{TARGET_OWNER}/{repository}.git"
-    _run_git(
-        None,
-        [
-            "clone",
-            "--filter=tree:0",
-            "--no-checkout",
-            public_url,
-            os.fspath(target_path),
-        ],
-    )
-    if not (target_path / ".git").is_dir():
-        raise CherryPickError(f"Target clone was not created at {target_path}")
-
-
-def _remote_ref(branch: str) -> str:
-    return f"refs/remotes/origin/{branch}"
-
-
-def _require_remote_branch(repo: Path, branch: str, description: str) -> str:
-    ref = _remote_ref(branch)
-    result = _run_git(
-        repo,
-        ["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        check=False,
-    )
-    if result.returncode != 0:
-        raise CherryPickError(
-            f"The {description} branch {branch!r} does not exist in the fresh target clone"
-        )
-    sha = result.stdout.strip()
-    if not FULL_SHA_RE.fullmatch(sha):
-        raise CherryPickError(
-            f"The {description} branch {branch!r} resolved to {sha!r}"
-        )
-    return ref
-
-
-def resolve_commits(repo: Path, commit_specs: Sequence[str]) -> list[str]:
-    """Resolve input SHAs uniquely and deduplicate them in first-seen order."""
-    resolved: list[str] = []
-    seen: set[str] = set()
-    for spec in commit_specs:
-        result = _run_git(
-            repo,
-            ["rev-parse", "--verify", "--quiet", f"{spec}^{{commit}}"],
-            check=False,
-        )
-        sha = result.stdout.strip()
-        if result.returncode != 0 or not FULL_SHA_RE.fullmatch(sha):
-            raise CherryPickError(
-                f"Commit {spec!r} does not resolve to exactly one target commit"
-            )
-        if sha not in seen:
-            resolved.append(sha)
-            seen.add(sha)
-    return resolved
-
-
-def _branch_exists(repo: Path, branch: str) -> bool:
-    result = _run_git(
-        repo,
-        ["show-ref", "--verify", "--quiet", _remote_ref(branch)],
-        check=False,
-    )
-    if result.returncode not in (0, 1):
-        raise CherryPickError(
-            f"Could not check whether target branch {branch!r} exists"
-        )
-    return result.returncode == 0
-
-
-def _commit_message(repo: Path, sha: str) -> str:
-    result = _run_git(repo, ["cat-file", "commit", sha])
-    _, separator, message = result.stdout.partition("\n\n")
-    if not separator:
-        raise CherryPickError(f"Commit {sha} has no parseable commit message")
-    return message
-
-
-def _commit_metadata(repo: Path, sha: str, parent: str) -> CommitInfo:
-    result = _run_git(
-        repo,
-        ["log", "-1", "--format=%an%x00%ae%x00%aI%x00%s", sha],
-    )
-    metadata = result.stdout.removesuffix("\n").split("\0")
-    if len(metadata) != 4 or not all(metadata[:3]):
-        raise CherryPickError(f"Commit {sha} has incomplete author metadata")
-    author_name, author_email, author_date, subject = metadata
-    return CommitInfo(
-        sha=sha,
-        parent=parent,
-        subject=subject,
-        message=_commit_message(repo, sha),
-        author_name=author_name,
-        author_email=author_email,
-        author_date=author_date,
-    )
-
-
-def validate_commits(
-    repo: Path,
-    resolved_commits: Sequence[str],
-    default_branch: str,
-    release_branch: str,
-) -> list[CommitInfo]:
-    """Validate all commits before any cherry-pick commit is constructed."""
-    default_ref = _require_remote_branch(repo, default_branch, "default")
-    release_ref = _require_remote_branch(repo, release_branch, "release")
-    commits: list[CommitInfo] = []
-
-    for sha in resolved_commits:
-        reachability = _run_git(
-            repo,
-            ["merge-base", "--is-ancestor", sha, default_ref],
-            check=False,
-        )
-        if reachability.returncode == 1:
-            raise CherryPickError(
-                f"Commit {sha} is not reachable from target default branch "
-                f"origin/{default_branch}"
-            )
-        if reachability.returncode != 0:
-            raise CherryPickError(
-                f"Could not check whether commit {sha} is on origin/{default_branch}"
-            )
-
-        parent_result = _run_git(repo, ["rev-list", "--parents", "-n", "1", sha])
-        commit_and_parents = parent_result.stdout.split()
-        if len(commit_and_parents) != 2:
-            parent_count = max(0, len(commit_and_parents) - 1)
-            raise CherryPickError(
-                f"Commit {sha} has {parent_count} parents; exactly one is required"
-            )
-        parent = commit_and_parents[1]
-
-        ancestry = _run_git(
-            repo,
-            ["merge-base", "--is-ancestor", sha, release_ref],
-            check=False,
-        )
-        if ancestry.returncode == 0:
-            raise CherryPickError(
-                f"Commit {sha} is already an ancestor of release branch {release_branch}"
-            )
-        if ancestry.returncode != 1:
-            raise CherryPickError(
-                f"Could not inspect release ancestry for commit {sha}"
-            )
-
-        previous_pick = _run_git(
-            repo,
-            [
-                "log",
-                "--format=%H",
-                "--fixed-strings",
-                f"--grep=Cherry-picks commit {sha}",
-                "-n",
-                "1",
-                release_ref,
-            ],
-        )
-        if previous_pick.stdout.strip():
-            raise CherryPickError(
-                f"Commit {sha} was already cherry-picked onto {release_branch}"
-            )
-
-        commits.append(_commit_metadata(repo, sha, parent))
-
-    return commits
-
-
-def _conflict_paths(merge_output: str) -> list[str]:
-    paths: list[str] = []
-    # With --name-only, the tree hash and conflict paths precede a blank line.
-    # Everything after that separator is diagnostic text, not a path.
-    for line in merge_output.splitlines()[1:]:
-        if not line:
-            break
-        if line not in paths:
-            paths.append(line)
-    return paths
-
-
-def build_cherry_pick_commits(
-    repo: Path,
-    release_branch: str,
-    release_label: str,
-    jira_id: str | None,
-    commits: Sequence[CommitInfo],
-    committer: BotIdentity,
-) -> list[BuiltCommit]:
-    """Construct picks using attributes from each generated release head."""
-    head = _run_git(
-        repo,
-        ["rev-parse", "--verify", f"{_remote_ref(release_branch)}^{{commit}}"],
-    ).stdout.strip()
-    built: list[BuiltCommit] = []
-
-    for commit in commits:
-        merge = _run_git(
-            repo,
-            [
-                "merge-tree",
-                "--write-tree",
-                "--name-only",
-                f"--merge-base={commit.parent}",
-                head,
-                commit.sha,
-            ],
-            check=False,
-            extra_env={"GIT_ATTR_SOURCE": head},
-        )
-        if merge.returncode == 1:
-            raise CherryPickConflictError(commit.sha, _conflict_paths(merge.stdout))
-        if merge.returncode != 0:
-            details = merge.stderr.strip() or "no details"
-            raise CherryPickError(
-                f"git merge-tree failed for commit {commit.sha}: {details}"
-            )
-        lines = merge.stdout.splitlines()
-        tree = lines[0].strip() if lines else ""
-        if not FULL_SHA_RE.fullmatch(tree):
-            raise CherryPickError(
-                f"git merge-tree returned invalid tree {tree!r} for commit {commit.sha}"
-            )
-
-        head_tree = _run_git(
-            repo, ["rev-parse", "--verify", f"{head}^{{tree}}"]
-        ).stdout.strip()
-        if tree == head_tree:
-            raise CherryPickError(
-                f"Cherry-picking commit {commit.sha} onto {release_branch} is empty"
-            )
-
-        message = build_commit_message(
-            commit=commit.sha,
-            release_label=release_label,
-            jira_id=jira_id,
-            original_message=commit.message,
-        )
-        commit_result = _run_git(
-            repo,
-            [
-                "-c",
-                "commit.gpgsign=false",
-                "commit-tree",
-                tree,
-                "-p",
-                head,
-                "-F",
-                "-",
-            ],
-            input_text=message,
-            extra_env={
-                "GIT_AUTHOR_NAME": commit.author_name,
-                "GIT_AUTHOR_EMAIL": commit.author_email,
-                "GIT_AUTHOR_DATE": commit.author_date,
-                "GIT_COMMITTER_NAME": committer.name,
-                "GIT_COMMITTER_EMAIL": committer.email,
-            },
-        )
-        head = commit_result.stdout.strip()
-        if not FULL_SHA_RE.fullmatch(head):
-            raise CherryPickError(
-                f"git commit-tree returned invalid commit {head!r} for {commit.sha}"
-            )
-        built.append(BuiltCommit(source=commit, sha=head))
-
-    return built
-
-
-def push_branch(
-    repo: Path,
-    repository: str,
-    token: str,
-    head: str,
-    pr_branch: str,
-    push_url: str | None = None,
-) -> None:
-    """Create an absent branch and verify creation without exposing credentials."""
-    authenticated_url = push_url or (
-        f"https://x-access-token:{quote(token, safe='')}@github.com/"
-        f"{TARGET_OWNER}/{repository}.git"
-    )
-    destination = f"refs/heads/{pr_branch}"
-    refspec = f"{head}:{destination}"
-    command = [
-        "git",
-        "-C",
-        os.fspath(repo),
-        "push",
-        "--porcelain",
-        f"--force-with-lease={destination}:",
-        authenticated_url,
-        refspec,
-    ]
-    env = os.environ.copy()
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-        )
-    except OSError as exc:
-        raise CherryPickError(
-            f"Could not execute git push for {TARGET_OWNER}/{repository} branch "
-            f"{pr_branch!r}"
-        ) from exc
-    if result.returncode != 0:
-        raise CherryPickError(
-            f"Failed to push {TARGET_OWNER}/{repository} branch {pr_branch!r} "
-            f"(git exited with status {result.returncode})"
-        )
-
-    # An existing branch at the same commit yields a successful "up to date"
-    # result even with the lease. Require confirmation of a newly created ref.
-    statuses: list[str] = []
-    for line in result.stdout.splitlines():
-        fields = line.split("\t")
-        if len(fields) == 3 and fields[1] == refspec:
-            statuses.append(fields[0])
-    if statuses == ["="]:
-        raise CherryPickError(
-            f"Target PR branch {pr_branch!r} already exists in "
-            f"{TARGET_OWNER}/{repository}; no pull request was created"
-        )
-    if statuses != ["*"]:
-        raise CherryPickError(
-            f"Could not confirm creation of {TARGET_OWNER}/{repository} branch "
-            f"{pr_branch!r}; inspect the destination before retrying. "
-            "No pull request was created"
-        )
 
 
 def _validate_workflow_provenance(workflow_run_url: str, workflow_actor: str) -> None:
@@ -884,13 +456,14 @@ def execute_cherry_pick(
     default_branch = target_metadata(api, repository)
     with tempfile.TemporaryDirectory(prefix="therock-cherry-pick-") as temp_dir:
         target_path = Path(temp_dir) / repository
-        clone_target(repository, target_path, clone_url=clone_url)
-        _require_remote_branch(target_path, release.branch, "release")
+        public_url = clone_url or f"https://github.com/{TARGET_OWNER}/{repository}.git"
+        clone_repository(public_url, target_path)
+        require_remote_branch(target_path, release.branch, "release")
         resolved_commits = resolve_commits(target_path, commit_specs)
         pr_branch = derive_pr_branch(
             release=release, jira_id=jira_id, first_commit=resolved_commits[0]
         )
-        if _branch_exists(target_path, pr_branch):
+        if branch_exists(target_path, pr_branch):
             raise CherryPickError(
                 f"Target PR branch {pr_branch!r} already exists in "
                 f"{TARGET_OWNER}/{repository}"
@@ -900,16 +473,29 @@ def execute_cherry_pick(
             repo=target_path,
             resolved_commits=resolved_commits,
             default_branch=default_branch,
-            release_branch=release.branch,
+            target_branch=release.branch,
+            target_description="release",
+            previous_pick_message_prefix=CHERRY_PICK_MESSAGE_PREFIX,
         )
         committer = bot_identity(api, app_slug)
+        prepared_commits = [
+            PreparedCommit(
+                source=commit,
+                message=build_commit_message(
+                    commit=commit.sha,
+                    release_label=release.label,
+                    jira_id=jira_id,
+                    original_message=commit.message,
+                ),
+            )
+            for commit in commits
+        ]
         try:
             built_commits = build_cherry_pick_commits(
                 repo=target_path,
-                release_branch=release.branch,
-                release_label=release.label,
-                jira_id=jira_id,
-                commits=commits,
+                target_branch=release.branch,
+                target_description="release",
+                commits=prepared_commits,
                 committer=committer,
             )
         except CherryPickConflictError as exc:
@@ -944,14 +530,20 @@ def execute_cherry_pick(
             summary_writer(_dry_run_summary(result))
             return result
 
-        push_branch(
-            repo=target_path,
-            repository=repository,
-            token=app_token,
-            head=built_commits[-1].sha,
-            pr_branch=pr_branch,
-            push_url=push_url,
+        authenticated_url = push_url or (
+            f"https://x-access-token:{quote(app_token, safe='')}@github.com/"
+            f"{TARGET_OWNER}/{repository}.git"
         )
+        try:
+            push_branch(
+                repo=target_path,
+                remote_url=authenticated_url,
+                remote_description=f"{TARGET_OWNER}/{repository}",
+                head=built_commits[-1].sha,
+                branch=pr_branch,
+            )
+        except CherryPickError as exc:
+            raise CherryPickError(f"{exc}; no pull request was created") from exc
         try:
             pr_url = create_pull_request(
                 api=api,

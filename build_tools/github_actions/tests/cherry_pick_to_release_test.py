@@ -12,17 +12,16 @@ from unittest.mock import patch
 
 import yaml
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, os.fspath(BUILD_TOOLS_DIR))
+sys.path.insert(0, os.fspath(BUILD_TOOLS_DIR / "github_actions"))
+
 from cherry_pick_to_release import (
     bot_identity,
     build_commit_message,
     build_pr_body,
     build_pr_title,
-    check_git_version,
-    clone_target,
-    _conflict_paths,
     CherryPickError,
-    CommitInfo,
     create_pull_request,
     derive_pr_branch,
     execute_cherry_pick,
@@ -32,14 +31,13 @@ from cherry_pick_to_release import (
     parse_jira_id,
     parse_release_branch,
     parse_repository,
-    push_branch,
-    resolve_commits,
     RunResult,
     target_metadata,
     validate_ticket_requirement,
 )
 
 from github_actions_api import GitHubAPIError
+from git_cherry_pick import clone_repository, CommitInfo, push_branch
 
 
 THEROCK_ROOT = Path(__file__).resolve().parents[3]
@@ -364,40 +362,6 @@ class GitHubOperationsTest(unittest.TestCase):
                 )
 
 
-class GitPrimitiveValidationTest(unittest.TestCase):
-    def test_commit_resolution_failure_is_reported(self) -> None:
-        ambiguous = subprocess.CompletedProcess(
-            args=["git", "rev-parse"],
-            returncode=128,
-            stdout="",
-            stderr="error: short object ID abcdef0 is ambiguous",
-        )
-        with patch("cherry_pick_to_release._run_git", return_value=ambiguous):
-            with self.assertRaisesRegex(CherryPickError, "exactly one target commit"):
-                resolve_commits(Path("/unused"), ["abcdef0"])
-
-    def test_git_older_than_attribute_source_requirement_is_rejected(self) -> None:
-        old_version = subprocess.CompletedProcess(
-            args=["git", "--version"],
-            returncode=0,
-            stdout="git version 2.40.9\n",
-            stderr="",
-        )
-        with patch("cherry_pick_to_release._run_git", return_value=old_version):
-            with self.assertRaisesRegex(CherryPickError, "Git 2.41 or newer"):
-                check_git_version()
-
-    def test_git_with_attribute_source_support_is_accepted(self) -> None:
-        supported_version = subprocess.CompletedProcess(
-            args=["git", "--version"],
-            returncode=0,
-            stdout="git version 2.41.0\n",
-            stderr="",
-        )
-        with patch("cherry_pick_to_release._run_git", return_value=supported_version):
-            self.assertEqual(check_git_version(), (2, 41))
-
-
 class CommandLineTest(unittest.TestCase):
     def test_dry_run_defaults_environment_and_explicit_overrides(self) -> None:
         cases = (
@@ -439,20 +403,6 @@ class CommandLineTest(unittest.TestCase):
                         api=api.return_value,
                     )
                     api.assert_called_once_with(github_token=TOKEN)
-
-
-class ConflictOutputTest(unittest.TestCase):
-    def test_only_path_section_is_reported_and_path_whitespace_is_preserved(
-        self,
-    ) -> None:
-        paths = [" binary-like.txt ", "nested/module", "warning: real filename"]
-        diagnostics = (
-            "warning: Cannot merge binary files: binary-like.txt",
-            "CONFLICT (binary): Merge conflict in binary-like.txt",
-            "CONFLICT (submodule): Merge conflict in nested/module",
-        )
-        output = "\n".join(["a" * 40, *paths, "", *diagnostics]) + "\n"
-        self.assertEqual(_conflict_paths(output), paths)
 
 
 class WorkflowWiringTest(unittest.TestCase):
@@ -1012,21 +962,26 @@ class CherryPickIntegrationTest(unittest.TestCase):
 
         def push_after_concurrent_creation(
             repo: Path,
-            repository: str,
-            token: str,
+            remote_url: str,
+            remote_description: str,
             head: str,
-            pr_branch: str,
-            push_url: str | None = None,
+            branch: str,
         ) -> None:
             nonlocal concurrent_head
             concurrent_head = head if identical_head else self.target.base
             _git(
                 "push",
                 self.target.remote.as_uri(),
-                f"{concurrent_head}:refs/heads/{pr_branch}",
+                f"{concurrent_head}:refs/heads/{branch}",
                 cwd=repo,
             )
-            push_branch(repo, repository, token, head, pr_branch, push_url=push_url)
+            push_branch(
+                repo=repo,
+                remote_url=remote_url,
+                remote_description=remote_description,
+                head=head,
+                branch=branch,
+            )
 
         expected_error = "already exists" if identical_head else "Failed to push"
         with patch(
@@ -1198,7 +1153,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
 
     def test_partial_clone_configuration_and_no_checkout(self) -> None:
         clone_path = self.target.root / "inspection-clone"
-        clone_target("rocm-systems", clone_path, clone_url=self.target.remote.as_uri())
+        clone_repository(self.target.remote.as_uri(), clone_path)
         self.assertEqual(
             _git(
                 "config", "--get", "remote.origin.promisor", cwd=clone_path
@@ -1212,56 +1167,6 @@ class CherryPickIntegrationTest(unittest.TestCase):
             "tree:0",
         )
         self.assertEqual({path.name for path in clone_path.iterdir()}, {".git"})
-
-
-class FailureSanitizationTest(unittest.TestCase):
-    def test_push_requires_creation_confirmation_for_exact_refspec(self) -> None:
-        head = "a" * 40
-        branch = "shared/cherry-pick/therock-10.2-airdel-12"
-        refspec = f"{head}:refs/heads/{branch}"
-        for status_output in (
-            "",
-            f"*\t{head}:refs/heads/another-branch\t[new branch]\n",
-            f"*\t{refspec}\n",
-            f"*\t{refspec}\t[new branch]\n*\t{refspec}\t[new branch]\n",
-            f"=\t{refspec}\t[up to date]\n",
-        ):
-            result = subprocess.CompletedProcess(
-                args=["git", "push"],
-                returncode=0,
-                stdout=f"To https://x-access-token:{TOKEN}@github.com/ROCm/rocm-systems.git\n"
-                f"{status_output}Done\n",
-                stderr=f"diagnostic containing {TOKEN}",
-            )
-            with self.subTest(status_output=status_output):
-                with patch(
-                    "cherry_pick_to_release.subprocess.run", return_value=result
-                ), self.assertRaises(CherryPickError) as raised:
-                    push_branch(
-                        Path("/temporary/repo"), "rocm-systems", TOKEN, head, branch
-                    )
-                self.assertNotIn(TOKEN, str(raised.exception))
-                self.assertNotIn("x-access-token", str(raised.exception))
-                self.assertIn(branch, str(raised.exception))
-
-    def test_push_failure_does_not_include_credentials(self) -> None:
-        result = subprocess.CompletedProcess(
-            args=["git", "push"],
-            returncode=1,
-            stdout="",
-            stderr=f"fatal: URL included {TOKEN}",
-        )
-        with patch("cherry_pick_to_release.subprocess.run", return_value=result):
-            with self.assertRaises(CherryPickError) as raised:
-                push_branch(
-                    Path("/temporary/repo"),
-                    "rocm-systems",
-                    TOKEN,
-                    "a" * 40,
-                    "shared/cherry-pick/therock-10.2-airdel-12",
-                )
-        self.assertNotIn(TOKEN, str(raised.exception))
-        self.assertNotIn("x-access-token", str(raised.exception))
 
 
 if __name__ == "__main__":
