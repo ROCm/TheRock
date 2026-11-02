@@ -1965,6 +1965,10 @@ class SparseRefUpdateIntegrationTest(LocalGitTestCase):
         with (
             self.temporary_clone(),
             patch.dict(SUBMODULE_CONFIG, {submodule: config}),
+            patch(
+                "bump_automation.submodule_changed",
+                side_effect=lambda before, after, path: path == submodule,
+            ),
             patch("bump_automation.get_submodule_sha", return_value=self.OLD_SHA),
             patch("bump_automation.close_stale_prs", return_value=[]),
             patch(
@@ -1981,7 +1985,6 @@ class SparseRefUpdateIntegrationTest(LocalGitTestCase):
                 self.OLD_SHA,
                 self.NEW_SHA,
                 {config["token_key"]: "token"},
-                only_submodule=submodule,
             )
         self.assertEqual(Path.cwd(), cwd)
         next_bump.assert_called_once_with(submodule, "token")
