@@ -127,7 +127,7 @@ jobs:
             !compile-hotspot-evidence/*.o
           if-no-files-found: error
           retention-days: 14
-      - name: Compare original, three-TU and two-TU object groups
+      - name: Compare original, previous three-file split and kernel groups
         if: inputs.operation == 'benchmark'
         run: python3 .compile-hotspot-instrumentation/build_tools/compile_hotspot/benchmark.py run
       - name: Retain exact objects and headers for GPU contract validation
