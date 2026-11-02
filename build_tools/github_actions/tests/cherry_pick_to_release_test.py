@@ -711,12 +711,20 @@ class CherryPickIntegrationTest(unittest.TestCase):
             "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%G?",
             f"refs/heads/{result.pr_branch}",
         ).removesuffix("\n")
+        source_author = self.target.remote_git(
+            "log",
+            "-1",
+            "--format=%an%x00%ae%x00%aI",
+            self.target.first,
+        ).removesuffix("\n")
+        author_name, author_email, author_date, *committer = metadata.split("\0")
         self.assertEqual(
-            metadata.split("\0"),
+            [author_name, author_email, author_date],
+            source_author.split("\0"),
+        )
+        self.assertEqual(
+            committer,
             [
-                "Original Author",
-                "original@example.com",
-                "2026-10-25T10:20:30+00:00",
                 "systems-assistant[bot]",
                 "systems-assistant@example.com",
                 "N",
