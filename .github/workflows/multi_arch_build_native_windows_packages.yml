@@ -100,7 +100,7 @@ jobs:
       contents: read
       id-token: write # Authenticate to AWS to upload MSI packages.
     name: Build MSI
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
+    runs-on: windows-2022
     defaults:
       run:
         shell: bash
