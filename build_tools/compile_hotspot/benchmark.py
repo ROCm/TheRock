@@ -348,6 +348,27 @@ def benchmark() -> None:
             "limits": "Isolated object groups; no stage improvement inferred. Identical wrappers/RSS sampling in all three arms; two observations per arm, mirrored order, OS cache uncontrolled.",
         },
     )
+    # Reject host/template diagnostics before spending time on control trials.
+    set_state("candidate")
+    dispatcher = candidate[diagnostic.SOURCE]
+    syntax_argv = [
+        value
+        for value in common_flags(arguments(dispatcher["command"]))
+        if value not in {"-MD", "-MMD", "-MP"}
+    ] + ["-fsyntax-only", dispatcher["file"]]
+    diagnostic.save(
+        "candidate-syntax-preflight.json",
+        {
+            "argv": syntax_argv,
+            "cwd": dispatcher["directory"],
+            "scope": "Untimed dispatcher host/device syntax and warning check; no flag relaxation.",
+        },
+    )
+    diagnostic.run(
+        syntax_argv,
+        cwd=Path(dispatcher["directory"]),
+        log="candidate-syntax-preflight.log",
+    )
     summary = []
     for trial, variant in trials:
         set_state(variant)

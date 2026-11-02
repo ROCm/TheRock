@@ -12,7 +12,7 @@ index 67bc0d8a8dbb65c073ddc665eec45801a5be9dfe..8a92d6eeee53aedfe28b887152a22e2b
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_tf32_16_16_instance.cpp
     xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_tf32_instance.cpp
 diff --git a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
-index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..48d2aba718d06812c2279b10974a487f9658df82 100644
+index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..51368064e85d7324786cdd89d0d2f47100374847 100644
 --- a/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
 +++ b/projects/composablekernel/library/src/tensor_operation_instance/gpu/grouped_conv2d_bwd_data/nhwgc/xdl/device_grouped_conv2d_bwd_data_xdl_nhwgc_gkyxc_nhwgk_f32_instance.cpp
 @@ -1,8 +1,7 @@
@@ -25,7 +25,7 @@ index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..48d2aba718d06812c2279b10974a487f
  
  namespace ck {
  namespace tensor_operation {
-@@ -23,60 +22,23 @@ void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_instances(
+@@ -23,60 +22,22 @@ void add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_instances(
                                                                    PassThrough,
                                                                    PassThrough>>>& instances)
  {
@@ -95,10 +95,9 @@ index 9df22a7bd85b794bd47ae9418d9b2c38d635540f..48d2aba718d06812c2279b10974a487f
 +    detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_kernel_group1_instances(slots);
 +
 +    // Restore the original family, specialization, and tuple order.
-+    for(auto& instance : slots)
-+    {
-+        instances.push_back(std::move(instance));
-+    }
++    ck::static_for<0, std::tuple_size_v<detail::F32KernelSlots>, 1>{}([&](auto i) {
++        instances.push_back(std::move(slots[i.value]));
++    });
 +    detail::add_device_grouped_conv2d_bwd_data_xdl_nhwgk_gkyxc_nhwgc_f32_nongrouped_match_instances(instances);
  }
  
