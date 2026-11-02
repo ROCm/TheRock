@@ -2200,6 +2200,34 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
         self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
         self.assertFalse(profiler.files.has("bin/not-a-profiler-tool"))
 
+    def test_profiler_wheel_includes_licenses(self):
+        """Each profiler tool's LICENSE.md from its doc artifact is in the wheel."""
+        from build_python_packages import (
+            PROFILER_WHEEL_INCLUDES,
+            profiler_artifact_filter,
+        )
+
+        artifact_dir = self.temp_dir / "artifacts"
+        for name in ["rocprofiler-compute", "rocprofiler-systems"]:
+            self._add_artifact(
+                artifact_dir,
+                name,
+                "doc",
+                "generic",
+                {f"share/doc/{name}/LICENSE.md": f"{name} license"},
+            )
+
+        params = self._make_params(artifact_dir)
+        profiler_artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        profiler.populate_runtime_files(profiler_artifacts)
+
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-compute/LICENSE.md"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-systems/LICENSE.md"))
+
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
     """Unit tests for ensure_profiler_library_symlinks() in isolation - no
