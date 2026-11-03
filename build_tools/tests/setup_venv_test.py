@@ -295,31 +295,30 @@ class WheelWorkflowTest(unittest.TestCase):
         )
         self.job = yaml.safe_load(workflow_path.read_text())["jobs"]["test_wheels"]
 
-    def test_dependency_index_is_limited_to_linux_artifact_installs(self):
-        self.assertEqual(
-            self.job["env"].get("ARTIFACT_DEPENDENCY_INDEX_URL"),
-            "${{ contains(inputs.test_runs_on, 'linux') && "
-            "inputs.package_index_url == '' && "
-            "inputs.package_find_links_url != '' && "
-            "'https://pypi.org/simple' || '' }}",
-        )
-
-    def test_core_install_steps_use_the_artifact_dependency_index(self):
+    def test_core_install_steps_do_not_add_a_dependency_index(self):
+        self.assertNotIn("ARTIFACT_DEPENDENCY_INDEX_URL", self.job["env"])
         steps = {step.get("id"): step for step in self.job["steps"]}
-        expected_indexes = {
-            "install_libraries": "${ARTIFACT_DEPENDENCY_INDEX_URL}",
-            "install_devel": "${ARTIFACT_DEPENDENCY_INDEX_URL}",
-            "install_profiler": (
-                "${ARTIFACT_DEPENDENCY_INDEX_URL:"
-                "-https://nightly.repo.amd.com/rocm/whl-next/}"
-            ),
-        }
-        for step_id, expected_index in expected_indexes.items():
+        for step_id in ("install_libraries", "install_devel"):
             with self.subTest(step=step_id):
                 command = shlex.split(steps[step_id]["run"])
-                self.assertIn(f"--extra-index-url={expected_index}", command)
+                self.assertFalse(
+                    any(
+                        argument.startswith("--extra-index-url") for argument in command
+                    )
+                )
                 self.assertIn("--index-url=${PACKAGE_INDEX_URL}", command)
                 self.assertIn("--find-links=${PACKAGE_FIND_LINKS_URL}", command)
+
+    def test_profiler_install_resolves_optional_dependencies_from_pypi(self):
+        step = next(
+            step for step in self.job["steps"] if step.get("id") == "install_profiler"
+        )
+        self.assertEqual(step["if"], "${{ !cancelled() && runner.os == 'Linux' }}")
+        command = shlex.split(step["run"])
+        self.assertIn("rocm[profiler]==${ROCM_VERSION}", command)
+        self.assertIn("--index-url=${PACKAGE_INDEX_URL}", command)
+        self.assertIn("--find-links=${PACKAGE_FIND_LINKS_URL}", command)
+        self.assertIn("--extra-index-url=https://pypi.org/simple", command)
 
 
 if __name__ == "__main__":

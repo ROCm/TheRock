@@ -56,6 +56,12 @@ EXTRAS_REQUIRE = {
     for pkg in dist_info.ALL_PACKAGES.values()
     if not pkg.required
 }
+if "profiler" in EXTRAS_REQUIRE:
+    core_package_name = dist_info.ALL_PACKAGES["core"].get_dist_package_name()
+    EXTRAS_REQUIRE["profiler"].append(
+        f"{core_package_name}[rocpd]=={dist_info.__version__}; sys_platform == 'linux'"
+    )
+
 # Per-target extras for target-specific packages with multiple available
 # targets (e.g. device wheels in kpack-split mode): explicit pip install
 # rocm[device-gfx942] plus a device-all aggregate. Cross-platform multi-arch

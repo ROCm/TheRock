@@ -245,28 +245,36 @@ remain subject to their normal retention policy.
 
 ## ROCpd Dependencies
 
-The Linux `rocm-sdk-core` wheel includes `rocpd` and declares pandas as a runtime
-dependency for CSV conversion and summaries. Both `rocm` and `rocm[profiler]`
-install this core wheel. Windows installations do not acquire these dependencies.
+ROCpd processes profiling databases produced by `rocprofv3`. The Linux
+`rocm-sdk-core` wheel includes its commands, but has no mandatory Python
+dependencies. Plain `rocm`, libraries, and devel installations do not install
+pandas. Help and Perfetto conversion remain available without analysis extras;
+CSV conversion and summaries require pandas.
 
-The `rocm-sdk-core[rocpd-dashboard]`, `rocm-sdk-core[rocpd-otf2]`, and
-`rocm-sdk-core[rocpd-pdf]` extras add `jinja2`, `otf2`, and `reportlab`, respectively.
-Request each extra at the same version as the installed `rocm-sdk-core`, using
-the same package index as the ROCm installation. These exporters are not required
-for CSV conversion, summaries, or Perfetto output.
+| Core-wheel extra  | Dependencies      | Functionality                |
+| ----------------- | ----------------- | ---------------------------- |
+| `rocpd`           | pandas            | CSV conversion and summaries |
+| `rocpd-dashboard` | pandas, jinja2    | HTML dashboard               |
+| `rocpd-otf2`      | otf2              | OTF2 conversion              |
+| `rocpd-pdf`       | pandas, reportlab | PDF export                   |
 
-Upstream OTF2 3.2 currently provides supported Linux wheels for Python 3.10 and
-3.11. OTF2 on newer interpreters requires a compatible wheel to be built and
-published separately. Keeping the extras independent lets dashboard and PDF
-users install their dependencies without requiring an OTF2 wheel.
+On Linux, `rocm[profiler]` requests `rocm-sdk-core[rocpd]` at the same version,
+so CSV conversion and summaries work after the documented profiler install.
+Existing core installations can instead request `rocm-sdk-core[rocpd]` or an
+exporter extra at their installed core version. Extras can be combined; none
+of these dependencies are selected on Windows or macOS.
 
-The dependency mirror retains pandas 2.3.3 and Pillow 12.3.0 for Python 3.10
-alongside the latest releases for newer Python versions. Before publishing wheels
-with new dependency metadata, publish the configured dependencies and deploy their aggregate-index
-ownership routes following the
-[index ownership procedure](/build_tools/packaging/python/README.md). Bundling a
-requirements file in the wheel does not install those dependencies or expose them
-through the package index.
+As with `rocm-profiler[compute-analyze]`, third-party dependencies come from
+PyPI. Add `--extra-index-url=https://pypi.org/simple` when the primary index is
+the ROCm index. These extras do not depend on new AMD mirror routes. Offline
+installations must supply the selected dependencies in their wheelhouse.
+
+The SDK's installed requirements file combines analysis and optional exporters,
+including the obsolete `dataclasses` backport. The core wheel declares the
+feature groups separately so that requesting CSV or PDF does not require OTF2.
+OTF2 wheels are interpreter-specific; a compatible wheel or a source build may
+be needed on newer Python versions. Installing an analysis extra does not make
+OTF2 available.
 
 ## rocm-profiler
 
@@ -282,12 +290,13 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 The recommended way to install profiling tools is via the meta package:
 
 ```bash
-pip install "rocm[profiler]"
+python -m pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+  --extra-index-url https://pypi.org/simple "rocm[profiler]"
 ```
 
 This will install:
 
-- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-sdk-core[rocpd]` (required runtime, SDK, and ROCpd analysis dependencies on Linux)
 - `rocm-profiler` (profiling tools)
 
 #### Direct installation
@@ -300,11 +309,8 @@ pip install rocm-profiler
 
 This may result in missing dependencies unless `rocm-sdk-core` is also installed.
 
-Always prefer:
-
-```bash
-pip install "rocm[profiler]"
-```
+Prefer the meta-package installation above, using the ROCm index appropriate
+for your release.
 
 ### Package Layout
 
