@@ -178,35 +178,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
 
   ##############################################################################
-  # roctx-fortran
-  # The generated ROCTx Fortran binding (rocm-systems projects/fortran,
-  # RFC0015), built against the rocprofiler-sdk above. core/ builds the HIP
-  # binding from the same project. Linux only, and skipped until
-  # projects/fortran exists in the rocm-systems source.
-  ##############################################################################
-
-  set(_roctx_fortran_subproject)
-  if(NOT WIN32 AND EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran/CMakeLists.txt")
-    set(_roctx_fortran_subproject roctx-fortran)
-    therock_cmake_subproject_declare(roctx-fortran
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/roctx-fortran"
-      CMAKE_ARGS
-        -DHIP_BUILD_FORTRAN_BINDINGS=OFF
-        -DROCTX_BUILD_FORTRAN_BINDINGS=ON
-        -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
-        -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-        -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-      COMPILER_TOOLCHAIN
-        amd-hip
-      RUNTIME_DEPS
-        rocprofiler-sdk
-    )
-    therock_cmake_subproject_provide_package(roctx-fortran roctx-fortran lib/cmake/roctx-fortran)
-    therock_cmake_subproject_activate(roctx-fortran)
-  endif()
-
-  ##############################################################################
   # roctracer
   # This is a very old, deprecated library with a number of quirks. Long term,
   # everything is supposed to migrate to rocprofiler-sdk, which has runtime
@@ -259,7 +230,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk
       roctracer
       rocprof-trace-decoder
-      ${_roctx_fortran_subproject}
   )
 
 endif(THEROCK_ENABLE_ROCPROFV3)

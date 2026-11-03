@@ -338,37 +338,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   therock_cmake_subproject_provide_package(hip-clr hiprtc lib/cmake/hiprtc)
   therock_cmake_subproject_activate(hip-clr)
 
-  ##############################################################################
-  # hip-fortran
-  # The generated HIP Fortran binding (rocm-systems projects/fortran, RFC0015),
-  # built against the hip-clr above. projects/fortran also holds the ROCTx
-  # binding, which profiler/ builds after rocprofiler-sdk. Linux only, and
-  # skipped until projects/fortran exists in the rocm-systems source.
-  ##############################################################################
-
-  set(_hip_fortran_subproject)
-  if(NOT WIN32 AND EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran/CMakeLists.txt")
-    set(_hip_fortran_subproject hip-fortran)
-    therock_cmake_subproject_declare(hip-fortran
-      USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-fortran"
-      CMAKE_ARGS
-        -DHIP_PLATFORM=amd
-        -DHIP_BUILD_FORTRAN_BINDINGS=ON
-        -DROCTX_BUILD_FORTRAN_BINDINGS=OFF
-        -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
-        -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-        -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-      COMPILER_TOOLCHAIN
-        amd-hip
-      RUNTIME_DEPS
-        hip-clr
-    )
-    therock_cmake_subproject_provide_package(hip-fortran hip-fortran lib/cmake/hip-fortran)
-    therock_cmake_subproject_activate(hip-fortran)
-  endif()
-
   therock_provide_artifact(core-hip
     TARGET_NEUTRAL
     DESCRIPTOR artifact-core-hip.toml
@@ -380,7 +349,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       run
     SUBPROJECT_DEPS
       hip-clr
-      ${_hip_fortran_subproject}
   )
 
   therock_test_validate_shared_lib(

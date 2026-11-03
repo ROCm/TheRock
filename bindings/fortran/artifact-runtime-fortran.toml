@@ -1,0 +1,9 @@
+# runtime-fortran: the HIP and ROCTx Fortran bindings. The archives, .mod files
+# and config packages are default dev paths; share/ holds the .F90 sources for
+# other compilers. Optional until rocm-systems has projects/fortran.
+[components.dev."bindings/fortran/runtime-fortran/stage"]
+include = [
+  "share/hip/fortran/**",
+  "share/roctx/fortran/**",
+]
+optional = true

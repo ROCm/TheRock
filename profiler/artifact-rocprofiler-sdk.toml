@@ -42,12 +42,3 @@ include = [
   "lib/python*/**",
 ]
 [components.dev."profiler/rocprof-trace-decoder/stage"]
-
-# roctx-fortran: the ROCTx Fortran binding, present once rocm-systems has
-# projects/fortran. The archive, .mod file and config package are default dev
-# paths; share/ holds the .F90 source for other compilers.
-[components.dev."profiler/roctx-fortran/stage"]
-include = [
-  "share/roctx/fortran/**",
-]
-optional = true
