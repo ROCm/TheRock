@@ -105,7 +105,7 @@ class CoverageProject:
             its instrumentation on. These names are not standardised -- most
             projects use `BUILD_CODE_COVERAGE` or `CODE_COVERAGE`, a few use
             `<PROJECT>_ENABLE_COVERAGE`, RCCL uses `ENABLE_CODE_COVERAGE` --
-            so therock_subproject.cmake translates TheRock's flag into this
+            so therock_coverage.cmake translates TheRock's flag into this
             name when configuring the subproject. Being per-subproject is what
             keeps the generic names from instrumenting the whole build.
         unsupported_reason: Set instead of coverage_option when the project
@@ -809,7 +809,7 @@ def emit_cmake(output_path: Path) -> None:
     THEROCK_COVERAGE_*_ALL options, and are limited to projects that can be
     measured and are not currently blocked. The option map is not: a blocked
     project stays in it so that naming it explicitly still instruments it.
-    The option map tells therock_subproject.cmake which flag each
+    The option map tells therock_coverage.cmake which flag each
     subproject actually implements, since the names are not standardised
     upstream. CMakeLists.txt reads both so it does not hardcode either.
     """

@@ -270,7 +270,7 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         )
 
     def test_partial_selection_names_each_project_in_upper_case(self):
-        # therock_subproject.cmake only forwards the upper case spelling.
+        # therock_coverage.cmake only forwards the upper case spelling.
         self.assertEqual(
             configure_coverage_ci.build_coverage_cmake_options(["rocblas"]),
             ["-DROCBLAS_ENABLE_COVERAGE=ON"],

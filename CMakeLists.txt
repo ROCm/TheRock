@@ -214,7 +214,7 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 ################################################################################
 # Coverage Options
 # Enable code-coverage instrumentation for a whole component group by setting the
-# per-project <PROJECT>_ENABLE_COVERAGE flags. therock_subproject.cmake turns
+# per-project <PROJECT>_ENABLE_COVERAGE flags. therock_coverage.cmake turns
 # each one into whichever option that subproject actually implements, using the
 # THEROCK_COVERAGE_OPTION_<PROJECT> map generated below. Both the group lists
 # and that map come from the coverage registry (COVERAGE_PROJECTS in

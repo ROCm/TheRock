@@ -1,9 +1,9 @@
 # Code Coverage
 
-TheRock builds ROCm libraries with LLVM source-based coverage and reports to
-[Codecov](https://app.codecov.io/gh/ROCm/TheRock). Coverage is opt-in per
-project — instrumentation slows a library substantially, and a report is only
-worth producing when the test suite gives a meaningful signal.
+TheRock can build ROCm libraries with LLVM source-based coverage
+instrumentation. Coverage is opt-in per project — instrumentation slows a
+library substantially, and a report is only worth producing when the test suite
+gives a meaningful signal.
 
 ## Enabling coverage for a local build
 
@@ -15,13 +15,15 @@ cmake -B build -GNinja . \
 
 `<PROJECT>_ENABLE_COVERAGE` is TheRock's own flag; upstream option names are
 not standardised (hipRAND: `BUILD_CODE_COVERAGE`, rocRAND: `CODE_COVERAGE`,
-RCCL: `ENABLE_CODE_COVERAGE`), so `therock_subproject.cmake` translates it to
+RCCL: `ENABLE_CODE_COVERAGE`), so `therock_coverage.cmake` translates it to
 whichever name `COVERAGE_PROJECTS` registers for that project. Passing the flag
 for an unregistered project is a configure error, not a silent no-op.
 
-Instrumentation is Linux only: the profile runtime's link flags and the
-device-compilation negation below are both clang/lld specific. On an MSVC build
-the flag is ignored with a warning rather than partially applied.
+Instrumentation requires a subproject compiled with clang from the `amd-llvm`
+toolchain, which is how most ROCm subprojects are built on both Linux and
+Windows (see [Windows support](windows_support.md#cmake-build-usage)). For a
+subproject compiled with MSVC itself, the flag is ignored with a warning rather
+than partially applied.
 
 ### Enabling a whole group
 
@@ -42,7 +44,7 @@ Upstream coverage flags are unqualified and the HIP driver forwards them to
 device compilation. Two failures result: the runtime aborts looking up missing
 profiling symbols in the device image, and when readback succeeds it writes a
 profile named after the device target (colons included, breaking CI artifact
-upload). `therock_subproject.cmake` appends the negation scoped to device
+upload). `therock_coverage.cmake` appends the negation scoped to device
 compilation:
 
 ```
@@ -59,8 +61,8 @@ The later of a `-f`/`-fno-` pair wins; the project's own flags arrive after
 `libclang_rt.profile_rocm.a` needs `-ldl` and `-lpthread`, which the driver
 does not supply. On the manylinux base these are not in libc, so an instrumented
 shared library gets undefined references and any executable linking it fails
-`--no-allow-shlib-undefined`. `therock_subproject.cmake` adds both libraries
-automatically.
+`--no-allow-shlib-undefined`. On Linux, `therock_coverage.cmake` adds both
+libraries automatically.
 
 ## Adding a project
 
