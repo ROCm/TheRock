@@ -285,12 +285,14 @@ def run(args: argparse.Namespace):
             # TODO: The base package is shoving CMake redirects into lib.
             excludes=[
                 "**/cmake/**",
-                # profiler binaries
-                "bin/rocprof-*",
+                # profiler binaries (rocprof-attach from rocprofiler-sdk stays in core)
+                "bin/rocprof-compute*",
+                "bin/rocprof-sys-*",
                 # rocprofiler-systems payload
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
                 "lib/python/site-packages/rocprofsys/**",
+                "lib/python*/site-packages/rocprof_trace_decoder/**",
                 "lib/rocprofiler-systems/**",
                 "libexec/rocprofiler-systems/**",
                 "share/**/rocprofiler-systems/**",
@@ -303,7 +305,7 @@ def run(args: argparse.Namespace):
         includes=PROFILER_WHEEL_INCLUDES,
     )
 
-    if profiler_artifacts.artifact_names:
+    if _artifact_catalog_has_matches(profiler_artifacts):
         profiler = PopulatedDistPackage(params, logical_name="profiler")
         profiler.rpath_dep(core, "lib")
         profiler.rpath_dep(core, "lib/llvm/lib")
@@ -356,6 +358,11 @@ def run(args: argparse.Namespace):
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
     )
+
+
+def _artifact_catalog_has_matches(artifacts: ArtifactCatalog) -> bool:
+    """Return whether an artifact catalog has at least one included file."""
+    return any(True for _ in artifacts.pm.matches())
 
 
 def _run_kpack_split(
@@ -618,11 +625,13 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
-    return an.name in [
+    profiler_tools = an.name in [
         "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
     ] and an.component in ["lib", "run"]
+    trace_decoder_python = an.name == "rocprofiler-sdk" and an.component == "lib"
+    return profiler_tools or trace_decoder_python
 
 
 # File-path allowlist for the rocm-profiler wheel, applied on top of
@@ -630,6 +639,7 @@ def profiler_artifact_filter(an: ArtifactName) -> bool:
 # libprofiler-hub.so.0 is silently dropped despite librocprof-sys* needing it.
 PROFILER_WHEEL_INCLUDES = [
     # rocprofiler-systems
+    "bin/rocsys",
     "bin/rocprof-sys-*",
     "include/rocprofiler-systems/**",
     "lib/librocprof-sys*",
@@ -643,6 +653,8 @@ PROFILER_WHEEL_INCLUDES = [
     "libexec/rocprofiler-compute/**",
     "lib/rocprofiler-compute/**",
     "share/**/rocprofiler-compute/**",
+    # rocprof-trace-decoder Python API
+    "lib/python*/site-packages/rocprof_trace_decoder/**",
 ]
 
 

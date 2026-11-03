@@ -1,7 +1,12 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+set(_rccl_enabled OFF)
 if(THEROCK_ENABLE_RCCL)
+  therock_check_subproject_targets(_rccl_enabled rccl)
+endif()
+
+if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -77,6 +82,14 @@ if(THEROCK_ENABLE_RCCL)
     therock_cmake_subproject_dist_dir(_rocjitsu_dist_dir rocjitsu)
     therock_cmake_subproject_dist_dir(_rocjitsu_hotswap_dist_dir rocjitsu-hotswap)
 
+    # RCCL compiles filtered test targets; the generic comm-libs stage has no per-arch list.
+    get_target_property(_rccl_declared_targets rccl THEROCK_AMDGPU_TARGETS)
+    therock_filter_amdgpu_targets(_rccl_gpu_targets rccl ${_rccl_declared_targets})
+    set(_rccl_run_pretranslate OFF)
+    if("gfx1250" IN_LIST _rccl_gpu_targets)
+      set(_rccl_run_pretranslate ON)
+    endif()
+
     # Generate the install-owned translation tier from RCCL before KPACK splits
     # its fat binary. The splitter then assigns this tree only to gfx1250.
     therock_cmake_subproject_declare(rccl-translate
@@ -94,6 +107,7 @@ if(THEROCK_ENABLE_RCCL)
         -DKPACK_PYTHON_SOURCE=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python
         # TODO: Set ON once RocJitsu supports every RCCL gfx1250 code object.
         -DRCCL_TRANSLATE_FAIL_ON_SKIPPED=OFF
+        -DRCCL_TRANSLATE_RUN_PRETRANSLATE=${_rccl_run_pretranslate}
       EXTRA_DEPENDS
         ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu/scripts/rocjitsu-pretranslate.py
         ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/binutils.py
@@ -158,9 +172,14 @@ if(THEROCK_ENABLE_RCCL)
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
+endif(THEROCK_ENABLE_RCCL AND _rccl_enabled)
+
+set(_rocshmem_enabled OFF)
+if(THEROCK_ENABLE_ROCSHMEM)
+  therock_check_subproject_targets(_rocshmem_enabled rocshmem)
 endif()
 
-if(THEROCK_ENABLE_ROCSHMEM)
+if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
   ##############################################################################
   # rocSHMEM
   ##############################################################################
@@ -243,4 +262,4 @@ if(THEROCK_ENABLE_ROCSHMEM)
     SUBPROJECT_DEPS
       ${_rocshmem_subproject_names}
   )
-endif(THEROCK_ENABLE_ROCSHMEM)
+endif(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)

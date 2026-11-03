@@ -51,7 +51,7 @@ on:
         default: "coverage-profraw"
       default_container_image:
         type: string
-        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
+        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39"
 
 
 permissions:
@@ -247,7 +247,7 @@ jobs:
       # shard is still useful, and the aggregation job tolerates missing shards.
       - name: Upload coverage profraw files
         if: ${{ always() && inputs.coverage_enabled }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: >-
             ${{ inputs.coverage_artifact_prefix }}-${{ fromJSON(inputs.component).job_name }}-shard${{ matrix.shard }}
