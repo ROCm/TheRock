@@ -65,12 +65,12 @@ install locations, and versioning are all inherited from the Core SDK
 ## Repo placement
 
 The CV SDK has an independent repository from `TheRock` under the
-`rocm` GitHub organization, namely `rocm-vision`. Both its component
-packages and its tarball are published as top-level peers under `vision-sdk`,
-alongside the `core/` location under each stream subdomain's `rocm/`
-tree. The `amdrocm-repo-<stream>` packages that already configure
-Core also surface the CV SDK components — no additional repo wiring
-is needed.
+`rocm` GitHub organization, namely `rocm-vision`. Per RFC0012, both its
+component packages and its tarball are published under a **top-level
+`computer-vision-sdk/` subtree**, a peer of `core/` (not nested under
+`core/` and not in `extras/`) within each stream subdomain's `rocm/`
+tree. The `amdrocm-repo-<stream>` packages that already configure Core
+also surface the CV SDK components — no additional repo wiring is needed.
 
 ## Install location
 
@@ -91,7 +91,11 @@ dedicated `amdrocm-vision-sysdeps` package, not a new directory tree.
 
 The CV SDK ships a **runtime meta-package, `amdrocm-vision`**, built and
 versioned with the Core SDK release, depending on every CV SDK runtime
-component at the exact version shipped in that Core release. Mirroring
+component at the matching Core release. The component dependency is a
+**compatible-version constraint**, not an exact pin, so a component
+post-release (`<version>.postN`) — permitted by
+`docs/packaging/versioning.md` without republishing the package set —
+still satisfies the meta-package. Mirroring
 Core's runtime/devel/test split, it is accompanied by two sibling
 meta-packages — **`amdrocm-vision-sdk`** (development: headers and CMake
 config) and **`amdrocm-vision-tests`** (test content). Like Core's
@@ -105,22 +109,30 @@ side-by-side.
   ROCm install does not pull in the CV SDK.
 
 - Installing `amdrocm-vision` adds the CV SDK components on top of
-  the matching Core SDK install:
+  the matching Core SDK install. Because each meta-package name carries
+  the ROCm `<major.minor>` suffix, use the **version-qualified selector**
+  to target a specific Core release rather than the unqualified name,
+  which resolves to the latest available and cannot distinguish
+  side-by-side releases:
 
   ```
-  yum install amdrocm-vision
-  apt install amdrocm-vision
+  yum install amdrocm-vision10.2
+  apt install amdrocm-vision10.2
   ```
 
-- Because CV components are built against a specific Core release,
-  `amdrocm-vision`'s component dependencies must resolve against
-  the Core SDK version already on the system (or are pulled from
-  the same stream).
+- CV component packages declare **explicit versioned dependencies on the
+  Core SDK packages** they build against — e.g. `amdrocm-runtime10.2`,
+  `amdrocm-rpp10.2`, `amdrocm-rocdecode10.2` with a `>= <version>`
+  lower bound tied to that release — so the resolver pulls (or requires)
+  the matching Core version already on the system, not merely whatever
+  Core happens to be latest.
 
 - Delivered today as Linux **deb, rpm, and tgz** packages plus Python
-  **wheels**. Windows **exe/msi** are out of scope for the first release
-  (the CV build is Linux-only) and will be added when Windows support
-  lands.
+  **wheels**. RFC0012 expects expansions to also publish Windows
+  zip/installer artifacts; the first CV release takes a **documented
+  exception** to that requirement because the CV build is Linux-only.
+  Windows **zip/exe/msi** and their target matrix are deferred until
+  Windows support lands and will be specified then.
 
 - Component list is owned by the CV SDK team and reviewed each
   release so new components are added to the meta-package
@@ -128,8 +140,9 @@ side-by-side.
 
 ## Tarball
 
-The CV SDK is also published as a **tarball**, in the 
-**`vision-sdk/tarball/`** location.
+The CV SDK is also published as a **tarball**, in the
+**`computer-vision-sdk/tarball/`** location (the peer-of-`core/` subtree
+from the Repo placement section).
 
 **Definition.** The CV SDK tarball is a **Vision-only overlay** on top
 of the matching ROCm Core SDK tarball. It contains the CV SDK components
