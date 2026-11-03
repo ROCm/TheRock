@@ -139,6 +139,16 @@ then
         configure)
             do_update_alternatives
 {%- if enable_ldconfig %}
+{%- if target == "deb" %}
+            # The /etc files carry the build in their names, so an upgrade does
+            # not replace them; dpkg only marks the old ones obsolete.
+            # Remove those the admin has not modified.
+            dpkg-query -W -f='${Conffiles}\n' "$DPKG_MAINTSCRIPT_PACKAGE" |
+            while read -r path md5 flag; do
+                [ "$flag" = "obsolete" ] && [ -f "$path" ] || continue
+                [ "$(md5sum < "$path" | cut -d' ' -f1)" = "$md5" ] && rm -f "$path"
+            done || true
+{%- endif %}
             # Refresh the linker cache for the package's ld.so.conf.d entry.
             ldconfig || true
 {%- endif %}

@@ -21,6 +21,32 @@ logger = TheRockLogger(__name__)
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# Directories under /etc owned by the OS (filesystem, glibc). Packages install
+# files into them but must not own the directories themselves.
+SYSTEM_ETC_DIRS = frozenset({"/etc", "/etc/ld.so.conf.d"})
+
+
+def list_etc_entries(staging_dir):
+    """List the %files entries for the /etc files staged in staging_dir.
+
+    Parameters:
+    staging_dir : Directory staged by stage_etc_files
+
+    Returns: %dir lines for package-specific directories (never
+    SYSTEM_ETC_DIRS) followed by %config(noreplace) lines for the files.
+    """
+    staging_dir = Path(staging_dir)
+    dirs, files = set(), []
+    for path in staging_dir.rglob("*"):
+        system_path = "/etc/" + path.relative_to(staging_dir).as_posix()
+        if path.is_dir() and not path.is_symlink():
+            dirs.add(system_path)
+        else:
+            files.append(system_path)
+    return [f"%dir {d}" for d in sorted(dirs - SYSTEM_ETC_DIRS)] + [
+        f"%config(noreplace) {f}" for f in sorted(files)
+    ]
+
 
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
@@ -159,8 +185,13 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
-    # Check if any source directories contain etc files
-    has_etc_files = any((Path(src_dir) / "etc").exists() for src_dir in sourcedir_list)
+    # etc/ files install at the system /etc rather than the prefix. They are
+    # staged next to the specfile and listed individually, as config files,
+    # so the package never owns OS directories.
+    etc_staging_dir = Path(specfile).parent / "etc_staging"
+    etc_files = []
+    if stage_etc_files(sourcedir_list, etc_staging_dir, version, config.version_suffix):
+        etc_files = list_etc_entries(etc_staging_dir)
 
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
@@ -174,7 +205,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     context = {
         "pkg_name": pkg_name,
         "version": version,
-        "version_str": version_to_str(version),
         "release": config.version_suffix,
         "build_arch": pkg_info.get("BuildArch"),
         "description_short": pkg_info.get("Description_Short"),
@@ -193,7 +223,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
-        "has_etc_files": has_etc_files,
+        "etc_staging_dir": etc_staging_dir,
+        "etc_files": etc_files,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
