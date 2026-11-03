@@ -29,6 +29,10 @@ Table of contents:
 > instead. It selects GPUs with checkboxes, defaults to the ROCm version used by
 > upstream PyTorch trunk CI, builds on Linux and/or Windows, and summarizes the
 > test results in its run summary. No package copying is needed.
+>
+> Avoid concurrent runs for the same branch and ROCm version, even with
+> different GPU families: their torch wheels share one version on the dev
+> index, so a later run overwrites the earlier run's wheel before it is tested.
 
 Let's say we want to test
 [`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml),

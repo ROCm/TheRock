@@ -8,6 +8,10 @@
 # multi_arch_build_windows_pytorch_wheels.yml with GPU checkboxes and ROCm
 # version keywords (resolved by resolve_dev_pytorch_wheel_inputs.py), then
 # summarizes the standard test suite from every platform in this run.
+#
+# Dev wheel versions carry only the PyTorch commit and ROCm version, so two
+# concurrent runs of the same branch and ROCm version overwrite each other's
+# torch wheel on the dev index. Run them one at a time.
 
 name: Dev PyTorch Wheels
 
@@ -96,6 +100,7 @@ permissions:
 jobs:
   resolve_inputs:
     name: Resolve Dev PyTorch Wheel Inputs
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
