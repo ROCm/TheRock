@@ -126,7 +126,10 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_DEFAULT_UNWINDLIB=libgcc
       -DCLANG_ENABLE_AMDCLANG=ON
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
-      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
+      # Ship LLVM-C.dll on Windows so consumers of the LLVM C API (e.g.
+      # hip-python, Numba HIP) have a loadable library. MSVC builds cannot
+      # produce a full libLLVM, and on Linux this option is Darwin-only.
+      -DLLVM_BUILD_LLVM_C_DYLIB=${THEROCK_CONDITION_IS_WINDOWS}
 
       # Build optimizations
       -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
