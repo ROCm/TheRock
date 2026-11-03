@@ -1086,6 +1086,30 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
+    def test_cli_hipdnn_selects_cudnn_corpus(self) -> None:
+        graph = {"hipdnn": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/hipdnn",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertEqual(selected, {"hipdnn", "hipdnn-cudnn-samples"})
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
 
 # ---------------------------------------------------------------------------
 # --explain: names level, walk set, includes (test-only marked), excludes, final
