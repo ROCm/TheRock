@@ -19,8 +19,6 @@ if(THEROCK_ENABLE_RUNTIME_FORTRAN)
         -DHIP_PLATFORM=amd
         -DBUILD_FORTRAN_BINDINGS=ON
         -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
-        -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-        -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       COMPILER_TOOLCHAIN
         amd-hip
       RUNTIME_DEPS
@@ -63,8 +61,6 @@ function(therock_declare_library_fortran_binding out_var lib)
       -DHIP_PLATFORM=amd
       -DBUILD_FORTRAN_BINDINGS=ON
       -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
-      -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
-      -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
