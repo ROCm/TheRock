@@ -9,6 +9,7 @@
 # development flow.
 
 include(ExternalProject)
+include(therock_project_smrev)
 include(therock_compiler_hardening)
 therock_initialize_hardening_policy()
 
@@ -705,8 +706,26 @@ function(therock_cmake_subproject_activate target_name)
   set(_fprint_is_valid TRUE)
   set(_fprint_files)
   set(_fprint_content)
+  set(_project_smrev_marker)
+  set(_project_smrev_guard)
+  set(_project_smrev_post_build)
   if(NOT _fprint_source_hash)
-    _therock_subproject_fprint_source_dir(_fprint_src "${_fprint_source_dir}")
+    therock_project_smrev(_project_smrev_marker _project_smrev_cacheable
+      "${target_name}" "${_fprint_source_dir}")
+    if(_project_smrev_marker)
+      # The generator has validated the actual source checkout. Reading directly
+      # avoids testing TheRock's Git state merely because build/ is inside it.
+      file(READ "${_project_smrev_marker}" _fprint_src)
+      set(_project_smrev_guard therock-check-project-identities)
+      get_target_property(_project_smrev_check_command "${target_name}" THEROCK_PROJECT_SMREV_CHECK_COMMAND)
+      set(_project_smrev_post_build COMMAND ${_project_smrev_check_command})
+      list(APPEND _extra_depends "${_project_smrev_marker}" ${_project_smrev_guard})
+      if(NOT _project_smrev_cacheable)
+        set(_fprint_is_valid FALSE)
+      endif()
+    else()
+      _therock_subproject_fprint_source_dir(_fprint_src "${_fprint_source_dir}")
+    endif()
     if(_fprint_src)
       list(APPEND _fprint_content "SOURCE=${_fprint_src}")
     else()
@@ -989,12 +1008,12 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
-      DEPENDS "${_prebuilt_file}"
+      DEPENDS "${_prebuilt_file}" ${_project_smrev_guard}
     )
     add_custom_command(
       OUTPUT "${_build_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
-      DEPENDS "${_prebuilt_file}"
+      DEPENDS "${_prebuilt_file}" ${_project_smrev_guard}
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
@@ -1005,6 +1024,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_prebuilt_file}"
         "${_fileset_tool}"
         ${_runtime_dep_stamps}
+        ${_project_smrev_guard}
     )
   else()
     # Not pre-built: normal configure/build/stage install.
@@ -1123,6 +1143,7 @@ function(therock_cmake_subproject_activate target_name)
         ${_build_log_prefix}
         "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
         "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
+      ${_project_smrev_post_build}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
@@ -1130,6 +1151,7 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_configure_stamp_file}"
         ${_sources}
+        ${_project_smrev_guard}
     )
     add_custom_target(
       "${target_name}+build"
@@ -1186,6 +1208,7 @@ function(therock_cmake_subproject_activate target_name)
       ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
       COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      ${_project_smrev_post_build}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
@@ -1193,6 +1216,7 @@ function(therock_cmake_subproject_activate target_name)
       DEPENDS
         "${_build_stamp_file}"
         "${_fileset_tool}"
+        ${_project_smrev_guard}
     )
   endif()  # Split between pre-built and build mode
   add_custom_target(
@@ -1209,8 +1233,17 @@ function(therock_cmake_subproject_activate target_name)
   # added as dependencies here.
   add_custom_target("${target_name}+dist")
 
-  # expunge target
-  # The prebuilt marker sits next to the stage dir, not inside it, so it has to
+  # Validate selected sources before any phase, including prebuilt imports.
+  if(_project_smrev_guard)
+    foreach(_phase IN ITEMS configure build stage dist)
+      if(TARGET "${target_name}+${_phase}")
+        add_dependencies("${target_name}+${_phase}" "${_project_smrev_guard}")
+      endif()
+    endforeach()
+    add_dependencies("${target_name}" "${_project_smrev_guard}")
+  endif()
+
+  # Expunge target. The prebuilt marker sits next to the stage dir, so it has to
   # be deleted here too or the project stays disabled.
   add_custom_target(
     "${target_name}+expunge"

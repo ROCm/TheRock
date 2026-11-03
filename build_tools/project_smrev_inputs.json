@@ -1,0 +1,484 @@
+{
+  "schema_version": 1,
+  "reviewed_revisions": {
+    ".": "a0e1df89a47ef3bf3e954569e35232e0f9072ba2",
+    "rocm-systems": "430d3d8f489ee9fbc13764610902a7d344b72368",
+    "rocm-libraries": "f4e24d58b3f313f1a31068def1e35376e43c2f49",
+    "base/rocm-cmake": "10155d7272ea1bf79f6b5a9dbc339657af1aa372",
+    "base/half": "207ee58595a64b5c4a70df221f1e6e704b807811",
+    "compiler/amd-llvm": "36c1564ff815158e4fdff0880ba90b5d628aa045",
+    "compiler/hipify": "d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c",
+    "math-libs/libhipcxx": "88f23f01fd7000c1ad25492311693e8e7ccabe31"
+  },
+  "targets": {
+    "MIOpen": {"repository": "rocm-libraries", "entry": "projects/miopen", "profile": "rocm-libraries:projects/miopen"},
+    "ROCR-Runtime": {"repository": "rocm-systems", "entry": "projects/rocr-runtime", "profile": "rocm-systems:projects/rocr-runtime"},
+    "amd-comgr": {"repository": "compiler/amd-llvm", "entry": "amd/comgr", "profile": "compiler/amd-llvm:."},
+    "amd-dbgapi": {"repository": "rocm-systems", "entry": "projects/rocdbgapi", "profile": "rocm-systems:projects/rocdbgapi"},
+    "amd-llvm": {"repository": "compiler/amd-llvm", "entry": ".", "profile": "compiler/amd-llvm:."},
+    "amdsmi": {"repository": "rocm-systems", "entry": "projects/amdsmi", "profile": "rocm-systems:projects/amdsmi"},
+    "aqlprofile": {"repository": "rocm-systems", "entry": "projects/aqlprofile", "profile": "rocm-systems:projects/aqlprofile"},
+    "composable_kernel": {"repository": "rocm-libraries", "entry": "projects/composablekernel", "profile": "rocm-libraries:projects/composablekernel"},
+    "hip-clr": {"repository": "rocm-systems", "entry": "projects/clr", "profile": "rocm-systems:projects/clr"},
+    "hip-tests": {"repository": "rocm-systems", "entry": "projects/hip-tests/catch", "profile": "rocm-systems:projects/hip-tests"},
+    "hipBLAS": {"repository": "rocm-libraries", "entry": "projects/hipblas", "profile": "rocm-libraries:projects/hipblas"},
+    "hipBLAS-common": {"repository": "rocm-libraries", "entry": "projects/hipblas-common", "profile": "rocm-libraries:projects/hipblas-common"},
+    "hipBLASLt": {"repository": "rocm-libraries", "entry": "projects/hipblaslt", "profile": "rocm-libraries:projects/hipblaslt"},
+    "hipCCL": {"repository": "rocm-libraries", "entry": "projects/hipccl/hipccl3", "profile": "rocm-libraries:projects/hipccl"},
+    "hipCCL_tests": {"repository": "rocm-libraries", "entry": "projects/hipccl/hipccl3", "profile": "rocm-libraries:projects/hipccl"},
+    "hipCUB": {"repository": "rocm-libraries", "entry": "projects/hipcub", "profile": "rocm-libraries:projects/hipcub"},
+    "hipDNN": {"repository": "rocm-libraries", "entry": "projects/hipdnn", "profile": "rocm-libraries:projects/hipdnn"},
+    "hipDNN_samples": {"repository": "rocm-libraries", "entry": "projects/hipdnn/samples", "profile": "rocm-libraries:projects/hipdnn"},
+    "hipFFT": {"repository": "rocm-libraries", "entry": "projects/hipfft", "profile": "rocm-libraries:projects/hipfft"},
+    "hipRAND": {"repository": "rocm-libraries", "entry": "projects/hiprand", "profile": "rocm-libraries:projects/hiprand"},
+    "hipSOLVER": {"repository": "rocm-libraries", "entry": "projects/hipsolver", "profile": "rocm-libraries:projects/hipsolver"},
+    "hipSPARSE": {"repository": "rocm-libraries", "entry": "projects/hipsparse", "profile": "rocm-libraries:projects/hipsparse"},
+    "hipSPARSELt": {"repository": "rocm-libraries", "entry": "projects/hipsparselt", "profile": "rocm-libraries:projects/hipsparselt"},
+    "hipTensor": {"repository": "rocm-libraries", "entry": "projects/hiptensor", "profile": "rocm-libraries:projects/hiptensor"},
+    "hipblasltprovider": {"repository": "rocm-libraries", "entry": "dnn-providers/hipblaslt-provider", "profile": "rocm-libraries:dnn-providers/hipblaslt-provider"},
+    "hipcc": {"repository": "compiler/amd-llvm", "entry": "amd/hipcc", "profile": "compiler/amd-llvm:."},
+    "hipdnn_integration_tests": {"repository": "rocm-libraries", "entry": "dnn-providers/integration-tests", "profile": "rocm-libraries:dnn-providers/integration-tests"},
+    "hipfile": {"repository": "rocm-systems", "entry": "projects/hipfile", "profile": "rocm-systems:projects/hipfile"},
+    "hipify": {"repository": "compiler/hipify", "entry": ".", "profile": "compiler/hipify:."},
+    "hipkernelprovider": {"repository": "rocm-libraries", "entry": "dnn-providers/hip-kernel-provider", "profile": "rocm-libraries:dnn-providers/hip-kernel-provider"},
+    "hipthreads": {"repository": "rocm-libraries", "entry": "projects/hipthreads", "profile": "rocm-libraries:projects/hipthreads"},
+    "hrr": {"repository": "rocm-systems", "entry": "projects/hrr", "profile": "rocm-systems:projects/hrr"},
+    "kfdtest": {"repository": "rocm-systems", "entry": "projects/rocr-runtime/libhsakmt/tests/kfdtest", "profile": "rocm-systems:projects/rocr-runtime"},
+    "libhipcxx": {"repository": "math-libs/libhipcxx", "entry": ".", "profile": "math-libs/libhipcxx:."},
+    "miopenprovider": {"repository": "rocm-libraries", "entry": "dnn-providers/miopen-provider", "profile": "rocm-libraries:dnn-providers/miopen-provider"},
+    "mirage": {"repository": "rocm-systems", "entry": "emulation/mirage", "profile": "rocm-systems:emulation/mirage", "uncacheable_reason": "HotSwap can fetch external compiler/runtime sources not covered by this catalog"},
+    "mxDataGenerator": {"repository": "rocm-libraries", "entry": "shared/mxdatagenerator", "profile": "rocm-libraries:shared/mxdatagenerator"},
+    "ocl-clr": {"repository": "rocm-systems", "entry": "projects/clr", "profile": "rocm-systems:projects/clr"},
+    "ocl-icd": {"repository": "rocm-systems", "entry": "projects/clr/opencl/khronos/icd", "profile": "rocm-systems:projects/clr"},
+    "origami": {"repository": "rocm-libraries", "entry": "shared/origami", "profile": "rocm-libraries:shared/origami"},
+    "profiler-hub": {"repository": "rocm-systems", "entry": "profilers/profiler-hub", "profile": "rocm-systems:profilers/profiler-hub", "uncacheable_reason": "rocprofiler-sdk-rocpd schema fetch defaults to a floating develop ref"},
+    "rccl": {"repository": "rocm-systems", "entry": "projects/rccl", "profile": "rocm-systems:projects/rccl"},
+    "rccl-tests": {"repository": "rocm-systems", "entry": "projects/rccl-tests", "profile": "rocm-systems:projects/rccl-tests"},
+    "rdc": {"repository": "rocm-systems", "entry": "projects/rdc", "profile": "rocm-systems:projects/rdc"},
+    "rocALUTION": {"repository": "rocm-libraries", "entry": "projects/rocalution", "profile": "rocm-libraries:projects/rocalution"},
+    "rocBLAS": {"repository": "rocm-libraries", "entry": "projects/rocblas", "profile": "rocm-libraries:projects/rocblas"},
+    "rocFFT": {"repository": "rocm-libraries", "entry": "projects/rocfft", "profile": "rocm-libraries:projects/rocfft"},
+    "rocPRIM": {"repository": "rocm-libraries", "entry": "projects/rocprim", "profile": "rocm-libraries:projects/rocprim"},
+    "rocPRIM_tests": {"repository": "rocm-libraries", "entry": "projects/rocprim", "profile": "rocm-libraries:projects/rocprim"},
+    "rocRAND": {"repository": "rocm-libraries", "entry": "projects/rocrand", "profile": "rocm-libraries:projects/rocrand"},
+    "rocRoller": {"repository": "rocm-libraries", "entry": "shared/rocroller", "profile": "rocm-libraries:shared/rocroller"},
+    "rocSOLVER": {"repository": "rocm-libraries", "entry": "projects/rocsolver", "profile": "rocm-libraries:projects/rocsolver"},
+    "rocSPARSE": {"repository": "rocm-libraries", "entry": "projects/rocsparse", "profile": "rocm-libraries:projects/rocsparse"},
+    "rocThrust": {"repository": "rocm-libraries", "entry": "projects/rocthrust", "profile": "rocm-libraries:projects/rocthrust"},
+    "rocWMMA": {"repository": "rocm-libraries", "entry": "projects/rocwmma", "profile": "rocm-libraries:projects/rocwmma"},
+    "rocdecode": {"repository": "rocm-systems", "entry": "projects/rocdecode", "profile": "rocm-systems:projects/rocdecode"},
+    "rocjitsu": {"repository": "rocm-systems", "entry": "emulation/rocjitsu", "profile": "rocm-systems:emulation/rocjitsu"},
+    "rocjpeg": {"repository": "rocm-systems", "entry": "projects/rocjpeg", "profile": "rocm-systems:projects/rocjpeg"},
+    "rocm-cmake": {"repository": "base/rocm-cmake", "entry": ".", "profile": "base/rocm-cmake:."},
+    "rocm-core": {"repository": "rocm-systems", "entry": "projects/rocm-core", "profile": "rocm-systems:projects/rocm-core"},
+    "rocm-half": {"repository": "base/half", "entry": ".", "profile": "base/half:."},
+    "rocm-kpack": {"repository": "rocm-systems", "entry": "shared/kpack", "profile": "rocm-systems:shared/kpack"},
+    "rocm_smi_lib": {"repository": "rocm-systems", "entry": "projects/rocm-smi-lib", "profile": "rocm-systems:projects/rocm-smi-lib"},
+    "rocminfo": {"repository": "rocm-systems", "entry": "projects/rocminfo", "profile": "rocm-systems:projects/rocminfo"},
+    "rocprof-trace-decoder": {"repository": "rocm-systems", "entry": "projects/rocprof-trace-decoder", "profile": "rocm-systems:projects/rocprof-trace-decoder"},
+    "rocprofiler-compute": {"repository": "rocm-systems", "entry": "projects/rocprofiler-compute", "profile": "rocm-systems:projects/rocprofiler-compute"},
+    "rocprofiler-register": {"repository": "rocm-systems", "entry": "projects/rocprofiler-register", "profile": "rocm-systems:projects/rocprofiler-register"},
+    "rocprofiler-sdk": {"repository": "rocm-systems", "entry": "projects/rocprofiler-sdk", "profile": "rocm-systems:projects/rocprofiler-sdk"},
+    "rocprofiler-systems": {"repository": "rocm-systems", "entry": "projects/rocprofiler-systems", "profile": "rocm-systems:projects/rocprofiler-systems"},
+    "rocprofiler-systems-examples": {"repository": "rocm-systems", "entry": "projects/rocprofiler-systems/examples", "profile": "rocm-systems:projects/rocprofiler-systems"},
+    "rocr-debug-agent": {"repository": "rocm-systems", "entry": "projects/rocr-debug-agent", "profile": "rocm-systems:projects/rocr-debug-agent"},
+    "rocr-debug-agent-tests": {"repository": "rocm-systems", "entry": "projects/rocr-debug-agent/test", "profile": "rocm-systems:projects/rocr-debug-agent"},
+    "rocrtst": {"repository": "rocm-systems", "entry": "projects/rocr-runtime/rocrtst/suites/test_common", "profile": "rocm-systems:projects/rocr-runtime"},
+    "rocshmem": {"repository": "rocm-systems", "entry": "projects/rocshmem", "profile": "rocm-systems:projects/rocshmem"},
+    "roctracer": {"repository": "rocm-systems", "entry": "projects/roctracer", "profile": "rocm-systems:projects/roctracer"},
+    "rpp": {"repository": "rocm-libraries", "entry": "projects/rpp", "profile": "rocm-libraries:projects/rpp"}
+  },
+  "profiles": {
+    "base/half:.": {
+      "paths": ["."],
+      "optional_paths": [],
+      "versions": [],
+      "environment": []
+    },
+    "base/rocm-cmake:.": {
+      "paths": ["."],
+      "optional_paths": [],
+      "versions": [],
+      "environment": ["ASAN_OPTIONS", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "DESTDIR", "DOXYGEN_DIR", "ROCMCHECKS_ERROR_TOOLCHAIN_VAR", "ROCMCHECKS_WARN_TOOLCHAIN_VAR", "ROCM_BUILD_ID", "ROCM_DEBIAN_COMPRESSION_TYPE", "ROCM_HEADER_WRAPPER_WERROR", "ROCM_LIBPATCH_VERSION", "ROCM_PKGTHREADS", "ROCM_PKGTYPE", "SOURCE_DATE_EPOCH", "SPHINX_DIR", "UBSAN_OPTIONS"]
+    },
+    "compiler/amd-llvm:.": {
+      "paths": ["."],
+      "optional_paths": [],
+      "versions": [],
+      "environment": ["CMPLR_ROOT", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CPPFLAGS", "DESTDIR", "DT_TOOLCHAIN_DIR", "DYLD_LIBRARY_PATH", "GITHUB_WORKSPACE", "HIP_PATH", "LD_LIBRARY_PATH", "LEVEL_ZERO_DIR", "PYTHONPATH", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCM_VERSION", "TERM", "VSCMD_ARG_TGT_ARCH", "VSINSTALLDIR", "VTUNE_AMPLIFIER_XE_2011_DIR", "VTUNE_AMPLIFIER_XE_2013_DIR", "VULKAN_SDK"]
+    },
+    "compiler/hipify:.": {
+      "paths": ["."],
+      "optional_paths": [],
+      "versions": [],
+      "environment": ["DESTDIR"],
+      "environment_patterns": ["NVCUDASAMPLES[0-9]+_[0-9]+_ROOT"]
+    },
+    "math-libs/libhipcxx:.": {
+      "paths": ["."],
+      "optional_paths": [],
+      "versions": [],
+      "environment": ["HIP_PLATFORM"]
+    },
+    "rocm-libraries:dnn-providers/hip-kernel-provider": {
+      "paths": ["dnn-providers/cmake", "dnn-providers/hip-kernel-provider", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:dnn-providers/hipblaslt-provider": {
+      "paths": ["dnn-providers/cmake", "dnn-providers/hipblaslt-provider", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:dnn-providers/integration-tests": {
+      "paths": ["dnn-providers/cmake", "dnn-providers/integration-tests", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:dnn-providers/miopen-provider": {
+      "paths": ["dnn-providers/cmake", "dnn-providers/miopen-provider", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/composablekernel": {
+      "paths": ["projects/composablekernel"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["BATCHED_CONTRACTION_CONFIG_FILE", "BATCHED_GEMM_CONFIG_FILE", "CC", "CMAKE_BUILD_PARALLEL_LEVEL", "CONTRACTION_MULTI_ABD_CONFIG_FILE", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "GEMM_ABQUANT_CONFIG_FILE", "GEMM_AQUANT_CONFIG_FILE", "GEMM_BQUANT_CONFIG_FILE", "GEMM_MULTI_ABD_CONFIG_FILE", "GEMM_MULTI_D_CONFIG_FILE", "GEMM_PRESHUFFLE_CONFIG_FILE", "GEMM_ROWCOLQUANT_CONFIG_FILE", "GEMM_STREAMK_CONFIG_FILE", "GEMM_TENSOR_QUANT_CONFIG_FILE", "GEMM_UNIVERSAL_CONFIG_FILE", "GROUPED_GEMM_CONFIG_FILE", "GROUPED_GEMM_ROWCOLQUANT_CONFIG_FILE", "GROUPED_GEMM_TENSORQUANT_CONFIG_FILE", "HIP_PATH", "HOME", "LD_LIBRARY_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "MX_GEMM_CONFIG_FILE", "POOLING_CONFIG_FILE", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCToolsInstallDir"]
+    },
+    "rocm-libraries:projects/hipblas": {
+      "paths": ["projects/hipblas", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["BLIS_DIR", "CBLAS_DIR", "CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "HIP_DIR", "HIP_PATH", "LAPACK_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "OPENBLAS_DIR", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH", "rocblas_DIR", "rocsolver_DIR"]
+    },
+    "rocm-libraries:projects/hipblas-common": {
+      "paths": ["projects/hipblas-common"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/hipblaslt": {
+      "paths": ["projects/hipblaslt", "shared/ctest", "shared/mxdatagenerator", "shared/origami", "shared/rocroller", "shared/stinkytofu"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "HIPBLASLT_LOGIC_ROOT", "HIPBLASLT_UID_TEST_PROCESSES", "HIP_DIR", "HIP_PATH", "HIP_VISIBLE_DEVICES", "LD_LIBRARY_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "PYTHONPATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "TENSILE_COVERAGE_SUBPROCESS_RC", "TENSILE_DISABLE_HELPER_CACHE", "TENSILE_GPU_TARGET", "TENSILE_HELPER_CACHE_DIR", "TENSILE_REQUIRE_AMDGCN_DISASM", "TENSILE_ROCM_PATH"]
+    },
+    "rocm-libraries:projects/hipccl": {
+      "paths": ["projects/hipccl", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPCC_COMPILE_FLAGS_APPEND", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/hipcub": {
+      "paths": ["projects/hipcub", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPCC_COMPILE_FLAGS_APPEND", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/hipdnn": {
+      "paths": ["projects/hipdnn", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPDNN_PLUGIN_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "WindowsSdkDir"]
+    },
+    "rocm-libraries:projects/hipfft": {
+      "paths": ["projects/hipfft", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FFTW_ROOT", "HIP_DIR", "HIP_PATH", "HIP_PLATFORM", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/hiprand": {
+      "paths": ["projects/hiprand", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/hipsolver": {
+      "paths": ["projects/hipsolver", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "hipblas_DIR", "hipsparse_DIR", "rocblas_DIR", "rocsolver_DIR", "rocsparse_DIR"]
+    },
+    "rocm-libraries:projects/hipsparse": {
+      "paths": ["projects/hipsparse", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPSPARSE_TEST_MIRROR", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/hipsparselt": {
+      "paths": ["projects/hipsparselt", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/hiptensor": {
+      "paths": ["projects/hiptensor", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["ADDRESS_SANITIZER", "CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPTENSOR_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/hipthreads": {
+      "paths": ["projects/hipthreads"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/miopen": {
+      "paths": ["projects/miopen", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}, {"kind": "nearest", "pattern": "v[0-9]*"}],
+      "environment": ["CC", "CMAKE_TOOLCHAIN_FILE", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_CMAKE_PATH", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "WindowsSdkDir"]
+    },
+    "rocm-libraries:projects/rocalution": {
+      "paths": ["projects/rocalution", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIP_DIR", "HIP_PATH", "LAPACK_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH", "rocblas_DIR", "rocrand_DIR", "rocsparse_DIR"]
+    },
+    "rocm-libraries:projects/rocblas": {
+      "paths": ["projects/rocblas", "shared/ctest", "shared/tensile"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "ENABLE_ADDRESS_SANITIZER", "FC", "HIP_DIR", "HIP_PATH", "HIP_PLATFORM", "LLVM_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "OPENBLAS_DIR", "PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "ROCM_VERSION", "SOURCE_DATE_EPOCH", "TENSILE_GFX1250_COMPILER_TARGET", "TENSILE_ROCM_PATH", "TENSILE_SKIP_LIBRARY", "VCPKG_PATH", "VCPKG_ROOT"]
+    },
+    "rocm-libraries:projects/rocfft": {
+      "paths": ["projects/rocfft", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FFTW_ROOT", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "SQLITE_3_51_3_SRC_URL", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/rocprim": {
+      "paths": ["projects/rocprim", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPCC_COMPILE_FLAGS_APPEND", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/rocrand": {
+      "paths": ["projects/rocrand", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/rocsolver": {
+      "paths": ["projects/rocsolver", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["BLA_VENDOR", "CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "HIP_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "MKLROOT", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "rocblas_DIR"]
+    },
+    "rocm-libraries:projects/rocsparse": {
+      "paths": ["projects/rocsparse", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "FC", "HIP_DIR", "HIP_PATH", "LAPACK_DIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "ROCSPARSE_TEST_MIRROR", "SOURCE_DATE_EPOCH", "VCPKG_PATH", "rocblas_DIR"]
+    },
+    "rocm-libraries:projects/rocthrust": {
+      "paths": ["projects/rocthrust", "shared/ctest", "shared/primbench"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "HIPCC_COMPILE_FLAGS_APPEND", "HIP_DIR", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VCPKG_PATH"]
+    },
+    "rocm-libraries:projects/rocwmma": {
+      "paths": ["projects/rocwmma", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["ADDRESS_SANITIZER", "CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCBLAS_DIR", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:projects/rpp": {
+      "paths": ["projects/rpp", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["AMDGPU_TARGETS", "CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "GPU_ARCHS", "HALF_DIR", "HIP_DEVICE_LIB_PATH", "HIP_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH", "TURBO_JPEG_PATH"]
+    },
+    "rocm-libraries:shared/mxdatagenerator": {
+      "paths": ["shared/mxdatagenerator"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:shared/origami": {
+      "paths": ["shared/origami"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "[0-9]*", "tags": false}],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LD_LIBRARY_PATH", "LLVM_TOOLS_SEARCH_PREFIX", "PYTHONPATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-libraries:shared/rocroller": {
+      "paths": ["shared/ctest", "shared/mxdatagenerator", "shared/rocroller"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CC", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "DESTDIR", "LLVM_TOOLS_SEARCH_PREFIX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_LIBS_ENABLE_ROOT_CTEST", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:emulation/mirage": {
+      "paths": ["emulation/mirage"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:emulation/rocjitsu": {
+      "paths": ["emulation/rocjitsu", "runtimes/api-headers", "shared/machine-readable-isa"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:profilers/profiler-hub": {
+      "paths": ["profilers/profiler-hub"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/amdsmi": {
+      "paths": ["projects/amdsmi", "shared/cuid", "shared/sha256"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "latest", "pattern": "amdsmi_pkg_ver*"}, {"kind": "latest", "pattern": "rsmi_so_ver*"}],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "DESTDIR", "HOME", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCM_RPATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/aqlprofile": {
+      "paths": ["projects/aqlprofile"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "*"}],
+      "environment": ["CMAKE_BUILD_PARALLEL_LEVEL", "CMAKE_BUILD_TYPE", "CMAKE_DEBUG_TRACE", "CMAKE_LD_AQLPROFILE", "CMAKE_PREFIX_PATH", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CXX", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/clr": {
+      "paths": ["projects/clr", "projects/hip", "projects/hrr"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "shared/amdgpu-windows-interop", "version.json"],
+      "versions": [{"kind": "timestamp", "path": "projects/clr"}],
+      "environment": ["CMAKE_BUILD_PARALLEL_LEVEL", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "Clang_ROOT", "DK_ROOT", "DXSDK_DIR", "HIP_PATH", "HIP_PLATFORM", "HOMEDRIVE", "LLVM_ROOT", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCPROFILER_REGISTER_ROOT", "SOURCE_DATE_EPOCH", "WDKContentRoot", "rocprofiler_register_ROOT"]
+    },
+    "rocm-systems:projects/hip-tests": {
+      "paths": ["projects/hip-tests"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "CUDA_PATH", "GLEW_INCLUDE_DIR", "GLEW_SHARED_LIBRARY_RELEASE", "GLUT_INCLUDE_DIR", "GLUT_glut_LIBRARY", "HCC_AMDGPU_TARGET", "HIP_PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH", "VULKAN_SDK", "WSL_DISTRO_NAME", "WSL_INTEROP"]
+    },
+    "rocm-systems:projects/hipfile": {
+      "paths": ["projects/hipfile"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "HIP_PLATFORM", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCM_VERSION", "ROCPROFILER_REGISTER_ROOT", "SOURCE_DATE_EPOCH", "rocprofiler_register_ROOT"]
+    },
+    "rocm-systems:projects/hrr": {
+      "paths": ["projects/hrr"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rccl": {
+      "paths": ["projects/rccl", "projects/rocshmem", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "*"}],
+      "environment": ["BUILD_LOCAL_GPU_TARGET_ONLY", "CC", "CFLAGS", "CXX", "CXXFLAGS", "GDRCOPY_HOME", "GDRCOPY_INCLUDE_DIR", "HOSTFILE", "MPI_PATH", "MPI_ROOT", "NCCL_USE_CMAKE", "OMPI_MCA_osc", "OMPI_MCA_pml", "PKG_CONFIG_PATH", "PMIX_ROOT", "PMIx_ROOT", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH", "TLS_BACKEND"]
+    },
+    "rocm-systems:projects/rccl-tests": {
+      "paths": ["projects/rccl", "projects/rccl-tests", "projects/rocshmem", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["BUILD_LOCAL_GPU_TARGET_ONLY", "CC", "CFLAGS", "CXX", "CXXFLAGS", "GDRCOPY_HOME", "GDRCOPY_INCLUDE_DIR", "HIP_PLATFORM", "HOSTFILE", "MPI_PATH", "MPI_ROOT", "NCCL_USE_CMAKE", "OMPI_MCA_osc", "OMPI_MCA_pml", "PKG_CONFIG_PATH", "PMIX_ROOT", "PMIx_ROOT", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH", "TLS_BACKEND"]
+    },
+    "rocm-systems:projects/rdc": {
+      "paths": ["projects/rdc"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "rdc_pkg_ver-[0-9.]*"}, {"kind": "nearest", "pattern": "rdc_so_ver-[0-9.]*"}],
+      "environment": ["ADDRESS_SANITIZER", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "LD_LIBRARY_PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocdbgapi": {
+      "paths": ["projects/rocdbgapi"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH", "USER"]
+    },
+    "rocm-systems:projects/rocdecode": {
+      "paths": ["projects/rocdecode"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["AMDGPU_TARGETS", "ASAN_OPTIONS", "ASAN_SYMBOLIZER_PATH", "FFMPEG_ROOT", "GPU_ARCHS", "HIP_DEVICE_LIB_PATH", "LSAN_OPTIONS", "PATH", "PKG_CONFIG_PATH", "ProgramFiles", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCPROFILER_REGISTER_ROOT", "SOURCE_DATE_EPOCH", "USERPROFILE", "rocprofiler_register_ROOT"]
+    },
+    "rocm-systems:projects/rocjpeg": {
+      "paths": ["projects/rocjpeg"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["AMDGPU_TARGETS", "GPU_ARCHS", "HIP_DEVICE_LIB_PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCPROFILER_REGISTER_ROOT", "SOURCE_DATE_EPOCH", "rocprofiler_register_ROOT"]
+    },
+    "rocm-systems:projects/rocm-core": {
+      "paths": ["projects/rocm-core"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocm-smi-lib": {
+      "paths": ["projects/rocm-smi-lib"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "rsmi_pkg_ver-[0-9.]*"}, {"kind": "nearest", "pattern": "rsmi_so_ver-[0-9.]*"}, {"kind": "nearest", "pattern": "oam_so_ver-[0-9.]*"}],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_RPATH", "ROCM_SMI_DISABLE", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocminfo": {
+      "paths": ["projects/rocminfo"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "rocminfo_pkg_ver-[0-9.]*"}],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocprof-trace-decoder": {
+      "paths": ["projects/rocprof-trace-decoder"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_PACKAGE_FILE_NAME", "LD_LIBRARY_PATH", "LLVM_DIR", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocprofiler-compute": {
+      "paths": ["projects/rocprofiler-compute", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "PKG_CONFIG_PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocprofiler-register": {
+      "paths": ["projects/rocprofiler-register"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "*"}],
+      "environment": ["CMAKE_PREFIX_PATH", "CONDA_PYTHON_EXE", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_PACKAGE_FILE_NAME", "CPACK_RPM_PACKAGE_RELEASE", "HOME", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocprofiler-sdk": {
+      "paths": ["projects/rocprofiler-sdk", "shared/sha256"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "*"}],
+      "environment": ["BUNDLE_PYTHON_TESTS", "CMAKE_PREFIX_PATH", "CONDA_PYTHON_EXE", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_PACKAGE_FILE_NAME", "CPACK_RPM_PACKAGE_RELEASE", "HOME", "LD_LIBRARY_PATH", "LD_PRELOAD", "PKG_CONFIG_SYSTEM_INCLUDE_PATH", "PYTHONPATH", "PYTHONWARNINGS", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocprofiler-systems": {
+      "paths": ["projects/rocprofiler-systems"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [{"kind": "exact"}, {"kind": "nearest", "pattern": "*"}],
+      "environment": ["CMAKE_PREFIX_PATH", "CONDA_PYTHON_EXE", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_PACKAGE_FILE_NAME", "CPACK_RPM_PACKAGE_RELEASE", "PLATFORM", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCM_PATH", "ROCPROFSYS_CI", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/rocr-debug-agent": {
+      "paths": ["projects/rocr-debug-agent"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH", "USER"]
+    },
+    "rocm-systems:projects/rocr-runtime": {
+      "paths": ["projects/rocr-runtime", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "shared/amdgpu-windows-interop", "version.json"],
+      "versions": [{"kind": "nearest", "pattern": "*"}],
+      "environment": ["CMAKE_BUILD_PARALLEL_LEVEL", "CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "DISTRO_NAME", "LIBHSAKMT_PATH", "LIBHSAKMT_ROOT", "LLVM_DIR", "OPENCL_VER", "OUT_DIR", "PATH", "PKG_CONFIG_PATH", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "ROCR_INC_DIR", "ROCR_LIB_DIR", "ROCT_LIB_DIR", "ROOT_OF_ROOTS", "SOURCE_DATE_EPOCH", "THEROCK_SANITIZER", "UNDEFINED_SANITIZER"]
+    },
+    "rocm-systems:projects/rocshmem": {
+      "paths": ["projects/rocshmem", "shared/ctest"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["BUILD_LOCAL_GPU_TARGET_ONLY", "HOSTFILE", "MPI_ROOT", "OMPI_MCA_osc", "OMPI_MCA_pml", "PKG_CONFIG_PATH", "PMIX_ROOT", "PMIx_ROOT", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:projects/roctracer": {
+      "paths": ["projects/roctracer"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["CPACK_DEBIAN_PACKAGE_RELEASE", "CPACK_RPM_PACKAGE_RELEASE", "ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    },
+    "rocm-systems:shared/kpack": {
+      "paths": ["shared/kpack"],
+      "optional_paths": ["CMakeLists.txt", "VERSION", "VERSION.txt", "cmake", "cmake_modules", "version.json"],
+      "versions": [],
+      "environment": ["ROCM_BUILD_ID", "ROCM_LIBPATCH_VERSION", "SOURCE_DATE_EPOCH"]
+    }
+  }
+}
