@@ -299,9 +299,12 @@ jobs:
       # custom skip-list integration, serialized execution, GPU selection, and
       # more. The list of included test suites is limited here compared to in
       # test_pytorch_wheels_full.yml.
+      # The completion marker tells the count step the runner exited rather
+      # than timing out mid-run, so partial counts are flagged incomplete.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
+          set +e
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
@@ -315,6 +318,11 @@ jobs:
               test_autograd \
             -- \
             --continue-on-collection-errors
+          test_exit_code=$?
+          reports_dir=external-builds/pytorch/pytorch/test/test-reports
+          mkdir -p "${reports_dir}"
+          touch "${reports_dir}/therock-test-complete.txt"
+          exit "${test_exit_code}"
 
       - name: Upload test reports
         if: always()
@@ -327,7 +335,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # Step outputs flow into the Quartz completed notification below.
+      # Step outputs flow into the Quartz completed notification below
+      # (failed_test_count, passed_test_count, ..., results_complete).
       - name: Count test results
         id: test-counts
         if: always()

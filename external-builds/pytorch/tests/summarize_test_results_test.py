@@ -119,28 +119,39 @@ class StandardSummaryTest(unittest.TestCase):
             self.assertEqual(m.write_standard_summary(Path(empty), str(summary)), 0)
             self.assertIn("No PyTorch test reports were uploaded", summary.read_text())
 
-    def test_count_outputs_are_written_for_quartz(self):
+    def _count(self, reports: Path) -> list[str]:
         output = self.root / "github_output"
-        outputs = m.write_count_outputs(
-            self.root / "test-reports-Linux-gfx94X-dcgpu", str(output)
-        )
+        output.unlink(missing_ok=True)
+        m.write_count_outputs(reports, str(output))
+        return output.read_text().splitlines()
+
+    def test_count_outputs_are_written_for_quartz(self):
+        reports = self.root / "test-reports-Linux-gfx94X-dcgpu"
+        (reports / m.COMPLETION_MARKER).touch()
         self.assertEqual(
-            output.read_text().splitlines(),
+            self._count(reports),
             [
-                "tests_run=5",
-                "tests_passed=3",
-                "tests_failed=1",
-                "tests_errors=1",
-                "tests_skipped=3",
-                "tests_flaky=2",
+                "run_test_count=5",
+                "passed_test_count=3",
+                "failed_test_count=2",
+                "skipped_test_count=3",
+                "results_complete=true",
             ],
         )
-        self.assertEqual(outputs["tests_failed"], 1)
 
-    def test_count_outputs_are_omitted_without_reports(self):
-        output = self.root / "github_output"
-        self.assertEqual(m.write_count_outputs(self.root / "missing", str(output)), {})
-        self.assertFalse(output.exists())
+    def test_counts_without_completion_marker_are_incomplete(self):
+        lines = self._count(self.root / "test-reports-Linux-gfx94X-dcgpu")
+        self.assertIn("failed_test_count=2", lines)
+        self.assertEqual(lines[-1], "results_complete=false")
+
+    def test_unparseable_report_is_incomplete(self):
+        reports = self.root / "test-reports-Linux-gfx94X-dcgpu"
+        (reports / m.COMPLETION_MARKER).touch()
+        _write(reports / "python-pytest" / "test_nn" / "broken.xml", "<testsuite")
+        self.assertEqual(self._count(reports)[-1], "results_complete=false")
+
+    def test_no_reports_only_writes_incomplete(self):
+        self.assertEqual(self._count(self.root / "missing"), ["results_complete=false"])
 
     def test_failure_only_parser_is_unchanged(self):
         xml = (

@@ -20,10 +20,10 @@ Two modes of operation:
    reports tests run, passed, failed, errored, skipped, and flaky per
    platform and family, then lists failures and skip reasons.
 
-4. **Counts** (``--counts-output``) — writes ``tests_run``, ``tests_passed``,
-   ``tests_failed``, ``tests_errors``, ``tests_skipped``, and ``tests_flaky``
-   for one test-reports directory to ``$GITHUB_OUTPUT`` so the job's Quartz
-   notification carries them. Writes nothing when there are no reports.
+4. **Counts** (``--counts-output``) — writes ``run_test_count``,
+   ``passed_test_count``, ``failed_test_count``, ``skipped_test_count``, and
+   ``results_complete`` for one test-reports directory to ``$GITHUB_OUTPUT``
+   so the job's Quartz notification carries them.
 
 Usage:
     # Per-shard (inside matrix job):
@@ -361,27 +361,43 @@ def count_outcomes(outcomes: dict) -> dict[str, int]:
     return counts
 
 
-COUNT_OUTPUT_NAMES = {
-    "RUN": "tests_run",
-    "PASSED": "tests_passed",
-    "FAILED": "tests_failed",
-    "ERROR": "tests_errors",
-    "SKIPPED": "tests_skipped",
-    "FLAKY": "tests_flaky",
-}
+# Written by the test step once the runner exits, so a timed-out or killed
+# run is reported incomplete instead of as a clean (partial) count.
+COMPLETION_MARKER = "therock-test-complete.txt"
 
 
-def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, int]:
+def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, object]:
     """Writes test counts for one reports directory as step outputs.
 
-    Returns the outputs written; empty when the directory has no test cases.
+    Output names match the full suite's ``failed_test_count`` contract;
+    ``failed_test_count`` includes errored tests. ``results_complete`` is
+    always written; the counts are written only when test cases were found.
     """
-    outcomes = collect_outcomes(reports_dir) if reports_dir.is_dir() else {}
-    if not outcomes:
+    xml_files = sorted(reports_dir.rglob("*.xml")) if reports_dir.is_dir() else []
+    parseable = True
+    for xml_file in xml_files:
+        try:
+            ET.parse(xml_file)
+        except ET.ParseError:
+            parseable = False
+    outcomes = collect_outcomes(reports_dir) if xml_files else {}
+    complete = (
+        bool(outcomes) and parseable and (reports_dir / COMPLETION_MARKER).is_file()
+    )
+
+    outputs: dict[str, object] = {}
+    if outcomes:
+        counts = count_outcomes(outcomes)
+        outputs = {
+            "run_test_count": counts["RUN"],
+            "passed_test_count": counts["PASSED"],
+            "failed_test_count": counts["FAILED"] + counts["ERROR"],
+            "skipped_test_count": counts["SKIPPED"],
+        }
+    else:
         print(f"No test cases found under {reports_dir}; writing no counts")
-        return {}
-    counts = count_outcomes(outcomes)
-    outputs = {name: counts[key] for key, name in COUNT_OUTPUT_NAMES.items()}
+    outputs["results_complete"] = "true" if complete else "false"
+
     lines = [f"{name}={value}" for name, value in outputs.items()]
     print("\n".join(lines))
     if output_file:
