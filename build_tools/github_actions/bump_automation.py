@@ -834,16 +834,22 @@ def create_therock_bump(
             },
         )
 
+        labels = list(config["labels"])
+        if target_branch.startswith("release/bkc/"):
+            labels.append("bump-pr:bkc")
+        elif target_branch.startswith("release/"):
+            labels.append("bump-pr:release")
+
         try:
-            # Add CI labels to the PR (run-all-archs + asan for full coverage)
+            # Add CI labels and identify release bumps in the PR overview.
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": config["labels"]},
+                data={"labels": labels},
             )
         except RuntimeError as e:
-            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
+            print(f"[WARN] Failed to apply labels to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 

@@ -1637,6 +1637,7 @@ class ReleaseBumpTest(unittest.TestCase):
         self.assertIn("&base=release%2Ftherock-10.2", endpoint)
         self.assertIn("bump-rocm-libraries-release%2Ftherock-10.2-aaaaaaa", endpoint)
         run.assert_any_call(["git", "-C", "rocm-libraries", "checkout", "a" * 40])
+        self.assertIn("bump-pr:release", api.call_args_list[3].kwargs["data"]["labels"])
 
     def test_release_submodule_selection(self):
         target = "release/bkc/therock-10.2"
