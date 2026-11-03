@@ -159,6 +159,7 @@ if(THEROCK_ENABLE_PRIM)
           -DHIPCCL_BUILD_LIBHIPCXX=OFF
           -DBUILD_TEST=ON
           -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+          -DROCPRIM_SEGMENTED_PAIRS_OFFLOAD_JOBS=4
           -DUSE_SYSTEM_LIB=ON
         CMAKE_INCLUDES
           ${_primlibs_benchmark_includes}
