@@ -206,6 +206,11 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
 # ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
+# ci:exactly makes the attached arch labels the complete family selection:
+# the trigger-based default families are dropped so that only the labeled
+# archs build and test. Packaging jobs are unaffected.
+EXACTLY_LABEL = "ci:exactly"
+
 
 def _apply_stage_test_labels(
     platform: str,
@@ -299,10 +304,24 @@ class CIInputs:
     def validate(self) -> None:
         """Validate inputs for consistency (fail-fast behavior).
 
-        Raises ValueError for conflicting build selections, test labels requiring
-        stages not in build_stages, or ci:run-wsl on a partial build without the
-        wsl-rocdxg stage.
+        Raises ValueError for conflicting build selections, ci:exactly without an
+        arch label, test labels requiring stages not in build_stages, or
+        ci:run-wsl on a partial build without the wsl-rocdxg stage.
         """
+        # ci:exactly drops the trigger defaults, so the arch labels become the
+        # whole selection. Without one, nothing would build and CI would report
+        # a green run that did no work.
+        if self.is_exactly and not any(
+            label.lower().startswith(("ci:gfx", "ci:build:gfx"))
+            or label == "ci:run-all-archs"
+            for label in self.pr_labels
+        ):
+            raise ValueError(
+                f"{EXACTLY_LABEL} requires at least one arch label "
+                f"(ci:gfx* or ci:build:gfx*), otherwise nothing would build. "
+                f"Add an arch label or remove {EXACTLY_LABEL}."
+            )
+
         for job in ("native-linux", "python-packages", "pytorch", "jax"):
             build_label = f"ci:build-{job}"
             skip_label = f"ci:skip-{job}"
@@ -331,6 +350,15 @@ class CIInputs:
     @property
     def is_pull_request(self) -> bool:
         return self.event_name == "pull_request"
+
+    @property
+    def is_exactly(self) -> bool:
+        """True when ci:exactly should suppress the default GPU families.
+
+        Only meaningful on pull requests, matching the other arch labels.
+        Other triggers already state their coverage explicitly.
+        """
+        return self.is_pull_request and EXACTLY_LABEL in self.pr_labels
 
     @property
     def is_push(self) -> bool:
@@ -944,6 +972,7 @@ def _apply_arch_labels(
     Labels are classified into batches and applied in priority order so that
     behavior is deterministic regardless of label iteration order:
 
+      0. ci:exactly — drops the trigger defaults so only labeled families run
       1. ci:run-all-archs — overrides both platform lists to all families
       2. ci:gfx* — adds family to builds AND tests (bypasses trigger gating)
       3. ci:build:gfx* — adds family to builds only
@@ -980,7 +1009,15 @@ def _apply_arch_labels(
             target = label.lower().removeprefix("ci:").split("-")[0]
             gfx_targets.append((label, target))
 
-    # 1. ci:run-all-archs takes highest priority — override to all families.
+    # 0. ci:exactly drops the trigger defaults so the labels below are the only
+    # thing that selects families. CIInputs.validate() guarantees at least one
+    # such label is present.
+    if ci_inputs.is_exactly:
+        linux_names.clear()
+        windows_names.clear()
+        print(f"  Label '{EXACTLY_LABEL}' -> dropping default families")
+
+    # 1. ci:run-all-archs overrides to all families.
     if has_run_all:
         linux_names[:] = list(all_families.keys())
         windows_names[:] = list(all_families.keys())
