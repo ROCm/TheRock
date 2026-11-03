@@ -1,0 +1,257 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Multi-Arch Linux XLA
+
+on:
+  workflow_call:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        required: true
+        type: string
+      rocm_distro_url:
+        description: "URL of the TheRock multi-arch distro tarball to test against."
+        required: true
+        type: string
+      rocm_distro_hash:
+        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+        type: string
+        default: "no_hash"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      xla_ref:
+        description: "ROCm/xla ref to check out."
+        required: true
+        type: string
+      xla_repository:
+        description: "Repository holding the XLA checkout the test suite runs from."
+        type: string
+        default: "ROCm/xla"
+      xla_commit:
+        description: "XLA commit to test. Empty uses xla_ref, which a moving ref like rocm-jaxlib-v0.11.2 may have advanced past."
+        type: string
+        default: ""
+      test_runs_on:
+        description: Runner label to execute tests on
+        required: true
+        type: string
+      test_timeout_minutes:
+        description: "Budget for the whole test job."
+        required: false
+        type: number
+        default: 240
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      test_amdgpu_family:
+        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+        type: string
+        default: "gfx950"
+      rocm_distro_url:
+        description: "URL of the TheRock multi-arch distro tarball to test against."
+        type: string
+        default: ""
+      rocm_distro_hash:
+        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+        type: string
+        default: "no_hash"
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
+      xla_ref:
+        description: "ROCm/xla ref to check out."
+        type: string
+        default: "rocm-jaxlib-v0.11.2"
+      xla_repository:
+        description: "Repository holding the XLA checkout the test suite runs from."
+        type: string
+        default: "ROCm/xla"
+      xla_commit:
+        description: "XLA commit to test. Empty uses xla_ref."
+        type: string
+        default: ""
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
+        type: string
+        default: "linux-gfx950-1gpu-ccs-ossci-rocm"
+      test_timeout_minutes:
+        description: "Budget for the whole test job, in minutes."
+        type: number
+        default: 240
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
+  # Validates the pipeline itself whenever it changes, with literal defaults
+  # standing in for what a future caller would pass — pull_request has no `inputs` context,
+  # so every `inputs.x` below is null here and falls back to these defaults.
+  pull_request:
+    paths:
+      - ".github/workflows/test_multi_arch_linux_xla.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test_xla:
+    name: Test XLA | ${{ inputs.test_amdgpu_family || 'gfx950' }}
+    runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
+    timeout-minutes: ${{ inputs.test_timeout_minutes || 240 }}
+
+    # Test cases excluded from the run. A single combination, so this does not
+    # fan out: the matrix is the one place a workflow can hold a real YAML list
+    # `join()` below turns it into the negative gtest filter.
+    #
+    # A value-parameterized name is <Instantiation>/<Fixture>.<Test>/<Param>.
+    strategy:
+      matrix:
+        include:
+          - excluded_tests:
+              - HloOpProfilerTest.BasicMeasurementsAreCorrect
+              - StreamExecutorGpuClientTest.NumaNode # Numa test doesn't work on DO nodes, rbe
+              - PrngTest.PassInGlobalRngSeed
+              - CommandBufferTests/CommandBufferTest.Convolutions* # TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
+
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
+
+    container:
+      image: ghcr.io/rocm/jax-build-ubu24.rocmless@sha256:68854ed30b800d3e8c390f6e651721e2bead58830da1c59e1b828354eb8f077f
+      options: >-
+        --shm-size=128g
+        --device /dev/kfd
+        --device /dev/dri
+        --user root
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        -e KUBE_CPU_REQUEST
+        -e KUBE_MEMORY_REQUEST
+      volumes:
+        - /etc/rbe-certs/temp-rbe-cert.crt:/data/temp-rbe-cert.crt:ro
+        - /etc/rbe-certs/temp-rbe-cert.key:/data/temp-rbe-cert.key:ro
+        - /etc/rbe-certs/bb-rbe-ca.crt:/data/bb-rbe-ca.crt:ro
+        - /etc/rbe-certs/bb-rbe-client.crt:/data/bb-rbe-client.crt:ro
+        - /etc/rbe-certs/bb-rbe-client.key:/data/bb-rbe-client.key:ro
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
+      QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
+      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_family || 'gfx950' }}
+      RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
+      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
+      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
+      XLA_TEST_FILTER: "-${{ join(matrix.excluded_tests, ':') }}"
+      ROCM_COMMON_BAZEL_ARGS: >-
+        --config=rocm_ci_hermetic
+        --config=rocm_rbe_dynamic
+        --config=rocm_rbe_dev
+        --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}"
+        --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}"
+        --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}"
+        --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}"
+        --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
+        --test_filter="${XLA_TEST_FILTER}"
+        --jobs=50
+        --bes_keywords=nightly
+        --bes_keywords=therock_xla
+
+    steps:
+      - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: started
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout XLA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          path: xla
+          repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
+          ref: ${{ inputs.xla_commit || inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+
+      # The device serial numbers it prints identify a recurring bad device
+      # across runs, since the runner and the device index change every time.
+      - name: Driver / GPU sanity check
+        timeout-minutes: 3
+        run: |
+          python build_tools/print_driver_gpu_info.py
+
+      - name: Run XLA tests [single_gpu]
+        working-directory: xla
+        run: |
+          build_tools/rocm/run_xla_ci_build.sh \
+            --config=ci_single_gpu \
+            --local_test_jobs=1 \
+            --build_event_json_file=xla_single_gpu_build_events.json \
+            --bes_keywords=single_gpu \
+            ${{ env.ROCM_COMMON_BAZEL_ARGS }} \
+            -- \
+            //xla/...
+
+      - name: Run XLA tests [cpu]
+        working-directory: xla
+        run: |
+          build_tools/rocm/run_xla_ci_build.sh \
+            --config=ci_rocm_cpu \
+            --build_event_json_file=xla_cpu_build_events.json \
+            --bes_keywords=cpu \
+            ${{ env.ROCM_COMMON_BAZEL_ARGS }} \
+            -- \
+            //xla/...
+
+      - name: Capture job summary
+        id: summary
+        if: always()
+        run: python build_tools/github_actions/capture_job_summary.py
+
+      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
+        continue-on-error: true
+        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        with:
+          run_phase: completed
+          run_conclusion: ${{ job.status }}
+          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
+          workflow_inputs: ${{ toJSON(inputs) }}
+          workflow_step_outputs: ${{ toJSON(steps) }}
+          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
+          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
