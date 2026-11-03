@@ -243,11 +243,10 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
-          # cmake, make, and a C++ compiler are for the downstream find_package
-          # smoke test, including sanity. hip-config calls find_dependency(Threads),
-          # which fails unless C or CXX is enabled. The default Unix Makefiles
-          # generator still requires make when CXX is enabled, even though this
-          # step does not build. g++ / gcc-c++ is the compiler.
+          # cmake, make, and a C++ compiler are for examples/cpp-sdk-user,
+          # including sanity. The step uses the Unix Makefiles generator, so
+          # make is required. g++ / gcc-c++ is the host compiler. The installed
+          # ROCm prefix supplies the HIP compiler.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -328,13 +327,17 @@ jobs:
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
-      - name: Downstream CMake smoke test
-        # Confirms find_package(hip) and find_package(hipblaslt) succeed against the installed prefix.
+      - name: Installed cpp-sdk-user test
+        # Runs the existing examples/cpp-sdk-user project against the installed prefix.
         if: ${{ inputs.install_prefix != '' }}
         run: |
-          echo "CMAKE SMOKE - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
-          $PYTHON_CMD build_tools/packaging/linux/downstream_cmake_smoke.py \
-            --install-prefix "${INSTALL_PREFIX}"
+          echo "CPP SDK USER - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
+          cmake -E env "CMAKE_PREFIX_PATH=${INSTALL_PREFIX}" -- \
+            cmake \
+              -DSOURCE_DIR="${GITHUB_WORKSPACE}/examples/cpp-sdk-user" \
+              -DBINARY_DIR="${RUNNER_TEMP}/cpp-sdk-user" \
+              -DGENERATOR="Unix Makefiles" \
+              -P "${GITHUB_WORKSPACE}/examples/clean_configure_test_project.cmake"
 
       - name: Package Uninstall Test
         # Gated by workflow input only; no RUN_UNINSTALL env (reuses job env from install step).
