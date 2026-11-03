@@ -267,32 +267,38 @@ jobs:
       # those bytes (embeds the signature into the RPM header) — signing
       # after indexing would leave repodata describing stale, pre-signature
       # file contents.
+      # TEMPORARY, FOR MANUAL TESTING ONLY — revert before merging.
+      # release-type hardcoded to "dev" (ci is never auto-signed) and
+      # GPG_SIGNING_SERVER pointed directly at the POC instance, since the
+      # GPG_SIGNING_SERVER repo secret isn't configured yet.
       - name: Sign Package
         run: |
           python ./build_tools/packaging/linux/sign_native_packages.py \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type "${RELEASE_TYPE}"
+            --release-type "dev"
         env:
-          GPG_SIGNING_SERVER: ${{ secrets.GPG_SIGNING_SERVER }}
-          GPG_SIGNING_API_URL: ${{ secrets.GPG_SIGNING_API_URL }}
+          GPG_SIGNING_SERVER: "https://ec2-3-141-97-147.us-east-2.compute.amazonaws.com/sign"
+          GPG_VERIFY_SSL: "false"
 
       - name: Build Package repository
         run: |
           python ./build_tools/packaging/linux/build_package_repo.py \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type "${RELEASE_TYPE}"
+            --release-type "dev"
 
+      # TEMPORARY, FOR MANUAL TESTING ONLY — revert before merging. See note
+      # on the "Sign Package" step above.
       - name: Sign repo metadata
         run: |
           python ./build_tools/packaging/linux/sign_package_repo.py \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --release-type "${RELEASE_TYPE}"
+            --release-type "dev"
         env:
-          GPG_SIGNING_SERVER: ${{ secrets.GPG_SIGNING_SERVER }}
-          GPG_SIGNING_API_URL: ${{ secrets.GPG_SIGNING_API_URL }}
+          GPG_SIGNING_SERVER: "https://ec2-3-141-97-147.us-east-2.compute.amazonaws.com/sign"
+          GPG_VERIFY_SSL: "false"
 
       # Tests the final, signed package tree. Packages are discovered
       # recursively under PACKAGE_DIST_DIR, so this works whether they're
