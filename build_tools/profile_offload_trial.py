@@ -4,7 +4,7 @@
 """Controlled, single-object HIP offload-job trials on TheRock CI only.
 
 Bootstrap the existing compiler/runtime, configure hipCCL_tests and dependencies,
-then compare jobs=2/4 sequentially within one allocation. No source patch,
+then compare jobs=1/2/4 sequentially within one allocation. No source patch,
 release publication, or S3 upload is performed. Diagnostics go to GitHub artifacts.
 """
 
@@ -27,8 +27,8 @@ SOURCE_BASELINE = "5b7cb88373362ab80dc0f19605915e534f4158aa"
 LIBRARIES_PIN = "f4e24d58b3f313f1a31068def1e35376e43c2f49"
 SDK_RUN = "41185762902"
 PACKAGE_VERSION = "10.3.0.dev0+5e7281668afc1c2c326f7ae0c73043a117ed8b53"
-FAMILY = "gfx103X-all"
-ARCHES = {f"gfx103{i}" for i in range(7)}
+FAMILY = "gfx110X-all"
+ARCHES = {f"gfx110{i}" for i in range(4)}
 OBJECT = (
     "rocprim/benchmark/CMakeFiles/benchmark_device_segmented_radix_sort_pairs.dir/"
     "benchmark_device_segmented_radix_sort_pairs.cpp.o"
@@ -89,8 +89,8 @@ def trial_env(env: dict[str, str]) -> dict[str, str]:
 
 def parse_order(raw: str) -> list[int]:
     value = json.loads(raw)
-    if value not in ([2, 4], [4, 2]) or any(type(n) is not int for n in value):
-        raise ValueError("Only balanced paired orders [2,4] and [4,2] are supported")
+    if value not in ([1, 2, 4], [4, 2, 1]) or any(type(n) is not int for n in value):
+        raise ValueError("Only balanced orders [1,2,4] and [4,2,1] are supported")
     return value
 
 
@@ -140,8 +140,8 @@ def object_edge(text: str, target: str = OBJECT) -> tuple[list[str], int, int]:
 
 
 def patch_flags(text: str, jobs: int, target: str = OBJECT) -> str:
-    if jobs not in (2, 4):
-        raise ValueError("Only the controlled jobs=2/4 comparison is supported")
+    if jobs not in (1, 2, 4):
+        raise ValueError("Only the controlled jobs=1/2/4 comparison is supported")
     lines, start, end = object_edge(text, target)
     matches = [i for i in range(start + 1, end) if re.match(r" +FLAGS = ", lines[i])]
     if len(matches) != 1:
@@ -214,7 +214,7 @@ def compiler_arguments(command: str, jobs: int) -> tuple[Path, list[str]]:
         )
     observed = {a.split("=", 1)[1] for a in args if a.startswith("--offload-arch=")}
     if observed != ARCHES:
-        raise ValueError(f"The original seven architectures must remain: {observed}")
+        raise ValueError(f"All four gfx110X architectures must remain: {observed}")
     if [a for a in args if a.startswith("--offload-jobs=")] != [
         f"--offload-jobs={jobs}"
     ]:
@@ -636,7 +636,7 @@ def run_trial(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--order", required=True, help="JSON [2,4] or [4,2]")
+    parser.add_argument("--order", required=True, help="JSON [1,2,4] or [4,2,1]")
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
     parser.add_argument(
         "--output", type=Path, default=ROOT / "build/logs/offload-trial"
@@ -736,10 +736,13 @@ def main() -> None:
             )
             write_json(output / "results.json", results)
         same_objects = len({result["object"]["sha256"] for result in results}) == 1
-        same_binaries = filecmp.cmp(
-            results[0]["benchmark"]["retained_local_path"],
-            results[1]["benchmark"]["retained_local_path"],
-            shallow=False,
+        same_binaries = all(
+            filecmp.cmp(
+                results[0]["benchmark"]["retained_local_path"],
+                result["benchmark"]["retained_local_path"],
+                shallow=False,
+            )
+            for result in results[1:]
         )
         write_json(
             output / "comparison.json",

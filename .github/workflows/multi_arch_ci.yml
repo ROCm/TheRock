@@ -20,7 +20,7 @@ on:
       profile_offload_trial:
         type: boolean
         default: false
-        description: "Run only the controlled gfx103X single-object offload concurrency experiment"
+        description: "Run only the controlled gfx110X-all single-object 1/2/4-worker experiment"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -271,7 +271,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        order: [[2, 4], [4, 2]]
+        order: [[1, 2, 4], [4, 2, 1]]
     permissions:
       contents: read
       actions: read
