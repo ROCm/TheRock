@@ -832,7 +832,7 @@ artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-r
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
-source_paths = ["rocprofiler", "rocprofiler-sdk", "roctracer", "rocprof-trace-decoder"]
+source_paths = ["rocprofiler", "rocprofiler-sdk", "roctracer", "rocprof-trace-decoder", "fortran"]
 
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-apps"
