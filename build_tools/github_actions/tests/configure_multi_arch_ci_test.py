@@ -220,7 +220,8 @@ class TestCIInputs(unittest.TestCase):
 
     def test_run_wsl_adds_wsl_rocdxg_to_partial_build(self):
         """A narrowed build (e.g. an external repo PR) still builds wsl-rocdxg,
-        the WSL libhsakmt that ci:run-wsl tests need."""
+        the WSL libhsakmt that ci:run-wsl tests need, on top of the requested
+        stages, which stay unchanged."""
         for labels, expect_wsl in (("ci:run-wsl,ci:gfx110X-all", True), ("", False)):
             with self.subTest(labels=labels):
                 inputs = _run_from_environ(
@@ -235,21 +236,16 @@ class TestCIInputs(unittest.TestCase):
                     },
                     extra_env={"BUILD_STAGES": "compiler-runtime,dctools-core"},
                 )
-                skipped = cm._resolve_skipped_stages(inputs.build_stages)
+                self.assertEqual(
+                    inputs.build_stages, ["compiler-runtime", "dctools-core"]
+                )
+                skipped = cm.decide_jobs(
+                    inputs, cm.GitContext(), cm.TargetSelection()
+                ).build_rocm.skipped_stages
                 self.assertEqual("wsl-rocdxg" not in skipped, expect_wsl)
                 self.assertNotIn("compiler-runtime", skipped)
                 self.assertNotIn("dctools-core", skipped)
-
-    def test_run_wsl_full_build_needs_no_stage_check(self):
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
-        )
-        inputs.validate()
+                self.assertIn("math-libs", skipped)
 
 
 class TestCIInputsFromEnviron(unittest.TestCase):
