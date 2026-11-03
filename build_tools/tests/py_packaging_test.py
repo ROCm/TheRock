@@ -19,6 +19,7 @@ import tempfile
 import unittest
 import zipfile
 from email import message_from_bytes
+from email.message import Message
 from pathlib import Path
 from unittest import mock
 
@@ -177,6 +178,28 @@ class MultiArchPackagingTest(TmpDirTestCase):
             version_suffix="",
             artifacts=ArtifactCatalog(artifact_dir),
         )
+
+    def _build_wheel_metadata(self, package: PopulatedDistPackage) -> Message:
+        wheel_dir = self.temp_dir / f"wheels-{package.logical_name}"
+        wheel_dir.mkdir()
+        result = subprocess.run(
+            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
+            cwd=package.path,
+            env={**os.environ, "ROCM_SDK_TARGET_FAMILY": "gfx950"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        wheel_paths = list(wheel_dir.glob("*.whl"))
+        self.assertEqual(len(wheel_paths), 1)
+        with zipfile.ZipFile(wheel_paths[0]) as archive:
+            metadata_name = next(
+                name
+                for name in archive.namelist()
+                if name.endswith(".dist-info/METADATA")
+            )
+            return message_from_bytes(archive.read(metadata_name))
 
     def test_each_library_package_independently_owns_shared_relpaths(self):
         """Both arch-specific library packages must contain all their runtime files.
@@ -340,10 +363,7 @@ class MultiArchPackagingTest(TmpDirTestCase):
             metadata = zf.read(metadata_name).decode()
             self.assertIn("Requires-Dist: pyelftools", metadata)
 
-    def test_core_setup_builds_wheel_with_rocpd_dependencies(self):
-        if importlib.util.find_spec("wheel") is None:
-            self.skipTest("wheel package is not available")
-
+    def test_core_setup_builds_wheel_with_optional_rocpd_dependencies(self):
         artifact_dir = self.temp_dir / "artifacts"
         artifact_dir.mkdir()
         dest_dir = self.temp_dir / "packages"
@@ -356,32 +376,15 @@ class MultiArchPackagingTest(TmpDirTestCase):
         )
         core = PopulatedDistPackage(params, logical_name="core")
         (core.platform_dir / "__init__.py").write_text("")
-        wheel_dir = self.temp_dir / "wheels"
-        wheel_dir.mkdir()
-        subprocess.run(
-            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
-            cwd=core.path,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-
-        wheel_path = next(wheel_dir.glob("rocm_sdk_core-*.whl"))
-        with zipfile.ZipFile(wheel_path) as archive:
-            metadata_name = next(
-                name
-                for name in archive.namelist()
-                if name.endswith(".dist-info/METADATA")
-            )
-            metadata = message_from_bytes(archive.read(metadata_name))
+        metadata = self._build_wheel_metadata(core)
 
         self.assertEqual(metadata["Name"], "rocm-sdk-core")
         self.assertEqual(metadata["Version"], "0.0.1.dev0")
         extras = {
-            "rocpd-dashboard": "jinja2",
-            "rocpd-otf2": "otf2",
-            "rocpd-pdf": "reportlab",
+            "rocpd": {"pandas"},
+            "rocpd-dashboard": {"pandas", "jinja2"},
+            "rocpd-otf2": {"otf2"},
+            "rocpd-pdf": {"pandas", "reportlab"},
         }
         self.assertEqual(set(metadata.get_all("Provides-Extra", [])), set(extras))
         requirements = [
@@ -399,11 +402,45 @@ class MultiArchPackagingTest(TmpDirTestCase):
                         )
                     }
                     expected = set()
-                    if sys_platform == "linux":
-                        expected.add("pandas")
-                        if extra:
-                            expected.add(extras[extra])
+                    if sys_platform == "linux" and extra:
+                        expected = extras[extra]
                     self.assertEqual(active, expected)
+
+    def test_profiler_selector_requests_matching_rocpd_extra(self):
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir()
+        params = Parameters(
+            dest_dir=self.temp_dir / "packages",
+            version="0.0.1.dev0",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+            linux_target_families=["gfx950"],
+            windows_target_families=["gfx950"],
+        )
+        selector = PopulatedDistPackage(params, logical_name="meta")
+        metadata = self._build_wheel_metadata(selector)
+        requirements = [
+            Requirement(value) for value in metadata.get_all("Requires-Dist", [])
+        ]
+        rocpd_requirements = [
+            requirement
+            for requirement in requirements
+            if requirement.name == "rocm-sdk-core" and requirement.extras
+        ]
+        self.assertEqual(len(rocpd_requirements), 1)
+        requirement = rocpd_requirements[0]
+        self.assertEqual(requirement.extras, {"rocpd"})
+        self.assertEqual(str(requirement.specifier), "==0.0.1.dev0")
+        self.assertIsNotNone(requirement.marker)
+        for sys_platform in ("linux", "win32", "darwin"):
+            for extra in ("", "profiler", "libraries", "devel"):
+                with self.subTest(sys_platform=sys_platform, extra=extra):
+                    self.assertEqual(
+                        requirement.marker.evaluate(
+                            {"sys_platform": sys_platform, "extra": extra}
+                        ),
+                        sys_platform == "linux" and extra == "profiler",
+                    )
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
