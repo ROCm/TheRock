@@ -333,7 +333,7 @@ def collect_outcomes(reports_dir: Path) -> dict[tuple[str, str, str], dict]:
     """
     attempts: dict[tuple[str, str, str], list[dict]] = {}
     for xml_file in sorted(reports_dir.rglob("*.xml")):
-        test_file = derive_test_file(str(xml_file.relative_to(reports_dir)))
+        test_file = derive_test_file(xml_file.relative_to(reports_dir).as_posix())
         for case in parse_junit_testcases(xml_file):
             key = (test_file, case["class"], case["test"])
             attempts.setdefault(key, []).append(case)
