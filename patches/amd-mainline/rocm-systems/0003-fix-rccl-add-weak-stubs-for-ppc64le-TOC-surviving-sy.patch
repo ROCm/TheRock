@@ -1,33 +1,25 @@
-From ccb6dddc19b13c982253cd049425c8b45fb43f71 Mon Sep 17 00:00:00 2001
+From 6d8fd94939a3b64b6771c906b449fe31ae7c4b0c Mon Sep 17 00:00:00 2001
 From: therockbot <therockbot@amd.com>
-Date: Thu, 29 Oct 2026 14:09:18 -0400
+Date: Mon, 2 Nov 2026 15:57:14 +0000
 Subject: [PATCH] fix(rccl): add weak stubs for ppc64le TOC-surviving symbols
  in host tests
 
-On ppc64le, TOC (Table of Contents) references to extern symbols survive
---gc-sections even when the code path referencing them is dead. This
-causes undefined-symbol link errors in host-only test binaries for symbols
-that are normally provided by GPU-side or network libraries.
-
-Add weak stub definitions guarded by __powerpc64__/__PPC64__ for:
-- topoPathTypeStr[] in nccl_fakes.cc (from rome_models.cc)
-- ncclNetIb_devices, ncclNetGdrCopy_devices, ncclNetSocket_devices,
-  ncclGinDeviceCount, ncclGinCustomAllReduceDeviceCount in transport_stubs.cc
-
-Weak linkage ensures tests that supply their own strong definitions win
-without a duplicate-symbol error.
+On ppc64le, TOC references to extern symbols survive --gc-sections even
+when the code path referencing them is dead. Add weak stub definitions
+for topoPathTypeStr, network device-count functions, and GIN plugin
+functions so host-only test binaries link without GPU/network libraries.
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ---
- projects/rccl/test/host/fakes/nccl_fakes.cc     | 10 ++++++++++
- .../rccl/test/host/fakes/transport_stubs.cc     | 17 +++++++++++++++++
- 2 files changed, 27 insertions(+)
+ projects/rccl/test/host/fakes/nccl_fakes.cc   | 10 +++++++
+ .../rccl/test/host/fakes/transport_stubs.cc   | 26 +++++++++++++++++++
+ 2 files changed, 36 insertions(+)
 
 diff --git a/projects/rccl/test/host/fakes/nccl_fakes.cc b/projects/rccl/test/host/fakes/nccl_fakes.cc
-index ac694bde7a..44f9746453 100644
+index 9a876ffd1b3..ecefaca0f93 100644
 --- a/projects/rccl/test/host/fakes/nccl_fakes.cc
 +++ b/projects/rccl/test/host/fakes/nccl_fakes.cc
-@@ -626,3 +626,13 @@ void ResetNcclFakes()
+@@ -646,3 +646,13 @@ void ResetNcclFakes()
      g_commGraphDeregister          = DefaultCommGraphDeregister;
      g_ncclSetThreadName            = DefaultSetThreadName;
  }
@@ -42,14 +34,13 @@ index ac694bde7a..44f9746453 100644
 +#endif
 +#endif
 diff --git a/projects/rccl/test/host/fakes/transport_stubs.cc b/projects/rccl/test/host/fakes/transport_stubs.cc
-index eedafab114..c51b290096 100644
+index 09835366996..25ea86b8d11 100644
 --- a/projects/rccl/test/host/fakes/transport_stubs.cc
 +++ b/projects/rccl/test/host/fakes/transport_stubs.cc
-@@ -148,3 +148,20 @@ static ncclResult_t ReachableCanConnect(int* ret, struct ncclComm*, struct ncclT
- }
- static struct ncclTransport reachableTransport = {"fake", ReachableCanConnect};
- struct ncclTransport* ncclTransports[NTRANSPORTS] = {&reachableTransport, &reachableTransport};
-+
+@@ -372,3 +372,29 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph*
+ #include "transport.h"
+ struct ncclTransport netTransport = {};
+ 
 +// ppc64le TOC references survive --gc-sections, so plugin device-count
 +// functions referenced as function pointers in topo.cc need definitions
 +// even though the code path that stores them is dead.  Use weak symbols
@@ -65,7 +56,17 @@ index eedafab114..c51b290096 100644
 +__attribute__((weak)) int ncclGinDeviceCount(void) { return 0; }
 +__attribute__((weak)) int ncclGinCustomAllReduceDeviceCount(void) { return 0; }
 +}
++// topo.cc stores ncclNetGetDevCount / ncclGinGetDevCount / etc. as function
++// pointers in netInfo; the TOC entry survives --gc-sections on POWER even
++// when the code path is dead.  Weak stubs let MicroGraph (which links the
++// real topo.cc but not graph_fakes.cc) resolve them.
++__attribute__((weak)) ncclResult_t ncclNetGetDevCount(int, int* p, int* v) { if (p) *p = 0; if (v) *v = 0; return ncclSuccess; }
++__attribute__((weak)) ncclResult_t ncclCollNetGetDevCount(int, int* p, int* v) { if (p) *p = 0; if (v) *v = 0; return ncclSuccess; }
++__attribute__((weak)) ncclResult_t ncclGinGetDevCount(int, int* p, int* v) { if (p) *p = 0; if (v) *v = 0; return ncclSuccess; }
++__attribute__((weak)) ncclResult_t ncclRmaGetDevCount(int, int* p, int* v) { if (p) *p = 0; if (v) *v = 0; return ncclSuccess; }
++__attribute__((weak)) ncclResult_t ncclNetSetVirtDevCount(int, int) { return ncclSuccess; }
++__attribute__((weak)) ncclResult_t ncclCollNetSetVirtDevCount(int, int) { return ncclSuccess; }
 +#endif
 -- 
-2.43.0
+2.52.0
 

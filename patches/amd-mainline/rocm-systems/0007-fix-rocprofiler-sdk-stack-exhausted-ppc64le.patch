@@ -1,0 +1,47 @@
+From d78403f39aee66bddd5594a23fc125e86da7fa14 Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Mon, 2 Nov 2026 19:36:42 +0000
+Subject: [PATCH] fix(rocprofiler-sdk): suppress -Wstack-exhausted in
+ enum_string test on ppc64le
+
+The recursive std::index_sequence template in enum_string.hpp exhausts
+the compiler stack at -O3 on ppc64le, where stack frames are larger due
+to the TOC save area.  The same code compiles on x86_64 without issue.
+
+Demote -Wstack-exhausted from error for enum_string.cpp on ppc64
+targets only.  The warning is still emitted so the underlying issue
+remains visible.  Recheck after the template is refactored to use
+iteration instead of recursion.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ .../source/lib/rocprofiler-sdk/tests/CMakeLists.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/tests/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/tests/CMakeLists.txt
+index dc4c8e30256..08b6c03529c 100644
+--- a/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/tests/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/rocprofiler-sdk/tests/CMakeLists.txt
+@@ -53,6 +53,19 @@ target_link_libraries(
+             GTest::gtest
+             GTest::gtest_main)
+ 
++# ppc64le has larger stack frames (TOC save area), so the recursive
++# std::index_sequence template in enum_string.hpp exhausts the compiler
++# stack at -O3 where x86_64 does not.  Demote from error; the warning
++# is still emitted.  Recheck after the enum_string template is
++# refactored to use iteration instead of recursion.
++if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
++    set_property(
++        SOURCE enum_string.cpp
++        APPEND
++        PROPERTY COMPILE_OPTIONS -Wno-error=stack-exhausted
++    )
++endif()
++
+ file(GLOB _NODE_PROPERTIES ${CMAKE_CURRENT_LIST_DIR}/data/topology/nodes/*/properties)
+ rocprofiler_add_unit_test(
+     TARGET rocprofiler-sdk-lib-tests
+-- 
+2.52.0
+
