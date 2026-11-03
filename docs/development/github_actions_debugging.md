@@ -22,6 +22,14 @@ Table of contents:
 
 ### Testing PyTorch release workflows
 
+> [!TIP]
+> To build and test a ROCm/pytorch branch against a published ROCm release,
+> trigger
+> [`.github/workflows/dev_pytorch_wheels.yml`](/.github/workflows/dev_pytorch_wheels.yml)
+> instead. It selects GPUs with checkboxes, defaults to the ROCm version used by
+> upstream PyTorch trunk CI, builds on Linux and/or Windows, and summarizes the
+> test results in its run summary. No package copying is needed.
+
 Let's say we want to test
 [`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml),
 which

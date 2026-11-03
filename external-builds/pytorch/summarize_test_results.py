@@ -15,12 +15,20 @@ Two modes of operation:
    table with a *Config* and *Shard* column so all failures are visible in
    one place.  Called from a post-matrix summary job.
 
+3. **Standard** (``--standard-dir``) — scans artifact directories named
+   ``test-reports-<os>-<amdgpu_family>`` from test_pytorch_wheels.yml and
+   reports tests run, passed, failed, errored, skipped, and flaky per
+   platform and family, then lists failures and skip reasons.
+
 Usage:
     # Per-shard (inside matrix job):
     python summarize_test_results.py
 
     # Combined (summary job after all shards):
     python summarize_test_results.py --combined-dir artifacts/
+
+    # Standard suite across platforms and families:
+    python summarize_test_results.py --standard-dir artifacts/
 """
 
 import argparse
@@ -31,8 +39,17 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-def parse_junit_xml(xml_path: Path) -> list[dict]:
-    """Extract failed/errored test cases from a JUnit XML file."""
+# Child elements pytest-rerunfailures and flaky plugins attach to a testcase
+# that failed at least once before its final outcome.
+_RERUN_TAGS = ("rerun", "rerunFailure", "rerunError", "flakyFailure", "flakyError")
+
+
+def parse_junit_testcases(xml_path: Path) -> list[dict]:
+    """Extract every test case from a JUnit XML file with its outcome.
+
+    Status is one of PASSED, FAILED, ERROR, or SKIPPED. ``rerun`` is True when
+    the case carries rerun/flaky records from an earlier attempt.
+    """
     results = []
     try:
         tree = ET.parse(xml_path)
@@ -55,6 +72,7 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
 
             failure = testcase.find("failure")
             error = testcase.find("error")
+            skipped = testcase.find("skipped")
 
             if failure is not None:
                 status = "FAILED"
@@ -62,8 +80,12 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
             elif error is not None:
                 status = "ERROR"
                 message = (error.get("message") or "")[:200]
+            elif skipped is not None:
+                status = "SKIPPED"
+                message = (skipped.get("message") or skipped.text or "")[:200]
             else:
-                continue
+                status = "PASSED"
+                message = ""
 
             results.append(
                 {
@@ -75,10 +97,20 @@ def parse_junit_xml(xml_path: Path) -> list[dict]:
                     "status": status,
                     "message": message,
                     "time": time_s,
+                    "rerun": any(testcase.find(t) is not None for t in _RERUN_TAGS),
                 }
             )
 
     return results
+
+
+def parse_junit_xml(xml_path: Path) -> list[dict]:
+    """Extract failed/errored test cases from a JUnit XML file."""
+    return [
+        case
+        for case in parse_junit_testcases(xml_path)
+        if case["status"] in ("FAILED", "ERROR")
+    ]
 
 
 def collect_results(reports_dir: Path) -> list[dict]:
@@ -274,6 +306,149 @@ def write_combined_summary(
 
 
 # ---------------------------------------------------------------------------
+# Standard summary (test_pytorch_wheels.yml across platforms and families)
+# ---------------------------------------------------------------------------
+
+_STANDARD_ARTIFACT_RE = re.compile(
+    r"test-reports-(?P<os>Linux|Windows|macOS)-(?P<family>.+)"
+)
+# Keep the step summary well under GitHub's 1 MiB limit.
+_MAX_FAILURE_ROWS = 200
+_MAX_SKIP_REASONS = 50
+
+
+def collect_outcomes(reports_dir: Path) -> dict[tuple[str, str, str], dict]:
+    """Merges every attempt of each test into one final outcome.
+
+    A test that passed on any attempt counts as passed; if another attempt
+    failed (or the case has rerun records) it is also flagged flaky.
+    """
+    attempts: dict[tuple[str, str, str], list[dict]] = {}
+    for xml_file in sorted(reports_dir.rglob("*.xml")):
+        test_file = derive_test_file(str(xml_file.relative_to(reports_dir)))
+        for case in parse_junit_testcases(xml_file):
+            key = (test_file, case["class"], case["test"])
+            attempts.setdefault(key, []).append(case)
+
+    outcomes = {}
+    for key, cases in attempts.items():
+        statuses = {c["status"] for c in cases}
+        for status in ("PASSED", "FAILED", "ERROR", "SKIPPED"):
+            if status in statuses:
+                break
+        final = next(c for c in cases if c["status"] == status)
+        flaky = status == "PASSED" and (
+            bool(statuses & {"FAILED", "ERROR"}) or any(c["rerun"] for c in cases)
+        )
+        outcomes[key] = {**final, "flaky": flaky}
+    return outcomes
+
+
+def count_outcomes(outcomes: dict) -> dict[str, int]:
+    counts = {"PASSED": 0, "FAILED": 0, "ERROR": 0, "SKIPPED": 0, "FLAKY": 0}
+    for outcome in outcomes.values():
+        counts[outcome["status"]] += 1
+        counts["FLAKY"] += outcome["flaky"]
+    counts["RUN"] = counts["PASSED"] + counts["FAILED"] + counts["ERROR"]
+    return counts
+
+
+def _escape(text: str, limit: int = 100) -> str:
+    return text.replace("|", "\\|").replace("\n", " ")[:limit]
+
+
+def write_standard_summary(standard_dir: Path, summary_file: str) -> int:
+    """Writes per-platform/family counts, failures, and skip reasons.
+
+    Returns the number of failed or errored tests across all reports.
+    """
+    groups = []
+    for artifact_dir in sorted(standard_dir.iterdir()):
+        m = _STANDARD_ARTIFACT_RE.fullmatch(artifact_dir.name)
+        if artifact_dir.is_dir() and m:
+            outcomes = collect_outcomes(artifact_dir)
+            groups.append((m.group("os"), m.group("family"), outcomes))
+
+    lines = ["## PyTorch Test Results", ""]
+    if not groups:
+        lines.append(
+            "No PyTorch test reports were uploaded. Check the Test PyTorch "
+            "jobs for install or setup failures."
+        )
+        _emit(lines, summary_file)
+        return 0
+
+    columns = ["RUN", "PASSED", "FAILED", "ERROR", "SKIPPED", "FLAKY"]
+    lines.append(
+        "| Platform | GPU family | Tests run | Passed | Failed | Errors "
+        "| Skipped | Flaky |"
+    )
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|")
+    totals = dict.fromkeys(columns, 0)
+    for os_name, family, outcomes in groups:
+        counts = count_outcomes(outcomes)
+        for col in columns:
+            totals[col] += counts[col]
+        cells = " | ".join(str(counts[col]) for col in columns)
+        lines.append(f"| {os_name} | {family} | {cells} |")
+    if len(groups) > 1:
+        cells = " | ".join(f"**{totals[col]}**" for col in columns)
+        lines.append(f"| **Total** | | {cells} |")
+    lines.append("")
+
+    for os_name, family, outcomes in groups:
+        label = f"{os_name} | {family}"
+        failures = sorted(
+            (k, v) for k, v in outcomes.items() if v["status"] in ("FAILED", "ERROR")
+        )
+        if failures:
+            lines.append(f"### {len(failures)} failed — {label}")
+            lines.append("")
+            lines.append("| Test File | Test Class | Test Name | Status | Error |")
+            lines.append("|-----------|-----------|-----------|--------|-------|")
+            for (test_file, cls, test), f in failures[:_MAX_FAILURE_ROWS]:
+                lines.append(
+                    f"| {test_file} | {cls} | {test} | {f['status']} "
+                    f"| {_escape(f['message'])} |"
+                )
+            if len(failures) > _MAX_FAILURE_ROWS:
+                lines.append(
+                    f"\n{len(failures) - _MAX_FAILURE_ROWS} more failures are in "
+                    f"the test-reports-{os_name}-{family} artifact."
+                )
+            lines.append("")
+
+        reasons: dict[str, list[str]] = {}
+        for (test_file, cls, test), outcome in sorted(outcomes.items()):
+            if outcome["status"] == "SKIPPED":
+                reason = _escape(outcome["message"] or "(no reason given)", 150)
+                reasons.setdefault(reason, []).append(f"{test_file}::{cls}::{test}")
+        if reasons:
+            skipped = sum(len(tests) for tests in reasons.values())
+            ranked = sorted(reasons.items(), key=lambda r: (-len(r[1]), r[0]))
+            lines.append(
+                f"<details><summary>{skipped} skipped — {label} "
+                f"({len(reasons)} reasons)</summary>"
+            )
+            lines.append("")
+            lines.append("| Count | Reason | Example |")
+            lines.append("|---:|---|---|")
+            for reason, tests in ranked[:_MAX_SKIP_REASONS]:
+                lines.append(f"| {len(tests)} | {reason} | `{_escape(tests[0])}` |")
+            if len(ranked) > _MAX_SKIP_REASONS:
+                lines.append(
+                    f"\n{len(ranked) - _MAX_SKIP_REASONS} more skip reasons are in "
+                    f"the test-reports-{os_name}-{family} artifact."
+                )
+            lines.append("")
+            lines.append("</details>")
+            lines.append("")
+
+    _emit(lines, summary_file)
+    return totals["FAILED"] + totals["ERROR"]
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -302,6 +477,13 @@ def main() -> int:
         "(test-reports-<config>-<shard>-<num>). Enables combined mode.",
     )
     parser.add_argument(
+        "--standard-dir",
+        type=Path,
+        default=None,
+        help="Path to a directory of downloaded artifact dirs "
+        "(test-reports-<os>-<amdgpu_family>). Enables standard mode.",
+    )
+    parser.add_argument(
         "--test-config",
         default=os.getenv("TEST_CONFIG", "unknown"),
     )
@@ -328,6 +510,13 @@ def main() -> int:
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
+
+    if args.standard_dir:
+        if not args.standard_dir.is_dir():
+            print(f"Standard directory not found: {args.standard_dir}")
+            return 0
+        write_standard_summary(args.standard_dir, summary_file)
+        return 0
 
     if args.combined_dir:
         if not args.combined_dir.is_dir():
