@@ -2,22 +2,22 @@
 # SPDX-License-Identifier: MIT
 
 # Fortran bindings for the ROCm libraries (RFC0015). Each binding is a
-# standalone CMake project that lives next to the library it wraps and builds
-# against that library once installed. They are built here, after those
+# standalone CMake project, in the bindings/fortran tree of the monorepo that
+# holds the library it wraps, and builds against that library once installed. They are built here, after those
 # libraries, rather than inside their builds.
 
 if(THEROCK_ENABLE_RUNTIME_FORTRAN)
   ##############################################################################
   # runtime-fortran
-  # The HIP and ROCTx bindings (rocm-systems projects/fortran), built against
-  # hip-clr and rocprofiler-sdk. Skipped until projects/fortran exists in the
+  # The HIP and ROCTx bindings (rocm-systems bindings/fortran), built against
+  # hip-clr and rocprofiler-sdk. Skipped until bindings/fortran exists in the
   # rocm-systems source; the artifact is then empty.
   ##############################################################################
   set(_runtime_fortran_subproject_names)
-  if(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran/CMakeLists.txt")
+  if(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran/CMakeLists.txt")
     therock_cmake_subproject_declare(runtime-fortran
       USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/runtime-fortran"
       CMAKE_ARGS
         -DHIP_PLATFORM=amd

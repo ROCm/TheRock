@@ -74,7 +74,7 @@
 #       to this artifact. Used for granular CI artifact reuse: when only specific
 #       source paths change in an external repo (e.g., rocm-libraries), only affected
 #       artifacts rebuild while others reuse baseline. Path names are directory
-#       basenames within projects/ or shared/ subdirs. Multiple artifacts can share
+#       basenames within projects/, shared/ or bindings/ subdirs. Multiple artifacts can share
 #       the same source_path (e.g., shared libraries). Defaults to [artifact_name]
 #       if omitted.
 #
@@ -958,4 +958,4 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
 feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
-source_paths = ["fortran"]  # rocm-systems projects/fortran: HIP and ROCTx
+source_paths = ["fortran"]  # rocm-systems bindings/fortran: HIP and ROCTx

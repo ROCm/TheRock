@@ -1151,6 +1151,12 @@ class ExtractSourcePathFromPathTest(unittest.TestCase):
             "miopen-provider",
         )
 
+    def test_bindings_path(self):
+        self.assertEqual(
+            BuildTopology.extract_source_path_from_path("bindings/fortran/hip.F90"),
+            "fortran",
+        )
+
     def test_root_file_returns_none(self):
         self.assertIsNone(BuildTopology.extract_source_path_from_path("CMakeLists.txt"))
 
@@ -1280,7 +1286,7 @@ class SourcePathsInSyncTest(unittest.TestCase):
             ),
             re.compile(
                 r'EXTERNAL_SOURCE_DIR\s+"?\$\{THEROCK_ROCM_SYSTEMS_SOURCE_DIR\}'
-                r"/(?:projects|shared)/([a-zA-Z0-9_-]+)"
+                r"/(?:projects|shared|bindings)/([a-zA-Z0-9_-]+)"
             ),
         ]
         for cmake_file in REPO_ROOT.rglob("CMakeLists.txt"):

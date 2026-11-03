@@ -1384,8 +1384,10 @@ class BuildTopology:
 
     @staticmethod
     def extract_source_path_from_path(path: str) -> Optional[str]:
-        """Extract source path name from projects/NAME/..., shared/NAME/..., or dnn-providers/NAME/... path."""
-        match = re.match(r"^(?:projects|shared|dnn-providers)/([^/]+)(?:/|$)", path)
+        """Extract source path name from projects/NAME/..., shared/NAME/..., dnn-providers/NAME/... or bindings/NAME/... path."""
+        match = re.match(
+            r"^(?:projects|shared|dnn-providers|bindings)/([^/]+)(?:/|$)", path
+        )
         return match.group(1) if match else None
 
     def get_artifacts_for_path(self, path: str) -> List[str]:
