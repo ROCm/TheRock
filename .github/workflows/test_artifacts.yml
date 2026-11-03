@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 # Temporary validation caller; not intended for merging.
-# Reuse this registered workflow path so dispatch needs no default-branch change.
-# Test code is pinned to TheRock PR #9577, not this validation branch.
-# Default artifacts: rocm-libraries #14529 at abad125f4bf7f2559a7bd831603653c54928e8f5.
-name: Test Artifacts - rocKE SDK deployment validation
+# Reuse the registered path; production TheRock pins remain unchanged.
+# Exact companion c2697592 and source artifact run are separate inputs/evidence.
+# Default artifacts are the old abad125f build (control only). Use 41557786519
+# for d524417b combined acceptance after its Linux/Windows artifacts are ready.
+name: Test Artifacts - rocKE owner deployment validation
 
 on:
   workflow_dispatch:
@@ -19,11 +20,11 @@ on:
 permissions:
   contents: read
 
-run-name: "rocKE SDK deployment | TheRock fd689f35 | artifacts ${{ inputs.artifact_run_id }}"
+run-name: "rocKE owner deployment | TheRock c2697592 | artifacts ${{ inputs.artifact_run_id }}"
 
 jobs:
   installed_rocke:
-    name: "Installed rocKE SDK | ${{ matrix.platform }} | ${{ matrix.family }}"
+    name: "Installed rocKE owner | ${{ matrix.platform }} | ${{ matrix.family }}"
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +45,7 @@ jobs:
             targets: gfx1100,gfx1101,gfx1102,gfx1103
             runner: windows-gfx110X-gpu-rocm
             container_options: ""
-    uses: ROCm/TheRock/.github/workflows/test_component.yml@fd689f357c283497a8d4c1ac1aa69d908ba48e97 # PR #9577
+    uses: ROCm/TheRock/.github/workflows/test_component.yml@c2697592d7c06fa92fc4569c5611c5c43046e9a5 # PR #9577, validation only
     # No secrets are needed for public artifact downloads or component tests.
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -56,7 +57,7 @@ jobs:
       release_type: ci
       build_variant: release
       repository: ROCm/TheRock
-      ref: fd689f357c283497a8d4c1ac1aa69d908ba48e97
+      ref: c2697592d7c06fa92fc4569c5611c5c43046e9a5
       # Same standard-tier component entry as fetch_test_configurations.py.
       # One complete shard per platform avoids duplicate artifact/SDK downloads.
       # Extra timeout headroom accommodates the unsharded suite.
