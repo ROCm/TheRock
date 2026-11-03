@@ -115,6 +115,19 @@ print(json.dumps(dict(asdict(info), selected_comgr=selected,
     # Compiler-free native IR consumers receive this owner's queried profile.
     if not os.environ.get("ROCKE_LLVM_FLAVOR"):
         os.environ["ROCKE_LLVM_FLAVOR"] = info["llvm_flavor"]
+    # HIP-source tests invoke hipcc separately. Its SDK trampoline can select
+    # SDK clang while test_runner sets ROCM_PATH to the tested artifacts; on
+    # Windows that combination does not discover the artifact device libraries.
+    # amd-llvm_lib explicitly installs this directory on both platforms. Keep
+    # artifact HIP/COMGR unchanged and pass the declared bitcode path to clang.
+    device_libs = Path(THEROCK_BIN_DIR).resolve().parent / "lib/llvm/amdgcn/bitcode"
+    flag = f"--rocm-device-lib-path={device_libs}"
+    quoted = subprocess.list2cmdline([flag]) if os.name == "nt" else shlex.quote(flag)
+    existing = os.environ.get("HIPCC_COMPILE_FLAGS_APPEND", "").strip()
+    os.environ["HIPCC_COMPILE_FLAGS_APPEND"] = " ".join(
+        filter(None, [existing, quoted])
+    )
+    logging.info("HIP source compiler device libraries: %s", device_libs)
 
 
 def fail(message) -> NoReturn:

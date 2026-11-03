@@ -28,6 +28,9 @@ def artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("ROCKE_COMGR_LIB", os.environ.get("ROCKE_COMGR_LIB", ""))
     monkeypatch.setenv("ROCKE_HIP_LIB", os.environ.get("ROCKE_HIP_LIB", ""))
     monkeypatch.setenv("ROCKE_LLVM_FLAVOR", os.environ.get("ROCKE_LLVM_FLAVOR", ""))
+    monkeypatch.setenv(
+        "HIPCC_COMPILE_FLAGS_APPEND", os.environ.get("HIPCC_COMPILE_FLAGS_APPEND", "")
+    )
     monkeypatch.delenv("ROCKE_LLVM_FLAVOR", raising=False)
     root = tmp_path / "artifact [build]" / "bin"
     (root / "hip_kernel_provider" / "wheels").mkdir(parents=True)
@@ -168,6 +171,24 @@ def test_compiler_and_provenance_reach_ctest(artifact, monkeypatch, caplog, over
     assert runner[1]["ROCKE_LLVM_FLAVOR"] == "llvm23"
     assert "compiler-query-module" in caplog.text
     assert sys.executable in caplog.text
+
+
+@pytest.mark.parametrize("flags", ["", "-O1 -g"])
+def test_hip_source_uses_artifact_device_libraries(artifact, monkeypatch, flags):
+    import shlex
+
+    selected = stage_compiler(artifact)
+    hip = os.environ["ROCKE_HIP_LIB"]
+    monkeypatch.setenv("HIPCC_COMPILE_FLAGS_APPEND", flags)
+    calls = []
+    assert run_wrapper(monkeypatch, calls) == 0
+    runner_env = calls[-1][1]
+    expected = artifact.parent.resolve() / "lib/llvm/amdgcn/bitcode"
+    assert shlex.split(runner_env["HIPCC_COMPILE_FLAGS_APPEND"]) == (
+        shlex.split(flags) + [f"--rocm-device-lib-path={expected}"]
+    )
+    assert runner_env["ROCKE_COMGR_LIB"] == selected
+    assert runner_env["ROCKE_HIP_LIB"] == hip
 
 
 @pytest.mark.parametrize("status, expected", [(0, 0), (7, 7), (-15, 143)])
