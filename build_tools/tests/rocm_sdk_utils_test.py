@@ -9,6 +9,28 @@ import pytest
 import rocm_sdk_utils
 
 
+@pytest.mark.parametrize("system", ["Linux", "Windows"])
+def test_artifact_pair_is_owned_and_unambiguous(tmp_path, monkeypatch, system):
+    monkeypatch.setattr(rocm_sdk_utils.platform, "system", lambda: system)
+    bin_dir = tmp_path / "artifact/bin"
+    bin_dir.mkdir(parents=True)
+    directory = bin_dir if system == "Windows" else bin_dir.parent / "lib"
+    directory.mkdir(exist_ok=True)
+    compiler = directory / (
+        "amd_comgr0702.dll" if system == "Windows" else "libamd_comgr.so.3"
+    )
+    hip = directory / ("amdhip64_7.dll" if system == "Windows" else "libamdhip64.so.7")
+    compiler.touch()
+    hip.touch()
+    assert rocm_sdk_utils.locate_artifact_pair(bin_dir) == (compiler, hip)
+    other = directory / (
+        "amd_comgr0703.dll" if system == "Windows" else "libamd_comgr.so.4"
+    )
+    other.touch()
+    with pytest.raises(RuntimeError, match="unambiguous COMGR"):
+        rocm_sdk_utils.locate_artifact_pair(bin_dir)
+
+
 def stage_sdk(tmp_path, monkeypatch, entries):
     """Use real distribution RECORD parsing without an ambient SDK."""
     dist_info = tmp_path / "rocm_sdk_core-1.0.dist-info"

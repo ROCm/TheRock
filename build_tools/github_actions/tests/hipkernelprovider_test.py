@@ -26,7 +26,10 @@ def artifact(tmp_path, monkeypatch):
     # Restore wrapper mutations too, including variables originally absent.
     monkeypatch.setenv("PYTHONPATH", os.environ.get("PYTHONPATH", ""))
     monkeypatch.setenv("ROCKE_COMGR_LIB", os.environ.get("ROCKE_COMGR_LIB", ""))
-    root = tmp_path / "artifact [build]"
+    monkeypatch.setenv("ROCKE_HIP_LIB", os.environ.get("ROCKE_HIP_LIB", ""))
+    monkeypatch.setenv("ROCKE_LLVM_FLAVOR", os.environ.get("ROCKE_LLVM_FLAVOR", ""))
+    monkeypatch.delenv("ROCKE_LLVM_FLAVOR", raising=False)
+    root = tmp_path / "artifact [build]" / "bin"
     (root / "hip_kernel_provider" / "wheels").mkdir(parents=True)
     monkeypatch.setenv("THEROCK_BIN_DIR", str(root))
     monkeypatch.delenv("PYTHONPATH", raising=False)
@@ -59,14 +62,29 @@ def stage_compiler(artifact: Path, info: dict | None = None) -> str:
     runtime.mkdir(parents=True)
     (runtime.parent / "__init__.py").touch()
     (runtime / "__init__.py").touch()
-    filename = (
-        "bin/amd_comgr0702.dll"
-        if rocm_sdk_utils.platform.system() == "Windows"
-        else "lib/libamd_comgr.so.3"
+    windows = rocm_sdk_utils.platform.system() == "Windows"
+    compiler = (
+        artifact / "amd_comgr0702.dll"
+        if windows
+        else artifact.parent / "lib/libamd_comgr.so.3"
     )
-    compiler = artifact / "_rocm_sdk_core" / filename
-    compiler.parent.mkdir(parents=True)
+    hip = (
+        artifact / "amdhip64_7.dll" if windows else compiler.parent / "libamdhip64.so.7"
+    )
+    compiler.parent.mkdir(parents=True, exist_ok=True)
     compiler.touch()
+    hip.touch()
+    os.environ["ROCKE_HIP_LIB"] = str(hip)
+    core = runtime.parent / "core"
+    core.mkdir()
+    (core / "__init__.py").touch()
+    (core / "llvm_profile.py").write_text(
+        'def _flavor_for_llvm(major):\n    assert major == 23\n    return "llvm23"\n'
+    )
+    (runtime / "hip_module.py").write_text(
+        "import os\nfrom types import SimpleNamespace\ndef _resolve_hip():\n"
+        '    return SimpleNamespace(hipGetDeviceCount=SimpleNamespace(path=os.environ["ROCKE_HIP_LIB"]))\n'
+    )
     values = dict(
         llvm_version=[23, 0, 1],
         source="LLVMGetVersion",
@@ -90,7 +108,9 @@ def stage_compiler(artifact: Path, info: dict | None = None) -> str:
         f"    if 'comgr_path' not in {list(info or {})!r}:\n"
         "        values['comgr_path'] = requested\n"
         "def loaded_compiler_info():\n"
-        "    return make_dataclass('CompilerInfo', values)(**values)\n",
+        "    return make_dataclass('CompilerInfo', values)(**values)\n"
+        "def _library_for_symbol(fn):\n"
+        "    return fn.path\n",
         encoding="utf-8",
     )
     return str(compiler)
@@ -122,7 +142,7 @@ def test_compiler_and_provenance_reach_ctest(artifact, monkeypatch, caplog, over
         override = selected
     elif override == "relative":
         monkeypatch.chdir(artifact)
-        override = "./" + str(Path(selected).relative_to(artifact))
+        override = "./" + os.path.relpath(selected, artifact)
     if override is not None:
         monkeypatch.setenv("ROCKE_COMGR_LIB", override)
     calls = []
@@ -144,7 +164,8 @@ def test_compiler_and_provenance_reach_ctest(artifact, monkeypatch, caplog, over
     assert probe[1]["ROCKE_COMGR_LIB"] == selected
     assert runner[0] == [sys.executable, RUNNER]
     assert runner[1]["ROCKE_COMGR_LIB"] == selected
-    assert runner[1]["ROCKE_HIP_LIB"] == "caller-artifact-hip"
+    assert Path(runner[1]["ROCKE_HIP_LIB"]).is_file()
+    assert runner[1]["ROCKE_LLVM_FLAVOR"] == "llvm23"
     assert "compiler-query-module" in caplog.text
     assert sys.executable in caplog.text
 
@@ -199,13 +220,42 @@ def test_missing_override_stops_before_probe(artifact, monkeypatch, capsys):
     assert "compiler selection failed" in capsys.readouterr().err
 
 
-def test_missing_sdk_payload_stops_before_probe(artifact, monkeypatch, capsys):
+def test_missing_artifact_compiler_stops_before_probe(artifact, monkeypatch, capsys):
     selected = stage_compiler(artifact)
     Path(selected).unlink()
     calls = []
     assert run_wrapper(monkeypatch, calls) == 1
     assert calls == []
-    assert "no COMGR payload" in capsys.readouterr().err
+    assert "unambiguous COMGR" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("kind", ["compiler", "hip"])
+def test_unpaired_override_does_not_replace_artifact_identity(
+    artifact, monkeypatch, capsys, kind
+):
+    stage_compiler(artifact)
+    foreign = artifact / "foreign-library"
+    foreign.touch()
+    monkeypatch.setenv(
+        "ROCKE_COMGR_LIB" if kind == "compiler" else "ROCKE_HIP_LIB", str(foreign)
+    )
+    calls = []
+    assert run_wrapper(monkeypatch, calls) == 1
+    assert calls == []
+    message = capsys.readouterr().err
+    assert (
+        "companion" in message
+        if kind == "compiler"
+        else "tested artifact runtime" in message
+    )
+
+
+def test_explicit_offline_flavor_is_preserved(artifact, monkeypatch):
+    stage_compiler(artifact)
+    monkeypatch.setenv("ROCKE_LLVM_FLAVOR", "llvm20")
+    calls = []
+    assert run_wrapper(monkeypatch, calls) == 0
+    assert calls[-1][1]["ROCKE_LLVM_FLAVOR"] == "llvm20"
 
 
 def test_package_fallback_preserves_pythonpath(artifact, monkeypatch):
