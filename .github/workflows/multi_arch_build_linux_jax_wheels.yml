@@ -189,7 +189,7 @@ jobs:
       contents: read
       id-token: write # Authenticate to AWS to upload wheels.
     name: Build | py ${{ inputs.python_version }} | jax ${{ inputs.jax_ref }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-26.04' }}
     outputs:
       package_index_url: ${{ steps.publish_jax_wheels.outputs.package_index_url }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
@@ -356,7 +356,7 @@ jobs:
     name: Configure JAX Tests
     # The tests install from the release index, so unpublished wheels go untested.
     if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
@@ -438,7 +438,7 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels]
     name: "Quartz - completed - build JAX Wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:

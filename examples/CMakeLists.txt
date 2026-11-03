@@ -46,6 +46,21 @@ if(_ck_enabled AND THEROCK_ENABLE_HIPTENSOR)
   set(_hiptensor_available ON)
 endif()
 
+set(_miopen_available OFF)
+if(_miopen_enabled AND THEROCK_ENABLE_MIOPEN)
+  set(_miopen_available ON)
+endif()
+
+set(_fft_available OFF)
+if(_fft_enabled AND THEROCK_ENABLE_FFT)
+  set(_fft_available ON)
+endif()
+
+set(_rocalution_available OFF)
+if(_rocalution_enabled AND THEROCK_ENABLE_ROCALUTION)
+  set(_rocalution_available ON)
+endif()
+
 # Examples are configured against the installed ROCm prefix. The
 # cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
 # HIP is not enabled (e.g. in early multi-arch CI stages) or when
@@ -60,17 +75,17 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/cpp-sdk-user"
           "-DGENERATOR=${CMAKE_GENERATOR}"
           "-DTHEROCK_ENABLE_BLAS=${THEROCK_ENABLE_BLAS}"
-          "-DTHEROCK_ENABLE_FFT=${THEROCK_ENABLE_FFT}"
+          "-DTHEROCK_ENABLE_FFT=${_fft_available}"
           "-DTHEROCK_ENABLE_HIP=${THEROCK_ENABLE_HIP_RUNTIME}"
           "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
-          "-DTHEROCK_ENABLE_MIOPEN=${THEROCK_ENABLE_MIOPEN}"
+          "-DTHEROCK_ENABLE_MIOPEN=${_miopen_available}"
           "-DTHEROCK_ENABLE_HIPTENSOR=${_hiptensor_available}"
           "-DTHEROCK_ENABLE_PRIM=${THEROCK_ENABLE_PRIM}"
           "-DTHEROCK_ENABLE_RAND=${THEROCK_ENABLE_RAND}"
           "-DTHEROCK_ENABLE_RCCL=${THEROCK_ENABLE_RCCL}"
           "-DTHEROCK_ENABLE_ROCWMMA=${THEROCK_ENABLE_ROCWMMA}"
-          "-DTHEROCK_ENABLE_ROCALUTION=${THEROCK_ENABLE_ROCALUTION}"
+          "-DTHEROCK_ENABLE_ROCALUTION=${_rocalution_available}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
           "-DTHEROCK_ENABLE_SOLVER=${THEROCK_ENABLE_SOLVER}"
           "-DTHEROCK_ENABLE_SPARSE=${THEROCK_ENABLE_SPARSE}"

@@ -22,6 +22,11 @@ function(therock_sanitizer_configure
     return()
   endif()
 
+  # A wrapper that launches an independent CMake, Meson, or Autotools build
+  # must propagate the sanitizer compile and link options into that inner
+  # build. Forwarding THEROCK_SANITIZER alone communicates policy state but
+  # does not instrument the inner artifacts.
+
   # Enabled.
   if(NOT compiler_toolchain)
     message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")

@@ -217,7 +217,7 @@ class TestGetJobsForChanges(unittest.TestCase):
         ]
         self.assertEqual(
             get_jobs_for_changes(paths),
-            {"pytorch", "rocm_python", "rocm_native_linux"},
+            {"pytorch", "rocm_python", "rocm_native_linux", "rocm_native_windows"},
         )
 
     def test_shared_packaging_code_affects_rocm(self):
