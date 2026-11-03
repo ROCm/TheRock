@@ -412,6 +412,22 @@ Several developers have reported link errors in rocBLAS and rocSPARSE like
 
 These have been worked around by disabling ccache.
 
+#### `lld-link: error: undefined symbol` on AMD Turin (Zen 5) hosts
+
+On AMD EPYC Turin hosts (e.g. Azure `F*ads_v7`, AWS `m8a`/`r8a`), `lld-link`
+occasionally drops one input object without reporting an error. The link then
+fails with `undefined symbol` for something defined in an object that is present
+and intact, or produces a DLL with missing exports. A re-link succeeds. The drop
+only happens when `lld-link`'s threads run on more than one core (see
+[#9469](https://github.com/ROCm/TheRock/issues/9469)).
+
+Configure with `-DTHEROCK_WINDOWS_LINK_CPU_AFFINITY=ON` to run every link step of
+the `amd-llvm`/`amd-hip` sub-projects pinned to one randomly chosen CPU through
+`build_tools/affinity_launch.py`. The option is enabled in Windows CI. Total
+build time is unchanged in CI, since concurrent links land on different CPUs.
+`lld-link`'s `/threads:1` flag does not help, because it does not stop inputs
+from being loaded on background threads.
+
 ### `pyYAML cannot be found by cmake`
 
 It is recommended to build TheRock using the `.venv` python3 virtual environment.
