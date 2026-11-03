@@ -399,6 +399,62 @@ def version_to_str(version_str):
     return f"{major:01d}{minor:02d}{patch:02d}"
 
 
+def rename_opencl_etc_files(etc_dir, version, version_suffix):
+    """Rename the OpenCL configuration files to include ROCm version and suffix.
+
+    Rewrites the ld.so.conf.d entry to the unversioned /opt/rocm/core path.
+    Other files in etc_dir are left untouched.
+
+    Parameters:
+    etc_dir : Path to the etc directory
+    version : ROCm version string
+    version_suffix : Version suffix string
+
+    Returns: None
+    """
+    etc_path = Path(etc_dir)
+    version_str = version_to_str(version)
+
+    # Point the ld.so.conf.d entry at the unversioned /opt/rocm/core (RFC0009)
+    ldso_conf = etc_path / "ld.so.conf.d" / "10-rocm-opencl.conf"
+    if ldso_conf.exists():
+        ldso_conf.write_text("/opt/rocm/core/lib/opencl\n", encoding="utf-8")
+        new_name = f"10-rocm{version_str}-{version_suffix}-opencl.conf"
+        ldso_conf.rename(ldso_conf.parent / new_name)
+        logger.info(f"Renamed: {ldso_conf.name} -> {new_name}")
+
+    icd_file = etc_path / "OpenCL" / "vendors" / "amdocl64.icd"
+    if icd_file.exists():
+        new_name = f"amdocl64_{version_str}_{version_suffix}.icd"
+        icd_file.rename(icd_file.parent / new_name)
+        logger.info(f"Renamed: {icd_file.name} -> {new_name}")
+
+
+def stage_etc_files(sourcedir_list, staging_dir, version, version_suffix):
+    """Collect the etc/ trees of all source directories into staging_dir.
+
+    Files are staged under their final /etc names (see
+    rename_opencl_etc_files), ready to be installed at the system /etc.
+
+    Parameters:
+    sourcedir_list : Artifact directories that make up the package
+    staging_dir : Directory to populate; it becomes the package's /etc
+    version : ROCm version string
+    version_suffix : Version suffix string
+
+    Returns: True if any etc/ files were staged
+    """
+    staging_dir = Path(staging_dir)
+    remove_dir(staging_dir)
+    etc_dirs = [p for p in (Path(d) / "etc" for d in sourcedir_list) if p.is_dir()]
+    if not etc_dirs:
+        return False
+    for etc_dir in etc_dirs:
+        shutil.copytree(etc_dir, staging_dir, symlinks=True, dirs_exist_ok=True)
+    rename_opencl_etc_files(staging_dir, version, version_suffix)
+    return True
+
+
 def update_package_name(pkg_name, config: PackageConfig):
     """Update the package name by adding ROCm version and graphics architecture.
 
