@@ -119,6 +119,29 @@ class StandardSummaryTest(unittest.TestCase):
             self.assertEqual(m.write_standard_summary(Path(empty), str(summary)), 0)
             self.assertIn("No PyTorch test reports were uploaded", summary.read_text())
 
+    def test_count_outputs_are_written_for_quartz(self):
+        output = self.root / "github_output"
+        outputs = m.write_count_outputs(
+            self.root / "test-reports-Linux-gfx94X-dcgpu", str(output)
+        )
+        self.assertEqual(
+            output.read_text().splitlines(),
+            [
+                "tests_run=5",
+                "tests_passed=3",
+                "tests_failed=1",
+                "tests_errors=1",
+                "tests_skipped=3",
+                "tests_flaky=2",
+            ],
+        )
+        self.assertEqual(outputs["tests_failed"], 1)
+
+    def test_count_outputs_are_omitted_without_reports(self):
+        output = self.root / "github_output"
+        self.assertEqual(m.write_count_outputs(self.root / "missing", str(output)), {})
+        self.assertFalse(output.exists())
+
     def test_failure_only_parser_is_unchanged(self):
         xml = (
             self.root

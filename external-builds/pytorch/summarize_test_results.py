@@ -20,6 +20,11 @@ Two modes of operation:
    reports tests run, passed, failed, errored, skipped, and flaky per
    platform and family, then lists failures and skip reasons.
 
+4. **Counts** (``--counts-output``) — writes ``tests_run``, ``tests_passed``,
+   ``tests_failed``, ``tests_errors``, ``tests_skipped``, and ``tests_flaky``
+   for one test-reports directory to ``$GITHUB_OUTPUT`` so the job's Quartz
+   notification carries them. Writes nothing when there are no reports.
+
 Usage:
     # Per-shard (inside matrix job):
     python summarize_test_results.py
@@ -29,6 +34,9 @@ Usage:
 
     # Standard suite across platforms and families:
     python summarize_test_results.py --standard-dir artifacts/
+
+    # Test counts as step outputs (inside the test job):
+    python summarize_test_results.py --counts-output
 """
 
 import argparse
@@ -353,6 +361,35 @@ def count_outcomes(outcomes: dict) -> dict[str, int]:
     return counts
 
 
+COUNT_OUTPUT_NAMES = {
+    "RUN": "tests_run",
+    "PASSED": "tests_passed",
+    "FAILED": "tests_failed",
+    "ERROR": "tests_errors",
+    "SKIPPED": "tests_skipped",
+    "FLAKY": "tests_flaky",
+}
+
+
+def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, int]:
+    """Writes test counts for one reports directory as step outputs.
+
+    Returns the outputs written; empty when the directory has no test cases.
+    """
+    outcomes = collect_outcomes(reports_dir) if reports_dir.is_dir() else {}
+    if not outcomes:
+        print(f"No test cases found under {reports_dir}; writing no counts")
+        return {}
+    counts = count_outcomes(outcomes)
+    outputs = {name: counts[key] for key, name in COUNT_OUTPUT_NAMES.items()}
+    lines = [f"{name}={value}" for name, value in outputs.items()]
+    print("\n".join(lines))
+    if output_file:
+        with open(output_file, "a") as fh:
+            fh.write("\n".join(lines) + "\n")
+    return outputs
+
+
 def _escape(text: str, limit: int = 100) -> str:
     return text.replace("|", "\\|").replace("\n", " ")[:limit]
 
@@ -484,6 +521,12 @@ def main() -> int:
         "(test-reports-<os>-<amdgpu_family>). Enables standard mode.",
     )
     parser.add_argument(
+        "--counts-output",
+        action="store_true",
+        help="Write test counts for --reports-dir to $GITHUB_OUTPUT instead "
+        "of a step summary.",
+    )
+    parser.add_argument(
         "--test-config",
         default=os.getenv("TEST_CONFIG", "unknown"),
     )
@@ -510,6 +553,10 @@ def main() -> int:
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
+
+    if args.counts_output:
+        write_count_outputs(args.reports_dir, os.getenv("GITHUB_OUTPUT", ""))
+        return 0
 
     if args.standard_dir:
         if not args.standard_dir.is_dir():

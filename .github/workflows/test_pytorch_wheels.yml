@@ -327,6 +327,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      # Step outputs flow into the Quartz completed notification below.
+      - name: Count test results
+        id: test-counts
+        if: always()
+        run: |
+          python ./external-builds/pytorch/summarize_test_results.py \
+            --reports-dir external-builds/pytorch/pytorch/test/test-reports \
+            --counts-output
+
       - name: Capture job summary
         id: summary
         if: always()
