@@ -1026,7 +1026,11 @@ def main() -> None:
         "--target_branch",
         default=THEROCK_MAIN_BRANCH,
         type=parse_target_branch,
-        help="TheRock PR base (default: main); main uses each upstream repository's default branch, while other targets use the same branch name across repositories.",
+        help=(
+            "TheRock PR base: main (default), release/therock-*, or "
+            "release/bkc/therock-*; main keeps its existing upstream branch "
+            "selection, while release targets use the matching upstream branch."
+        ),
     )
     parser.add_argument(
         "--submodule",

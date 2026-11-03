@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       target_branch:
-        description: 'TheRock PR base: main, release/therock-*, or release/bkc/therock-* (release all bumps systems and libraries only)'
+        description: 'TheRock PR base: main, release/therock-*, or release/bkc/therock-* (for releases: "all" bumps systems and libraries only)'
         required: false
         default: 'main'
         type: string
