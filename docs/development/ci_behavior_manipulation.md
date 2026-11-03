@@ -23,8 +23,10 @@ The following labels may be added to a pull request to modify CI behavior:
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
-| `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
-| `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
+| `ci:asan-debug`            | Select full ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over all other sanitizer labels.                                                |
+| `ci:asan`                  | Select full ASan builds. GPU tests remain limited to nightly/manual runs. Takes precedence over host-ASan labels.                                                                                 |
+| `ci:host-asan-debug`       | Select host-ASan builds with debug information. GPU tests remain limited to nightly/manual runs. Takes precedence over `ci:host-asan`.                                                            |
+| `ci:host-asan`             | Select host-ASan builds. GPU tests remain limited to nightly/manual runs.                                                                                                                         |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
 | `ci:run-wsl`               | Also test the Linux build on the WSL GPU runner (`test-runs-on-wsl`), as non-blocking `Test <family> (WSL)` jobs for WSL-capable components (hip-tests, rocrtst). Adds to native tests.           |
 | `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
@@ -79,6 +81,25 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Automated submodule update pull requests
+
+The [submodule bump automation](../../build_tools/github_actions/bump_automation.py)
+adds `ci:run-all-archs` to its pull requests to cover all GPU families.
+`rocm-systems` and `rocm-libraries` updates also receive `ci:host-asan` for
+host-ASan build coverage, plus `gfx950-dcgpu` and `gfx125X-dcgpu` to enable
+label-gated tests on limited hardware. `rocgdb` updates receive `test:rocgdb`;
+`mesa-fork` updates receive `test:rocdecode` and `test:rocjpeg` to restrict tests
+to the affected projects.
+
+Other pull requests can use the same sanitizer labels to opt in, or remove all
+sanitizer labels to opt out. Submodule changes alone do not enable sanitizer CI.
+For LLVM promotion pull requests, optionally add `ci:asan-debug` to exercise
+device instrumentation and debug-info generation with the new compiler.
+
+Sanitizer labels do not override GPU test gating. GPU sanity checks and
+component tests remain subject to trigger and runner restrictions. CPU tests
+may still run. `ci:skip` still skips CI.
 
 ### Push
 

@@ -829,7 +829,7 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
-    - ASAN builds on PRs without ci:asan or ci:host-asan labels
+    - ASAN builds on PRs without an enabling sanitizer label
 
     For external repo builds, path filtering uses changed_files and
     skip_ci_patterns from the external_repo JSON (both must be provided).
@@ -883,8 +883,9 @@ def should_skip_ci(
             return True
 
     # 3. ASAN skip - only evaluated if path filtering didn't skip CI
-    has_asan_label = (
-        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
+    has_asan_label = any(
+        label in ci_inputs.pr_labels
+        for label in ["ci:asan-debug", "ci:asan", "ci:host-asan-debug", "ci:host-asan"]
     )
     if (
         ci_inputs.is_pull_request
@@ -892,7 +893,7 @@ def should_skip_ci(
         and not has_asan_label
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
+            "  Skipping: ASAN PR without enabling label (add 'ci:asan-debug', 'ci:asan', 'ci:host-asan-debug' or 'ci:host-asan' to enable)"
         )
         return True
 
@@ -2006,13 +2007,21 @@ def expand_build_configs(
     all_families = _apply_external_family_overrides(all_families)
     build_variant = ci_inputs.build_variant
     # ASAN variant selection:
-    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
-    # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    # 1. ci:asan-debug label -> asan-debug (full ASAN with debug info)
+    # 2. ci:asan label -> asan (explicit full ASAN)
+    # 3. ci:host-asan-debug label -> host-asan-debug (host-only ASAN with debug info)
+    # 4. ci:host-asan label -> host-asan (explicit)
+    # 5. push/pull_request events -> host-asan (default for pre/postsubmit)
+    # 6. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
     if build_variant == "asan":
-        if "ci:asan" in ci_inputs.pr_labels:
+        if "ci:asan-debug" in ci_inputs.pr_labels:
+            build_variant = "asan-debug"
+            print("  Using full asan-debug variant (ci:asan-debug label)")
+        elif "ci:asan" in ci_inputs.pr_labels:
             print("  Using full asan variant (ci:asan label)")
+        elif "ci:host-asan-debug" in ci_inputs.pr_labels:
+            build_variant = "host-asan-debug"
+            print("  Using host-asan-debug variant (ci:host-asan-debug label)")
         elif "ci:host-asan" in ci_inputs.pr_labels:
             build_variant = "host-asan"
             print("  Using host-asan variant (ci:host-asan label)")
