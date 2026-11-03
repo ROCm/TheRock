@@ -355,13 +355,14 @@ python build_tools/packaging/upload_release_packages.py \
   --use-release-buckets
 ```
 
-For ASAN tarballs:
+For ASAN wheels and tarballs:
 
 ```bash
 python build_tools/packaging/upload_release_packages.py \
   --input-dir ./promotion/download/ \
   --structured \
   --repo-stream=rc \
+  --build-variant=asan \
   --upload-tarballs \
   --tarball-variant=asan \
   --execute \

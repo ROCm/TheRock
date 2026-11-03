@@ -221,6 +221,7 @@ class StructuredUploadTest(unittest.TestCase):
                     "--structured",
                     "--use-release-buckets",
                     "--tarball-variant=asan",
+                    "--build-variant=asan",
                     "--repo-stream=nightly",
                 ]
             )
@@ -230,6 +231,24 @@ class StructuredUploadTest(unittest.TestCase):
             self.assertEqual(args.python_index, "whl-next-asan")
             self.assertEqual(args.tarball_bucket, "therock-repo-amd-nightly-core")
             self.assertEqual(args.tarball_bucket_prefix, "v5/rocm/core/tarball-asan/")
+
+            # --index-type and --build-variant together select the Python index.
+            for extra_args, expected_index in (
+                ([], "whl-next"),
+                (["--index-type=whl"], "whl"),
+                (["--index-type=whl", "--build-variant=asan-debug"], "whl-asan"),
+            ):
+                with self.subTest(extra_args=extra_args):
+                    args = parse_arguments(
+                        [
+                            "--input-dir",
+                            str(root),
+                            "--structured",
+                            "--repo-stream=nightly",
+                            *extra_args,
+                        ]
+                    )
+                    self.assertEqual(args.python_index, expected_index)
 
 
 class OverwriteGuardTest(unittest.TestCase):
