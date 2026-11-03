@@ -131,17 +131,14 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
-        # Move etc files to system /etc location
-        etc_source = dest_dir / "etc"
-        if etc_source.exists() and etc_source.is_dir():
-            etc_dest = package_dir / "etc"
-            etc_dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(etc_source), str(etc_dest))
-
-            # Rename OpenCL configuration files with version
-            rename_etc_files_with_version(
-                etc_dest, build_config.rocm_version, build_config.version_suffix
-            )
+        # etc/ files install at the system /etc rather than the prefix.
+        if stage_etc_files(
+            sourcedir_list,
+            package_dir / "etc",
+            build_config.rocm_version,
+            build_config.version_suffix,
+        ):
+            remove_dir(dest_dir / "etc")
 
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
@@ -237,7 +234,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
             else:
                 has_regular_files = True
 
-    # Check if etc files exist at the package root (moved from install_prefix/etc)
+    # etc/ files staged at the package root for the system /etc (stage_etc_files)
     package_dir = Path(deb_dir).parent
     has_etc_files = (package_dir / "etc").exists()
 
@@ -476,47 +473,6 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
                 f"Failed to generate Debian {script} script "
                 f"for package {pkg_name!r}"
             ) from exc
-
-
-def rename_etc_files_with_version(etc_dir, version, version_suffix):
-    """Rename OpenCL configuration files to include ROCm version and version suffix.
-
-    Parameters:
-    etc_dir : Path to the etc directory
-    version : ROCm version string
-    version_suffix : Version suffix string
-
-    Returns: None
-    """
-    logger.debug("rename_etc_files_with_version")
-
-    etc_path = Path(etc_dir)
-    if not etc_path.exists():
-        return
-
-    # Rename and edit ld.so.conf.d file
-    ldso_conf = etc_path / "ld.so.conf.d" / "10-rocm-opencl.conf"
-    if ldso_conf.exists():
-        # Update content to use /opt/rocm/core/lib/opencl
-        with ldso_conf.open("w", encoding="utf-8") as f:
-            f.write("/opt/rocm/core/lib/opencl\n")
-
-        # Rename with version
-        version_str = version_to_str(version)
-        new_name = f"10-rocm{version_str}-{version_suffix}-opencl.conf"
-        new_path = ldso_conf.parent / new_name
-        ldso_conf.rename(new_path)
-        logger.info(f"Renamed: {ldso_conf.name} -> {new_name}")
-        logger.info("Updated content to: /opt/rocm/core/lib/opencl")
-
-    # Rename OpenCL ICD file
-    icd_file = etc_path / "OpenCL" / "vendors" / "amdocl64.icd"
-    if icd_file.exists():
-        version_str = version_to_str(version)
-        new_name = f"amdocl64_{version_str}_{version_suffix}.icd"
-        new_path = icd_file.parent / new_name
-        icd_file.rename(new_path)
-        logger.info(f"Renamed: {icd_file.name} -> {new_name}")
 
 
 def copy_package_contents(source_dir, destination_dir):
