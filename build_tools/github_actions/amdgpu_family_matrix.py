@@ -140,7 +140,12 @@ BUILD_RUNNER_LABELS = {
 }
 
 
-def select_build_runner(platform: str, build_variant: str, size: str = "large") -> str:
+def select_build_runner(
+    platform: str,
+    build_variant: str,
+    size: str = "large",
+    triggers: set[str] | None = None,
+) -> str:
     """Select a build runner label based on platform, build variant, and size.
 
     Args:
@@ -149,6 +154,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
         size: runner pool size — "small", "medium", or "large" (default).
               Sanitizer variants always use the sanitizer (large) pool regardless
               of size. Platforms without a size-specific pool fall back to default.
+        triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
+                  When "submodule_bump" is present, uses the "bump" runner pool if
+                  configured, to isolate bump PRs from the weighted Azure/AWS split.
     """
     build_runner_labels = get_build_runner_labels()
     if platform not in build_runner_labels:
@@ -161,6 +169,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
     if "san" in build_variant:
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
+    elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
+        labels_config = platform_config["bump"]
+        context_name = f"build-runner-bump ({platform})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"

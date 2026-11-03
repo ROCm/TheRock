@@ -1789,10 +1789,18 @@ def _expand_build_config_for_platform(
     dist_amdgpu_families = ";".join(family_names)
     suffix = variant_config.get("build_variant_suffix", "")
 
-    # Select build runner using weighted distribution
-    build_runs_on_large = select_build_runner(platform, build_variant, size="large")
-    build_runs_on_small = select_build_runner(platform, build_variant, size="small")
-    build_runs_on_medium = select_build_runner(platform, build_variant, size="medium")
+    # Select build runner using weighted distribution.
+    # Pass active triggers so submodule_bump PRs route to the bump runner pool.
+    triggers = _get_current_triggers(ci_inputs, git_context)
+    build_runs_on_large = select_build_runner(
+        platform, build_variant, size="large", triggers=triggers
+    )
+    build_runs_on_small = select_build_runner(
+        platform, build_variant, size="small", triggers=triggers
+    )
+    build_runs_on_medium = select_build_runner(
+        platform, build_variant, size="medium", triggers=triggers
+    )
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN

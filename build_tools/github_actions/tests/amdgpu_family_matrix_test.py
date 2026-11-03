@@ -513,6 +513,18 @@ class TestBuildRunnerSelection(unittest.TestCase):
                         expected,
                     )
 
+    def test_select_build_runner_bump_trigger(self):
+        """submodule_bump trigger falls back to default when no 'bump' pool in local config."""
+        # Local BUILD_RUNNER_LABELS has no "bump" key, so it should fall through to default.
+        with patch("random.SystemRandom.random", return_value=0.5):
+            result = select_build_runner(
+                "linux",
+                "release",
+                size="large",
+                triggers={"presubmit", "submodule_bump"},
+            )
+            self.assertEqual(result, "aws-linux-scale-rocm-prod")
+
 
 class TestDisabledFrameworkTests(unittest.TestCase):
     """Tests for disabled_framework_tests field."""
