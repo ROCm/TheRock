@@ -142,26 +142,28 @@ if is_windows:
     # the CTest tests, then the lit suite. The lit CTest entry runs lit without
     # -s, so every test result is printed as it finishes.
     LIT_CTEST_NAME = r"^libcudacxx\.test\.lit$"
+    build_cmd = ["cmake", "--build", ".", "--target", "libcudacxx.test.c2h_all"]
+    logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(build_cmd)}")
+    failed_steps = []
+    if subprocess.run(build_cmd, env=environ_vars).returncode != 0:
+        failed_steps.append(shlex.join(build_cmd))
+    # CTest runs the c2h executables directly, so place the artifact
+    # DLLs next to them; otherwise System32's amdhip64_7.dll wins.
+    for dll in THEROCK_BIN_PATH.glob("*.dll"):
+        target = Path("bin") / dll.name
+        target.unlink(missing_ok=True)
+        try:
+            os.link(dll, target)
+        except OSError:
+            shutil.copy2(dll, target)
     steps = [
-        ["cmake", "--build", ".", "--target", "libcudacxx.test.c2h_all"],
         ["ctest", "--output-on-failure", "--timeout", "300", "-E", LIT_CTEST_NAME],
         ["ctest", "-V", "-R", LIT_CTEST_NAME],
     ]
-    failed_steps = []
     for cmd in steps:
         logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
         if subprocess.run(cmd, env=environ_vars).returncode != 0:
             failed_steps.append(shlex.join(cmd))
-        if cmd[0] == "cmake":
-            # CTest runs the c2h executables directly, so place the artifact
-            # DLLs next to them; otherwise System32's amdhip64_7.dll wins.
-            for dll in THEROCK_BIN_PATH.glob("*.dll"):
-                target = Path("bin") / dll.name
-                target.unlink(missing_ok=True)
-                try:
-                    os.link(dll, target)
-                except OSError:
-                    shutil.copy2(dll, target)
     if failed_steps:
         logging.error("Failed steps:\n  " + "\n  ".join(failed_steps))
         sys.exit(1)
