@@ -32,3 +32,12 @@ exclude = [
 exclude = [
   "share/doc/rocr/**",
 ]
+
+# hip-fortran: the HIP Fortran binding, present once rocm-systems has
+# projects/fortran. The archive, .mod file and config package are default dev
+# paths; share/ holds the .F90 source for other compilers.
+[components.dev."core/hip-fortran/stage"]
+include = [
+  "share/hip/fortran/**",
+]
+optional = true

@@ -178,34 +178,32 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
 
   ##############################################################################
-  # rocm-systems-fortran
-  # The generated HIP and ROCTx Fortran bindings (rocm-systems projects/fortran,
-  # RFC0015), built against the hip-clr and rocprofiler-sdk built above. Linux
-  # only, and skipped until projects/fortran exists in the rocm-systems source.
+  # roctx-fortran
+  # The generated ROCTx Fortran binding (rocm-systems projects/fortran,
+  # RFC0015), built against the rocprofiler-sdk above. core/ builds the HIP
+  # binding from the same project. Linux only, and skipped until
+  # projects/fortran exists in the rocm-systems source.
   ##############################################################################
 
-  set(_rocm_systems_fortran_subproject)
+  set(_roctx_fortran_subproject)
   if(NOT WIN32 AND EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran/CMakeLists.txt")
-    set(_rocm_systems_fortran_subproject rocm-systems-fortran)
-    therock_cmake_subproject_declare(rocm-systems-fortran
-      USE_TEST_AMDGPU_TARGETS
+    set(_roctx_fortran_subproject roctx-fortran)
+    therock_cmake_subproject_declare(roctx-fortran
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/fortran"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-systems-fortran"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/roctx-fortran"
       CMAKE_ARGS
-        -DHIP_PLATFORM=amd
-        -DBUILD_FORTRAN_BINDINGS=ON
+        -DHIP_BUILD_FORTRAN_BINDINGS=OFF
+        -DROCTX_BUILD_FORTRAN_BINDINGS=ON
         -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
         -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
         -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       COMPILER_TOOLCHAIN
         amd-hip
       RUNTIME_DEPS
-        hip-clr
         rocprofiler-sdk
     )
-    therock_cmake_subproject_provide_package(rocm-systems-fortran hip-fortran lib/cmake/hip-fortran)
-    therock_cmake_subproject_provide_package(rocm-systems-fortran roctx-fortran lib/cmake/roctx-fortran)
-    therock_cmake_subproject_activate(rocm-systems-fortran)
+    therock_cmake_subproject_provide_package(roctx-fortran roctx-fortran lib/cmake/roctx-fortran)
+    therock_cmake_subproject_activate(roctx-fortran)
   endif()
 
   ##############################################################################
@@ -261,7 +259,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk
       roctracer
       rocprof-trace-decoder
-      ${_rocm_systems_fortran_subproject}
+      ${_roctx_fortran_subproject}
   )
 
 endif(THEROCK_ENABLE_ROCPROFV3)

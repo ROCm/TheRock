@@ -582,7 +582,7 @@ artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 test_artifacts = ["core-hiptests"]  # When building HIP, also build hip-tests
-source_paths = ["clr", "hip", "amdgpu-windows-interop"]
+source_paths = ["clr", "hip", "amdgpu-windows-interop", "fortran"]
 
 [artifacts.core-hrr]
 artifact_group = "hip-runtime"
