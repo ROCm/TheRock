@@ -29,6 +29,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # GPU and is used at runtime by `rocprofv3 --att`.
   ##############################################################################
   therock_cmake_subproject_declare(rocprof-trace-decoder
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "CPACK_PACKAGE_FILE_NAME" "LD_LIBRARY_PATH"
+      "LLVM_DIR"
     # The build infrastructure requires generic stages to pass through
     # DIST_AMDGPU_TARGETS even if the list isn't used by the underlying project.
     USE_DIST_AMDGPU_TARGETS
@@ -48,6 +53,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+      "CMAKE_BUILD_PARALLEL_LEVEL" "CMAKE_BUILD_TYPE" "CMAKE_DEBUG_TRACE" "CMAKE_LD_AQLPROFILE"
+      "CMAKE_PREFIX_PATH" "CXX"
+    FPRINT_PROJECT_VERSION_QUERIES "nearest:*"
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
@@ -106,6 +118,15 @@ if(THEROCK_ENABLE_ROCPROFV3)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS "shared/sha256"
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+      "BUNDLE_PYTHON_TESTS" "CMAKE_PREFIX_PATH" "CONDA_PYTHON_EXE" "CPACK_PACKAGE_FILE_NAME" "HOME"
+      "LD_LIBRARY_PATH" "LD_PRELOAD" "PKG_CONFIG_SYSTEM_INCLUDE_PATH" "PYTHONPATH" "PYTHONWARNINGS"
+      "ROCM_PATH"
+    FPRINT_PROJECT_VERSION_QUERIES "nearest:*"
     # Use TEST targets (all available archs) so the _generic test artifact
     # contains .hsaco files for all architectures, not just dist archs.
     USE_TEST_AMDGPU_TARGETS
@@ -187,6 +208,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
 
   therock_cmake_subproject_declare(roctracer
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/roctracer"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/roctracer"
@@ -240,6 +265,12 @@ endif(THEROCK_ENABLE_ROCPROFV3)
 
 if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
   therock_cmake_subproject_declare(rocprofiler-compute
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS "shared/ctest"
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+      "PKG_CONFIG_PATH" "ROCM_PATH"
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
@@ -302,6 +333,11 @@ if(THEROCK_ENABLE_PROFILER_HUB)
   endif()
 
   therock_cmake_subproject_declare(profiler-hub
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT}
+    FPRINT_PROJECT_UNCACHEABLE_REASON
+      "rocprofiler-sdk-rocpd schema fetch defaults to a floating develop ref"
     DISABLE_AMDGPU_TARGETS
     COMPILER_TOOLCHAIN amd-llvm
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
@@ -452,6 +488,13 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-systems
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+      "CMAKE_PREFIX_PATH" "CONDA_PYTHON_EXE" "CPACK_PACKAGE_FILE_NAME" "PLATFORM" "ROCM_PATH"
+      "ROCPROFSYS_CI"
+    FPRINT_PROJECT_VERSION_QUERIES "exact" "nearest:*"
     HARDENING_DEFERRED
       "PAPI (autotools, when ROCPROFSYS_USE_PAPI and ROCPROFSYS_BUILD_PAPI are enabled)"
       "libiberty (autotools, when built internally instead of using an external library)"
@@ -543,6 +586,14 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems-examples
+      FPRINT_PROJECT_SOURCE
+      FPRINT_PROJECT_SCOPE "projects/rocprofiler-systems"
+      FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+      FPRINT_PROJECT_ENVIRONMENT
+        ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+        "CMAKE_PREFIX_PATH" "CONDA_PYTHON_EXE" "CPACK_PACKAGE_FILE_NAME" "PLATFORM" "ROCM_PATH"
+        "ROCPROFSYS_CI"
+      FPRINT_PROJECT_VERSION_QUERIES "exact" "nearest:*"
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"

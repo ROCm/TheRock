@@ -14,7 +14,7 @@ import tempfile
 
 
 SCHEMA = "therock-project-smrev-v2"
-CATALOG = Path(__file__).with_name("project_smrev_inputs.json")
+REQUEST_SCHEMA = 1
 
 
 class SourceIdentityError(RuntimeError):
@@ -148,7 +148,7 @@ def version_inputs(repo, revision, queries):
 def calculate(repo, profile, repository_name):
     """Identity deliberately excludes commit/branch/count provenance labels.
 
-    The catalog retains tag-derived releases and semantic project timestamps.
+    The declarations retain tag-derived releases and semantic project timestamps.
     Reused artifacts keep their original producer's metadata; we never rewrite it.
     """
     paths = sorted({source_path(p) for p in profile["paths"]})
@@ -212,7 +212,7 @@ def owned_marker(path):
         return False
 
 
-def generate(target, source, output, *, check=False, catalog_path=CATALOG):
+def generate(target, source, output, *, repository, profile, entry=None, check=False):
     output = output.absolute()
     # Never follow an output symlink, including one in a parent directory.
     if output.is_symlink() or output.resolve() != output:
@@ -220,18 +220,19 @@ def generate(target, source, output, *, check=False, catalog_path=CATALOG):
     if output.exists() and not owned_marker(output):
         raise SourceIdentityError(f"refusing to replace foreign marker: {output}")
     try:
-        catalog = json.loads(catalog_path.read_text())
-        if catalog.get("schema_version") != 1 or target not in catalog["targets"]:
-            raise SourceIdentityError(f"no source-identity policy for target {target}")
-        target_policy = catalog["targets"][target]
+        if not repository or not isinstance(profile, dict) or not profile.get("paths"):
+            raise SourceIdentityError(f"missing source-identity declaration for {target}; rerun cmake")
         source = source.resolve(strict=True)
         repo = Path(git(source, "rev-parse", "--show-toplevel")).resolve()
         if output.is_relative_to(repo):
             raise SourceIdentityError("source marker must be outside its source repository")
-        if source.relative_to(repo).as_posix() != target_policy["entry"]:
+        actual_entry = source.relative_to(repo).as_posix()
+        if entry is not None and actual_entry != entry:
             raise SourceIdentityError(f"{target}: source checkout/layout does not match the declared input policy")
-        profile = catalog["profiles"][target_policy["profile"]]
-        identity = calculate(repo, profile, target_policy["repository"])
+        if not any(p == "." or actual_entry == p or actual_entry.startswith(p + "/")
+                   for p in profile["paths"]):
+            raise SourceIdentityError(f"{target}: declared source scope does not cover {actual_entry}")
+        identity = calculate(repo, profile, repository)
         data = encoded(identity)
         if check:
             if not output.exists() or output.read_bytes() != data:
@@ -245,12 +246,43 @@ def generate(target, source, output, *, check=False, catalog_path=CATALOG):
         raise
 
 
+def parse_version_query(value):
+    """Decode a CMake declaration; preserve the existing marker query format."""
+    kind, separator, argument = value.partition(":")
+    if kind == "exact" and not separator:
+        return {"kind": "exact"}
+    if not separator or not argument:
+        raise SourceIdentityError(f"invalid version query: {value!r}")
+    if kind == "timestamp":
+        return {"kind": kind, "path": source_path(argument)}
+    if kind in ("latest", "nearest"):
+        return {"kind": kind, "pattern": argument}
+    if kind == "nearest-annotated":
+        return {"kind": "nearest", "pattern": argument, "tags": False}
+    raise SourceIdentityError(f"invalid version query: {value!r}")
+
+
+def check_request(request):
+    if request.get("schema_version") != REQUEST_SCHEMA:
+        raise SourceIdentityError("source-identity request needs reconfiguration; rerun cmake")
+    generate(request["target"], Path(request["source"]), Path(request["output"]),
+             repository=request.get("repository"), profile=request.get("profile"),
+             entry=request["entry"], check=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target")
     parser.add_argument("--source", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--request", type=Path)
+    parser.add_argument("--repository", help="Logical repository name, independent of checkout location")
+    parser.add_argument("--scope", help="Repository-relative source scope; defaults to the source directory")
+    parser.add_argument("--input", action="append", default=[])
+    parser.add_argument("--optional-input", action="append", default=[])
+    parser.add_argument("--environment", action="append", default=[])
+    parser.add_argument("--environment-pattern", action="append", default=[])
+    parser.add_argument("--version-query", action="append", default=[])
     parser.add_argument("--check-list", type=Path)
     parser.add_argument("--check-request", type=Path)
     args = parser.parse_args(argv)
@@ -260,17 +292,36 @@ def main(argv=None):
                         args.check_list.read_text().splitlines())
             for line in requests:
                 request = json.loads(Path(line).read_text())
-                generate(request["target"], Path(request["source"]), Path(request["output"]), check=True)
+                check_request(request)
         else:
-            if not all((args.target, args.source, args.output, args.request)):
-                parser.error("--target, --source, --output and --request are required")
-            generate(args.target, args.source, args.output)
+            if not all((args.target, args.source, args.output, args.request, args.repository)):
+                parser.error("--target, --source, --output, --request and --repository are required")
+            source = args.source.resolve(strict=True)
+            repo = Path(git(source, "rev-parse", "--show-toplevel")).resolve()
+            entry = source.relative_to(repo).as_posix()
+            profile = {
+                "paths": [args.scope if args.scope is not None else entry, *args.input],
+                "optional_paths": args.optional_input,
+                "versions": [parse_version_query(q) for q in args.version_query],
+                "environment": args.environment,
+                "environment_patterns": args.environment_pattern,
+            }
+            generate(args.target, source, args.output, repository=args.repository,
+                     profile=profile, entry=entry)
             write_changed(args.request, encoded({
-                "target": args.target, "source": str(args.source.resolve()),
+                "schema_version": REQUEST_SCHEMA,
+                "target": args.target, "source": str(source), "entry": entry,
                 "output": str(args.output.absolute()),
+                "repository": args.repository, "profile": profile,
             }))
             print(f"Project source identity: {args.target} -> {args.output}")
     except (OSError, ValueError, KeyError, SourceIdentityError) as exc:
+        # Argument decoding/Git discovery can fail before generate() owns the
+        # operation. Invalidate only our marker, without following symlinks.
+        if args.output and not (args.check_list or args.check_request):
+            output = args.output.absolute()
+            if output.resolve() == output and owned_marker(output):
+                output.unlink()
         parser.exit(2, f"ERROR: {exc}\n")
     return 0
 

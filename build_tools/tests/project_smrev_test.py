@@ -7,6 +7,8 @@
 import importlib.util
 import json
 import os
+import re
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -68,16 +70,7 @@ class SourceIdentityTest(unittest.TestCase):
             "environment": ["THEROCK_SMREV_TEST_VALUE"],
             "versions": [],
         }
-        self.catalog = self.root / "catalog.json"
         self.marker = self.root / "build/.a.smrev"
-        self.save_catalog()
-
-    def save_catalog(self):
-        self.catalog.write_text(json.dumps({
-            "schema_version": 1,
-            "targets": {"a": {"repository": "fixture", "entry": "projects/a", "profile": "a"}},
-            "profiles": {"a": self.profile},
-        }))
 
     def write(self, relative, content):
         path = self.repo / relative
@@ -86,9 +79,8 @@ class SourceIdentityTest(unittest.TestCase):
         return path
 
     def generate(self, **kwargs):
-        self.save_catalog()
         return smrev.generate("a", self.repo / "projects/a", self.marker,
-                              catalog_path=self.catalog, **kwargs)
+                              repository="fixture", profile=self.profile, **kwargs)
 
     def test_unrelated_commit_and_repeat_preserve_identity_and_mtime(self):
         before = self.generate()
@@ -206,11 +198,35 @@ class SourceIdentityTest(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(smrev.SourceIdentityError):
                 smrev.source_path(path)
 
-    def test_unknown_target_removes_owned_marker(self):
+    def test_missing_declaration_removes_owned_marker(self):
         self.generate()
-        with self.assertRaisesRegex(smrev.SourceIdentityError, "no source-identity policy"):
-            smrev.generate("absent", self.repo / "projects/a", self.marker, catalog_path=self.catalog)
+        with self.assertRaisesRegex(smrev.SourceIdentityError, "missing source-identity declaration"):
+            smrev.generate("a", self.repo / "projects/a", self.marker,
+                           repository="fixture", profile=None)
         self.assertFalse(self.marker.exists())
+
+    def test_scope_must_cover_source_and_entry_must_match(self):
+        self.generate()
+        with self.assertRaisesRegex(smrev.SourceIdentityError, "does not cover"):
+            smrev.generate("a", self.repo / "projects/a", self.marker,
+                           repository="fixture", profile={"paths": ["projects/b"]})
+        self.assertFalse(self.marker.exists())
+        with self.assertRaisesRegex(smrev.SourceIdentityError, "layout"):
+            self.generate(entry="projects/b")
+
+    def test_version_query_declarations(self):
+        expected = {
+            "latest:pkg-*": {"kind": "latest", "pattern": "pkg-*"},
+            "nearest:v*": {"kind": "nearest", "pattern": "v*"},
+            "nearest-annotated:[0-9]*": {"kind": "nearest", "pattern": "[0-9]*", "tags": False},
+            "exact": {"kind": "exact"},
+            "timestamp:projects/a": {"kind": "timestamp", "path": "projects/a"},
+        }
+        for declaration, query in expected.items():
+            self.assertEqual(smrev.parse_version_query(declaration), query)
+        for bad in ("", "latest", "latest:", "exact:tag", "unknown:x", "timestamp:../a"):
+            with self.subTest(bad=bad), self.assertRaises(smrev.SourceIdentityError):
+                smrev.parse_version_query(bad)
 
     def test_environment_unset_empty_and_value_are_distinct(self):
         with patch.dict(os.environ, {}, clear=False):
@@ -272,7 +288,7 @@ class SourceIdentityTest(unittest.TestCase):
         clone = self.root / "other-checkout"
         command("git", "clone", "-q", self.repo, clone)
         second = smrev.generate("a", clone / "projects/a", self.root / "other-build/.a.smrev",
-                                catalog_path=self.catalog)
+                                repository="fixture", profile=self.profile)
         self.assertEqual(first, second)
 
     def test_check_rejects_stale_inputs_without_rewriting(self):
@@ -284,20 +300,29 @@ class SourceIdentityTest(unittest.TestCase):
         self.assertFalse(self.marker.exists())
 
     def test_cli_request_checks_and_regeneration(self):
-        # Exercise the real checked-in AMD SMI policy through the CLI.
+        # Requests retain configured declarations for build-time checks.
         for path in ("projects/amdsmi", "shared/cuid", "shared/sha256"):
             self.write(path + "/data.txt", "data\n")
         commit(self.repo)
         script = ROOT / "build_tools/generate_project_smrev.py"
         request = self.root / "request.json"
         args = (sys.executable, script, "--target", "amdsmi", "--source",
-                self.repo / "projects/amdsmi", "--output", self.marker, "--request", request)
+                self.repo / "projects/amdsmi", "--output", self.marker, "--request", request,
+                "--repository", "rocm-systems", "--input", "shared/cuid", "--input", "shared/sha256")
         command(*args)
         before = self.marker.read_bytes()
+        saved_request = json.loads(request.read_text())
+        self.assertEqual(saved_request["entry"], "projects/amdsmi")
+        self.assertEqual(saved_request["profile"]["paths"],
+                         ["projects/amdsmi", "shared/cuid", "shared/sha256"])
         self.marker.unlink()
         command(*args)
         self.assertEqual(before, self.marker.read_bytes())
         command(sys.executable, script, "--check-request", request)
+        result = command(*args, "--version-query", "unknown:tag", ok=False)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.marker.exists())
+        command(*args)
         self.write("shared/cuid/data.txt", "changed\n")
         commit(self.repo)
         result = command(sys.executable, script, "--check-request", request, ok=False)
@@ -324,21 +349,99 @@ class SourceIdentityTest(unittest.TestCase):
         self.assertEqual(absent["nested_sources"][0]["state"], "uninitialized")
 
 
-class CatalogTest(unittest.TestCase):
-    def test_all_reviewed_targets_and_profiles_resolve(self):
-        data = json.loads(smrev.CATALOG.read_text())
-        self.assertEqual(len(data["targets"]), 76)
-        for target, policy in data["targets"].items():
+def project_declarations():
+    """Read only the literal FPRINT_PROJECT blocks for declaration coverage.
+
+    This narrow test reader is not a CMake interpreter. Real CMake expansion and
+    propagation are exercised separately by CMakeIntegrationTest.
+    """
+    helper = (ROOT / "cmake/therock_project_smrev.cmake").read_text()
+    common = {name: shlex.split(body) for name, body in re.findall(
+        r"set\((THEROCK_PROJECT_[A-Z_]+)\s+([^)]*)\)", helper)}
+    defaults = {"THEROCK_" + name.upper().replace("-", "_") + "_SOURCE_DIR": value
+                for name, value in re.findall(
+                    r'therock_enable_external_source\("([^"]+)"\s+"([^"]+)"',
+                    (ROOT / "CMakeLists.txt").read_text())}
+    result = {}
+    files = command("git", "-C", ROOT, "ls-files", "--", "*CMakeLists.txt").stdout.splitlines()
+    for name in files:
+        text = (ROOT / name).read_text()
+        for match in re.finditer(r"therock_cmake_subproject_declare\(([^\s)]+)\s*\n", text):
+            lines = text[match.end():].splitlines()
+            if not lines or lines[0].strip() != "FPRINT_PROJECT_SOURCE":
+                continue
+            block = []
+            for line in lines:
+                item = line.strip()
+                if item.startswith(("FPRINT_PROJECT_", '"', "${")):
+                    block.append(item)
+                else:
+                    break
+            fields = {}
+            current = None
+            for token in shlex.split("\n".join(block)):
+                if token.startswith("FPRINT_PROJECT_"):
+                    current = token.removeprefix("FPRINT_PROJECT_")
+                    fields[current] = []
+                elif token.startswith("${"):
+                    fields[current].extend(common[token[2:-1]])
+                else:
+                    fields[current].append(token)
+            # All reviewed declarations have a literal or rooted source path.
+            source_match = re.search(r'(?m)^\s*EXTERNAL_SOURCE_DIR\s+"([^"\n]+)"', text[match.end():])
+            if source_match is None:
+                raise AssertionError(f"Missing source for {match[1]}")
+            source = source_match[1]
+            for variable, value in defaults.items():
+                source = source.replace("${" + variable + "}", value)
+            if source.startswith("${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/"):
+                repository = "rocm-systems"
+                entry = source.split("}/", 1)[1]
+            elif source.startswith("${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/"):
+                repository = "rocm-libraries"
+                entry = source.split("}/", 1)[1]
+            else:
+                if source.startswith("${THEROCK_SOURCE_DIR}/"):
+                    source = source.split("}/", 1)[1]
+                else:
+                    source = (Path(name).parent / source).as_posix()
+                repository = next((r for r in (
+                    "compiler/amd-llvm", "compiler/hipify", "base/half",
+                    "base/rocm-cmake", "math-libs/libhipcxx"
+                ) if source == r or source.startswith(r + "/")), None)
+                if repository is None:
+                    raise AssertionError(f"Unreviewed source expression: {source}")
+                entry = str(Path(source).relative_to(repository))
+            scope = fields.get("SCOPE", [entry])[0]
+            profile = {
+                "paths": [scope, *fields.get("INPUTS", [])],
+                "optional_paths": fields.get("OPTIONAL_INPUTS", []),
+                "environment": fields.get("ENVIRONMENT", []),
+                "environment_patterns": fields.get("ENVIRONMENT_PATTERNS", []),
+                "versions": [smrev.parse_version_query(q) for q in fields.get("VERSION_QUERIES", [])],
+            }
+            if match[1] in result:
+                raise AssertionError(f"Duplicate declaration: {match[1]}")
+            result[match[1]] = {"repository": repository, "entry": entry,
+                                "profile": profile, "fields": fields, "block": "\n".join(block)}
+    return result
+
+
+class DeclarationTest(unittest.TestCase):
+    def test_all_reviewed_declarations_resolve(self):
+        declarations = project_declarations()
+        self.assertEqual(len(declarations), 76)
+        self.assertFalse((ROOT / "build_tools/project_smrev_inputs.json").exists())
+        for target, declaration in declarations.items():
             with self.subTest(target=target):
-                profile = data["profiles"][policy["profile"]]
-                self.assertTrue(profile["paths"])
-                for path in profile["paths"] + profile.get("optional_paths", []):
+                profile = declaration["profile"]
+                for path in profile["paths"] + profile["optional_paths"]:
                     smrev.source_path(path)
-                self.assertTrue(any(path == "." or policy["entry"] == path or
-                                    policy["entry"].startswith(path + "/") for path in profile["paths"]))
+                self.assertTrue(any(p == "." or declaration["entry"] == p or
+                                    declaration["entry"].startswith(p + "/") for p in profile["paths"]))
 
     def test_required_shared_inputs_and_mutable_fetch_exclusions(self):
-        data = json.loads(smrev.CATALOG.read_text())
+        declarations = project_declarations()
         for target, required in {
             "amdsmi": {"shared/cuid", "shared/sha256"},
             "hip-clr": {"projects/clr", "projects/hip", "projects/hrr"},
@@ -346,39 +449,39 @@ class CatalogTest(unittest.TestCase):
             "hipBLASLt": {"shared/origami", "shared/rocroller", "shared/stinkytofu"},
             "miopenprovider": {"dnn-providers/cmake"},
         }.items():
-            self.assertLessEqual(required, set(data["profiles"][data["targets"][target]["profile"]]["paths"]))
+            self.assertLessEqual(required, set(declarations[target]["profile"]["paths"]))
         for target in ("mirage", "profiler-hub"):
-            self.assertTrue(data["targets"][target]["uncacheable_reason"])
+            self.assertTrue(declarations[target]["fields"]["UNCACHEABLE_REASON"])
 
     @unittest.skipUnless(shutil.which("git"), "Git is required")
-    def test_every_target_generates_and_repeats_with_its_catalog(self):
-        # Tiny committed inputs exercise every policy/entry mapping. This is
-        # policy coverage, not an audit of the real projects' complete builds.
-        data = json.loads(smrev.CATALOG.read_text())
+    def test_every_target_generates_and_repeats_with_its_declaration(self):
+        declarations = project_declarations()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             repositories = {}
-            for policy in data["targets"].values():
-                name = policy["repository"]
+            for declaration in declarations.values():
+                name = declaration["repository"]
                 if name not in repositories:
                     repositories[name] = root / name.replace("/", "_")
                     init_git(repositories[name])
                 repo = repositories[name]
-                profile = data["profiles"][policy["profile"]]
-                for relative in [policy["entry"], *profile["paths"]]:
+                for relative in [declaration["entry"], *declaration["profile"]["paths"]]:
                     path = repo / relative
                     path.mkdir(parents=True, exist_ok=True)
                     (path / "input.txt").write_text("fixture\n")
             for repo in repositories.values():
                 commit(repo)
-            for target, policy in data["targets"].items():
+            for target, declaration in declarations.items():
                 with self.subTest(target=target):
-                    repo = repositories[policy["repository"]]
+                    repo = repositories[declaration["repository"]]
                     output = root / "markers" / ("." + target + ".smrev")
-                    first = smrev.generate(target, repo / policy["entry"], output)
+                    args = (target, repo / declaration["entry"], output)
+                    kwargs = {"repository": declaration["repository"],
+                              "profile": declaration["profile"], "entry": declaration["entry"]}
+                    first = smrev.generate(*args, **kwargs)
                     stamp = output.stat().st_mtime_ns
-                    smrev.generate(target, repo / policy["entry"], output, check=True)
-                    self.assertEqual(first, smrev.generate(target, repo / policy["entry"], output))
+                    smrev.generate(*args, **kwargs, check=True)
+                    self.assertEqual(first, smrev.generate(*args, **kwargs))
                     self.assertEqual(stamp, output.stat().st_mtime_ns)
 
 
@@ -420,7 +523,13 @@ include(therock_subproject)
 set(ROCM_BUILD_FLAGS_STATE_FILE "${{CMAKE_BINARY_DIR}}/flags.cmake")
 file(CONFIGURE OUTPUT "${{ROCM_BUILD_FLAGS_STATE_FILE}}" CONTENT "# fixture flags\n")
 foreach(name IN ITEMS amdsmi rocm-core)
+  set(shared_inputs)
+  if(name STREQUAL "amdsmi")
+    set(shared_inputs shared/cuid shared/sha256)
+  endif()
   therock_cmake_subproject_declare(${{name}}
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS ${{shared_inputs}}
     EXTERNAL_SOURCE_DIR "{self.repo}/projects/${{name}}"
     BINARY_DIR "${{CMAKE_BINARY_DIR}}/${{name}}"
     NO_MERGE_COMPILE_COMMANDS DISABLE_AMDGPU_TARGETS)
@@ -505,7 +614,7 @@ therock_project_smrev(marker cacheable unreviewed "{self.repo}/projects/amdsmi")
 ''')
         result = self.configure(ok=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Missing project source-identity policy", result.stdout)
+        self.assertIn("Missing project source-identity declaration", result.stdout)
 
     def test_unmodeled_fetch_has_no_valid_artifact_fingerprint(self):
         source = self.repo / "profilers/profiler-hub"
@@ -515,6 +624,8 @@ therock_project_smrev(marker cacheable unreviewed "{self.repo}/projects/amdsmi")
         path = self.source / "CMakeLists.txt"
         path.write_text(path.read_text() + f'''
 therock_cmake_subproject_declare(profiler-hub
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_UNCACHEABLE_REASON "fixture: external input not modeled"
   EXTERNAL_SOURCE_DIR "{source}" BINARY_DIR "${{CMAKE_BINARY_DIR}}/hub"
   DISABLE_AMDGPU_TARGETS)
 therock_cmake_subproject_activate(profiler-hub)
@@ -525,6 +636,111 @@ endif()
 ''')
         self.configure()
         self.assertTrue((self.build / "source-identities/.profiler-hub.smrev").exists())
+
+    def test_declared_values_and_conditions_reach_request(self):
+        cmake = self.source / "CMakeLists.txt"
+        text = cmake.read_text().replace(
+            "    FPRINT_PROJECT_INPUTS ${shared_inputs}",
+            """    FPRINT_PROJECT_INPUTS ${shared_inputs}
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT}
+      THEROCK_SMREV_TEST_VALUE
+    FPRINT_PROJECT_ENVIRONMENT_PATTERNS "THEROCK_CUDA[0-9]+_[0-9]+_ROOT"
+    FPRINT_PROJECT_VERSION_QUERIES "latest:fixture-*" "nearest-annotated:v*" exact""")
+        text = text.replace("set(shared_inputs shared/cuid shared/sha256)",
+                            """set(shared_inputs shared/cuid)
+    if(INCLUDE_SHA256)
+      list(APPEND shared_inputs shared/sha256)
+    endif()""")
+        cmake.write_text(text)
+        self.configure("-DINCLUDE_SHA256=OFF")
+        request = json.loads((self.build / "source-identities/amdsmi.request.json").read_text())
+        profile = request["profile"]
+        self.assertEqual(request["repository"], "rocm-systems")
+        self.assertEqual(profile["paths"], ["projects/amdsmi", "shared/cuid"])
+        self.assertIn("VERSION", profile["optional_paths"])
+        self.assertIn("ROCM_BUILD_ID", profile["environment"])
+        self.assertIn("THEROCK_SMREV_TEST_VALUE", profile["environment"])
+        self.assertEqual(profile["environment_patterns"], ["THEROCK_CUDA[0-9]+_[0-9]+_ROOT"])
+        self.assertEqual(profile["versions"], [
+            {"kind": "latest", "pattern": "fixture-*"},
+            {"kind": "nearest", "pattern": "v*", "tags": False}, {"kind": "exact"}])
+        self.configure("-DINCLUDE_SHA256=ON")
+        request = json.loads((self.build / "source-identities/amdsmi.request.json").read_text())
+        self.assertIn("shared/sha256", request["profile"]["paths"])
+        command("cmake", "--build", self.build, "--target", "therock-check-project-identities")
+
+    def test_parent_scope_covers_nested_source(self):
+        cmake = self.source / "CMakeLists.txt"
+        cmake.write_text(cmake.read_text().replace(
+            "    FPRINT_PROJECT_SOURCE", "    FPRINT_PROJECT_SOURCE\n    FPRINT_PROJECT_SCOPE projects"))
+        self.configure()
+        marker = json.loads((self.build / "source-identities/.amdsmi.smrev").read_text())
+        self.assertIn("projects", [p["path"] for p in marker["inputs"]])
+        self.assertNotIn("projects/amdsmi", [p["path"] for p in marker["inputs"]])
+
+    def test_conflicting_source_modes_fail(self):
+        cmake = self.source / "CMakeLists.txt"
+        cmake.write_text(cmake.read_text().replace(
+            "    FPRINT_PROJECT_SOURCE", "    FPRINT_PROJECT_SOURCE FPRINT_SOURCE_HASH"))
+        result = self.configure(ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("incompatible", result.stdout)
+
+    def test_inputs_without_opt_in_fail(self):
+        cmake = self.source / "CMakeLists.txt"
+        cmake.write_text(cmake.read_text().replace("    FPRINT_PROJECT_SOURCE\n", ""))
+        result = self.configure(ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires FPRINT_PROJECT_SOURCE", result.stdout)
+
+    def test_missing_scope_value_fails(self):
+        cmake = self.source / "CMakeLists.txt"
+        cmake.write_text(cmake.read_text().replace(
+            "    FPRINT_PROJECT_SOURCE", "    FPRINT_PROJECT_SOURCE FPRINT_PROJECT_SCOPE"))
+        result = self.configure(ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FPRINT_PROJECT_SCOPE requires a value", result.stdout)
+
+    def test_all_project_declarations_through_real_cmake(self):
+        declarations = project_declarations()
+        repositories = {}
+        for declaration in declarations.values():
+            name = declaration["repository"]
+            if name not in repositories:
+                repositories[name] = self.source / name
+                init_git(repositories[name])
+            for relative in [declaration["entry"], *declaration["profile"]["paths"]]:
+                directory = repositories[name] / relative
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / "input.txt").write_text("fixture\n")
+        for repo in repositories.values():
+            commit(repo)
+        text = (self.source / "CMakeLists.txt").read_text().split("foreach(name IN ITEMS", 1)[0]
+        text += f'''
+set(THEROCK_SOURCE_DIR "{self.source}")
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "{repositories['rocm-systems']}")
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "{repositories['rocm-libraries']}")
+'''
+        for target, declaration in declarations.items():
+            source = repositories[declaration["repository"]] / declaration["entry"]
+            text += f'''
+therock_cmake_subproject_declare({target}
+  {declaration['block']}
+  EXTERNAL_SOURCE_DIR "{source}" BINARY_DIR "${{CMAKE_BINARY_DIR}}/{target}"
+  DISABLE_AMDGPU_TARGETS NO_MERGE_COMPILE_COMMANDS)
+therock_project_smrev(marker cacheable {target} "{source}")
+'''
+        (self.source / "CMakeLists.txt").write_text(text)
+        self.configure()
+        self.assertEqual(len((self.build / "source-identities/requests.txt").read_text().splitlines()), 76)
+        for target, declaration in declarations.items():
+            with self.subTest(target=target):
+                expected = smrev.calculate(repositories[declaration["repository"]],
+                                           declaration["profile"], declaration["repository"])
+                self.assertEqual((self.build / f"source-identities/.{target}.smrev").read_bytes(),
+                                 smrev.encoded(expected))
+        command("cmake", "--build", self.build, "--target", "therock-check-project-identities")
 
 
 if __name__ == "__main__":

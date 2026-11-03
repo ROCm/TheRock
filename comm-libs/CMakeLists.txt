@@ -33,6 +33,15 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS "projects/rocshmem" "shared/ctest"
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "BUILD_LOCAL_GPU_TARGET_ONLY" "CC" "CFLAGS" "CXX"
+      "CXXFLAGS" "GDRCOPY_HOME" "GDRCOPY_INCLUDE_DIR" "HOSTFILE" "MPI_PATH" "MPI_ROOT"
+      "NCCL_USE_CMAKE" "OMPI_MCA_osc" "OMPI_MCA_pml" "PKG_CONFIG_PATH" "PMIX_ROOT" "PMIx_ROOT"
+      "ROCM_PATH" "TLS_BACKEND"
+    FPRINT_PROJECT_VERSION_QUERIES "nearest:*"
     # Build all GPU targets in a single target-neutral artifact as long as the
     # host code isn't fully target agnostic.
     USE_TEST_AMDGPU_TARGETS
@@ -131,6 +140,14 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
     endif()
 
     therock_cmake_subproject_declare(rccl-tests
+      FPRINT_PROJECT_SOURCE
+      FPRINT_PROJECT_INPUTS "projects/rccl" "projects/rocshmem" "shared/ctest"
+      FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+      FPRINT_PROJECT_ENVIRONMENT
+        ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "BUILD_LOCAL_GPU_TARGET_ONLY" "CC" "CFLAGS"
+        "CXX" "CXXFLAGS" "GDRCOPY_HOME" "GDRCOPY_INCLUDE_DIR" "HIP_PLATFORM" "HOSTFILE" "MPI_PATH"
+        "MPI_ROOT" "NCCL_USE_CMAKE" "OMPI_MCA_osc" "OMPI_MCA_pml" "PKG_CONFIG_PATH" "PMIX_ROOT"
+        "PMIx_ROOT" "ROCM_PATH" "TLS_BACKEND"
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
@@ -192,6 +209,12 @@ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
     endif()
   endif()
   therock_cmake_subproject_declare(rocshmem
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS "shared/ctest"
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "BUILD_LOCAL_GPU_TARGET_ONLY" "HOSTFILE"
+      "MPI_ROOT" "OMPI_MCA_osc" "OMPI_MCA_pml" "PKG_CONFIG_PATH" "PMIX_ROOT" "PMIx_ROOT"
     # rocshmem uses .hip_fatbin/.hip_gpubin_* ELF sections for device code
     # instead of .hipFatBinSegment, making it incompatible with kpack injection.
     # Build all GPU targets in a single target-neutral artifact as a workaround.

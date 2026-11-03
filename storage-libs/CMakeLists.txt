@@ -7,6 +7,12 @@ if(THEROCK_ENABLE_HIPFILE)
   ##############################################################################
   set(_hipfile_subproject_names)
   therock_cmake_subproject_declare(hipfile
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT
+      ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+      "HIP_PLATFORM" "ROCM_PATH" "ROCM_VERSION" "ROCPROFILER_REGISTER_ROOT"
+      "rocprofiler_register_ROOT"
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hipfile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipfile"

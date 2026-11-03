@@ -359,13 +359,44 @@ endfunction()
 #   all files hashed instead of querying the source control system. This is used for
 #   certain small, in-tree directories where we don't want them fingerprinted from
 #   TheRock's commit but based on content.
+# FPRINT_PROJECT_SOURCE: Declare reviewed Git inputs for THEROCK_PROJECT_SMREV.
+#   The selected source directory is the default scope; incompatible with
+#   FPRINT_SOURCE_HASH. Missing declarations in opted-in monorepos are errors.
+# FPRINT_PROJECT_SCOPE: Override the default scope with a repository-relative
+#   parent tree (for example "." for COMGR/hipcc's complete LLVM repository).
+# FPRINT_PROJECT_INPUTS / FPRINT_PROJECT_OPTIONAL_INPUTS: Additional required /
+#   optional repository-relative trees or files. An absent optional input counts.
+# FPRINT_PROJECT_ENVIRONMENT / FPRINT_PROJECT_ENVIRONMENT_PATTERNS: Environment
+#   variable names / full-match regular expressions to include in the identity.
+# FPRINT_PROJECT_VERSION_QUERIES: Ordered latest:<glob>, nearest:<glob>,
+#   nearest-annotated:<glob>, exact, or timestamp:<repo-relative-path> queries.
+# FPRINT_PROJECT_UNCACHEABLE_REASON: Generate a source marker but invalidate the
+#   final fingerprint until the stated missing inputs are modeled.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;FPRINT_PROJECT_SOURCE"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR;FPRINT_PROJECT_SCOPE;FPRINT_PROJECT_UNCACHEABLE_REASON"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED;FPRINT_PROJECT_INPUTS;FPRINT_PROJECT_OPTIONAL_INPUTS;FPRINT_PROJECT_ENVIRONMENT;FPRINT_PROJECT_ENVIRONMENT_PATTERNS;FPRINT_PROJECT_VERSION_QUERIES"
   )
+  if(ARG_FPRINT_PROJECT_SOURCE AND ARG_FPRINT_SOURCE_HASH)
+    message(FATAL_ERROR "${target_name}: FPRINT_PROJECT_SOURCE and FPRINT_SOURCE_HASH are incompatible")
+  endif()
+  foreach(_argument IN LISTS ARG_UNPARSED_ARGUMENTS)
+    if(_argument MATCHES "^FPRINT_PROJECT_")
+      message(FATAL_ERROR "${target_name}: unrecognized argument ${_argument}")
+    endif()
+  endforeach()
+  foreach(_argument IN ITEMS FPRINT_PROJECT_SCOPE FPRINT_PROJECT_UNCACHEABLE_REASON)
+    if(_argument IN_LIST ARG_KEYWORDS_MISSING_VALUES)
+      message(FATAL_ERROR "${target_name}: ${_argument} requires a value")
+    endif()
+  endforeach()
+  foreach(_property IN ITEMS SCOPE INPUTS OPTIONAL_INPUTS ENVIRONMENT ENVIRONMENT_PATTERNS VERSION_QUERIES UNCACHEABLE_REASON)
+    if(DEFINED ARG_FPRINT_PROJECT_${_property} AND NOT ARG_FPRINT_PROJECT_SOURCE)
+      message(FATAL_ERROR "${target_name}: FPRINT_PROJECT_${_property} requires FPRINT_PROJECT_SOURCE")
+    endif()
+  endforeach()
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
   endif()
@@ -573,6 +604,11 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
+
+  foreach(_property IN ITEMS SOURCE SCOPE INPUTS OPTIONAL_INPUTS ENVIRONMENT ENVIRONMENT_PATTERNS VERSION_QUERIES UNCACHEABLE_REASON)
+    set_property(TARGET "${target_name}" PROPERTY "THEROCK_FPRINT_PROJECT_${_property}"
+      "${ARG_FPRINT_PROJECT_${_property}}")
+  endforeach()
 
   # Record direct-consumer edges for the consumer graph emitted by
   # therock_emit_consumer_graph(). The compiler is a dependency too, but is

@@ -29,6 +29,12 @@ therock_cmake_subproject_activate(therock-aux-overlay)
 ################################################################################
 
 therock_cmake_subproject_declare(rocm-cmake
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_ENVIRONMENT
+    ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+    "ASAN_OPTIONS" "DESTDIR" "DOXYGEN_DIR" "ROCMCHECKS_ERROR_TOOLCHAIN_VAR"
+    "ROCMCHECKS_WARN_TOOLCHAIN_VAR" "ROCM_DEBIAN_COMPRESSION_TYPE" "ROCM_HEADER_WRAPPER_WERROR"
+    "ROCM_PKGTHREADS" "ROCM_PKGTYPE" "SPHINX_DIR" "UBSAN_OPTIONS"
   EXTERNAL_SOURCE_DIR "rocm-cmake"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
@@ -51,6 +57,10 @@ else()
 endif()
 
 therock_cmake_subproject_declare(rocm-core
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+  FPRINT_PROJECT_ENVIRONMENT
+    ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-core"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-core"
   USE_DIST_AMDGPU_TARGETS
@@ -74,6 +84,13 @@ therock_cmake_subproject_activate(rocm-core)
 if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
 
 therock_cmake_subproject_declare(rocm_smi_lib
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+  FPRINT_PROJECT_ENVIRONMENT
+    ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT} "ROCM_RPATH"
+    "ROCM_SMI_DISABLE"
+  FPRINT_PROJECT_VERSION_QUERIES
+    "nearest:rsmi_pkg_ver-[0-9.]*" "nearest:rsmi_so_ver-[0-9.]*" "nearest:oam_so_ver-[0-9.]*"
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-smi-lib"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm_smi_lib"
   USE_DIST_AMDGPU_TARGETS
@@ -113,6 +130,12 @@ endif()
 if(NOT WIN32)  # TODO(#36): Enable on Windows?
 
 therock_cmake_subproject_declare(rocprofiler-register
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+  FPRINT_PROJECT_ENVIRONMENT
+    ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} ${THEROCK_PROJECT_PACKAGE_ENVIRONMENT}
+    "CMAKE_PREFIX_PATH" "CONDA_PYTHON_EXE" "CPACK_PACKAGE_FILE_NAME" "HOME"
+  FPRINT_PROJECT_VERSION_QUERIES "nearest:*"
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-register"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-register"
   USE_DIST_AMDGPU_TARGETS
@@ -139,6 +162,7 @@ endif()
 ################################################################################
 
 therock_cmake_subproject_declare(rocm-half
+  FPRINT_PROJECT_SOURCE
   EXTERNAL_SOURCE_DIR "half"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD

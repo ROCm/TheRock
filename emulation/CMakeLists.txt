@@ -17,6 +17,10 @@ if(THEROCK_ENABLE_ROCJITSU)
   ##############################################################################
 
   therock_cmake_subproject_declare(rocjitsu
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_INPUTS "runtimes/api-headers" "shared/machine-readable-isa"
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "ROCM_PATH"
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
@@ -101,6 +105,11 @@ if(THEROCK_ENABLE_MIRAGE)
   ##############################################################################
 
   therock_cmake_subproject_declare(mirage
+    FPRINT_PROJECT_SOURCE
+    FPRINT_PROJECT_OPTIONAL_INPUTS ${THEROCK_PROJECT_ROOT_INPUTS}
+    FPRINT_PROJECT_ENVIRONMENT ${THEROCK_PROJECT_ROCM_VERSION_ENVIRONMENT} "ROCM_PATH"
+    FPRINT_PROJECT_UNCACHEABLE_REASON
+      "HotSwap can fetch external compiler/runtime sources not covered by the declared inputs"
     DISABLE_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/mirage"

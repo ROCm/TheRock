@@ -106,6 +106,31 @@ therock_cmake_subproject_declare(client
         RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
 
 
+def test_project_source_inputs_are_not_graph_dependencies(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(runtime)
+therock_cmake_subproject_declare(client
+  RUNTIME_DEPS runtime
+  FPRINT_PROJECT_SOURCE
+  FPRINT_PROJECT_SCOPE projects/client
+  FPRINT_PROJECT_INPUTS shared/cuid shared/sha256
+  FPRINT_PROJECT_OPTIONAL_INPUTS VERSION
+  FPRINT_PROJECT_ENVIRONMENT ROCM_BUILD_ID
+  FPRINT_PROJECT_ENVIRONMENT_PATTERNS "SDK[0-9]+_ROOT"
+  FPRINT_PROJECT_VERSION_QUERIES "latest:client-*"
+  FPRINT_PROJECT_UNCACHEABLE_REASON "External input not modeled"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/client")
+""",
+    )
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+    assert result.subprojects["client"].runtime_deps == {"runtime"}
+    assert result.build_consumer_graph()["runtime"]["consumers"] == ["client"]
+
+
 def test_graph_comparison_edge_direction() -> None:
     generated = {
         "a": {"consumers": ["b", "c"]},
