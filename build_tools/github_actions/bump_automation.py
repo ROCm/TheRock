@@ -333,7 +333,11 @@ def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
     url = f"repos/{repo}/commits"
     if branch:
         url += f"?sha={quote(branch, safe='')}"
-    data = gh_api(token, url)
+    try:
+        data = gh_api(token, url)
+    except (RuntimeError, requests.RequestException) as error:
+        source = f"branch {branch!r}" if branch else "the default branch"
+        raise RuntimeError(f"Could not resolve {source} in {repo}: {error}") from error
     return data[0]["sha"]
 
 
