@@ -242,17 +242,15 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
-    def test_structured_whl_next(self, mock_list, mock_copy_file, mock_copy_dir):
-        # Test regular, ASAN, and explicit override use correct index
+    def test_structured_python_index(self, mock_list, mock_copy_file, mock_copy_dir):
+        # Index is computed from --index-type and --build-variant.
         test_cases = [
-            ("release", None, "whl-next"),  # Regular build -> whl-next
-            ("asan", None, "whl-next-asan"),  # ASAN build -> whl-next-asan
-            ("asan", "whl-next", "whl-next"),  # Explicit override -> whl-next
+            ("release", None, "whl-next"),
+            ("asan-debug", None, "whl-next-asan"),
+            ("host-asan", "whl", "whl-asan"),
         ]
-        for build_variant, explicit_index, expected_index in test_cases:
-            with self.subTest(
-                build_variant=build_variant, explicit_index=explicit_index
-            ):
+        for build_variant, index_type, expected_index in test_cases:
+            with self.subTest(build_variant=build_variant, index_type=index_type):
                 mock_copy_dir.reset_mock()
                 mock_copy_file.reset_mock()
                 mock_list.reset_mock()
@@ -276,8 +274,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                     "--skip-native-packages",
                     "--dry-run",
                 ]
-                if explicit_index:
-                    args.extend(["--python-index", explicit_index])
+                if index_type:
+                    args.extend(["--index-type", index_type])
                 main(args)
                 _, dest = mock_copy_file.call_args_list[0].args
                 self.assertEqual(

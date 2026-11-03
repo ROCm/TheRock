@@ -85,7 +85,14 @@ from _therock_utils.s3_buckets import (
 )
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.python_package_paths import plan_key_copies
+from _therock_utils.python_package_paths import (
+    BUILD_VARIANTS,
+    DEFAULT_INDEX_TYPE,
+    INDEX_TYPES,
+    build_variant_index_suffix,
+    get_python_index,
+    plan_key_copies,
+)
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
@@ -332,12 +339,12 @@ def main(argv: list[str]) -> None:
         "(v5/rocm/core/<index>/<package>/) instead of the flat v4/whl prefix.",
     )
     parser.add_argument(
-        "--python-index",
-        default=None,
-        choices=["whl", "whl-next", "whl-next-asan"],
-        help="Product-local index name for structured Python publishing. "
-        "Selects the v5/rocm/core/<index>/ path segment. "
-        "If not specified, defaults to whl-next-asan for ASAN builds, whl-next otherwise.",
+        "--index-type",
+        default=DEFAULT_INDEX_TYPE,
+        choices=INDEX_TYPES,
+        help=f"Python index type for structured publishing (default: "
+        f"{DEFAULT_INDEX_TYPE}). Combined with --build-variant to select the "
+        "v5/rocm/core/<index>/ path segment, e.g. whl-next or whl-next-asan.",
     )
     parser.add_argument(
         "--skip-native-packages",
@@ -350,9 +357,10 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
+        choices=BUILD_VARIANTS,
         help="Build variant (default: release). ASAN builds publish python packages "
-        "to whl-next-asan index and native packages to separate paths. The '-debug' variants "
+        "to the <index-type>-asan index and native packages to separate paths. "
+        "The '-debug' variants "
         "(RelWithDebInfo + line-number debug info) publish to the same paths "
         "as their non-debug counterpart.",
     )
@@ -372,20 +380,14 @@ def main(argv: list[str]) -> None:
             "Skipping python packages for ASAN build (use --structured for ASAN wheels)"
         )
     else:
-        # Determine python index: explicit --python-index takes precedence,
-        # otherwise default to whl-next-asan for ASAN builds, whl-next otherwise.
-        if args.python_index is not None:
-            python_index = args.python_index
-        elif is_asan:
-            python_index = "whl-next-asan"
-        else:
-            python_index = "whl-next"
         publish_python_packages(
             artifacts_root,
             args.release_type,
             backend,
             structured=args.structured,
-            index=python_index,
+            index=get_python_index(
+                args.index_type, build_variant_index_suffix(args.build_variant)
+            ),
         )
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(

@@ -8,7 +8,8 @@ product-local package directories:
 
     <product>/<index>/<normalized-package>/<filename>
 
-where <index> is ``whl``, ``whl-next``, or ``whl-next-asan``. Release stream (dev/nightly/
+where <index> is ``whl`` or ``whl-next``, optionally with a build variant
+suffix (e.g. ``whl-next-asan``). Release stream (dev/nightly/
 prerelease) is selected by the target bucket, never encoded in the path. This
 module computes the per-file destination keys the release publishers use when
 run with ``--structured``; the generator in ``manage_structured.py`` later
@@ -37,12 +38,72 @@ from packaging.utils import (
 # Distribution artifacts placed into package directories.
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
-# Valid aggregate index names (the second path segment).
-# whl: flat pip-installable index (backward-compatible, all device extras)
+# Aggregate index types:
+# whl: flat pip-installable index (explicit dependency on device-all)
 # whl-next: index for gfx-specific builds (explicit device selection)
-# whl-next-asan: ASAN-instrumented wheels for memory error detection
-INDEX_NAMES = ("whl", "whl-next", "whl-next-asan")
-DEFAULT_INDEX = "whl-next"
+INDEX_TYPES = ("whl", "whl-next")
+DEFAULT_INDEX_TYPE = "whl-next"
+
+# Build variant suffixes with their own index, as ``<index-type>-<suffix>``
+# (e.g. ``whl-next-asan``).
+INDEX_BUILD_VARIANT_SUFFIXES = ("asan", "tsan", "debug")
+
+
+def get_python_index(
+    index_type: str = DEFAULT_INDEX_TYPE, build_variant_suffix: str | None = None
+) -> str:
+    """Return the aggregate index name for an index type and build variant.
+
+    ``get_python_index("whl-next")`` -> ``whl-next``;
+    ``get_python_index("whl", "asan")`` -> ``whl-asan``.
+
+    Raises:
+        ValueError: if ``index_type`` or ``build_variant_suffix`` is unknown.
+    """
+    if index_type not in INDEX_TYPES:
+        raise ValueError(
+            f"index_type={index_type!r} is invalid, must be one of {INDEX_TYPES}"
+        )
+    if build_variant_suffix is None:
+        return index_type
+    if build_variant_suffix not in INDEX_BUILD_VARIANT_SUFFIXES:
+        raise ValueError(
+            f"build_variant_suffix={build_variant_suffix!r} is invalid, must be "
+            f"one of {INDEX_BUILD_VARIANT_SUFFIXES}"
+        )
+    return f"{index_type}-{build_variant_suffix}"
+
+
+# Valid aggregate index names (the second path segment).
+INDEX_NAMES = tuple(
+    get_python_index(index_type, suffix)
+    for suffix in (None, *INDEX_BUILD_VARIANT_SUFFIXES)
+    for index_type in INDEX_TYPES
+)
+DEFAULT_INDEX = get_python_index()
+
+# Build variants that publish Python packages (see all_build_variants in
+# amdgpu_family_matrix.py).
+BUILD_VARIANTS = ("release", "asan", "asan-debug", "host-asan", "host-asan-debug")
+
+
+def build_variant_index_suffix(build_variant: str) -> str | None:
+    """Return the index suffix for a build variant, for ``get_python_index``.
+
+    Host ASAN and ``-debug`` (RelWithDebInfo) variants share the ASAN index,
+    matching tarball-asan: ``build_variant_index_suffix("asan-debug")`` ->
+    ``asan``; ``build_variant_index_suffix("release")`` -> ``None``.
+
+    Raises:
+        ValueError: if ``build_variant`` is unknown.
+    """
+    if build_variant not in BUILD_VARIANTS:
+        raise ValueError(
+            f"build_variant={build_variant!r} is invalid, must be one of "
+            f"{BUILD_VARIANTS}"
+        )
+    return "asan" if "asan" in build_variant else None
+
 
 # repo.amd.com release streams and the per-product bucket naming scheme:
 # therock-repo-amd-<stream>-<product>. Centralized here (rather than
@@ -194,7 +255,7 @@ def plan_key_copies(
         source_bucket: Bucket the source keys live in.
         dest_bucket: Destination bucket name.
         product: Product segment (e.g. ``core``).
-        index: Index segment (``whl``, ``whl-next``, or ``whl-next-asan``).
+        index: Index segment (one of ``INDEX_NAMES``, e.g. ``whl-next``).
 
     Returns:
         Planned copies for accepted artifacts, sorted by source key. Only the
