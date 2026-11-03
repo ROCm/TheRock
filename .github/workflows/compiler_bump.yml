@@ -780,7 +780,8 @@ jobs:
   rccl-coco:
     name: RCCL Coco Tests
     needs: [create-branch, setup-linux, publish-linux-artifacts]
-    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.publish-linux-artifacts.result == 'success' }}
+    # Standard, including the daily schedule, runs coco. Quick skips it.
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.publish-linux-artifacts.result == 'success' && (inputs.test_type || 'standard') == 'standard' }}
     permissions:
       contents: read
     uses: ./.github/workflows/rccl_coco.yml
