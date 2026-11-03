@@ -195,19 +195,25 @@ def _append_build_rocm(
             "-- | -- | -- | --",
         ]
     )
-    linux_output_root = None
-    for platform_name in ["linux", "windows"]:
+    for platform_name, config in [
+        ("linux", outputs.builds.linux),
+        ("windows", outputs.builds.windows),
+    ]:
+        if config is None:
+            continue
         output_root = WorkflowOutputRoot.from_workflow_run(
             run_id=ci_inputs.run_id, platform=platform_name
         )
-        if platform_name == "linux":
-            linux_output_root = output_root
         log_url = output_root.log_root_index().https_url
         artifact_url = output_root.artifact_index().https_url
         manifest_url = output_root.manifests_index().https_url
         lines.append(
             f"{platform_name.capitalize()} | {log_url} | {artifact_url} | {manifest_url}"
         )
+    # The workflow-level manifest diff uses Linux storage even without a Linux build.
+    linux_output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=ci_inputs.run_id, platform="linux"
+    )
     manifest_diff_url = linux_output_root.log_file(
         "manifest-diff", "index.html"
     ).https_url
@@ -222,6 +228,9 @@ def _append_build_rocm(
 
 
 def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
+    # TODO(#7731): Show each row's test level once multi_arch_ci consumes it to
+    # schedule PyTorch tests. Today these CI jobs stop after build-time wheel
+    # validation even though the generated matrix carries a test level.
     lines.append("| Platform | Python | PyTorch ref | Families |")
     lines.append("|----------|--------|-------------|----------|")
 
@@ -292,8 +301,12 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("")
 
     # Per-family test runner table
-    lines.append("| Platform | Family | Runner Label | Scope |")
-    lines.append("|----------|--------|--------------|-------|")
+    lines.append(
+        "| Platform | Family | GPU Runner | Multi-GPU Runner | CPU Runner | Scope |"
+    )
+    lines.append(
+        "|----------|--------|------------|------------------|------------|-------|"
+    )
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
@@ -304,9 +317,21 @@ def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
         for entry in per_family:
             family = f"`{entry['amdgpu_family']}`"
             runner = f"`{entry['test-runs-on']}`" if entry["test-runs-on"] else "—"
+            multi_gpu_runner = (
+                f"`{entry['test-runs-on-multi-gpu']}`"
+                if entry.get("test-runs-on-multi-gpu")
+                else "—"
+            )
+            cpu_runner = (
+                f"`{entry['test-runs-on-cpu']}`"
+                if entry.get("test-runs-on-cpu")
+                else "—"
+            )
             if entry.get("sanity_check_only_for_family"):
                 scope = "sanity check only"
             else:
                 scope = test_rocm.test_type
-            lines.append(f"| {platform} | {family} | {runner} | {scope} |")
+            lines.append(
+                f"| {platform} | {family} | {runner} | {multi_gpu_runner} | {cpu_runner} | {scope} |"
+            )
     lines.append("")

@@ -185,6 +185,8 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
                 old_version,
                 old_rocm_version,
                 new_rocm_version,
+                # Same version keeps these tests on the ROCm-only rewrite.
+                new_version=Version(old_version),
                 float_rocm_dependency_patch=float_rocm_dependency_patch,
             )
             return metadata.read_text(encoding="utf-8")
@@ -578,6 +580,169 @@ class ComputeNewVersionStrTest(unittest.TestCase):
             "rocm7.13.0",
         )
 
+    def test_nothing_to_promote_returns_none(self):
+        for version, src, dest in (
+            ("7.13.0", "rc", "release"),
+            ("7.13.0rc1", "a", "release"),
+            ("7.13.0rc1", "rc", "rc1"),
+        ):
+            with self.subTest(version=version, src=src, dest=dest):
+                self.assertIsNone(ptf.compute_new_version_str(version, src, dest))
+
+
+DEV_SHA = "2a7253fc74e48c0b30163e378833f082a32eb3c9"
+
+
+class DevVersionTest(unittest.TestCase):
+    """`--src-version-type=dev`: version strings, raw file lines, pins and package files."""
+
+    def test_compute_new_version_str(self):
+        # (normalized wheel version, keep_git, expected)
+        cases = [
+            ("2.12.0+git1a2b3c4d.rocm10.0.0rc4", False, "2.12.0+rocm10.0.0"),
+            ("2.12.0+git1a2b3c4d.rocm10.0.0", False, "2.12.0+rocm10.0.0"),
+            (
+                f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}",
+                False,
+                "2.12.0+rocm10.2.0",
+            ),
+            (
+                f"0.29.0a0+gitb7d540b2.devrocm10.2.0.dev0.{DEV_SHA}",
+                False,
+                "0.29.0+rocm10.2.0",
+            ),
+            (
+                f"3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}",
+                True,
+                "3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("1.12.0+rocm10.0.0rc4", False, "1.12.0+rocm10.0.0"),
+            # Nightly ROCm marker on the ROCm version.
+            ("2.12.0+git9ccf2fd0.rocm10.2.0a20261006", False, "2.12.0+rocm10.2.0"),
+            ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0+rocm10.2.0"),
+            (
+                "3.8.0+git669b31ac.rocm10.2.0a20260929",
+                True,
+                "3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("2.10.0+rocm7.13.0a20260430", False, "2.10.0+rocm7.13.0"),
+            (f"10.2.0.dev0+{DEV_SHA}", False, "10.2.0"),
+            # Nothing to strip: skipped, not an error.
+            ("1.12.0+rocm10.0.0", False, None),
+            ("3.8.0+git669b31ac.rocm10.0.0", True, None),
+        ]
+        for version, keep_git, expected in cases:
+            with self.subTest(version=version):
+                self.assertEqual(
+                    ptf.compute_new_version_str(version, "dev", "release", keep_git),
+                    expected,
+                )
+
+    def test_strip_dev_markers_on_raw_lines(self):
+        # (raw file line, keep_git, expected)
+        cases = [
+            (
+                f"__version__ = '2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-{DEV_SHA}'",
+                False,
+                "__version__ = '2.12.0+rocm10.2.0'",
+            ),
+            (
+                f"triton==3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}",
+                True,
+                "triton==3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'", False, None),
+            (
+                'Requires-Dist: amd-torch-device-gfx942; extra == "device-gfx942"',
+                False,
+                None,
+            ),
+            ("check_version='10.0.0rc4')", False, None),
+        ]
+        for line, keep_git, expected in cases:
+            with self.subTest(line=line):
+                self.assertEqual(
+                    ptf.strip_dev_markers(line, keep_git), expected or line
+                )
+
+    def test_metadata_requires_dist_pins(self):
+        old = f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}"
+        new = "2.12.0+rocm10.2.0"
+        body = f"""\
+            Metadata-Version: 2.1
+            Name: torch
+            Version: {old}
+            Requires-Dist: triton==3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}
+            Requires-Dist: rocm[libraries]==10.2.0.dev0+{DEV_SHA}
+            Provides-Extra: device-gfx942
+            Requires-Dist: amd-torch-device-gfx942 == {old}; extra == "device-gfx942"
+            """
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_info = Path(tmp) / f"torch-{old}.dist-info"
+            dist_info.mkdir()
+            metadata = dist_info / "METADATA"
+            metadata.write_text(textwrap.dedent(body), encoding="utf-8")
+            ptf.update_metadata_rocm_requires_dist(
+                Path(tmp), "torch", old, "10.2.0", "10.2.0", new_version=Version(new)
+            )
+            pins = [
+                line
+                for line in metadata.read_text(encoding="utf-8").splitlines()
+                if line.startswith("Requires-Dist:")
+            ]
+        self.assertEqual(
+            pins,
+            [
+                "Requires-Dist: triton==3.8.0+git669b31ac.rocm10.2.0",
+                "Requires-Dist: rocm[libraries]==10.2.0",
+                'Requires-Dist: amd-torch-device-gfx942 == 2.12.0+rocm10.2.0; extra == "device-gfx942"',
+            ],
+        )
+
+    def test_wheel_change_extra_files(self):
+        # (package, old version, new version, {file: (before, after)})
+        cases = [
+            (
+                "torch",
+                f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}",
+                "2.12.0+rocm10.2.0",
+                {
+                    "torch/version.py": (
+                        f"__version__ = '2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-{DEV_SHA}'\n"
+                        "git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'\n",
+                        "__version__ = '2.12.0+rocm10.2.0'\n"
+                        "git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'\n",
+                    ),
+                    "torch/_rocm_init.py": (
+                        f"check_version='10.2.0.dev0+{DEV_SHA}')\n",
+                        "check_version='10.2.*')\n",
+                    ),
+                },
+            ),
+            (
+                "apex",
+                f"1.12.0+devrocm10.2.0.dev0.{DEV_SHA}",
+                "1.12.0+rocm10.2.0",
+                {
+                    "apex/git_version_info_installed.py": (
+                        f"version='1.12.0+devrocm10.2.0.dev0-{DEV_SHA}+ad1376f'\n",
+                        "version='1.12.0+rocm10.2.0+ad1376f'\n",
+                    ),
+                },
+            ),
+        ]
+        for package, old, new, files in cases:
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as tmp:
+                new_dir = Path(tmp) / f"{package}-{new}"
+                for rel, (before, _) in files.items():
+                    (new_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+                    (new_dir / rel).write_text(before, encoding="utf-8")
+                ptf.wheel_change_extra_files(
+                    new_dir, Version(old), Version(new), "release"
+                )
+                for rel, (_, after) in files.items():
+                    self.assertEqual((new_dir / rel).read_text(encoding="utf-8"), after)
+
 
 class ParseArgumentsMutexTest(unittest.TestCase):
     """`--skip-version-promotion` is mutex with the version flags; sentinel
@@ -587,20 +752,20 @@ class ParseArgumentsMutexTest(unittest.TestCase):
         return ptf.parse_arguments(argv)
 
     def test_defaults_resolve_after_mutex_check(self):
-        ns = self._parse(["--input-dir", "/tmp"])
+        ns = self._parse(["--input-dir", "/fake"])
         self.assertEqual(ns.dest_version, "release")
         self.assertEqual(ns.src_version_type, "rc")
 
     def test_skip_version_promotion_requires_multi_arch_targets(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--skip-version-promotion"])
+            self._parse(["--input-dir", "/fake", "--skip-version-promotion"])
 
     def test_skip_version_promotion_rejects_dest_version(self):
         with self.assertRaises(SystemExit):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fake",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -614,7 +779,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fake",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -625,16 +790,16 @@ class ParseArgumentsMutexTest(unittest.TestCase):
 
     def test_dest_version_must_be_recognised(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--dest-version", "garbage"])
+            self._parse(["--input-dir", "/fake", "--dest-version", "garbage"])
 
     def test_dest_version_a_must_be_valid_calendar_date(self):
         with self.assertRaises(SystemExit):
             # Feb 30 doesn't exist.
-            self._parse(["--input-dir", "/tmp", "--dest-version", "a20260230"])
+            self._parse(["--input-dir", "/fake", "--dest-version", "a20260230"])
 
     def test_multi_arch_targets_passthrough(self):
         ns = self._parse(
-            ["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"]
+            ["--input-dir", "/fake", "--multi-arch-targets", "gfx1010,gfx1201"]
         )
         self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
 

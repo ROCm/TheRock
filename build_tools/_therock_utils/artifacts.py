@@ -25,7 +25,9 @@ build directory that its contents are subset from.
 
 from typing import Callable, Optional, Sequence
 
+import filecmp
 import os
+import stat
 import re
 from pathlib import Path, PurePosixPath
 
@@ -113,6 +115,32 @@ class ArtifactCatalog:
                     self.artifact_basedirs.append((name, full_path))
                     self.pm.add_basedir(full_path)
 
+    def validated_matches(self) -> dict[str, os.DirEntry[str]]:
+        """Merge roots only after validating collisions with source provenance.
+
+        Device packaging must call this instead of the last-wins pattern view.
+        Check directories too so a file/directory conflict cannot hide descendants.
+        """
+        entries: dict[str, os.DirEntry[str]] = {}
+        for _, basedir in self.artifact_basedirs:
+            root = PatternMatcher()
+            root.add_basedir(basedir)
+            for relpath, entry in root.all.items():
+                previous = entries.get(relpath)
+                if previous is not None:
+                    if not _identical_entries(previous, entry):
+                        raise ValueError(
+                            f"Conflicting device path {relpath}: "
+                            f"{previous.path} and {entry.path}"
+                        )
+                else:
+                    entries[relpath] = entry
+        return {
+            relpath: entry
+            for relpath, entry in entries.items()
+            if self.pm.predicate.matches(relpath, entry)
+        }
+
     @property
     def artifact_names(self) -> list[ArtifactName]:
         return [an for an, _ in self.artifact_basedirs]
@@ -124,6 +152,28 @@ class ArtifactCatalog:
             for an in self.artifact_names
             if an.target_family != "generic"
         )
+
+
+def _identical_entries(first: os.DirEntry[str], second: os.DirEntry[str]) -> bool:
+    first_type = stat.S_IFMT(first.stat(follow_symlinks=False).st_mode)
+    second_type = stat.S_IFMT(second.stat(follow_symlinks=False).st_mode)
+    if first_type != second_type:
+        return False
+    if stat.S_ISDIR(first_type):
+        return True
+    if stat.S_ISLNK(first_type):
+        if os.readlink(first.path) != os.readlink(second.path):
+            return False
+        # Runtime packaging resolves links, so equal link text alone is not
+        # enough: identical relative links can refer to different payloads.
+        first_path = Path(first.path).resolve(strict=True)
+        second_path = Path(second.path).resolve(strict=True)
+        if first_path.is_dir() or second_path.is_dir():
+            return first_path == second_path
+        return filecmp.cmp(first_path, second_path, shallow=False)
+    if stat.S_ISREG(first_type):
+        return filecmp.cmp(first.path, second.path, shallow=False)
+    raise ValueError(f"Unsupported device entry type: {first.path}")
 
 
 class ArtifactPopulator:

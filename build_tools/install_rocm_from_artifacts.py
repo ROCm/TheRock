@@ -27,6 +27,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-integration-tests | --no-hipdnn-integration-tests]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--hipfile | --no-hipfile]
+    [--hrr | --no-hrr]
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--hipblasltprovider | --no-hipblasltprovider]
@@ -51,6 +52,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
+    [--dev | --no-dev]
     [--tests | --no-tests]
     [--base-only]
 
@@ -106,6 +108,16 @@ Examples:
         --release 7.11.0a20260119 \
         --amdgpu-family gfx110X-all \
         --dry-run
+    ```
+- Adds `--dev` to any selection to also download the headers and CMake configs
+  needed to build against it (the `_dev` component of every selected artifact
+  and of the base artifacts), shown here for `--blas`:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --run-id 14474448215 \
+        --amdgpu-family gfx94X-dcgpu \
+        --blas \
+        --dev
     ```
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
 
@@ -300,7 +312,9 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir, filter="tar")
+        # Preserve packaged modes and ownership; the data filter changes them.
+        # Only extract trusted ROCm artifacts: tar permits external link targets.
+        extracted_tar_file.extractall(output_dir, filter="tar")  # nosec B202
     destination.unlink()
 
 
@@ -333,6 +347,22 @@ def _retrieve_multiarch_tarball(
         s3_client.download_fileobj(release_bucket, s3_key, file)
 
     _untar_files(output_dir, destination)
+
+
+def _dev_component_patterns(artifact_patterns: list[str]) -> list[str]:
+    """Returns the missing '_dev' counterparts of '<artifact>_<component>' patterns.
+
+    Order is preserved and duplicates are dropped, so a list naming both
+    '<artifact>_lib' and '<artifact>_run' yields a single '<artifact>_dev', and
+    an artifact whose '_dev' component is already requested yields nothing.
+    """
+    dev_patterns = []
+    for pattern in artifact_patterns:
+        artifact_name, _, _component = pattern.rpartition("_")
+        dev_pattern = f"{artifact_name}_dev"
+        if dev_pattern not in artifact_patterns and dev_pattern not in dev_patterns:
+            dev_patterns.append(dev_pattern)
+    return dev_patterns
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -394,10 +424,26 @@ def retrieve_artifacts_by_run_id(args):
         "host-suite-sparse_lib",
     ]
 
+    # WSL has no amdgpu kernel driver: the runtime reaches the GPU (/dev/dxg)
+    # through the WSL libhsakmt that the wsl-rocdxg stage builds. The WSL kernel
+    # release ("...-microsoft-standard-WSL2") identifies it, also in containers.
+    if "microsoft" in platform.release().lower():
+        base_artifact_patterns.append("wsl-rocdxg_lib")
+
+    # Building against a narrowed install needs the headers and CMake package
+    # configs that live in the _dev components, so --dev pairs each base
+    # artifact with its _dev counterpart (amd-llvm_dev, base_dev, ...).
+    # Otherwise those only arrive as a side effect of an unrelated selection
+    # such as --debug-tools.
+    if args.dev:
+        base_artifact_patterns.extend(_dev_component_patterns(base_artifact_patterns))
+
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.sanity,
+            args.dev,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -406,6 +452,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_integration_tests,
             args.hipdnn_samples,
             args.hipfile,
+            args.hrr,
             args.miopen,
             args.miopenprovider,
             args.hiptensor,
@@ -425,6 +472,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_systems,
             args.rocprofiler_systems_examples,
             args.rocrtst,
+            args.hip_tests,
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
@@ -438,6 +486,9 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.sanity:
+            argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
+            argv.append("hipify_run")  # hipify-clang for the HIPIFY sanity test
         if args.aqlprofile:
             extra_artifacts.append("aqlprofile")
         if args.blas:
@@ -478,6 +529,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.hipfile:
             extra_artifacts.append("hipfile")
             extra_artifacts.append("sysdeps-util-linux")
+        if args.hrr:
+            # core-hrr has no _lib component; hrr-playback is in _run.
+            argv.append("core-hrr_run")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
@@ -545,14 +599,23 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
-            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            # Contains executables (rocsys, rocprof-sys-run, rocprof-sys-instrument, etc.)
             argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems links libprofiler-hub.so.0 at runtime.
+            argv.append("profiler-hub_lib")
             if args.tests:
                 # Tests need version.h for rocprofiler-sdk version detection.
                 argv.append("rocprofiler-sdk_dev")
+            # librocprof-sys.so dlopens libhipfile.so.0 on the first hipFile
+            # telemetry sample.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocprofiler_systems_examples:
             # Only a _test artifact is produced
             argv.append("rocprofiler-systems-examples_test")
+            # The hipFile examples link libhipfile.so.0 directly.
+            extra_artifacts.append("hipfile")
+            extra_artifacts.append("sysdeps-util-linux")
         if args.rocrtst:
             extra_artifacts.append("rocrtst")
             # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
@@ -561,6 +624,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocalution:
             extra_artifacts.append("rocalution")
             argv.append("rocalution_dev")
+        if args.hip_tests:
+            # Only a _test artifact is produced; it carries share/hip/catch_tests.
+            argv.append("core-hiptests_test")
         if args.kfdtest:
             extra_artifacts.append("kfdtest")
             # kfdtest depends on llvm-dev
@@ -616,11 +682,13 @@ def retrieve_artifacts_by_run_id(args):
                 # extra_artifacts expansion below only pulls _lib/_test).
                 argv.append("rand_dev")
 
-        # Fetch _lib (always) and _test (when --tests) for each artifact.
-        # Some projects have self-contained _test archives (just test
-        # binaries), while others may also need executables or data from
+        # Fetch _lib (always), _dev (when --dev) and _test (when --tests) for
+        # each artifact. Some projects have self-contained _test archives (just
+        # test binaries), while others may also need executables or data from
         # _run. Add those explicitly above via argv.append("<name>_run").
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
+        if args.dev:
+            extra_artifact_patterns.extend([f"{a}_dev" for a in extra_artifacts])
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
 
@@ -1000,6 +1068,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--hrr",
+        default=False,
+        help="Include 'hrr' artifacts (hrr-playback)",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocrtst",
         default=False,
         help="Include 'rocrtst' artifacts",
@@ -1017,6 +1092,13 @@ def main(argv):
         "--kfdtest",
         default=False,
         help="Include 'kfdtest' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hip-tests",
+        default=False,
+        help="Include artifacts needed to build and run 'hip-tests'",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -1049,12 +1131,26 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--dev",
+        default=False,
+        help="Include the development ('_dev') artifacts (headers, CMake package configs) "
+        "of the base artifacts and of every enabled library",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--tests",
         default=False,
         help="Include all test artifacts for enabled libraries",
         action=argparse.BooleanOptionalAction,
     )
 
+    artifacts_group.add_argument(
+        "--sanity",
+        default=False,
+        help="Include base artifacts, clinfo, and hipify-clang for sanity tests",
+        action=argparse.BooleanOptionalAction,
+    )
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )

@@ -30,6 +30,7 @@ import json
 import subprocess
 import sys
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -92,8 +93,14 @@ def checkout_project(
 def download_manifest(*, manifest_url: str, output_path: Path) -> Path:
     """Download a manifest URL to output_path."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if urlsplit(manifest_url).scheme != "https" or not urlsplit(manifest_url).netloc:
+        raise ValueError(f"Expected an HTTPS manifest URL: {manifest_url}")
     log(f"Downloading manifest: {manifest_url} -> {output_path}")
-    urllib.request.urlretrieve(manifest_url, output_path)
+    urllib.request.urlretrieve(
+        manifest_url,
+        output_path,
+        # HTTPS URL checked above.
+    )  # nosec B310
     if not output_path.is_file() or output_path.stat().st_size == 0:
         raise RuntimeError(f"Failed to download manifest: {manifest_url}")
     return output_path

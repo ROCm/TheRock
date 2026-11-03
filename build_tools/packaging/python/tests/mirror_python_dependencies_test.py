@@ -766,3 +766,29 @@ def test_mirror_command_resolves_and_uploads_snapshot(
     assert "`test-bucket`: published; uploaded 1, refreshed 0, skipped 0" in (
         summary_text
     )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/wheel.whl",
+        "file:///fixtures/wheel.whl",
+        "https:///wheel.whl",
+    ],
+)
+def test_download_wheel_rejects_non_https(url, tmp_path, monkeypatch):
+    wheel = PypiWheel(
+        filename=_WHEEL_FILENAME,
+        url=url,
+        sha256=_WHEEL_SHA256,
+        size=len(_WHEEL_BYTES),
+        version=mirror.Version("2.0.0"),
+    )
+
+    def unexpected_download(*args, **kwargs):
+        pytest.fail("Non-HTTPS input reached the downloader")
+
+    monkeypatch.setattr(mirror, "urlopen", unexpected_download)
+    with pytest.raises(ValueError, match="HTTPS"):
+        mirror.download_wheel(wheel, tmp_path / _WHEEL_FILENAME)
+    assert not (tmp_path / _WHEEL_FILENAME).exists()

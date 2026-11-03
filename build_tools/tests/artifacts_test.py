@@ -11,7 +11,11 @@ import sys
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifacts import ArtifactName, prebuilt_marker_relpath
+from _therock_utils.artifacts import (
+    ArtifactCatalog,
+    ArtifactName,
+    prebuilt_marker_relpath,
+)
 import _therock_utils.artifact_builder as builder
 
 
@@ -40,6 +44,46 @@ class TmpDirTestCase(unittest.TestCase):
         p = self.temp_dir / relpath
         p.parent.mkdir(parents=True, exist_ok=True)
         p.touch()
+
+
+class ArtifactCatalogValidationTest(TmpDirTestCase):
+    def setUp(self):
+        super().setUp()
+        self.artifacts = self.temp_dir / "artifacts"
+        self.sources = []
+        for target in ("gfx1100", "gfx1101"):
+            root = self.artifacts / f"blas_lib_{target}"
+            stage = root / "stage"
+            stage.mkdir(parents=True)
+            (root / "artifact_manifest.txt").write_text("stage\n")
+            (stage / "data").write_text("identical")
+            self.sources.append(stage)
+
+    def test_identical_files_are_deduplicated(self):
+        matches = ArtifactCatalog(self.artifacts).validated_matches()
+        self.assertEqual(list(matches), ["data"])
+
+    def test_conflicting_contents_are_rejected(self):
+        (self.sources[1] / "data").write_text("different")
+        with self.assertRaisesRegex(ValueError, "Conflicting device path data"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_file_directory_overlap_is_rejected(self):
+        (self.sources[1] / "data").unlink()
+        (self.sources[1] / "data").mkdir()
+        with self.assertRaisesRegex(ValueError, "Conflicting device path data"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_file_symlink_overlap_is_rejected(self):
+        (self.sources[0] / "link").symlink_to("data")
+        (self.sources[1] / "link").write_text("identical")
+        with self.assertRaisesRegex(ValueError, "Conflicting device path link"):
+            ArtifactCatalog(self.artifacts).validated_matches()
+
+    def test_identical_symlinks_are_accepted(self):
+        for source in self.sources:
+            (source / "link").symlink_to("data")
+        self.assertIn("link", ArtifactCatalog(self.artifacts).validated_matches())
 
 
 class ArtifactNameTest(TmpDirTestCase):

@@ -22,6 +22,11 @@ function(therock_sanitizer_configure
     return()
   endif()
 
+  # A wrapper that launches an independent CMake, Meson, or Autotools build
+  # must propagate the sanitizer compile and link options into that inner
+  # build. Forwarding THEROCK_SANITIZER alone communicates policy state but
+  # does not instrument the inner artifacts.
+
   # Enabled.
   if(NOT compiler_toolchain)
     message(WARNING "Sub-project ${subproject_name} built with the system toolchain does not support sanitizer ${_sanitizer}")
@@ -101,7 +106,7 @@ function(therock_sanitizer_configure
     # Device-side instrumentation: applied for full ASAN and TSAN, not HOST_ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "TSAN")
-      string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
+      string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx90a|gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()

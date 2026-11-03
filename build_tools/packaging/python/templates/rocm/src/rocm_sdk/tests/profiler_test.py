@@ -63,6 +63,7 @@ CONSOLE_SCRIPT_TESTS = [
     ConsoleScriptTest(
         "rocprof-sys-instrument", ["--version"], "rocprof-sys-instrument", True
     ),
+    ConsoleScriptTest("rocsys", ["--version"], "rocsys", True),
 ]
 
 
@@ -216,3 +217,15 @@ class ROCmProfilerTest(unittest.TestCase):
                         f"Expected '{test.expected_text}' in console-script "
                         f"{test.script_name} output:\n{output_text}"
                     )
+
+    def test_rocprof_trace_decoder_python_api(self):
+        """The packaged rocprof_trace_decoder API must be importable.
+
+        Skips on ROCm builds whose rocprof-trace-decoder ships no Python API.
+        """
+        try:
+            trace_decoder_mod = importlib.import_module("rocprof_trace_decoder")
+        except ImportError as e:
+            raise unittest.SkipTest(f"rocprof_trace_decoder is not installed: {e}")
+
+        utils.assert_is_physical_package(trace_decoder_mod)

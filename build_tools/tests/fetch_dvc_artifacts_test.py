@@ -27,7 +27,7 @@ import fetch_dvc_artifacts as fda
 
 
 def _md5_hex(data: bytes) -> str:
-    return hashlib.md5(data).hexdigest()
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
 
 
 class TestParseDvcPointer(unittest.TestCase):

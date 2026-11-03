@@ -180,6 +180,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    mxDataGenerator
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
@@ -301,7 +302,7 @@ if(THEROCK_ENABLE_SPARSE)
     BUILD_DEPS
       rocm-cmake
       rocBLAS
-      rocPRIM
+      ${_prim_build_dep}
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -439,7 +440,7 @@ if(THEROCK_ENABLE_SOLVER)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        rocPRIM
+        ${_prim_build_dep}
         therock-fmt
         therock-googletest
       RUNTIME_DEPS
