@@ -7,19 +7,28 @@
 name: ROCm PR Bot Scan
 
 on:
-  # SECURITY: pull_request_target runs in the base-repo context so secrets
-  # are available even for fork PRs. The called workflow never checks out
-  # or executes PR head code directly.
-  pull_request_target:
+  # SECURITY: pull_request_target runs in the BASE-repo context, so secrets and
+  # a write token are available even for PRs opened from FORKS.
+  #
+  # This is SAFE here ONLY because this workflow:
+  #   • NEVER checks out or executes PR head code (see checkout step below),
+  #   • runs the TRUSTED policy_check.py / policy.yml from the base branch, and
+  #   • reads all PR data via the GitHub API.
+  # Do NOT add build/test/install steps that run PR-provided code, and do NOT
+  # change the checkout to the PR head — that would create a "pwn request".
+  # Refs:
+  #   https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+  #   https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, synchronize, reopened, ready_for_review, edited]
   # Re-run when the required check workflow finishes so the results table flips
-  # from ⏳ Pending to ✅/❌ — without the bot ever waiting or polling. We use
+  # from ⏳ Pending to PASS/FAIL — without the bot ever waiting or polling. We use
   # `workflow_run` (NOT `check_run`): GitHub deliberately suppresses `check_run`
   # re-triggers for checks created by Actions' GITHUB_TOKEN (recursion guard),
   # so the table would otherwise stay ⏳ until a human pushes/edits the PR.
   # `workflow_run` is not suppressed and runs in the base-repo context with
   # secrets. The watched name must match the pre-commit workflow's `name:`.
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["pre-commit"]
     types: [completed]
 
