@@ -127,7 +127,8 @@ COMPILED_OUTCOMES = RAN_OUTCOMES | {OUTCOME_COMPILED, OUTCOME_XFAIL_NOW_COMPILES
 VERDICT_EXPECTED = "expected"
 VERDICT_UNEXPECTED = "unexpected"
 KNOWN_VERDICTS = {VERDICT_EXPECTED, VERDICT_UNEXPECTED}
-# A case that never reaches the shim; the harness reports it to ctest as skipped.
+# A case that never reaches the cuDNN compatibility shim; the harness reports it
+# to ctest as skipped.
 TIER_VACUOUS = "VACUOUS"
 
 logging.basicConfig(level=logging.INFO)
@@ -329,15 +330,6 @@ def is_cudnn_compatibility_installed(frontend_config: Path) -> bool:
     return value not in CMAKE_FALSE_VALUES and not value.endswith("-NOTFOUND")
 
 
-def append_step_summary(text: str):
-    """Append to the GitHub job summary; a no-op outside GitHub Actions."""
-    step_summary = os.getenv("GITHUB_STEP_SUMMARY")
-    if step_summary:
-        with open(step_summary, "a", encoding="utf-8") as summary_file:
-            summary_file.write(text)
-            summary_file.write("\n")
-
-
 def report_skip() -> int:
     """Announce that nothing was tested, and decide whether that is fatal."""
     reason = (
@@ -347,7 +339,6 @@ def report_skip() -> int:
     )
     logging.info(reason)
     print(f"::notice title=cuDNN samples skipped::{reason}")
-    append_step_summary(f"## hipDNN cuDNN sample corpus: skipped\n\n{reason}\n")
     if os.getenv("HIPDNN_CUDNN_SAMPLES_REQUIRE_FLAG") == "1":
         print(
             "::error title=cuDNN samples required but skipped::"
@@ -555,15 +546,10 @@ def format_report(
 
 
 def emit_report(build_dir: Path):
-    """Aggregate the sidecars into the job summary and onto stdout."""
+    """Aggregate the sidecars and print the report to the job log."""
     entries, anomalies = load_sidecars(build_dir / REPORT_DIR_NAME)
     counts = summarize(entries)
-    report = format_report(entries, anomalies, counts, summarize_cases(entries))
-
-    # Always print: the step summary only exists under GitHub Actions, and a
-    # local run needs to be readable too.
-    print(report)
-    append_step_summary(report)
+    print(format_report(entries, anomalies, counts, summarize_cases(entries)))
 
     for anomaly in anomalies:
         logging.warning(f"Report anomaly: {anomaly}")
