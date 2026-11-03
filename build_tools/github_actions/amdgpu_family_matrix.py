@@ -182,10 +182,16 @@ all_build_variants = {
             "build_variant_cmake_preset": "",
         },
         # full ASAN builds are run on nightly
+        # sanitizer_triggers: which (trigger -> sources) activate this variant
+        #   Sources are submodule basenames or external repo short names.
+        #   Issue: https://github.com/ROCm/TheRock/issues/9366
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+            "sanitizer_triggers": {
+                "nightly": ["rocm-libraries"],
+            },
         },
         # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
@@ -193,6 +199,9 @@ all_build_variants = {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+            "sanitizer_triggers": {
+                "submodule_bump": ["rocm-systems", "rocm-libraries"],
+            },
         },
         # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
         # Used for nightly and release ASAN builds where stack traces need source line info.
@@ -200,6 +209,10 @@ all_build_variants = {
             "build_variant_label": "asan-debug",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan-debug",
+            "sanitizer_triggers": {
+                "submodule_bump": ["amd-llvm"],
+                "nightly": ["rockrel"],
+            },
         },
         "host-asan-debug": {
             "build_variant_label": "host-asan-debug",
@@ -220,6 +233,17 @@ all_build_variants = {
         },
     },
 }
+
+
+def get_sanitizer_variant_for_trigger(source: str, trigger: str) -> str | None:
+    """Return the sanitizer variant matching (source, trigger), or None."""
+    for variant_name, variant_config in all_build_variants.get("linux", {}).items():
+        triggers = variant_config.get("sanitizer_triggers", {})
+        sources = triggers.get(trigger, [])
+        if source in sources:
+            return variant_name
+    return None
+
 
 """
 amdgpu_family_info_matrix dictionary fields:
