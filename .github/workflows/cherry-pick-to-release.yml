@@ -15,7 +15,7 @@ on:
           - rocm-systems
           - rocm-libraries
       commits:
-        description: Commit SHAs from the target repository's default branch
+        description: Default-branch commit SHAs (7-40 hex), separated by spaces or commas
         required: true
         type: string
       release_branch:
@@ -23,7 +23,7 @@ on:
         required: true
         type: string
       jira_id:
-        description: JIRA issue key (required for non-BKC release branches)
+        description: JIRA key like AIRDEL-1234 (required for regular release branches)
         required: false
         type: string
       dry_run:
