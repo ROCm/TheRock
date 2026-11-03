@@ -22,7 +22,7 @@ on:
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, synchronize, reopened, ready_for_review, edited]
   # Re-run when the required check workflow finishes so the results table flips
-  # from ⏳ Pending to PASS/FAIL — without the bot ever waiting or polling. We use
+  # from Pending to PASS/FAIL — without the bot ever waiting or polling. We use
   # `workflow_run` (NOT `check_run`): GitHub deliberately suppresses `check_run`
   # re-triggers for checks created by Actions' GITHUB_TOKEN (recursion guard),
   # so the table would otherwise stay ⏳ until a human pushes/edits the PR.
