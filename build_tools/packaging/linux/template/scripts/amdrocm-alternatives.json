@@ -102,6 +102,12 @@
     ],
     "binaries": [
       "clinfo"
+    ],
+    "icd_files": [
+      {
+        "name": "amdocl64",
+        "library": "lib/opencl/libamdocl64.so"
+      }
     ]
   }
 }

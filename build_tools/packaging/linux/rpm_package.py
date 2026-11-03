@@ -260,6 +260,7 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     binaries = json_pkg_config["binaries"]
     core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
     llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+    icd_files = json_pkg_config.get("icd_files", [])
 
     unsupported_scripts = set(scripts) - set(rpm_sections)
     if unsupported_scripts:
@@ -278,6 +279,7 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         "binaries": binaries,
         "core_symlinks": core_symlinks,
         "llvm_symlinks": llvm_symlinks,
+        "icd_files": icd_files,
     }
 
     rpm_script_sections = {}

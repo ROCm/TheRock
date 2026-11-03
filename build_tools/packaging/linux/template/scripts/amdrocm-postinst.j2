@@ -131,6 +131,37 @@ do_update_alternatives() {
     true
 }
 
+do_register_icd() {
+    # Register OpenCL ICD vendor files in the system-wide vendors directory.
+    #
+    # The ICD loader only scans /etc/OpenCL/vendors/, so a vendor file shipped
+    # under the relocatable install prefix is never discovered. The path written
+    # here must be absolute: the library lives in lib/opencl/, which is not on
+    # the default dynamic loader search path, so a bare soname fails to dlopen
+    # and clGetPlatformIDs returns -1001 (CL_PLATFORM_NOT_FOUND_KHR).
+    #
+    # The file name is version-qualified so that side-by-side installs of
+    # different ROCm versions each register their own implementation rather
+    # than overwriting one another.
+{% if target == "deb" %}
+    PKG_INSTALL_PREFIX={{ install_prefix }}
+{% else %}
+    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+{% endif %}
+
+{% for icd in icd_files | default([]) %}
+    if [ -e "$PKG_INSTALL_PREFIX/{{ icd.library }}" ]; then
+        install -d /etc/OpenCL/vendors
+        echo "$PKG_INSTALL_PREFIX/{{ icd.library }}" \
+            > "/etc/OpenCL/vendors/{{ icd.name }}-{{ version_major }}.{{ version_minor }}.icd"
+    else
+        echo "$PKG_INSTALL_PREFIX/{{ icd.library }} not found, skipping ICD registration" >&2
+    fi
+{% endfor %}
+
+    true
+}
+
 if [ -e /etc/os-release ] &&
    source /etc/os-release &&
    is_debian_like "${ID_LIKE:-$ID}"
@@ -138,6 +169,7 @@ then
     case "$1" in
         configure)
             do_update_alternatives
+            do_register_icd
             ;;
 
         abort-upgrade|abort-remove|abort-deconfigure)
@@ -150,4 +182,5 @@ then
     esac
 else
     do_update_alternatives
+    do_register_icd
 fi
