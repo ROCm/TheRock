@@ -370,8 +370,8 @@ disable_platforms = ["windows"]
 [artifact_groups.fortran-bindings]
 description = "Fortran bindings for the ROCm libraries"
 type = "generic"
-artifact_group_deps = ["compiler", "hip-runtime", "profiler-core"]
-source_sets = ["rocm-systems"]  # projects/fortran is in rocm-systems
+artifact_group_deps = ["compiler", "hip-runtime", "profiler-core", "math-libs"]
+source_sets = ["rocm-systems", "rocm-libraries"]
 disable_platforms = ["windows"]
 
 # ==============================================================================
@@ -949,8 +949,6 @@ disable_platforms = ["windows"]
 # ==============================================================================
 # Fortran bindings (bindings/fortran)
 # ==============================================================================
-# Each artifact wraps one domain of libraries. The bindings build in their own
-# stage, after the libraries they wrap, never inside those libraries' builds.
 
 [artifacts.runtime-fortran]
 artifact_group = "fortran-bindings"
@@ -958,4 +956,39 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
 feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
-source_paths = ["fortran"]  # rocm-systems bindings/fortran: HIP and ROCTx
+source_paths = ["fortran"]
+
+[artifacts.blas-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["blas", "runtime-fortran"]
+feature_group = "FORTRAN_BINDINGS"
+disable_platforms = ["windows"]
+
+[artifacts.solver-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["solver", "blas-fortran", "runtime-fortran"]
+feature_group = "FORTRAN_BINDINGS"
+disable_platforms = ["windows"]
+
+[artifacts.sparse-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["sparse", "runtime-fortran"]
+feature_group = "FORTRAN_BINDINGS"
+disable_platforms = ["windows"]
+
+[artifacts.fft-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["fft", "runtime-fortran"]
+feature_group = "FORTRAN_BINDINGS"
+disable_platforms = ["windows"]
+
+[artifacts.rand-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["rand", "runtime-fortran"]
+feature_group = "FORTRAN_BINDINGS"
+disable_platforms = ["windows"]

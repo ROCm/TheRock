@@ -1,0 +1,11 @@
+[components.dev."bindings/fortran/rocfft-fortran/stage"]
+include = [
+  "share/rocfft/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hipfft-fortran/stage"]
+include = [
+  "share/hipfft/fortran/**",
+]
+optional = true

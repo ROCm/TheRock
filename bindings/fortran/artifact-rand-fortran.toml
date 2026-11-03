@@ -1,0 +1,11 @@
+[components.dev."bindings/fortran/rocrand-fortran/stage"]
+include = [
+  "share/rocrand/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hiprand-fortran/stage"]
+include = [
+  "share/hiprand/fortran/**",
+]
+optional = true

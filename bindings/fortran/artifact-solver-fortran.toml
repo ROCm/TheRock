@@ -1,0 +1,11 @@
+[components.dev."bindings/fortran/rocsolver-fortran/stage"]
+include = [
+  "share/rocsolver/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hipsolver-fortran/stage"]
+include = [
+  "share/hipsolver/fortran/**",
+]
+optional = true

@@ -16,7 +16,7 @@
 # 10. profiler-apps (generic) - rocprofiler-systems, rocprofiler-compute (after storage-libs)
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
-# 13. fortran-bindings (generic) - runtime-fortran (after compiler-runtime)
+# 13. fortran-bindings (generic) - Fortran bindings (after math-libs)
 
 # Notes on security:
 #   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
@@ -490,12 +490,10 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: fortran-bindings (generic)
-  # The Fortran bindings build after the libraries they wrap, never inside
-  # their builds. runtime-fortran (HIP, ROCTx) only needs compiler-runtime.
+  # STAGE: fortran-bindings (generic, after math-libs)
   # ==========================================================================
   fortran-bindings:
-    needs: compiler-runtime
+    needs: [compiler-runtime, math-libs]
     if: >-
       ${{
         !cancelled() && !failure() &&
