@@ -12,6 +12,11 @@
 name: Dev PyTorch Wheels
 
 on:
+  # TEMPORARY: registers the workflow so it can be dispatched from this PR
+  # branch before merge. Every job is skipped for this event. Revert before merge.
+  pull_request:
+    paths:
+      - .github/workflows/dev_pytorch_wheels.yml
   workflow_dispatch:
     inputs:
       build_linux:
