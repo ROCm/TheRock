@@ -935,6 +935,13 @@ VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
 # Opt-in label for also testing a family's Linux build on its test-runs-on-wsl runner.
 WSL_RUN_LABEL = "ci:run-wsl"
 
+# Artifacts that CI control labels need beyond the components' own artifacts.
+# Tests on WSL also install the WSL libhsakmt (see install_rocm_from_artifacts),
+# so a narrowed build adds the stage that produces it.
+CI_LABEL_REQUIRED_ARTIFACTS: dict[str, list[str]] = {
+    WSL_RUN_LABEL: ["wsl-rocdxg"],
+}
+
 
 def get_wsl_test_runner(
     platform_info: dict, *, labels: list[str], test_runs_on: str, build_variant: str
