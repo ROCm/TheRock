@@ -4,7 +4,7 @@
 """Controlled, single-object HIP offload-job trials on TheRock CI only.
 
 Bootstrap the existing compiler/runtime, configure hipCCL_tests and dependencies,
-then compare jobs=1/2 sequentially within one allocation. No source patch,
+then compare jobs=2/4 sequentially within one allocation. No source patch,
 release publication, or S3 upload is performed. Diagnostics go to GitHub artifacts.
 """
 
@@ -89,8 +89,8 @@ def trial_env(env: dict[str, str]) -> dict[str, str]:
 
 def parse_order(raw: str) -> list[int]:
     value = json.loads(raw)
-    if value not in ([1, 2], [2, 1]) or any(type(n) is not int for n in value):
-        raise ValueError("Only balanced paired orders [1,2] and [2,1] are supported")
+    if value not in ([2, 4], [4, 2]) or any(type(n) is not int for n in value):
+        raise ValueError("Only balanced paired orders [2,4] and [4,2] are supported")
     return value
 
 
@@ -140,8 +140,8 @@ def object_edge(text: str, target: str = OBJECT) -> tuple[list[str], int, int]:
 
 
 def patch_flags(text: str, jobs: int, target: str = OBJECT) -> str:
-    if jobs not in (1, 2):
-        raise ValueError("Only the controlled jobs=1/2 comparison is supported")
+    if jobs not in (2, 4):
+        raise ValueError("Only the controlled jobs=2/4 comparison is supported")
     lines, start, end = object_edge(text, target)
     matches = [i for i in range(start + 1, end) if re.match(r" +FLAGS = ", lines[i])]
     if len(matches) != 1:
@@ -278,11 +278,11 @@ def capability_probe(compiler: Path, output: Path, env: dict[str, str]) -> None:
         "-Werror=unused-command-line-argument",
     ]
     args.extend(f"--offload-arch={arch}" for arch in sorted(ARCHES))
-    args.extend(["--offload-jobs=2", "-c", str(source), "-o", str(output / "probe.o")])
+    args.extend(["--offload-jobs=4", "-c", str(source), "-o", str(output / "probe.o")])
     run_logged(args, output / "actual-probe.log", ROOT, env)
     plan = capture([*args, "-###"], ROOT, env)
     (output / "rendered-probe.txt").write_text(plan, encoding="utf-8")
-    if "--wrapper-jobs=2" not in plan:
+    if "--wrapper-jobs=4" not in plan:
         raise ValueError("Actual binary did not forward the offload concurrency option")
     device_arches = set(re.findall(r'-target-cpu["\s]+(gfx[0-9a-f]+)', plan))
     if device_arches != ARCHES:
@@ -636,7 +636,7 @@ def run_trial(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--order", required=True, help="JSON [1,2] or [2,1]")
+    parser.add_argument("--order", required=True, help="JSON [2,4] or [4,2]")
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
     parser.add_argument(
         "--output", type=Path, default=ROOT / "build/logs/offload-trial"
@@ -695,11 +695,11 @@ def main() -> None:
     manifest = nested / "build.ninja"
     original = manifest.read_text()
     benchmark_env = trial_env(env)
-    probe_text = patch_flags(original, 2)
+    probe_text = patch_flags(original, 4)
     manifest.write_text(probe_text, encoding="utf-8", newline="")
     try:
         compiler, _ = compiler_arguments(
-            single_command(ninja, nested, OBJECT, benchmark_env), 2
+            single_command(ninja, nested, OBJECT, benchmark_env), 4
         )
         query = capture(
             [ninja, "-C", str(nested), "-t", "query", BENCHMARK], ROOT, benchmark_env

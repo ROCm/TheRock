@@ -34,7 +34,7 @@ def ninja_text() -> str:
     )
 
 
-def compiler_command(jobs: int = 2) -> str:
+def compiler_command(jobs: int = 4) -> str:
     return (
         "ccache /sdk/bin/clang++ -O3 "
         + " ".join(f"--offload-arch={arch}" for arch in sorted(trial.ARCHES))
@@ -46,7 +46,7 @@ def compiler_command(jobs: int = 2) -> str:
 class TrialGuardsTest(unittest.TestCase):
     def test_one_exact_object_edge_changes_and_neighbor_is_untouched(self):
         original = ninja_text()
-        for jobs in (1, 2):
+        for jobs in (2, 4):
             with self.subTest(jobs=jobs):
                 patched = trial.patch_flags(original, jobs)
                 self.assertEqual(
@@ -71,18 +71,18 @@ class TrialGuardsTest(unittest.TestCase):
         ):
             with self.subTest(text=text[:50]):
                 with self.assertRaises(ValueError):
-                    trial.patch_flags(text, 2)
+                    trial.patch_flags(text, 4)
         with self.assertRaises(ValueError):
-            trial.patch_flags(original, 4)
+            trial.patch_flags(original, 1)
 
     def test_commands_keep_seven_targets_and_reject_silent_serial_or_noop_modes(self):
-        compiler, args = trial.compiler_arguments(compiler_command(), 2)
+        compiler, args = trial.compiler_arguments(compiler_command(), 4)
         self.assertEqual(compiler.as_posix(), "/sdk/bin/clang++")
-        self.assertIn("--offload-jobs=2", args)
+        self.assertIn("--offload-jobs=4", args)
         for bad in (
             compiler_command().replace("--offload-arch=gfx1036", ""),
-            compiler_command().replace("--offload-jobs=2", "--offload-jobs=1"),
-            compiler_command() + " --offload-jobs=2",
+            compiler_command().replace("--offload-jobs=4", "--offload-jobs=2"),
+            compiler_command() + " --offload-jobs=4",
             compiler_command() + " -parallel-jobs=2",
             compiler_command() + " -v",
             compiler_command() + " -fproc-stat-report=stats.csv",
@@ -96,7 +96,7 @@ class TrialGuardsTest(unittest.TestCase):
         ):
             with self.subTest(command=bad[-60:]):
                 with self.assertRaises(ValueError):
-                    trial.compiler_arguments(bad, 2)
+                    trial.compiler_arguments(bad, 4)
 
     def test_cache_and_profiler_environment_cannot_override_the_trial(self):
         original = {key: "sensitive-value-not-to-log" for key in trial.DISABLING_ENV}
@@ -116,9 +116,9 @@ class TrialGuardsTest(unittest.TestCase):
         self.assertEqual(original["CCACHE_DISABLE"], "0")
 
     def test_only_explicit_balanced_orders_and_therock_ci_are_accepted(self):
-        for order in ([1, 2], [2, 1]):
+        for order in ([2, 4], [4, 2]):
             self.assertEqual(trial.parse_order(json.dumps(order)), order)
-        for order in ([1, 1], [1, 2, 4], [True, 2], ["1", "2"], None):
+        for order in ([2, 2], [1, 2], [2, 4, 8], [True, 4], ["2", "4"], None):
             with self.assertRaises((TypeError, ValueError)):
                 trial.parse_order(json.dumps(order))
         trial.require_ci(
@@ -180,7 +180,7 @@ class NativeNinjaTest(unittest.TestCase):
         # Real Ninja command hashes and dependency decisions, with a tiny Python
         # producer instead of a ROCm build. Removing FLAGS scoping or the forced
         # rebuild, or recompiling the object during link, fails these assertions.
-        for order in ([1, 2], [2, 1]):
+        for order in ([2, 4], [4, 2]):
             with self.subTest(order=order), tempfile.TemporaryDirectory() as temporary:
                 build = Path(temporary)
                 writer = build / "writer.py"
@@ -265,7 +265,7 @@ class WorkflowContractTest(unittest.TestCase):
         self.assertEqual(experiment["runs-on"], "aws-linux-scale-rocm-prod")
         self.assertEqual(experiment["timeout-minutes"], "360")
         self.assertEqual(
-            experiment["strategy"]["matrix"]["order"], [["1", "2"], ["2", "1"]]
+            experiment["strategy"]["matrix"]["order"], [["2", "4"], ["4", "2"]]
         )
         self.assertIn(
             "@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb",

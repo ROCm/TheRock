@@ -271,7 +271,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        order: [[1, 2], [2, 1]]
+        order: [[2, 4], [4, 2]]
     permissions:
       contents: read
       actions: read
