@@ -293,10 +293,8 @@ It cannot prove right a classification that names a real function and parameter.
 The cross-check against the headers' doxygen comments flags some wrong ones, and the runtime tests and the CODEOWNERS review of the metadata catch the rest (see [Keeping the classifications correct](#curated-metadata-the-manual-surface), in the [generator appendix](#appendix-the-generator-rocm-fortran-generator)).
 
 A binding's Fortran tests live in its `test/` and follow one convention (see [Tests and documentation](#tests-and-documentation), in the [build appendix](#appendix-building-installing-and-testing-the-bindings)).
-Coverage is uneven.
-HIP, ROCTx, rocSOLVER, hipSOLVER, rocSPARSE, hipSPARSE, rocFFT, hipFFT, hipFFTW, rocRAND and hipRAND have a `test/`, mostly ported from hipfort.
-rocBLAS and hipBLAS have none yet, and their libraries' `clients/` still exercise the hand-written modules until those are removed.
-Filling that gap is part of the rollout, and adding the bindings does not wait for it.
+Every binding has a `test/`, mostly ported from hipfort, rocBLAS's and hipBLAS's included.
+Those two matter most, because their libraries' `clients/` still exercise the hand-written modules until those are removed, not the bindings.
 The bot's pull request compiles the tests without a GPU, and the packaging or validation job runs them on an AMD GPU.
 
 The libraries' existing Fortran examples (the rocBLAS, hipBLAS, rocSPARSE and hipSPARSE samples) move to the generated module when the hand-written ones are removed.
@@ -670,7 +668,6 @@ The rollout is done when:
 - TheRock builds and packages the bindings (see the [Packaging in TheRock](#appendix-packaging-in-therock) appendix)
 - each array tier compiles at its declared standard (see [Language standard](#language-standard))
 - an external program compiles and links against the installed package with at least amdflang and gfortran
-- every binding has a `test/`, rocBLAS's and hipBLAS's included
 - the hand-written library modules are removed, and the libraries' Fortran clients no longer use them
 - the bindings ship in the OS packages, and the Fortran entry point carries their full documentation and the migration guides (10.4)
 - `ROCm/hipfort` is removed (11.0)
@@ -694,7 +691,6 @@ Before they merge:
 - hipBLAS's binding drops the temporary `hip` stub module it builds until the HIP binding is installed
 
 The deprecation pull requests follow, one per library with a hand-written module, once its binding has merged.
-rocBLAS's and hipBLAS's binding tests come later in the rollout.
 
 ## Open questions and risks
 
@@ -1049,7 +1045,6 @@ The filenames change in the move anyway, so there is no drop-in path to preserve
 ### Tests and documentation
 
 hipfort's test suite splits across the libraries it covers, and each library's Fortran tests move to its binding's `test/`.
-rocBLAS's and hipBLAS's bindings have no `test/` yet (see [Maintaining the bindings under the split](#maintaining-the-bindings-under-the-split)).
 Each test is one Fortran program and its own CTest test, labeled `gpu` since it needs an AMD GPU.
 A `<name>.f03` test calls the raw and typed forms and is registered as `<lib>_fortran_<name>`.
 A `<name>.f08` test calls the array overloads and is registered as `<lib>_fortran_<name>_f2008`.
