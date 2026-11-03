@@ -111,8 +111,19 @@ class BuildTestMatrixTest(unittest.TestCase):
     def test_a_family_without_any_test_runner_runs_nothing(self):
         # A family that has a build but no test hardware carries an empty label,
         # so this is a configuration a run has to survive, loudly.
-        with contextlib.redirect_stdout(io.StringIO()) as out:
-            matrix = self.matrix(target="gfx90a", platform="windows", size="large")
+        # Use a mock entry with test-runs-on="" to test this path directly.
+        fake_entry = {
+            "test-runs-on": "",
+            "family": "mock-no-runner",
+            "fetch-gfx-targets": [],
+        }
+        with mock.patch.object(
+            matrix_script, "platform_entry", return_value=fake_entry
+        ):
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                matrix = self.matrix(
+                    target="mock-no-runner", platform="linux", size="large"
+                )
 
         self.assertEqual(matrix["include"], [])
         self.assertIn("::warning::", out.getvalue())

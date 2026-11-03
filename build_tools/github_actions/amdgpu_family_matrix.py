@@ -200,6 +200,7 @@ all_build_variants = {
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
             "sanitizer_triggers": {
+                "presubmit": ["rocm-systems", "rocm-libraries"],
                 "submodule_bump": ["rocm-systems", "rocm-libraries"],
             },
         },
@@ -456,32 +457,27 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests only on nightly
+    # host-asan only family - builds on presubmit/submodule_bump;
+    # tests gated to rocm-systems/rocm-libraries source repos
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "host-asan"],
             "builds_on_trigger": [
-                "postsubmit",
+                "presubmit",
                 "submodule_bump",
-                "nightly",
             ],
-            "tests_on_trigger": ["nightly"],
-            # Only run tests when gfx90a label is present on PR
-            "trigger_test_label_only": True,
+            "tests_on_trigger": ["presubmit", "submodule_bump"],
+            "test_source_repos": ["rocm-systems", "rocm-libraries"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "builds_on_trigger": [
-                "postsubmit",
-                "submodule_bump",
-                "nightly",
-            ],
+            "builds_on_trigger": ["presubmit", "submodule_bump"],
             "tests_on_trigger": [],
         },
     },
