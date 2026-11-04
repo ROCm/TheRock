@@ -7,7 +7,6 @@
 
 import os
 import re
-import platform
 import subprocess
 import sys
 from dataclasses import replace
@@ -173,7 +172,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "pkg_name": pkg_name,
         "version": version,
         "release": config.version_suffix,
-        "build_arch": pkg_info.get("BuildArch", platform.machine()),
+        "build_arch": pkg_info.get("BuildArch"),
         "description_short": pkg_info.get("Description_Short"),
         "description_long": pkg_info.get("Description_Long"),
         "group": pkg_info.get("Group"),
