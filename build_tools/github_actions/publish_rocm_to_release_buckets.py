@@ -10,7 +10,7 @@ These release file types are supported:
 - [x] python packages
 - [x] native linux packages
 - [x] amd-repo-setup packages (linux, when the build uploaded them)
-- [ ] native windows packages
+- [x] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
 
@@ -48,6 +48,11 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
 
     s3://therock-prerelease-artifacts/12345-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm
       -> s3://therock-repo-amd-rc-core/v5/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm
+
+    native windows packages (dev/nightly), with ``--platform windows``:
+
+    s3://therock-dev-artifacts/12345-windows/packages/msi/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
 
 ASAN build variant:
 
@@ -308,6 +313,49 @@ def publish_repo_setup_packages(
     logger.info("Copied %d amd-repo-setup packages", count)
 
 
+def publish_native_windows_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+) -> None:
+    """Copy native Windows MSI packages from the artifacts bucket to the release bucket.
+
+    The source MSIs were uploaded by upload_package_repo.py (called from
+    multi_arch_build_native_windows_packages.yml) as loose .msi files.
+
+    The destination follows RFC0012: Windows installer artifacts live under
+    ``core/windows-installers/`` (not ``core/packages/``). The current MSI is a
+    single OS-agnostic installer, so it is published to a flat
+    ``windows-installers/`` prefix rather than the per-OS subfolders RFC0012
+    reserves for OS-specific installers.
+
+    dev/nightly example:
+        s3://therock-dev-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+
+    prerelease example:
+        s3://therock-prerelease-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/
+    """
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    today = datetime.date.today().strftime("%Y%m%d")
+
+    source = artifacts_root.native_windows_packages("msi")
+
+    base_path = "v5/rocm/core/windows-installers"
+    if release_type == "prerelease":
+        dest_prefix = base_path
+    else:
+        dest_prefix = f"{base_path}/{today}-{artifacts_root.run_id}"
+
+    dest = StorageLocation(dest_bucket.name, dest_prefix)
+    logger.info("Native msi packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    count = backend.copy_directory(source, dest)
+    logger.info("Copied %d files for msi packages", count)
+    if count == 0:
+        raise FileNotFoundError(f"No msi packages found at {source.s3_uri}")
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Publish ROCm release files to release buckets"
@@ -398,6 +446,8 @@ def main(argv: list[str]) -> None:
             publish_repo_setup_packages(artifacts_root, args.release_type, backend)
         else:
             logger.info("Skipping amd-repo-setup packages for ASAN build variant")
+    if artifacts_root.platform == "windows" and not args.skip_native_packages:
+        publish_native_windows_packages(artifacts_root, args.release_type, backend)
 
 
 if __name__ == "__main__":

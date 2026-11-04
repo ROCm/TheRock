@@ -49,6 +49,14 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("rocminfo", [], "", True),
     ("rocm-smi", [], "Management", True),
     ("hipify-perl", ["--help"], "USAGE:", True),
+    ("rocpd", ["--help"], "Aggregate", True),
+    ("rocpd2csv", ["--help"], "Convert", True),
+    ("rocpd2otf2", ["--help"], "Convert", True),
+    ("rocpd2pftrace", ["--help"], "Convert", True),
+    ("rocpd2summary", ["--help"], "Generate summary", True),
+    ("rocprofv3", ["--help"], "ROCProfilerV3", True),
+    ("rocprof-attach", ["--help"], "attachment", True),
+    ("rocprofv3-avail", ["--help"], "query tool", True),
 ]
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [

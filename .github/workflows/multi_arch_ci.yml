@@ -52,6 +52,10 @@ on:
         type: boolean
         default: true
         description: "Build native Linux packages and run install tests"
+      build_native_windows:
+        type: boolean
+        default: true
+        description: "Build native Windows packages (MSI)"
       # --- Artifact reuse ---
       prebuilt_stages:
         type: string
@@ -113,6 +117,9 @@ on:
       build_native_linux:
         type: boolean
         default: true
+      build_native_windows:
+        type: boolean
+        default: true
       prebuilt_stages:
         type: string
         default: ""
@@ -170,6 +177,7 @@ jobs:
       build_pytorch: ${{ github.event_name != 'workflow_dispatch' || inputs.build_pytorch }}
       build_jax: ${{ github.event_name != 'workflow_dispatch' || inputs.build_jax }}
       build_native_linux: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_linux }}
+      build_native_windows: ${{ github.event_name != 'workflow_dispatch' || inputs.build_native_windows }}
       build_stages: ${{ inputs.build_stages || '' }}
 
   linux_build_and_test:
@@ -206,6 +214,7 @@ jobs:
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      rocm_msi_package_version: ${{ needs.setup.outputs.rocm_msi_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
     permissions:

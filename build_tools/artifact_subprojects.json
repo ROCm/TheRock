@@ -41,6 +41,9 @@
   "core-hiptests": [
     "hip-tests"
   ],
+  "core-hrr": [
+    "hrr"
+  ],
   "core-kpack": [
     "rocm-kpack"
   ],
@@ -100,10 +103,8 @@
     "therock-nlohmann-json"
   ],
   "prim": [
-    "hipCUB",
-    "rocPRIM",
-    "rocPRIM_tests",
-    "rocThrust"
+    "hipCCL",
+    "hipCCL_tests"
   ],
   "rand": [
     "hipRAND",
