@@ -37,7 +37,10 @@ do_update_alternatives() {
 {% if target == "deb" %}
     PKG_INSTALL_PREFIX={{ install_prefix }}
 {% else %}
-    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    # rpm sets RPM_INSTALL_PREFIX0 to the relocated prefix in posttrans too.
+    # zypper runs posttrans without it, but zypper never relocates a package,
+    # so it is then installed at the build-time prefix.
+    PKG_INSTALL_PREFIX="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
 {% endif %}
 
 {% if core_symlinks or llvm_symlinks %}
