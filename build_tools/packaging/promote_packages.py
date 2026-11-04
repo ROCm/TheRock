@@ -10,7 +10,7 @@ This script promotes the version of two kinds of artifact:
   - standalone `therock-dist-*.tar.gz` distribution tarballs, which are renamed
     to the promoted version (their contents are NOT opened or modified). Pass
     --source-bucket, --dest-bucket, and --version to copy those objects to the
-    renamed key in S3. --version is the filename token, for example 7.13.0rc1.
+    renamed key in S3. --version is the filename token, for example 10.1.0rc1.
     --src-version-type and --dest-version choose the new name. The source key
     is left in place.
 It optionally also restricts which gfx target architectures are referenced by the
@@ -84,11 +84,10 @@ TYPICAL USAGE:
   # other archs are skipped/deleted, multi-arch aggregator wheels are rewritten:
   python ./build_tools/packaging/promote_packages.py --input-dir=./release_candidates/ --skip-version-promotion --multi-arch-targets=gfx1201,gfx1010,gfx11
 
-  # Copy one therock-dist version in S3. --version is the filename token.
-  # --src-version-type and --dest-version choose the new name (default rc -> release).
-  # Dry-run until --execute. The source key is left in place.
+  # Copy 10.1.0rc1 from the rc bucket to stable-staging. --version is the filename token.
+  # Default rewrite is rc -> release. Dry-run until --execute. The source key is left in place.
   python ./build_tools/packaging/promote_packages.py \
-    --version=7.13.0rc1 \
+    --version=10.1.0rc1 \
     --source-bucket=therock-repo-amd-rc-core \
     --dest-bucket=therock-repo-amd-stable-staging-core
 
@@ -194,7 +193,8 @@ and --dest-version choose the new name. --input-dir is not used on that path.
             "python ./build_tools/packaging/promote_packages.py "
             "--input-dir=./release_candidates/rc1/ --delete-old-on-success\n"
             "       python ./build_tools/packaging/promote_packages.py "
-            "--version=7.13.0rc1 --source-bucket=SRC --dest-bucket=DST"
+            "--version=10.1.0rc1 --source-bucket=therock-repo-amd-rc-core "
+            "--dest-bucket=therock-repo-amd-stable-staging-core"
         ),
     )
     parser.add_argument(
@@ -269,7 +269,7 @@ and --dest-version choose the new name. --input-dir is not used on that path.
     parser.add_argument(
         "--version",
         default=None,
-        help="Filename version token to copy, for example 7.13.0rc1.",
+        help="Filename version token to copy, for example 10.1.0rc1.",
     )
     parser.add_argument(
         "--source-bucket",
@@ -1415,8 +1415,8 @@ def promoted_tarball_rename(
 
     The version token is the last '-' segment. Only that segment is rewritten.
     A token that is not a version raises InvalidVersion.
-    Example: therock-dist-linux-gfx950-7.13.0rc1.tar.gz ->
-    therock-dist-linux-gfx950-7.13.0.tar.gz with src 'rc' and dest 'release'.
+    Example: therock-dist-linux-gfx950-10.1.0rc1.tar.gz ->
+    therock-dist-linux-gfx950-10.1.0.tar.gz with src 'rc' and dest 'release'.
     """
     stem = filename.removesuffix(".tar.gz")
     old_version = tarball_version_token(filename)
