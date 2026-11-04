@@ -71,6 +71,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from amdgpu_family_matrix import (
     WSL_RUN_LABEL,
     all_build_variants,
+    amdgpu_family_info_matrix,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     get_wsl_test_runner,
@@ -898,7 +899,8 @@ def should_skip_ci(
     - 'ci:skip' PR label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
-    - ASAN builds on PRs without ci:asan or ci:host-asan labels
+    - ASAN builds on PRs that are not a #9366 host-asan row and have no
+      ci:asan or ci:host-asan label.
 
     For external repo builds, path filtering uses changed_files and
     skip_ci_patterns from the external_repo JSON (both must be provided).
@@ -951,21 +953,24 @@ def should_skip_ci(
             print("  TheRock: CI can be skipped")
             return True
 
-    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
-    has_asan_label = (
-        "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
-    )
+    # 3. ASAN skip - only evaluated if path filtering didn't skip CI.
+    # rocm-systems and rocm-libraries pull requests run host-asan (see #9366).
+    # ci:asan and ci:host-asan are the on-demand opt-ins for every other PR.
+    policy = resolve_sanitizer_policy(ci_inputs, git_context)
     if (
         ci_inputs.is_pull_request
-        and ci_inputs.build_variant == "asan"
-        and not has_asan_label
+        and "asan" in ci_inputs.build_variant
+        and "ci:asan" not in ci_inputs.pr_labels
+        and "ci:host-asan" not in ci_inputs.pr_labels
+        and not (policy is not None and policy.variant == "host-asan")
     ):
         print(
-            "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
+            "  Skipping: ASAN pull request is not a host-asan row and has "
+            "no ci:asan or ci:host-asan label"
         )
         return True
 
-    if has_asan_label and ci_inputs.build_variant == "asan":
+    if "ci:asan" in ci_inputs.pr_labels and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
 
     return False
@@ -1429,6 +1434,160 @@ def _should_use_published_rocm_for_changes(
     return not needs_rocm_artifacts
 
 
+# Rows from ROCm/TheRock#9366. The tsan row is intentionally absent.
+# ``repo`` is the external caller, or the TheRock submodule for a bump.
+# ``families`` are the only families built and tested for that row.
+_SANITIZER_ROWS: tuple[tuple[str, str, str, tuple[str, ...], bool], ...] = (
+    ("rocm-systems", "presubmit", "host-asan", ("gfx90a",), False),
+    ("rocm-systems", "submodule_bump", "host-asan", ("gfx90a",), False),
+    ("rocm-libraries", "presubmit", "host-asan", ("gfx90a",), False),
+    ("rocm-libraries", "submodule_bump", "host-asan", ("gfx90a",), False),
+    ("rocm-libraries", "nightly", "asan", ("gfx94x", "gfx950"), True),
+    ("rockrel", "nightly", "asan-debug", ("gfx94x", "gfx950"), True),
+    ("llvm", "submodule_bump", "asan-debug", ("gfx94x", "gfx950"), True),
+)
+
+# TheRock submodule paths that the matrix names as a repository.
+_SUBMODULE_REPOS = {
+    "rocm-systems": "rocm-systems",
+    "rocm-libraries": "rocm-libraries",
+    "compiler/amd-llvm": "llvm",
+}
+
+
+@dataclass(frozen=True)
+class SanitizerPolicy:
+    """One applied #9366 row: variant, families, and whether tests use sandbox."""
+
+    variant: str
+    families: tuple[str, ...]
+    sandbox: bool
+    reason: str
+
+
+def _caller_repository(ci_inputs: CIInputs) -> str:
+    """Repository that invoked this workflow, without the owner prefix."""
+    if ci_inputs.external_repo:
+        try:
+            payload = json.loads(ci_inputs.external_repo)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+        if not isinstance(payload, dict):
+            return ""
+        return str(payload.get("repository", "")).split("/")[-1]
+    return os.environ.get("GITHUB_REPOSITORY", "").split("/")[-1]
+
+
+def _submodule_repositories(git_context: GitContext) -> set[str]:
+    """Matrix repository names for TheRock submodules changed in this diff."""
+    if git_context.has_submodule_changes is not True:
+        return set()
+    changed = set(git_context.changed_files or [])
+    repos: set[str] = set()
+    for path in git_context.submodule_paths or []:
+        if path in changed and path in _SUBMODULE_REPOS:
+            repos.add(_SUBMODULE_REPOS[path])
+    return repos
+
+
+def resolve_sanitizer_policy(
+    ci_inputs: CIInputs,
+    git_context: GitContext | None = None,
+) -> SanitizerPolicy | None:
+    """Return the #9366 row for this caller, or None when no row matches.
+
+    ``ci:asan`` keeps the caller's full asan selection, so it matches no row.
+    ``ci:host-asan`` is the on-demand host-asan path and tests gfx90a.
+    A pull request matches the caller's presubmit row. A schedule matches the
+    caller's nightly row. A TheRock submodule change matches that submodule's
+    bump row. External-repo calls are not TheRock submodule bumps.
+    """
+    if "asan" not in ci_inputs.build_variant:
+        return None
+    if "ci:asan" in ci_inputs.pr_labels:
+        return None
+    if "ci:host-asan" in ci_inputs.pr_labels:
+        return SanitizerPolicy(
+            variant="host-asan",
+            families=("gfx90a",),
+            sandbox=False,
+            reason="ci:host-asan",
+        )
+
+    git_context = git_context or GitContext()
+    caller = _caller_repository(ci_inputs)
+    # An external repo's GitContext marks the repo name as a submodule so
+    # stage reuse can see it. That is not a TheRock submodule bump.
+    submodule_repos = (
+        set() if ci_inputs.external_repo else _submodule_repositories(git_context)
+    )
+    matches = []
+    for repo, trigger, variant, families, sandbox in _SANITIZER_ROWS:
+        if trigger == "presubmit" and ci_inputs.is_pull_request and caller == repo:
+            matches.append((variant, families, sandbox, f"{repo} pull request"))
+        elif trigger == "nightly" and ci_inputs.is_schedule and caller == repo:
+            matches.append((variant, families, sandbox, f"{repo} nightly"))
+        elif (
+            trigger == "submodule_bump"
+            and not ci_inputs.external_repo
+            and repo in submodule_repos
+        ):
+            matches.append((variant, families, sandbox, f"{repo} submodule bump"))
+
+    if not matches:
+        return None
+    variant = matches[0][0]
+    if any(item[0] != variant for item in matches):
+        print(
+            "  sanitizer rows select more than one variant; "
+            f"using {variant} ({matches[0][3]})"
+        )
+        matches = [item for item in matches if item[0] == variant]
+    families: list[str] = []
+    for item in matches:
+        for family in item[1]:
+            if family not in families:
+                families.append(family)
+    return SanitizerPolicy(
+        variant=variant,
+        families=tuple(families),
+        sandbox=any(item[2] for item in matches),
+        reason=", ".join(item[3] for item in matches),
+    )
+
+
+def select_asan_build_variant(
+    ci_inputs: CIInputs,
+    git_context: GitContext | None = None,
+) -> str:
+    """Choose the sanitizer variant for this event.
+
+    A matching #9366 row replaces the requested asan-family variant. ``ci:asan``
+    keeps full asan. Anything that is not an asan variant is unchanged, and so
+    is an asan variant with no matching row.
+    """
+    build_variant = ci_inputs.build_variant
+    if "asan" not in build_variant:
+        return build_variant
+    if "ci:asan" in ci_inputs.pr_labels:
+        return "asan"
+    policy = resolve_sanitizer_policy(ci_inputs, git_context)
+    if policy is not None:
+        return policy.variant
+    return build_variant
+
+
+def _sandbox_test_runner(family_name: str) -> str:
+    """Sandbox label from the local family matrix, ignoring the PR reservation.
+
+    get_all_families_for_trigger_types blanks mi325/mi350 sandbox labels except
+    on a rocm-systems pull request. The #9366 nightly and llvm rows need those
+    labels on other events, so they read the unblanked value.
+    """
+    linux = amdgpu_family_info_matrix.get(family_name, {}).get("linux", {})
+    return linux.get("test-runs-on-sandbox", "")
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1633,14 +1792,21 @@ def decide_jobs(
 
     # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
     # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
+    # A #9366 row and a manual workflow_dispatch run tests. Every other
+    # asan-family build does not.
+    policy = resolve_sanitizer_policy(ci_inputs, git_context)
+    effective_variant = select_asan_build_variant(ci_inputs, git_context)
+    policy_tests = policy is not None and effective_variant == policy.variant
+    if (
+        "asan" in effective_variant
+        and not policy_tests
+        and not ci_inputs.is_workflow_dispatch
+    ):
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="no #9366 sanitizer test row for this event",
+        )
 
     return JobDecisions(
         build_rocm=build_rocm,
@@ -1833,35 +1999,31 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif "asan" in build_variant:
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
+        # #9366 names the only asan, host-asan, and asan-debug test rows.
+        # A manual workflow_dispatch keeps the caller's variant and families.
+        policy = resolve_sanitizer_policy(ci_inputs, git_context)
+        policy_family = (
+            policy is not None
+            and build_variant == policy.variant
+            and family_name in policy.families
+        )
+        if policy is not None and policy_family and policy.sandbox:
+            test_runs_on = _sandbox_test_runner(family_name)
+            print(
+                f"  {family_name}: {policy.reason} uses sandbox runner "
+                f"{test_runs_on}"
+            )
+        elif policy is not None and policy_family:
+            print(f"  {family_name}: {policy.reason} uses {test_runs_on}")
+        elif "asan" in build_variant and ci_inputs.is_workflow_dispatch:
+            if build_variant.startswith("host-asan"):
+                if family_name != "gfx90a":
+                    test_runs_on = ""
+                    print(
+                        f"  {family_name}: manual host-asan tests run on "
+                        f"gfx90a, disabling tests"
+                    )
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
@@ -1870,6 +2032,9 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: no ASAN sandbox runner available, "
                     f"disabling tests"
                 )
+        elif "asan" in build_variant:
+            test_runs_on = ""
+            print(f"  {family_name}: no #9366 sanitizer test row, disabling tests")
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if (
@@ -1895,7 +2060,9 @@ def _expand_build_config_for_platform(
         # trigger matches.
         # Skip trigger-based gating for test-only families (ci:test:gfx*) - they
         # explicitly request tests regardless of trigger type.
-        elif test_runs_on and family_name not in test_only_families:
+        elif (
+            test_runs_on and family_name not in test_only_families and not policy_family
+        ):
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
@@ -2221,21 +2388,19 @@ def expand_build_configs(
     #            env var in setup_multi_arch.yml
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
-    build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
-    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
-    # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
-    if build_variant == "asan":
-        if "ci:asan" in ci_inputs.pr_labels:
-            print("  Using full asan variant (ci:asan label)")
-        elif "ci:host-asan" in ci_inputs.pr_labels:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+    policy = resolve_sanitizer_policy(ci_inputs, git_context)
+    build_variant = select_asan_build_variant(ci_inputs, git_context)
+    if build_variant != ci_inputs.build_variant:
+        print(f"  Using {build_variant} variant")
+    elif build_variant == "asan" and "ci:asan" in ci_inputs.pr_labels:
+        print("  Using full asan variant (ci:asan label)")
+    linux_families = list(targets.linux_families)
+    if policy is not None and build_variant == policy.variant:
+        linux_families = list(policy.families)
+        print(
+            f"  sanitizer policy ({policy.reason}): {build_variant} on "
+            f"{linux_families}"
+        )
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -2252,7 +2417,7 @@ def expand_build_configs(
     for platform, families, build_only, test_only in [
         (
             "linux",
-            targets.linux_families,
+            linux_families,
             targets.linux_build_only_families,
             targets.linux_test_only_families,
         ),
