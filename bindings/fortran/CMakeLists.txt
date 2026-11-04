@@ -82,7 +82,7 @@ if(THEROCK_ENABLE_BLAS_FORTRAN)
   therock_declare_library_fortran_binding(_blas_fortran_subproject_names rocblas
     RUNTIME_DEPS rocBLAS)
   therock_declare_library_fortran_binding(_blas_fortran_subproject_names hipblas
-    RUNTIME_DEPS hipBLAS)
+    RUNTIME_DEPS hipBLAS hipBLAS-common)
 
   therock_provide_artifact(blas-fortran
     TARGET_NEUTRAL
