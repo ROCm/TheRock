@@ -169,9 +169,9 @@ The following are out of scope for this RFC.
 
 - **Windows.** The target is Linux HPC, and a Windows Fortran product is not a goal.
   ROCm's existing Fortran clients are already disabled on Windows: rocBLAS, hipBLAS, hipSOLVER and rocSPARSE all build Fortran only under `NOT WIN32` or `UNIX`.
-- **Fortran under sanitizers.** The ASan and coverage build variants will ship no Fortran, because ROCm's sanitizer configuration cannot instrument Fortran yet.
-  Today the projects still build the bindings under ASan and only skip their tests.
-  TheRock's ASan and coverage builds will skip the bindings' build stage (see the [Packaging in TheRock](#appendix-packaging-in-therock) appendix).
+- **Fortran under sanitizers.** The ASan build variants ship no Fortran, because ROCm's sanitizer configuration cannot instrument Fortran yet.
+  A binding built on its own under ASan still builds, and only skips its tests.
+  TheRock's sanitizer builds declare no binding, so the bindings' artifacts are empty there (see the [Packaging in TheRock](#appendix-packaging-in-therock) appendix).
 - **A binding for compilers limited to Fortran 77.** Fortran 77 code built with a current compiler can use the bindings.
   Only a compiler, or a compiler mode, limited to Fortran 95 or older cannot.
   [Fortran 77 code](#fortran-77-code), under [Language standard](#language-standard), explains what that means and what such a binding would take.
@@ -1086,7 +1086,7 @@ The libraries' builds pass no Fortran option and need no Fortran compiler for th
    The bindings build in their own generic stage, `fortran-bindings`, after `math-libs`.
    The math libraries are built once per GPU architecture, and the stage builds the host-only bindings once, against the generic part of the math artifacts.
    The binding tests `use hip`, so every binding depends on `runtime-fortran`, and rocSOLVER's also depends on rocBLAS's.
-   The stage runs on Linux only, and the ASan and coverage variants skip it (see [Non-goals](#non-goals)).
+   The stage runs on Linux only, and a sanitizer build (`THEROCK_SANITIZER`) declares no binding in it (see [Non-goals](#non-goals)).
 
 1. **One Fortran compiler: the `amdflang` TheRock builds.**
    TheRock builds flang on Linux, and `base/aux-overlay` exposes it as `bin/amdflang`, which ships in `amdrocm-llvm`.
