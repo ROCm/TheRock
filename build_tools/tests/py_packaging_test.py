@@ -7,6 +7,7 @@ These tests cover:
   - PopulatedFiles: per-instance isolation, dedup semantics
   - Multi-arch packaging: each library package independently tracks its own files
   - params.populated_packages: registration and cross-package search helpers
+  - mark_amdsmi_rocm_sdk_core: flagging the amdsmi module shipped in rocm-sdk-core
 """
 
 import argparse
@@ -30,6 +31,7 @@ from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, Popula
 from build_python_packages import (
     _artifact_catalog_has_matches,
     _run_kpack_split,
+    mark_amdsmi_rocm_sdk_core,
     PROFILER_WHEEL_INCLUDES,
     profiler_artifact_filter,
     validate_kpack_split_target_completeness,
@@ -2261,6 +2263,36 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+
+class MarkAmdsmiRocmSdkCoreTest(TmpDirTestCase):
+    def _write_wrapper(self, text: str) -> Path:
+        return self.write_file("share/amd_smi/amdsmi/amdsmi_wrapper.py", text)
+
+    def test_flag_is_set(self):
+        wrapper = self._write_wrapper("x = 1\n_AMDSMI_ROCM_SDK_CORE = False\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n_AMDSMI_ROCM_SDK_CORE = True\n")
+
+    def test_wrapper_without_flag_is_unchanged(self):
+        wrapper = self._write_wrapper("x = 1\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n")
+
+    def test_missing_module_is_ignored(self):
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_duplicate_flag_fails(self):
+        self._write_wrapper(
+            "_AMDSMI_ROCM_SDK_CORE = False\n_AMDSMI_ROCM_SDK_CORE = False\n"
+        )
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_changed_flag_line_fails(self):
+        self._write_wrapper("_AMDSMI_ROCM_SDK_CORE: bool = False\n")
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
 
 
 # ---------------------------------------------------------------------------
