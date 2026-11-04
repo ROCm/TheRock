@@ -2099,7 +2099,8 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
 
         libprofiler-hub.so* arrives from its own artifact and must be selected
         the same way as librocprof-sys*. bin/rocsys must be selected too:
-        bin/rocprof-sys-* does not match that name.
+        bin/rocprof-sys-* does not match that name. Each tool's LICENSE.md
+        arrives from its doc artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2135,6 +2136,14 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
                 "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
             },
         )
+        for name in ["rocprofiler-compute", "rocprofiler-systems"]:
+            self._add_artifact(
+                artifact_dir,
+                name,
+                "doc",
+                "generic",
+                {f"share/doc/{name}/LICENSE.md": f"{name} license"},
+            )
 
         params = self._make_params(artifact_dir)
         profiler_artifacts = params.filter_artifacts(
@@ -2155,6 +2164,8 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
             "bin/rocsys was dropped from the profiler wheel",
         )
         self.assertTrue(profiler.files.has("bin/rocprof-sys-run"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-compute/LICENSE.md"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-systems/LICENSE.md"))
 
     def test_profiler_wheel_excludes_unrelated_files(self):
         """The allowlist is not a bare lib/** or bin/** catch-all.
