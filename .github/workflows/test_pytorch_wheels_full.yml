@@ -292,6 +292,7 @@ jobs:
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --extra-index-url="https://nightly.repo.amd.com/rocm/whl-next/" \
             --activate-in-future-github-actions-steps
 
       - name: Initialize ROCm SDK and configure environment
