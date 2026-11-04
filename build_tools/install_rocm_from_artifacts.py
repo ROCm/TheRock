@@ -160,7 +160,7 @@ MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
 # The C library artifacts each --fortran-bindings family's tests load.
 FORTRAN_BINDING_LIBS = {
     "runtime": [],
-    "blas": ["blas"],
+    "blas": ["blas", "solver"],
     "solver": ["solver", "blas", "sparse"],
     "sparse": ["sparse", "blas"],
     "fft": ["fft", "fftw3", "rand"],
