@@ -18,6 +18,8 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 LINUX_DIR = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(LINUX_DIR.parents[1]), str(LINUX_DIR)]
 
@@ -34,11 +36,11 @@ from packaging_utils import (  # noqa: E402
 MAJOR, MINOR = 10, 2
 VERSION = f"{MAJOR}.{MINOR}.0"
 PREFIX = f"/opt/rocm/core-{MAJOR}.{MINOR}"
-RPM_SECTIONS = {"postinst": "%post", "prerm": "%preun"}
+RPM_SECTIONS = {"postinst": "%post", "prerm": "%preun", "posttrans": "%posttrans"}
 ACTIONS = {"postinst": "--install", "prerm": "--remove"}
 PREFIX_LINES = {
     "deb": f"PKG_INSTALL_PREFIX={PREFIX}",
-    "rpm": 'PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"',
+    "rpm": f'PKG_INSTALL_PREFIX="${{RPM_INSTALL_PREFIX0:-{PREFIX}}}"',
 }
 # Symlink flag -> (only package allowed to set it, alternatives it controls).
 SYMLINK_GROUPS = {
@@ -220,6 +222,25 @@ class AlternativesScriptsTest(unittest.TestCase):
         }
         return run, links, expected, {"RPM_INSTALL_PREFIX0": str(prefix)}
 
+    def test_rpm_spec_reruns_post_in_posttrans(self) -> None:
+        template = Environment(
+            loader=FileSystemLoader(str(LINUX_DIR)),
+            autoescape=select_autoescape(
+                enabled_extensions=("html", "htm", "xml"),
+                default_for_string=True,
+                default=False,
+            ),
+        ).get_template("template/rpm_specfile.j2")
+        for name in self.alternatives:
+            with self.subTest(package=name):
+                sections = {
+                    section: self.scripts[(name, "rpm", script)]
+                    for script, section in RPM_SECTIONS.items()
+                }
+                self.assertEqual(sections["%posttrans"], sections["%post"])
+                spec = template.render(rpm_scripts=sections)
+                self.assertIn(f"%posttrans\n{sections['%post']}", spec)
+
     @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
     def test_update_alternatives_install_and_remove(self) -> None:
         """Run the real deb postinst and prerm against a sandboxed update-alternatives."""
@@ -246,6 +267,21 @@ class AlternativesScriptsTest(unittest.TestCase):
 
         run("prerm", "0", reversed(SANDBOX_PACKAGES), **rpm_env)
         self.assertEqual(links(), {})
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_rpm_posttrans_restores_links_after_released_preun(self) -> None:
+        """Upgrade from a released package, whose %preun removes on upgrade too."""
+        run, links, expected, rpm_env = self.sandbox(
+            "rpm-posttrans", "rpm", opt_rocm=False
+        )
+
+        run("postinst", "2", **rpm_env)
+        run("prerm", "0", reversed(SANDBOX_PACKAGES), **rpm_env)
+        self.assertEqual(links(), {})
+
+        # zypper runs %posttrans without RPM_INSTALL_PREFIX0.
+        run("posttrans", "0")
+        self.assertEqual(links(), expected)
 
 
 if __name__ == "__main__":

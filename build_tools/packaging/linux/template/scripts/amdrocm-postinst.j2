@@ -37,7 +37,7 @@ do_update_alternatives() {
 {% if target == "deb" %}
     PKG_INSTALL_PREFIX={{ install_prefix }}
 {% else %}
-    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    PKG_INSTALL_PREFIX="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
 {% endif %}
 
 {% if core_symlinks or llvm_symlinks %}

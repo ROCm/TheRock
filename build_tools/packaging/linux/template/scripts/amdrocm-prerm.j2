@@ -7,7 +7,7 @@ do_remove_alternatives() {
 {% if target == "deb" %}
     PKG_INSTALL_PREFIX={{ install_prefix }}
 {% else %}
-    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    PKG_INSTALL_PREFIX="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
 {% endif %}
 
     # Remove package-specific binary alternatives first.
