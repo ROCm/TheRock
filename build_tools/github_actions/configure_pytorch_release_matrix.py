@@ -82,8 +82,6 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 # them yet. Direct target selections remain available.
 EXCLUDED_IMPLICIT_TARGETS = {
     "linux": {
-        "release/2.13": {"gfx1250-strict"},
-        "release/2.14": {"gfx1250-strict"},
         "release/2.15": {"gfx1250-strict"},
         "nightly": {"gfx1250-strict"},
     },

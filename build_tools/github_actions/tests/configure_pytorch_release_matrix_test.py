@@ -37,7 +37,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
-                    "exclude_implicit_targets": "gfx1250-strict",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -103,7 +103,12 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.13", "release/2.14", "release/2.15"):
+        cases = (
+            ("release/2.13", ""),
+            ("release/2.14", ""),
+            ("release/2.15", "gfx1250-strict"),
+        )
+        for pytorch_git_ref, excluded_targets in cases:
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
@@ -120,7 +125,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
                             "amdgpu_families": "gfx125X-dcgpu",
-                            "exclude_implicit_targets": "gfx1250-strict",
+                            "exclude_implicit_targets": excluded_targets,
                             "test_level": "none",
                             "test_amdgpu_families": "auto",
                         }
@@ -152,7 +157,9 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_resolve_excluded_implicit_targets_cli(self):
         cases = (
-            ("linux", "release/2.13", "gfx1250-strict"),
+            ("linux", "release/2.13", ""),
+            ("linux", "release/2.14", ""),
+            ("linux", "release/2.15", "gfx1250-strict"),
             ("linux", "users/alice/gfx125x-bringup", ""),
             ("windows", "release/2.13", ""),
         )
