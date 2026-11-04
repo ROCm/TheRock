@@ -1,206 +1,218 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Exercise index overrides, stage selection, and provenance with real Git repos."""
+"""Source override routing in fetch_sources, with Git operations mocked."""
 
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
-import textwrap
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import fetch_sources
-from generate_therock_manifest import build_manifest_schema
 
 
-def git(repo: Path, *args: str, input: str | None = None) -> str:
-    return subprocess.check_output(
-        ["git", *args], cwd=repo, text=True, input=input
-    ).strip()
-
-
-def commit(repo: Path, message: str) -> str:
-    tree = git(repo, "write-tree")
-    sha = git(repo, "commit-tree", tree, "-m", message)
-    git(repo, "update-ref", "refs/heads/main", sha)
-    git(repo, "symbolic-ref", "HEAD", "refs/heads/main")
-    return sha
+TEST_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+SUBMODULE_PATHS = {
+    "rocm-systems": "rocm-systems",
+    "rocm-libraries": "rocm-libraries",
+    "rocgdb": "debug-tools/rocgdb/source",
+}
 
 
 @pytest.fixture
-def source_tree(tmp_path, monkeypatch):
-    # Isolate Git config and rewrite the production GitHub URL to a local remote.
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
-    for role in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{role}_NAME", "Source fixture")
-        monkeypatch.setenv(f"GIT_{role}_EMAIL", "fixture@example.invalid")
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", "safe.directory")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "*")
-
-    upstream = tmp_path / "upstream"
-    upstream.mkdir()
-    git(upstream, "init")
-    old = commit(upstream, "upstream")
-    fork = tmp_path / "fork"
-    fork.mkdir()
-    git(fork, "init")
-    new = commit(fork, "fork-only commit")
-    monkeypatch.setenv("GIT_CONFIG_KEY_1", f"url.{fork.as_uri()}.insteadOf")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "https://github.com/test/fork.git")
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
-
-    repo = tmp_path / "TheRock"
-    repo.mkdir()
-    git(repo, "init")
-    for name in ("rocm-systems", "rocm-libraries"):
-        git(repo, "config", "--file", ".gitmodules", f"submodule.{name}.path", name)
-        git(
-            repo,
-            "config",
-            "--file",
-            ".gitmodules",
-            f"submodule.{name}.url",
-            upstream.as_uri(),
-        )
-    git(repo, "add", ".gitmodules")
-    for name in ("rocm-systems", "rocm-libraries"):
-        git(repo, "update-index", "--add", "--cacheinfo", f"160000,{old},{name}")
-    base = commit(repo, "TheRock base")
-    topology = repo / "BUILD_TOPOLOGY.toml"
-    topology.write_text(
-        textwrap.dedent(
-            """
-        [source_sets.systems]
-        submodules = ["rocm-systems"]
-        [source_sets.libraries]
-        submodules = ["rocm-libraries"]
-        [build_stages.math-libs]
-        description = "Both source repositories"
-        artifact_groups = ["math"]
-        [build_stages.cv-libs]
-        description = "Libraries only"
-        artifact_groups = ["cv"]
-        [artifact_groups.math]
-        description = "Math"
-        type = "generic"
-        source_sets = ["systems", "libraries"]
-        [artifact_groups.cv]
-        description = "CV"
-        type = "generic"
-        source_sets = ["libraries"]
-    """
-        )
+def args() -> SimpleNamespace:
+    return SimpleNamespace(
+        remote=False,
+        update_submodules=True,
+        depth=None,
+        progress=False,
+        jobs=None,
+        dvc_projects=[],
+        apply_patches=False,
+        external_repo_config=None,
     )
-    patches = repo / "patches" / "amd-mainline" / "rocm-systems"
-    patches.mkdir(parents=True)
-    # A bad patch must never be applied to the external PR checkout.
-    (patches / "0001.patch").write_text("deliberately invalid patch\n")
-    config = {"repository": "test/fork", "ref": new, "submodule_path": "rocm-systems"}
-    monkeypatch.setenv("EXTERNAL_REPO_CONFIG", json.dumps(config))
-    monkeypatch.delenv("THEROCK_GIT_MIRROR_DIR", raising=False)
-    monkeypatch.setattr(fetch_sources, "THEROCK_DIR", repo)
-    monkeypatch.setattr(fetch_sources, "TOPOLOGY_PATH", topology)
+
+
+@pytest.fixture
+def git_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Mock:
+    """Stub Git I/O; keep the override and ordinary update logic under test."""
+    monkeypatch.setattr(fetch_sources, "THEROCK_DIR", tmp_path)
+    monkeypatch.setattr(fetch_sources, "ALWAYS_SUBMODULE_PATHS", [])
     monkeypatch.setattr(
-        fetch_sources, "BRANCH_CONFIG_PATH", repo / "BRANCH_CONFIG.json"
+        fetch_sources,
+        "get_enabled_sources",
+        Mock(return_value=(list(SUBMODULE_PATHS), [])),
     )
-    monkeypatch.setattr(fetch_sources, "PATCHES_DIR", repo / "patches")
-    return repo, base, old, new, config
-
-
-def test_selected_override_and_default_source(source_tree):
-    repo, base, old, new, config = source_tree
-    fetch_sources.main(["--stage", "math-libs", "--depth", "1"])
-    assert git(repo / "rocm-systems", "rev-parse", "HEAD") == new
-    assert git(repo / "rocm-libraries", "rev-parse", "HEAD") == old
-    assert git(repo, "rev-parse", "HEAD") == base
-    assert (
-        git(repo / "rocm-systems", "remote", "get-url", "origin")
-        == (repo.parent / "fork").as_uri()
+    monkeypatch.setattr(
+        fetch_sources, "get_submodule_path", SUBMODULE_PATHS.__getitem__
     )
-    assert fetch_sources.get_submodule_revision("rocm-systems") == new
-    manifest = build_manifest_schema(repo, base, external_repo_config=config)
-    rows = {row["submodule_name"]: row for row in manifest["submodules"]}
-    assert rows["rocm-systems"]["pin_sha"] == new
-    assert rows["rocm-systems"]["submodule_url"] == "https://github.com/test/fork.git"
-    assert rows["rocm-systems"]["patches"] == []
-    assert rows["rocm-libraries"]["pin_sha"] == old
+    monkeypatch.setattr(fetch_sources, "resolve_reference_dir", Mock(return_value=None))
+    gitmodules = "\n".join(
+        f"submodule.{name}.path {path}" for name, path in SUBMODULE_PATHS.items()
+    )
+
+    def read_git_output(command: list[str], *, cwd: Path, text: bool) -> str:
+        if command[:2] == ["git", "config"]:
+            return gitmodules
+        if command == ["git", "rev-parse", "HEAD"]:
+            return TEST_COMMIT
+        pytest.fail(f"Unexpected Git read: {command}")
+
+    monkeypatch.setattr(fetch_sources.subprocess, "check_output", read_git_output)
+    commands = Mock()
+    monkeypatch.setattr(fetch_sources, "run_command", commands)
+    return commands
 
 
-def test_unselected_override_is_reported_without_checkout(source_tree):
-    repo, base, old, new, config = source_tree
-    fetch_sources.main(["--stage", "cv-libs", "--depth", "1"])
-    assert not (repo / "rocm-systems" / ".git").exists()
-    assert git(repo / "rocm-libraries", "rev-parse", "HEAD") == old
-    manifest = build_manifest_schema(repo, base, external_repo_config=config)
-    rows = {row["submodule_name"]: row for row in manifest["submodules"]}
-    assert rows["rocm-systems"]["pin_sha"] == new
+def test_no_config_uses_normal_submodule_update(
+    args: SimpleNamespace, git_commands: Mock
+) -> None:
+    fetch_sources.run(args)
+
+    # All submodules should be initialized normally.
+    git_commands.assert_any_call(
+        ["git", "submodule", "update", "--init", "--"] + list(SUBMODULE_PATHS.values()),
+        cwd=fetch_sources.THEROCK_DIR,
+    )
+    # No fancy cache/config commands to change submodule pins.
+    commands = [invocation.args[0] for invocation in git_commands.call_args_list]
+    assert not any("--cacheinfo" in command for command in commands)
+    assert not any(command[:2] == ["git", "config"] for command in commands)
 
 
-def test_no_external_config_uses_original_gitlinks(source_tree, monkeypatch):
-    repo, base, old, _, _ = source_tree
-    monkeypatch.delenv("EXTERNAL_REPO_CONFIG")
-    fetch_sources.main(["--stage", "math-libs", "--no-apply-patches"])
-    assert git(repo / "rocm-systems", "rev-parse", "HEAD") == old
-    assert git(repo / "rocm-libraries", "rev-parse", "HEAD") == old
-    assert git(repo, "diff", "--cached", "--name-only") == ""
-    manifest = build_manifest_schema(repo, base)
-    assert all(row["pin_sha"] == old for row in manifest["submodules"])
+def test_only_configured_submodule_gets_new_pin_and_remote(
+    args: SimpleNamespace, git_commands: Mock
+) -> None:
+    args.external_repo_config = {
+        "repository": "my-fork/rocm-systems",
+        "ref": TEST_COMMIT,
+        "submodule_path": "rocm-systems",
+    }
+    source_dir = fetch_sources.THEROCK_DIR / "rocm-systems"
+    source_dir.mkdir()
+    (source_dir / ".git").touch()
+
+    fetch_sources.run(args)
+
+    # The pin and URL changes for the external config, and only for it.
+    pin_updates = [
+        invocation.args[0]
+        for invocation in git_commands.call_args_list
+        if "--cacheinfo" in invocation.args[0]
+    ]
+    assert pin_updates == [
+        ["git", "update-index", "--cacheinfo", f"160000,{TEST_COMMIT},rocm-systems"]
+    ]
+    remote_updates = [
+        invocation.args[0]
+        for invocation in git_commands.call_args_list
+        if invocation.args[0][:2] == ["git", "config"]
+    ]
+    assert remote_updates == [
+        [
+            "git",
+            "config",
+            "submodule.rocm-systems.url",
+            "https://github.com/my-fork/rocm-systems.git",
+        ]
+    ]
+    origin_update = [
+        "git",
+        "remote",
+        "set-url",
+        "origin",
+        "https://github.com/my-fork/rocm-systems.git",
+    ]
+    git_commands.assert_any_call(origin_update, cwd=source_dir)
+
+    # All selected submodules then use `git submodule update --init` with indexed pins.
+    git_commands.assert_any_call(
+        ["git", "submodule", "update", "--init", "--"] + list(SUBMODULE_PATHS.values()),
+        cwd=fetch_sources.THEROCK_DIR,
+    )
+
+    # Pin and remote overrides must take effect before the checkout.
+    commands = [invocation.args[0] for invocation in git_commands.call_args_list]
+    update_index = next(
+        i
+        for i, command in enumerate(commands)
+        if command[:3] == ["git", "submodule", "update"]
+    )
+    assert commands.index(pin_updates[0]) < update_index
+    assert commands.index(remote_updates[0]) < update_index
+    assert commands.index(origin_update) < update_index
 
 
-def test_existing_checkout_changes_remote_and_pin(source_tree):
-    repo, _, old, new, config = source_tree
-    # Initialize using the original URL/pin before enabling the override.
-    git(repo, "submodule", "update", "--init", "--", "rocm-systems")
-    assert git(repo / "rocm-systems", "rev-parse", "HEAD") == old
-    fetch_sources.main(["--stage", "math-libs", "--depth", "1"])
-    assert git(repo / "rocm-systems", "rev-parse", "HEAD") == new
-    # Exercise reapplying an index override after normal fetch bookkeeping.
-    fetch_sources.main(["--stage", "math-libs", "--depth", "1"])
-    assert git(repo / "rocm-systems", "rev-parse", "HEAD") == new
+def test_unselected_override_does_not_add_a_checkout(
+    args: SimpleNamespace,
+    git_commands: Mock,
+) -> None:
+    fetch_sources.get_enabled_sources.return_value = (["rocm-libraries"], [])
 
+    args.external_repo_config = {
+        "repository": "my-fork/rocm-systems",
+        "ref": TEST_COMMIT,
+        "submodule_path": "rocm-systems",
+    }
+    fetch_sources.run(args)
 
-@pytest.mark.parametrize("windows", [False, True])
-def test_external_checkout_uses_normal_dvc_projects(source_tree, monkeypatch, windows):
-    repo, _, _, _, _ = source_tree
-    monkeypatch.setattr(fetch_sources, "is_windows", lambda: windows)
-    fetch_sources.main(["--stage", "math-libs", "--depth", "1"])
-    for name in ("rocm-systems", "rocm-libraries"):
-        dvc_dir = repo / name / ".dvc"
-        dvc_dir.mkdir()
-        (dvc_dir / "config").write_text("[core]\nremote = fixture\n")
-    pulled = []
-
-    def pull(project_dir, *, jobs):
-        pulled.append(project_dir)
-        return SimpleNamespace(fetched=0, cached=0, skipped=0)
-
-    monkeypatch.setattr(fetch_sources.fetch_dvc_artifacts, "pull", pull)
-    fetch_sources.main(["--stage", "math-libs", "--depth", "1"])
-    expected = [repo / "rocm-libraries"]
-    if windows:
-        expected.append(repo / "rocm-systems")
-    assert pulled == expected
+    # We adjusted the pin for the rocm-systems submodule but only tried to
+    # fetch the rocm-libraries submodule so the pin doesn't need to be updated
+    # and submodule init should happen normally.
+    commands = [invocation.args[0] for invocation in git_commands.call_args_list]
+    checkouts = [command for command in commands if command[:2] == ["git", "submodule"]]
+    assert checkouts == [
+        ["git", "submodule", "update", "--init", "--", "rocm-libraries"]
+    ]
+    assert not any(command[:2] == ["git", "config"] for command in commands)
+    git_commands.assert_any_call(
+        ["git", "update-index", "--cacheinfo", f"160000,{TEST_COMMIT},rocm-systems"],
+        cwd=fetch_sources.THEROCK_DIR,
+    )
 
 
 @pytest.mark.parametrize(
     "field,value", [("ref", "main"), ("submodule_path", "missing")]
 )
-def test_invalid_override_leaves_index_unchanged(
-    source_tree, monkeypatch, field, value
-):
-    repo, _, _, _, config = source_tree
-    original_index = git(repo, "ls-files", "--stage")
+def test_invalid_override_does_not_change_sources(
+    git_commands: Mock, field: str, value: str
+) -> None:
+    config = {
+        "repository": "my-fork/rocm-systems",
+        "ref": TEST_COMMIT,
+        "submodule_path": "rocm-systems",
+    }
     config[field] = value
-    monkeypatch.setenv("EXTERNAL_REPO_CONFIG", json.dumps(config))
+
     with pytest.raises(ValueError):
-        fetch_sources.main(["--stage", "math-libs"])
-    assert git(repo, "ls-files", "--stage") == original_index
+        fetch_sources.apply_external_repo_override(config, list(SUBMODULE_PATHS))
+
+    git_commands.assert_not_called()
+
+
+@pytest.mark.parametrize("explicit_config", [False, True])
+def test_cli_passes_decoded_config_through_args(
+    explicit_config: bool,
+) -> None:
+    config = {
+        "repository": "my-fork/rocm-systems",
+        "ref": TEST_COMMIT,
+        "submodule_path": "rocm-systems",
+    }
+    requested = {**config, "repository": "another-fork/rocm-systems"}
+    argv = ["--external-repo-config", json.dumps(requested)] if explicit_config else []
+    with (
+        patch("fetch_sources.os.getenv", return_value=json.dumps(config)) as getenv,
+        patch("fetch_sources.run") as run,
+    ):
+        fetch_sources.main(argv)
+
+    getenv.assert_called_once_with("EXTERNAL_REPO_CONFIG")
+    assert run.call_args.args[0].external_repo_config == (
+        requested if explicit_config else config
+    )

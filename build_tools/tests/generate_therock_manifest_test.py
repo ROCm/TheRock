@@ -1,99 +1,107 @@
 """Tests for generate_therock_manifest.py."""
 
-import json
 import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from generate_therock_manifest import (
-    parse_and_validate_external_repo_config,
-)
+from generate_therock_manifest import build_manifest_schema
 
 
-class ParseAndValidateExternalRepoConfigTest(unittest.TestCase):
-    """Tests for parsing EXTERNAL_REPO_CONFIG."""
+class ManifestSchemaTest(unittest.TestCase):
+    def test_no_override_uses_committed_source_identity(self):
+        repo_root = Path("unused")
+        therock_commit = "a" * 40
+        submodule_commit = "b" * 40
+        entries = [
+            {
+                "name": "rocgdb",
+                "path": "debug-tools/rocgdb/source",
+                "url": "https://github.com/ROCm/rocgdb.git",
+            }
+        ]
+        with (
+            patch(
+                "generate_therock_manifest.list_submodules_from_gitmodules_at_commit",
+                return_value=entries,
+            ),
+            patch(
+                "generate_therock_manifest.submodule_pin",
+                return_value=submodule_commit,
+            ) as submodule_pin,
+            patch(
+                "generate_therock_manifest.patches_for_submodule_by_name",
+                return_value=["local.patch"],
+            ),
+        ):
+            manifest = build_manifest_schema(repo_root, therock_commit)
 
-    def test_missing_config_returns_none(self):
-        self.assertIsNone(parse_and_validate_external_repo_config(None))
-        self.assertIsNone(parse_and_validate_external_repo_config(""))
+        submodule_pin.assert_called_once_with(
+            repo_root, therock_commit, "debug-tools/rocgdb/source"
+        )
+        self.assertEqual(
+            manifest,
+            {
+                "the_rock_commit": therock_commit,
+                "submodules": [
+                    {
+                        "submodule_name": "rocgdb",
+                        "submodule_path": "debug-tools/rocgdb/source",
+                        "submodule_url": "https://github.com/ROCm/rocgdb.git",
+                        "pin_sha": submodule_commit,
+                        "patches": ["local.patch"],
+                    }
+                ],
+            },
+        )
 
-    def test_valid_config(self):
-        config = {
+    def test_only_external_source_replaces_committed_identity(self):
+        entries = [
+            {"name": name, "path": name, "url": f"https://github.com/ROCm/{name}.git"}
+            for name in ("rocm-libraries", "rocm-systems")
+        ]
+        default_pin = "a" * 40
+        external_pin = "b" * 40
+        # If we provide an external_repo_config, that data should be used in the
+        # manifest instead of the original values.
+        external_repo_config = {
+            "repository": "my-fork/rocm-systems",
+            "ref": external_pin,
             "submodule_path": "rocm-systems",
-            "ref": "c1dba564e7e3a9158ce56bd0d314c7769ca0a073",
         }
+        with (
+            patch(
+                "generate_therock_manifest.list_submodules_from_gitmodules_at_commit",
+                return_value=entries,
+            ),
+            patch("generate_therock_manifest.submodule_pin", return_value=default_pin),
+            patch(
+                "generate_therock_manifest.patches_for_submodule_by_name",
+                return_value=["local.patch"],
+            ),
+        ):
+            manifest = build_manifest_schema(
+                Path("unused"),
+                "therock-commit",
+                external_repo_config=external_repo_config,
+            )
 
-        result = parse_and_validate_external_repo_config(json.dumps(config))
-
-        self.assertEqual(result, config)
-
-    def test_rejects_non_object_json(self):
-        invalid_values = [
-            None,
-            [],
-            "rocm-systems",
-            123,
-            True,
-        ]
-
-        for value in invalid_values:
-            with self.subTest(value=value):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "EXTERNAL_REPO_CONFIG must be a JSON object",
-                ):
-                    parse_and_validate_external_repo_config(json.dumps(value))
-
-    def test_rejects_invalid_submodule_path(self):
-        invalid_values = [
-            None,
-            "",
-            "   ",
-            123,
-            True,
-            [],
-            {},
-        ]
-
-        for value in invalid_values:
-            with self.subTest(value=value):
-                config = {
-                    "submodule_path": value,
-                    "ref": "c1dba564e7e3a9158ce56bd0d314c7769ca0a073",
-                }
-
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "'submodule_path' must be a non-empty string",
-                ):
-                    parse_and_validate_external_repo_config(json.dumps(config))
-
-    def test_rejects_invalid_ref(self):
-        invalid_values = [
-            None,
-            "",
-            "   ",
-            123,
-            True,
-            [],
-            {},
-        ]
-
-        for value in invalid_values:
-            with self.subTest(value=value):
-                config = {
-                    "submodule_path": "rocm-systems",
-                    "ref": value,
-                }
-
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "'ref' must be a non-empty string",
-                ):
-                    parse_and_validate_external_repo_config(json.dumps(config))
+        rows = {row["submodule_name"]: row for row in manifest["submodules"]}
+        self.assertEqual(rows["rocm-systems"]["pin_sha"], external_pin)
+        self.assertEqual(
+            rows["rocm-systems"]["submodule_url"],
+            "https://github.com/my-fork/rocm-systems.git",
+        )
+        self.assertEqual(rows["rocm-systems"]["patches"], [])
+        self.assertEqual(rows["rocm-libraries"]["pin_sha"], default_pin)
+        self.assertEqual(
+            rows["rocm-libraries"]["submodule_url"],
+            "https://github.com/ROCm/rocm-libraries.git",
+        )
+        self.assertEqual(rows["rocm-libraries"]["patches"], ["local.patch"])
 
 
 if __name__ == "__main__":

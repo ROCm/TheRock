@@ -38,7 +38,8 @@ Examples (run from the TheRock checkout):
     python build_tools/fetch_sources.py
 
 Component-repository CI overrides:
-    EXTERNAL_REPO_CONFIG accepts the JSON emitted as config_json by
+    --external-repo-config defaults to EXTERNAL_REPO_CONFIG and accepts the JSON
+    emitted as config_json by
     github_actions/detect_external_repo_config.py. The source fields are:
 
         {
@@ -620,9 +621,7 @@ def apply_external_repo_override(config: dict, projects: list[str]) -> str:
 
 def run(args):
     projects, external_sources = get_enabled_sources(args)
-    external_config = parse_and_validate_external_repo_config(
-        os.getenv("EXTERNAL_REPO_CONFIG")
-    )
+    external_config = args.external_repo_config
     external_name = None
     if external_config:
         if args.remote or not args.update_submodules:
@@ -868,6 +867,14 @@ def main(argv):
             "index in a disposable checkout; stage selection still controls fetching. "
             "See this script's module documentation for examples and manifest handling."
         ),
+    )
+
+    parser.add_argument(
+        "--external-repo-config",
+        type=parse_and_validate_external_repo_config,
+        default=os.getenv("EXTERNAL_REPO_CONFIG"),
+        help="JSON source override containing repository, ref, and submodule_path. "
+        "Defaults to EXTERNAL_REPO_CONFIG.",
     )
 
     # Stage-aware fetching (preferred for CI)
