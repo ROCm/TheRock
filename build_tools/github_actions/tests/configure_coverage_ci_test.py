@@ -16,6 +16,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parents[2]))
 
 import configure_coverage_ci
+from _therock_utils import coverage_registry
 from _therock_utils.build_topology import get_topology
 
 
@@ -26,7 +27,7 @@ class ParseProjectsTest(unittest.TestCase):
         # should it pick projects whose stage this workflow cannot build.
         self.assertEqual(
             configure_coverage_ci.parse_projects(""),
-            sorted(configure_coverage_ci.DEFAULT_PROJECTS),
+            sorted(coverage_registry.DEFAULT_PROJECTS),
         )
 
     def test_default_selection_is_one_the_workflow_can_actually_build(self):
@@ -37,8 +38,8 @@ class ParseProjectsTest(unittest.TestCase):
     def test_default_leaves_out_what_cannot_be_built_or_is_known_broken(self):
         self.assertEqual(
             sorted(
-                configure_coverage_ci.SUPPORTED_PROJECTS
-                - configure_coverage_ci.DEFAULT_PROJECTS
+                coverage_registry.SUPPORTED_PROJECTS
+                - coverage_registry.DEFAULT_PROJECTS
             ),
             # rccl and rocshmem for want of a comm-libs build job, hipblaslt
             # and hiptensor because their instrumented builds do not link.
@@ -51,24 +52,24 @@ class ParseProjectsTest(unittest.TestCase):
         for alias in ("all", "rocm_libraries_all", "rocm_systems_all"):
             with self.subTest(alias=alias):
                 self.assertFalse(
-                    configure_coverage_ci.BLOCKED_PROJECTS
+                    coverage_registry.BLOCKED_PROJECTS
                     & configure_coverage_ci._GROUP_ALIASES[alias]
                 )
 
     def test_blocked_project_is_still_honoured_when_named(self):
         # Retesting is the only way to notice the block has been lifted.
-        for name in sorted(configure_coverage_ci.BLOCKED_PROJECTS):
+        for name in sorted(coverage_registry.BLOCKED_PROJECTS):
             with self.subTest(project=name):
                 self.assertEqual(configure_coverage_ci.parse_projects(name), [name])
 
     def test_naming_a_blocked_project_warns_with_the_reason(self):
-        for name in sorted(configure_coverage_ci.BLOCKED_PROJECTS):
+        for name in sorted(coverage_registry.BLOCKED_PROJECTS):
             with self.subTest(project=name):
                 stderr = io.StringIO()
                 with contextlib.redirect_stderr(stderr):
                     configure_coverage_ci.parse_projects(name)
                 self.assertIn(
-                    configure_coverage_ci.COVERAGE_PROJECTS[name].blocked_reason,
+                    coverage_registry.COVERAGE_PROJECTS[name].blocked_reason,
                     stderr.getvalue(),
                 )
 
@@ -89,15 +90,15 @@ class ParseProjectsTest(unittest.TestCase):
         self.assertEqual(
             configure_coverage_ci.parse_projects("all"),
             sorted(
-                configure_coverage_ci.SUPPORTED_PROJECTS
-                - configure_coverage_ci.BLOCKED_PROJECTS
+                coverage_registry.SUPPORTED_PROJECTS
+                - coverage_registry.BLOCKED_PROJECTS
             ),
         )
 
     def test_rocm_libraries_all_expands_to_that_group(self):
         self.assertEqual(
             configure_coverage_ci.parse_projects("rocm_libraries_all"),
-            sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS),
+            sorted(coverage_registry.ROCM_LIBRARIES_PROJECTS),
         )
 
     def test_group_aliases_are_case_insensitive(self):
@@ -134,14 +135,14 @@ class ParseProjectsTest(unittest.TestCase):
 
 class SourceRepoPartitionTest(unittest.TestCase):
     def test_groups_partition_the_measurable_projects(self):
-        libraries = set(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
-        systems = set(configure_coverage_ci.ROCM_SYSTEMS_PROJECTS)
+        libraries = set(coverage_registry.ROCM_LIBRARIES_PROJECTS)
+        systems = set(coverage_registry.ROCM_SYSTEMS_PROJECTS)
         self.assertTrue(libraries.isdisjoint(systems))
         self.assertEqual(
             libraries | systems,
             set(
-                configure_coverage_ci.SUPPORTED_PROJECTS
-                - configure_coverage_ci.BLOCKED_PROJECTS
+                coverage_registry.SUPPORTED_PROJECTS
+                - coverage_registry.BLOCKED_PROJECTS
             ),
         )
 
@@ -199,7 +200,7 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(matrix)), matrix)
 
     def test_every_registered_project_declares_report_inputs(self):
-        for name, project in configure_coverage_ci.COVERAGE_PROJECTS.items():
+        for name, project in coverage_registry.COVERAGE_PROJECTS.items():
             with self.subTest(project=name):
                 self.assertTrue(project.object_globs, "needs objects for llvm-cov")
                 self.assertTrue(project.fetch_artifact_args, "needs artifacts to fetch")
@@ -210,10 +211,10 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         # TheRock's <PROJECT>_ENABLE_COVERAGE is only a knob; instrumentation
         # happens when the subproject's own option is set. An entry without one
         # builds and tests cleanly and then reports nothing.
-        for name in sorted(configure_coverage_ci.SUPPORTED_PROJECTS):
+        for name in sorted(coverage_registry.SUPPORTED_PROJECTS):
             with self.subTest(project=name):
                 self.assertTrue(
-                    configure_coverage_ci.COVERAGE_PROJECTS[name].coverage_option
+                    coverage_registry.COVERAGE_PROJECTS[name].coverage_option
                 )
 
     def test_unsupported_project_is_rejected_with_the_reason(self):
@@ -227,7 +228,7 @@ class BuildCoverageMatrixTest(unittest.TestCase):
         # scheduled by a group selection.
         for name in ("miopen", "hipsparse", "rocalution", "rocprofiler-sdk"):
             with self.subTest(project=name):
-                self.assertIn(name, configure_coverage_ci.COVERAGE_PROJECTS)
+                self.assertIn(name, coverage_registry.COVERAGE_PROJECTS)
                 self.assertNotIn(name, configure_coverage_ci.parse_projects("all"))
 
     def test_object_globs_reach_the_matrix(self):
@@ -245,7 +246,7 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         # What the nightly does: instrument every onboarded project at once.
         self.assertEqual(
             configure_coverage_ci.build_coverage_cmake_options(
-                sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+                sorted(coverage_registry.ROCM_LIBRARIES_PROJECTS)
             ),
             ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"],
         )
@@ -254,8 +255,8 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         self.assertEqual(
             configure_coverage_ci.build_coverage_cmake_options(
                 sorted(
-                    configure_coverage_ci.SUPPORTED_PROJECTS
-                    - configure_coverage_ci.BLOCKED_PROJECTS
+                    coverage_registry.SUPPORTED_PROJECTS
+                    - coverage_registry.BLOCKED_PROJECTS
                 )
             ),
             ["-DTHEROCK_COVERAGE_ALL=ON"],
@@ -286,7 +287,7 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
 
     def test_one_group_does_not_claim_to_cover_the_other(self):
         options = configure_coverage_ci.build_coverage_cmake_options(
-            sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
+            sorted(coverage_registry.ROCM_LIBRARIES_PROJECTS)
         )
         self.assertEqual(options, ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"])
 
@@ -334,7 +335,7 @@ class ResolveBuildStagesTest(unittest.TestCase):
 
     def test_every_buildable_stage_is_one_a_project_can_register_against(self):
         self.assertTrue(
-            configure_coverage_ci.BUILDABLE_STAGES <= configure_coverage_ci.KNOWN_STAGES
+            coverage_registry.BUILDABLE_STAGES <= coverage_registry.KNOWN_STAGES
         )
 
 
@@ -349,7 +350,7 @@ class RegistryMatchesBuildTopologyTest(unittest.TestCase):
 
     def test_all_artifacts_of_a_project_come_from_one_stage(self):
         topology = get_topology()
-        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+        for key, project in sorted(coverage_registry.COVERAGE_PROJECTS.items()):
             for artifact in project.artifact_names:
                 with self.subTest(project=key, artifact=artifact):
                     self.assertEqual(
@@ -358,12 +359,12 @@ class RegistryMatchesBuildTopologyTest(unittest.TestCase):
                     )
 
     def test_every_project_resolves_to_a_known_stage(self):
-        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+        for key, project in sorted(coverage_registry.COVERAGE_PROJECTS.items()):
             with self.subTest(project=key):
-                self.assertIn(project.stage, configure_coverage_ci.KNOWN_STAGES)
+                self.assertIn(project.stage, coverage_registry.KNOWN_STAGES)
 
     def test_unknown_artifact_is_rejected_rather_than_guessed(self):
-        project = configure_coverage_ci.CoverageProject(
+        project = coverage_registry.CoverageProject(
             cmake_target="notAProject",
             artifact_names=["no-such-artifact"],
         )
@@ -374,15 +375,15 @@ class RegistryMatchesBuildTopologyTest(unittest.TestCase):
     def test_stage_override_wins_over_the_topology(self):
         # The escape hatch for a project the topology cannot answer for. No
         # entry needs it today, so this is the only thing exercising it.
-        project = configure_coverage_ci.CoverageProject(
+        project = coverage_registry.CoverageProject(
             cmake_target="hipRAND",
             artifact_names=["no-such-artifact"],
-            stage_override=configure_coverage_ci.STAGE_COMM_LIBS,
+            stage_override=coverage_registry.STAGE_COMM_LIBS,
         )
-        self.assertEqual(project.stage, configure_coverage_ci.STAGE_COMM_LIBS)
+        self.assertEqual(project.stage, coverage_registry.STAGE_COMM_LIBS)
 
     def test_stage_needs_an_artifact_or_an_override(self):
-        project = configure_coverage_ci.CoverageProject(cmake_target="hipRAND")
+        project = coverage_registry.CoverageProject(cmake_target="hipRAND")
         with self.assertRaises(ValueError) as caught:
             project.stage
         self.assertIn("artifact_names", str(caught.exception))
@@ -403,68 +404,66 @@ class ValidateRegistryTest(unittest.TestCase):
             artifact_names=["rand"],
             artifact_relpaths=["math-libs/hipRAND/stage"],
         )
-        return configure_coverage_ci.CoverageProject(**{**defaults, **kwargs})
+        return coverage_registry.CoverageProject(**{**defaults, **kwargs})
 
     def test_the_shipped_registry_is_valid(self):
-        configure_coverage_ci.validate_registry(configure_coverage_ci.COVERAGE_PROJECTS)
+        coverage_registry.validate_registry(coverage_registry.COVERAGE_PROJECTS)
 
     def test_raises_rather_than_asserts(self):
         # A ValueError subclass, so callers can keep catching ValueError.
-        self.assertTrue(
-            issubclass(configure_coverage_ci.CoverageRegistryError, ValueError)
-        )
+        self.assertTrue(issubclass(coverage_registry.CoverageRegistryError, ValueError))
 
     def test_unknown_source_repo_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(source_repo="rocm-something")}
             )
         self.assertIn("source_repo", str(caught.exception))
 
     def test_key_disagreeing_with_cmake_target_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry({"hip_rand": self._project()})
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry({"hip_rand": self._project()})
         self.assertIn("cmake_target lower cased", str(caught.exception))
 
     def test_entry_with_neither_option_nor_reason_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(coverage_option="")}
             )
         self.assertIn("set either coverage_option", str(caught.exception))
 
     def test_entry_with_both_option_and_reason_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(unsupported_reason="no")}
             )
         self.assertIn("set only one of", str(caught.exception))
 
     def test_measurable_project_without_overlay_inputs_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(artifact_relpaths=[])}
             )
         self.assertIn("artifact_relpaths", str(caught.exception))
 
     def test_artifact_the_topology_does_not_know_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(artifact_names=["no-such-artifact"])}
             )
         self.assertIn("no-such-artifact", str(caught.exception))
 
     def test_stage_outside_the_known_set_is_rejected(self):
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {"hiprand": self._project(stage_override="not-a-stage")}
             )
         self.assertIn("not-a-stage", str(caught.exception))
 
     def test_every_problem_is_reported_not_just_the_first(self):
         # Adding a project should surface all of its mistakes in one run.
-        with self.assertRaises(configure_coverage_ci.CoverageRegistryError) as caught:
-            configure_coverage_ci.validate_registry(
+        with self.assertRaises(coverage_registry.CoverageRegistryError) as caught:
+            coverage_registry.validate_registry(
                 {
                     "hip_rand": self._project(
                         source_repo="nope",
@@ -487,13 +486,13 @@ class DerivedAttributesTest(unittest.TestCase):
     """
 
     def test_key_and_test_component_follow_the_cmake_target(self):
-        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+        for key, project in sorted(coverage_registry.COVERAGE_PROJECTS.items()):
             with self.subTest(project=key):
                 self.assertEqual(project.key, key)
                 self.assertEqual(project.test_component, key)
 
     def test_coverage_config_path_follows_the_key(self):
-        project = configure_coverage_ci.COVERAGE_PROJECTS["hiprand"]
+        project = coverage_registry.COVERAGE_PROJECTS["hiprand"]
         self.assertEqual(
             project.coverage_config,
             "projects/hiprand/test_categories_coverage.yaml",
@@ -502,17 +501,17 @@ class DerivedAttributesTest(unittest.TestCase):
     def test_codecov_flag_defaults_to_the_cmake_target(self):
         # The cased spelling, not the key: Codecov reports "hipRAND".
         self.assertEqual(
-            configure_coverage_ci.COVERAGE_PROJECTS["hiprand"].codecov_flag, "hipRAND"
+            coverage_registry.COVERAGE_PROJECTS["hiprand"].codecov_flag, "hipRAND"
         )
 
     def test_codecov_flag_override_is_honoured(self):
         # rocshmem is the only project whose flag is not its cmake_target.
         self.assertEqual(
-            configure_coverage_ci.COVERAGE_PROJECTS["rocshmem"].codecov_flag, "rocSHMEM"
+            coverage_registry.COVERAGE_PROJECTS["rocshmem"].codecov_flag, "rocSHMEM"
         )
 
     def test_every_project_declares_the_inputs_the_derivations_need(self):
-        for key, project in sorted(configure_coverage_ci.COVERAGE_PROJECTS.items()):
+        for key, project in sorted(coverage_registry.COVERAGE_PROJECTS.items()):
             with self.subTest(project=key):
                 self.assertTrue(project.artifact_names, "stage is derived from these")
                 self.assertTrue(project.codecov_flag)
@@ -556,7 +555,7 @@ class EmitCmakeTest(unittest.TestCase):
     def test_emits_group_lists_from_allowlist(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "therock_coverage_projects.cmake"
-            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            self.assertEqual(coverage_registry.main(["--emit-cmake", str(out)]), 0)
             text = out.read_text()
             self.assertIn("set(THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS", text)
             self.assertIn("hipRAND", text)
@@ -587,7 +586,7 @@ class EmitCmakeTest(unittest.TestCase):
         # translation to its upstream option name to survive.
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "therock_coverage_projects.cmake"
-            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            self.assertEqual(coverage_registry.main(["--emit-cmake", str(out)]), 0)
             self.assertIn(
                 "set(THEROCK_COVERAGE_OPTION_HIPBLASLT HIPBLASLT_ENABLE_COVERAGE)",
                 out.read_text(),
@@ -599,7 +598,7 @@ class EmitCmakeTest(unittest.TestCase):
         # to understand it.
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "therock_coverage_projects.cmake"
-            self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
+            self.assertEqual(coverage_registry.main(["--emit-cmake", str(out)]), 0)
             text = out.read_text()
             self.assertIn(
                 "set(THEROCK_COVERAGE_OPTION_HIPRAND BUILD_CODE_COVERAGE)", text
@@ -634,9 +633,7 @@ class EmitCmakeTest(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 out = Path(tmp) / "c.cmake"
-                self.assertEqual(
-                    configure_coverage_ci.main(["--emit-cmake", str(out)]), 0
-                )
+                self.assertEqual(coverage_registry.main(["--emit-cmake", str(out)]), 0)
                 self.assertTrue(out.exists())
         finally:
             for k, v in saved.items():

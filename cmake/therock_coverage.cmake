@@ -52,7 +52,7 @@ function(therock_coverage_configure
     message(FATAL_ERROR
       "${logical_target_name}: ${_var_name} was set but the project "
       "has no coverage option registered. Add one to COVERAGE_PROJECTS in "
-      "build_tools/github_actions/configure_coverage_ci.py.")
+      "build_tools/_therock_utils/coverage_registry.py.")
   endif()
 
   # The super-project may be configured with MSVC while the subproject is

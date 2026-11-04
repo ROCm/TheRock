@@ -218,8 +218,8 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 # each one into whichever option that subproject actually implements, using the
 # THEROCK_COVERAGE_OPTION_<PROJECT> map generated below. Both the group lists
 # and that map come from the coverage registry (COVERAGE_PROJECTS in
-# build_tools/github_actions/configure_coverage_ci.py) at configure time, and
-# cover only the projects that emit LLVM profile data.
+# build_tools/_therock_utils/coverage_registry.py) at configure time, and cover
+# only the projects that emit LLVM profile data.
 ################################################################################
 
 option(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL
@@ -230,13 +230,15 @@ option(THEROCK_COVERAGE_ALL
   "Enable coverage instrumentation for all coverage-enabled projects" OFF)
 
 # Emit the per-group project lists from COVERAGE_PROJECTS. CMAKE_CONFIGURE_DEPENDS
-# re-runs configure when that file changes.
+# re-runs configure when that file changes. The registry lives under
+# build_tools/_therock_utils/, which the build system may depend on; the CI
+# matrix code under build_tools/github_actions/ is not used here.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py")
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/coverage_registry.py")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
 execute_process(
   COMMAND ${Python3_EXECUTABLE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/coverage_registry.py"
     "--emit-cmake" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake"
   COMMAND_ERROR_IS_FATAL ANY)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake")
