@@ -198,6 +198,23 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+# Fortran binding test jobs, mapped to the binding family whose artifacts they
+# test (see install_rocm_from_artifacts.py --fortran-bindings).
+FORTRAN_BINDING_TEST_JOBS = {
+    "runtime-fortran": "runtime",
+    **{
+        f"{lib}-fortran": family
+        for family, libs in {
+            "blas": ("rocblas", "hipblas"),
+            "solver": ("rocsolver", "hipsolver"),
+            "sparse": ("rocsparse", "hipsparse"),
+            "fft": ("rocfft", "hipfft"),
+            "rand": ("rocrand", "hiprand"),
+        }.items()
+        for lib in libs
+    },
+}
+
 
 # Runner assignment for test components
 # =====================================
@@ -693,115 +710,27 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "rocblas-fortran": {
-        "job_name": "rocblas-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "hipblas-fortran": {
-        "job_name": "hipblas-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "rocsolver-fortran": {
-        "job_name": "rocsolver-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "hipsolver-fortran": {
-        "job_name": "hipsolver-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "rocsparse-fortran": {
-        "job_name": "rocsparse-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "hipsparse-fortran": {
-        "job_name": "hipsparse-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "rocfft-fortran": {
-        "job_name": "rocfft-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "hipfft-fortran": {
-        "job_name": "hipfft-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "rocrand-fortran": {
-        "job_name": "rocrand-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "hiprand-fortran": {
-        "job_name": "hiprand-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
-    },
-    "runtime-fortran": {
-        "job_name": "runtime-fortran",
-        "fetch_artifact_args": "--fortran-bindings --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-        },
+    # One job per binding subproject, named after it for consumer-based test
+    # selection, fetching only its binding family.
+    **{
+        job: {
+            "job_name": job,
+            "fetch_artifact_args": f"--fortran-bindings={family} --tests",
+            "timeout_minutes": 15,
+            "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+            "platform": ["linux"],
+            "total_shards_dict": {
+                "linux": 1,
+            },
+            # The bindings are not built in sanitizer builds.
+            "skip_build_variant": [
+                "asan",
+                "host-asan",
+                "asan-debug",
+                "host-asan-debug",
+            ],
+        }
+        for job, family in FORTRAN_BINDING_TEST_JOBS.items()
     },
     "hiprand": {
         "job_name": "hiprand",

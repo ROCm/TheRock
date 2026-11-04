@@ -48,6 +48,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocalution | --no-rocalution]
     [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
+    [--fortran-bindings {blas,fft,rand,runtime,solver,sparse}]
     [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
@@ -155,6 +156,16 @@ PLATFORM = platform.system().lower()
 NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
 DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
 MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
+
+# The C library artifacts each --fortran-bindings family's tests load.
+FORTRAN_BINDING_LIBS = {
+    "runtime": [],
+    "blas": ["blas"],
+    "solver": ["solver", "blas", "sparse"],
+    "sparse": ["sparse", "blas"],
+    "fft": ["fft", "fftw3", "rand"],
+    "rand": ["rand"],
+}
 s3_client = boto3.client(
     "s3",
     region_name=NIGHTLY_TARBALL_BUCKET.region,
@@ -637,18 +648,10 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
         if args.fortran_bindings:
-            for family in ("runtime", "blas", "solver", "sparse", "fft", "rand"):
-                extra_artifacts.append(f"{family}-fortran")
-            # The libraries the binding tests load, without their own tests.
-            for lib in (
-                "rocprofiler-sdk",
-                "blas",
-                "solver",
-                "sparse",
-                "fft",
-                "fftw3",
-                "rand",
-            ):
+            # The bindings are static archives, so their tests only load the
+            # base HIP and ROCTx libraries and these C libraries.
+            extra_artifacts.append(f"{args.fortran_bindings}-fortran")
+            for lib in FORTRAN_BINDING_LIBS[args.fortran_bindings]:
                 argv.append(f"{lib}_lib")
         if args.solver:
             extra_artifacts.append("solver")
@@ -1119,9 +1122,8 @@ def main(argv):
 
     artifacts_group.add_argument(
         "--fortran-bindings",
-        default=False,
-        help="Include the Fortran binding artifacts",
-        action=argparse.BooleanOptionalAction,
+        choices=sorted(FORTRAN_BINDING_LIBS),
+        help="Include a family of Fortran bindings and the libraries they wrap",
     )
 
     artifacts_group.add_argument(

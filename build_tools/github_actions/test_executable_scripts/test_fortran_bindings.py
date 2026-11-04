@@ -44,7 +44,12 @@ if TEST_COMPONENT not in TEST_DIRS:
 test_dirs = [Path(THEROCK_BIN_DIR) / d for d in TEST_DIRS[TEST_COMPONENT]]
 test_dirs = [d for d in test_dirs if (d / "CTestTestfile.cmake").is_file()]
 if not test_dirs:
-    logging.info(f"No {TEST_COMPONENT} tests are installed; nothing to run.")
+    # Not an error yet: the monorepo pins do not contain the bindings.
+    print(
+        f"::warning::No {TEST_COMPONENT} tests are installed in {THEROCK_BIN_DIR}; "
+        "nothing was run.",
+        flush=True,
+    )
     sys.exit(0)
 
 failed = []

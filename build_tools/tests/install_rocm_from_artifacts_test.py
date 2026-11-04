@@ -477,7 +477,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocalution=False,
         kfdtest=False,
         rocwmma=False,
-        fortran_bindings=False,
+        fortran_bindings=None,
         rpp=False,
         solver=False,
         sparse=False,
@@ -523,17 +523,27 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
 
 
 class TestFortranBindings(unittest.TestCase):
-    """--fortran-bindings fetches the bindings' tests and the ROCTx runtime."""
+    """--fortran-bindings fetches one family's bindings and the libraries their tests load."""
 
-    def test_fortran_bindings_with_tests(self) -> None:
+    def test_solver_bindings_with_tests(self) -> None:
         argv = _captured_fetch_argv(
-            _make_run_id_args(fortran_bindings=True, tests=True)
+            _make_run_id_args(fortran_bindings="solver", tests=True)
         )
-        for family in ("runtime", "blas", "solver", "sparse", "fft", "rand"):
-            self.assertIn(f"{family}-fortran_test", argv)
+        self.assertIn("solver-fortran_test", argv)
+        for lib in ("solver", "blas", "sparse"):
+            self.assertIn(f"{lib}_lib", argv)
+            self.assertNotIn(f"{lib}_test", argv)
+        self.assertNotIn("blas-fortran_test", argv)
+        self.assertNotIn("runtime-fortran_test", argv)
+
+    def test_runtime_bindings_with_tests(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(fortran_bindings="runtime", tests=True)
+        )
+        self.assertIn("runtime-fortran_test", argv)
+        self.assertIn("core-hip_lib", argv)
         self.assertIn("rocprofiler-sdk_lib", argv)
-        self.assertIn("blas_lib", argv)
-        self.assertNotIn("blas_test", argv)
+        self.assertNotIn("blas_lib", argv)
 
 
 class TestUntarFiles(unittest.TestCase):
