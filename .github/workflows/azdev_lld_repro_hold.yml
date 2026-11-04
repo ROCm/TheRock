@@ -1,25 +1,20 @@
-# NO-MERGE: lld-link silent object drop reproducer on shark69-ci (ROCm/TheRock#9469).
+# NO-MERGE: held lld-link reproducer on the Azure DEV Turin pool (ROCm/TheRock#9469, ROCM-33918).
 #
-# shark69-ci is bare-metal Windows 11 on a Zen 5 Threadripper PRO 9985WX (no hypervisor).
-# This builds only the math-libs stage for gfx120X-all, with all inbound stages fetched
-# from main run 41076512607 (same commit as this branch), and runs repro_link.ps1 in the
-# background against the live build tree while the build keeps the machine loaded.
-#
-# Differences from multi_arch_build_windows_artifacts.yml:
-#   - choco uses public chocolatey (no in-cluster Nexus); ninja pinned to 1.13.2 like CI
-#   - build dir is B:\build like CI (prebuilt artifacts embed B:/build paths); sources,
-#     repro copies and tools live under a short root on the largest free fixed drive
-#   - no ccache, no AWS credentials, no artifact push / log upload to S3
-name: shark69 lld-link repro (NO-MERGE)
+# Runs on az-windows-scale-rocm-default-dev (Standard_F80ads_v7, EPYC 9V45 Turin,
+# Windows Server 2025 ARC pod). Builds only the math-libs stage for gfx120X-all with
+# inbound stages from main run 41076512607 (same commit as this branch), runs
+# repro_link.ps1 against the live build tree, then HOLDS the pod so it can be
+# inspected with `kubectl exec` (the reproducer keeps running during the hold).
+# Release early: create the file printed by the hold step (B:\lr\release).
+name: azdev lld-link repro + hold (NO-MERGE)
 
 on:
   push:
     branches:
-      - users/justchen/shark69-lld-repro
-  workflow_dispatch:
+      - users/justchen/azdev-lld-repro-hold
 
 concurrency:
-  group: shark69-lld-repro
+  group: azdev-lld-repro-hold
   cancel-in-progress: false
 
 permissions:
@@ -32,54 +27,33 @@ env:
   DIST_AMDGPU_FAMILIES: gfx110X-all;gfx1151;gfx120X-all;gfx90a
   ROCM_PACKAGE_VERSION: 10.3.0.dev0+1c64e8692e235910ffacea88c315973c87cdaf7e
   CMAKE_PRESET: windows-release
+  HOLD_MINUTES: "480"
 
 jobs:
-  preflight:
-    name: Preflight (shark69-ci)
-    runs-on: windows-gfx1201-gpu-rocm-shark69-ci
-    timeout-minutes: 15
-    outputs:
-      root: ${{ steps.pf.outputs.root }}
-      jobs: ${{ steps.pf.outputs.jobs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          sparse-checkout: .github/lld_repro
-      - name: Preflight
-        id: pf
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .github/lld_repro/preflight.ps1
-
-  build_and_repro:
-    name: math-libs gfx120X build + lld-link repro (shark69-ci)
-    needs: preflight
-    runs-on: windows-gfx1201-gpu-rocm-shark69-ci
+  build_repro_hold:
+    name: math-libs gfx120X build + lld-link repro + hold (az dev Turin)
+    runs-on: az-windows-scale-rocm-default-dev
     timeout-minutes: 720
     defaults:
       run:
         shell: bash
     env:
-      ROOT: ${{ needs.preflight.outputs.root }}
+      ROOT: B:\lr
       BUILD_DIR: B:\build
-      SRC_DIR: ${{ needs.preflight.outputs.root }}\s
-      REPRO_DIR: ${{ needs.preflight.outputs.root }}\r
-      TOOLS_DIR: ${{ needs.preflight.outputs.root }}\t
-      STOP_FILE: ${{ needs.preflight.outputs.root }}\stop
-      WATCH_LOG: ${{ needs.preflight.outputs.root }}\repro_watch.log
-      BUILD_JOBS: ${{ needs.preflight.outputs.jobs }}
+      SRC_DIR: B:\lr\s
+      REPRO_DIR: B:\lr\r
+      TOOLS_DIR: B:\lr\t
+      STOP_FILE: B:\lr\stop
+      WATCH_LOG: B:\lr\repro_watch.log
+      RELEASE_FILE: B:\lr\release
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
       - name: Prepare build root
         shell: powershell
         run: |
-          if (Test-Path $env:ROOT) { cmd /c "rmdir /s /q `"$env:ROOT`"" }
-          if (Test-Path $env:BUILD_DIR) {
-            if (-not (Test-Path "$env:BUILD_DIR\.shark69-lld-repro")) { "refusing to delete foreign $env:BUILD_DIR"; exit 1 }
-            cmd /c "rmdir /s /q `"$env:BUILD_DIR`""
-          }
           New-Item -ItemType Directory -Force $env:BUILD_DIR, $env:REPRO_DIR, $env:TOOLS_DIR | Out-Null
-          New-Item -ItemType File -Force "$env:BUILD_DIR\.shark69-lld-repro" | Out-Null
-          Get-ChildItem $env:ROOT
+          "runner/pod: $env:RUNNER_NAME"
+          Get-PSDrive B | Format-Table -AutoSize
 
       - name: Enable long paths for git
         run: git config --global core.longpaths true
@@ -207,7 +181,31 @@ jobs:
         id: build
         continue-on-error: true
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} -- -k 0 -j ${BUILD_JOBS}
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} -- -k 0
+
+      - name: Hold pod for live debugging (kubectl exec)
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          $minutes = [int]$env:HOLD_MINUTES
+          Write-Host "=========================================================="
+          Write-Host " POD HELD FOR DEBUGGING - up to $minutes minute(s)"
+          Write-Host " pod       : $env:RUNNER_NAME"
+          Write-Host " namespace : az-windows-scale-rocm-default-dev"
+          Write-Host " exec      : kubectl exec -it $env:RUNNER_NAME -- powershell"
+          Write-Host " in shell  : subst B: C:\scratch-b   (drive letters are per session)"
+          Write-Host " build     : $env:BUILD_DIR   repro: $env:REPRO_DIR   log: $env:WATCH_LOG"
+          Write-Host " release   : New-Item -ItemType File $env:RELEASE_FILE"
+          Write-Host "=========================================================="
+          "pod=$env:RUNNER_NAME" | Add-Content $env:GITHUB_STEP_SUMMARY
+          $deadline = (Get-Date).AddMinutes($minutes)
+          while ((Get-Date) -lt $deadline) {
+            if (Test-Path $env:RELEASE_FILE) { Write-Host "release file seen; ending hold"; break }
+            $left = [int]($deadline - (Get-Date)).TotalMinutes
+            $undef = if (Test-Path $env:WATCH_LOG) { @(Select-String -Path $env:WATCH_LOG -Pattern ' UNDEF iter=').Count } else { 0 }
+            Write-Host "[hold] $left min left - $env:RUNNER_NAME - repro drops so far: $undef"
+            Start-Sleep -Seconds 120
+          }
 
       - name: Stop reproducer and summarize
         if: ${{ always() }}
@@ -227,7 +225,7 @@ jobs:
           $nat = Get-ChildItem "$env:BUILD_DIR\logs" -Recurse -File -EA SilentlyContinue | Select-String -Pattern 'lld-link: error: undefined symbol' -List
           "==== natural build lld-link undefined-symbol logs: $(@($nat).Count)"; $nat | ForEach-Object { $_.Path }
           $nat | ForEach-Object { $_.Path } | Set-Content "$env:ROOT\natural_undef_logs.txt"
-          @("### shark69 lld-link repro", "", "Build outcome: ${{ steps.build.outcome }}", "",
+          @("### az dev (Turin) lld-link repro + hold", "", "Build outcome: ${{ steps.build.outcome }}", "",
             "Natural lld-link undefined-symbol logs: $(@($nat).Count)", "", '```') + ($key | Select-Object -Last 40 | ForEach-Object { $_.Line }) +
             ($prog | ForEach-Object { $_.Line }) + '```' | Add-Content $env:GITHUB_STEP_SUMMARY
 
@@ -246,16 +244,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ always() }}
         with:
-          name: shark69-lld-repro-logs
+          name: azdev-lld-repro-logs
           path: ${{ env.UPLOAD_DIR }}
           if-no-files-found: warn
-
-      - name: Free B:\build
-        if: ${{ always() }}
-        shell: powershell
-        run: |
-          if (Test-Path "$env:BUILD_DIR\.shark69-lld-repro") { cmd /c "rmdir /s /q `"$env:BUILD_DIR`"" }
-          Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='B:'" | ForEach-Object { "B: free=$([math]::Round($_.FreeSpace/1GB))GB" }
 
       - name: Fail if the build failed
         if: ${{ steps.build.outcome == 'failure' }}
