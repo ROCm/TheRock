@@ -60,7 +60,6 @@ CI_LABELS: list[Label] = [
     Label("ci:run-all-archs", COLOR_CI_GENERAL, "Opt-in to building for all architectures on a pull request"),
     Label("ci:run-multi-arch", COLOR_CI_GENERAL, "Opt-in to running multi-arch CI on a pull request"),
     Label("ci:run-non-multi-arch", COLOR_CI_GENERAL, "Opt-in to running non-multi-arch CI on a pull request"),
-    Label("ci:build-jax", COLOR_CI_GENERAL, "Enable Jax Build"),
     Label("ci:asan", COLOR_CI_GENERAL, "Opt-in to building ASAN"),
     Label("ci:host-asan", COLOR_CI_GENERAL, "Opt-in to running multi-arch host-asan CI on a pull request"),
     Label("ci:run-multi-gpu", COLOR_CI_GENERAL, "Opt-in to running multi-GPU tests"),
@@ -173,16 +172,17 @@ CI_LABELS: list[Label] = [
     # build_variant: labels
     Label("build_variant:asan", COLOR_BUILD_VARIANT, "If enabled, the pull request will run ASAN builds"),
     # ci:packaging labels (opt-in to specific packaging/build jobs)
+    Label("ci:build-python-packages", COLOR_CI_PACKAGING, "Opt-in to building Python packages"),
     Label("ci:build-pytorch", COLOR_CI_PACKAGING, "Opt-in to building PyTorch packages"),
     Label("ci:build-jax", COLOR_CI_PACKAGING, "Opt-in to building JAX packages"),
     Label("ci:build-native-linux", COLOR_CI_PACKAGING, "Opt-in to building native Linux packages"),
     Label("ci:build-native-windows", COLOR_CI_PACKAGING, "Opt-in to building native Windows packages"),
-    Label("ci:build-python-packages", COLOR_CI_PACKAGING, "Opt-in to building Python packages"),
+    Label("ci:skip-rocm", COLOR_CI_PACKAGING, "Skip ROCm builds and tests; use published ROCm packages for frameworks"),
+    Label("ci:skip-python-packages", COLOR_CI_PACKAGING, "Skip Python package builds"),
     Label("ci:skip-pytorch", COLOR_CI_PACKAGING, "Skip PyTorch package builds"),
     Label("ci:skip-jax", COLOR_CI_PACKAGING, "Skip JAX package builds"),
     Label("ci:skip-native-linux", COLOR_CI_PACKAGING, "Skip native Linux package builds"),
     Label("ci:skip-native-windows", COLOR_CI_PACKAGING, "Skip native Windows package builds"),
-    Label("ci:skip-python-packages", COLOR_CI_PACKAGING, "Skip Python package builds"),
 ]
 # fmt: on
 
