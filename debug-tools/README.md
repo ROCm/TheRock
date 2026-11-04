@@ -482,6 +482,35 @@ Both scripts report pass/fail status and exit with code 0 on success. ROCgdb tra
 - Unexpected failures
 - Comparison of compiler-specific failures
 
+## rocgdb-emulate
+
+`rocgdb-emulate` runs ROCgdb inside a mirage session, so GPU programs can be
+debugged on an emulated GPU instead of real hardware. For now it is installed
+in `bin/` next to `rocgdb` only when tests are built, and it needs a ROCm tree
+built with `-DTHEROCK_ENABLE_EMULATION=ON`.
+
+```bash
+# Debug ./my_app on an emulated MI350X
+rocgdb-emulate --profile mi350x ./my_app
+
+# Pick the profile from the GPU target ./my_app was built for
+rocgdb-emulate ./my_app
+```
+
+Profiles are `mi300x` (gfx942), `mi350x` (gfx950) and `mi450x` (gfx1250); the
+gfx names work too. `ROCGDB_EMULATE_PROFILE` sets a default profile. All other
+arguments go to ROCgdb unchanged. `rocgdb-emulate -h` and `--help` print the
+usage. Arguments after `--` are passed to ROCgdb, including ROCgdb's own
+`--help`. `ROCGDB_WRAPPER_DEBUG=1` shows the chosen profile and command without
+running it.
+
+- Kernel breakpoints stay pending until the first kernel launch. Answer `y`
+  when asked, or use `set breakpoint pending on` in batch mode.
+- Emulator messages such as the mirage `ip_versions` warning and
+  `[rj warn] ... IB_STS` lines are harmless. `MIRAGE_LOG=error` hides the mirage
+  one.
+- If ROCgdb is killed with `kill -9`, run `mirage cleanup`.
+
 ## Additional information
 
 ### ROCgdb dependency on terminfo for TUI mode
@@ -532,15 +561,15 @@ Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
 
 ### THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
 
-- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py` and `.github/scripts/rocjitsu_emulator.py` to exist in the rocgdb source tree; configure fails if either is missing.
-- **Non-default**: `ON` - If `test_rocgdb.py` or `rocjitsu_emulator.py` is missing from the source tree, download them from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install them into `tests/rocgdb`.
+- **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py`, `.github/scripts/rocjitsu_emulator.py` and `.github/scripts/rocgdb_emulate.py` to exist in the rocgdb source tree; configure fails if any is missing.
+- **Non-default**: `ON` - If any of them is missing from the source tree, download all three from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install them.
 
 Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
 
 Usage: `-DTHEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT=ON`
 
 **Note:** `git` and `curl` must be available on the system when this option is
-enabled: `git` resolves `amd-staging` to a commit and `curl` downloads
-`test_rocgdb.py` and `rocjitsu_emulator.py` from that commit at configure time.
+enabled: `git` resolves `amd-staging` to a commit and `curl` downloads the
+scripts from that commit at configure time.
 Most environments provide both by default, but they may need to be installed
 otherwise.

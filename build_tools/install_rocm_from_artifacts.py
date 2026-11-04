@@ -52,6 +52,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
+    [--dev | --no-dev]
     [--tests | --no-tests]
     [--base-only]
 
@@ -107,6 +108,16 @@ Examples:
         --release 7.11.0a20260119 \
         --amdgpu-family gfx110X-all \
         --dry-run
+    ```
+- Adds `--dev` to any selection to also download the headers and CMake configs
+  needed to build against it (the `_dev` component of every selected artifact
+  and of the base artifacts), shown here for `--blas`:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --run-id 14474448215 \
+        --amdgpu-family gfx94X-dcgpu \
+        --blas \
+        --dev
     ```
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
 
@@ -338,6 +349,22 @@ def _retrieve_multiarch_tarball(
     _untar_files(output_dir, destination)
 
 
+def _dev_component_patterns(artifact_patterns: list[str]) -> list[str]:
+    """Returns the missing '_dev' counterparts of '<artifact>_<component>' patterns.
+
+    Order is preserved and duplicates are dropped, so a list naming both
+    '<artifact>_lib' and '<artifact>_run' yields a single '<artifact>_dev', and
+    an artifact whose '_dev' component is already requested yields nothing.
+    """
+    dev_patterns = []
+    for pattern in artifact_patterns:
+        artifact_name, _, _component = pattern.rpartition("_")
+        dev_pattern = f"{artifact_name}_dev"
+        if dev_pattern not in artifact_patterns and dev_pattern not in dev_patterns:
+            dev_patterns.append(dev_pattern)
+    return dev_patterns
+
+
 def retrieve_artifacts_by_run_id(args):
     """
     If the user requested TheRock artifacts by CI (run ID), this function will retrieve those assets
@@ -403,11 +430,20 @@ def retrieve_artifacts_by_run_id(args):
     if "microsoft" in platform.release().lower():
         base_artifact_patterns.append("wsl-rocdxg_lib")
 
+    # Building against a narrowed install needs the headers and CMake package
+    # configs that live in the _dev components, so --dev pairs each base
+    # artifact with its _dev counterpart (amd-llvm_dev, base_dev, ...).
+    # Otherwise those only arrive as a side effect of an unrelated selection
+    # such as --debug-tools.
+    if args.dev:
+        base_artifact_patterns.extend(_dev_component_patterns(base_artifact_patterns))
+
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
         [
             args.sanity,
+            args.dev,
             args.aqlprofile,
             args.blas,
             args.debug_tools,
@@ -646,11 +682,13 @@ def retrieve_artifacts_by_run_id(args):
                 # extra_artifacts expansion below only pulls _lib/_test).
                 argv.append("rand_dev")
 
-        # Fetch _lib (always) and _test (when --tests) for each artifact.
-        # Some projects have self-contained _test archives (just test
-        # binaries), while others may also need executables or data from
+        # Fetch _lib (always), _dev (when --dev) and _test (when --tests) for
+        # each artifact. Some projects have self-contained _test archives (just
+        # test binaries), while others may also need executables or data from
         # _run. Add those explicitly above via argv.append("<name>_run").
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
+        if args.dev:
+            extra_artifact_patterns.extend([f"{a}_dev" for a in extra_artifacts])
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
 
@@ -1089,6 +1127,14 @@ def main(argv):
         "--hipthreads",
         default=False,
         help="Include 'hipthreads' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--dev",
+        default=False,
+        help="Include the development ('_dev') artifacts (headers, CMake package configs) "
+        "of the base artifacts and of every enabled library",
         action=argparse.BooleanOptionalAction,
     )
 
