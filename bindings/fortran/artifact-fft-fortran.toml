@@ -9,3 +9,18 @@ include = [
   "share/hipfft/fortran/**",
 ]
 optional = true
+
+[components.test."bindings/fortran/rocfft-fortran/stage"]
+include = [
+  "bin/rocfft_fortran_test_*",
+  "bin/rocfft-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hipfft-fortran/stage"]
+include = [
+  "bin/hipfft_fortran_test_*",
+  "bin/hipfftw_fortran_test_*",
+  "bin/hipfft-fortran/**",
+]
+optional = true

@@ -20,6 +20,21 @@ logging.basicConfig(level=logging.INFO)
 # CTestTestfile.cmake in bin/<binding>-fortran/.
 TEST_DIRS = {
     "runtime-fortran": ["hip-fortran", "roctx-fortran"],
+    **{
+        f"{lib}-fortran": [f"{lib}-fortran"]
+        for lib in (
+            "rocblas",
+            "hipblas",
+            "rocsolver",
+            "hipsolver",
+            "rocsparse",
+            "hipsparse",
+            "rocfft",
+            "hipfft",
+            "rocrand",
+            "hiprand",
+        )
+    },
 }
 
 if TEST_COMPONENT not in TEST_DIRS:

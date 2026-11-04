@@ -637,9 +637,19 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
         if args.fortran_bindings:
-            extra_artifacts.append("runtime-fortran")
-            # The ROCTx binding test loads librocprofiler-sdk-roctx.
-            argv.append("rocprofiler-sdk_lib")
+            for family in ("runtime", "blas", "solver", "sparse", "fft", "rand"):
+                extra_artifacts.append(f"{family}-fortran")
+            # The libraries the binding tests load, without their own tests.
+            for lib in (
+                "rocprofiler-sdk",
+                "blas",
+                "solver",
+                "sparse",
+                "fft",
+                "fftw3",
+                "rand",
+            ):
+                argv.append(f"{lib}_lib")
         if args.solver:
             extra_artifacts.append("solver")
         if args.sparse:

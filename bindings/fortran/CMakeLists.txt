@@ -90,6 +90,7 @@ if(THEROCK_ENABLE_BLAS_FORTRAN)
     DESCRIPTOR artifact-blas-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_blas_fortran_subproject_names}
   )
@@ -114,6 +115,7 @@ if(THEROCK_ENABLE_SOLVER_FORTRAN)
     DESCRIPTOR artifact-solver-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_solver_fortran_subproject_names}
   )
@@ -134,6 +136,7 @@ if(THEROCK_ENABLE_SPARSE_FORTRAN)
     DESCRIPTOR artifact-sparse-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_sparse_fortran_subproject_names}
   )
@@ -155,6 +158,7 @@ if(THEROCK_ENABLE_FFT_FORTRAN)
     DESCRIPTOR artifact-fft-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_fft_fortran_subproject_names}
   )
@@ -175,6 +179,7 @@ if(THEROCK_ENABLE_RAND_FORTRAN)
     DESCRIPTOR artifact-rand-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_rand_fortran_subproject_names}
   )

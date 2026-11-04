@@ -529,8 +529,11 @@ class TestFortranBindings(unittest.TestCase):
         argv = _captured_fetch_argv(
             _make_run_id_args(fortran_bindings=True, tests=True)
         )
-        self.assertIn("runtime-fortran_test", argv)
+        for family in ("runtime", "blas", "solver", "sparse", "fft", "rand"):
+            self.assertIn(f"{family}-fortran_test", argv)
         self.assertIn("rocprofiler-sdk_lib", argv)
+        self.assertIn("blas_lib", argv)
+        self.assertNotIn("blas_test", argv)
 
 
 class TestUntarFiles(unittest.TestCase):

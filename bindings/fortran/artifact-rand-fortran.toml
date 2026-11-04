@@ -9,3 +9,17 @@ include = [
   "share/hiprand/fortran/**",
 ]
 optional = true
+
+[components.test."bindings/fortran/rocrand-fortran/stage"]
+include = [
+  "bin/rocrand_fortran_test_*",
+  "bin/rocrand-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hiprand-fortran/stage"]
+include = [
+  "bin/hiprand_fortran_test_*",
+  "bin/hiprand-fortran/**",
+]
+optional = true

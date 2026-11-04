@@ -693,6 +693,106 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "rocblas-fortran": {
+        "job_name": "rocblas-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "hipblas-fortran": {
+        "job_name": "hipblas-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocsolver-fortran": {
+        "job_name": "rocsolver-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "hipsolver-fortran": {
+        "job_name": "hipsolver-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocsparse-fortran": {
+        "job_name": "rocsparse-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "hipsparse-fortran": {
+        "job_name": "hipsparse-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocfft-fortran": {
+        "job_name": "rocfft-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "hipfft-fortran": {
+        "job_name": "hipfft-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "rocrand-fortran": {
+        "job_name": "rocrand-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
+    "hiprand-fortran": {
+        "job_name": "hiprand-fortran",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     "runtime-fortran": {
         "job_name": "runtime-fortran",
         "fetch_artifact_args": "--fortran-bindings --tests",
