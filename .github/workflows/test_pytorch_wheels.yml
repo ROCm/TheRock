@@ -324,6 +324,17 @@ jobs:
           touch "${reports_dir}/therock-test-complete.txt"
           exit "${test_exit_code}"
 
+      # Lets summarize_test_results.py --standard-dir identify the report set
+      # even when it is the only artifact downloaded (no name directory).
+      - name: Label test reports
+        if: always()
+        run: |
+          reports_dir=external-builds/pytorch/pytorch/test/test-reports
+          if [[ -d "${reports_dir}" ]]; then
+            printf '{"os": "%s", "amdgpu_family": "%s"}\n' \
+              "${RUNNER_OS}" "${AMDGPU_FAMILY}" > "${reports_dir}/therock-test-report.json"
+          fi
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

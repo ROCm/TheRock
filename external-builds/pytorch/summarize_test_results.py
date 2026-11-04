@@ -40,6 +40,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -320,6 +321,10 @@ def write_combined_summary(
 _STANDARD_ARTIFACT_RE = re.compile(
     r"test-reports-(?P<os>Linux|Windows|macOS)-(?P<family>.+)"
 )
+# Written into each report set by test_pytorch_wheels.yml. download-artifact
+# extracts a lone matching artifact straight into its path, dropping the
+# artifact-name directory, so report sets identify themselves.
+REPORT_METADATA = "therock-test-report.json"
 # Keep the step summary well under GitHub's 1 MiB limit.
 _MAX_FAILURE_ROWS = 200
 _MAX_SKIP_REASONS = 50
@@ -410,17 +415,44 @@ def _escape(text: str, limit: int = 100) -> str:
     return text.replace("|", "\\|").replace("\n", " ")[:limit]
 
 
+def find_report_sets(standard_dir: Path) -> list[tuple[str, str, Path]]:
+    """Returns (os, amdgpu_family, reports_dir) for each downloaded report set.
+
+    Report sets are found by their metadata file, so both download layouts
+    work: one artifact extracted directly into `standard_dir`, or several in
+    per-artifact subdirectories. Artifacts without metadata fall back to the
+    ``test-reports-<os>-<family>`` directory name.
+    """
+    sets = []
+    for metadata in sorted(standard_dir.rglob(REPORT_METADATA)):
+        try:
+            data = json.loads(metadata.read_text())
+        except (OSError, ValueError):
+            data = {}
+        sets.append(
+            (
+                str(data.get("os") or "unknown"),
+                str(data.get("amdgpu_family") or "unknown"),
+                metadata.parent,
+            )
+        )
+    labelled = {path for _, _, path in sets}
+    for artifact_dir in sorted(standard_dir.iterdir()):
+        m = _STANDARD_ARTIFACT_RE.fullmatch(artifact_dir.name)
+        if artifact_dir.is_dir() and m and artifact_dir not in labelled:
+            sets.append((m.group("os"), m.group("family"), artifact_dir))
+    return sets
+
+
 def write_standard_summary(standard_dir: Path, summary_file: str) -> int:
     """Writes per-platform/family counts, failures, and skip reasons.
 
     Returns the number of failed or errored tests across all reports.
     """
-    groups = []
-    for artifact_dir in sorted(standard_dir.iterdir()):
-        m = _STANDARD_ARTIFACT_RE.fullmatch(artifact_dir.name)
-        if artifact_dir.is_dir() and m:
-            outcomes = collect_outcomes(artifact_dir)
-            groups.append((m.group("os"), m.group("family"), outcomes))
+    groups = [
+        (os_name, family, collect_outcomes(reports_dir))
+        for os_name, family, reports_dir in find_report_sets(standard_dir)
+    ]
 
     lines = ["## PyTorch Test Results", ""]
     if not groups:

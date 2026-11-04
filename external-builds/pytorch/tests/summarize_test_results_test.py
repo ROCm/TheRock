@@ -113,6 +113,33 @@ class StandardSummaryTest(unittest.TestCase):
         self.assertIn("| 2 | skipIfRocm: not supported |", text)
         self.assertIn("| 1 | requires multiple GPUs |", text)
 
+    def test_single_artifact_download_is_found_by_metadata(self):
+        # download-artifact extracts a lone match directly into its path.
+        with tempfile.TemporaryDirectory() as tmp:
+            single = Path(tmp)
+            reports = single / "python-pytest" / "test_nn"
+            _write(reports / "test_nn-1.xml", LINUX_XML)
+            _write(reports / "test_nn-2.xml", LINUX_RETRY_XML)
+            _write(
+                single / m.REPORT_METADATA,
+                '{"os": "Linux", "amdgpu_family": "gfx120X-all"}\n',
+            )
+            summary = single / "summary.md"
+            self.assertEqual(m.write_standard_summary(single, str(summary)), 2)
+            text = summary.read_text()
+        self.assertIn("| Linux | gfx120X-all | 5 | 3 | 1 | 1 | 3 | 2 |", text)
+        self.assertNotIn("**Total**", text)
+
+    def test_metadata_overrides_artifact_directory_names(self):
+        _write(
+            self.root / "test-reports-Linux-gfx94X-dcgpu" / m.REPORT_METADATA,
+            '{"os": "Linux", "amdgpu_family": "gfx942"}\n',
+        )
+        _, text = self._summarize()
+        self.assertIn("| Linux | gfx942 | 5 |", text)
+        self.assertNotIn("| Linux | gfx94X-dcgpu |", text)
+        self.assertIn("| Windows | gfx120X-all | 2 |", text)
+
     def test_no_reports_is_explained(self):
         with tempfile.TemporaryDirectory() as empty:
             summary = Path(empty) / "summary.md"
