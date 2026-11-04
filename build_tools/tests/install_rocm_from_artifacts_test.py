@@ -477,6 +477,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         rocalution=False,
         kfdtest=False,
         rocwmma=False,
+        fortran_bindings=False,
         rpp=False,
         solver=False,
         sparse=False,
@@ -519,6 +520,17 @@ class TestRocprofilerSystemsHipfile(unittest.TestCase):
         )
         self.assertIn("hipfile_lib", argv)
         self.assertIn("sysdeps-util-linux_lib", argv)
+
+
+class TestFortranBindings(unittest.TestCase):
+    """--fortran-bindings fetches the bindings' tests and the ROCTx runtime."""
+
+    def test_fortran_bindings_with_tests(self) -> None:
+        argv = _captured_fetch_argv(
+            _make_run_id_args(fortran_bindings=True, tests=True)
+        )
+        self.assertIn("runtime-fortran_test", argv)
+        self.assertIn("rocprofiler-sdk_lib", argv)
 
 
 class TestUntarFiles(unittest.TestCase):

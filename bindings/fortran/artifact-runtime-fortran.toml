@@ -4,3 +4,12 @@ include = [
   "share/roctx/fortran/**",
 ]
 optional = true
+
+[components.test."bindings/fortran/runtime-fortran/stage"]
+include = [
+  "bin/hip_fortran_test_*",
+  "bin/roctx_fortran_test_*",
+  "bin/hip-fortran/**",
+  "bin/roctx-fortran/**",
+]
+optional = true

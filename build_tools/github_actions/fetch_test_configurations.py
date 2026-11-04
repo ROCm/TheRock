@@ -693,6 +693,16 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "fortran-bindings": {
+        "job_name": "fortran-bindings",
+        "fetch_artifact_args": "--fortran-bindings --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",

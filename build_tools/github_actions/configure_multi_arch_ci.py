@@ -186,6 +186,7 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "cv-libs": ["rpp"],
     "media-libs": ["rocdecode", "rocjpeg"],
     "debug-tools": ["rocgdb", "rocr-debug-agent"],
+    "fortran-bindings": ["fortran-bindings"],
 }
 
 

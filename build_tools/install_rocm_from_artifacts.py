@@ -476,6 +476,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
+            args.fortran_bindings,
             args.rpp,
             args.solver,
             args.sparse,
@@ -635,6 +636,10 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.fortran_bindings:
+            extra_artifacts.append("runtime-fortran")
+            # The ROCTx binding test loads librocprofiler-sdk-roctx.
+            argv.append("rocprofiler-sdk_lib")
         if args.solver:
             extra_artifacts.append("solver")
         if args.sparse:
@@ -1099,6 +1104,13 @@ def main(argv):
         "--hip-tests",
         default=False,
         help="Include artifacts needed to build and run 'hip-tests'",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--fortran-bindings",
+        default=False,
+        help="Include the Fortran binding artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

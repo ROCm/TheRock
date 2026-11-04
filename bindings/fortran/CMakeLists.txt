@@ -36,6 +36,7 @@ if(THEROCK_ENABLE_RUNTIME_FORTRAN)
     DESCRIPTOR artifact-runtime-fortran.toml
     COMPONENTS
       dev
+      test
     SUBPROJECT_DEPS
       ${_runtime_fortran_subproject_names}
   )
