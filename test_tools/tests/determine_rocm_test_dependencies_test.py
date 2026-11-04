@@ -288,7 +288,12 @@ class TestNameNormalization(_FixtureTestCase):
         # rocPRIM/hipCUB/rocThrust are built via the unified hipCCL superbuild,
         # so their standalone subtrees must resolve to the hipccl graph node
         # instead of stripping to non-existent rocprim/hipcub/rocthrust keys.
-        for subtree in ("projects/rocprim", "projects/hipcub", "projects/rocthrust"):
+        for subtree in (
+            "projects/rocprim",
+            "projects/hipcub",
+            "projects/rocthrust",
+            "projects/hipccl",
+        ):
             self.assertEqual(_normalize_changed_project(subtree), ["hipccl"])
 
 
