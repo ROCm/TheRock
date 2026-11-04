@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1356" height="1496" viewBox="-48 -48 1356 1496">
+<title>Current source identity selection</title>
+<desc>Existing directory selection, source hashing, marker reading, Git fallback, validation and sub-project fingerprint calculation.</desc>
+<rect x="-48" y="-48" width="1356" height="1496" fill="white"/>
+<rect x="380.0" y="13.5" width="500" height="77.0" rx="12" fill="#fff4d6" stroke="#7c8c9b" stroke-width="2"/>
+<text x="630.0" y="60.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">FPRINT_SOURCE_DIR set?</text>
+<rect x="95" y="118.5" width="440" height="62.99999999999999" rx="12" fill="#e8f1fa" stroke="#7c8c9b" stroke-width="2"/>
+<text x="315.0" y="158.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">D = FPRINT_SOURCE_DIR</text>
+<rect x="720" y="118.5" width="460" height="62.99999999999999" rx="12" fill="#e8f1fa" stroke="#7c8c9b" stroke-width="2"/>
+<text x="950.0" y="158.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">D = external source directory</text>
+<polyline points="380,52.0 315,52.0 315,118.5" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="315,118.5 309.345448056554,106.7941876694152 320.654551943446,106.7941876694152" fill="#566777"/>
+<text x="280" y="93.8" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">Yes</text>
+<polyline points="880,52.0 950,52.0 950,118.5" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="950,118.5 944.345448056554,106.7941876694152 955.654551943446,106.7941876694152" fill="#566777"/>
+<text x="985" y="93.8" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">No</text>
+<rect x="320" y="220.0" width="620" height="62.99999999999999" rx="12" fill="#e8f1fa" stroke="#7c8c9b" stroke-width="2"/>
+<text x="630.0" y="244.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Directory selected only</text>
+<text x="630.0" y="275.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">No source identity generated yet</text>
+<polyline points="315,181.5 315,199.0 630,199.0 630,220.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="630,220.0 624.345448056554,208.2941876694152 635.654551943446,208.2941876694152" fill="#566777"/>
+<polyline points="950,181.5 950,199.0 630,199.0 630,220.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="630,220.0 624.345448056554,208.2941876694152 635.654551943446,208.2941876694152" fill="#566777"/>
+<rect x="365.0" y="309.25" width="530" height="87.5" rx="12" fill="#fff4d6" stroke="#7c8c9b" stroke-width="2"/>
+<text x="630.0" y="346.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">FPRINT_SOURCE_HASH</text>
+<text x="630.0" y="377.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">enabled?</text>
+<polyline points="630,283.0 630,309.25" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="630,309.25 624.345448056554,297.5441876694152 635.654551943446,297.5441876694152" fill="#566777"/>
+<rect x="35" y="447.5" width="335" height="91.0" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="202.5" y="485.32" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="23" font-weight="400" fill="#17212b">Recursively collect D/*</text>
+<text x="202.5" y="516.32" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="23" font-weight="400" fill="#17212b">Add file hashes to inputs</text>
+<polyline points="365,353.0 200,353.0 200,447.5" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="200,447.5 194.345448056554,435.7941876694152 205.654551943446,435.7941876694152" fill="#566777"/>
+<text x="277" y="344.4" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">Yes</text>
+<rect x="475" y="447.5" width="650" height="70.0" rx="12" fill="#e8f1fa" stroke="#7c8c9b" stroke-width="2"/>
+<text x="800.0" y="475.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Read matching sibling marker</text>
+<text x="800.0" y="506.5" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">parent(D)/.basename(D).smrev</text>
+<polyline points="630,396.75 630,423.0 800,423.0 800,447.5" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="800,447.5 794.345448056554,435.7941876694152 805.654551943446,435.7941876694152" fill="#566777"/>
+<text x="675" y="415.09999999999997" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">No</text>
+<rect x="570.0" y="540.25" width="460" height="87.5" rx="12" fill="#fff4d6" stroke="#7c8c9b" stroke-width="2"/>
+<text x="800.0" y="577.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Marker supplies</text>
+<text x="800.0" y="608.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">a usable identity?</text>
+<polyline points="800,517.5 800,540.25" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="800,540.25 794.345448056554,528.5441876694152 805.654551943446,528.5441876694152" fill="#566777"/>
+<rect x="405" y="689.0" width="330" height="70.0" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="570.0" y="717.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Source identity =</text>
+<text x="570.0" y="748.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">marker contents</text>
+<polyline points="570,584.0 500,584.0 500,689.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="500,689.0 494.345448056554,677.2941876694152 505.654551943446,677.2941876694152" fill="#566777"/>
+<text x="463" y="646.8" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">Yes</text>
+<rect x="820.0" y="664.5" width="370" height="105.0" rx="12" fill="#fff4d6" stroke="#7c8c9b" stroke-width="2"/>
+<text x="1005.0" y="709.66" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">D inside Git and</text>
+<text x="1005.0" y="740.66" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">HEAD readable?</text>
+<polyline points="1030,584.0 1100,584.0 1100,643.5 1005,643.5 1005,664.5" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="1005,664.5 999.345448056554,652.7941876694152 1010.654551943446,652.7941876694152" fill="#566777"/>
+<text x="1137" y="632.8" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">No</text>
+<rect x="805" y="822.0" width="375" height="70.0" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="992.5" y="849.66" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">Source identity =</text>
+<text x="992.5" y="880.66" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">containing repository HEAD</text>
+<polyline points="1005,769.5 1005,822.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="1005,822.0 999.345448056554,810.2941876694152 1010.654551943446,810.2941876694152" fill="#566777"/>
+<text x="1050" y="807.8" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">Yes</text>
+<rect x="350.0" y="916.4999999999999" width="540" height="105.0" rx="12" fill="#fff4d6" stroke="#7c8c9b" stroke-width="2"/>
+<text x="620.0" y="961.6599999999999" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">Inside Git AND tracked</text>
+<text x="620.0" y="992.6599999999999" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">working-tree check fails?</text>
+<polyline points="570,759.0 570,790.5 620,790.5 620,916.4999999999999" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="620,916.4999999999999 614.345448056554,904.7941876694151 625.654551943446,904.7941876694151" fill="#566777"/>
+<polyline points="992.5,892.0 992.5,906.0 620,906.0 620,916.4999999999999" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="620,916.4999999999999 614.345448056554,904.7941876694151 625.654551943446,904.7941876694151" fill="#566777"/>
+<rect x="930" y="1053.0" width="280" height="73.5" rx="12" fill="#fdeaea" stroke="#7c8c9b" stroke-width="2"/>
+<text x="1070.0" y="1082.41" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">Invalid source</text>
+<text x="1070.0" y="1113.41" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="24" font-weight="400" fill="#17212b">identity</text>
+<polyline points="1190,717.0 1240,717.0 1240,1089.75 1210,1089.75" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="1210,1089.75 1221.7058123305849,1084.095448056554 1221.7058123305849,1095.404551943446" fill="#566777"/>
+<text x="1208" y="761.5999999999999" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">No</text>
+<polyline points="890,968.9999999999999 1070,968.9999999999999 1070,1053.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="1070,1053.0 1064.345448056554,1041.2941876694151 1075.654551943446,1041.2941876694151" fill="#566777"/>
+<text x="1110" y="1017.7999999999998" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">Yes</text>
+<rect x="425" y="1067.0" width="390" height="59.49999999999999" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="620.0" y="1105.25" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Accept source identity</text>
+<polyline points="620,1021.4999999999999 620,1067.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="620,1067.0 614.345448056554,1055.2941876694151 625.654551943446,1055.2941876694151" fill="#566777"/>
+<text x="655" y="1054.1999999999998" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#17212b">No</text>
+<rect x="110" y="1186.0" width="1040" height="80.5" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="630.0" y="1219.59" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#17212b">Combine source inputs, configuration, selected file hashes</text>
+<text x="630.0" y="1250.59" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="400" fill="#17212b">and dependency fingerprints</text>
+<polyline points="200,538.5 200,1186.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="200,1186.0 194.345448056554,1174.2941876694151 205.654551943446,1174.2941876694151" fill="#566777"/>
+<polyline points="620,1126.5 620,1186.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="620,1186.0 614.345448056554,1174.2941876694151 625.654551943446,1174.2941876694151" fill="#566777"/>
+<rect x="270" y="1305.0" width="720" height="70.0" rx="12" fill="#e8f5eb" stroke="#7c8c9b" stroke-width="2"/>
+<text x="630.0" y="1333.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">Produce THEROCK_FPRINT</text>
+<text x="630.0" y="1364.0" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="25" font-weight="400" fill="#17212b">when all required inputs are valid</text>
+<polyline points="630,1266.5 630,1305.0" fill="none" stroke="#566777" stroke-width="3"/>
+<polygon points="630,1305.0 624.345448056554,1293.2941876694151 635.654551943446,1293.2941876694151" fill="#566777"/>
+</svg>
