@@ -324,8 +324,6 @@ jobs:
   # TODO: Consider pulling ROCm packages from the published release index instead
   #   of the artifact bucket now that this waits for release bucket publication.
   trigger_release_jax_wheels:
-    # build_tarballs is already complete here by way of publish_to_release_buckets;
-    # naming it is what makes its tarball URL readable for the XLA tests.
     needs: [build_tarballs, build_python_packages, publish_to_release_buckets]
     name: Trigger Release JAX Wheels
     if: ${{ inputs.build_jax != false && fromJSON(inputs.build_config).build_jax == true }}
