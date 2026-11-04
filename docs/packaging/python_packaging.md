@@ -234,15 +234,15 @@ core index without implicitly changing that routing. If a mirrored dependency
 should also be available through the aggregate index used by pip, add its core
 ownership mapping and redeploy the aggregate index.
 
-The `Mirror Python Dependencies` workflow will live with the other
-[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
-It will resolve one snapshot every Monday and sequentially publish it to `dev`,
-`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
-resolve-only and allow targeting one stream for diagnostics. Retained streams
-will refresh only the current snapshot's existing objects; stable-staging will
-skip existing objects because it has no lifecycle expiration. If a stream
-fails, rerun the complete workflow. Each run is idempotent, and older versions
-remain subject to their normal retention policy.
+The rockrel
+[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/blob/main/.github/workflows/mirror_python_dependencies.yml)
+workflow resolves one snapshot every Monday and sequentially publishes it with
+`--refresh-existing` to the `dev`, `nightly`, and `rc` core buckets. Each
+stream uses the same `therock-repo-<stream>-core` role that publishes core
+packages. Manual dispatch publishes to all three streams by default and can
+target one stream. `stable-staging` is not published by the workflow. If a
+stream fails, rerun the complete workflow. Each run is idempotent, and older
+versions remain subject to their normal retention policy.
 
 ## rocm-profiler
 
