@@ -187,8 +187,7 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
         },
-        # host ASAN builds run on gfx90a. Tests run there on submodule bumps.
-        # They are not a presubmit variant. See ROCm/TheRock#9366.
+        # host-asan is tested on gfx90a. See ROCm/TheRock#9366.
         # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
         "host-asan": {
             "build_variant_label": "host-asan",
@@ -425,9 +424,10 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            # host-asan is built here for postsubmit and submodule bumps.
-            # Tests use this family's runner when a submodule changes.
-            # gfx90a is not in the presubmit trigger set. See ROCm/TheRock#9366.
+            # host-asan for rocm-systems and rocm-libraries is tested on this
+            # runner. gfx90a stays out of the default presubmit family set;
+            # the sanitizer policy adds it for those rows. See
+            # ROCm/TheRock#9366.
             "build_variants": [
                 "release",
                 "asan-debug",
