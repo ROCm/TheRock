@@ -3,14 +3,15 @@
 
 # Each binding is a standalone project in the bindings/fortran tree of the
 # monorepo of the library it wraps, built against the installed library. A
-# binding absent from its monorepo is skipped and its artifact left empty.
+# binding absent from its monorepo, or any binding in a sanitizer build, is
+# skipped and its artifact left empty.
 
 if(THEROCK_ENABLE_RUNTIME_FORTRAN)
   ##############################################################################
   # runtime-fortran: HIP and ROCTx
   ##############################################################################
   set(_runtime_fortran_subproject_names)
-  if(EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran/CMakeLists.txt")
+  if(NOT THEROCK_SANITIZER AND EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran/CMakeLists.txt")
     therock_cmake_subproject_declare(runtime-fortran
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran"
@@ -47,7 +48,7 @@ endif(THEROCK_ENABLE_RUNTIME_FORTRAN)
 function(therock_declare_library_fortran_binding out_var lib)
   cmake_parse_arguments(PARSE_ARGV 2 ARG "" "" "RUNTIME_DEPS;PACKAGES")
   set(_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/bindings/fortran/${lib}")
-  if(NOT EXISTS "${_source_dir}/CMakeLists.txt")
+  if(THEROCK_SANITIZER OR NOT EXISTS "${_source_dir}/CMakeLists.txt")
     return()
   endif()
   if(NOT ARG_PACKAGES)
