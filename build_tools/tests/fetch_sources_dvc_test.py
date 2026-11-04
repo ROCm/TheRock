@@ -12,22 +12,16 @@ import tempfile
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import patch
 
 
-# Mock PullResult before importing fetch_sources
+# Result returned by mocked DVC pulls.
 @dataclass
 class MockPullResult:
     fetched: int = 0
     cached: int = 0
     skipped: int = 0
 
-
-# Mock fetch_dvc_artifacts before import to avoid boto3 dependency
-fetch_dvc_mock = Mock()
-fetch_dvc_mock.DEFAULT_JOBS = 4
-fetch_dvc_mock.PullResult = MockPullResult
-sys.modules["fetch_dvc_artifacts"] = fetch_dvc_mock
 
 # Add parent directory to path to import the module
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -70,7 +64,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_external_repo_uses_direct_path(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -106,7 +100,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_external_repo_only(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -130,7 +124,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_submodule_only(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -154,7 +148,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
         self.assertEqual(call_args[0], self.rocm_systems_submodule)
 
     @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_missing_dvc_config_warning(self, mock_dvc_pull, mock_therock_dir):
         """Test warning when .dvc/config is missing."""
         fetch_sources.THEROCK_DIR = self.therock_dir
@@ -182,7 +176,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_jobs_parameter_passed(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -201,7 +195,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
         self.assertEqual(mock_dvc_pull.call_args[1]["jobs"], 8)
 
     @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_empty_dvc_projects(self, mock_dvc_pull, mock_therock_dir):
         """Test behavior with empty dvc_projects list."""
         fetch_sources.THEROCK_DIR = self.therock_dir
@@ -222,7 +216,7 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_none_jobs_uses_default(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -238,7 +232,10 @@ class TestPullLargeFilesExternalRepo(unittest.TestCase):
 
         # Verify DEFAULT_JOBS was used
         mock_dvc_pull.assert_called_once()
-        self.assertEqual(mock_dvc_pull.call_args[1]["jobs"], 4)  # DEFAULT_JOBS
+        self.assertEqual(
+            mock_dvc_pull.call_args[1]["jobs"],
+            fetch_sources.fetch_dvc_artifacts.DEFAULT_JOBS,
+        )
 
 
 class TestPullLargeFilesIntegration(unittest.TestCase):
@@ -246,7 +243,7 @@ class TestPullLargeFilesIntegration(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_wsl_rocdxg_scenario(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):
@@ -306,7 +303,7 @@ class TestPullLargeFilesIntegration(unittest.TestCase):
 
     @patch("fetch_sources.THEROCK_DIR")
     @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
+    @patch("fetch_sources.fetch_dvc_artifacts.pull")
     def test_rocm_libraries_scenario_pulls_rocm_systems_wkmi(
         self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
     ):

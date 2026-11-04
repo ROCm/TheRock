@@ -10,6 +10,11 @@ import re
 import subprocess
 import sys
 
+from _therock_utils.external_repo import (
+    external_repo_url,
+    parse_and_validate_external_repo_config,
+)
+
 from github_actions.manifest_utils import capture, capture_optional, log
 
 
@@ -179,30 +184,6 @@ def rocm_version_from_package_version(rocm_package_version: str) -> str | None:
     return match.group(1)
 
 
-def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
-    """Parse and validate external repo configuration used by super-repo CI."""
-    if not raw:
-        return None
-
-    config = json.loads(raw)
-
-    if not isinstance(config, dict):
-        raise ValueError("EXTERNAL_REPO_CONFIG must be a JSON object")
-
-    submodule_path = config.get("submodule_path")
-    ref = config.get("ref")
-
-    if not isinstance(submodule_path, str) or not submodule_path.strip():
-        raise ValueError(
-            "EXTERNAL_REPO_CONFIG 'submodule_path' must be a non-empty string"
-        )
-
-    if not isinstance(ref, str) or not ref.strip():
-        raise ValueError("EXTERNAL_REPO_CONFIG 'ref' must be a non-empty string")
-
-    return config
-
-
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
@@ -239,9 +220,17 @@ def build_manifest_schema(
             {
                 "submodule_name": e["name"],
                 "submodule_path": e["path"],
-                "submodule_url": e["url"],
+                "submodule_url": (
+                    external_repo_url(external_repo_config) or e["url"]
+                    if external_repo_submodule_path == e["path"]
+                    else e["url"]
+                ),
                 "pin_sha": pin,
-                "patches": patches_for_submodule_by_name(repo_root, e["name"]),
+                "patches": (
+                    []
+                    if external_repo_submodule_path == e["path"]
+                    else patches_for_submodule_by_name(repo_root, e["name"])
+                ),
             }
         )
     if external_repo_config and not external_repo_matched:
@@ -302,9 +291,17 @@ def build_partial_manifest_schema(
             {
                 "submodule_name": e["name"],
                 "submodule_path": e["path"],
-                "submodule_url": e["url"],
+                "submodule_url": (
+                    external_repo_url(external_repo_config) or e["url"]
+                    if external_repo_submodule_path == e["path"]
+                    else e["url"]
+                ),
                 "pin_sha": pin,
-                "patches": patches_for_submodule_by_name(repo_root, e["name"]),
+                "patches": (
+                    []
+                    if external_repo_submodule_path == e["path"]
+                    else patches_for_submodule_by_name(repo_root, e["name"])
+                ),
             }
         )
     if external_repo_config and not external_repo_matched:
