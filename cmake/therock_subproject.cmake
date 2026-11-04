@@ -1751,15 +1751,16 @@ function(_therock_cmake_subproject_setup_toolchain
   if(NOT _disable_amdgpu_targets)
     _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
 
-    # Check for sentinel values indicating no targets were configured.
-    # This is a lazy error - we only fail when actually building a subproject
-    # that needs targets, not at top-level configuration time.
     # A pre-built subproject is never configured, so it needs no targets: a
     # generic stage can depend on artifacts built per architecture.
     get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
     if("${_filtered_gpu_targets}" MATCHES "-NOTFOUND$" AND EXISTS "${_stage_dir}.prebuilt")
       set(_filtered_gpu_targets)
     endif()
+
+    # Check for sentinel values indicating no targets were configured.
+    # This is a lazy error - we only fail when actually building a subproject
+    # that needs targets, not at top-level configuration time.
     if("${_filtered_gpu_targets}" MATCHES "-NOTFOUND$")
       if("${_filtered_gpu_targets}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
         message(FATAL_ERROR
