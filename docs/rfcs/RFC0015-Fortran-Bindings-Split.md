@@ -295,7 +295,7 @@ The cross-check against the headers' doxygen comments flags some wrong ones, and
 A binding's Fortran tests live in its `test/` and follow one convention (see [Tests and documentation](#tests-and-documentation), in the [build appendix](#appendix-building-installing-and-testing-the-bindings)).
 Every binding has a `test/`, mostly ported from hipfort, rocBLAS's and hipBLAS's included.
 Those two matter most, because their libraries' `clients/` still exercise the hand-written modules until those are removed, not the bindings.
-The bot's pull request compiles the tests without a GPU, and the packaging or validation job runs them on an AMD GPU.
+The bot's pull request compiles the tests without a GPU, and TheRock's test jobs run them on an AMD GPU, including whenever the library they bind changes.
 
 The libraries' existing Fortran examples (the rocBLAS, hipBLAS, rocSPARSE and hipSPARSE samples) move to the generated module when the hand-written ones are removed.
 The packaged modules carry no docstrings yet (see [Tests and documentation](#tests-and-documentation), in the [build appendix](#appendix-building-installing-and-testing-the-bindings)).
@@ -735,7 +735,8 @@ Several points are still open.
 - **Building the bindings in a generic stage.**
   TheRock builds the math libraries once per GPU architecture, but the bindings are host-only and are built once, in a generic stage.
   That stage builds against the generic part of the math libraries' artifacts, which their split into generic and architecture-specific components provides.
-  If that split is ever turned off, the stage needs another source for the libraries' headers and host libraries.
+  It is the first generic stage to depend on artifacts built per architecture: their subprojects are declared there as pre-built, with no AMDGPU target selected, which TheRock now allows.
+  If the split is ever turned off, the stage needs another source for the libraries' headers and host libraries.
 - **Compile time of the large modules.**
   Compile time depends on the compiler as much as on the size of a module, and a construct that costs nothing in one compiler can be very slow in another.
   With Cray CCE, a large hipfort module took about an hour to compile while each interface carried its own `use` statements, and a few seconds once the generator `use`d each module once and `import`ed it in each interface.
@@ -1048,12 +1049,12 @@ hipfort's test suite splits across the libraries it covers, and each library's F
 Each test is one Fortran program and its own CTest test, labeled `gpu` since it needs an AMD GPU.
 A `<name>.f03` test calls the raw and typed forms and is registered as `<lib>_fortran_<name>`.
 A `<name>.f08` test calls the array overloads and is registered as `<lib>_fortran_<name>_f2008`.
-Tests are built under `BUILD_FORTRAN_CLIENTS`.
+Tests are built under `BUILD_FORTRAN_CLIENTS`, and installed: the executables in `bin/`, and a `CTestTestfile.cmake` with the same tests and properties in `bin/<lib>-fortran/`, so that `ctest --test-dir` runs them from an install.
 They `use hip`, so until the HIP binding is installed they configure as skipped with a `STATUS` message.
 rocRAND, hipRAND and the `rocm-systems` tests follow the same convention, with differences only where they must (for example ROCTx's single test needs no GPU).
 
 The bot's pull request compiles every library's Fortran tests without a GPU, and that is what catches interface drift.
-They run on an AMD GPU runner from the build tree, and the packaging or validation job takes them over once each library's `test` component carries them (see [Packaging in TheRock](#appendix-packaging-in-therock)).
+TheRock runs the installed tests on an AMD GPU, in one test job per binding (see [Packaging in TheRock](#appendix-packaging-in-therock)).
 A test that spans libraries, such as a rocSOLVER test that `use`s rocBLAS, follows the same dependency order as the bindings.
 
 A Fortran routine has the same name, arguments and semantics as the C function it binds, so the library's C reference documents it.
@@ -1109,8 +1110,10 @@ The libraries' builds pass no Fortran option and need no Fortran compiler for th
    `rocm-libraries`' CI does not reuse the stage from a baseline, since it depends on the math libraries it rebuilds.
 
 1. **Tests.**
-   The binding tests are CTest tests labeled `gpu`, built under `BUILD_FORTRAN_CLIENTS`.
-   They join each binding's `test` component and TheRock's test runner once the bindings install them.
+   Each binding installs its tests, and they ship in the `test` component of its family's artifact.
+   TheRock runs them in one test job per binding, named after its subproject (`runtime-fortran` for HIP and ROCTx, `rocblas-fortran`, ...), which fetches the bindings' tests and the libraries they load.
+   Consumer-based test selection runs a changed subproject's tests and those of its direct consumers, and a binding consumes the library it binds, so a change to HIP, ROCTx or a math library also runs its binding's tests.
+   The math-library binding tests `use hip`, so they run once the HIP binding is in the rocm-systems commit TheRock pins.
 
 Once the changes in this appendix land, TheRock's nightly builds are the first place a user gets the bindings precompiled, ahead of a ROCm release.
 For the 10.3 tech preview, the `dev` components above are enough: they are part of the tarballs, so the bindings ship there.
