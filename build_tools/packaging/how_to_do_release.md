@@ -185,17 +185,19 @@ each object in its own prefix. The source key is left in place. It is dry-run
 until `--execute`. A destination key that already exists is skipped, with no
 size check. If every planned copy was skipped, the command exits 0.
 
-`--src-version-type` chooses the filename token. `rc` (the default) selects
-`7.13.0rc1` and rewrites it with `--dest-version` (default `release`). There is
-no separate `--version`. If the bucket has more than one token of that type,
-for example `7.13.0rc1` and `7.13.0rc2`, the command stops and names them.
-The source and destination buckets are still passed explicitly. An rc build
-uses `therock-repo-amd-rc-core`, and a release goes to
-`therock-repo-amd-stable-staging-core`. A nightly passes `--src-version-type=a`.
+`--version` is the filename token to copy, for example `7.13.0rc1`. The rc
+bucket keeps older candidates, so the token names one of them.
+`--src-version-type` and `--dest-version` rewrite that token. The default is
+`rc` to `release`. A token that does not contain the source marker is skipped.
+The source and destination buckets are passed explicitly. An rc build uses
+`therock-repo-amd-rc-core`, and a release goes to
+`therock-repo-amd-stable-staging-core`. A nightly passes `--src-version-type=a`
+and the `a<YYYYMMDD>` token as `--version`.
 
 ```bash
 python build_tools/packaging/promote_packages.py \
   --src-version-type=rc \
+  --version=7.13.0rc1 \
   --source-bucket=therock-repo-amd-rc-core \
   --dest-bucket=therock-repo-amd-stable-staging-core \
   --execute
