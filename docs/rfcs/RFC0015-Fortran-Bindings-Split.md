@@ -2,7 +2,7 @@
 author: Alexis Montoison (amontoison)
 created: 2026-07-20
 modified: 2026-11-03
-status: Approved
+status: draft
 ---
 
 # Distributing Fortran bindings across rocm-systems and rocm-libraries
@@ -144,7 +144,7 @@ It is then regenerated from that repository's own headers, with no copy step, an
 Proximity bounds the lag: the binding follows the header on the regeneration workflow's next run, or in the same PR if its author regenerates it.
 
 **P2. A binding is an API consumer, built apart from its library.**
-A binding depends only on its library's public API, which is reorganized at most, never changed by the reorganization of the library's implementation.
+A binding depends only on its library's public API, which a reorganization of the library's implementation does not change.
 So each binding is its own CMake project, outside the library's project, and builds against the installed library: nothing about it is wired into the library's build, and the library's implementation can be restructured without touching it.
 Each binding ships its own `.F90`, `.mod`, `lib<lib>_fortran.a` and CMake target (`roc::rocblas_fortran`, `hip::hip_fortran`, ...).
 TheRock builds every binding from its own `bindings/fortran/`, in a build stage after the libraries they wrap, and packages them by library family (see the [Packaging in TheRock](#appendix-packaging-in-therock) appendix).
@@ -294,7 +294,7 @@ The cross-check against the headers' doxygen comments flags some wrong ones, and
 
 A binding's Fortran tests live in its `test/` and follow one convention (see [Tests and documentation](#tests-and-documentation), in the [build appendix](#appendix-building-installing-and-testing-the-bindings)).
 Every binding has a `test/`, mostly ported from hipfort, rocBLAS's and hipBLAS's included.
-Those two matter most, because their libraries' `clients/` still exercise the hand-written modules until those are removed, not the bindings.
+Those two matter most, because, until the hand-written modules are removed, their libraries' `clients/` exercise those modules and not the bindings.
 The bot's pull request compiles the tests without a GPU, and TheRock's test jobs run them on an AMD GPU, including whenever the library they bind changes.
 
 The libraries' existing Fortran examples (the rocBLAS, hipBLAS, rocSPARSE and hipSPARSE samples) move to the generated module when the hand-written ones are removed.
@@ -346,24 +346,21 @@ hipfort is not packaged.
 Built from source, it installs side by side with the packaged bindings until 11.0, because their module names differ.
 
 Every binding takes the same options.
-The per-library forms in the table below use the project's prefix: `ROCSPARSE_`, `HIP_`, and so on.
+`<LIB>` in the table below is the project's prefix: `ROCSPARSE_`, `HIP_`, and so on.
 hipFFT uses two, `HIPFFT_` and `HIPFFTW_`.
 Every routine has a raw form that takes C pointers (see [Calling styles](#calling-styles)).
 The *array tier*, selected by `FORTRAN_ARRAY_INTERFACES`, adds forms that take Fortran arrays: one per array rank (`assumed-shape`, Fortran 2008, the default), a single form for any rank (`assumed-rank`, Fortran 2018), or none.
 
-| Option                         | Default                                              | Effect                                                                                 |
-| :----------------------------- | :--------------------------------------------------- | :------------------------------------------------------------------------------------- |
-| `BUILD_FORTRAN_BINDINGS`       | `${UNIX}` (`OFF` for a hip\* library's CUDA backend) | build the binding, skipped with a `STATUS` line without a Fortran compiler             |
-| `<LIB>_BUILD_FORTRAN_BINDINGS` | unset                                                | per-library override of `BUILD_FORTRAN_BINDINGS`                                       |
-| `FORTRAN_ARRAY_INTERFACES`     | `assumed-shape`                                      | array overloads: `none`, `assumed-shape` (Fortran 2008), `assumed-rank` (Fortran 2018) |
-| `BUILD_FORTRAN_CLIENTS`        | `ON`                                                 | build and register the binding's `test/`                                               |
-| `<LIB>_BUILD_FORTRAN_CLIENTS`  | unset                                                | per-library override of `BUILD_FORTRAN_CLIENTS`                                        |
-| `<LIB>_FORTRAN_COMPILER_DIR`   | from the compiler ID                                 | the `<compiler>` install subdirectory, to keep a second version of one compiler apart  |
-| `<LIB>_HAVE_FORTRAN_BINDINGS`  | (result)                                             | true when this library's binding was built                                             |
+| Option                       | Default              | Effect                                                                                 |
+| :--------------------------- | :------------------- | :------------------------------------------------------------------------------------- |
+| `BUILD_FORTRAN_BINDINGS`     | `${UNIX}`            | build the binding, skipped with a `STATUS` line without a Fortran compiler             |
+| `FORTRAN_ARRAY_INTERFACES`   | `assumed-shape`      | array overloads: `none`, `assumed-shape` (Fortran 2008), `assumed-rank` (Fortran 2018) |
+| `BUILD_FORTRAN_CLIENTS`      | `ON`                 | build and register the binding's `test/`                                               |
+| `<LIB>_FORTRAN_COMPILER_DIR` | from the compiler ID | the `<compiler>` install subdirectory, to keep a second version of one compiler apart  |
 
 A few bindings add a guard of their own:
 
-- rocSPARSE's builds nothing under `BUILD_ROCSPARSE_ILP64`, and installs nothing under `BUILD_CLIENTS_ONLY`
+- rocSPARSE's builds nothing against an ILP64 rocSPARSE, whose `rocsparse_int` is 64-bit
 - hipSPARSE's installs nothing under `HIPSPARSE_ENABLE_HOST=OFF`
 - `rocm-systems`' `bindings/fortran/` takes its install component from `HIP_FORTRAN_INSTALL_COMPONENT` (default `dev`)
 
@@ -399,6 +396,7 @@ The libraries' Fortran `clients/` (the samples and the gtest Fortran shims) keep
 hipSOLVER needs care during the deprecation.
 Its build exports the hand-written module's shared library as `roc::hipsolver_fortran` by default (`EXPORT_FORTRAN_BINDINGS=ON`), the same name as the generated binding's target, so a project that finds both packages gets two definitions of one target.
 TheRock already builds hipSOLVER with `EXPORT_FORTRAN_BINDINGS=OFF`, so ROCm's packages never meet the clash, and the deprecation turns that default off.
+Against an installed hipSOLVER that still exports the target, the generated binding fails its configure with an error that says to build hipSOLVER with `EXPORT_FORTRAN_BINDINGS=OFF`.
 
 The generated module follows the C API more closely than a hand-written one, so a few call sites change for its users:
 
@@ -407,7 +405,7 @@ The generated module follows the C API more closely than a hand-written one, so 
 - handle creation takes the handle variable itself
 
 The last change needs care: the old `rocblas_create_handle(c_loc(handle))` still compiles, but leaves the handle unset.
-Each binding's documentation and the in-tree migration guide list these changes.
+Each binding's documentation and the migration guides (see [Migration and compatibility](#migration-and-compatibility)) list these changes.
 
 ## The generated bindings
 
@@ -510,8 +508,7 @@ The packaged modules carry no CUDA branches, and their preprocessing only select
 
 The NVIDIA backend lives only in the compatibility track (`ROCm/hipfort`), kept there until ROCm 11.0 to compare HIP and CUDA.
 The packaged track does not carry it: it is not in the monorepos, not packaged and not shipped in ROCm.
-A `hip*` binding (hipBLAS, hipSPARSE, hipSOLVER, hipFFT, hipRAND) configured for the CUDA backend, through `USE_CUDA` or `HIP_PLATFORM=nvidia`, defaults `BUILD_FORTRAN_BINDINGS` to `OFF`.
-Forcing it on builds the ROCm-generated module, with a warning that it is not tested against the CUDA-backed library.
+The `hip*` bindings (hipBLAS, hipSPARSE, hipSOLVER, hipFFT, hipRAND) build against the installed ROCm libraries only, and none is built or tested against a CUDA-backed library.
 
 ## Migration and compatibility
 
@@ -664,7 +661,7 @@ The rollout is done when:
 - a header change that changes a binding is followed by the bot's pull request within one run, and that pull request is merged within five business days
 - every release branch is cut with no binding drift, and every release tag passes the regeneration check
 - `find_package(<lib>-fortran)` exposes `<ns>::<lib>_fortran` when the binding is built, where `<ns>` is the C library's namespace
-- `find_package(<lib>)` does too, once rocm-cmake can include the Fortran config
+- `find_package(<lib>)` does too for the rocm-cmake libraries, once rocm-cmake can include the Fortran config (not required for HIP and ROCTx)
 - TheRock builds and packages the bindings (see the [Packaging in TheRock](#appendix-packaging-in-therock) appendix)
 - each array tier compiles at its declared standard (see [Language standard](#language-standard))
 - an external program compiles and links against the installed package with at least amdflang and gfortran
@@ -673,7 +670,7 @@ The rollout is done when:
 - `ROCm/hipfort` is removed (11.0)
 
 Adding the bindings is one pull request per library: the HIP binding and ROCTx in `rocm-systems`, and one per `rocm-libraries` binding.
-Each one only adds its binding to `bindings/fortran/`, with its CODEOWNERS line and the entry that lets the monorepo's CI detect changes to it, and leaves the library untouched.
+Each one only adds its binding to `bindings/fortran/` (and, in `rocm-systems`, the shared `ROCmFortran.cmake` probe), with its CODEOWNERS line and the entry that lets the monorepo's CI detect changes to it, and leaves the library untouched.
 Every `rocm-libraries` binding test uses `hip`, except rocRAND's and hipRAND's version checks, so these tests need the HIP binding installed.
 Until it is, they are skipped at configure time, so the `rocm-libraries` pull requests merge after the HIP one.
 All these pull requests share one shape:
@@ -807,7 +804,7 @@ Each monorepo's CI runs the generator on that monorepo's checkout only: `rocm-sy
 The headers a build would generate (the version, config and export headers) are synthesized from the checkout's templates.
 A Clang error fails generation for that library only, and the other libraries still generate.
 
-The profiling binding (`roctx`) sits beside HIP in `rocm-systems`' `bindings/fortran/`, although it was first proposed under `projects/rocprofiler-sdk/fortran/`.
+The profiling binding (`roctx`) sits beside HIP in `rocm-systems`' `bindings/fortran/`.
 It is built against the installed `rocprofiler-sdk-roctx` and exports `roc::roctx_fortran` from a `roctx-fortran` package.
 It is a dozen `bind(C)` interfaces with no array overloads, so the array option `FORTRAN_ARRAY_INTERFACES` (see [Building the bindings](#building-the-bindings)) changes nothing for it.
 
@@ -895,7 +892,7 @@ Those tests prioritize the pointer-mode-ambiguous families (`alpha`/`beta`/`resu
 The generator is tested at three levels.
 A unit-test suite in the generator repository checks its logic with small fixture headers and no ROCm, including a byte-for-byte golden test of the emitters.
 The same CI checks that the output compiles and that the array tiers agree, on every supported Julia version.
-In each monorepo, the CI of the bot's pull request builds the regenerated modules with the project's compilers, in each array configuration, and compiles each binding's Fortran tests (its `test/`, where present) against them, which catches interface drift without a GPU.
+In each monorepo, the CI of the bot's pull request builds the regenerated modules with the project's compilers, in each array configuration, and compiles each binding's Fortran tests (its `test/`) against them, which catches interface drift without a GPU.
 At runtime, the same tests exercise the bindings on an AMD GPU, as GPU-labeled CTest tests of each binding.
 That runtime suite must cover both pointer modes, host and device, for the entry points whose scalar arguments the metadata classifies.
 A misclassified scalar pointer compiles and links cleanly, so it is the one correctness property no compile-only gate can see (see [Keeping the classifications correct](#curated-metadata-the-manual-surface)).
@@ -921,7 +918,7 @@ This appendix records the build, install and test decisions, and the bindings' p
 ### Building the bindings
 
 Each binding is a self-contained CMake project, `bindings/fortran/<lib>/` in `rocm-libraries` and `bindings/fortran/` in `rocm-systems`, which builds its sources into the `.mod` and `.a` against the installed library.
-It requires CMake 3.18 for `Fortran_PREPROCESS`, and 3.20 to run its tests with `ctest --test-dir`, which the versions in use already satisfy.
+It requires CMake 3.19, and 3.20 to run its tests with `ctest --test-dir`, which the versions in use already satisfy.
 No library build adds it, so a binding is only ever built that way, by TheRock or by a user, and never forces a Fortran compiler on a C build.
 
 ```bash
@@ -936,7 +933,6 @@ A binding builds behind one switch, `BUILD_FORTRAN_BINDINGS`.
 Its default is `${UNIX}`, because ROCm ships no Fortran compiler on Windows, which is out of scope (see [Non-goals](#non-goals)).
 The switch is guarded: it builds the binding when a Fortran compiler is present, and otherwise skips it with a `STATUS` line and never fails the configure.
 When neither `CMAKE_Fortran_COMPILER` nor `FC` is set, the binding prefers the `amdflang` found beside the C/HIP compiler or under `ROCM_PATH`.
-Each switch also has a per-library form, `<LIB>_BUILD_FORTRAN_BINDINGS` (for example `ROCSPARSE_BUILD_FORTRAN_BINDINGS`), which overrides the global one when several bindings are configured in one build.
 
 `FORTRAN_ARRAY_INTERFACES` selects the array tier: which ergonomic array specifics each generic carries besides the raw form.
 Its values are `none`, `assumed-shape` and `assumed-rank`, and its default is `assumed-shape`.
@@ -945,9 +941,7 @@ See [Open questions](#open-questions-and-risks) for why assumed-rank replaces ra
 ROCTx has no array overloads, so the option has no effect on it.
 
 `BUILD_FORTRAN_CLIENTS` builds the binding's own tests in its `test/`.
-Its default is `ON`, and its per-library form is `<LIB>_BUILD_FORTRAN_CLIENTS`.
-
-A result variable, `<LIB>_HAVE_FORTRAN_BINDINGS` (for example `ROCSPARSE_HAVE_FORTRAN_BINDINGS`), is true only when the binding was actually built, so that a build that configures several bindings can tell which ones it got.
+Its default is `ON`.
 
 For discovery, the Fortran target ships as its own per-library config package, `<lib>-fortran`.
 A consumer writes `find_package(rocblas-fortran)`, which `find_dependency()`s the C library.
@@ -1040,8 +1034,8 @@ The generated `.F90` installs too, under `share/<lib>/fortran/` (`share/hipfft/f
 A user of another compiler builds the binding from it without cloning a monorepo, and installed source always matches the installed library.
 They compile it with `-DUSE_ASSUMED_SHAPE=1` for the `assumed-shape` tier, or `-DUSE_ASSUMED_RANK=1` for the `assumed-rank` tier.
 Without a macro, the source yields the `none` tier.
-This replaces where the hand-written modules live while they are deprecated (`include/rocsparse/rocsparse.f90`, `include/hipblas/hipblas_module.f90`).
-The filenames change in the move anyway, so there is no drop-in path to preserve.
+The hand-written modules keep their installed sources (`include/rocsparse/rocsparse.f90`, `include/hipblas/hipblas_module.f90`) while they are deprecated.
+The generated source does not reuse those paths, so a consumer that compiles them changes its path when it moves.
 
 ### Tests and documentation
 
@@ -1050,7 +1044,7 @@ Each test is one Fortran program and its own CTest test, labeled `gpu` since it 
 A `<name>.f03` test calls the raw and typed forms and is registered as `<lib>_fortran_<name>`.
 A `<name>.f08` test calls the array overloads and is registered as `<lib>_fortran_<name>_f2008`.
 Tests are built under `BUILD_FORTRAN_CLIENTS`, and installed: the executables in `bin/`, and a `CTestTestfile.cmake` with the same tests and properties in `bin/<lib>-fortran/`, so that `ctest --test-dir` runs them from an install.
-They `use hip`, so until the HIP binding is installed they configure as skipped with a `STATUS` message.
+Most of them `use hip`, so until the HIP binding is installed those configure as skipped with a `STATUS` message.
 rocRAND, hipRAND and the `rocm-systems` tests follow the same convention, with differences only where they must (for example ROCTx's single test needs no GPU).
 
 The bot's pull request compiles every library's Fortran tests without a GPU, and that is what catches interface drift.
@@ -1111,7 +1105,7 @@ The libraries' builds pass no Fortran option and need no Fortran compiler for th
 
 1. **Tests.**
    Each binding installs its tests, and they ship in the `test` component of its family's artifact.
-   TheRock runs them in one test job per binding, named after its subproject (`runtime-fortran` for HIP and ROCTx, `rocblas-fortran`, ...), which fetches the bindings' tests and the libraries they load.
+   TheRock runs them in one test job per binding, named after its subproject (`runtime-fortran` for HIP and ROCTx, `rocblas-fortran`, ...), which fetches only that binding's tests and the libraries they load.
    Consumer-based test selection runs a changed subproject's tests and those of its direct consumers, and a binding consumes the library it binds, so a change to HIP, ROCTx or a math library also runs its binding's tests.
    The math-library binding tests `use hip`, so they run once the HIP binding is in the rocm-systems commit TheRock pins.
 
