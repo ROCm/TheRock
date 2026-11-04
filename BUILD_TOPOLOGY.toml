@@ -954,41 +954,36 @@ disable_platforms = ["windows"]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
+# Covers bindings/fortran/** in both rocm-systems and rocm-libraries.
 source_paths = ["fortran"]
 
 [artifacts.blas-fortran]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["blas", "runtime-fortran"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
 
 [artifacts.solver-fortran]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["solver", "blas-fortran", "runtime-fortran"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
 
 [artifacts.sparse-fortran]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["sparse", "runtime-fortran"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
 
 [artifacts.fft-fortran]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["fft", "runtime-fortran"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
 
 [artifacts.rand-fortran]
 artifact_group = "fortran-bindings"
 type = "target-neutral"
 artifact_deps = ["rand", "runtime-fortran"]
-feature_group = "FORTRAN_BINDINGS"
 disable_platforms = ["windows"]
