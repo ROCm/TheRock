@@ -6,6 +6,10 @@ name: Multi-Arch CI - Windows
 on:
   workflow_call:
     inputs:
+      max_retries:
+        description: "Additional failed component Test command attempts (0 disables retries)"
+        type: number
+        default: 1
       build_config:
         type: string
         description: >-
@@ -174,6 +178,7 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
+      max_retries: ${{ inputs.max_retries }}
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}

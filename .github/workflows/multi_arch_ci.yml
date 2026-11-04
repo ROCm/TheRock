@@ -17,6 +17,10 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      max_retries:
+        description: "Additional attempts of a failed component shard Test command (0 disables retries)"
+        type: number
+        default: 1
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -93,6 +97,10 @@ on:
           reuse and test filtering (empty = run all tests).
   workflow_call:
     inputs:
+      max_retries:
+        description: "Additional failed component Test command attempts (0 disables retries)"
+        type: number
+        default: 1
       linux_amdgpu_families:
         type: string
         default: ""
@@ -190,6 +198,7 @@ jobs:
       }}
     uses: ./.github/workflows/multi_arch_ci_linux.yml
     with:
+      max_retries: ${{ (toJSON(inputs.max_retries) == 'null' || toJSON(inputs.max_retries) == '""') && 1 || inputs.max_retries }}
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
@@ -211,6 +220,7 @@ jobs:
       }}
     uses: ./.github/workflows/multi_arch_ci_windows.yml
     with:
+      max_retries: ${{ (toJSON(inputs.max_retries) == 'null' || toJSON(inputs.max_retries) == '""') && 1 || inputs.max_retries }}
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}

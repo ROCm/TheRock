@@ -10,6 +10,10 @@ name: Test Artifacts
 on:
   workflow_dispatch:
     inputs:
+      max_retries:
+        description: "Additional attempts of a failed component shard Test command (0 disables retries)"
+        type: number
+        default: 1
       artifact_group:
         description: >-
           Artifact group name used to fetch build artifacts
@@ -116,6 +120,10 @@ on:
         default: ""
   workflow_call:
     inputs:
+      max_retries:
+        description: "Additional failed component Test command attempts (0 disables retries)"
+        type: number
+        default: 1
       artifact_group:
         type: string
       artifact_run_id:
@@ -218,6 +226,13 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Validate Test command retry limit
+        env:
+          MAX_RETRIES: ${{ inputs.max_retries }}
+        run: |
+          python build_tools/github_actions/retry_test_command.py \
+            --max-retries "$MAX_RETRIES" --validate-only
+
       - name: "Determine test dependencies"
         id: test_deps
         # Reads the committed consumer graph directly (no fetch/configure); kept
@@ -293,6 +308,7 @@ jobs:
     uses: './.github/workflows/test_component.yml'
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      max_retries: ${{ inputs.max_retries }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}

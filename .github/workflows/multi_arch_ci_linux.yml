@@ -6,6 +6,10 @@ name: Multi-Arch CI - Linux
 on:
   workflow_call:
     inputs:
+      max_retries:
+        description: "Additional failed component Test command attempts (0 disables retries)"
+        type: number
+        default: 1
       build_config:
         type: string
         description: >-
@@ -172,6 +176,7 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
+      max_retries: ${{ inputs.max_retries }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
@@ -206,6 +211,7 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).wsl_per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
+      max_retries: ${{ inputs.max_retries }}
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}

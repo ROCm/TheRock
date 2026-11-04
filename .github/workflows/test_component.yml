@@ -6,6 +6,10 @@ name: Test component
 on:
   workflow_call:
     inputs:
+      max_retries:
+        description: "Additional failed component Test command attempts (0 disables retries)"
+        type: number
+        default: 1
       artifact_run_id:
         type: string
         default: ""
@@ -55,7 +59,8 @@ jobs:
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
-    timeout-minutes: 210
+    # Reserve up to 75 minutes for setup, diagnostics and cleanup outside Test.
+    timeout-minutes: 360
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
@@ -146,6 +151,16 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
 
+      - name: Configure Test command retries
+        id: retry_config
+        env:
+          MAX_RETRIES: ${{ inputs.max_retries }}
+          TEST_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+        run: |
+          python build_tools/github_actions/retry_test_command.py \
+            --max-retries "$MAX_RETRIES" \
+            --timeout-minutes "$TEST_TIMEOUT_MINUTES" --configure-only
+
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
@@ -207,7 +222,8 @@ jobs:
 
       - name: Test
         id: test
-        timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
+        # Budget all attempts and delays, capped at 285 minutes.
+        timeout-minutes: ${{ fromJSON(steps.retry_config.outputs.step_timeout_minutes) }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
@@ -229,20 +245,23 @@ jobs:
           # Default unset components to the platform backend, mirroring the runtime fix
           # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
-          RETRY_THIS_STEP: "true"
-          RETRY_COUNT: "1"
-          RETRY_DELAY: "7"
+          # The helper owns retries; disable any runner-level retry hook.
+          RETRY_THIS_STEP: "false"
+          RETRY_COUNT: "0"
+          MAX_RETRIES: ${{ inputs.max_retries }}
+          TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
           STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
             ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-        # This input is intentionally a shell program from fetch_test_configurations.py,
-        # including command chains and per-command environment assignments. Callers
-        # must be trusted to select code, just as they select repository/ref above.
-        run: | # zizmor: ignore[template-injection]
-          ${{ fromJSON(inputs.component).test_script }}
+        # TEST_SCRIPT is intentionally executable shell code from the trusted
+        # component configuration, including chains and environment assignments.
+        run: |
+          python build_tools/github_actions/retry_test_command.py \
+            --max-retries "$MAX_RETRIES" \
+            --timeout-minutes "$STEP_TIMEOUT_MINUTES"
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
