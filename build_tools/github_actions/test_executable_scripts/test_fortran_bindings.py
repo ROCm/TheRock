@@ -9,18 +9,27 @@ import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+TEST_COMPONENT = os.getenv("TEST_COMPONENT")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-# Each binding installs its CTestTestfile.cmake in bin/<binding>-fortran/.
-BINDINGS = ["hip-fortran", "roctx-fortran"]
+# Each test job is named after a binding subproject, so that consumer-based test
+# selection picks it when the library it binds changes. A binding installs its
+# CTestTestfile.cmake in bin/<binding>-fortran/.
+TEST_DIRS = {
+    "runtime-fortran": ["hip-fortran", "roctx-fortran"],
+}
 
-test_dirs = [Path(THEROCK_BIN_DIR) / b for b in BINDINGS]
+if TEST_COMPONENT not in TEST_DIRS:
+    logging.error(f"Unknown Fortran binding test component: {TEST_COMPONENT}")
+    sys.exit(1)
+
+test_dirs = [Path(THEROCK_BIN_DIR) / d for d in TEST_DIRS[TEST_COMPONENT]]
 test_dirs = [d for d in test_dirs if (d / "CTestTestfile.cmake").is_file()]
 if not test_dirs:
-    logging.info("No Fortran binding tests are installed; nothing to run.")
+    logging.info(f"No {TEST_COMPONENT} tests are installed; nothing to run.")
     sys.exit(0)
 
 failed = []

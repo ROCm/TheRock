@@ -693,8 +693,8 @@ test_matrix = {
             "windows": 1,
         },
     },
-    "fortran-bindings": {
-        "job_name": "fortran-bindings",
+    "runtime-fortran": {
+        "job_name": "runtime-fortran",
         "fetch_artifact_args": "--fortran-bindings --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
