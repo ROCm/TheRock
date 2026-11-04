@@ -3,14 +3,14 @@
 # SPDX-License-Identifier: MIT
 
 """
-Detect external repository configuration for TheRock CI workflows.
+Detects external repository configuration for TheRock CI workflows.
 
-This script identifies the repository being built (rocm-libraries, rocm-systems,
-etc.) and its normal submodule path. It emits a config_json GitHub Actions output
-containing the source identity and caller-supplied build options. Build workflows
-pass this JSON as EXTERNAL_REPO_CONFIG to fetch_sources.py and manifest generation.
-fetch_sources.py selects sources by stage and checks out the requested commit at
-the normal submodule path, using its standard DVC project defaults.
+This script identifies the repository for being built (rocm-libraries, rocm-systems,
+etc.) and its normal submodule path within TheRock. It then emits a config_json
+GitHub Actions output containing the source identity and caller-supplied build
+options. Build workflows can then pass this JSON as EXTERNAL_REPO_CONFIG to
+scripts like fetch_sources.py and generate_therock_manifest.py to override the
+default git submodule state.
 
 Usage:
     python build_tools/github_actions/detect_external_repo_config.py --repository <repository_name>
@@ -35,6 +35,7 @@ projects, and family_overrides fields are forwarded from that input unchanged.
 """
 
 import argparse
+from dataclasses import asdict, dataclass, field
 import json
 import sys
 
@@ -49,15 +50,88 @@ SUBMODULE_PATHS = {
 }
 
 
-def main(argv=None):
-    """Main entry point for the script.
+@dataclass
+class ExternalRepoConfig:
+    """Source identity and caller build options forwarded to build workflows."""
+
+    repository: str
+    ref: str
+    submodule_path: str
+    extra_cmake_options: str = ""
+    projects: str = ""
+    family_overrides: dict[str, dict[str, object]] = field(default_factory=dict)
+
+
+def build_external_repo_config(
+    repository: str,
+    *,
+    ref: str = "",
+    extra_cmake_options: str = "",
+    projects: str = "",
+    family_overrides: dict[str, dict[str, object]] | None = None,
+) -> ExternalRepoConfig:
+    """Build source checkout configuration and attach caller-supplied options.
 
     Args:
-        argv: Command line arguments (defaults to sys.argv if None)
+        repository: Supported component name or GitHub owner/repo, including a
+            fork. The component name determines the submodule path, ignoring
+            case. Bare names become ROCm/<lowercase-name>; explicit owner/repo
+            values are preserved.
+        ref: Commit to test from repository. CI callers supply a full commit
+            SHA; an empty string allows inspecting the configuration without
+            selecting a commit. Commit validation happens during source fetching.
+        extra_cmake_options: Additional CMake arguments for the build, forwarded
+            unchanged as a string.
+        projects: Caller-supplied project selection string, forwarded unchanged
+            without parsing or validation.
+        family_overrides: CI configuration overrides keyed by GPU family, then
+            platform. Forwarded unchanged; None becomes an empty dictionary.
 
     Returns:
-        Exit code (0 for success, 1 for error)
+        Configuration containing the resolved repository and submodule path,
+        together with the supplied ref and build options. The caller can
+        serialize it as JSON for build jobs using dataclasses.asdict().
+
+    Raises:
+        ValueError: The repository name is missing or unsupported.
+
+    Examples:
+        Inspect the default repository and submodule path without a commit:
+
+        >>> config = build_external_repo_config("rocm-systems")
+        >>> (config.repository, config.submodule_path, config.ref)
+        ('ROCm/rocm-systems', 'rocm-systems', '')
+
+        Test a fork's commit at the same submodule path with extra build options:
+
+        >>> config = build_external_repo_config(
+        ...     "my-fork/rocm-systems",
+        ...     ref="0123456789abcdef0123456789abcdef01234567",
+        ...     projects="rccl",
+        ...     extra_cmake_options="-DTHEROCK_ENABLE_RCCL=ON",
+        ... )
+        >>> (config.repository, config.submodule_path)
+        ('my-fork/rocm-systems', 'rocm-systems')
     """
+    if not isinstance(repository, str) or not repository.strip():
+        raise ValueError("A repository name or owner/repo is required")
+    repo_name = repository.rsplit("/", 1)[-1].lower()
+    if repo_name not in SUBMODULE_PATHS:
+        raise ValueError(
+            f"Unknown external repository: {repo_name}\n"
+            f"Known repositories: {', '.join(SUBMODULE_PATHS)}"
+        )
+    return ExternalRepoConfig(
+        repository=repository if "/" in repository else f"ROCm/{repo_name}",
+        ref=ref,
+        submodule_path=SUBMODULE_PATHS[repo_name],
+        extra_cmake_options=extra_cmake_options,
+        projects=projects,
+        family_overrides=family_overrides if family_overrides is not None else {},
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Resolve external source identity and build options for TheRock CI."
     )
@@ -83,77 +157,32 @@ def main(argv=None):
         print("Known external repositories:")
         for repo_name in SUBMODULE_PATHS.keys():
             print(f"  - {repo_name}")
-        return 0
+        return
 
     # Parse external repo JSON if provided, extract repository name
     external_repo = {}
-    source_repository = None
-    source_ref = ""
     if args.external_repo_json:
-        try:
-            external_repo = json.loads(args.external_repo_json)
-            source_repository = external_repo.get("repository", "")
-            source_ref = external_repo.get("ref", "")
-            # Extract repo name from full name (e.g., "rocm-libraries" from "ROCm/rocm-libraries").
-            # Lowercase so SUBMODULE_PATHS lookup is case-insensitive (e.g. "ROCgdb" -> "rocgdb").
-            if "/" in source_repository:
-                repo_name = source_repository.split("/")[-1].lower()
-            else:
-                repo_name = source_repository.lower()
-            args.repository = repo_name
-            print(
-                f"Parsed external_repo: repository={source_repository}, ref={source_ref}",
-                file=sys.stderr,
-            )
-        except json.JSONDecodeError as e:
-            print(f"ERROR: Invalid JSON in --external-repo-json: {e}", file=sys.stderr)
-            return 1
-
-    if not args.repository:
-        print(
-            "ERROR: --repository or --external-repo-json is required",
-            file=sys.stderr,
-        )
-        return 1
-
-    try:
-        if args.repository not in SUBMODULE_PATHS:
-            raise ValueError(
-                f"Unknown external repository: {args.repository}\n"
-                f"Known repositories: {', '.join(SUBMODULE_PATHS)}"
-            )
-        submodule_path = SUBMODULE_PATHS[args.repository]
-
-        # Log to stderr for visibility in CI logs
-        print(f"Detected repository: {args.repository}", file=sys.stderr)
-
-        final_source_repo = source_repository or f"ROCm/{args.repository}"
-
-        # Keep caller build/test options separate from source fetching.
-        projects = external_repo.get("projects", "")
-        family_overrides = external_repo.get("family_overrides", {})
-        extra_cmake_options = external_repo.get("extra_cmake_options", "")
-
-        config_json = {
-            "repository": final_source_repo,
-            "ref": source_ref,
-            "submodule_path": submodule_path,
-            "extra_cmake_options": extra_cmake_options,
-            "projects": projects,
-            "family_overrides": family_overrides,
-        }
-        print(
-            f"Generated config_json:\n{json.dumps(config_json, indent=2)}",
-            file=sys.stderr,
-        )
-
-        gha_set_output({"config_json": json.dumps(config_json)})
-        return 0
-
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 1
+        external_repo = json.loads(args.external_repo_json)
+        if not isinstance(external_repo, dict):
+            raise ValueError("--external-repo-json must contain a JSON object")
+    repository = (
+        external_repo.get("repository", "")
+        if args.external_repo_json
+        else args.repository or ""
+    )
+    config = build_external_repo_config(
+        repository,
+        ref=external_repo.get("ref", ""),
+        extra_cmake_options=external_repo.get("extra_cmake_options", ""),
+        projects=external_repo.get("projects", ""),
+        family_overrides=external_repo.get("family_overrides"),
+    )
+    config_json = asdict(config)
+    print(
+        f"Generated config_json:\n{json.dumps(config_json, indent=2)}", file=sys.stderr
+    )
+    gha_set_output({"config_json": json.dumps(config_json)})
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main(sys.argv[1:])

@@ -92,7 +92,7 @@ from typing import List
 import os
 
 import fetch_dvc_artifacts
-from _therock_utils.external_repo import (
+from _therock_utils.external_repo_config import (
     external_repo_url,
     parse_and_validate_external_repo_config,
 )
