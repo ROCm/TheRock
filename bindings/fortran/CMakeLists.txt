@@ -12,6 +12,10 @@ if(THEROCK_ENABLE_RUNTIME_FORTRAN)
   ##############################################################################
   set(_runtime_fortran_subproject_names)
   if(NOT THEROCK_SANITIZER AND EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran/CMakeLists.txt")
+    # The HIP tests build a code object with hipcc, which does not know where
+    # amd-llvm's device libraries are.
+    therock_compiler_toolchain_subproject(_toolchain_subproject amd-hip)
+    get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     therock_cmake_subproject_declare(runtime-fortran
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/bindings/fortran"
@@ -20,6 +24,7 @@ if(THEROCK_ENABLE_RUNTIME_FORTRAN)
         -DHIP_PLATFORM=amd
         -DBUILD_FORTRAN_BINDINGS=ON
         -DBUILD_FORTRAN_CLIENTS=${THEROCK_BUILD_TESTING}
+        "-DHIP_FORTRAN_GENCO_FLAGS=--hip-device-lib-path=${_amd_llvm_dist_dir}/lib/llvm/amdgcn/bitcode"
       COMPILER_TOOLCHAIN
         amd-hip
       RUNTIME_DEPS
