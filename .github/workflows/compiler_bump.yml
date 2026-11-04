@@ -88,6 +88,7 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       branch_name: ${{ steps.create-branch.outputs.branch_name }}
+      rocm_system_ref: ${{ steps.rocm-systems-ref.outputs.sha }}
     steps:
       - name: Generate branch name
         id: branch-name
@@ -187,6 +188,11 @@ jobs:
           git push origin "${BRANCH_NAME}"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Branch pushed: [\`${BRANCH_NAME}\`](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME})" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Get rocm-systems submodule ref
+        id: rocm-systems-ref
+        run: |
+          echo "sha=$(git ls-tree HEAD rocm-systems | awk '{print $3}')" >> "$GITHUB_OUTPUT"
 
   # ==========================================================================
   # Phase 2 - Linux: Build and packaging
@@ -330,7 +336,7 @@ jobs:
           ref: ${{ needs.setup-linux.outputs.ref }}
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -505,7 +511,7 @@ jobs:
           ref: ${{ needs.setup-windows.outputs.ref }}
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -659,7 +665,6 @@ jobs:
             # Hard-code: gfx950's tests_on_trigger is "submodule_bump" only,
             # so the setup config clears test_runs_on for scheduled runs.
             hardcoded_test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
-            test_type_override: quick
           - amdgpu_family: gfx1151
             hardcoded_test_runs_on: ""
     steps:
@@ -706,7 +711,7 @@ jobs:
               "amdgpu_families": "${{ matrix.amdgpu_family }}",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ matrix.test_type_override || inputs.test_type || 'standard' }}",
+              "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
@@ -770,6 +775,23 @@ jobs:
           echo "**Test Run:** ${TEST_RUN_URL}" >> "$GITHUB_STEP_SUMMARY"
 
   # ==========================================================================
+  # Phase 4 - RCCL Coco: Smoke tests via rocm-systems harness
+  # ==========================================================================
+  rccl-coco:
+    name: RCCL Coco Tests
+    needs: [create-branch, setup-linux, publish-linux-artifacts]
+    # Standard, including the daily schedule, runs coco. Quick skips it.
+    if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.publish-linux-artifacts.result == 'success' && (inputs.test_type || 'standard') == 'standard' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/rccl_coco.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      rocm_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
+      rocm_system_ref: ${{ needs.create-branch.outputs.rocm_system_ref }}
+      trigger_kind: ci
+
+  # ==========================================================================
   # Summary
   # ==========================================================================
   summary:
@@ -795,6 +817,7 @@ jobs:
       - trigger-linux-tests
       - trigger-linux-tests-extra
       - trigger-windows-tests
+      - rccl-coco
     if: always()
     runs-on: ubuntu-26.04
     env:
@@ -810,7 +833,7 @@ jobs:
         timeout-minutes: 15
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -977,6 +1000,17 @@ jobs:
             echo "- :x: ASAN Build dispatch failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.dispatch-asan-build.result }}" == "skipped" ]; then
             echo "- :fast_forward: ASAN Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### RCCL Coco" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ needs.rccl-coco.result }}" == "success" ]; then
+            echo "- :white_check_mark: RCCL coco tests passed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.rccl-coco.result }}" == "failure" ]; then
+            echo "- :x: RCCL coco tests failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.rccl-coco.result }}" == "skipped" ]; then
+            echo "- :fast_forward: RCCL coco tests skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"

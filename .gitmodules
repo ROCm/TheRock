@@ -21,7 +21,7 @@
 [submodule "rocm-systems"]
 	path = rocm-systems
 	url = https://github.com/ROCm/rocm-systems.git
-	branch = users/amilanov/add-test-filter-standardization
+	branch = develop
 [submodule "spirv-llvm-translator"]
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
@@ -37,7 +37,7 @@
 [submodule "rocgdb"]
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
-	branch = amd-staging-rocgdb-16
+	branch = amd-staging-rocgdb-18
 [submodule "rocm-docs"]
 	path = rocm-docs
 	url = https://github.com/ROCm/rocm-docs.git
