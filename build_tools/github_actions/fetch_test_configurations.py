@@ -233,7 +233,8 @@ _rocgdb_common = {
 # (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
 # that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
 # targets, so those must be matched by the group string (e.g. "gfx1150",
-# "gfx125X-dcgpu"). Examples:
+# "gfx125X-dcgpu"). Targets = AMDGPU_TARGETS if set, else the static fetch-gfx-targets.
+# Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 #
@@ -389,7 +390,8 @@ test_matrix = {
             "linux": [
                 # CRITICAL FAILURE (hang): test causes hang during execution
                 # https://github.com/ROCm/TheRock/actions/runs/36185080189/job/108239321671
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -423,7 +425,13 @@ test_matrix = {
             "linux": 1,
         },
         "include_family": {
-            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
+            "linux": [
+                "gfx90a",
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx120X-all",
+                "gfx1250-strict",
+            ],
         },
     },
     "origami": {
@@ -475,7 +483,8 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -1365,6 +1374,9 @@ def run():
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    amdgpu_targets = [
+        t.strip() for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t.strip()
+    ]
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
@@ -1474,9 +1486,15 @@ def run():
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
         # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
-        _family_gfx_targets = []
-        if amdgpu_families and shortened_family and shortened_family in all_families:
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201"). AMDGPU_TARGETS
+        # (fetch-gfx-targets after the caller's family overrides) wins over the matrix.
+        _family_gfx_targets = amdgpu_targets
+        if (
+            not _family_gfx_targets
+            and amdgpu_families
+            and shortened_family
+            and shortened_family in all_families
+        ):
             _family_gfx_targets = (
                 all_families[shortened_family]
                 .get(platform, {})
