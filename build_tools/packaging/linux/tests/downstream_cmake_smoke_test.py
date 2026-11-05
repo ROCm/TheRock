@@ -2,300 +2,304 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for ``downstream_cmake_smoke.py``.
+"""Unit tests for downstream_cmake_smoke.py. No ROCm prefix or cmake required."""
 
-No ROCm install and no real ``cmake`` binary are required. Configure is
-replaced with ``run_configure``, and ``shutil.which`` is patched through
-``_resolve_cmake``.
-
-CI collects this file from ``.github/workflows/unit_tests.yml`` because
-``pyproject.toml`` lists ``build_tools/packaging/linux/tests``. Run locally
-from the repository root::
-
-    python3 -m unittest \\
-        build_tools.packaging.linux.tests.downstream_cmake_smoke_test -v
-"""
-
-import os
+import re
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-# Resolve the packaging module from linux/ (same pattern as the other tests
-# in this directory; linux/ is not an installed package).
-_LINUX_DIR = Path(__file__).resolve().parent.parent
-_path_str = os.fspath(_LINUX_DIR)
-if _path_str not in sys.path:
-    sys.path.insert(0, _path_str)
+LINUX_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(LINUX_DIR))
 
-import downstream_cmake_smoke as smoke  # noqa: E402
+import downstream_cmake_smoke as sdk  # noqa: E402
+
+PROJECT_CMAKE = sdk.REPO_ROOT / "examples" / "cpp-sdk-user" / "CMakeLists.txt"
+DRIVER_CMAKE = sdk.REPO_ROOT / "examples" / "clean_configure_test_project.cmake"
+GROUPS = sdk.parse_enable_groups(PROJECT_CMAKE.read_text())
+
+SAMPLE_PROJECT = """
+if(THEROCK_ENABLE_HIP)
+    find_package(hip CONFIG REQUIRED)
+endif()
+if(THEROCK_ENABLE_BLAS)
+    find_package(hipblaslt CONFIG REQUIRED)
+    find_package(hipblas CONFIG REQUIRED)
+    find_package(rocblas CONFIG REQUIRED)
+endif()
+if(THEROCK_ENABLE_HIPTENSOR)
+    find_package(hiptensor CONFIG REQUIRED)
+endif()
+"""
 
 
-class DownstreamCmakeSmokeTest(unittest.TestCase):
-    """Command construction and fail-closed configure results."""
+def _write_config(prefix: Path, package: str, filename: str | None = None) -> None:
+    """Write a one-line CMake config file under ``prefix/lib/cmake/<package>``."""
+    folder = prefix / "lib" / "cmake" / package
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / (filename or f"{package}-config.cmake")).write_text("# test\n")
 
-    def setUp(self) -> None:
-        self._temporary = tempfile.TemporaryDirectory(prefix="smoke-ut-")
-        self.root = Path(self._temporary.name)
-        self.prefix = self.root / "opt" / "rocm" / "core-test"
-        self.prefix.mkdir(parents=True)
-        self.work_dir = self.root / "work"
-        self._plant_config("hip")
-        self._plant_config("hipblaslt")
 
-    def _plant_config(self, package_name: str, *, version_file: bool = False) -> None:
-        package_dir = self.prefix / "lib" / "cmake" / package_name
-        package_dir.mkdir(parents=True, exist_ok=True)
-        (package_dir / f"{package_name}-config.cmake").write_text(
-            "# test fixture\n", encoding="utf-8"
-        )
-        if version_file:
-            (package_dir / f"{package_name}-config-version.cmake").write_text(
-                "# test fixture\n", encoding="utf-8"
-            )
+def _all_packages(prefix: Path) -> None:
+    """Write a config file for every package the real cpp-sdk-user project finds."""
+    for _flag, group in GROUPS:
+        for package in group:
+            if package == "rocWMMA":
+                _write_config(prefix, package, "rocWMMAConfig.cmake")
+            else:
+                _write_config(prefix, package)
 
-    def tearDown(self) -> None:
-        self._temporary.cleanup()
 
-    def _fake_success(self, command: list[str]) -> smoke.ConfigureResult:
-        self.command = command
-        return smoke.ConfigureResult(
-            returncode=0,
-            stdout="-- hip_VERSION=1.0\n-- hipblaslt_VERSION=1.0\n",
-            stderr="",
-        )
+class EnableFlagTests(unittest.TestCase):
+    def test_full_prefix_enables_every_group(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            _all_packages(prefix)
+            flags = {
+                flag.name: flag.value
+                for flag in sdk.enable_flags(
+                    sdk.installed_cmake_packages(prefix, GROUPS), GROUPS
+                )
+            }
+        self.assertEqual(set(flags), {name for name, _group in GROUPS})
+        self.assertTrue(all(value == "ON" for value in flags.values()))
 
-    def test_generated_project_finds_hip_and_hipblaslt(self) -> None:
-        """The generated project enables CXX and requires hip and hipblaslt."""
-        contents = smoke.render_cmake_lists(("hip", "hipblaslt"))
-        self.assertIn("project(install_smoke_test LANGUAGES CXX)", contents)
-        self.assertIn("find_package(hip CONFIG REQUIRED)", contents)
-        self.assertIn("find_package(hipblaslt CONFIG REQUIRED)", contents)
+    def test_absent_hiptensor_is_off_and_hip_stays_on(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            _all_packages(prefix)
+            hiptensor = prefix / "lib" / "cmake" / "hiptensor"
+            for path in hiptensor.iterdir():
+                path.unlink()
+            hiptensor.rmdir()
+            flags = {
+                flag.name: flag
+                for flag in sdk.enable_flags(
+                    sdk.installed_cmake_packages(prefix, GROUPS), GROUPS
+                )
+            }
+        self.assertEqual(flags["THEROCK_ENABLE_HIPTENSOR"].value, "OFF")
+        self.assertEqual(flags["THEROCK_ENABLE_HIPTENSOR"].missing, ("hiptensor",))
+        self.assertEqual(flags["THEROCK_ENABLE_HIP"].value, "ON")
+        self.assertEqual(flags["THEROCK_ENABLE_BLAS"].value, "ON")
 
-    def test_discovers_every_config_under_lib_cmake(self) -> None:
-        """Version files and configs outside lib/cmake are not packages."""
-        self._plant_config("rocblas", version_file=True)
-        wmma_dir = self.prefix / "lib" / "cmake" / "rocWMMA"
-        wmma_dir.mkdir(parents=True)
-        (wmma_dir / "rocWMMAConfig.cmake").write_text(
-            "# test fixture\n", encoding="utf-8"
-        )
-        share_dir = self.prefix / "share" / "cmake" / "ignored"
-        share_dir.mkdir(parents=True)
-        (share_dir / "ignored-config.cmake").write_text(
-            "# test fixture\n", encoding="utf-8"
-        )
+    def test_absent_group_is_off(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            _all_packages(prefix)
+            for package in ("hipfft", "rocfft"):
+                folder = prefix / "lib" / "cmake" / package
+                for path in folder.iterdir():
+                    path.unlink()
+                folder.rmdir()
+            flags = {
+                flag.name: flag
+                for flag in sdk.enable_flags(
+                    sdk.installed_cmake_packages(prefix, GROUPS), GROUPS
+                )
+            }
+        self.assertEqual(flags["THEROCK_ENABLE_FFT"].value, "OFF")
+        self.assertEqual(flags["THEROCK_ENABLE_FFT"].missing, ("hipfft", "rocfft"))
 
+    def test_missing_hip_fails(self) -> None:
+        with self.assertRaisesRegex(ValueError, "missing required CMake packages: hip"):
+            sdk.enable_flags({"hipblaslt"}, GROUPS)
+
+    def test_missing_hipblaslt_fails(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "missing required CMake packages: hipblaslt"
+        ):
+            sdk.enable_flags({"hip"}, GROUPS)
+
+    def test_partial_group_fails(self) -> None:
+        packages = {"hip", "hipblaslt", "hipblas", "rocblas", "rocprim"}
+        with self.assertRaisesRegex(
+            ValueError, "THEROCK_ENABLE_PRIM is only partly installed"
+        ):
+            sdk.enable_flags(packages, GROUPS)
+
+    def test_similar_config_names_do_not_satisfy_required_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            _write_config(prefix, "hip-lang", "hip-lang-config.cmake")
+            _write_config(prefix, "hipblaslt", "hipblaslt-package-config.cmake")
+            names = sdk.installed_cmake_packages(prefix, GROUPS)
+        self.assertEqual(names, set())
+        with self.assertRaisesRegex(ValueError, "hip"):
+            sdk.enable_flags(names, GROUPS)
+
+    def test_rocwmma_config_cmake_name(self) -> None:
+        known = {"rocWMMA"}
         self.assertEqual(
-            smoke.discover_cmake_packages(self.prefix),
-            ["hip", "hipblaslt", "rocWMMA", "rocblas"],
+            sdk.package_name_from_config(Path("rocWMMAConfig.cmake"), known),
+            "rocWMMA",
         )
-        contents = smoke.render_cmake_lists(smoke.discover_cmake_packages(self.prefix))
-        self.assertIn("find_package(rocblas CONFIG REQUIRED)", contents)
-        self.assertIn("find_package(rocWMMA CONFIG REQUIRED)", contents)
-        self.assertNotIn("find_package(ignored CONFIG REQUIRED)", contents)
-
-    def test_skips_non_downstream_configs(self) -> None:
-        """Support, Fortran, and test configs are not direct find_package targets."""
-        for package_name in smoke.SKIP_PACKAGES:
-            self._plant_config(package_name)
-
-        discovered = smoke.discover_cmake_packages(self.prefix)
-        contents = smoke.render_cmake_lists(discovered)
-        for package_name in smoke.SKIP_PACKAGES:
-            self.assertNotIn(package_name, discovered)
-            self.assertNotIn(f"find_package({package_name} CONFIG REQUIRED)", contents)
-        self.assertIn("find_package(hip CONFIG REQUIRED)", contents)
-        self.assertIn("find_package(hipblaslt CONFIG REQUIRED)", contents)
-
-    def test_missing_required_package_fails(self) -> None:
-        """hipblaslt must be installed even when other configs are present."""
-        bare = self.root / "bare-prefix"
-        bare.mkdir()
-        package_dir = bare / "lib" / "cmake" / "hip"
-        package_dir.mkdir(parents=True)
-        (package_dir / "hip-config.cmake").write_text(
-            "# test fixture\n", encoding="utf-8"
+        self.assertEqual(
+            sdk.package_name_from_config(Path("rocwmma-config.cmake"), known),
+            "rocWMMA",
         )
-        called = False
+        self.assertIsNone(sdk.package_name_from_config(Path("CMakeLists.txt"), known))
 
-        def configure(_command: list[str]) -> smoke.ConfigureResult:
-            nonlocal called
-            called = True
-            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
+    def test_lowercase_rocwmma_file_enables_the_group(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            for package in ("hip", "hipblaslt", "hipblas", "rocblas"):
+                _write_config(prefix, package)
+            _write_config(prefix, "rocwmma", "rocwmma-config.cmake")
+            flags = {
+                flag.name: flag.value
+                for flag in sdk.enable_flags(
+                    sdk.installed_cmake_packages(prefix, GROUPS), GROUPS
+                )
+            }
+        self.assertEqual(flags["THEROCK_ENABLE_ROCWMMA"], "ON")
 
-        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
-            return_code = smoke.run_smoke(
-                bare,
-                work_dir=self.work_dir,
-                run_configure=configure,
-            )
-
-        self.assertEqual(return_code, 1)
-        self.assertFalse(called)
-
-    def test_no_cmake_configs_fails(self) -> None:
-        """A prefix with no lib/cmake package configs fails before configure."""
-        empty = self.root / "empty-prefix"
-        empty.mkdir()
-        called = False
-
-        def configure(_command: list[str]) -> smoke.ConfigureResult:
-            nonlocal called
-            called = True
-            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
-
-        return_code = smoke.run_smoke(
-            empty,
-            work_dir=self.work_dir,
-            run_configure=configure,
-        )
-
-        self.assertEqual(return_code, 1)
-        self.assertFalse(called)
-
-    def test_configure_argv_uses_resolved_prefix_and_hip_platform(self) -> None:
-        """Configure follows a symlink prefix and sets HIP_PLATFORM=amd."""
-        link = self.root / "core-link"
-        link.symlink_to(self.prefix, target_is_directory=True)
-
-        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
-            return_code = smoke.run_smoke(
-                link,
-                work_dir=self.work_dir,
-                run_configure=self._fake_success,
-            )
-
-        self.assertEqual(return_code, 0)
-        self.assertIn(f"-DCMAKE_PREFIX_PATH={self.prefix.resolve()}", self.command)
-        self.assertIn(f"-DHIP_PLATFORM={smoke.HIP_PLATFORM}", self.command)
-        self.assertFalse(
-            any(
-                argument.startswith("-DCMAKE_CXX_COMPILER=")
-                for argument in self.command
+    def test_nested_win32_package_stays_in_its_group(self) -> None:
+        groups = dict(
+            sdk.parse_enable_groups(
+                """
+                if(THEROCK_ENABLE_SPARSE)
+                    if(NOT WIN32)
+                        find_package(hipsparselt CONFIG REQUIRED)
+                    endif()
+                    find_package(hipsparse CONFIG REQUIRED)
+                endif()
+                """
             )
         )
-        source_dir = Path(self.command[self.command.index("-S") + 1])
-        self.assertFalse(smoke.path_is_inside(source_dir, self.prefix))
-        self.assertTrue((source_dir / "CMakeLists.txt").is_file())
+        self.assertEqual(groups["THEROCK_ENABLE_SPARSE"], ("hipsparselt", "hipsparse"))
 
-    def test_cxx_compiler_is_passed_to_cmake(self) -> None:
-        """--cxx-compiler selects g++ or clang++ for this configure."""
-        with (
-            patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"),
-            patch.object(
-                smoke, "_resolve_cxx_compiler", return_value="/usr/bin/clang++"
-            ),
-        ):
-            return_code = smoke.run_smoke(
-                self.prefix,
-                work_dir=self.work_dir,
-                cxx_compiler="clang++",
-                run_configure=self._fake_success,
-            )
+    def test_real_project_packages_come_from_the_cmake_file(self) -> None:
+        text = PROJECT_CMAKE.read_text()
+        found = re.findall(r"find_package\s*\(\s*([A-Za-z0-9_]+)", text)
+        parsed = [package for _flag, group in GROUPS for package in group]
+        self.assertCountEqual(parsed, found)
+        by_flag = dict(GROUPS)
+        self.assertIn("hipblaslt", by_flag["THEROCK_ENABLE_BLAS"])
+        self.assertIn("hipsparselt", by_flag["THEROCK_ENABLE_SPARSE"])
+        self.assertEqual(by_flag["THEROCK_ENABLE_ROCWMMA"], ("rocWMMA",))
+        propagate_block = re.search(
+            r"set\(\s*propagate_vars(.*?)\)",
+            DRIVER_CMAKE.read_text(),
+            re.S,
+        )
+        self.assertIsNotNone(propagate_block)
+        propagated = set(
+            re.findall(r"\bTHEROCK_ENABLE_[A-Za-z0-9_]+\b", propagate_block.group(1))
+        )
+        self.assertLessEqual({name for name, _group in GROUPS}, propagated)
 
-        self.assertEqual(return_code, 0)
-        self.assertIn("-DCMAKE_CXX_COMPILER=/usr/bin/clang++", self.command)
 
-    def test_missing_cxx_compiler_fails(self) -> None:
-        """A requested compiler that cannot be run fails before configure."""
-        called = False
+class CommandTests(unittest.TestCase):
+    def test_command_uses_driver_and_prefix_env(self) -> None:
+        flags = [
+            sdk.EnableFlag("THEROCK_ENABLE_HIP", "ON"),
+            sdk.EnableFlag("THEROCK_ENABLE_HIPTENSOR", "OFF", ("hiptensor",)),
+        ]
+        command = sdk.build_command(
+            cmake="cmake",
+            source_dir=Path("/src/examples/cpp-sdk-user"),
+            binary_dir=Path("/tmp/cpp-sdk-user"),
+            driver=Path("/src/examples/clean_configure_test_project.cmake"),
+            prefix=Path("/opt/rocm/core"),
+            generator="Unix Makefiles",
+            flags=flags,
+        )
+        self.assertEqual(
+            command[:5],
+            ["cmake", "-E", "env", "CMAKE_PREFIX_PATH=/opt/rocm/core", "--"],
+        )
+        self.assertIn("-DTHEROCK_ENABLE_HIP=ON", command)
+        self.assertIn("-DTHEROCK_ENABLE_HIPTENSOR=OFF", command)
+        self.assertNotIn("-DENABLE_DEVICE_TEST=ON", command)
+        self.assertEqual(
+            command[-2:], ["-P", "/src/examples/clean_configure_test_project.cmake"]
+        )
 
-        def configure(_command: list[str]) -> smoke.ConfigureResult:
-            nonlocal called
-            called = True
-            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
+    def test_build_dir_inside_prefix_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as prefix_dir, tempfile.TemporaryDirectory() as other:
+            prefix = Path(prefix_dir)
+            other_path = Path(other)
+            source = other_path / "cpp-sdk-user"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text(SAMPLE_PROJECT)
+            driver = other_path / "clean_configure_test_project.cmake"
+            driver.write_text("# driver\n")
+            with self.assertRaisesRegex(ValueError, "inside the install prefix"):
+                sdk.validate_layout(prefix, prefix / "build", source, driver)
 
-        with (
-            patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"),
-            patch.object(smoke, "_resolve_cxx_compiler", return_value=None),
-        ):
-            return_code = smoke.run_smoke(
-                self.prefix,
-                work_dir=self.work_dir,
-                cxx_compiler="clang++",
-                run_configure=configure,
-            )
+    def test_main_invokes_cmake_with_hiptensor_off(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prefix = root / "prefix"
+            _all_packages(prefix)
+            hiptensor = prefix / "lib" / "cmake" / "hiptensor"
+            for path in hiptensor.iterdir():
+                path.unlink()
+            hiptensor.rmdir()
+            source = root / "cpp-sdk-user"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text(SAMPLE_PROJECT)
+            driver = root / "clean_configure_test_project.cmake"
+            driver.write_text("# driver\n")
+            cmake = root / "cmake"
+            cmake.write_text("#!/bin/sh\n")
+            binary = root / "build"
+            with patch.object(sdk.subprocess, "run") as run:
+                run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                code = sdk.main(
+                    [
+                        "--prefix",
+                        str(prefix),
+                        "--source-dir",
+                        str(source),
+                        "--driver",
+                        str(driver),
+                        "--cmake",
+                        str(cmake),
+                        "--binary-dir",
+                        str(binary),
+                    ]
+                )
+        self.assertEqual(code, 0)
+        command = run.call_args.args[0]
+        self.assertIn("-DTHEROCK_ENABLE_HIPTENSOR=OFF", command)
+        self.assertIn("-DTHEROCK_ENABLE_HIP=ON", command)
+        self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", command)
+        self.assertTrue(command[-1].endswith("clean_configure_test_project.cmake"))
 
-        self.assertEqual(return_code, 1)
-        self.assertFalse(called)
-
-    def test_nonzero_configure_fails(self) -> None:
-        """A non-zero cmake status fails the helper."""
-
-        def fail_configure(_command: list[str]) -> smoke.ConfigureResult:
-            return smoke.ConfigureResult(
-                returncode=1,
-                stdout="",
-                stderr=(
-                    "Could not find a package configuration file "
-                    "provided by hipblaslt"
-                ),
-            )
-
-        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
-            return_code = smoke.run_smoke(
-                self.prefix,
-                work_dir=self.work_dir,
-                run_configure=fail_configure,
-            )
-
-        self.assertEqual(return_code, 1)
-
-    def test_missing_cmake_fails(self) -> None:
-        """A missing cmake executable fails instead of skipping."""
-        with patch.object(smoke, "_resolve_cmake", return_value=None):
-            return_code = smoke.run_smoke(self.prefix, work_dir=self.work_dir)
-
-        self.assertEqual(return_code, 1)
-
-    def test_project_inside_prefix_fails(self) -> None:
-        """The smoke project is not written inside the install prefix."""
-        inside = self.prefix / "smoke-work"
-        called = False
-
-        def configure(_command: list[str]) -> smoke.ConfigureResult:
-            nonlocal called
-            called = True
-            return smoke.ConfigureResult(returncode=0, stdout="", stderr="")
-
-        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
-            return_code = smoke.run_smoke(
-                self.prefix,
-                work_dir=inside,
-                run_configure=configure,
-            )
-
-        self.assertEqual(return_code, 1)
-        self.assertFalse(called)
-
-    def test_missing_prefix_fails(self) -> None:
-        """A prefix that is not a directory fails before cmake is invoked."""
-        return_code = smoke.run_smoke(self.root / "missing-prefix")
-        self.assertEqual(return_code, 1)
-
-    def test_default_project_directory_is_removed(self) -> None:
-        """The default temporary project is removed after configure."""
-        source_dir: Path | None = None
-
-        def configure(command: list[str]) -> smoke.ConfigureResult:
-            nonlocal source_dir
-            source_dir = Path(command[command.index("-S") + 1])
-            cmake_lists = source_dir / "CMakeLists.txt"
-            self.assertTrue(cmake_lists.is_file())
-            self.assertGreater(cmake_lists.stat().st_size, 0)
-            self.assertFalse(smoke.path_is_inside(source_dir, self.prefix))
-            return self._fake_success(command)
-
-        with patch.object(smoke, "_resolve_cmake", return_value="/usr/bin/cmake"):
-            return_code = smoke.run_smoke(self.prefix, run_configure=configure)
-
-        self.assertEqual(return_code, 0)
-        self.assertIsNotNone(source_dir)
-        assert source_dir is not None
-        self.assertFalse(source_dir.exists())
+    def test_main_returns_error_when_hipblaslt_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prefix = root / "prefix"
+            _write_config(prefix, "hip")
+            source = root / "cpp-sdk-user"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text(SAMPLE_PROJECT)
+            driver = root / "clean_configure_test_project.cmake"
+            driver.write_text("# driver\n")
+            cmake = root / "cmake"
+            cmake.write_text("#!/bin/sh\n")
+            with patch.object(sdk.subprocess, "run") as run:
+                code = sdk.main(
+                    [
+                        "--prefix",
+                        str(prefix),
+                        "--source-dir",
+                        str(source),
+                        "--driver",
+                        str(driver),
+                        "--cmake",
+                        str(cmake),
+                        "--binary-dir",
+                        str(root / "build"),
+                    ]
+                )
+        self.assertEqual(code, 1)
+        run.assert_not_called()
 
 
 if __name__ == "__main__":
