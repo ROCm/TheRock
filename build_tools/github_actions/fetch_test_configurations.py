@@ -806,8 +806,7 @@ test_matrix = {
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
     # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
-    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
-    # expect_failure below).
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -828,11 +827,6 @@ test_matrix = {
         "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
             "linux": ["gfx942", "gfx950"],
-        },
-        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
-        # few consecutive standard/comprehensive/full runs.
-        "expect_failure": {
-            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
