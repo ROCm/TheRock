@@ -248,6 +248,7 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
+include(therock_windows_driver)
 
 ################################################################################
 # Manual features that don't map to artifacts

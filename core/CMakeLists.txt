@@ -268,6 +268,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
+  if(THEROCK_ENABLE_KPACK)
+    list(APPEND HIP_CLR_RUNTIME_DEPS rocm-kpack)
+  endif()
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
@@ -307,7 +310,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
-      "-DROCM_KPACK_ENABLED=ON"
+      "-DROCM_KPACK_ENABLED=${THEROCK_ENABLE_KPACK}"
       "-DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}"
       ${_clr_comgr_dll_name_cmake_args}
       # Legacy: Disable various auto-detection logic that breaks out of jail
@@ -322,7 +325,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
       amd-comgr
       hipcc     # For hipconfig
       rocm-core
-      rocm-kpack
       ${HIP_CLR_RUNTIME_DEPS}
     INTERFACE_LINK_DIRS
       "lib"

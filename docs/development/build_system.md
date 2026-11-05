@@ -156,6 +156,20 @@ Each sub-project, by default, uses a standard directory layout for its build:
 
 ## CMake Configuration Options
 
+### Windows driver builds
+
+On Windows, `-DTHEROCK_FLAG_WINDOWS_DRIVER_BUILD=ON` selects the AMD driver
+variant. Pair it with `-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF`. This variant
+disables the kpack runtime component and configures HIP with
+`ROCM_KPACK_ENABLED=OFF`, removing its dependency on `rocm_kpack.dll`.
+Configuration fails if artifact splitting remains enabled, since that HIP
+runtime cannot load kpack-backed device code. Use conventional embedded device
+code in driver binaries and their consumers.
+
+Other builds retain their normal kpack settings. When changing an existing
+build tree between variants, replace the downstream bundle completely with
+artifacts from the new build; do not reuse DLLs from the previous variant.
+
 ### `THEROCK_DEV_PROJECTS`
 
 Subprojects that opt in to source file globbing even when otherwise skipped
