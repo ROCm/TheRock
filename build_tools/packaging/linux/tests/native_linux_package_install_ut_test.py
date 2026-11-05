@@ -3174,7 +3174,11 @@ class HarnessWithoutJinja2Test(unittest.TestCase):
 
 
 class RunRepoSetupDispatchTest(unittest.TestCase):
-    """run_repo_setup_and_install dispatch: package mode vs config-only vs default."""
+    """run_repo_setup_and_install dispatch: package mode vs config-only vs default.
+
+    Package mode checks published checksums after the repo file is verified and
+    before ROCm is installed. Config-only stops before that check.
+    """
 
     def _runner(self, **kw):
         base = dict(os_profile="ubuntu2404", repo_url="", release_type="prerelease")
@@ -3185,29 +3189,47 @@ class RunRepoSetupDispatchTest(unittest.TestCase):
         runner = self._runner(repo_setup_package_dir="/pkgs", repo_config_only=True)
         runner.install_repo_setup_package = MagicMock(return_value=True)
         runner.assert_repo_configured = MagicMock(return_value=True)
+        runner.verify_published_checksum_metadata = MagicMock(return_value=True)
         runner.install_deb_packages = MagicMock(return_value=True)
         with _suppress_script_output():
             self.assertTrue(runner.run_repo_setup_and_install())
         runner.install_repo_setup_package.assert_called_once()
         runner.assert_repo_configured.assert_called_once()
+        runner.verify_published_checksum_metadata.assert_not_called()
         runner.install_deb_packages.assert_not_called()
 
     def test_package_mode_installs_rocm_when_not_config_only(self):
         runner = self._runner(repo_setup_package_dir="/pkgs", repo_config_only=False)
         runner.install_repo_setup_package = MagicMock(return_value=True)
         runner.assert_repo_configured = MagicMock(return_value=True)
+        runner.verify_published_checksum_metadata = MagicMock(return_value=True)
         runner.install_deb_packages = MagicMock(return_value=True)
         with _suppress_script_output():
             self.assertTrue(runner.run_repo_setup_and_install())
+        runner.verify_published_checksum_metadata.assert_called_once()
         runner.install_deb_packages.assert_called_once()
+
+    def test_package_mode_checksum_failure_skips_install(self):
+        """A failed published checksum check must not install ROCm packages."""
+        runner = self._runner(repo_setup_package_dir="/pkgs", repo_config_only=False)
+        runner.install_repo_setup_package = MagicMock(return_value=True)
+        runner.assert_repo_configured = MagicMock(return_value=True)
+        runner.verify_published_checksum_metadata = MagicMock(return_value=False)
+        runner.install_deb_packages = MagicMock(return_value=True)
+        with _suppress_script_output():
+            self.assertFalse(runner.run_repo_setup_and_install())
+        runner.verify_published_checksum_metadata.assert_called_once()
+        runner.install_deb_packages.assert_not_called()
 
     def test_failed_assert_short_circuits(self):
         runner = self._runner(repo_setup_package_dir="/pkgs", repo_config_only=False)
         runner.install_repo_setup_package = MagicMock(return_value=True)
         runner.assert_repo_configured = MagicMock(return_value=False)
+        runner.verify_published_checksum_metadata = MagicMock(return_value=True)
         runner.install_deb_packages = MagicMock(return_value=True)
         with _suppress_script_output():
             self.assertFalse(runner.run_repo_setup_and_install())
+        runner.verify_published_checksum_metadata.assert_not_called()
         runner.install_deb_packages.assert_not_called()
 
     def test_default_path_uses_manual_setup(self):
@@ -3222,6 +3244,59 @@ class RunRepoSetupDispatchTest(unittest.TestCase):
         runner.verify_published_checksum_metadata.assert_called_once()
         runner.install_deb_packages.assert_called_once()
         runner.install_repo_setup_package.assert_not_called()
+
+
+class PublishedChecksumRepoUrlTest(unittest.TestCase):
+    """Install-via-package reads the checksum URL from the installed repo file."""
+
+    def _check_url(
+        self,
+        os_profile: str,
+        release_type: str,
+        repo_text: str,
+        marker_url: str,
+        pkg_type: str,
+    ) -> None:
+        """Assert the published check receives the URL from the repo file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_file = Path(temp_dir) / "repo"
+            repo_file.write_text(repo_text)
+            runner = _package_runner(os_profile, release_type)
+            real = runner._repo_setup_package_contract()
+            contract = real._replace(repo_file=str(repo_file))
+            with patch.object(
+                runner, "_repo_setup_package_contract", return_value=contract
+            ):
+                with patch.object(
+                    native_linux_package_install_test,
+                    "verify_published_repository_checksums",
+                ) as verify:
+                    with _suppress_script_output():
+                        self.assertTrue(runner.verify_published_checksum_metadata())
+            verify.assert_called_once_with(marker_url, pkg_type)
+
+    def test_deb_uses_uris_from_repo_file(self):
+        """DEB install-via-package checks the URIs value from the repo file."""
+        self._check_url(
+            os_profile="ubuntu2404",
+            release_type="prerelease",
+            repo_text=(
+                "Types: deb\n"
+                "URIs: https://rc.repo.amd.com/rocm/core/packages/ubuntu2404/\n"
+            ),
+            marker_url="https://rc.repo.amd.com/rocm/core/packages/ubuntu2404",
+            pkg_type="deb",
+        )
+
+    def test_rpm_uses_baseurl_from_repo_file(self):
+        """RPM install-via-package checks the baseurl value from the repo file."""
+        self._check_url(
+            os_profile="rhel10",
+            release_type="prerelease",
+            repo_text="baseurl=https://rc.repo.amd.com/rocm/core/packages/rhel10/x86_64/\n",
+            marker_url="https://rc.repo.amd.com/rocm/core/packages/rhel10/x86_64",
+            pkg_type="rpm",
+        )
 
 
 class ArgvFromCiEnvRepoSetupPackageTest(unittest.TestCase):

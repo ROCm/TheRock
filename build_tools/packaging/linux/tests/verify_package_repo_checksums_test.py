@@ -443,6 +443,37 @@ class PublishedChecksumTest(unittest.TestCase):
                 )
         self.assertIn("mismatch", str(caught.exception).lower())
 
+    def test_published_rpm_parent_href_fails(self) -> None:
+        """A ``..`` primary location fails before that file is fetched."""
+        digest = "a" * 64
+        repomd = (
+            f'<repomd xmlns="{_NS_REPO}">'
+            '<data type="primary">'
+            f'<checksum type="sha256">{digest}</checksum>'
+            '<location href="../../x/primary.xml.gz"/>'
+            "<size>1</size>"
+            "</data>"
+            "</repomd>"
+        ).encode("utf-8")
+        fetched: list[str] = []
+
+        def fetch(url: str) -> bytes:
+            fetched.append(url)
+            if url.endswith("/repodata/repomd.xml"):
+                return repomd
+            raise AssertionError(url)
+
+        with patch.object(checksums, "_fetch_https_bytes", side_effect=fetch):
+            with self.assertRaises(checksums.PackageChecksumError) as caught:
+                checksums.verify_published_repository_checksums(
+                    "https://example.invalid/rpm/20261029-1", "rpm"
+                )
+        self.assertIn("escapes the repository", str(caught.exception))
+        self.assertEqual(
+            fetched,
+            ["https://example.invalid/rpm/20261029-1/repodata/repomd.xml"],
+        )
+
 
 class CliTest(unittest.TestCase):
     def test_main_passes_for_valid_deb_repo(self) -> None:

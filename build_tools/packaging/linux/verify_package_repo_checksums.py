@@ -14,9 +14,9 @@ archive fails the process before upload.
 The install test calls :func:`verify_published_repository_checksums` after
 repository setup and before ``apt``, ``dnf``, or ``zypper`` install. That check
 confirms the published index matches its ``Release`` or ``repomd.xml`` checksum
-and that every package entry advertises the required digest. It does not
-download every package archive; the package manager compares those bytes again
-while installing.
+and that every package entry advertises the required digest. An RPM primary
+location that leaves the repository fails. It does not download every package
+archive; the package manager compares those bytes again while installing.
 
 DEB archives require both ``MD5sum`` and ``SHA256``. MD5 remains because Debian
 repository metadata still publishes it; SHA256 is the integrity check. RPM
@@ -153,12 +153,14 @@ def verify_published_repository_checksums(repo_url: str, pkg_type: str) -> None:
     Args:
         repo_url: HTTPS APT repository root for DEB, or HTTPS RPM ``baseurl``.
             DEB reads ``dists/stable/Release`` and ``Packages.gz``. RPM reads
-            ``repodata/repomd.xml`` and the primary metadata it names.
+            ``repodata/repomd.xml`` and the primary metadata it names. A primary
+            location that leaves the repository is rejected.
         pkg_type: ``deb`` or ``rpm``.
 
     Raises:
         PackageChecksumError: When the index checksum does not match, a package
-            entry omits the required digest, or the metadata cannot be read.
+            entry omits the required digest, a primary location leaves the
+            repository, or the metadata cannot be read.
             Network and parse errors are reported through this exception so the
             install test has one fail-closed path. The original exception is
             preserved as ``__cause__``.
@@ -345,14 +347,13 @@ def _verify_published_deb_repository(repo_url: str) -> None:
 
 
 def _verify_published_rpm_repository(repo_url: str) -> None:
-    """Check published RPM metadata. DNF or Zypper checks the archives later."""
+    """Check published RPM metadata. DNF or Zypper checks the archives later.
+
+    The primary location named by ``repomd.xml`` must stay inside the repository.
+    """
     repomd_bytes = _fetch_https_bytes(_repo_child(repo_url, _PUBLISHED_RPM_REPOMD))
     primary = _rpm_primary_metadata(repomd_bytes)
-    if urlsplit(primary.href).scheme or primary.href.startswith("/"):
-        raise PackageChecksumError(
-            [f"primary metadata location escapes the repository: {primary.href}"]
-        )
-    primary_bytes = _fetch_https_bytes(_repo_child(repo_url, primary.href))
+    primary_bytes = _fetch_https_bytes(_published_location_url(repo_url, primary.href))
     failures = _Failures()
     _compare_bytes(
         payload=primary_bytes,
@@ -875,6 +876,28 @@ def _repo_child(repo_url: str, relative: str) -> str:
     if parts.scheme != "https" or not parts.netloc:
         raise ValueError(f"Expected an HTTPS repository URL: {repo_url}")
     return urljoin(repo_url.strip().rstrip("/") + "/", relative.lstrip("/"))
+
+
+def _published_location_url(repo_url: str, relative: str) -> str:
+    """Build the fetch URL for a location named by published metadata.
+
+    ``repomd.xml`` supplies this path. A scheme, an absolute path, a backslash,
+    or a ``..`` segment is rejected before ``urljoin`` can walk above the
+    repository directory. A normal ``repodata/primary.xml.gz`` location is kept.
+    """
+    raw = relative.strip()
+    if (
+        not raw
+        or urlsplit(raw).scheme
+        or raw.startswith(("/", "\\"))
+        or "\\" in raw
+        or "\x00" in raw
+        or any(segment == ".." for segment in raw.split("/"))
+    ):
+        raise PackageChecksumError(
+            [f"primary metadata location escapes the repository: {relative}"]
+        )
+    return _repo_child(repo_url, raw)
 
 
 def _fetch_https_bytes(url: str) -> bytes:
