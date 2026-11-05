@@ -187,14 +187,30 @@ class TestReplaceInstrumentedLibraries(unittest.TestCase):
             for path in paths:
                 members[f"{stages[folder]}/{path}"] = b"instrumented test"
 
+        # The shared kpack follows whichever project's host binaries are
+        # swapped in, or they look up kernels the baseline's kpack lacks.
         for folder, paths in files.items():
             with self.subTest(folder=folder):
                 self.assertEqual(
                     self._replaced_files(
                         "prim_test_generic.tar.xz", {"prim": [folder]}, members
                     ),
-                    paths,
+                    sorted([".kpack/prim_test_gfx942.kpack", *paths]),
                 )
+
+    def test_keeps_device_code_of_artifacts_without_the_component_stage(self):
+        prefix = "math-libs/BLAS/hipBLASLt/stage"
+        members = {
+            "artifact_manifest.txt": f"{prefix}\n".encode(),
+            f"{prefix}/.kpack/blas_lib_gfx942.kpack": b"device code",
+            f"{prefix}/lib/libhipblaslt.so": b"some other library",
+        }
+        self.assertEqual(
+            self._replaced_files(
+                "blas_lib_gfx942.tar.xz", {"blas": ["rocBLAS"]}, members
+            ),
+            [],
+        )
 
     def test_replaces_device_code_named_after_the_component(self):
         prefix = "math-libs/rocWMMA/stage"

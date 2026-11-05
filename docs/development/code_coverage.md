@@ -261,8 +261,12 @@ directories (`math-libs/hipRAND/stage`), and elsewhere only paths naming its
 library folder in `COMPONENT_MAP` (`hipRAND`). The stage directories are what
 bring in a header-only project's tests, which are named after what they test
 (rocThrust's `bin/merge.hip`). The device code under `.kpack/` is shared by
-every project in the artifact, so it is replaced only when its name names the
-project, as rocWMMA's does. The instrumented stack lives under
+every project in the artifact, but host binaries look their kernels up in it by
+name, so it is replaced along with them whenever the project has a stage
+directory in the artifact; keeping the baseline's would fail with `Cannot find Symbol` once the two builds' versions differ (`HIPCUB_400700_NS` vs
+`HIPCUB_400701_NS`). Other projects' baseline binaries in that artifact then
+load the instrumented kpack, so only the swapped project's tests are expected
+to pass. The instrumented stack lives under
 `<run_id>-coverage`, so even a baseline from the same workflow run is never
 overwritten by it.
 

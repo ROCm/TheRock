@@ -16,6 +16,7 @@ python build_tools/install_rocm_code_coverage_build.py
     [** all supported options of install_rocm_from_artifacts.py]
 
 """
+
 import os
 import re
 import sys
@@ -186,21 +187,39 @@ def _replace_scoped_member(tf, member, dest_path, output_dir, relpaths):
         raise IOError(f"Unhandled tar member: {member}")
 
 
-def _is_component_path(folder, prefix, scoped_path):
+def _names_folder(folder, path):
+    """Whether `path` has a component naming `folder` (e.g. rocBLAS/, rocblas.so)."""
+    return re.search(rf"{folder}[^a-zA-Z]", path, flags=re.IGNORECASE)
+
+
+def _is_own_stage(folder, prefix):
+    """Whether manifest relpath `prefix` is one of `folder`'s stage directories."""
+    return bool(
+        re.search(rf"(^|/){folder}[^a-zA-Z]", prefix + "/", flags=re.IGNORECASE)
+    )
+
+
+def _is_component_path(folder, prefix, scoped_path, owns_archive):
     """Whether a member under manifest relpath `prefix` belongs to `folder`.
 
     Everything under the component's own stage directories does, named after it
     or not: the test binaries a header-only project's report measures are named
     after what they test (rocThrust's bin/merge.hip, rocPRIM's
-    bin/test_block_scan). Elsewhere, and for the device code under .kpack/ that
-    every component in the artifact shares, only a path naming the component
-    does.
+    bin/test_block_scan). Elsewhere only a path naming the component does --
+    except the device code under .kpack/. Every component in the artifact shares
+    one kpack archive, stored under whichever stage directory comes first
+    (prim_test's sits in hipCUB's), and host binaries look their kernels up in
+    it by name. Swapping the host binaries without it leaves them loading the
+    baseline's kernels, which fail once the two builds differ (a bumped
+    HIPCUB_<version>_NS mangles to symbols the baseline kpack does not have).
+    So it follows the host binaries: it is replaced whenever `owns_archive`,
+    i.e. the component has a stage directory in this artifact.
     """
-    names_folder = rf"{folder}[^a-zA-Z]"
-    if re.search(names_folder, scoped_path, flags=re.IGNORECASE):
+    if _names_folder(folder, scoped_path):
         return True
-    in_own_stage = re.search(rf"(^|/){names_folder}", prefix + "/", flags=re.IGNORECASE)
-    return bool(in_own_stage) and not scoped_path.startswith(".kpack/")
+    if scoped_path == ".kpack" or scoped_path.startswith(".kpack/"):
+        return owns_archive
+    return _is_own_stage(folder, prefix)
 
 
 def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
@@ -242,6 +261,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                     )
                 with tf.extractfile(manifest_member) as mf_file:
                     relpaths = [r for r in mf_file.read().decode().splitlines() if r]
+                owns_archive = any(_is_own_stage(folder, r) for r in relpaths)
 
                 while member := tf.next():
                     for prefix in relpaths:
@@ -249,7 +269,9 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         if not member.name.startswith(prefix_slash):
                             continue
                         scoped_path = member.name[len(prefix_slash) :]
-                        if not _is_component_path(folder, prefix, scoped_path):
+                        if not _is_component_path(
+                            folder, prefix, scoped_path, owns_archive
+                        ):
                             break
                         dest_path = output_dir / PurePosixPath(scoped_path)
                         _replace_scoped_member(
