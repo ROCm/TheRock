@@ -23,7 +23,13 @@ class SelectedSanitizerTest(unittest.TestCase):
         self.assertIsNone(selected_sanitizer(argparse.Namespace()))
 
     def test_asan_labels_share_one_row(self):
-        for variant in ("asan", "asan-debug", "host-asan", "host-asan-debug"):
+        for variant in (
+            "asan",
+            "asan-debug",
+            "host-asan",
+            "host-asan-debug",
+            "future-asan",
+        ):
             with self.subTest(variant=variant):
                 spec = selected_sanitizer(argparse.Namespace(build_variant=variant))
                 self.assertIs(spec, SANITIZERS["asan"])

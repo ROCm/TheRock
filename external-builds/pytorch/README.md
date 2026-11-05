@@ -323,9 +323,10 @@ per-target device wheels were promoted independently. See the discussion on
 
 ### Building torch with AddressSanitizer
 
-`--build-variant` selects the sanitizer. `asan`, `asan-debug`, `host-asan`,
-and `host-asan-debug` build the torch wheel with AddressSanitizer. `release`
-does not. Any other name is an error. It is Linux
+`--build-variant` selects the sanitizer. A variant that contains `asan`
+builds the torch wheel with AddressSanitizer. That includes `asan`,
+`asan-debug`, `host-asan`, and `host-asan-debug`. `release` does not. Any
+other name is an error. It is Linux
 x86_64 only. Install an AddressSanitizer build of the `rocm` packages first
 (the same `rocm[libraries,devel]` packages as a normal build, from an ASAN
 index or find-links page). The variant does not choose the GPU list or the

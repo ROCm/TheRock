@@ -1622,9 +1622,10 @@ def main(argv: list[str]):
         "--build-variant",
         default="release",
         help="Build variant passed by the release workflow. release is a normal "
-        "build. asan, asan-debug, host-asan, and host-asan-debug build the "
-        "torch wheel with AddressSanitizer. Triton, torchaudio, torchvision, "
-        "and apex are not built.",
+        "build. A variant containing asan, such as asan, asan-debug, "
+        "host-asan, or host-asan-debug, builds the torch wheel with "
+        "AddressSanitizer. Any other name is an error. Triton, torchaudio, "
+        "torchvision, and apex are not built.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
