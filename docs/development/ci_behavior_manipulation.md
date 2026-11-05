@@ -26,7 +26,9 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
+| `ci:run-wsl`               | Also test the Linux build on the WSL GPU runner (`test-runs-on-wsl`), as non-blocking `Test <family> (WSL)` jobs for WSL-capable components (hip-tests, rocrtst). Adds to native tests.           |
 | `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
+| `ci:no-downstream-test`    | Test only changed components, skip downstream consumer tests. Useful for submodule bumps where you only want to validate the changed project itself without testing its dependents.               |
 | `ci:platform:linux`        | Run CI only on Linux (skip Windows builds/tests)                                                                                                                                                  |
 | `ci:platform:windows`      | Run CI only on Windows (skip Linux builds/tests)                                                                                                                                                  |
 | `ci:gfx...`                | Opt-in to building and testing the specified gfx family (e.g. `ci:gfx120X-all`, `ci:gfx950-dcgpu`)                                                                                                |
@@ -37,8 +39,11 @@ The following labels may be added to a pull request to modify CI behavior:
 | `test_filter:...`          | Override the test level (e.g. `test_filter:comprehensive`, `test_filter:quick`). Takes priority over all other test level logic. See [test_filtering.md](./test_filtering.md) for allowed values. |
 | `ci:build-native-linux`    | Opt-in to building native Linux packages (deb/rpm).                                                                                                                                               |
 | `ci:skip-native-linux`     | Skip native Linux package builds.                                                                                                                                                                 |
+| `ci:build-native-windows`  | Opt-in to building native Windows packages (MSI).                                                                                                                                                 |
+| `ci:skip-native-windows`   | Skip native Windows package builds.                                                                                                                                                               |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:skip-rocm`             | Skip ROCm builds and tests; use published ROCm packages for frameworks. See [Building frameworks with published ROCm](#building-frameworks-with-published-rocm).                                  |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
 | `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
@@ -75,6 +80,35 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Building frameworks with published ROCm
+
+When CI-relevant changes are confined to PyTorch or JAX files, CI can skip ROCm
+builds and use published ROCm packages. Ownership is listed under `[job_paths]`
+in [`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml).
+
+Explicit labels override automatic selection:
+
+- Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
+  build frameworks using the latest nightly ROCm packages.
+- Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
+  workflow enables by default.
+
+> [!NOTE]
+> Automatic use of published packages is disabled by:
+>
+> - Build variants other than `release`, until ROCm releases include Python
+>   packages for other build variants (see
+>   https://github.com/ROCm/TheRock/issues/3161 for example).
+> - `ci:build-python-packages`, `ci:build-native-linux`, or
+>   `ci:build-native-windows` labels, which request ROCm packaging jobs.
+> - Nonempty `build_stages`, `prebuilt_stages`, or `baseline_run_id` inputs,
+>   which request specific stage builds or artifact reuse.
+> - An `external_repo` input, whose changes are treated as ROCm changes.
+
+See
+[ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
+for more details.
 
 ### Push
 

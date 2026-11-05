@@ -71,6 +71,11 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--mirage"])
         self.assertIn("mirage_run", argv)
 
+    def test_hrr_flag_includes_hrr_run(self):
+        argv = self._run_main(["--hrr"])
+        self.assertIn("core-hrr_run", argv)
+        self.assertNotIn("core-hrr_lib", argv)
+
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
@@ -82,6 +87,52 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertEqual(sanity_argv, base_argv + ["core-ocl_run", "hipify_run"])
         self.assertNotIn("core-ocl_run", self._run_main(["--blas", "--tests"]))
 
+    def test_base_only_on_wsl_includes_wsl_rocdxg(self):
+        """WSL needs the libhsakmt WSL build to reach the GPU via /dev/dxg.
+
+        Without it the bare-metal libhsakmt in core-runtime is used and rocminfo
+        exits non-zero with no output, because there is no amdgpu driver in the
+        guest. Observed on actions/runs/36035911215.
+        """
+        with mock.patch(
+            "platform.release", return_value="6.6.87.2-microsoft-standard-WSL2"
+        ):
+            argv = self._run_main(["--base-only"])
+        self.assertIn("wsl-rocdxg_lib", argv)
+        # The ordinary base set must still be requested.
+        self.assertIn("core-runtime_lib", argv)
+
+    def test_base_only_off_wsl_excludes_wsl_rocdxg(self):
+        with mock.patch("platform.release", return_value="6.8.0-45-generic"):
+            argv = self._run_main(["--base-only"])
+        self.assertNotIn("wsl-rocdxg_lib", argv)
+
+    def test_dev_flag_adds_dev_pattern_for_selected_artifact(self):
+        argv = self._run_main(["--blas", "--dev"])
+        self.assertIn("blas_lib", argv)
+        self.assertIn("blas_dev", argv)
+        self.assertNotIn("blas_test", argv)
+
+    def test_dev_flag_adds_base_dev_patterns(self):
+        # Before --dev existed, a narrowed selection could only reach the base
+        # _dev components by naming an unrelated flag (--debug-tools, --rpp,
+        # ...) or by overlaying them by hand. See issue #9013.
+        plain_argv = self._run_main(["--blas"])
+        dev_argv = self._run_main(["--blas", "--dev"])
+        for pattern in ("amd-llvm_dev", "base_dev", "core-amdsmi_dev"):
+            self.assertNotIn(pattern, plain_argv)
+            self.assertIn(pattern, dev_argv)
+
+    def test_dev_flag_alone_selects_base_artifacts(self):
+        argv = self._run_main(["--dev"])
+        self.assertIn("core-runtime_lib", argv)
+        self.assertIn("amd-llvm_dev", argv)
+
+    def test_base_only_with_dev_adds_base_dev_patterns(self):
+        argv = self._run_main(["--base-only", "--dev"])
+        self.assertIn("core-runtime_lib", argv)
+        self.assertIn("amd-llvm_dev", argv)
+
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
         # generation, so the test runners must fetch the rand artifact even
@@ -89,6 +140,19 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--hipdnn-integration-tests"])
         self.assertIn("hipdnn-integration-tests_run", argv)
         self.assertIn("rand_lib", argv)
+
+
+class TestDevComponentPatterns(unittest.TestCase):
+    def test_collapses_components_of_one_artifact_into_single_dev_pattern(self):
+        self.assertEqual(
+            mod._dev_component_patterns(["amd-llvm_run", "amd-llvm_lib", "base_lib"]),
+            ["amd-llvm_dev", "base_dev"],
+        )
+
+    def test_skips_artifacts_whose_dev_component_is_already_requested(self):
+        self.assertEqual(
+            mod._dev_component_patterns(["core-hip_lib", "core-hip_dev"]), []
+        )
 
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
@@ -389,6 +453,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         hipdnn_integration_tests=False,
         hipdnn_samples=False,
         hipfile=False,
+        hrr=False,
         miopen=False,
         miopenprovider=False,
         hipkernelprovider=False,
@@ -417,6 +482,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         sparse=False,
         libhipcxx=False,
         hipthreads=False,
+        dev=False,
         tests=False,
     )
     defaults.update(overrides)

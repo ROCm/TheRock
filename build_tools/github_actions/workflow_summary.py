@@ -13,7 +13,7 @@ Usage in a workflow:
     ci_summary:
       if: always()
       needs: [setup, build, test]
-      runs-on: ubuntu-24.04
+      runs-on: ubuntu-26.04
       steps:
         - uses: actions/checkout@<sha>
         - name: Evaluate workflow results
