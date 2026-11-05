@@ -248,7 +248,18 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
-include(therock_windows_driver)
+
+# Apply the driver variant before finalizing the generated feature dependencies.
+if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
+    message(FATAL_ERROR
+      "Windows driver builds require -DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF "
+      "because the driver HIP runtime does not support kpack."
+    )
+  endif()
+  set(THEROCK_ENABLE_KPACK OFF)
+  list(REMOVE_ITEM THEROCK_REQUIRES_HIP_RUNTIME KPACK)
+endif()
 
 ################################################################################
 # Manual features that don't map to artifacts

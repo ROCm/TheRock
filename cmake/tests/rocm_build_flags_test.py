@@ -7,6 +7,7 @@
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -90,6 +91,96 @@ def provider_state(
 
 
 class ROCmBuildFlagsTest(unittest.TestCase):
+    def test_windows_driver_kpack(self):
+        root_cmake = (THEROCK_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        # Exercise the root feature-selection section, including finalization,
+        # without configuring compilers or initializing submodules.
+        start = root_cmake.index("option(THEROCK_ENABLE_ALL ")
+        end = root_cmake.index("therock_report_features()")
+        feature_selection = root_cmake[start:end]
+        for driver, split, expected in (
+            ("ON", "OFF", "OFF"),
+            ("OFF", "ON", "ON"),
+            ("ON", "ON", None),
+        ):
+            with self.subTest(driver=driver, split=split):
+                with tempfile.TemporaryDirectory() as temp_dir_str:
+                    source_dir = Path(temp_dir_str) / "source"
+                    build_dir = Path(temp_dir_str) / "build"
+                    build_dir.mkdir()
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            str(THEROCK_ROOT / "build_tools/topology_to_cmake.py"),
+                            "--topology",
+                            str(THEROCK_ROOT / "BUILD_TOPOLOGY.toml"),
+                            "--output",
+                            str(build_dir / "cmake/therock_topology.cmake"),
+                            "--branch-config-output",
+                            str(build_dir / "cmake/therock_branch_config.cmake"),
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    write_file(
+                        source_dir / "CMakeLists.txt",
+                        f"""
+                        cmake_minimum_required(VERSION 3.25)
+                        project(driver_kpack_test NONE)
+                        set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
+                        set(THEROCK_BINARY_DIR "${{CMAKE_BINARY_DIR}}")
+                        set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${{THEROCK_SOURCE_DIR}}/rocm-systems")
+                        list(APPEND CMAKE_MODULE_PATH "${{THEROCK_SOURCE_DIR}}/cmake")
+                        include(CMakeDependentOption)
+                        include(therock_features)
+                        include("${{THEROCK_SOURCE_DIR}}/FLAGS.cmake")
+                        {feature_selection}
+
+                        # Capture real core declarations without building them.
+                        function(therock_check_subproject_targets out_var)
+                          set(${{out_var}} ON PARENT_SCOPE)
+                        endfunction()
+                        function(therock_cmake_subproject_declare name)
+                          file(WRITE "${{CMAKE_BINARY_DIR}}/${{name}}.txt" "${{ARGN}}")
+                        endfunction()
+                        function(therock_cmake_subproject_activate)
+                        endfunction()
+                        function(therock_cmake_subproject_provide_package)
+                        endfunction()
+                        function(therock_cmake_subproject_glob_c_sources)
+                        endfunction()
+                        function(therock_test_validate_shared_lib)
+                        endfunction()
+                        function(therock_provide_artifact)
+                        endfunction()
+                        include("${{THEROCK_SOURCE_DIR}}/core/CMakeLists.txt")
+                        """,
+                    )
+                    result = run_cmake(
+                        source_dir,
+                        build_dir,
+                        "-DCMAKE_SYSTEM_NAME=Windows",
+                        "-DCMAKE_SYSTEM_PROCESSOR=AMD64",
+                        "-DTHEROCK_ENABLE_ALL=OFF",
+                        "-DTHEROCK_ENABLE_CORE=ON",
+                        "-DTHEROCK_ENABLE_KPACK=ON",
+                        f"-DTHEROCK_FLAG_WINDOWS_DRIVER_BUILD={driver}",
+                        f"-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS={split}",
+                        expect_success=expected is not None,
+                    )
+                    if expected is None:
+                        self.assertIn(
+                            "-DTHEROCK_FLAG_KPACK_SPLIT_ARTIFACTS=OFF", result.stdout
+                        )
+                        continue
+                    hip_args = (build_dir / "hip-clr.txt").read_text().split(";")
+                    self.assertIn(f"-DROCM_KPACK_ENABLED={expected}", hip_args)
+                    self.assertEqual("rocm-kpack" in hip_args, expected == "ON")
+                    self.assertEqual(
+                        (build_dir / "rocm-kpack.txt").exists(), expected == "ON"
+                    )
+
     def test_therock_registry_emits_typed_json_and_state(self):
         with tempfile.TemporaryDirectory() as temp_dir_str:
             temp_dir = Path(temp_dir_str)
