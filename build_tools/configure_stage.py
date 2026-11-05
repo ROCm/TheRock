@@ -99,9 +99,6 @@ def get_stage_features(
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
-    Note: Opt-in artifacts may still be enabled here when produced by the stage
-    so CI can pass them through. When both Flang delivery paths are ON, CMake
-    prefers FLANG_STANDALONE (disables COMPILER_FORTRAN_DISTRIBUTION).
     """
     if stage_name not in topology.build_stages:
         raise ValueError(f"Unknown stage: {stage_name}")
