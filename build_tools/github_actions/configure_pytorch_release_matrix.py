@@ -40,11 +40,13 @@ RELEASE_STABLE_PYTORCH_REFS = {
         "release/2.12",
         "release/2.13",
         "release/2.14",
+        "release/2.15",
     ],
     "windows": [
         "release/2.12",
         "release/2.13",
         "release/2.14",
+        "release/2.15",
     ],
 }
 
@@ -66,12 +68,14 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "release/2.12": {},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
+        "release/2.15": {"gfx90c"},
         "nightly": {},
     },
     "windows": {
         "release/2.12": {"gfx90c"},
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
+        "release/2.15": {"gfx90c"},
     },
 }
 

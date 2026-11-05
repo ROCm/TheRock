@@ -52,6 +52,12 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          Comma- or semicolon-separated PyTorch refs. Empty uses the release
+          type default. "all" is not a keyword on this branch.
+        type: string
+        default: ""
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -114,6 +120,12 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          Comma- or semicolon-separated PyTorch refs. Empty uses the release
+          type default. "all" is not a keyword on this branch.
+        type: string
+        default: ""
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -164,6 +176,7 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${{ inputs.python_version }}" \
+            --pytorch-git-refs="${{ inputs.pytorch_git_refs }}" \
             --platform=linux \
             --release-type="${{ inputs.release_type }}" \
             --amdgpu-families="${{ inputs.amdgpu_families }}"
