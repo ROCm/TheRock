@@ -489,13 +489,32 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
 
+  build-windows-msi:
+    permissions:
+      contents: read
+      id-token: write # Authenticate to AWS to upload MSI packages.
+    name: Build Windows MSI Packages
+    needs: [create-branch, setup-windows, build-windows]
+    if: ${{ inputs.dry_run != true && needs.build-windows.result == 'success' }}
+    uses: ./.github/workflows/multi_arch_build_native_windows_packages.yml
+    with:
+      artifact_run_id: ${{ github.run_id }}
+      rocm_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      msi_version: ${{ needs.setup-windows.outputs.rocm_msi_package_version }}
+      # Only the runtime package is published in artifacts today; core's Windows
+      # artifacts (core-amdsmi, core-runtime) are not yet available.
+      packages: runtime
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ needs.setup-windows.outputs.ref }}
+
   publish-windows-artifacts:
     permissions:
       contents: read
       id-token: write # Authenticate to AWS for build artifacts and publication.
     name: Publish Windows Artifacts
-    needs: [create-branch, setup-windows, build-windows, build-windows-tarballs, build-windows-python-packages]
-    if: ${{ inputs.dry_run != true && needs.build-windows-tarballs.result == 'success' && needs.build-windows-python-packages.result == 'success' }}
+    needs: [create-branch, setup-windows, build-windows, build-windows-tarballs, build-windows-python-packages, build-windows-msi]
+    if: ${{ inputs.dry_run != true && needs.build-windows-tarballs.result == 'success' && needs.build-windows-python-packages.result == 'success' && needs.build-windows-msi.result == 'success' }}
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
@@ -527,6 +546,29 @@ jobs:
             --release-type="dev" \
             --structured \
             --build-variant="release"
+
+  trigger-windows-msi-install:
+    permissions:
+      actions: write # Dispatch downstream workflows.
+    name: Trigger Windows MSI Install Test
+    needs: [create-branch, setup-windows, build-windows-msi]
+    if: ${{ inputs.dry_run != true && needs.build-windows-msi.result == 'success' }}
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Trigger test_native_windows_packages_install
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_native_windows_packages_install.yml
+          inputs: |
+            {
+              "artifact_run_id": "${{ github.run_id }}",
+              "packages": "runtime",
+              "rocm_version": "${{ needs.setup-windows.outputs.rocm_package_version }}",
+              "release_type": "dev",
+              "run_uninstall": "true",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.setup-windows.outputs.ref }}"
+            }
 
   # PyTorch wheels for Windows - triggered after Windows Python packages are published
   trigger-windows-pytorch-wheels:
@@ -803,7 +845,9 @@ jobs:
       - build-windows
       - build-windows-tarballs
       - build-windows-python-packages
+      - build-windows-msi
       - publish-windows-artifacts
+      - trigger-windows-msi-install
       - trigger-windows-pytorch-wheels
       - dispatch-asan-build
       - trigger-linux-tests
@@ -955,6 +999,15 @@ jobs:
             echo "- :x: Packaging failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.build-windows-tarballs.result }}" == "skipped" ]; then
             echo "- :fast_forward: Packaging skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows MSI
+          if [ "${{ needs.build-windows-msi.result }}" == "success" ]; then
+            echo "- :white_check_mark: Native MSI package" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-msi.result }}" == "failure" ]; then
+            echo "- :x: Native MSI package failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-msi.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Native MSI package skipped" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Windows publish
