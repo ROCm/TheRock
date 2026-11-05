@@ -157,8 +157,12 @@ ExternalProject_Add(flang-openmp-modules
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -DCMAKE_Fortran_COMPILER=${_flang_exe}
     -DLLVM_BINARY_DIR=${AMD_LLVM_BINARY_DIR}
-  # Both module sets use EXCLUDE_FROM_ALL install components.
+  # Mods are EXCLUDE_FROM_ALL components; flang-rt libs use COMPONENT flang-rt
+  # (INSTALL_WITH_TOOLCHAIN). Without flang-rt, consumers fail to link
+  # -lflang_rt.runtime / -lflang_rt.quadmath.
   INSTALL_COMMAND
+    "${CMAKE_COMMAND}" --install "${_openmp_mod_bin_dir}" --component flang-rt
+  COMMAND
     "${CMAKE_COMMAND}" --install "${_openmp_mod_bin_dir}" --component flang-rt-mod
   COMMAND
     "${CMAKE_COMMAND}" --install "${_openmp_mod_bin_dir}" --component libomp-mod
