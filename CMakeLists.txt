@@ -249,13 +249,22 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
-# Master Flang switch (Linux + COMPILER only). Path when ON:
+# Master Flang switch. Not implied by COMPILER=ON (default ON for full trees).
+# Path when ON:
 #   Default: standalone amd-llvm-flang (FLANG_STANDALONE=ON).
 #   Opt-in dist: COMPILER_FORTRAN_DISTRIBUTION=ON and FLANG_STANDALONE=OFF.
 #   If both are ON, prefer standalone (disable the fortran distribution).
-cmake_dependent_option(THEROCK_ENABLE_FLANG
-  "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON
-  "THEROCK_ENABLE_COMPILER;NOT WIN32" OFF)
+option(THEROCK_ENABLE_FLANG
+  "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON)
+
+# Prerequisite only: Flang needs amd-llvm and is Linux-only today.
+if(THEROCK_ENABLE_FLANG AND (WIN32 OR NOT THEROCK_ENABLE_COMPILER))
+  message(STATUS
+    "Disabling THEROCK_ENABLE_FLANG (requires THEROCK_ENABLE_COMPILER on non-Windows)")
+  set(THEROCK_ENABLE_FLANG OFF CACHE BOOL
+    "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" FORCE)
+  set(THEROCK_ENABLE_FLANG OFF)
+endif()
 
 # FLANG=OFF must win over a cached/topology FLANG_STANDALONE=ON.
 if(NOT THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
@@ -335,12 +344,14 @@ if(THEROCK_ENABLE_FLANG
 endif()
 
 
-# If FLANG is on but neither delivery path was chosen, default to standalone.
-if(THEROCK_ENABLE_FLANG
+# Full-tree default only. Stage configures pass ALL=OFF and must not inherit
+# standalone just because FLANG's option default is ON.
+if(THEROCK_ENABLE_ALL
+   AND THEROCK_ENABLE_FLANG
    AND NOT THEROCK_ENABLE_FLANG_STANDALONE
    AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
   message(STATUS
-    "FLANG=ON with no delivery path selected; "
+    "ENABLE_ALL + FLANG=ON with no delivery path selected; "
     "defaulting FLANG_STANDALONE=ON")
   set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL
     "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
