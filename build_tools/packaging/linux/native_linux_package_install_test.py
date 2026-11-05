@@ -13,8 +13,11 @@ Test modes (--test-type):
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository, require the
-     published index checksum metadata, and install ROCm packages. Arch
-     suffixes in metapackage names are used only when both
+     published index checksum metadata, and install ROCm packages. The
+     amd-repo-setup package path checks the URL in the repo file it installed.
+     ``--repo-config-only`` stops after that file is verified and does not
+     check the index or install ROCm. Arch suffixes in metapackage names are
+     used only when both
      ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
      With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
@@ -59,6 +62,10 @@ For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
+
+ # install, sanity, and full check published checksums before install.
+ # Manual setup checks --repo-url. amd-repo-setup checks the URL in its repo file.
+ # --repo-config-only verifies that file and stops, so it does not check the index.
 
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
@@ -883,14 +890,22 @@ gpgcheck=0
         and ``repomd.xml`` must match the primary metadata. APT, DNF, and Zypper
         check the downloaded package archives again during installation.
 
+        Manual setup checks ``--repo-url``. Install-via-package checks the URL
+        in the repo file the amd-repo-setup package wrote. A missing URL fails.
+
         Returns:
             True when the published checksum metadata matches.
         """
         print("\n" + "=" * 80)
         print("CHECKING PUBLISHED REPOSITORY CHECKSUMS")
         print("=" * 80)
+        repo_url = self._checksum_repo_url()
+        if not repo_url:
+            print("\n[FAIL] Published repository checksum metadata check failed")
+            print("  repository URL is missing")
+            return False
         try:
-            verify_published_repository_checksums(self.repo_url, self.package_type)
+            verify_published_repository_checksums(repo_url, self.package_type)
         except PackageChecksumError as error:
             print("\n[FAIL] Published repository checksum metadata check failed")
             for line in error.errors:
@@ -898,6 +913,43 @@ gpgcheck=0
             return False
         print("\n[PASS] Published repository checksum metadata matches")
         return True
+
+    def _checksum_repo_url(self) -> str:
+        """Return the repository URL whose published index is checked.
+
+        Manual setup uses ``--repo-url``. Install-via-package uses the URL in
+        the repo file the amd-repo-setup package wrote, because that is the
+        repository apt, dnf, or zypper will install from.
+        """
+        if self.repo_setup_package_dir:
+            return self._repo_file_baseurl() or ""
+        return self.repo_url
+
+    def _repo_file_baseurl(self) -> str | None:
+        """Read the repository URL from the amd-repo-setup repo file.
+
+        DEB uses the ``URIs:`` line. RPM uses ``baseurl=``. The returned URL has
+        no trailing slash. Returns None when the file or that line is missing.
+        """
+        try:
+            contract = self._repo_setup_package_contract()
+        except ValueError as error:
+            print(f"[FAIL] {error}")
+            return None
+        repo_file = Path(contract.repo_file)
+        marker = "URIs:" if self.package_type == "deb" else "baseurl="
+        if not repo_file.is_file():
+            print(f"[FAIL] Repo file not found: {repo_file}")
+            return None
+        text = repo_file.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            if not line.startswith(marker):
+                continue
+            url = line[len(marker) :].strip().rstrip("/")
+            if url:
+                return url
+        print(f"[FAIL] Repo file missing expected {marker!r} entry: {repo_file}")
+        return None
 
     def _find_repo_setup_package(self) -> Path | None:
         """Locate the built amd-repo-setup package in repo_setup_package_dir.
@@ -1099,7 +1151,7 @@ gpgcheck=0
 
         Returns:
         True if repository setup, checksum metadata, and package installation
-        all succeeded.
+        all succeeded. Config-only returns after the repo file is verified.
         """
         print("\n" + "=" * 80)
         print("STEP 1: REPOSITORY SETUP AND PACKAGE INSTALLATION")
@@ -1140,6 +1192,8 @@ gpgcheck=0
                     "\n[PASS] Repo configured via amd-repo-setup package (config-only)"
                 )
                 return True
+            if not self.verify_published_checksum_metadata():
+                return False
             if self.package_type == "deb":
                 return self.install_deb_packages()
             return self.install_rpm_packages()
@@ -1693,8 +1747,11 @@ gpgcheck=0
 _CLI_EXAMPLES_EPILOG = """
 Examples:
  # install, sanity, and full check published checksum metadata before install.
+ # Manual setup checks --repo-url. amd-repo-setup checks the URL in its repo file.
+ # --repo-config-only verifies that file and stops, so it does not check the index.
  # DEB requires MD5sum and SHA256 in Packages, and Release must match Packages.gz.
  # RPM requires SHA256 or stronger, and repomd.xml must match primary metadata.
+ # A primary location that leaves the RPM repository fails the check.
  # simulate has no repository, so it skips that check.
  # A mismatch or unreadable index fails the run before apt, dnf, or zypper install.
 
@@ -1794,7 +1851,9 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--repo-url",
         type=str,
-        help="HTTPS repository URL. Required for install, sanity, and full, which check its checksum metadata before install. Not used for simulate.",
+        help="HTTPS repository URL checked before install for install, sanity, and "
+        "full. Optional with --repo-setup-package-dir, which reads the URL from "
+        "the installed repo file. Not used for simulate or --repo-config-only.",
     )
     parser.add_argument(
         "--gfx-arch",
@@ -1867,15 +1926,17 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         metavar="DIR",
         help="Directory containing the built amd-repo-setup .deb/.rpm. When set, the "
         "repository is configured by installing that package (instead of writing repo "
-        "files); --repo-url and --gpg-key-url become optional. Requires a "
-        "--release-type with a public stream. Not valid with --test-type simulate.",
+        "files); --repo-url and --gpg-key-url become optional. The published checksum "
+        "metadata is still checked, using the URL in the installed repo file, before "
+        "ROCm packages are installed. Requires a --release-type with a public stream. "
+        "Not valid with --test-type simulate.",
     )
     parser.add_argument(
         "--repo-config-only",
         action="store_true",
         help="With --repo-setup-package-dir: install the amd-repo-setup package, "
-        "verify the repo config, and stop (do not install ROCm). --install-prefix "
-        "is not required.",
+        "verify the repo config, and stop. Does not check published checksum "
+        "metadata and does not install ROCm. --install-prefix is not required.",
     )
     parser.add_argument(
         "--pkg-type",
