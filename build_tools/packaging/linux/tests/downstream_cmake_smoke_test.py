@@ -55,6 +55,7 @@ def _all_packages(prefix: Path) -> None:
 
 class EnableFlagTests(unittest.TestCase):
     def test_full_prefix_enables_every_group(self) -> None:
+        """Turn every ``THEROCK_ENABLE_*`` flag ON when each config is present."""
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             _all_packages(prefix)
@@ -68,6 +69,10 @@ class EnableFlagTests(unittest.TestCase):
         self.assertTrue(all(value == "ON" for value in flags.values()))
 
     def test_absent_hiptensor_is_off_and_hip_stays_on(self) -> None:
+        """Turn only the hipTensor group OFF when its config is absent.
+
+        hip and the BLAS group stay ON.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             _all_packages(prefix)
@@ -87,6 +92,10 @@ class EnableFlagTests(unittest.TestCase):
         self.assertEqual(flags["THEROCK_ENABLE_BLAS"].value, "ON")
 
     def test_absent_group_is_off(self) -> None:
+        """Turn a group OFF when every package in it is absent.
+
+        The missing names are hipfft and rocfft.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             _all_packages(prefix)
@@ -105,16 +114,22 @@ class EnableFlagTests(unittest.TestCase):
         self.assertEqual(flags["THEROCK_ENABLE_FFT"].missing, ("hipfft", "rocfft"))
 
     def test_missing_hip_fails(self) -> None:
+        """Fail when the required hip config is absent."""
         with self.assertRaisesRegex(ValueError, "missing required CMake packages: hip"):
             sdk.enable_flags({"hipblaslt"}, GROUPS)
 
     def test_missing_hipblaslt_fails(self) -> None:
+        """Fail when the required hipblaslt config is absent."""
         with self.assertRaisesRegex(
             ValueError, "missing required CMake packages: hipblaslt"
         ):
             sdk.enable_flags({"hip"}, GROUPS)
 
     def test_partial_group_fails(self) -> None:
+        """Fail when a group is only partly installed.
+
+        A present rocprim with a missing sibling stays an error instead of OFF.
+        """
         packages = {"hip", "hipblaslt", "hipblas", "rocblas", "rocprim"}
         with self.assertRaisesRegex(
             ValueError, "THEROCK_ENABLE_PRIM is only partly installed"
@@ -122,6 +137,11 @@ class EnableFlagTests(unittest.TestCase):
             sdk.enable_flags(packages, GROUPS)
 
     def test_similar_config_names_do_not_satisfy_required_packages(self) -> None:
+        """Ignore config filenames that are not the two ``find_package`` names.
+
+        ``hip-lang-config.cmake`` is not hip, and
+        ``hipblaslt-package-config.cmake`` is not hipblaslt.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             _write_config(prefix, "hip-lang", "hip-lang-config.cmake")
@@ -132,6 +152,11 @@ class EnableFlagTests(unittest.TestCase):
             sdk.enable_flags(names, GROUPS)
 
     def test_rocwmma_config_cmake_name(self) -> None:
+        """Accept both CMake config filenames for rocWMMA.
+
+        ``rocWMMAConfig.cmake`` and ``rocwmma-config.cmake`` match. An
+        unrelated filename does not.
+        """
         known = {"rocWMMA"}
         self.assertEqual(
             sdk.package_name_from_config(Path("rocWMMAConfig.cmake"), known),
@@ -144,6 +169,7 @@ class EnableFlagTests(unittest.TestCase):
         self.assertIsNone(sdk.package_name_from_config(Path("CMakeLists.txt"), known))
 
     def test_lowercase_rocwmma_file_enables_the_group(self) -> None:
+        """Turn ``THEROCK_ENABLE_ROCWMMA`` ON for ``rocwmma-config.cmake``."""
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             for package in ("hip", "hipblaslt", "hipblas", "rocblas"):
@@ -158,6 +184,10 @@ class EnableFlagTests(unittest.TestCase):
         self.assertEqual(flags["THEROCK_ENABLE_ROCWMMA"], "ON")
 
     def test_nested_win32_package_stays_in_its_group(self) -> None:
+        """Keep a package inside its flag when a nested condition wraps it.
+
+        hipsparselt stays in ``THEROCK_ENABLE_SPARSE`` under ``if(NOT WIN32)``.
+        """
         groups = dict(
             sdk.parse_enable_groups(
                 """
@@ -173,6 +203,11 @@ class EnableFlagTests(unittest.TestCase):
         self.assertEqual(groups["THEROCK_ENABLE_SPARSE"], ("hipsparselt", "hipsparse"))
 
     def test_real_project_packages_come_from_the_cmake_file(self) -> None:
+        """Read the package groups from ``examples/cpp-sdk-user``.
+
+        Every ``find_package`` name is parsed, and the CMake driver
+        propagates each ``THEROCK_ENABLE_*`` flag.
+        """
         text = PROJECT_CMAKE.read_text()
         found = re.findall(r"find_package\s*\(\s*([A-Za-z0-9_]+)", text)
         parsed = [package for _flag, group in GROUPS for package in group]
@@ -195,6 +230,10 @@ class EnableFlagTests(unittest.TestCase):
 
 class CommandTests(unittest.TestCase):
     def test_command_uses_driver_and_prefix_env(self) -> None:
+        """Pass the prefix as ``CMAKE_PREFIX_PATH`` and run the existing driver.
+
+        Enable flags are forwarded. ``ENABLE_DEVICE_TEST`` is not.
+        """
         flags = [
             sdk.EnableFlag("THEROCK_ENABLE_HIP", "ON"),
             sdk.EnableFlag("THEROCK_ENABLE_HIPTENSOR", "OFF", ("hiptensor",)),
@@ -220,6 +259,11 @@ class CommandTests(unittest.TestCase):
         )
 
     def test_prefix_clang_is_the_host_compiler(self) -> None:
+        """Use prefix Clang when ``--cxx-compiler`` is omitted.
+
+        A file at ``<prefix>/lib/llvm/bin/clang++`` is the host compiler.
+        An explicit compiler replaces that default and is returned unchanged.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
             clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
@@ -231,10 +275,15 @@ class CommandTests(unittest.TestCase):
             )
 
     def test_missing_prefix_clang_leaves_the_compiler_unset(self) -> None:
+        """Leave the host compiler unset when the prefix has no Clang.
+
+        ``host_cxx_compiler`` returns None so CMake chooses the compiler.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(sdk.host_cxx_compiler(Path(tmp)))
 
     def test_build_dir_inside_prefix_fails(self) -> None:
+        """Reject a build directory inside the install prefix."""
         with tempfile.TemporaryDirectory() as prefix_dir, tempfile.TemporaryDirectory() as other:
             prefix = Path(prefix_dir)
             other_path = Path(other)
@@ -247,6 +296,10 @@ class CommandTests(unittest.TestCase):
                 sdk.validate_layout(prefix, prefix / "build", source, driver)
 
     def test_main_invokes_cmake_with_hiptensor_off(self) -> None:
+        """Run the driver with hipTensor OFF when that config is absent.
+
+        hip and the BLAS group stay ON.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             prefix = root / "prefix"
@@ -287,6 +340,7 @@ class CommandTests(unittest.TestCase):
         self.assertTrue(command[-1].endswith("clean_configure_test_project.cmake"))
 
     def test_main_returns_error_when_hipblaslt_is_missing(self) -> None:
+        """Return an error and skip cmake when hipblaslt is absent."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             prefix = root / "prefix"
