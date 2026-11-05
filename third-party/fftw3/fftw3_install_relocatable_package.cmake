@@ -38,6 +38,13 @@ if(ENABLE_FLOAT)
   endif()
 endif()
 
+# Upstream installs libfftw3_threads.so without an EXPORT name. Publish
+# FFTW3::fftw3_threads (or the float name) only where that library is built.
+set(_threads_library_name "")
+if(ENABLE_THREADS AND NOT WIN32)
+  set(_threads_library_name "${_library_name}_threads")
+endif()
+
 configure_file(
   "${CMAKE_CURRENT_LIST_DIR}/FFTW3Config.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/therock-fftw-package/${_package_name}Config.cmake"
@@ -79,6 +86,15 @@ if(_fftw_header)
     if(NOT EXISTS \"${CMAKE_INSTALL_PREFIX}/include/fftw3.h\")
       message(FATAL_ERROR
         \"FFTW ${_package_name} install is missing include/fftw3.h under ${CMAKE_INSTALL_PREFIX}\")
+    endif()
+  ")
+endif()
+
+if(_threads_library_name)
+  install(CODE "
+    if(NOT EXISTS \"${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${_threads_library_name}${CMAKE_SHARED_LIBRARY_SUFFIX}\")
+      message(FATAL_ERROR
+        \"FFTW ${_package_name} install is missing lib/${CMAKE_SHARED_LIBRARY_PREFIX}${_threads_library_name}${CMAKE_SHARED_LIBRARY_SUFFIX}\")
     endif()
   ")
 endif()

@@ -1,8 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# configure_file() fills the package name (FFTW3 or FFTW3f) and the library
-# name (fftw3 or fftw3f).
+# configure_file() fills the package name (FFTW3 or FFTW3f), the library
+# name (fftw3 or fftw3f), and, on Linux with threads enabled, the threads
+# library name (fftw3_threads or fftw3f_threads). That name is empty on
+# Windows, where threads are not a separate library.
 #
 # Installed at lib/cmake/<name>. The prefix is this file's location, so a
 # copied install does not keep the directory that produced it. This file
@@ -56,6 +58,28 @@ if(NOT TARGET FFTW3::@_library_name@)
     unset(_fftw_shared)
   endif()
 endif()
+
+# The .so is already in lib. Upstream install(TARGETS) does not export it, so
+# the CMake name is created here and pointed at that file.
+set(_fftw_threads_name "@_threads_library_name@")
+if(_fftw_threads_name AND NOT WIN32)
+  find_package(Threads REQUIRED)
+  set(_fftw_threads_lib "${_fftw_import_prefix}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${_fftw_threads_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+  if(NOT TARGET FFTW3::${_fftw_threads_name})
+    add_library(FFTW3::${_fftw_threads_name} SHARED IMPORTED)
+    set_target_properties(FFTW3::${_fftw_threads_name} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_fftw_import_prefix}/include"
+      INTERFACE_LINK_LIBRARIES "FFTW3::@_library_name@;Threads::Threads"
+      IMPORTED_LOCATION "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_DEBUG "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_MINSIZEREL "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_RELEASE "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_threads_lib}"
+    )
+  endif()
+  unset(_fftw_threads_lib)
+endif()
+unset(_fftw_threads_name)
 
 set(@_package_name@_FOUND TRUE)
 unset(_fftw_import_prefix)
