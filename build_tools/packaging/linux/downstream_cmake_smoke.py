@@ -247,6 +247,16 @@ def enable_flags(packages: set[str], groups: EnableGroups) -> list[EnableFlag]:
     return flags
 
 
+
+def _cmake_path(path: Path | str) -> str:
+    """Render ``path`` with the forward slashes cmake accepts.
+
+    ``pathlib.Path`` uses backslashes when this file is imported on Windows.
+    The packaging unit test compares these command strings on that runner.
+    """
+    return Path(path).as_posix()
+
+
 def build_command(
     *,
     cmake: str,
@@ -278,15 +288,22 @@ def build_command(
     """
     child = [
         cmake,
-        f"-DSOURCE_DIR={source_dir}",
-        f"-DBINARY_DIR={binary_dir}",
+        f"-DSOURCE_DIR={_cmake_path(source_dir)}",
+        f"-DBINARY_DIR={_cmake_path(binary_dir)}",
         f"-DGENERATOR={generator}",
     ]
     if cxx_compiler:
-        child.append(f"-DCMAKE_CXX_COMPILER={cxx_compiler}")
+        child.append(f"-DCMAKE_CXX_COMPILER={_cmake_path(cxx_compiler)}")
     child.extend(f"-D{flag.name}={flag.value}" for flag in flags)
-    child.extend(["-P", str(driver)])
-    return [cmake, "-E", "env", f"CMAKE_PREFIX_PATH={prefix}", "--", *child]
+    child.extend(["-P", _cmake_path(driver)])
+    return [
+        cmake,
+        "-E",
+        "env",
+        f"CMAKE_PREFIX_PATH={_cmake_path(prefix)}",
+        "--",
+        *child,
+    ]
 
 
 def _inside_prefix(path: Path, prefix: Path) -> bool:
