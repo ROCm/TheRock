@@ -247,7 +247,6 @@ def enable_flags(packages: set[str], groups: EnableGroups) -> list[EnableFlag]:
     return flags
 
 
-
 def _cmake_path(path: Path | str) -> str:
     """Render ``path`` with the forward slashes cmake accepts.
 
