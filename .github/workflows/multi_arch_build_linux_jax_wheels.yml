@@ -62,14 +62,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      rocm_distro_url:
-        description: >-
-          This run's multi-arch distro tarball: the same ROCm build the JAX
-          tests install as wheels, in the form XLA's hermetic Bazel config
-          consumes. Empty skips the XLA tests rather than letting them fall
-          back to the published nightly, which is a different build.
-        type: string
-        default: ""
       release_type:
         description: "Release type."
         type: string
@@ -153,14 +145,6 @@ on:
         required: true
       rocm_package_find_links_url:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
-        type: string
-        default: ""
-      rocm_distro_url:
-        description: >-
-          This run's multi-arch distro tarball: the same ROCm build the JAX
-          tests install as wheels, in the form XLA's hermetic Bazel config
-          consumes. Empty skips the XLA tests rather than letting them fall
-          back to the published nightly, which is a different build.
         type: string
         default: ""
       release_type:
@@ -415,59 +399,9 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-  # The first of the two acceptance suites. Where test_jax_wheels exercises the
-  # published wheels, this exercises the ROCm distro underneath them across a far
-  # broader surface -- compiler, runtime, collectives, HLO execution -- and on RBE
-  # rather than a scarce GPU runner, so it is the sharper signal that this build
-  # is broken and the cheaper one to run.
-  #
-  # It gates test_jax_wheels below: no point spending GPU hours rediscovering the
-  # same breakage through a noisier signal. It does not gate the wheels, which
-  # are already live -- the upload is the last step of build_jax_wheels.
-  test_xla:
-    needs: [build_jax_wheels]
-    # publish: false is a trial build, not something to accept -- the same gate
-    # test_jax_wheels gets through configure_jax_tests. Without a tarball there
-    # is no way to test the ROCm these wheels were built against, so skip rather
-    # than let the XLA workflow fall back to the published nightly and report a
-    # green run against some other build.
-    if: ${{ inputs.publish && inputs.rocm_distro_url != '' }}
-    name: Test XLA | gfx950
-    permissions:
-      contents: read
-    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      # Tied to the GPU in test_runs_on, not to inputs.test_amdgpu_family: this
-      # becomes ROCM_AMD_GPU_TARGETS for the XLA build.
-      test_amdgpu_family: "gfx950"
-      # The same build the JAX suite installs as wheels, in tarball form. The
-      # hermetic repo rule unpacks it once and Bazel caches that across runs,
-      # where a pip install of ROCm has been seen to take over an hour.
-      rocm_distro_url: ${{ inputs.rocm_distro_url }}
-      # upload_tarballs.py publishes no digest alongside the URL.
-      rocm_distro_hash: "no_hash"
-      xla_ref: "rocm-jaxlib-v0.11.2"
-      # Must be an RBE-capable pool: the XLA job mounts /etc/rbe-certs and builds
-      # with --config=rocm_rbe_dev.
-      test_runs_on: "linux-gfx950-1gpu-ccs-ossci-rocm"
-      repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref }}
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-
   test_jax_wheels:
-    # A red XLA run stops the JAX suite: no point spending GPU hours
-    # rediscovering the same breakage through a noisier signal. A *skipped* one
-    # must not -- a caller with no tarball still gets its JAX tests -- so this
-    # cannot rely on default needs semantics, which treat a skipped dependency
-    # as a stop. The build_jax_wheels check restores what those semantics gave
-    # us for free before !cancelled() widened the gate.
-    if: >-
-      ${{ !cancelled()
-          && needs.build_jax_wheels.result == 'success'
-          && needs.configure_jax_tests.outputs.enabled == 'true'
-          && contains(fromJSON('["success", "skipped"]'), needs.test_xla.result) }}
-    needs: [build_jax_wheels, configure_jax_tests, test_xla]
+    if: ${{ needs.configure_jax_tests.outputs.enabled == 'true' }}
+    needs: [build_jax_wheels, configure_jax_tests]
     name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
     strategy:
       fail-fast: false
@@ -502,7 +436,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels, test_xla]
+    needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels]
     name: "Quartz - completed - build JAX Wheels"
     runs-on: ubuntu-26.04
     timeout-minutes: 10

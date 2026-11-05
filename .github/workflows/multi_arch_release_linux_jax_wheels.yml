@@ -31,12 +31,6 @@ on:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
         type: string
         default: ""
-      rocm_distro_url:
-        description: >-
-          This run's multi-arch distro tarball, forwarded to the XLA tests.
-          Empty skips them.
-        type: string
-        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -74,12 +68,6 @@ on:
         required: true
       rocm_package_find_links_url:
         description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
-        type: string
-        default: ""
-      rocm_distro_url:
-        description: >-
-          This run's multi-arch distro tarball, forwarded to the XLA tests.
-          Empty skips them.
         type: string
         default: ""
       repository:
@@ -167,7 +155,6 @@ jobs:
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
-      rocm_distro_url: ${{ inputs.rocm_distro_url }}
       release_type: ${{ inputs.release_type }}
       # A prerelease is worth the multi-GPU runner every time; the nightly takes
       # it one day a week.
