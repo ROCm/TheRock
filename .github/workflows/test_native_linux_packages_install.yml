@@ -245,8 +245,9 @@ jobs:
           echo "Installing prerequisites for ${PKG_TYPE} on container"
           # cmake, make, and a C++ compiler are for examples/cpp-sdk-user,
           # including sanity. The step uses the Unix Makefiles generator, so
-          # make is required. g++ / gcc-c++ is the host compiler. The installed
-          # ROCm prefix supplies the HIP compiler.
+          # make is required. The installed ROCm prefix supplies the HIP
+          # compiler and the Clang used to compile hip-host-test. Distro
+          # g++ / gcc-c++ stays installed for the rest of the job.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -331,6 +332,9 @@ jobs:
         # Runs examples/cpp-sdk-user against the installed prefix. The launcher
         # sets THEROCK_ENABLE_* from configs under the prefix. hip and hipblaslt
         # stay required; a component with no config (for example hipTensor) is OFF.
+        # The install runners have a GPU, so this step does not pass an
+        # architecture. CMake detects one. A GPU-less run can still pass
+        # --hip-arch to the launcher.
         if: ${{ inputs.install_prefix != '' }}
         run: |
           echo "CPP SDK USER - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"

@@ -212,12 +212,58 @@ class CommandTests(unittest.TestCase):
             command[:5],
             ["cmake", "-E", "env", "CMAKE_PREFIX_PATH=/opt/rocm/core", "--"],
         )
+        self.assertIn("-DSOURCE_DIR=/src/examples/cpp-sdk-user", command)
+        self.assertIn("-DBINARY_DIR=/tmp/cpp-sdk-user", command)
         self.assertIn("-DTHEROCK_ENABLE_HIP=ON", command)
         self.assertIn("-DTHEROCK_ENABLE_HIPTENSOR=OFF", command)
         self.assertNotIn("-DENABLE_DEVICE_TEST=ON", command)
         self.assertEqual(
             command[-2:], ["-P", "/src/examples/clean_configure_test_project.cmake"]
         )
+        self.assertNotIn("-DCMAKE_HIP_ARCHITECTURES=gfx942", command)
+
+    def test_prefix_clang_is_the_host_compiler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
+            clangxx.parent.mkdir(parents=True)
+            clangxx.write_text("")
+            self.assertEqual(sdk.host_cxx_compiler(prefix), clangxx.as_posix())
+            self.assertEqual(
+                sdk.host_cxx_compiler(prefix, "/usr/bin/g++"), "/usr/bin/g++"
+            )
+
+    def test_missing_prefix_clang_leaves_the_compiler_unset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(sdk.host_cxx_compiler(Path(tmp)))
+
+    def test_command_pins_one_hip_architecture(self) -> None:
+        command = sdk.build_command(
+            cmake="cmake",
+            source_dir=Path("/src/examples/cpp-sdk-user"),
+            binary_dir=Path("/tmp/cpp-sdk-user"),
+            driver=Path("/src/examples/clean_configure_test_project.cmake"),
+            prefix=Path("/opt/rocm/core"),
+            generator="Unix Makefiles",
+            flags=[sdk.EnableFlag("THEROCK_ENABLE_HIP", "ON")],
+            hip_arch="gfx942",
+        )
+        self.assertIn("-DCMAKE_HIP_ARCHITECTURES=gfx942", command)
+
+    def test_family_group_pins_its_first_target(self) -> None:
+        self.assertEqual(sdk.first_hip_architecture("gfx94X-dcgpu"), "gfx942")
+        self.assertEqual(sdk.first_hip_architecture("gfx942"), "gfx942")
+        self.assertEqual(
+            sdk.first_hip_architecture("gfx94X-dcgpu;gfx950-dcgpu"), "gfx942"
+        )
+
+    def test_lowered_gfx_arch_token_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            sdk.first_hip_architecture("gfx94x")
+
+    def test_empty_hip_arch_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "empty"):
+            sdk.first_hip_architecture("  ")
 
     def test_build_dir_inside_prefix_fails(self) -> None:
         with tempfile.TemporaryDirectory() as prefix_dir, tempfile.TemporaryDirectory() as other:

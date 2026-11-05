@@ -13,6 +13,16 @@ then calls examples/clean_configure_test_project.cmake.
 hip and hipblaslt are required. A group that is only partly installed fails
 instead of being switched off, so a present hipblaslt with a missing sibling
 still reaches find_package. An entirely absent optional group is OFF.
+
+The install job does not pass an architecture. Those runners have a GPU,
+so CMake detects one. ``--hip-arch`` remains available for a GPU-less run:
+an artifact group such as ``gfx94X-dcgpu`` becomes one concrete target
+from ``cmake/therock_amdgpu_targets.cmake`` and is passed as
+``CMAKE_HIP_ARCHITECTURES``.
+
+The host file ``hip-host-test.cpp`` includes the installed HIP headers. Those
+headers need a compiler newer than RHEL 8's GCC 8, so the host compile uses
+the prefix Clang unless ``--cxx-compiler`` is set.
 """
 
 import argparse
@@ -25,6 +35,17 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
+
+# build_tools/ is two levels above packaging/linux. The family map lives in
+# _therock_utils and reads cmake/therock_amdgpu_targets.cmake.
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2]
+if str(_BUILD_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.cmake_amdgpu_targets import (  # noqa: E402
+    amdgpu_family_map,
+    expand_families,
+)
 
 
 def _repo_root() -> Path | None:
@@ -247,6 +268,64 @@ def enable_flags(packages: set[str], groups: EnableGroups) -> list[EnableFlag]:
     return flags
 
 
+def first_hip_architecture(spec: str) -> str:
+    """Return one concrete gfx target for ``CMAKE_HIP_ARCHITECTURES``.
+
+    ``examples/CMakeLists.txt`` pins the first target of the build so HIP
+    language setup does not detect a GPU. The install job names a family
+    (``gfx94X-dcgpu``) or a concrete target (``gfx942``). Both are keys in
+    ``cmake/therock_amdgpu_targets.cmake``. A comma or semicolon list uses
+    only the first entry. The workflow's lowered ``GFX_ARCH`` value
+    (``gfx94x``) is not a family name and is rejected.
+
+    Args:
+        spec: Artifact group or concrete target from the install job.
+
+    Returns:
+        One gfx target, such as ``gfx942``.
+
+    Raises:
+        ValueError: ``spec`` is empty or names no family in the CMake map.
+    """
+    token = spec.replace(";", ",").split(",")[0].strip()
+    if not token:
+        raise ValueError("HIP architecture spec is empty")
+    targets = expand_families([token], amdgpu_family_map())
+    return targets[0]
+
+
+def host_cxx_compiler(prefix: Path, override: str | None = None) -> str | None:
+    """Choose the compiler that builds ``hip-host-test``.
+
+    The installed HIP headers use ``__builtin_bit_cast``. RHEL 8's system
+    GCC 8 does not provide that builtin, so the default host compiler is
+    the Clang shipped in the prefix. ``--cxx-compiler`` replaces that
+    default. When the prefix has no Clang, cmake chooses the compiler.
+
+    Args:
+        prefix: Installed ROCm prefix.
+        override: Compiler from ``--cxx-compiler``, when the caller set one.
+
+    Returns:
+        A compiler path, or None to leave the choice to cmake.
+    """
+    if override:
+        return override
+    clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
+    if clangxx.is_file():
+        return _cmake_path(clangxx)
+    return None
+
+
+def _cmake_path(path: Path | str) -> str:
+    """Render ``path`` with the forward slashes cmake accepts.
+
+    ``pathlib.Path`` uses backslashes when this file is imported on Windows.
+    The packaging unit test compares these command strings on that runner.
+    """
+    return Path(path).as_posix()
+
+
 def build_command(
     *,
     cmake: str,
@@ -257,11 +336,15 @@ def build_command(
     generator: str,
     flags: list[EnableFlag],
     cxx_compiler: str | None = None,
+    hip_arch: str | None = None,
 ) -> list[str]:
     """Build the ``cmake -E env`` invocation of the existing driver.
 
     ``CMAKE_PREFIX_PATH`` is an environment variable, matching
-    ``examples/CMakeLists.txt``. The driver forwards each ``-D`` flag.
+    ``examples/CMakeLists.txt``. The driver forwards each ``-D`` flag,
+    including ``CMAKE_HIP_ARCHITECTURES`` when ``hip_arch`` is set. Every
+    path is written with forward slashes so the same command matches on
+    the Windows unit-test runner.
 
     Args:
         cmake: cmake executable.
@@ -271,22 +354,32 @@ def build_command(
         prefix: Installed ROCm prefix.
         generator: CMake generator. The install job uses ``Unix Makefiles``.
         flags: ``THEROCK_ENABLE_*`` values for this prefix.
-        cxx_compiler: Host C++ compiler. Omit to let cmake find ``g++``.
+        cxx_compiler: Host C++ compiler. None leaves the choice to cmake.
+        hip_arch: One concrete gfx target. Omit to leave detection to CMake.
 
     Returns:
         The argv list, with no shell quoting.
     """
     child = [
         cmake,
-        f"-DSOURCE_DIR={source_dir}",
-        f"-DBINARY_DIR={binary_dir}",
+        f"-DSOURCE_DIR={_cmake_path(source_dir)}",
+        f"-DBINARY_DIR={_cmake_path(binary_dir)}",
         f"-DGENERATOR={generator}",
     ]
     if cxx_compiler:
-        child.append(f"-DCMAKE_CXX_COMPILER={cxx_compiler}")
+        child.append(f"-DCMAKE_CXX_COMPILER={_cmake_path(cxx_compiler)}")
     child.extend(f"-D{flag.name}={flag.value}" for flag in flags)
-    child.extend(["-P", str(driver)])
-    return [cmake, "-E", "env", f"CMAKE_PREFIX_PATH={prefix}", "--", *child]
+    if hip_arch:
+        child.append(f"-DCMAKE_HIP_ARCHITECTURES={hip_arch}")
+    child.extend(["-P", _cmake_path(driver)])
+    return [
+        cmake,
+        "-E",
+        "env",
+        f"CMAKE_PREFIX_PATH={_cmake_path(prefix)}",
+        "--",
+        *child,
+    ]
 
 
 def _inside_prefix(path: Path, prefix: Path) -> bool:
@@ -393,7 +486,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cmake", default="cmake", help="cmake executable.")
     parser.add_argument(
         "--cxx-compiler",
-        help="Host C++ compiler. Omit to let cmake find g++.",
+        help=(
+            "Host C++ compiler for hip-host-test. Omit to use the prefix "
+            "Clang, which can compile the HIP headers on RHEL 8."
+        ),
+    )
+    parser.add_argument(
+        "--hip-arch",
+        help=(
+            "Artifact group or concrete gfx target. The first target of that "
+            "family is passed as CMAKE_HIP_ARCHITECTURES. Example: gfx94X-dcgpu."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -427,11 +530,17 @@ def main(argv: list[str] | None = None) -> int:
                 f"No THEROCK_ENABLE_* find_package groups in {project_cmake}"
             )
         flags = enable_flags(installed_cmake_packages(args.prefix, groups), groups)
+        hip_arch = first_hip_architecture(args.hip_arch) if args.hip_arch else None
+        cxx_compiler = host_cxx_compiler(args.prefix, args.cxx_compiler)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Installed cpp-sdk-user prefix: {args.prefix}", flush=True)
+    if cxx_compiler:
+        print(f"CMAKE_CXX_COMPILER={cxx_compiler}", flush=True)
+    if hip_arch:
+        print(f"CMAKE_HIP_ARCHITECTURES={hip_arch}", flush=True)
     for flag in flags:
         if flag.value == "ON":
             print(f"{flag.name}=ON", flush=True)
@@ -445,7 +554,8 @@ def main(argv: list[str] | None = None) -> int:
         prefix=args.prefix,
         generator=args.generator,
         flags=flags,
-        cxx_compiler=args.cxx_compiler,
+        cxx_compiler=cxx_compiler,
+        hip_arch=hip_arch,
     )
     print("Running:", shlex.join(command), flush=True)
     completed = subprocess.run(command)
