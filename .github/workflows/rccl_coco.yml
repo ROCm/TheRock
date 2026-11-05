@@ -96,4 +96,6 @@ jobs:
       coco_ref: ${{ inputs.coco_ref }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_system_ref: ${{ inputs.rocm_system_ref }}
-      timeout_minutes: ${{ inputs.timeout_minutes }}
+      # workflow_dispatch delivers number inputs as strings, which the
+      # callee's `type: number` input rejects.
+      timeout_minutes: ${{ fromJSON(inputs.timeout_minutes) }}
