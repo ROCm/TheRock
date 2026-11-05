@@ -178,7 +178,7 @@ jobs:
         family_info: ${{ fromJSON(inputs.build_config).per_family_info }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
-      max_retries: ${{ inputs.max_retries }}
+      max_retries: ${{ fromJSON(format('{0}', inputs.max_retries)) }}
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
