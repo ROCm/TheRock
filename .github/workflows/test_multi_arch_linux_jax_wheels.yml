@@ -23,7 +23,11 @@ on:
         required: true
         type: string
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for testing."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
         default: ""
       release_type:
@@ -130,7 +134,11 @@ on:
         type: string
         default: "7.14.0.dev0"
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for testing."
+        type: string
+        default: ""
+      rocm_package_index_url:
+        description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
         default: ""
       release_type:
@@ -270,13 +278,14 @@ jobs:
       WHEEL_INDEX_URL: ${{ inputs.package_index_url }}
       WHEEL_FIND_LINKS_URL: ${{ inputs.wheel_find_links_url }}
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       VIRTUAL_ENV: ${{ github.workspace }}/.venv
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -308,7 +317,7 @@ jobs:
           ref: ${{ inputs.jax_commit || inputs.jax_ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
           check-latest: true
@@ -342,7 +351,7 @@ jobs:
           if [ -n "${JAX_PLUGIN_VERSION}" ] && [ -n "${JAX_VERSION}" ]; then
             echo "Using versions passed from build workflow"
           else
-            pip install packaging
+            pip install packaging==25.0
 
             python build_tools/github_actions/compute_jax_package_version.py \
               --rocm-version "${ROCM_VERSION}" \
@@ -364,7 +373,8 @@ jobs:
         run: |
           python build_tools/setup_venv.py "${VIRTUAL_ENV}" \
             --packages "${ROCM_PACKAGES}" \
-            --find-links "${ROCM_PACKAGE_FIND_LINKS_URL}"
+            --index-url="${ROCM_PACKAGE_INDEX_URL}" \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}"
 
       # Package names, versions and where to get them arrive as env vars above.
       - name: Install JAX wheels
@@ -438,7 +448,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}
