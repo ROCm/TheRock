@@ -66,7 +66,7 @@ libraries automatically.
 
 ## Adding a project
 
-Add an entry to `COVERAGE_PROJECTS` in `build_tools/_therock_utils/coverage_registry.py`.
+Add an entry to `COVERAGE_PROJECTS` in `configure_coverage_ci.py`.
 
 `coverage_option` must name the CMake option the project implements, and it must
 select LLVM instrumentation (not gcov, which writes `.gcda` files this pipeline
