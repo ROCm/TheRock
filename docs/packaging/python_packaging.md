@@ -236,13 +236,12 @@ ownership mapping and redeploy the aggregate index.
 
 The rockrel
 [`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/blob/main/.github/workflows/mirror_python_dependencies.yml)
-workflow runs on a schedule and can also be run manually whenever needed. It
-resolves one snapshot and publishes it with `--refresh-existing` to the core
-bucket of each "particular release streams, one job per stream. Manual dispatch
-publishes to all four streams by default and can target one stream.
-A failing stream does not stop the others; rerun the failed jobs or
-the complete workflow. Each run is idempotent, and older versions remain
-subject to their normal retention policy.
+workflow runs weekly and can also be run manually. It resolves one snapshot and
+publishes it with `--refresh-existing` to the core bucket of each selected
+release stream. Scheduled runs and the default `all` input publish to `dev` and
+`nightly`; a manual run can instead target particular release streams. If
+a run fails, rerun the workflow. Each run is idempotent, and older versions
+remain subject to their normal retention policy.
 
 ## rocm-profiler
 
