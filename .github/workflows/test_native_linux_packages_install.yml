@@ -243,10 +243,11 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
-          # cmake, make, and a C++ compiler are for examples/cpp-sdk-user,
-          # including sanity. The step uses the Unix Makefiles generator, so
-          # make is required. g++ / gcc-c++ is the host compiler. The installed
-          # ROCm prefix supplies the HIP compiler.
+          # cmake, make, and a C++ compiler are for examples/cpp-sdk-user.
+          # The step uses the Unix Makefiles generator, so make is required.
+          # The installed ROCm prefix supplies the HIP compiler and the Clang
+          # used to compile hip-host-test. The distro g++ / gcc-c++ installed
+          # below is not that host compiler.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
