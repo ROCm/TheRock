@@ -2307,6 +2307,24 @@ class TestExpandBuildConfigs(unittest.TestCase):
             ],
         )
 
+    def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        exclusions = {
+            row["pytorch_git_ref"]: row["exclude_implicit_targets"]
+            for row in result.linux.pytorch_build_matrix
+        }
+        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
+
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
