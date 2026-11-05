@@ -92,6 +92,10 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "projects/rocprim": ["hipccl"],
     "projects/hipcub": ["hipccl"],
     "projects/rocthrust": ["hipccl"],
+    # The unified hipCCL superbuild itself (projects/hipccl/hipccl3). hipccl is
+    # a valid graph node, so edits here select the rocprim/hipcub/rocthrust test
+    # jobs via _CI_TEST_SELECTOR_ALIASES["hipccl"].
+    "projects/hipccl": ["hipccl"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
