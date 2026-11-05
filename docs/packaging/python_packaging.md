@@ -186,7 +186,8 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > For CI-style testing with the same directory layout used by workflows, use
 > [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
 > with `--output-dir`. This stages packages locally under
-> `{run_id}-{platform}/python/`.
+> `{run_id}-{platform}/python/` but does not generate an index. To create
+> `index.html`, run the indexer command above against the staged directory.
 
 ## Mirroring Third-Party Python Dependencies
 
