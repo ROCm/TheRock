@@ -49,10 +49,10 @@ Sample usage:
   # rocm_package_version=7.10.0.dev0+sha.asan
 
   python compute_rocm_package_version.py --release-type=nightly --build-variant=asan-debug
-  # rocm_package_version=7.10.0a20251021+asandebug  (dashes removed from variant)
+  # rocm_package_version=7.10.0a20251021+asan.debug  (separators normalized to ".")
 
   python compute_rocm_package_version.py --release-type=nightly --build-variant=host-asan
-  # rocm_package_version=7.10.0a20251021+hostasan
+  # rocm_package_version=7.10.0a20251021+host.asan
 
   python compute_rocm_package_version.py --release-type=nightly --build-variant=tsan
   # rocm_package_version=7.10.0a20251021+tsan
@@ -70,6 +70,7 @@ from datetime import date, datetime
 from pathlib import Path
 import json
 import os
+import re
 import subprocess
 import sys
 from typing import Any
@@ -88,6 +89,24 @@ MSI_EPOCH = date(2016, 4, 1)
 # the third (build) field at 65535. days-since-MSI_EPOCH stays under this until
 # ~year 2195, after which a build would raise rather than silently wrap.
 MSI_BUILD_FIELD_MAX = 65535
+
+_LOCAL_LABEL_SEPARATORS = re.compile(r"[-_.]+")
+
+
+def normalize_build_variant(build_variant: str) -> str:
+    """Normalize a build variant into a PEP 440 local version label segment.
+
+    PEP 440 normalizes '-', '_' and '.' to '.' within local version labels, and
+    lowercases the label, so we emit the already-normalized form directly:
+    https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-segments
+
+        "asan"        -> "asan"
+        "asan-debug"  -> "asan.debug"
+        "host-asan"   -> "host.asan"
+        "host_asan"   -> "host.asan"
+    """
+    normalized = _LOCAL_LABEL_SEPARATORS.sub(".", build_variant.strip().lower())
+    return normalized.strip(".")
 
 
 def _log(*args, **kwargs):
@@ -209,7 +228,8 @@ def compute_version(
             "nightly-bkc", "prerelease", or "release")
         build_variant: Build variant (e.g., "release", "asan", "asan-debug",
             "host-asan", "tsan"). Empty or "release" uses default behavior.
-            Other variants add a sanitized suffix (dashes removed) to wheel packages.
+            Other variants add a normalized suffix (separators normalized to
+            "." per PEP 440 local version labels) to wheel packages.
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
@@ -242,8 +262,10 @@ def compute_version(
             )
 
     # Handle wheel packages (Python packaging standards)
-    # Build version using parts: base_version + pre_release_tag + local_parts
-    # Pre-release tag is appended directly (e.g., "a20261007", "rc2", ".dev0")
+    # Build version using parts: base_version + release_segment + local_parts
+    # The release segment is appended directly and is either a pre-release
+    # segment ("a20261007", "rc2") or a development release segment (".dev0"):
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/
     # Local parts are joined: first with "+", rest with "."
     if package_type == "wheel":
         if custom_version_suffix:
@@ -255,42 +277,44 @@ def compute_version(
             _log(f"Full version  : '{rocm_package_version}'")
             return rocm_package_version
 
-        pre_release_tag = ""
+        release_segment = ""
         local_parts: list[str] = []
 
         if release_type == "release":
-            pass  # No pre-release tag or local parts for stable release
+            pass  # No release segment or local parts for a final release
         elif release_type in ("ci", "dev", "dev-bkc"):
-            # Construct a dev release version:
+            # Development release (".devN"), not a pre-release:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
             git_sha = get_git_sha(override_git_sha=override_git_sha)
-            pre_release_tag = ".dev0"
+            release_segment = ".dev0"
             local_parts.append(git_sha)
         elif release_type == "nightly":
-            # Construct a nightly (a / "alpha") version:
+            # Pre-release, alpha segment ("aN"):
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            pre_release_tag = f"a{current_date}"
+            release_segment = f"a{current_date}"
         elif release_type == "nightly-bkc":
-            pre_release_tag = f"a{release_metadata['base-date']}"
+            # Pre-release, alpha segment pinned to the BKC base date.
+            release_segment = f"a{release_metadata['base-date']}"
             local_parts.append(f"bkc.{current_date}")
         elif release_type == "prerelease":
-            # Construct a prerelease (rc / "release candidate") version
+            # Pre-release, release candidate segment ("rcN"):
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            pre_release_tag = f"rc{prerelease_version}"
+            release_segment = f"rc{prerelease_version}"
         else:
             raise ValueError(
                 f"Unhandled release type '{release_type}' for wheel packages"
             )
 
         # Add build variant suffix for non-release builds (e.g., asan, tsan)
-        # Sanitize variant: remove dashes (host-asan -> hostasan)
+        # Normalize variant to a PEP 440 local label (host-asan -> host.asan)
         if build_variant and build_variant != "release":
-            sanitized_variant = build_variant.replace("-", "")
-            local_parts.append(sanitized_variant)
-            _log(f"Build variant : '{build_variant}' -> '{sanitized_variant}'")
+            normalized_variant = normalize_build_variant(build_variant)
+            if normalized_variant:
+                local_parts.append(normalized_variant)
+                _log(f"Build variant : '{build_variant}' -> '{normalized_variant}'")
 
-        # Compose final version: base + pre_release_tag + local_parts
-        rocm_package_version = base_version + pre_release_tag
+        # Compose final version: base + release_segment + local_parts
+        rocm_package_version = base_version + release_segment
         if local_parts:
             rocm_package_version += "+" + ".".join(local_parts)
 
@@ -419,7 +443,8 @@ def main(argv):
         type=str,
         help="Build variant (e.g., 'release', 'asan', 'asan-debug', 'host-asan', 'tsan'). "
         "Empty or 'release' uses default behavior. Other variants add a "
-        "sanitized suffix (dashes removed) to wheel packages.",
+        "normalized suffix (separators normalized to '.' per PEP 440 "
+        "local version labels) to wheel packages.",
     )
 
     args = parser.parse_args(argv)
