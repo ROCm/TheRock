@@ -105,7 +105,6 @@ jobs:
           CHERRY_PICK_JIRA_ID: ${{ inputs.jira_id }}
           CHERRY_PICK_DRY_RUN: ${{ inputs.dry_run }}
           GITHUB_APP_TOKEN: ${{ steps.therock-token.outputs.token || steps.systems-token.outputs.token || steps.libraries-token.outputs.token }}
-          GITHUB_APP_SLUG: ${{ steps.therock-token.outputs.app-slug || steps.systems-token.outputs.app-slug || steps.libraries-token.outputs.app-slug }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           WORKFLOW_ACTOR: ${{ github.actor }}
         run: python3 build_tools/github_actions/cherry_pick_to_release.py

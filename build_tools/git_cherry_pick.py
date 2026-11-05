@@ -20,6 +20,7 @@ Conflicts and empty picks fail the operation; the module does not attempt to
 resolve them or publish a partial result.
 """
 
+import base64
 from collections.abc import Sequence
 from dataclasses import dataclass
 import os
@@ -420,6 +421,8 @@ def push_branch(
     remote_description: str,
     head: str,
     branch: str,
+    *,
+    token: str | None = None,
 ) -> None:
     """Create an absent branch and verify creation without exposing credentials."""
     destination = f"refs/heads/{branch}"
@@ -436,6 +439,17 @@ def push_branch(
     ]
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    encoded_credentials: str | None = None
+    if token is not None:
+        encoded_credentials = base64.b64encode(
+            f"x-access-token:{token}".encode("utf-8")
+        ).decode("ascii")
+        config_index = int(env.get("GIT_CONFIG_COUNT", "0"))
+        env["GIT_CONFIG_COUNT"] = str(config_index + 1)
+        env[f"GIT_CONFIG_KEY_{config_index}"] = "http.https://github.com/.extraheader"
+        env[f"GIT_CONFIG_VALUE_{config_index}"] = (
+            f"AUTHORIZATION: basic {encoded_credentials}"
+        )
     try:
         result = subprocess.run(
             command,
@@ -449,9 +463,13 @@ def push_branch(
             f"Could not execute git push for {remote_description} branch {branch!r}"
         ) from exc
     if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "no details"
+        for secret in (token, encoded_credentials):
+            if secret is not None:
+                detail = detail.replace(secret, "***")
         raise CherryPickError(
             f"Failed to push {remote_description} branch {branch!r} "
-            f"(git exited with status {result.returncode})"
+            f"(git exited with status {result.returncode}): {detail}"
         )
 
     # An existing branch at the same commit yields a successful "up to date"

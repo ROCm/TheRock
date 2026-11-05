@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import base64
 import os
 from pathlib import Path
 import subprocess
@@ -76,7 +77,7 @@ class PushSanitizationTest(unittest.TestCase):
         head = "a" * 40
         branch = "shared/cherry-pick/therock-10.2-airdel-12"
         refspec = f"{head}:refs/heads/{branch}"
-        remote_url = f"https://x-access-token:{TOKEN}@github.com/ROCm/target.git"
+        remote_url = "https://github.com/ROCm/target.git"
         for status_output in (
             "",
             f"*\t{head}:refs/heads/another-branch\t[new branch]\n",
@@ -88,7 +89,7 @@ class PushSanitizationTest(unittest.TestCase):
                 args=["git", "push"],
                 returncode=0,
                 stdout=f"To {remote_url}\n{status_output}Done\n",
-                stderr=f"diagnostic containing {TOKEN}",
+                stderr="unused diagnostic",
             )
             with self.subTest(status_output=status_output):
                 with patch(
@@ -100,20 +101,34 @@ class PushSanitizationTest(unittest.TestCase):
                         remote_description="ROCm/target",
                         head=head,
                         branch=branch,
+                        token=TOKEN,
                     )
                 self.assertNotIn(TOKEN, str(raised.exception))
-                self.assertNotIn("x-access-token", str(raised.exception))
                 self.assertIn(branch, str(raised.exception))
 
-    def test_push_failure_does_not_include_credentials(self) -> None:
-        remote_url = f"https://x-access-token:{TOKEN}@github.com/ROCm/target.git"
+    def test_push_failure_reports_diagnostics_without_credentials(self) -> None:
+        remote_url = "https://github.com/ROCm/target.git"
+        encoded_credentials = base64.b64encode(
+            f"x-access-token:{TOKEN}".encode("utf-8")
+        ).decode("ascii")
         result = subprocess.CompletedProcess(
             args=["git", "push"],
             returncode=1,
             stdout="",
-            stderr=f"fatal: URL included {TOKEN}",
+            stderr=(
+                "remote: GH013: repository rule violations; credentials were "
+                f"{TOKEN} and {encoded_credentials}"
+            ),
         )
-        with patch("git_cherry_pick.subprocess.run", return_value=result):
+        with patch.dict(
+            os.environ,
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.attributesFile",
+                "GIT_CONFIG_VALUE_0": os.devnull,
+            },
+            clear=True,
+        ), patch("git_cherry_pick.subprocess.run", return_value=result) as run:
             with self.assertRaises(CherryPickError) as raised:
                 push_branch(
                     repo=Path("/temporary/repo"),
@@ -121,9 +136,26 @@ class PushSanitizationTest(unittest.TestCase):
                     remote_description="ROCm/target",
                     head="a" * 40,
                     branch="shared/cherry-pick/therock-10.2-airdel-12",
+                    token=TOKEN,
                 )
+        command = run.call_args.args[0]
+        command_text = "\0".join(command)
+        environment = run.call_args.kwargs["env"]
+        self.assertIn(remote_url, command)
+        self.assertNotIn(TOKEN, command_text)
+        self.assertNotIn(encoded_credentials, command_text)
+        self.assertEqual(environment["GIT_CONFIG_COUNT"], "2")
+        self.assertEqual(
+            environment["GIT_CONFIG_KEY_1"],
+            "http.https://github.com/.extraheader",
+        )
+        self.assertEqual(
+            environment["GIT_CONFIG_VALUE_1"],
+            f"AUTHORIZATION: basic {encoded_credentials}",
+        )
+        self.assertIn("GH013: repository rule violations", str(raised.exception))
         self.assertNotIn(TOKEN, str(raised.exception))
-        self.assertNotIn("x-access-token", str(raised.exception))
+        self.assertNotIn(encoded_credentials, str(raised.exception))
 
 
 if __name__ == "__main__":

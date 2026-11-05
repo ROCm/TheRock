@@ -182,9 +182,13 @@ def validate_ticket_requirement(release: ReleaseInfo, jira_id: str | None) -> No
 
 
 def derive_pr_branch(
-    release: ReleaseInfo, jira_id: str | None, first_commit: str
+    release: ReleaseInfo, jira_id: str | None, first_commit_sha: str
 ) -> str:
-    """Derive the new target branch from the ticket or ticketless BKC inputs."""
+    """Derive the destination branch name.
+
+    For a ticketless BKC release, first_commit_sha is the full resolved SHA
+    of the first commit in cherry-pick order and supplies the branch suffix.
+    """
     if jira_id is not None:
         release_name = f"therock-{release.version}"
         if release.bkc_date is not None:
@@ -194,7 +198,7 @@ def derive_pr_branch(
         raise CherryPickError("A ticketless PR branch is only valid for a BKC release")
     return (
         f"shared/cherry-pick/bkc-therock-{release.version}-{release.bkc_date}-"
-        f"{first_commit[:7]}"
+        f"{first_commit_sha[:7]}"
     )
 
 
@@ -233,7 +237,7 @@ def build_pr_body(
     workflow_run_url: str,
     workflow_actor: str,
 ) -> str:
-    """Build the pull request body, including TheRock run provenance."""
+    """Build the pull request body, including available workflow provenance."""
     lines = [
         f"Cherry-picks the following commits into the ROCm {release.label} "
         f"branch (`{release.branch}`):",
@@ -242,14 +246,15 @@ def build_pr_body(
     lines.extend(f"- `{commit.sha}` {commit.subject}" for commit in commits)
     if jira_id is not None:
         lines.extend(["", f"JIRA ID: {jira_id}"])
-    actor_url = f"https://github.com/{quote(workflow_actor, safe='')}"
-    lines.extend(
-        [
-            "",
-            f"Triggered by [@{workflow_actor}]({actor_url}) in "
-            f"[the TheRock workflow run]({workflow_run_url}).",
-        ]
-    )
+    if workflow_run_url and workflow_actor:
+        actor_url = f"https://github.com/{quote(workflow_actor, safe='')}"
+        lines.extend(
+            [
+                "",
+                f"Triggered by [@{workflow_actor}]({actor_url}) in "
+                f"[the TheRock workflow run]({workflow_run_url}).",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -343,7 +348,21 @@ def create_pull_request(
     return html_url
 
 
-def _validate_workflow_provenance(workflow_run_url: str, workflow_actor: str) -> None:
+def _validate_workflow_provenance(
+    workflow_run_url: str, workflow_actor: str, *, required: bool
+) -> None:
+    has_run_url = bool(workflow_run_url)
+    has_actor = bool(workflow_actor.strip())
+    if not has_run_url and not has_actor:
+        if required:
+            raise CherryPickError(
+                "The workflow run URL and triggering actor are required for live runs"
+            )
+        return
+    if not has_run_url or not has_actor:
+        raise CherryPickError(
+            "The workflow run URL and triggering actor must be provided together"
+        )
     parsed_url = urlsplit(workflow_run_url)
     expected_path = f"/{HOST_REPOSITORY}/actions/runs/"
     if (
@@ -354,8 +373,6 @@ def _validate_workflow_provenance(workflow_run_url: str, workflow_actor: str) ->
         raise CherryPickError(
             f"Workflow run URL must point to a {HOST_REPOSITORY} Actions run"
         )
-    if not workflow_actor.strip():
-        raise CherryPickError("The triggering workflow actor is required")
 
 
 def _conflict_summary(
@@ -363,7 +380,7 @@ def _conflict_summary(
 ) -> str:
     paths = "\n".join(f"- `{path}`" for path in error.paths)
     if not paths:
-        paths = "- Conflict paths were not reported by Git"
+        paths = "- No conflict paths were reported by Git"
     return "\n".join(
         [
             "# Cherry-pick conflict",
@@ -406,16 +423,14 @@ def _dry_run_summary(result: RunResult) -> str:
     )
 
 
-def _success_summary(result: RunResult) -> str:
-    if result.pr_url is None:
-        raise AssertionError("A live-run summary requires a pull request URL")
+def _success_summary(result: RunResult, pr_url: str) -> str:
     return "\n".join(
         [
             "# Cherry-pick pull request created",
             "",
             f"- Target repository: `{TARGET_OWNER}/{result.repository}`",
             f"- Release branch: `{result.release_branch}`",
-            f"- Pull request: {result.pr_url}",
+            f"- Pull request: {pr_url}",
         ]
     )
 
@@ -428,7 +443,6 @@ def execute_cherry_pick(
     jira_id_value: str,
     dry_run: bool,
     app_token: str,
-    app_slug: str,
     workflow_run_url: str,
     workflow_actor: str,
     api: GitHubClient,
@@ -442,15 +456,12 @@ def execute_cherry_pick(
     release = parse_release_branch(release_branch_value)
     jira_id = parse_jira_id(jira_id_value)
     validate_ticket_requirement(release, jira_id)
-    if not app_token.strip():
+    if not dry_run and not app_token.strip():
         raise CherryPickError("The selected GitHub App token is missing or empty")
-    expected_app_slug = SUPPORTED_REPOSITORIES[repository]
-    if app_slug != expected_app_slug:
-        raise CherryPickError(
-            f"Repository {repository!r} requires App {expected_app_slug!r}, "
-            f"not {app_slug!r}"
-        )
-    _validate_workflow_provenance(workflow_run_url, workflow_actor)
+    app_slug = SUPPORTED_REPOSITORIES[repository]
+    _validate_workflow_provenance(
+        workflow_run_url, workflow_actor, required=not dry_run
+    )
     check_git_version()
 
     default_branch = target_metadata(api, repository)
@@ -461,7 +472,7 @@ def execute_cherry_pick(
         require_remote_branch(target_path, release.branch, "release")
         resolved_commits = resolve_commits(target_path, commit_specs)
         pr_branch = derive_pr_branch(
-            release=release, jira_id=jira_id, first_commit=resolved_commits[0]
+            release=release, jira_id=jira_id, first_commit_sha=resolved_commits[0]
         )
         if branch_exists(target_path, pr_branch):
             raise CherryPickError(
@@ -530,17 +541,20 @@ def execute_cherry_pick(
             summary_writer(_dry_run_summary(result))
             return result
 
-        authenticated_url = push_url or (
-            f"https://x-access-token:{quote(app_token, safe='')}@github.com/"
-            f"{TARGET_OWNER}/{repository}.git"
-        )
+        if push_url is None:
+            remote_url = f"https://github.com/{TARGET_OWNER}/{repository}.git"
+            push_token = app_token
+        else:
+            remote_url = push_url
+            push_token = None
         try:
             push_branch(
                 repo=target_path,
-                remote_url=authenticated_url,
+                remote_url=remote_url,
                 remote_description=f"{TARGET_OWNER}/{repository}",
                 head=built_commits[-1].sha,
                 branch=pr_branch,
+                token=push_token,
             )
         except CherryPickError as exc:
             raise CherryPickError(f"{exc}; no pull request was created") from exc
@@ -567,7 +581,7 @@ def execute_cherry_pick(
             raise
 
         result = replace(result, pr_url=pr_url, dry_run=False)
-        summary_writer(_success_summary(result))
+        summary_writer(_success_summary(result, pr_url))
         return result
 
 
@@ -602,28 +616,27 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--app-token",
         default=os.getenv("GITHUB_APP_TOKEN", ""),
-        help="GitHub App installation token (env: GITHUB_APP_TOKEN)",
-    )
-    parser.add_argument(
-        "--app-slug",
-        default=os.getenv("GITHUB_APP_SLUG", ""),
-        help="GitHub App slug matching the target repository " "(env: GITHUB_APP_SLUG)",
+        help="GitHub App installation token, required for live runs and optional "
+        "for dry runs (env: GITHUB_APP_TOKEN)",
     )
     parser.add_argument(
         "--workflow-run-url",
         default=os.getenv("WORKFLOW_RUN_URL", ""),
-        help="TheRock Actions run URL for pull request provenance "
+        help="URL of the originating TheRock Actions run, included in the pull "
+        "request body; required for live runs and optional for local dry runs "
         "(env: WORKFLOW_RUN_URL)",
     )
     parser.add_argument(
         "--workflow-actor",
         default=os.getenv("WORKFLOW_ACTOR", ""),
-        help="GitHub login of the triggering operator (env: WORKFLOW_ACTOR)",
+        help="GitHub login of the triggering operator, included with the workflow "
+        "run provenance; required for live runs and optional for local dry runs "
+        "(env: WORKFLOW_ACTOR)",
     )
     parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
-        default=parse_dry_run(os.getenv("CHERRY_PICK_DRY_RUN", "true")),
+        default=None,
         help="Build and report without publishing (default: true; "
         "env: CHERRY_PICK_DRY_RUN). --no-dry-run publishes the branch and PR; "
         "either flag overrides the environment setting",
@@ -634,15 +647,19 @@ def _create_argument_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = _create_argument_parser().parse_args(argv)
-        api = GitHubAPI(github_token=args.app_token)
+        dry_run = (
+            args.dry_run
+            if args.dry_run is not None
+            else parse_dry_run(os.getenv("CHERRY_PICK_DRY_RUN", "true"))
+        )
+        api = GitHubAPI(github_token=args.app_token or None)
         execute_cherry_pick(
             repository_value=args.repository,
             commits_value=args.commits,
             release_branch_value=args.release_branch,
             jira_id_value=args.jira_id,
-            dry_run=args.dry_run,
+            dry_run=dry_run,
             app_token=args.app_token,
-            app_slug=args.app_slug,
             workflow_run_url=args.workflow_run_url,
             workflow_actor=args.workflow_actor,
             api=api,

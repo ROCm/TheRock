@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from dataclasses import dataclass
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -378,7 +379,6 @@ class CommandLineTest(unittest.TestCase):
             "CHERRY_PICK_RELEASE_BRANCH": "release/therock-10.2",
             "CHERRY_PICK_JIRA_ID": "AIRDEL-1234",
             "GITHUB_APP_TOKEN": TOKEN,
-            "GITHUB_APP_SLUG": "systems-assistant",
             "WORKFLOW_RUN_URL": RUN_URL,
             "WORKFLOW_ACTOR": "release-operator",
         }
@@ -397,12 +397,36 @@ class CommandLineTest(unittest.TestCase):
                         jira_id_value="AIRDEL-1234",
                         dry_run=expected,
                         app_token=TOKEN,
-                        app_slug="systems-assistant",
                         workflow_run_url=RUN_URL,
                         workflow_actor="release-operator",
                         api=api.return_value,
                     )
                     api.assert_called_once_with(github_token=TOKEN)
+
+    def test_invalid_dry_run_environment_is_ignored_by_help_and_flags(self) -> None:
+        with patch.dict(
+            os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
+        ), patch("sys.stdout", io.StringIO()), self.assertRaises(SystemExit) as raised:
+            main(["--help"])
+        self.assertEqual(raised.exception.code, 0)
+
+        for flag, expected in (("--dry-run", True), ("--no-dry-run", False)):
+            with self.subTest(flag=flag), patch.dict(
+                os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
+            ), patch("cherry_pick_to_release.execute_cherry_pick") as execute, patch(
+                "cherry_pick_to_release.GitHubAPI"
+            ):
+                self.assertEqual(main([flag]), 0)
+                self.assertEqual(execute.call_args.kwargs["dry_run"], expected)
+
+    def test_invalid_unoverridden_dry_run_environment_fails(self) -> None:
+        with patch.dict(
+            os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
+        ), patch("sys.stderr", io.StringIO()), patch(
+            "cherry_pick_to_release.execute_cherry_pick"
+        ) as execute:
+            self.assertEqual(main([]), 1)
+        execute.assert_not_called()
 
 
 class WorkflowWiringTest(unittest.TestCase):
@@ -457,10 +481,6 @@ class WorkflowWiringTest(unittest.TestCase):
                 self.assertIn(
                     f"steps.{step_id}.outputs.token",
                     self.cherry_pick_step["env"]["GITHUB_APP_TOKEN"],
-                )
-                self.assertIn(
-                    f"steps.{step_id}.outputs.app-slug",
-                    self.cherry_pick_step["env"]["GITHUB_APP_SLUG"],
                 )
 
     def test_workflow_passes_inputs_through_environment(self) -> None:
@@ -663,6 +683,9 @@ class CherryPickIntegrationTest(unittest.TestCase):
         release_branch: str = "release/therock-10.2",
         jira_id: str = "AIRDEL-1234",
         dry_run: bool = True,
+        app_token: str = TOKEN,
+        workflow_run_url: str = RUN_URL,
+        workflow_actor: str = "release-operator",
         api: FakeGitHubAPI | None = None,
     ) -> RunResult:
         return execute_cherry_pick(
@@ -671,10 +694,9 @@ class CherryPickIntegrationTest(unittest.TestCase):
             release_branch_value=release_branch,
             jira_id_value=jira_id,
             dry_run=dry_run,
-            app_token=TOKEN,
-            app_slug="systems-assistant",
-            workflow_run_url=RUN_URL,
-            workflow_actor="release-operator",
+            app_token=app_token,
+            workflow_run_url=workflow_run_url,
+            workflow_actor=workflow_actor,
             api=self.api if api is None else api,
             summary_writer=self.summaries.append,
             clone_url=self.target.remote.as_uri(),
@@ -697,6 +719,29 @@ class CherryPickIntegrationTest(unittest.TestCase):
         self.assertIn(result.built_commits[0].sha, summary)
         self.assertIn(result.pr_title, summary)
         self.assertIn(result.pr_body, summary)
+
+    def test_local_dry_run_does_not_require_token_or_provenance(self) -> None:
+        result = self.execute(
+            app_token="",
+            workflow_run_url="",
+            workflow_actor="",
+        )
+        self.assertTrue(result.dry_run)
+        self.assertNotIn("Triggered by", result.pr_body)
+
+    def test_live_run_requires_token_and_provenance(self) -> None:
+        with self.assertRaisesRegex(CherryPickError, "App token"):
+            self.execute(dry_run=False, app_token="")
+        with self.assertRaisesRegex(CherryPickError, "required for live runs"):
+            self.execute(
+                dry_run=False,
+                workflow_run_url="",
+                workflow_actor="",
+            )
+
+    def test_dry_run_rejects_partial_provenance(self) -> None:
+        with self.assertRaisesRegex(CherryPickError, "must be provided together"):
+            self.execute(workflow_run_url="")
 
     def test_live_run_pushes_unsigned_commit_and_creates_pr(self) -> None:
         result = self.execute(dry_run=False)
@@ -974,6 +1019,8 @@ class CherryPickIntegrationTest(unittest.TestCase):
             remote_description: str,
             head: str,
             branch: str,
+            *,
+            token: str | None = None,
         ) -> None:
             nonlocal concurrent_head
             concurrent_head = head if identical_head else self.target.base
@@ -989,6 +1036,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
                 remote_description=remote_description,
                 head=head,
                 branch=branch,
+                token=token,
             )
 
         expected_error = "already exists" if identical_head else "Failed to push"

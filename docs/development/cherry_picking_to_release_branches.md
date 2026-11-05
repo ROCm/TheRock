@@ -18,11 +18,13 @@ branches and optional for BKC branches. Set `dry_run` to `false` only for the
 coordinated live cherry-pick.
 
 Every requested commit must be reachable from the target repository's current
-default branch. The workflow rejects merge commits, commits already present on
-the release branch, conflicts, empty cherry-picks, and an existing destination
-branch. Validation and cherry-pick failures push nothing. If the push outcome
-cannot be confirmed or pull request creation fails after a successful push,
-the job reports the destination branch for manual inspection and recovery.
+default branch and have exactly one parent. This excludes root commits, which
+have no parent, and merge commits, which combine two or more parent histories.
+The workflow also rejects commits already present on the release branch,
+conflicts, empty cherry-picks, and an existing destination branch. Validation
+and cherry-pick failures push nothing. If the push outcome cannot be confirmed
+or pull request creation fails after a successful push, the job reports the
+destination branch for manual inspection and recovery.
 
 The generated commit message has this form:
 
@@ -51,8 +53,10 @@ Destination branch names:
 mode. `CHERRY_PICK_DRY_RUN=true` or `false` sets the default explicitly.
 `--dry-run` and `--no-dry-run` override that environment setting: use
 `--dry-run` to build and report without publishing, or `--no-dry-run` to push
-the branch and create a pull request. The script requires the same App
-credentials and TheRock workflow provenance as the workflow. Run it with
+the branch and create a pull request. A live run requires the selected App
+token and TheRock workflow provenance. A local dry run can omit both the token
+and workflow provenance; when provenance is omitted, the prospective pull
+request body leaves out the triggering-operator paragraph. Run the script with
 `--help` for the input options and corresponding environment variables.
 
 ## Access and repository configuration
