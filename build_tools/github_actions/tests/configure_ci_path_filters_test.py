@@ -135,6 +135,7 @@ class TestGetJobsForChanges(unittest.TestCase):
     def test_pytorch_changes_select_pytorch(self):
         paths = [
             "external-builds/pytorch/skip_tests/generic.py",
+            ".github/workflows/dev_pytorch_wheels.yml",
             ".github/workflows/multi_arch_build_windows_pytorch_wheels_ci.yml",
         ]
         self.assertEqual(get_jobs_for_changes(paths), {"pytorch"})

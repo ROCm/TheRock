@@ -50,7 +50,7 @@ from typing import Callable
 
 from packaging.version import InvalidVersion, Version
 
-_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2] / "build_tools"
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map

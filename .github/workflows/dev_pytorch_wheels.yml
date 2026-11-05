@@ -16,11 +16,6 @@
 name: Dev PyTorch Wheels
 
 on:
-  # TEMPORARY: registers the workflow so it can be dispatched from this PR
-  # branch before merge. Every job is skipped for this event. Revert before merge.
-  pull_request:
-    paths:
-      - .github/workflows/dev_pytorch_wheels.yml
   workflow_dispatch:
     inputs:
       build_linux:
@@ -137,7 +132,7 @@ jobs:
           ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
           PYTORCH_BRANCH: ${{ inputs.pytorch_branch }}
         run: |
-          python build_tools/github_actions/resolve_dev_pytorch_wheel_inputs.py \
+          python external-builds/pytorch/resolve_dev_pytorch_wheel_inputs.py \
             --build-linux "${BUILD_LINUX}" \
             --build-windows "${BUILD_WINDOWS}" \
             --datacenter-instinct-gpus "${DATACENTER_INSTINCT_GPUS}" \
