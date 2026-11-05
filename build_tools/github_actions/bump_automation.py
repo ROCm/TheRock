@@ -2,12 +2,25 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+"""Create submodule bump PRs and update upstream references to TheRock.
+
+Bump PRs use a filtered, no-checkout clone of TheRock main. See
+_commit_gitlink_bump for how the gitlink commit is built and verified.
+
+Upstream reference updates use a filtered sparse checkout of develop,
+including .github and configured-file parent directories. This preserves
+recursive workflow discovery while limiting the files checked out.
+
+See .github/workflows/bump_submodules.yml for the workflow definition.
+"""
+
 import argparse
 import os
 import re
 import subprocess
 import tempfile
 import time
+from contextlib import chdir
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -115,8 +128,15 @@ def run(cmd: list[str]) -> str:
 
 def get_submodule_sha(commit: str, path: str) -> str:
     """Return SHA of submodule at path in given commit."""
-    out = run(["git", "ls-tree", commit, path])
-    return out.split()[2]
+    out = run(["git", "ls-tree", "-z", commit, "--", path])
+    entries = out.split("\0")
+    if len(entries) != 2 or entries[1]:
+        raise RuntimeError(f"Expected one gitlink at {path} in {commit}")
+    metadata, _, entry_path = entries[0].partition("\t")
+    fields = metadata.split()
+    if len(fields) != 3 or fields[:2] != ["160000", "commit"] or entry_path != path:
+        raise RuntimeError(f"Expected a mode 160000 gitlink at {path} in {commit}")
+    return fields[2]
 
 
 def submodule_changed(before: str, after: str, path: str) -> bool:
@@ -732,13 +752,76 @@ def _git_commit(title: str) -> None:
     )
 
 
+def _commit_gitlink_bump(
+    submodule: str, old_sha: str, new_sha: str, branch: str, title: str
+) -> None:
+    """Commit the gitlink update without fetching blobs or submodule commits.
+
+    A gitlink is a mode 160000 tree entry that stores a submodule commit SHA.
+    Updating it requires neither the submodule's files nor its commit object.
+
+    Run inside the filtered, no-checkout clone prepared by create_therock_bump.
+    HEAD is the base commit; the caller has checked that submodule is a gitlink
+    at old_sha and that new_sha differs. The upstream API supplies new_sha, so
+    the target commit need not exist in this clone's object store.
+
+    read-tree populates the complete index from HEAD before update-index
+    replaces the one mode 160000 entry. Starting with the full index is
+    essential: building a tree from just the replacement would delete every
+    unrelated entry.
+
+    write-tree --missing-ok permits blobs deliberately omitted by the partial
+    clone to remain absent. Since this disables object-existence checks, retain
+    all base entries and verify the resulting tree below. commit-tree creates
+    the commit with the bot identity and HEAD as its sole parent. Ordinary
+    git commit can trigger lazy blob downloads even without a checkout.
+
+    update-ref attaches the commit to branch without checking it out or moving
+    HEAD. Verify that branch has exactly the expected parent and that its full
+    recursive tree listing differs only in the selected gitlink SHA. Use
+    rev-parse and ls-tree for this: even patch-free show or diff-tree commands
+    can fetch .gitmodules. A mismatch raises before the caller pushes branch.
+    """
+    parent = run(["git", "rev-parse", "HEAD"])
+    run(["git", "read-tree", "HEAD"])
+    run(["git", "update-index", "--cacheinfo", f"160000,{new_sha},{submodule}"])
+    tree = run(["git", "write-tree", "--missing-ok"])
+    commit = run(
+        [
+            "git",
+            "-c",
+            f"user.name={BOT_NAME}",
+            "-c",
+            f"user.email={BOT_EMAIL}",
+            "commit-tree",
+            tree,
+            "-p",
+            parent,
+            "-m",
+            title,
+        ]
+    )
+    ref = f"refs/heads/{branch}"
+    run(["git", "update-ref", ref, commit])
+    parents = run(["git", "rev-parse", f"{ref}^@"])
+    before = run(["git", "ls-tree", "-r", "-z", parent])
+    after = run(["git", "ls-tree", "-r", "-z", ref])
+    old_entry = f"160000 commit {old_sha}\t{submodule}\0"
+    new_entry = f"160000 commit {new_sha}\t{submodule}\0"
+    if (
+        parents != parent
+        or old_entry not in before
+        or after != before.replace(old_entry, new_entry, 1)
+    ):
+        raise RuntimeError(f"Bump commit must change only the {submodule} gitlink")
+
+
 def create_therock_bump(submodule: str, token: str) -> None:
     """Create a bump PR for the given submodule in TheRock."""
     config = SUBMODULE_CONFIG[submodule]
     repo = config["repo"]
     branch = config.get("branch")
 
-    original_cwd = os.getcwd()
     # Get latest SHA from upstream submodule repo
     latest = latest_commit(repo, token, branch)
 
@@ -763,66 +846,56 @@ def create_therock_bump(submodule: str, token: str) -> None:
         clone_dir = os.path.join(tmpdir, "TheRock")
         print(f"[INFO] Cloning TheRock into {clone_dir}")
         run(
-            ["git", "clone", "--depth", "1", _clone_url(THEROCK_REPO, token), clone_dir]
+            [
+                "git",
+                "clone",
+                "--branch",
+                THEROCK_MAIN_BRANCH,
+                "--depth",
+                "1",
+                "--filter=blob:none",
+                "--no-checkout",
+                _clone_url(THEROCK_REPO, token),
+                clone_dir,
+            ]
         )
-        os.chdir(clone_dir)
+        with chdir(clone_dir):
+            current_sha = get_submodule_sha("HEAD", submodule)
 
-        run(["git", "checkout", "-b", branch_name])
+            if current_sha == latest:
+                print(f"[INFO] {submodule} is already at {latest[:7]}, nothing to bump")
+                return
 
-        # Initialize the submodule if needed
-        if not os.path.exists(os.path.join(submodule, ".git")):
-            run(["git", "submodule", "update", "--init", "--depth", "1", submodule])
-        else:
-            print(f"[INFO] Submodule {submodule} already initialized")
+            # Commit and push
+            title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
+            body = generate_pr_body(repo, current_sha, latest)
+            _commit_gitlink_bump(submodule, current_sha, latest, branch_name, title)
+            run(["git", "push", "origin", branch_name])
 
-        current_sha = get_submodule_sha("HEAD", submodule)
-
-        if current_sha == latest:
-            print(f"[INFO] {submodule} is already at {latest[:7]}, nothing to bump")
-            os.chdir(original_cwd)
-            return
-
-        # Fetch the exact target commit in the submodule. A plain depth-1 fetch
-        # only retrieves the default branch tip, which misses commits that live
-        # on a non-default branch (e.g. rocgdb's amd-staging-rocgdb-18).
-        print(f"[INFO] Fetching {latest[:7]} for {submodule}")
-        run(["git", "-C", submodule, "fetch", "--depth=1", "origin", latest])
-        run(["git", "-C", submodule, "checkout", latest])
-
-        # Stage the submodule change
-        run(["git", "add", submodule])
-
-        # Commit and push
-        title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
-        body = generate_pr_body(repo, current_sha, latest)
-        _git_commit(title)
-        run(["git", "push", "origin", branch_name])
-
-        # Create PR
-        pr = gh_api(
-            token,
-            f"repos/{THEROCK_REPO}/pulls",
-            method="POST",
-            data={
-                "title": title,
-                "head": branch_name,
-                "base": THEROCK_MAIN_BRANCH,
-                "body": body,
-            },
-        )
-
-        try:
-            # Add CI labels to the PR (run-all-archs + asan for full coverage)
-            gh_api(
+            # Create PR
+            pr = gh_api(
                 token,
-                f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
+                f"repos/{THEROCK_REPO}/pulls",
                 method="POST",
-                data={"labels": config["labels"]},
+                data={
+                    "title": title,
+                    "head": branch_name,
+                    "base": THEROCK_MAIN_BRANCH,
+                    "body": body,
+                },
             )
-        except RuntimeError as e:
-            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
-        print(f"[INFO] Created bump PR for {submodule}")
-        os.chdir(original_cwd)
+
+            try:
+                # Add CI labels to the PR (run-all-archs + asan for full coverage)
+                gh_api(
+                    token,
+                    f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
+                    method="POST",
+                    data={"labels": config["labels"]},
+                )
+            except RuntimeError as e:
+                print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
+            print(f"[INFO] Created bump PR for {submodule}")
 
 
 def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
@@ -889,68 +962,86 @@ def handle_push(
     repo_name = config["repo"]
     branch = f"update-therock-{changed}-{after[:7]}"
 
-    original_cwd = os.getcwd()
     with tempfile.TemporaryDirectory() as tmp:
-        run(["git", "clone", "--depth", "1", _clone_url(repo_name, token), tmp])
-        os.chdir(tmp)  # Change working directory to the cloned repo
-
-        # Verify that the file exists before accessing
-        for f in config["files"]:
-            if not os.path.exists(f):
-                print(f"[ERROR] File not found: {f}")
-                os.chdir(original_cwd)
-                _fail_if_cancel_errors(cancel_errors)
-                return
-
-        run(["git", "checkout", "-b", branch])
-
-        updater = config.get("updater")
-        files_to_update = list(config["files"])
-        if updater == "ci-env":
-            update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
-        workflow_files = find_therock_workflow_files()
-        for f in workflow_files:
-            update_therock_workflow_file(f, after)
-        files_to_update.extend(workflow_files)
-
-        run(["git", "add"] + files_to_update)
-
-        commit_msg = f"Update TheRock ref to {after[:7]}"
-        if baseline_run_id:
-            commit_msg += f" (baseline: {baseline_run_id})"
-        _git_commit(commit_msg)
-
-        run(["git", "push", "origin", branch])
-
-        pr_body = (
-            f"Updated all pinned TheRock workflow and source refs to "
-            f"`{after[:7]}` due to submodule bump"
+        run(
+            [
+                "git",
+                "clone",
+                "--branch",
+                "develop",
+                "--depth",
+                "1",
+                "--filter=blob:none",
+                "--sparse",
+                _clone_url(repo_name, token),
+                tmp,
+            ]
         )
-        if baseline_run_id:
-            pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
-        else:
-            pr_body += (
-                "\n\n**Note:** No successful baseline run was found for the "
-                "merged PR. The existing `baseline-run-id` in ci-env was "
-                "preserved (not cleared)."
+
+        with chdir(tmp):
+            # Cone mode includes root files and files in each parent directory.
+            directories = {".github"}
+            directories.update(
+                Path(f).parent.as_posix()
+                for f in config["files"]
+                if Path(f).parent != Path(".")
             )
+            run(["git", "sparse-checkout", "set", *sorted(directories)])
 
-        pr = gh_api(
-            token,
-            f"repos/{repo_name}/pulls",
-            method="POST",
-            data={
-                "title": f"Update TheRock reference to ({after[:7]})",
-                "head": branch,
-                "base": "develop",
-                "body": pr_body,
-            },
-        )
-        close_stale_therock_ref_prs(
-            repo_name, pr["number"], token, config["bot_author"]
-        )
+            # Verify that the file exists before accessing
+            for f in config["files"]:
+                if not os.path.exists(f):
+                    print(f"[ERROR] File not found: {f}")
+                    _fail_if_cancel_errors(cancel_errors)
+                    return
 
-    os.chdir(original_cwd)
+            run(["git", "checkout", "-b", branch])
+
+            updater = config.get("updater")
+            files_to_update = list(config["files"])
+            if updater == "ci-env":
+                update_ci_env_file(ROCM_LIBRARIES_CI_ENV_FILE, after, baseline_run_id)
+            workflow_files = find_therock_workflow_files()
+            for f in workflow_files:
+                update_therock_workflow_file(f, after)
+            files_to_update.extend(workflow_files)
+
+            run(["git", "add"] + files_to_update)
+
+            commit_msg = f"Update TheRock ref to {after[:7]}"
+            if baseline_run_id:
+                commit_msg += f" (baseline: {baseline_run_id})"
+            _git_commit(commit_msg)
+
+            run(["git", "push", "origin", branch])
+
+            pr_body = (
+                f"Updated all pinned TheRock workflow and source refs to "
+                f"`{after[:7]}` due to submodule bump"
+            )
+            if baseline_run_id:
+                pr_body += f"\n\nBaseline run ID: [{baseline_run_id}](https://github.com/{THEROCK_REPO}/actions/runs/{baseline_run_id})"
+            else:
+                pr_body += (
+                    "\n\n**Note:** No successful baseline run was found for the "
+                    "merged PR. The existing `baseline-run-id` in ci-env was "
+                    "preserved (not cleared)."
+                )
+
+            pr = gh_api(
+                token,
+                f"repos/{repo_name}/pulls",
+                method="POST",
+                data={
+                    "title": f"Update TheRock reference to ({after[:7]})",
+                    "head": branch,
+                    "base": "develop",
+                    "body": pr_body,
+                },
+            )
+            close_stale_therock_ref_prs(
+                repo_name, pr["number"], token, config["bot_author"]
+            )
 
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
