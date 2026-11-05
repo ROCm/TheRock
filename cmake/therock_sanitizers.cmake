@@ -108,6 +108,7 @@ function(therock_sanitizer_configure
     if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "TSAN")
       string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx90a|gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
+      string(APPEND _stanza "set(CMAKE_HIP_ARCHITECTURES \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
       # HOST_ASAN.
