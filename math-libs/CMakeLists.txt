@@ -700,6 +700,18 @@ if(_ck_enabled)
   # Composable_kernel
   ##############################################################################
 
+  # CK's prebuilt instance libraries are only consumed by MIOpen: hipTensor
+  # instantiates the CK templates itself and only needs the CK headers. When
+  # MIOpen does not use CK in this build (e.g. a hipTensor-only build), install
+  # just the headers and CMake package instead of compiling the instance
+  # libraries (CK_HEADERS_ONLY).
+  if(THEROCK_ENABLE_MIOPEN AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_ck_headers_only OFF)
+  else()
+    set(_ck_headers_only ON)
+    message(STATUS "composable_kernel: no CK instance library consumer enabled; installing headers only")
+  endif()
+
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
@@ -711,6 +723,7 @@ if(_ck_enabled)
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
       "-DHIPTENSOR_REQ_LIBS_ONLY=$<NOT:$<BOOL:${THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY}>>"
+      "-DCK_HEADERS_ONLY=${_ck_headers_only}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
