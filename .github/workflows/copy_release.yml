@@ -7,48 +7,46 @@ on:
   workflow_dispatch:
     inputs:
       rocm_version:
-        description: ROCm version to copy from nightly releases to dev releases, e.g. 7.14.0a20260617 (see https://rocm.nightlies.amd.com/whl-multi-arch/)
+        description: >-
+          ROCm version to copy from nightly.repo.amd.com into
+          dev.repo.amd.com (e.g. 10.3.0a20261027)
         type: string
-      python_version:
+        required: true
+      source_stream:
+        description: Source repo.amd.com stream
         type: choice
         options:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        default: "3.12"
+          - nightly
+          - rc
+          - stable-staging
+        default: nightly
       include_torch:
-        description: Copy 'torch' packages in addition to 'rocm' packages?
-        type: boolean
-        default: false
-      include_jax:
-        description: Copy 'jax' packages in addition to 'rocm' packages?
+        description: Copy torch/apex/triton packages in addition to ROCm Core?
         type: boolean
         default: false
 permissions:
   contents: read
 
 run-name: >-
-  Copy nightly -> dev |
+  Copy ${{ inputs.source_stream }} -> dev |
   rocm ${{ inputs.rocm_version }} |
-  py ${{ inputs.python_version }} |
-  extras: ${{
-    inputs.include_torch && inputs.include_jax && 'PyTorch + JAX' ||
-    inputs.include_torch && 'PyTorch' ||
-    inputs.include_jax && 'JAX' ||
-    'none'
-  }}
+  extras: ${{ inputs.include_torch && 'PyTorch' || 'none' }}
 
 jobs:
   copy_python_packages:
-    name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+    name: >-
+      Copy ${{ inputs.source_stream }} -> dev |
+      rocm ${{ inputs.rocm_version }}
     runs-on: ubuntu-26.04
     permissions:
       contents: read
       id-token: write
-
     env:
+      # Destination is fixed to "dev" so developer-triggered PyTorch builds that
+      # publish to https://dev.repo.amd.com/rocm/whl-next/ can resolve the same
+      # rocm==VERSION pin they built against.
+      DEST_STREAM: dev
+      SOURCE_STREAM: ${{ inputs.source_stream }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
 
     steps:
@@ -58,45 +56,32 @@ jobs:
         with:
           persist-credentials: false
 
-      # TODO: migrate to boto3 Python package instead of this native tool?
-      - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      - name: Configure AWS credentials for Core destination
+        uses: ./.github/actions/configure_aws_product_publication_credentials
         with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-dev
+          release_type: dev
+          product: core
 
-      - name: Select Python version
+      - name: Copy ROCm Core packages between streams
         run: |
-          python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
+          python build_tools/github_actions/copy_rocm_packages_between_streams.py \
+            --rocm-version "${ROCM_VERSION}" \
+            --source-stream "${SOURCE_STREAM}" \
+            --dest-stream "${DEST_STREAM}" \
+            --products core
 
-      - name: Copy ROCm packages between S3 buckets
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "rocm*${ROCM_VERSION}*"
+      - name: Configure AWS credentials for PyTorch destination
+        if: ${{ inputs.include_torch }}
+        uses: ./.github/actions/configure_aws_product_publication_credentials
+        with:
+          release_type: dev
+          product: pytorch
 
-      - name: Copy torch wheels between S3 buckets
+      - name: Copy torch packages between streams
         if: ${{ inputs.include_torch }}
         run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "*torch*${ROCM_VERSION}*${cp_version}*" \
-            --include "apex*${ROCM_VERSION}*${cp_version}*" \
-            --include "triton*${ROCM_VERSION}*${cp_version}*"
-
-      - name: Copy JAX wheels between S3 buckets
-        if: ${{ inputs.include_jax }}
-        run: |
-          aws s3 cp \
-            s3://therock-nightly-python/v4/whl/ \
-            s3://therock-dev-python/v4/whl/ \
-            --recursive --exclude "*" \
-            --include "jax*${ROCM_VERSION}*${cp_version}*"
+          python build_tools/github_actions/copy_rocm_packages_between_streams.py \
+            --rocm-version "${ROCM_VERSION}" \
+            --source-stream "${SOURCE_STREAM}" \
+            --dest-stream "${DEST_STREAM}" \
+            --products pytorch
