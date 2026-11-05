@@ -219,6 +219,21 @@ class CommandTests(unittest.TestCase):
             command[-2:], ["-P", "/src/examples/clean_configure_test_project.cmake"]
         )
 
+    def test_prefix_clang_is_the_host_compiler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = Path(tmp)
+            clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
+            clangxx.parent.mkdir(parents=True)
+            clangxx.write_text("")
+            self.assertEqual(sdk.host_cxx_compiler(prefix), clangxx.as_posix())
+            self.assertEqual(
+                sdk.host_cxx_compiler(prefix, "/usr/bin/g++"), "/usr/bin/g++"
+            )
+
+    def test_missing_prefix_clang_leaves_the_compiler_unset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(sdk.host_cxx_compiler(Path(tmp)))
+
     def test_build_dir_inside_prefix_fails(self) -> None:
         with tempfile.TemporaryDirectory() as prefix_dir, tempfile.TemporaryDirectory() as other:
             prefix = Path(prefix_dir)

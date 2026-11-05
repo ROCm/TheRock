@@ -6,13 +6,17 @@
 
 The existing project defaults every THEROCK_ENABLE_* option to ON. A native
 install can omit a component (hipTensor is published, but the amdrocm
-metapackage does not depend on it; some GPU families never build it). This
-launcher sets each option from the CMake configs under <prefix>/lib/cmake,
-then calls examples/clean_configure_test_project.cmake.
+metapackage does not depend on it). This launcher sets each option from the
+CMake configs under <prefix>/lib/cmake, then calls
+examples/clean_configure_test_project.cmake.
 
 hip and hipblaslt are required. A group that is only partly installed fails
 instead of being switched off, so a present hipblaslt with a missing sibling
 still reaches find_package. An entirely absent optional group is OFF.
+
+The host file ``hip-host-test.cpp`` includes the installed HIP headers. Those
+headers need a compiler newer than RHEL 8's GCC 8, so the host compile uses
+the prefix Clang unless ``--cxx-compiler`` is set.
 """
 
 import argparse
@@ -256,6 +260,29 @@ def _cmake_path(path: Path | str) -> str:
     return Path(path).as_posix()
 
 
+def host_cxx_compiler(prefix: Path, override: str | None = None) -> str | None:
+    """Choose the compiler that builds ``hip-host-test``.
+
+    The installed HIP headers use ``__builtin_bit_cast``. RHEL 8's system
+    GCC 8 does not provide that builtin, so the default host compiler is
+    the Clang shipped in the prefix. ``--cxx-compiler`` replaces that
+    default. When the prefix has no Clang, cmake chooses the compiler.
+
+    Args:
+        prefix: Installed ROCm prefix.
+        override: Compiler from ``--cxx-compiler``, when the caller set one.
+
+    Returns:
+        A compiler path, or None to leave the choice to cmake.
+    """
+    if override:
+        return override
+    clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
+    if clangxx.is_file():
+        return _cmake_path(clangxx)
+    return None
+
+
 def build_command(
     *,
     cmake: str,
@@ -280,7 +307,7 @@ def build_command(
         prefix: Installed ROCm prefix.
         generator: CMake generator. The install job uses ``Unix Makefiles``.
         flags: ``THEROCK_ENABLE_*`` values for this prefix.
-        cxx_compiler: Host C++ compiler. Omit to let cmake find ``g++``.
+        cxx_compiler: Host C++ compiler. None leaves the choice to cmake.
 
     Returns:
         The argv list, with no shell quoting.
@@ -409,7 +436,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cmake", default="cmake", help="cmake executable.")
     parser.add_argument(
         "--cxx-compiler",
-        help="Host C++ compiler. Omit to let cmake find g++.",
+        help=(
+            "Host C++ compiler for hip-host-test. Omit to use the prefix "
+            "Clang, which can compile the HIP headers on RHEL 8."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -443,11 +473,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"No THEROCK_ENABLE_* find_package groups in {project_cmake}"
             )
         flags = enable_flags(installed_cmake_packages(args.prefix, groups), groups)
+        cxx_compiler = host_cxx_compiler(args.prefix, args.cxx_compiler)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Installed cpp-sdk-user prefix: {args.prefix}", flush=True)
+    if cxx_compiler:
+        print(f"CMAKE_CXX_COMPILER={cxx_compiler}", flush=True)
     for flag in flags:
         if flag.value == "ON":
             print(f"{flag.name}=ON", flush=True)
@@ -461,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         prefix=args.prefix,
         generator=args.generator,
         flags=flags,
-        cxx_compiler=args.cxx_compiler,
+        cxx_compiler=cxx_compiler,
     )
     print("Running:", shlex.join(command), flush=True)
     completed = subprocess.run(command)
