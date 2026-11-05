@@ -2,17 +2,18 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Copy runner-local EngFlow client credentials into $RUNNER_TEMP.
+"""Copy the runner-local EngFlow cache token into $RUNNER_TEMP.
 
-XLA and JAX CI keep the mTLS files at `/data/ci-cert.crt` and
-`/data/ci-cert.key` on the runner, where every job can read them — including
-pull requests from forks. GitHub Actions secrets are not used: they are
-invisible to fork PRs and would be a third credential path next to the
-runner-local AWS files and OIDC roles the other caches already use.
+The token is an EngFlow-issued JWT kept on the runner, where every job can read
+it — including pull requests from forks. That is safe because the token's
+`cache-reader` role is enforced by EngFlow, not by the client. GitHub Actions
+secrets are not used: they are invisible to fork PRs and would be a third
+credential path next to the runner-local AWS files and OIDC roles the other
+caches already use.
 
 The copy lands under $RUNNER_TEMP rather than the workspace, which CI
-publishes as artifacts. Missing source files are not an error: the wheel
-build runs without a remote cache. Files that are present but empty are.
+publishes as artifacts. A missing token is not an error: the wheel build runs
+without a remote cache. A token file that is present but empty is.
 
 Used by `.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml`.
 """
@@ -29,8 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_actions_api import gha_set_output
 
 DEFAULT_SOURCE_DIR = Path("/data")
-CERT_NAME = "ci-cert.crt"
-KEY_NAME = "ci-cert.key"
+# Also the name configure_jax_bazel_cache.py reads inside the build container.
+TOKEN_NAME = "engflow-cache.jwt"
 DEST_DIRNAME = "bazel-cache-credentials"
 
 
@@ -48,40 +49,30 @@ def _restrict_private(path: Path, is_dir: bool) -> None:
 
 
 def materialize_credentials(source_dir: Path, dest_dir: Path) -> Path | None:
-    """Copy the runner's cert/key into dest_dir, or return None if they are absent."""
-    certificate = source_dir / CERT_NAME
-    key = source_dir / KEY_NAME
-    missing = [p for p in (certificate, key) if not p.is_file()]
-    if missing:
-        _log(
-            "No cache credentials at "
-            + ", ".join(str(p) for p in missing)
-            + "; building without a remote cache."
-        )
+    """Copy the runner's token into dest_dir, or return None if it is absent."""
+    token = source_dir / TOKEN_NAME
+    if not token.is_file():
+        _log(f"No cache token at {token}; building without a remote cache.")
         return None
-    empty = [p for p in (certificate, key) if p.stat().st_size == 0]
-    if empty:
-        raise ValueError(
-            f"Cache credentials are present but empty: {', '.join(map(str, empty))}"
-        )
+    if token.stat().st_size == 0:
+        raise ValueError(f"Cache token is present but empty: {token}")
 
     if dest_dir.exists():
         shutil.rmtree(dest_dir)
     dest_dir.mkdir(parents=True)
     _restrict_private(dest_dir, is_dir=True)
 
-    for src, name in ((certificate, CERT_NAME), (key, KEY_NAME)):
-        dest = dest_dir / name
-        shutil.copyfile(src, dest)
-        _restrict_private(dest, is_dir=False)
+    dest = dest_dir / TOKEN_NAME
+    shutil.copyfile(token, dest)
+    _restrict_private(dest, is_dir=False)
 
-    _log(f"Cache credentials copied to {dest_dir}")
+    _log(f"Cache token copied to {dest_dir}")
     return dest_dir
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Copy runner-local EngFlow credentials into $RUNNER_TEMP."
+        description="Copy the runner-local EngFlow cache token into $RUNNER_TEMP."
     )
     parser.add_argument(
         "--source-dir",
@@ -89,7 +80,7 @@ def main(argv: list[str] | None = None) -> None:
         default=Path(
             os.environ.get("JAX_BAZEL_CACHE_CREDENTIALS_DIR") or DEFAULT_SOURCE_DIR
         ),
-        help="Directory that already holds ci-cert.crt and ci-cert.key on the runner.",
+        help=f"Directory that already holds {TOKEN_NAME} on the runner.",
     )
     parser.add_argument(
         "--dest-dir",

@@ -248,9 +248,9 @@ jobs:
             --rocm-version "${ROCM_VERSION}" \
             --jax-source-dir jax-source
 
-      # Runner-local files at /data/ci-cert.{crt,key}, the same path XLA and
-      # JAX CI mount. GitHub secrets are not used, so fork pull requests can
-      # read the cache. Missing files leave the mount absent.
+      # A runner-local EngFlow cache-reader token, so fork pull requests can
+      # read the cache; EngFlow rejects its writes. GitHub secrets are not
+      # used. A missing token leaves the mount absent.
       - name: Locate Bazel remote cache credentials
         id: cache_credentials
         env:
@@ -268,8 +268,8 @@ jobs:
           JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
           CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
-          # rocm.bazelrc reads the client credentials from /data, copied
-          # from the runner's /data/ci-cert.* into $RUNNER_TEMP.
+          # configure_jax_bazel_cache.py reads the token from /data, a copy
+          # of the runner's file in $RUNNER_TEMP.
           credentials_mount=""
           if [[ -n "${CACHE_CREDENTIALS_DIR}" ]]; then
             credentials_mount="--volume ${CACHE_CREDENTIALS_DIR}:/data:ro"

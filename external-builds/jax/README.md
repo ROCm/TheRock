@@ -159,28 +159,31 @@ wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.
 Only the CI wheel build uses the cache. Release builds stay uncached until they
 have a cache of their own, the way nightly has its own ccache server.
 
-JAX points Bazel at EngFlow (`grpcs://wardite.cluster.engflow.com`) as a
+JAX points Bazel at EngFlow (`grpcs://actinolite.cluster.engflow.com`) as a
 **cache only**. The build keeps `--config=rocm_release_wheel` and never enables
 `rocm_rbe`, so it does not pick up `--remote_executor` and every action still
 runs on the runner.
 
-Credentials are the runner-local files at `/data/ci-cert.crt` and
-`/data/ci-cert.key` — the same path XLA and JAX CI already mount, not GitHub
-Actions secrets. Fork pull requests see those files, so they can **read** the
-cache. `write_jax_bazel_cache_credentials.py` copies them into `$RUNNER_TEMP`
-(the workspace is published as artifacts) and the wheel job mounts that copy
-read-only at `/data`. Set the repository variable
-`JAX_BAZEL_CACHE_CREDENTIALS_DIR` if the runner keeps the files somewhere else.
+The credential is an EngFlow-issued JWT with the `cache-reader` role, kept on
+the runner as `/data/engflow-cache.jwt`, not as a GitHub Actions secret. Fork
+pull requests see that file, so they can **read** the cache; EngFlow rejects
+writes made with it. `write_jax_bazel_cache_credentials.py` copies it into
+`$RUNNER_TEMP` (the workspace is published as artifacts) and the wheel job
+mounts that copy read-only at `/data`. Set the repository variable
+`JAX_BAZEL_CACHE_CREDENTIALS_DIR` if the runner keeps the token somewhere else.
 
 `configure_jax_bazel_cache.py` runs inside the build container and prints no
-Bazel options when the files are missing or the release type is not `ci`; the
-build command is then unchanged. Credentials that are present but empty or
-rejected, or a cache that does not answer, fail the job rather than build
-uncached.
+Bazel options when the token is missing or the release type is not `ci`; the
+build command is then unchanged. A token that is present but empty, malformed
+or expired, or a cache that does not answer, fails the job rather than build
+uncached. The token reaches Bazel through the same script acting as a
+credential helper scoped to the cache host, never on the command line, which
+`build.py --verbose` logs.
 
 Only pushes to `main` upload. Pull requests and manual dispatches pass
-`--remote_upload_local_results=false`. That gate runs on the client, so what a
-pull request could write is decided by the certificate's scope on EngFlow. Set
+`--remote_upload_local_results=false`. That gate runs on the client; what a
+run can write is decided by its token's role on EngFlow, so uploads from `main`
+need a `cache-writer` token that only `main` can fetch. Set
 `JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a different cache.
 
 EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with

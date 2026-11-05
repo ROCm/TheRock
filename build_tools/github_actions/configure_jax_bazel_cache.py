@@ -10,38 +10,46 @@ Bazel against an already-installed ROCm. Those compiles repeat across runs
 whenever the JAX ref and the ROCm build are unchanged, which is the common case
 for a pull request that only touches CI or test-selection files.
 
-The cache is the EngFlow cluster ROCm's JAX CI already uses, reached with the
-mTLS client credentials `rocm.bazelrc` expects at `/data`. Only the cache is
-used: the build runs `--config=rocm_release_wheel`, never `rocm_rbe`, so it
-never picks up that config's `--remote_executor` and every action still executes
-locally.
+The cache is the EngFlow cluster ROCm's JAX CI already uses, reached with an
+EngFlow-issued JWT. Its role is fixed when EngFlow issues it: a `cache-reader`
+token cannot write, whatever the client asks for. Only the cache is used: the
+build runs `--config=rocm_release_wheel`, never `rocm_rbe`, so it never picks up
+that config's `--remote_executor` and every action still executes locally.
 
 This runs *inside* the manylinux build container rather than on the runner. The
-container reaches the network through the Docker daemon and receives the
-credentials through a mount of the runner's `/data/ci-cert.*` files, so it is
-the only place that can tell whether Bazel will actually reach the cache. When
-those files are absent or the release type may not use the cache, this prints
-nothing and the build runs exactly as it would without a cache. Credentials
-that are present but rejected, or a cache that does not answer, raise instead.
+container reaches the network through the Docker daemon and receives the token
+through a read-only mount of a copy of the runner's file, so it is the only
+place that can tell whether Bazel will actually reach the cache. When the token
+is absent or the release type may not use the cache, this prints nothing and
+the build runs exactly as it would without a cache. A token that is present but
+malformed or expired, or a cache that does not answer, raises instead.
 
 Options are printed to stdout so the caller can expand them into the build
 command; all logging goes to stderr.
+
+Run as `configure_jax_bazel_cache.py get`, this is also the Bazel credential
+helper that hands the token to Bazel, so it never appears on a command line or
+in a bazelrc that `--announce_rc` would print.
 """
 
 import argparse
+import base64
+import binascii
+import json
 import os
 import socket
 import ssl
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-REMOTE_CACHE_URL = "grpcs://wardite.cluster.engflow.com"
+REMOTE_CACHE_URL = "grpcs://actinolite.cluster.engflow.com"
 
-# Paths `build/rocm/rocm.bazelrc` already expects, populated by mounting the
-# runner's `/data/ci-cert.*` files into the build container.
-CLIENT_CERTIFICATE = Path("/data/ci-cert.crt")
-CLIENT_KEY = Path("/data/ci-cert.key")
+# Where the wheel job mounts the copy of the runner's token inside the build
+# container.
+TOKEN_FILE = Path("/data/engflow-cache.jwt")
 
 # Release types that may use the cache. Only CI for now: release builds need a
 # cache of their own, as nightly has for ccache in setup_ccache.py.
@@ -89,18 +97,32 @@ def endpoint_address(url: str) -> tuple[str, int]:
     return split.hostname or "", split.port or DEFAULT_TLS_PORT
 
 
-def probe_cache(
-    url: str,
-    certificate: Path,
-    key: Path,
-    timeout: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
-):
-    """Raises CacheUnusableError unless the cache accepts the client credentials.
+def check_token(token_file: Path, now: float | None = None):
+    """Raises CacheUnusableError unless token_file holds an unexpired JWT.
 
-    Under TLS 1.3 the server checks the client certificate after the handshake
-    has completed on the client side, so a rejection only arrives on the first
-    read. Sending the preface gRPC opens with and reading the reply surfaces it
-    here rather than as a wall of Bazel cache warnings during the build.
+    EngFlow rejects a bad token per request, and Bazel then builds locally with
+    only warnings, so an expired token would otherwise pass as a slow uncached
+    build. Errors name the file, never its contents.
+    """
+    parts = token_file.read_text().strip().split(".")
+    try:
+        if len(parts) != 3:
+            raise ValueError(f"{len(parts)} segments")
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        expires = float(json.loads(base64.urlsafe_b64decode(payload))["exp"])
+    except (binascii.Error, KeyError, TypeError, ValueError) as e:
+        raise CacheUnusableError(f"{token_file} does not hold a JWT: {e}") from e
+    if expires <= (time.time() if now is None else now):
+        expired_at = datetime.fromtimestamp(expires, timezone.utc).isoformat()
+        raise CacheUnusableError(f"The token in {token_file} expired at {expired_at}")
+
+
+def probe_cache(url: str, timeout: float = DEFAULT_PROBE_TIMEOUT_SECONDS):
+    """Raises CacheUnusableError unless the cache answers a gRPC connection.
+
+    Sending the preface gRPC opens with and reading the reply surfaces an
+    unreachable cache here rather than as a wall of Bazel cache warnings during
+    the build.
     """
     host, port = endpoint_address(url)
     if not host:
@@ -109,32 +131,46 @@ def probe_cache(
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.set_alpn_protocols(["h2"])
     try:
-        context.load_cert_chain(certfile=certificate, keyfile=key)
         with socket.create_connection((host, port), timeout=timeout) as sock:
             with context.wrap_socket(sock, server_hostname=host) as tls:
                 tls.sendall(HTTP2_CLIENT_PREFACE)
                 if not tls.recv(1):
                     raise CacheUnusableError(f"{url} closed the connection")
     except OSError as e:
-        raise CacheUnusableError(
-            f"Cannot use the cache at {url} with {certificate}: {e}"
-        ) from e
+        raise CacheUnusableError(f"Cannot reach the cache at {url}: {e}") from e
 
 
-def bazel_cache_options(
-    url: str, certificate: Path, key: Path, allow_upload: bool
-) -> list[str]:
+def credential_helper_response(token: str) -> dict:
+    """The Bazel credential helper reply carrying an EngFlow-issued JWT."""
+    return {
+        "headers": {
+            "x-engflow-auth-method": ["jwt-v0"],
+            "x-engflow-auth-token": [token],
+        }
+    }
+
+
+def bazel_cache_options(url: str, helper: Path, allow_upload: bool) -> list[str]:
     """Returns the `--bazel_options=...` arguments for a usable cache."""
+    host, _ = endpoint_address(url)
     return [
         f"--bazel_options=--remote_cache={url}",
-        f"--bazel_options=--tls_client_certificate={certificate}",
-        f"--bazel_options=--tls_client_key={key}",
+        # Scoped to the cache host, so downloads from other hosts never see it.
+        f"--bazel_options=--credential_helper={host}={helper}",
         f"--bazel_options=--remote_timeout={DEFAULT_REMOTE_TIMEOUT_SECONDS}",
         f"--bazel_options=--remote_upload_local_results={str(allow_upload).lower()}",
     ]
 
 
 def main(argv: list[str] | None = None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["get"]:
+        # Bazel sends the request URI on stdin; the token is the same for all.
+        sys.stdin.read()
+        token = TOKEN_FILE.read_text().strip()
+        print(json.dumps(credential_helper_response(token)))
+        return
+
     parser = argparse.ArgumentParser(
         description="Print build/build.py options for the JAX Bazel remote cache."
     )
@@ -159,18 +195,6 @@ def main(argv: list[str] | None = None):
         help="Git ref the run is for, e.g. refs/heads/main.",
     )
     parser.add_argument(
-        "--client-certificate",
-        type=Path,
-        default=CLIENT_CERTIFICATE,
-        help="mTLS client certificate for the cache.",
-    )
-    parser.add_argument(
-        "--client-key",
-        type=Path,
-        default=CLIENT_KEY,
-        help="mTLS client key for the cache.",
-    )
-    parser.add_argument(
         "--probe-timeout",
         type=float,
         default=DEFAULT_PROBE_TIMEOUT_SECONDS,
@@ -183,26 +207,20 @@ def main(argv: list[str] | None = None):
         _log(f"No remote cache for release_type={args.release_type!r}")
         return
 
-    missing = [p for p in (args.client_certificate, args.client_key) if not p.exists()]
-    if missing:
-        # Runners without `/data/ci-cert.*` skip the cache. That is a normal
-        # outcome, not an error: the build simply compiles locally.
-        _log(f"No cache credentials at {', '.join(str(p) for p in missing)}")
+    if not TOKEN_FILE.exists():
+        # Runners without the token skip the cache. That is a normal outcome,
+        # not an error: the build simply compiles locally.
+        _log(f"No cache token at {TOKEN_FILE}")
         return
 
     allow_upload = upload_allowed(args.event_name, args.ref)
     _log(
         f"Cache mode: url={url} release_type={args.release_type} upload={allow_upload}"
     )
-    probe_cache(url, args.client_certificate, args.client_key, args.probe_timeout)
+    check_token(TOKEN_FILE)
+    probe_cache(url, args.probe_timeout)
 
-    print(
-        " ".join(
-            bazel_cache_options(
-                url, args.client_certificate, args.client_key, allow_upload
-            )
-        )
-    )
+    print(" ".join(bazel_cache_options(url, Path(__file__).resolve(), allow_upload)))
 
 
 if __name__ == "__main__":

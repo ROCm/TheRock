@@ -4,11 +4,13 @@
 
 """Unit tests for configure_jax_bazel_cache.py"""
 
+import base64
 import io
+import json
 import os
-import ssl
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path, PurePosixPath
 from unittest import mock
@@ -21,12 +23,25 @@ from configure_jax_bazel_cache import (
     REMOTE_CACHE_URL,
     CacheUnusableError,
     bazel_cache_options,
+    check_token,
+    credential_helper_response,
     endpoint_address,
     main,
     probe_cache,
     resolve_cache_url,
     upload_allowed,
 )
+
+
+def _segment(data: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
+
+
+def fake_jwt(expires: float) -> str:
+    """A JWT-shaped string built at test time; literal tokens trip scanners."""
+    return ".".join(
+        [_segment({"alg": "none"}), _segment({"exp": expires}), "test-signature"]
+    )
 
 
 class ResolveCacheUrlTest(unittest.TestCase):
@@ -78,8 +93,8 @@ class EndpointAddressTest(unittest.TestCase):
 
     def test_default_port_is_tls(self):
         self.assertEqual(
-            endpoint_address("grpcs://wardite.cluster.engflow.com"),
-            ("wardite.cluster.engflow.com", 443),
+            endpoint_address("grpcs://actinolite.cluster.engflow.com"),
+            ("actinolite.cluster.engflow.com", 443),
         )
 
     def test_explicit_port_is_honored(self):
@@ -88,8 +103,47 @@ class EndpointAddressTest(unittest.TestCase):
         )
 
 
+class CheckTokenTest(unittest.TestCase):
+    """Tests that only an unexpired JWT passes."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.token_file = Path(tmp.name) / "engflow-cache.jwt"
+
+    def _check(self, contents: str, now: float = 1000.0):
+        self.token_file.write_text(contents)
+        check_token(self.token_file, now=now)
+
+    def test_unexpired_token_passes(self):
+        self._check(fake_jwt(expires=2000.0) + "\n")
+
+    def test_expired_token_raises(self):
+        with self.assertRaisesRegex(CacheUnusableError, "expired"):
+            self._check(fake_jwt(expires=500.0))
+
+    def test_malformed_tokens_raise(self):
+        for contents in (
+            "",
+            "not-a-jwt",
+            "a.b",
+            "a.!!!.c",
+            f"a.{_segment({'no_exp': 1})}.c",
+            f"a.{base64.urlsafe_b64encode(b'[1]').decode()}.c",
+        ):
+            with self.subTest(contents=contents):
+                with self.assertRaises(CacheUnusableError):
+                    self._check(contents)
+
+    def test_errors_never_include_the_token(self):
+        token = fake_jwt(expires=500.0)
+        with self.assertRaises(CacheUnusableError) as raised:
+            self._check(token)
+        self.assertNotIn(token.split(".")[1], str(raised.exception))
+
+
 class ProbeCacheTest(unittest.TestCase):
-    """Tests that the probe raises for any cache it cannot use."""
+    """Tests that the probe raises for any cache it cannot reach."""
 
     def setUp(self):
         self.context = mock.MagicMock()
@@ -106,7 +160,7 @@ class ProbeCacheTest(unittest.TestCase):
             "create_connection",
             side_effect=connect_effect,
         ):
-            probe_cache(url, Path("cert.crt"), Path("cert.key"))
+            probe_cache(url)
 
     def test_usable_when_the_server_answers_the_preface(self):
         self._probe()
@@ -121,18 +175,6 @@ class ProbeCacheTest(unittest.TestCase):
         with self.assertRaises(CacheUnusableError):
             self._probe(connect_effect=TimeoutError())
 
-    def test_raises_when_the_credentials_cannot_be_loaded(self):
-        self.context.load_cert_chain.side_effect = ssl.SSLError("bad key")
-        with self.assertRaises(CacheUnusableError):
-            self._probe()
-
-    def test_raises_when_tls13_rejects_the_certificate_after_the_handshake(self):
-        # Under TLS 1.3 the handshake completes before the server checks the
-        # client certificate, so the rejection only shows on the first read.
-        self.tls.recv.side_effect = ssl.SSLError("TLSV1_ALERT_UNKNOWN_CA")
-        with self.assertRaises(CacheUnusableError):
-            self._probe()
-
     def test_raises_when_the_server_closes_the_connection(self):
         self.tls.recv.return_value = b""
         with self.assertRaises(CacheUnusableError):
@@ -143,26 +185,43 @@ class ProbeCacheTest(unittest.TestCase):
             self._probe(url="not-a-url")
 
 
+class CredentialHelperResponseTest(unittest.TestCase):
+    """Tests the headers handed to Bazel."""
+
+    def test_sends_the_token_as_an_engflow_jwt(self):
+        self.assertEqual(
+            credential_helper_response("test-token"),
+            {
+                "headers": {
+                    "x-engflow-auth-method": ["jwt-v0"],
+                    "x-engflow-auth-token": ["test-token"],
+                }
+            },
+        )
+
+
 class BazelCacheOptionsTest(unittest.TestCase):
     """Tests the emitted build/build.py options."""
 
-    def _options(self, allow_upload):
-        # Paths inside the build container, so they stay POSIX even when the
-        # test itself runs on Windows.
-        return bazel_cache_options(
-            REMOTE_CACHE_URL,
-            PurePosixPath("/data/ci-cert.crt"),
-            PurePosixPath("/data/ci-cert.key"),
-            allow_upload,
+    # A path inside the build container, so it stays POSIX even when the test
+    # itself runs on Windows.
+    HELPER = PurePosixPath("/workspace/configure_jax_bazel_cache.py")
+
+    def _options(self, allow_upload, url=REMOTE_CACHE_URL):
+        return bazel_cache_options(url, self.HELPER, allow_upload)
+
+    def test_points_bazel_at_the_cache(self):
+        self.assertIn(
+            f"--bazel_options=--remote_cache={REMOTE_CACHE_URL}",
+            self._options(allow_upload=False),
         )
 
-    def test_points_bazel_at_the_cache_with_credentials(self):
-        options = self._options(allow_upload=False)
-        self.assertIn(f"--bazel_options=--remote_cache={REMOTE_CACHE_URL}", options)
+    def test_credential_helper_is_scoped_to_the_cache_host(self):
+        # An unscoped helper would send the token to every host Bazel fetches.
         self.assertIn(
-            "--bazel_options=--tls_client_certificate=/data/ci-cert.crt", options
+            f"--bazel_options=--credential_helper=cache.example={self.HELPER}",
+            self._options(allow_upload=False, url="grpcs://cache.example:8980"),
         )
-        self.assertIn("--bazel_options=--tls_client_key=/data/ci-cert.key", options)
 
     def test_never_requests_remote_execution(self):
         # The build uses --config=rocm_release_wheel, so it must stay
@@ -188,33 +247,24 @@ class MainTest(unittest.TestCase):
     """Tests that stdout carries options only when the cache is usable."""
 
     def setUp(self):
-        credentials = tempfile.TemporaryDirectory()
-        self.addCleanup(credentials.cleanup)
-        self.certificate = Path(credentials.name) / "ci-cert.crt"
-        self.key = Path(credentials.name) / "ci-cert.key"
-        # Only existence matters here; the handshake that would read these is
-        # mocked out, and real PEM headers trip secret scanning.
-        self.certificate.write_text("test certificate")
-        self.key.write_text("test key")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        # Never the real default path: a machine that happens to hold a token
+        # there would make the missing-token case pass for the wrong reason.
+        self.token_file = Path(tmp.name) / "engflow-cache.jwt"
+        self.token = fake_jwt(expires=time.time() + 3600)
+        self.token_file.write_text(self.token + "\n")
+        patcher = mock.patch.object(
+            configure_jax_bazel_cache, "TOKEN_FILE", self.token_file
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def _main(self, argv, reachable=True, with_credentials=True):
-        # Always pass explicit paths: a developer machine may happen to have
-        # credentials at the default location, which would make the
-        # missing-credentials case pass for the wrong reason.
-        certificate, key = self.certificate, self.key
-        if not with_credentials:
-            certificate = self.certificate.with_name("absent.crt")
-            key = self.key.with_name("absent.key")
-        argv = argv + [
-            "--client-certificate",
-            str(certificate),
-            "--client-key",
-            str(key),
-        ]
+    def _main(self, argv, reachable=True, stdin=""):
         probe = mock.patch.object(
             configure_jax_bazel_cache,
             "probe_cache",
-            side_effect=None if reachable else CacheUnusableError("rejected"),
+            side_effect=None if reachable else CacheUnusableError("unreachable"),
         )
         # The defaults read the runner's own environment; keep it out so a test
         # run on a push to main cannot flip the upload decision.
@@ -227,7 +277,9 @@ class MainTest(unittest.TestCase):
         stdout = io.StringIO()
         with probe, mock.patch.dict(
             os.environ, github_env, clear=True
-        ), mock.patch.object(sys, "stdout", stdout):
+        ), mock.patch.object(sys, "stdout", stdout), mock.patch.object(
+            sys, "stdin", io.StringIO(stdin)
+        ):
             main(argv)
         return stdout.getvalue().strip()
 
@@ -238,12 +290,20 @@ class MainTest(unittest.TestCase):
         self.assertIn(f"--bazel_options=--remote_cache={REMOTE_CACHE_URL}", output)
         self.assertIn("--bazel_options=--remote_upload_local_results=true", output)
 
-    def test_prints_nothing_without_credentials(self):
-        # Runners without `/data/ci-cert.*` leave the mount absent, so the
-        # build command must come out unchanged.
-        self.assertEqual(
-            self._main(["--release-type", "ci"], with_credentials=False), ""
-        )
+    def test_options_never_carry_the_token(self):
+        # build.py --verbose logs the full command line.
+        self.assertNotIn(self.token, self._main(["--release-type", "ci"]))
+
+    def test_prints_nothing_without_a_token(self):
+        # Runners without the token leave the mount absent, so the build
+        # command must come out unchanged.
+        self.token_file.unlink()
+        self.assertEqual(self._main(["--release-type", "ci"]), "")
+
+    def test_fails_when_the_token_has_expired(self):
+        self.token_file.write_text(fake_jwt(expires=time.time() - 60))
+        with self.assertRaisesRegex(CacheUnusableError, "expired"):
+            self._main(["--release-type", "ci"])
 
     def test_fails_when_the_cache_is_unusable(self):
         with self.assertRaises(CacheUnusableError):
@@ -263,6 +323,12 @@ class MainTest(unittest.TestCase):
     def test_upload_defaults_to_read_only(self):
         output = self._main(["--release-type", "ci"])
         self.assertIn("--bazel_options=--remote_upload_local_results=false", output)
+
+    def test_get_answers_the_credential_helper_protocol(self):
+        output = self._main(
+            ["get"], stdin='{"uri": "https://actinolite.cluster.engflow.com/x"}'
+        )
+        self.assertEqual(json.loads(output), credential_helper_response(self.token))
 
 
 if __name__ == "__main__":
