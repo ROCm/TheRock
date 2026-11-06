@@ -181,9 +181,10 @@ class InputParsingTest(unittest.TestCase):
     def test_commit_list_accepts_space_comma_and_newline_separators(self) -> None:
         commits = parse_commit_list("abcdef0, 12345678\nABCDEF012345")
         self.assertEqual(commits, ["abcdef0", "12345678", "ABCDEF012345"])
+        self.assertEqual(parse_commit_list("a" * 64), ["a" * 64])
 
     def test_commit_list_rejects_empty_non_hex_and_short_values(self) -> None:
-        for value in ("", "   ,\n", "abcdef", "abcdefg", "abc123!", "a" * 41):
+        for value in ("", "   ,\n", "abcdef", "abcdefg", "abc123!"):
             with self.subTest(value=value), self.assertRaises(CherryPickError):
                 parse_commit_list(value)
 
@@ -784,14 +785,12 @@ class CherryPickIntegrationTest(unittest.TestCase):
         self.assertIn(RUN_URL, request.body["body"])
         self.assertIn(result.pr_url, self.summaries[0])
 
-    def test_multiple_commits_follow_input_order_and_dedupe_mixed_shas(self) -> None:
+    def test_multiple_commits_follow_input_order(self) -> None:
         second = self.target.commit(
             "feature-two.txt", "second fix\n", "Second release fix\n"
         )
         self.target.push_all()
-        result = self.execute(
-            f"{second[:8]}, {second} {self.target.first}", dry_run=False
-        )
+        result = self.execute(f"{second[:8]}, {self.target.first}", dry_run=False)
         self.assertEqual(
             [item.source.sha for item in result.built_commits],
             [second, self.target.first],
@@ -805,6 +804,13 @@ class CherryPickIntegrationTest(unittest.TestCase):
         newest, older, _ = messages.split("\0")
         self.assertIn(f"Cherry-picks commit {self.target.first}", newest)
         self.assertIn(f"Cherry-picks commit {second}", older)
+
+    def test_repeated_commit_fails_as_an_empty_pick(self) -> None:
+        with self.assertRaisesRegex(CherryPickError, "is empty"):
+            self.execute(f"{self.target.first[:8]} {self.target.first}")
+        self.assertIsNone(
+            self.target.remote_ref("shared/cherry-pick/therock-10.2-airdel-1234")
+        )
 
     def test_original_hash_lines_and_trailing_blank_lines_are_preserved(self) -> None:
         original_message = "Exact subject\n\n# Keep this line\n\n\n"
@@ -847,7 +853,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
             "feature-one.txt", "release version\n", "Divergent release change\n"
         )
         self.target.push_all()
-        with self.assertRaisesRegex(CherryPickError, "conflicts"):
+        with self.assertRaisesRegex(CherryPickError, "did not apply cleanly"):
             self.execute(dry_run=False)
         self.assertIsNone(
             self.target.remote_ref("shared/cherry-pick/therock-10.2-airdel-1234")
@@ -912,16 +918,16 @@ class CherryPickIntegrationTest(unittest.TestCase):
         )
         self.assertNotEqual(ordinary_pick.returncode, 0)
 
-        with self.assertRaisesRegex(CherryPickError, "conflicts"):
+        with self.assertRaisesRegex(CherryPickError, "did not apply cleanly"):
             self.execute(source_commit, dry_run=False)
         self.assertIsNone(
             self.target.remote_ref("shared/cherry-pick/therock-10.2-airdel-1234")
         )
         self.assertEqual(self.api.pull_requests, [])
         self.assertIn("binary-like.txt", self.summaries[0])
-        self.assertNotIn("warning:", self.summaries[0])
-        self.assertNotIn("CONFLICT", self.summaries[0])
-        self.assertNotIn("Auto-merging", self.summaries[0])
+        self.assertIn("warning:", self.summaries[0])
+        self.assertIn("CONFLICT", self.summaries[0])
+        self.assertIn("```", self.summaries[0])
 
     def test_later_pick_uses_attributes_added_by_earlier_pick(self) -> None:
         self.target.switch("release/therock-10.2")
@@ -954,7 +960,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
         )
         self.assertNotEqual(ordinary_pick.returncode, 0)
 
-        with self.assertRaisesRegex(CherryPickError, "conflicts"):
+        with self.assertRaisesRegex(CherryPickError, "did not apply cleanly"):
             self.execute(
                 f"{attribute_commit} {content_commit}",
                 dry_run=False,
@@ -1113,7 +1119,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(CherryPickError, "has 0 parents"):
             self.execute(self.target.base)
 
-    def test_commit_already_on_release_branch_is_rejected(self) -> None:
+    def test_commit_already_present_on_release_branch_is_empty(self) -> None:
         _git(
             "branch",
             "-f",
@@ -1122,10 +1128,10 @@ class CherryPickIntegrationTest(unittest.TestCase):
             cwd=self.target.source,
         )
         self.target.push_all()
-        with self.assertRaisesRegex(CherryPickError, "already an ancestor"):
+        with self.assertRaisesRegex(CherryPickError, "is empty"):
             self.execute()
 
-    def test_prior_automation_cherry_pick_is_rejected(self) -> None:
+    def test_prior_automation_message_does_not_block_pick(self) -> None:
         self.target.switch("release/therock-10.2")
         _git(
             "commit",
@@ -1135,8 +1141,23 @@ class CherryPickIntegrationTest(unittest.TestCase):
             cwd=self.target.source,
         )
         self.target.push_all()
-        with self.assertRaisesRegex(CherryPickError, "already cherry-picked"):
-            self.execute()
+        result = self.execute()
+        self.assertEqual(result.built_commits[0].source.sha, self.target.first)
+
+    def test_reverted_ancestor_can_be_reapplied(self) -> None:
+        _git(
+            "branch",
+            "-f",
+            "release/therock-10.2",
+            self.target.first,
+            cwd=self.target.source,
+        )
+        self.target.switch("release/therock-10.2")
+        _git("revert", "--no-edit", self.target.first, cwd=self.target.source)
+        self.target.push_all()
+
+        result = self.execute()
+        self.assertEqual(result.built_commits[0].source.sha, self.target.first)
 
     def test_pr_failure_leaves_pushed_branch_and_reports_it(self) -> None:
         failing_api = FakeGitHubAPI(pr_error=GitHubAPIError("API unavailable"))

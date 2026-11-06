@@ -22,18 +22,15 @@ from git_cherry_pick import (
     branch_exists,
     BuiltCommit,
     build_cherry_pick_commits,
-    check_git_version,
     CherryPickConflictError,
     CherryPickError,
     clone_repository,
     CommitIdentity,
     CommitInfo,
+    inspect_commits,
     PreparedCommit,
     push_branch,
-    require_remote_branch,
     resolve_commits,
-    validate_branch_name,
-    validate_commits,
 )
 from github_actions_api import (
     gha_append_step_summary,
@@ -45,16 +42,13 @@ from github_actions_api import (
 TARGET_OWNER = "ROCm"
 HOST_REPOSITORY = "ROCm/TheRock"
 MINIMUM_SHORT_SHA_LENGTH = 7
-FULL_SHA_LENGTH = 40
 SUPPORTED_REPOSITORIES = {
     "TheRock": "systems-assistant",
     "rocm-systems": "systems-assistant",
     "rocm-libraries": "assistant-librarian",
 }
 
-COMMIT_RE = re.compile(
-    rf"^[0-9a-fA-F]{{{MINIMUM_SHORT_SHA_LENGTH},{FULL_SHA_LENGTH}}}$"
-)
+COMMIT_RE = re.compile(rf"^[0-9a-fA-F]{{{MINIMUM_SHORT_SHA_LENGTH},}}$")
 JIRA_RE = re.compile(r"^[A-Z][A-Z0-9_]*-[1-9][0-9]*$")
 REGULAR_RELEASE_RE = re.compile(r"^release/therock-([0-9]+\.[0-9]+)$")
 BKC_RELEASE_RE = re.compile(r"^release/bkc/therock-([0-9]+\.[0-9]+)-([0-9]{8})$")
@@ -121,14 +115,14 @@ def parse_jira_id(value: str) -> str | None:
 
 
 def parse_commit_list(value: str) -> list[str]:
-    """Parse comma or whitespace separated abbreviated or full commit SHAs."""
+    """Parse comma or whitespace separated hexadecimal commit IDs."""
     commits = [item for item in re.split(r"[,\s]+", value.strip()) if item]
     if not commits:
         raise CherryPickError("At least one commit SHA is required")
     for commit in commits:
         if not COMMIT_RE.fullmatch(commit):
             raise CherryPickError(
-                f"Invalid commit {commit!r}; expected 7 to 40 hexadecimal characters"
+                f"Invalid commit {commit!r}; expected at least 7 hexadecimal characters"
             )
     return commits
 
@@ -272,7 +266,6 @@ def target_metadata(api: GitHubClient, repository: str) -> str:
         raise CherryPickError(
             f"Metadata for {TARGET_OWNER}/{repository} has no valid default_branch"
         )
-    validate_branch_name(default_branch, "default")
     return default_branch
 
 
@@ -378,9 +371,6 @@ def _validate_workflow_provenance(
 def _conflict_summary(
     repository: str, release_branch: str, error: CherryPickConflictError
 ) -> str:
-    paths = "\n".join(f"- `{path}`" for path in error.paths)
-    if not paths:
-        paths = "- No conflict paths were reported by Git"
     return "\n".join(
         [
             "# Cherry-pick conflict",
@@ -390,8 +380,11 @@ def _conflict_summary(
             "",
             f"Commit `{error.commit}` did not apply cleanly.",
             "",
-            "Conflicting paths:",
-            paths,
+            "Git diagnostics:",
+            "",
+            "```",
+            error.diagnostics.rstrip(),
+            "```",
             "",
             "Nothing was pushed and no pull request was created.",
         ]
@@ -462,14 +455,12 @@ def execute_cherry_pick(
     _validate_workflow_provenance(
         workflow_run_url, workflow_actor, required=not dry_run
     )
-    check_git_version()
 
     default_branch = target_metadata(api, repository)
     with tempfile.TemporaryDirectory(prefix="therock-cherry-pick-") as temp_dir:
         target_path = Path(temp_dir) / repository
         public_url = clone_url or f"https://github.com/{TARGET_OWNER}/{repository}.git"
         clone_repository(public_url, target_path)
-        require_remote_branch(target_path, release.branch, "release")
         resolved_commits = resolve_commits(target_path, commit_specs)
         pr_branch = derive_pr_branch(
             release=release, jira_id=jira_id, first_commit_sha=resolved_commits[0]
@@ -480,13 +471,10 @@ def execute_cherry_pick(
                 f"{TARGET_OWNER}/{repository}"
             )
 
-        commits = validate_commits(
+        commits = inspect_commits(
             repo=target_path,
             resolved_commits=resolved_commits,
             default_branch=default_branch,
-            target_branch=release.branch,
-            target_description="release",
-            previous_pick_message_prefix=CHERRY_PICK_MESSAGE_PREFIX,
         )
         committer = bot_identity(api, app_slug)
         prepared_commits = [

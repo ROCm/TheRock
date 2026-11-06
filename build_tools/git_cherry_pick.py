@@ -25,12 +25,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import os
 from pathlib import Path
-import re
+import shlex
 import subprocess
-
-
-MINIMUM_GIT_VERSION = (2, 41)
-FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+import sys
 
 
 class CherryPickError(RuntimeError):
@@ -40,11 +37,10 @@ class CherryPickError(RuntimeError):
 class CherryPickConflictError(CherryPickError):
     """A cherry-pick that could not be merged cleanly."""
 
-    def __init__(self, commit: str, paths: list[str]) -> None:
+    def __init__(self, commit: str, diagnostics: str) -> None:
         self.commit = commit
-        self.paths = paths
-        details = ", ".join(paths) if paths else "unknown paths"
-        super().__init__(f"Commit {commit} conflicts in: {details}")
+        self.diagnostics = diagnostics
+        super().__init__(f"Commit {commit} did not apply cleanly")
 
 
 @dataclass(frozen=True)
@@ -99,44 +95,27 @@ def _run_git(
     env = os.environ.copy()
     if extra_env is not None:
         env.update(extra_env)
+    print(f"+ {shlex.join(command)}", file=sys.stderr, flush=True)
     try:
         result = subprocess.run(
             command,
             input=input_text,
-            capture_output=True,
+            stdout=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             env=env,
         )
     except OSError as exc:
-        operation = args[0] if args else "command"
-        raise CherryPickError(f"Could not execute git {operation}: {exc}") from exc
+        raise CherryPickError(
+            f"Could not execute {shlex.join(command)}: {exc}"
+        ) from exc
     if check and result.returncode != 0:
-        operation = args[0] if args else "command"
-        detail = result.stderr.strip() or result.stdout.strip() or "no details"
-        raise CherryPickError(f"git {operation} failed: {detail}")
+        if result.stdout:
+            print(result.stdout, file=sys.stderr, end="", flush=True)
+        raise CherryPickError(
+            f"{shlex.join(command)} failed with status {result.returncode}"
+        )
     return result
-
-
-def check_git_version() -> tuple[int, int]:
-    """Require Git support for `merge-tree` and `GIT_ATTR_SOURCE`."""
-    result = _run_git(None, ["--version"])
-    match = re.search(r"git version ([0-9]+)\.([0-9]+)", result.stdout)
-    if match is None:
-        raise CherryPickError(f"Could not parse Git version from {result.stdout!r}")
-    version = (int(match.group(1)), int(match.group(2)))
-    if version < MINIMUM_GIT_VERSION:
-        required = ".".join(str(part) for part in MINIMUM_GIT_VERSION)
-        actual = ".".join(str(part) for part in version)
-        raise CherryPickError(f"Git {required} or newer is required; found {actual}")
-    return version
-
-
-def validate_branch_name(branch: str, description: str) -> None:
-    """Reject a branch name that Git cannot represent."""
-    result = _run_git(None, ["check-ref-format", "--branch", branch], check=False)
-    if result.returncode != 0:
-        raise CherryPickError(f"Invalid {description} branch name {branch!r}")
 
 
 def clone_repository(clone_url: str, target_path: Path) -> None:
@@ -151,39 +130,15 @@ def clone_repository(clone_url: str, target_path: Path) -> None:
             os.fspath(target_path),
         ],
     )
-    if not (target_path / ".git").is_dir():
-        raise CherryPickError(f"Target clone was not created at {target_path}")
 
 
 def _remote_ref(branch: str) -> str:
     return f"refs/remotes/origin/{branch}"
 
 
-def require_remote_branch(repo: Path, branch: str, description: str) -> str:
-    """Require a remote branch and return its remote-tracking ref."""
-    ref = _remote_ref(branch)
-    result = _run_git(
-        repo,
-        ["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        check=False,
-    )
-    if result.returncode != 0:
-        raise CherryPickError(
-            f"The {description} branch {branch!r} does not exist in the fresh "
-            "target clone"
-        )
-    sha = result.stdout.strip()
-    if not FULL_SHA_RE.fullmatch(sha):
-        raise CherryPickError(
-            f"The {description} branch {branch!r} resolved to {sha!r}"
-        )
-    return ref
-
-
 def resolve_commits(repo: Path, commit_specs: Sequence[str]) -> list[str]:
-    """Resolve input SHAs uniquely and deduplicate them in first-seen order."""
+    """Resolve input SHAs in order, preserving repeated commits."""
     resolved: list[str] = []
-    seen: set[str] = set()
     for spec in commit_specs:
         result = _run_git(
             repo,
@@ -191,13 +146,11 @@ def resolve_commits(repo: Path, commit_specs: Sequence[str]) -> list[str]:
             check=False,
         )
         sha = result.stdout.strip()
-        if result.returncode != 0 or not FULL_SHA_RE.fullmatch(sha):
+        if result.returncode != 0:
             raise CherryPickError(
                 f"Commit {spec!r} does not resolve to exactly one target commit"
             )
-        if sha not in seen:
-            resolved.append(sha)
-            seen.add(sha)
+        resolved.append(sha)
     return resolved
 
 
@@ -217,10 +170,7 @@ def branch_exists(repo: Path, branch: str) -> bool:
 
 def _commit_message(repo: Path, sha: str) -> str:
     result = _run_git(repo, ["cat-file", "commit", sha])
-    _, separator, message = result.stdout.partition("\n\n")
-    if not separator:
-        raise CherryPickError(f"Commit {sha} has no parseable commit message")
-    return message
+    return result.stdout.partition("\n\n")[2]
 
 
 def _commit_metadata(repo: Path, sha: str, parent: str) -> CommitInfo:
@@ -228,10 +178,9 @@ def _commit_metadata(repo: Path, sha: str, parent: str) -> CommitInfo:
         repo,
         ["log", "-1", "--format=%an%x00%ae%x00%aI%x00%s", sha],
     )
-    metadata = result.stdout.removesuffix("\n").split("\0")
-    if len(metadata) != 4 or not all(metadata[:3]):
-        raise CherryPickError(f"Commit {sha} has incomplete author metadata")
-    author_name, author_email, author_date, subject = metadata
+    author_name, author_email, author_date, subject = result.stdout.removesuffix(
+        "\n"
+    ).split("\0", maxsplit=3)
     return CommitInfo(
         sha=sha,
         parent=parent,
@@ -243,17 +192,13 @@ def _commit_metadata(repo: Path, sha: str, parent: str) -> CommitInfo:
     )
 
 
-def validate_commits(
+def inspect_commits(
     repo: Path,
     resolved_commits: Sequence[str],
     default_branch: str,
-    target_branch: str,
-    target_description: str,
-    previous_pick_message_prefix: str,
 ) -> list[CommitInfo]:
-    """Validate all commits before constructing any cherry-pick commit."""
-    default_ref = require_remote_branch(repo, default_branch, "default")
-    target_ref = require_remote_branch(repo, target_branch, target_description)
+    """Inspect source commits and enforce source-selection policy."""
+    default_ref = _remote_ref(default_branch)
     commits: list[CommitInfo] = []
 
     for sha in resolved_commits:
@@ -281,54 +226,9 @@ def validate_commits(
                 f"Commit {sha} has {parent_count} parents; exactly one is required"
             )
         parent = commit_and_parents[1]
-
-        ancestry = _run_git(
-            repo,
-            ["merge-base", "--is-ancestor", sha, target_ref],
-            check=False,
-        )
-        if ancestry.returncode == 0:
-            raise CherryPickError(
-                f"Commit {sha} is already an ancestor of {target_description} branch "
-                f"{target_branch}"
-            )
-        if ancestry.returncode != 1:
-            raise CherryPickError(
-                f"Could not inspect {target_description} ancestry for commit {sha}"
-            )
-
-        previous_pick = _run_git(
-            repo,
-            [
-                "log",
-                "--format=%H",
-                "--fixed-strings",
-                f"--grep={previous_pick_message_prefix} {sha}",
-                "-n",
-                "1",
-                target_ref,
-            ],
-        )
-        if previous_pick.stdout.strip():
-            raise CherryPickError(
-                f"Commit {sha} was already cherry-picked onto {target_branch}"
-            )
-
         commits.append(_commit_metadata(repo, sha, parent))
 
     return commits
-
-
-def _conflict_paths(merge_output: str) -> list[str]:
-    paths: list[str] = []
-    # With --name-only, the tree hash and conflict paths precede a blank line.
-    # Everything after that separator is diagnostic text, not a path.
-    for line in merge_output.splitlines()[1:]:
-        if not line:
-            break
-        if line not in paths:
-            paths.append(line)
-    return paths
 
 
 def build_cherry_pick_commits(
@@ -350,6 +250,7 @@ def build_cherry_pick_commits(
         merge = _run_git(
             repo,
             [
+                f"--attr-source={head}",
                 "merge-tree",
                 "--write-tree",
                 "--name-only",
@@ -358,22 +259,15 @@ def build_cherry_pick_commits(
                 source.sha,
             ],
             check=False,
-            extra_env={"GIT_ATTR_SOURCE": head},
         )
         if merge.returncode == 1:
-            raise CherryPickConflictError(source.sha, _conflict_paths(merge.stdout))
+            raise CherryPickConflictError(source.sha, merge.stdout)
         if merge.returncode != 0:
-            details = merge.stderr.strip() or "no details"
             raise CherryPickError(
-                f"git merge-tree failed for commit {source.sha}: {details}"
+                f"git merge-tree failed for commit {source.sha} with status "
+                f"{merge.returncode}"
             )
-        lines = merge.stdout.splitlines()
-        tree = lines[0].strip() if lines else ""
-        if not FULL_SHA_RE.fullmatch(tree):
-            raise CherryPickError(
-                f"git merge-tree returned invalid tree {tree!r} for commit "
-                f"{source.sha}"
-            )
+        tree = merge.stdout.splitlines()[0].strip()
 
         head_tree = _run_git(
             repo, ["rev-parse", "--verify", f"{head}^{{tree}}"]
@@ -406,10 +300,6 @@ def build_cherry_pick_commits(
             },
         )
         head = commit_result.stdout.strip()
-        if not FULL_SHA_RE.fullmatch(head):
-            raise CherryPickError(
-                f"git commit-tree returned invalid commit {head!r} for {source.sha}"
-            )
         built.append(BuiltCommit(source=source, sha=head))
 
     return built
@@ -437,6 +327,7 @@ def push_branch(
         remote_url,
         refspec,
     ]
+    print(f"+ {shlex.join(command)}", file=sys.stderr, flush=True)
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     encoded_credentials: str | None = None
@@ -462,14 +353,16 @@ def push_branch(
         raise CherryPickError(
             f"Could not execute git push for {remote_description} branch {branch!r}"
         ) from exc
+    detail = result.stderr or ""
+    for secret in (token, encoded_credentials):
+        if secret is not None:
+            detail = detail.replace(secret, "***")
+    if detail:
+        print(detail, file=sys.stderr, end="", flush=True)
     if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "no details"
-        for secret in (token, encoded_credentials):
-            if secret is not None:
-                detail = detail.replace(secret, "***")
         raise CherryPickError(
             f"Failed to push {remote_description} branch {branch!r} "
-            f"(git exited with status {result.returncode}): {detail}"
+            f"(git exited with status {result.returncode})"
         )
 
     # An existing branch at the same commit yields a successful "up to date"

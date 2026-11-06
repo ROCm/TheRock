@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 import base64
+from contextlib import redirect_stderr
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -13,8 +15,6 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
 
 from git_cherry_pick import (
-    _conflict_paths,
-    check_git_version,
     CherryPickError,
     push_branch,
     resolve_commits,
@@ -36,40 +36,18 @@ class GitPrimitiveValidationTest(unittest.TestCase):
             with self.assertRaisesRegex(CherryPickError, "exactly one target commit"):
                 resolve_commits(Path("/unused"), ["abcdef0"])
 
-    def test_git_older_than_attribute_source_requirement_is_rejected(self) -> None:
-        old_version = subprocess.CompletedProcess(
-            args=["git", "--version"],
+    def test_commit_resolution_preserves_repeated_commits(self) -> None:
+        resolved = subprocess.CompletedProcess(
+            args=["git", "rev-parse"],
             returncode=0,
-            stdout="git version 2.40.9\n",
+            stdout=f"{'a' * 40}\n",
             stderr="",
         )
-        with patch("git_cherry_pick._run_git", return_value=old_version):
-            with self.assertRaisesRegex(CherryPickError, "Git 2.41 or newer"):
-                check_git_version()
-
-    def test_git_with_attribute_source_support_is_accepted(self) -> None:
-        supported_version = subprocess.CompletedProcess(
-            args=["git", "--version"],
-            returncode=0,
-            stdout="git version 2.41.0\n",
-            stderr="",
-        )
-        with patch("git_cherry_pick._run_git", return_value=supported_version):
-            self.assertEqual(check_git_version(), (2, 41))
-
-
-class ConflictOutputTest(unittest.TestCase):
-    def test_only_path_section_is_reported_and_path_whitespace_is_preserved(
-        self,
-    ) -> None:
-        paths = [" binary-like.txt ", "nested/module", "warning: real filename"]
-        diagnostics = (
-            "warning: Cannot merge binary files: binary-like.txt",
-            "CONFLICT (binary): Merge conflict in binary-like.txt",
-            "CONFLICT (submodule): Merge conflict in nested/module",
-        )
-        output = "\n".join(["a" * 40, *paths, "", *diagnostics]) + "\n"
-        self.assertEqual(_conflict_paths(output), paths)
+        with patch("git_cherry_pick._run_git", return_value=resolved):
+            self.assertEqual(
+                resolve_commits(Path("/unused"), ["aaaaaaa", "aaaaaaaa"]),
+                ["a" * 40, "a" * 40],
+            )
 
 
 class PushSanitizationTest(unittest.TestCase):
@@ -89,7 +67,7 @@ class PushSanitizationTest(unittest.TestCase):
                 args=["git", "push"],
                 returncode=0,
                 stdout=f"To {remote_url}\n{status_output}Done\n",
-                stderr="unused diagnostic",
+                stderr="",
             )
             with self.subTest(status_output=status_output):
                 with patch(
@@ -129,7 +107,8 @@ class PushSanitizationTest(unittest.TestCase):
             },
             clear=True,
         ), patch("git_cherry_pick.subprocess.run", return_value=result) as run:
-            with self.assertRaises(CherryPickError) as raised:
+            stderr = io.StringIO()
+            with redirect_stderr(stderr), self.assertRaises(CherryPickError) as raised:
                 push_branch(
                     repo=Path("/temporary/repo"),
                     remote_url=remote_url,
@@ -153,9 +132,10 @@ class PushSanitizationTest(unittest.TestCase):
             environment["GIT_CONFIG_VALUE_1"],
             f"AUTHORIZATION: basic {encoded_credentials}",
         )
-        self.assertIn("GH013: repository rule violations", str(raised.exception))
+        self.assertIn("GH013: repository rule violations", stderr.getvalue())
+        self.assertNotIn(TOKEN, stderr.getvalue())
+        self.assertNotIn(encoded_credentials, stderr.getvalue())
         self.assertNotIn(TOKEN, str(raised.exception))
-        self.assertNotIn(encoded_credentials, str(raised.exception))
 
 
 if __name__ == "__main__":
