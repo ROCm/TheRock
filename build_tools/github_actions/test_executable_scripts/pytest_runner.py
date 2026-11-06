@@ -31,7 +31,10 @@ TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
     run one specific category regardless of the CI tier (e.g. hw-common). If
     the installed component does not define that category yet, the run is
     skipped with a warning instead of failing.
-AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
+AMDGPU_FAMILIES: GPU family (e.g. "gfx94X-dcgpu"). Its gfx token is the
+    skip-marker arch, and substitutes {AMDGPU_TARGETS} if AMDGPU_TARGETS is unset.
+AMDGPU_TARGETS: Optional comma-separated targets (e.g. "gfx942"). The first
+    substitutes {AMDGPU_TARGETS}; a lone entry replaces the family's skip arch.
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
 JUNIT_XML_DIR: Optional. When set, pytest writes a JUnit XML report to
@@ -148,13 +151,28 @@ def extract_gpu_arch(amdgpu_families):
     """Extract the first gfx architecture token from AMDGPU_FAMILIES."""
     if not amdgpu_families:
         return None
-    match = re.search(r"gfx\w+", amdgpu_families)
+    # Keep -strict (a target's stepping); -dcgpu and the like name a family.
+    match = re.search(r"gfx\w+(?:-strict)?", amdgpu_families)
     if match:
         gpu_arch = match.group(0)
         logging.info(f"Detected GPU architecture: {gpu_arch}")
         return gpu_arch
     logging.warning(f"Could not parse GPU architecture from: {amdgpu_families}")
     return None
+
+
+def resolve_skip_arch(gpu_arch, amdgpu_targets):
+    """Arch for the ``not skip-<arch>`` term.
+
+    *gpu_arch* (from AMDGPU_FAMILIES) may be a family (gfx125X, matches no
+    marker) or lack the target's stepping (gfx1250 for gfx1250-strict, whose
+    configs carry skip-gfx1250).  Prefer a lone AMDGPU_TARGETS entry; with
+    several (gfx120X-all) the runner may be any, so keep *gpu_arch*.
+    """
+    if not gpu_arch:
+        return gpu_arch
+    targets = [t.strip() for t in (amdgpu_targets or "").split(",") if t.strip()]
+    return targets[0] if len(targets) == 1 else gpu_arch
 
 
 def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
@@ -338,7 +356,9 @@ if __name__ == "__main__":
     amdgpu_target = (
         AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
     ) or (gpu_arch or "")
-    marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
+    marker_expr = build_marker_expression(
+        category_config, resolve_skip_arch(gpu_arch, AMDGPU_TARGETS), amdgpu_target
+    )
 
     # Extra pytest CLI options for this category.  {ROCM_PATH} and
     # {AMDGPU_TARGETS} tokens are substituted with runtime values.

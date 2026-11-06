@@ -29,11 +29,43 @@ class ExtractGpuArchTest(unittest.TestCase):
         # First gfx token is returned, suffixes/families included in the token.
         self.assertEqual(pytest_runner.extract_gpu_arch("gfx94X-dcgpu"), "gfx94X")
 
+    def test_strict_stepping_kept(self):
+        self.assertEqual(
+            pytest_runner.extract_gpu_arch("gfx1250-strict"), "gfx1250-strict"
+        )
+
     def test_first_of_multiple(self):
         self.assertEqual(pytest_runner.extract_gpu_arch("gfx1250,gfx942"), "gfx1250")
 
     def test_unparseable(self):
         self.assertIsNone(pytest_runner.extract_gpu_arch("no-arch-here"))
+
+
+class ResolveSkipArchTest(unittest.TestCase):
+    def test_single_target_keeps_stepping(self):
+        # Strict configs carry skip-gfx1250.
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx1250", "gfx1250-strict"),
+            "gfx1250-strict",
+        )
+
+    def test_single_target_over_family(self):
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx125X", " gfx1250 "), "gfx1250"
+        )
+
+    def test_multiple_targets_keep_family(self):
+        # The runner may be any listed target.
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx120X", "gfx1200,gfx1201"), "gfx120X"
+        )
+
+    def test_no_targets_keeps_family(self):
+        self.assertEqual(pytest_runner.resolve_skip_arch("gfx942", None), "gfx942")
+        self.assertEqual(pytest_runner.resolve_skip_arch("gfx942", ""), "gfx942")
+
+    def test_no_family_emits_nothing(self):
+        self.assertIsNone(pytest_runner.resolve_skip_arch(None, "gfx1250"))
 
 
 class BuildMarkerExpressionTest(unittest.TestCase):
