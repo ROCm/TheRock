@@ -18,10 +18,10 @@ with no families is skipped (empty output).
 
 ROCm version keywords:
 
+* ``latest`` (default): the newest ``rocm`` version on the selected index.
 * ``trunk``: the ROCm version upstream pytorch/pytorch trunk CI builds with,
   read from .ci/docker/build.sh, resolved to the newest matching release on
   the selected index (``10.1`` -> ``10.1.0``).
-* ``latest``: the newest ``rocm`` version on the selected index.
 * Anything else is an exact version, or a series like ``10.1`` that resolves
   to its newest version on the index.
 
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--datacenter-instinct-gpus", default="false")
     parser.add_argument("--consumer-radeon-gpus", default="false")
     parser.add_argument("--extra-amdgpu-families", default="")
-    parser.add_argument("--rocm-version", default="trunk")
+    parser.add_argument("--rocm-version", default="latest")
     parser.add_argument("--rocm-package-index-url", required=True)
     parser.add_argument("--pytorch-git-ref", default="")
     args = parser.parse_args(argv)

@@ -65,18 +65,18 @@ on:
         default: "3.12"
       rocm_version:
         description: >-
-          'trunk' = the ROCm version pytorch/pytorch trunk CI uses
-          (.ci/docker/build.sh), 'latest' = newest on the index, or a version
-          like 10.1.0.
+          'latest' = newest on the index, 'trunk' = the ROCm version
+          pytorch/pytorch trunk CI uses (.ci/docker/build.sh; pair with the
+          stable index), or a version like 10.1.0.
         type: string
-        default: trunk
+        default: latest
       rocm_package_index_url:
-        description: ROCm package index. With nightly, use rocm_version 'latest'.
+        description: ROCm package index. With stable, use rocm_version 'trunk'.
         type: choice
         options:
-          - https://stable.repo.amd.com/rocm/whl-next/
           - https://nightly.repo.amd.com/rocm/whl-next/
-        default: https://stable.repo.amd.com/rocm/whl-next/
+          - https://stable.repo.amd.com/rocm/whl-next/
+        default: https://nightly.repo.amd.com/rocm/whl-next/
       test_level:
         description: "'standard' runs the GPU test suite; 'none' only builds."
         type: choice

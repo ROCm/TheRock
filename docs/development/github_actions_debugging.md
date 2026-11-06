@@ -26,9 +26,10 @@ Table of contents:
 > To build and test a ROCm/pytorch branch against a published ROCm release,
 > trigger
 > [`.github/workflows/dev_pytorch_wheels.yml`](/.github/workflows/dev_pytorch_wheels.yml)
-> instead. It selects GPUs with checkboxes, defaults to the ROCm version used by
-> upstream PyTorch trunk CI, builds on Linux and/or Windows, and summarizes the
-> test results in its run summary. No package copying is needed.
+> instead. It selects GPUs with checkboxes, builds on Linux and/or Windows, and
+> summarizes the test results in its run summary. It defaults to the newest
+> nightly ROCm; pick `rocm_version: trunk` with the stable index to match the
+> ROCm version upstream PyTorch trunk CI uses. No package copying is needed.
 >
 > Avoid concurrent runs for the same branch and ROCm version, even with
 > different GPU families: their torch wheels share one version on the dev
