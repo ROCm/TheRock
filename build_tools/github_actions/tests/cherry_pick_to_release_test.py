@@ -433,7 +433,8 @@ class CommandLineTest(unittest.TestCase):
 class WorkflowWiringTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.workflow = yaml.load(
+        # BaseLoader preserves Actions' `on` key and cannot construct objects.
+        cls.workflow = yaml.load(  # nosec B506
             WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
         )
         cls.steps = cls.workflow["jobs"]["cherry_pick"]["steps"]
@@ -723,7 +724,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
 
     def test_local_dry_run_does_not_require_token_or_provenance(self) -> None:
         result = self.execute(
-            app_token="",
+            app_token="",  # nosec B106 - missing token is under test
             workflow_run_url="",
             workflow_actor="",
         )
@@ -732,7 +733,10 @@ class CherryPickIntegrationTest(unittest.TestCase):
 
     def test_live_run_requires_token_and_provenance(self) -> None:
         with self.assertRaisesRegex(CherryPickError, "App token"):
-            self.execute(dry_run=False, app_token="")
+            self.execute(
+                dry_run=False,
+                app_token="",  # nosec B106 - missing token is under test
+            )
         with self.assertRaisesRegex(CherryPickError, "required for live runs"):
             self.execute(
                 dry_run=False,
