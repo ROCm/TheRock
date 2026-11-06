@@ -180,11 +180,14 @@ uncached. The token reaches Bazel through the same script acting as a
 credential helper scoped to the cache host, never on the command line, which
 `build.py --verbose` logs.
 
-Only pushes to `main` upload. Pull requests and manual dispatches pass
-`--remote_upload_local_results=false`. That gate runs on the client; what a
-run can write is decided by its token's role on EngFlow, so uploads from `main`
-need a `cache-writer` token that only `main` can fetch. Set
-`JAX_BAZEL_REMOTE_CACHE_URL` to point the build at a different cache.
+Only pushes to `main` in ROCm/TheRock upload. Pull requests and manual
+dispatches pass `--remote_upload_local_results=false`, but that gate runs on
+the client; what a run can write is decided by its token's role on EngFlow.
+The `cache-writer` token is never on a runner: those `main` builds assume the
+`therock-jax-cache-writer-main` IAM role through GitHub OIDC, fetch the token
+from AWS Secrets Manager, stage it for the build container like the reader
+token, and delete it after the build. Set `JAX_BAZEL_REMOTE_CACHE_URL`
+to point the build at a different cache.
 
 EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with
 `--config=rocm_rbe`, so the action keys differ. TheRock has to populate the
