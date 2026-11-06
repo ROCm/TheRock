@@ -669,3 +669,30 @@ Tests should
 > See
 > [adding_tests.md](/docs/development/adding_tests.md)
 > for instructions on how to add tests for a subproject to TheRock's CI.
+
+#### rocWMMA installed-package consumers
+
+The `rocwmma_install` component builds the consumer sources shipped in the
+rocWMMA test artifact against the fetched SDK. It runs on CPU runners at every
+test tier for families with rocWMMA test artifacts, independently of rocWMMA's GPU suites. The no-OpenMP consumer checks
+HIP compilation and host FP16 linking on Linux and Windows. A second C++
+consumer uses FindOpenMP before rocWMMA on Linux to detect unresolved exported
+OpenMP targets. Windows does not ship LLVM OpenMP, so only the first case runs.
+
+Run the same checks locally with CMake and Ninja on `PATH` (and the Visual
+Studio developer environment on Windows):
+
+```sh
+python build_tools/github_actions/test_executable_scripts/test_rocwmma_install.py \
+  --sdk /path/to/rocm --gpu-targets gfx1100 --build-dir /tmp/rocwmma-consumers
+```
+
+The SDK must include rocWMMA's installed test sources under
+`share/rocwmma/tests/package_consumer`, headers, CMake exports, and the compiler.
+Build subdirectories must be fresh; the runner retains them and each phase's
+log for diagnosis. A configure, build, or CTest failure fails the job, as does
+an SDK missing the test sources. This requires the corresponding rocWMMA
+source-install change when advancing TheRock's rocm-libraries pin. Component
+repositories must subsequently advance their TheRock CI pin to enable this job.
+The `test:rocwmma` label selects both rocWMMA jobs; `test:rocwmma_install`
+selects just these package checks.
