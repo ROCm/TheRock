@@ -142,7 +142,9 @@ versions):
 ```
 
 TODO: Need to add an option to post-process wheels, set the manylinux tag, and
-inline system deps into the audio and vision wheels as needed.
+inline system deps into the audio and vision wheels as needed. Vision runs
+upstream pre_build_script.sh and packaging/wheel/relocate.py so the image
+codecs are linked and copied into the wheel.
 """
 
 import argparse
@@ -1360,6 +1362,103 @@ def do_build_pytorch_audio(
     copy_to_output(args, built_wheel)
 
 
+# Same Miniforge release as pytorch/test-infra's aarch64 wheel builds.
+_MINIFORGE_VERSION = "26.3.2-3"
+
+
+def _conda_exe_from_which(found: str) -> str:
+    # Windows `conda` is often conda.bat. subprocess cannot run a .bat without a shell.
+    path = Path(found)
+    if path.suffix.lower() not in {".bat", ".cmd"}:
+        return found
+    conda_exe = path.resolve().parent.parent / "Scripts" / "conda.exe"
+    if conda_exe.is_file():
+        return str(conda_exe)
+    return found
+
+
+def _install_miniforge(env: dict[str, str]) -> str:
+    """Install Miniforge into a build-local prefix. Not part of the image."""
+    machine = platform.machine().lower()
+    # NSIS treats /D= as the rest of the command line, so the Windows prefix
+    # cannot contain spaces.
+    prefix = (
+        Path("C:/therock-miniforge")
+        if is_windows
+        else Path(tempfile.gettempdir()) / f"therock-miniforge-{machine}"
+    )
+    if is_windows:
+        names = {
+            "amd64": "Miniforge3-Windows-x86_64.exe",
+            "x86_64": "Miniforge3-Windows-x86_64.exe",
+        }
+        conda_exe = prefix / "Scripts" / "conda.exe"
+        bin_dir = prefix / "Scripts"
+    else:
+        names = {
+            "x86_64": "Miniforge3-Linux-x86_64.sh",
+            "aarch64": "Miniforge3-Linux-aarch64.sh",
+        }
+        conda_exe = prefix / "bin" / "conda"
+        bin_dir = prefix / "bin"
+    if machine not in names:
+        raise RuntimeError(f"No Miniforge installer for {platform.machine()}")
+    if not conda_exe.is_file():
+        name = names[machine]
+        url = (
+            "https://github.com/conda-forge/miniforge/releases/download/"
+            f"{_MINIFORGE_VERSION}/{name}"
+        )
+        print(f"Installing Miniforge {_MINIFORGE_VERSION} to {prefix}: {url}")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = Path(temp_dir) / name
+            urllib.request.urlretrieve(url, installer)
+            if is_windows:
+                # NSIS: /D= must be the last argument and must not be quoted.
+                run_command(
+                    [
+                        installer,
+                        "/InstallationType=JustMe",
+                        "/RegisterPython=0",
+                        "/AddToPath=0",
+                        "/S",
+                        f"/D={prefix}",
+                    ],
+                    cwd=Path(temp_dir),
+                    env=env,
+                )
+            else:
+                run_command(
+                    ["bash", installer, "-b", "-p", prefix],
+                    cwd=Path(temp_dir),
+                    env=env,
+                )
+    # Keep the build interpreter's pip first. The pre-build script calls both.
+    python_bin = str(Path(sys.executable).parent)
+    conda_bin = str(bin_dir)
+    parts = [
+        part
+        for part in env.get("PATH", "").split(os.pathsep)
+        if part and part != conda_bin
+    ]
+    insert_at = parts.index(python_bin) + 1 if python_bin in parts else 0
+    parts.insert(insert_at, conda_bin)
+    env["PATH"] = os.pathsep.join(parts)
+    return str(conda_exe)
+
+
+def _ensure_build_conda(env: dict[str, str]) -> str:
+    """Return a conda executable, installing Miniforge into a temp prefix if absent.
+
+    The install is build-local and is not baked into the image. LD_LIBRARY_PATH
+    is left alone; conda's libsolv breaks the Linux image's yum.
+    """
+    existing = shutil.which("conda", path=env.get("PATH"))
+    if existing:
+        return _conda_exe_from_which(existing)
+    return _install_miniforge(env)
+
+
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
@@ -1392,16 +1491,86 @@ def do_build_pytorch_vision(
             }
         )
 
+    # setup.py looks for libjpeg and libwebp under CONDA_PREFIX. On Windows,
+    # libpng is found through pngfix.exe in Library/bin.
+    conda_exe = _ensure_build_conda(env)
+    conda_base = capture([conda_exe, "info", "--base"], cwd=pytorch_vision_dir)
+    conda_prefix = [line.strip() for line in conda_base.splitlines() if line.strip()]
+    if not conda_prefix:
+        raise RuntimeError("`conda info --base` did not report a prefix")
+    env["CONDA_PREFIX"] = conda_prefix[-1]
+    env["ARCH"] = platform.machine()
+    if is_windows:
+        library_bin = str(Path(env["CONDA_PREFIX"]) / "Library" / "bin")
+        env["PATH"] = library_bin + os.pathsep + env.get("PATH", "")
+        # pre_build_script.sh installs libpng only when OSTYPE is msys.
+        env["OSTYPE"] = "msys"
+    else:
+        # The script's libpng install does not run on Linux x86_64. Upstream
+        # gets libpng from test-infra's conda create, before the script.
+        run_command(
+            [conda_exe, "install", "-y", "-p", env["CONDA_PREFIX"], "libpng"],
+            cwd=pytorch_vision_dir,
+            env=env,
+        )
+
+    pre_build = pytorch_vision_dir / "packaging" / "pre_build_script.sh"
+    relocate = pytorch_vision_dir / "packaging" / "wheel" / "relocate.py"
+    if not pre_build.is_file() or not relocate.is_file():
+        raise FileNotFoundError(
+            f"torchvision packaging scripts not found: {pre_build}, {relocate}"
+        )
+
+    # The script pins setuptools==72.1.0. Restore the image pin afterwards.
+    setuptools_before = get_installed_package_version("setuptools")
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
-
-    run_command(
-        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env
-    )
-    built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
-    print(f"Found built wheel: {built_wheel}")
-    copy_to_output(args, built_wheel)
+    try:
+        run_command(["bash", pre_build], cwd=pytorch_vision_dir, env=env)
+        redirected = pytorch_vision_dir / "=1.3.2"
+        if redirected.exists():
+            redirected.unlink()
+        run_command(
+            [sys.executable, "setup.py", "bdist_wheel"],
+            cwd=pytorch_vision_dir,
+            env=env,
+        )
+        # lddtree does not search the conda prefix, so libjpeg and libwebp
+        # were omitted. Scope LD_LIBRARY_PATH to this call: the pre-build
+        # script's yum already finished, and conda's libsolv breaks it.
+        relocate_env = dict(env)
+        if not is_windows:
+            conda_lib = str(Path(env["CONDA_PREFIX"]) / "lib")
+            current_ld = relocate_env.get(
+                "LD_LIBRARY_PATH", os.environ.get("LD_LIBRARY_PATH", "")
+            )
+            relocate_env["LD_LIBRARY_PATH"] = conda_lib + (
+                os.pathsep + current_ld if current_ld else ""
+            )
+        run_command(
+            [sys.executable, relocate],
+            cwd=pytorch_vision_dir,
+            env=relocate_env,
+        )
+        built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
+        print(f"Found built wheel: {built_wheel}")
+        copy_to_output(args, built_wheel)
+    finally:
+        current = get_installed_package_version("setuptools")
+        if current != setuptools_before:
+            print(f"Restoring setuptools {current} -> {setuptools_before}")
+            run_command(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    f"setuptools=={setuptools_before}",
+                ],
+                cwd=pytorch_vision_dir,
+                env=env,
+            )
 
 
 def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
