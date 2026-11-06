@@ -1361,100 +1361,6 @@ def do_build_pytorch_audio(
     copy_to_output(args, built_wheel)
 
 
-# Same installer pin as pytorch/test-infra's aarch64 wheel builds.
-_MINIFORGE_VERSION = "26.3.2-3"
-
-
-def _vision_conda_prefix() -> Path:
-    override = os.environ.get("THEROCK_VISION_CONDA_PREFIX")
-    if override:
-        return Path(override)
-    if Path("/opt/conda").exists() or os.access("/opt", os.W_OK):
-        return Path("/opt/conda")
-    return Path.home() / ".cache" / "therock-vision-conda"
-
-
-def _insert_conda_bin_on_path(path: str, conda_prefix: Path) -> str:
-    """Expose conda and libpng-config without shadowing the build interpreter."""
-    conda_bin = str(conda_prefix / "bin")
-    python_bins = {
-        str(Path(sys.executable).parent),
-        str(Path(sys.executable).resolve().parent),
-    }
-    parts = [part for part in path.split(os.pathsep) if part and part != conda_bin]
-    insert_at = 1 if parts else 0
-    for index, part in enumerate(parts):
-        if part in python_bins:
-            insert_at = index + 1
-            break
-    parts.insert(insert_at, conda_bin)
-    return os.pathsep.join(parts)
-
-
-def _miniforge_installer_name() -> str:
-    machine = platform.machine()
-    names = {
-        "x86_64": "Miniforge3-Linux-x86_64.sh",
-        "aarch64": "Miniforge3-Linux-aarch64.sh",
-    }
-    try:
-        return names[machine]
-    except KeyError:
-        raise RuntimeError(
-            f"No miniforge installer for {machine}. torchvision needs conda "
-            "to install libpng, libjpeg-turbo, and libwebp."
-        ) from None
-
-
-def _install_miniforge(prefix: Path) -> None:
-    name = _miniforge_installer_name()
-    url = (
-        "https://github.com/conda-forge/miniforge/releases/download/"
-        f"{_MINIFORGE_VERSION}/{name}"
-    )
-    print(
-        f"Installing miniforge {_MINIFORGE_VERSION} to {prefix} for torchvision codecs"
-    )
-    print(f"  URL: {url}")
-    prefix.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        installer = Path(temp_dir) / name
-        urllib.request.urlretrieve(url, installer)
-        installer.chmod(0o755)
-        subprocess.check_call(["bash", str(installer), "-b", "-p", str(prefix)])
-
-
-def _conda_install_vision_codecs(env: dict[str, str]) -> None:
-    """Install libpng, libjpeg-turbo, and libwebp for the torchvision build.
-
-    The manylinux image has no conda. setup.py warns and continues when the
-    headers are missing, so this install is not required for the wheel to build.
-    """
-    prefix = _vision_conda_prefix()
-    conda_exe = prefix / "bin" / "conda"
-    if not conda_exe.is_file():
-        _install_miniforge(prefix)
-    env["CONDA_PLUGINS_AUTO_ACCEPT_TOS"] = "true"
-    env["CONDA_PREFIX"] = str(prefix)
-    env["PATH"] = _insert_conda_bin_on_path(
-        env.get("PATH", os.environ.get("PATH", "")), prefix
-    )
-    run_command(
-        [
-            str(conda_exe),
-            "install",
-            "-y",
-            "-p",
-            str(prefix),
-            "libpng",
-            "libjpeg-turbo",
-            "libwebp>=1.3.2",
-        ],
-        cwd=prefix,
-        env=env,
-    )
-
-
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
@@ -1488,7 +1394,15 @@ def do_build_pytorch_vision(
         )
 
     if not is_windows:
-        _conda_install_vision_codecs(env)
+        # setup.py looks for libjpeg and libwebp under CONDA_PREFIX.
+        env["CONDA_PREFIX"] = capture(
+            ["conda", "info", "--base"], cwd=pytorch_vision_dir
+        )
+        run_command(
+            ["conda", "install", "-y", "libpng", "libjpeg-turbo", "libwebp>=1.3.2"],
+            cwd=pytorch_vision_dir,
+            env=env,
+        )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
