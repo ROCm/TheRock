@@ -2,31 +2,56 @@
 
 Release maintainers can use TheRock's
 [Cherry-pick to release](https://github.com/ROCm/TheRock/actions/workflows/cherry-pick-to-release.yml)
-workflow to cherry-pick commits from the default branch of `ROCm/rocm-systems`
-or `ROCm/rocm-libraries`, or from TheRock's own default branch. The workflow
-creates an unsigned commit chain on a new `shared/cherry-pick/*` branch in the
-selected repository and opens a pull request against either
-`release/therock-X.Y` or
-`release/bkc/therock-X.Y-YYYYMMDD`.
+workflow to apply reviewed default-branch commits from TheRock,
+`ROCm/rocm-systems`, or `ROCm/rocm-libraries` to a release branch in the same
+repository. Use a manual process when a change requires conflict resolution.
+
+A live run creates an unsigned commit chain on a new `shared/cherry-pick/*`
+branch and opens a pull request against either
+`release/therock-X.Y` or `release/bkc/therock-X.Y-YYYYMMDD`.
 
 ## Running the workflow
 
-The workflow starts in dry-run mode. Select the target repository and release
-branch, enter commit SHAs in the order they should be applied, and provide a
-JIRA key such as `AIRDEL-1234`. A JIRA key is required for regular release
-branches and optional for BKC branches. Set `dry_run` to `false` only for the
-coordinated live cherry-pick.
+1. Open the workflow and select **Run workflow**.
+1. Select the repository containing the commits and release branch.
+1. Enter commit SHAs in application order, separated by spaces or commas.
+1. Enter the release branch and a JIRA key when required by the table below.
+1. Choose whether to preview or publish. You can leave `dry_run` enabled to
+   validate the request and preview the generated commits and pull request
+   without publishing anything. A dry run is optional; a live run performs the
+   same validation before pushing. Set `dry_run` to `false` to create the
+   branch and pull request.
 
-Every requested commit must be reachable from the target repository's current
-default branch and have exactly one parent. This excludes root commits, which
-have no parent, and merge commits, which combine two or more parent histories.
-The workflow also rejects commits already present on the release branch,
-conflicts, empty cherry-picks, and an existing destination branch. Validation
-and cherry-pick failures push nothing. If the push outcome cannot be confirmed
-or pull request creation fails after a successful push, the job reports the
-destination branch for manual inspection and recovery.
+The release type and optional JIRA key determine the destination branch:
 
-The generated commit message has this form:
+| Release branch                      | JIRA key                 | Destination branch                                                                              |
+| ----------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `release/therock-10.2`              | Required (`AIRDEL-1234`) | `shared/cherry-pick/therock-10.2-airdel-1234`                                                   |
+| `release/bkc/therock-10.2-20261013` | Optional, provided       | `shared/cherry-pick/bkc-therock-10.2-20261013-airdel-1234`                                      |
+| `release/bkc/therock-10.2-20261013` | Optional, omitted        | `shared/cherry-pick/bkc-therock-10.2-20261013-<first seven characters of the first commit SHA>` |
+
+A regular release run might select `rocm-libraries`, commit `1a2b3c4`,
+`release/therock-10.2`, and `AIRDEL-1234`. A ticketless BKC run might select
+`rocm-systems`, commits `1a2b3c4, 5d6e7f8`, and
+`release/bkc/therock-10.2-20261013`, leaving the JIRA field empty.
+
+## Behavior and failure handling
+
+Every requested commit must be reachable from the selected repository's
+current default branch and have exactly one parent. This excludes root commits,
+which have no parent, and merge commits, which combine two or more parent
+histories. Commits are applied in the requested order, including repeated
+inputs. Conflicts, empty picks, and existing destination branches fail the run.
+An ancestor that was later reverted can be reapplied; a change whose resulting
+tree is already present fails as empty.
+
+A dry run reports the prospective commits and pull request without publishing.
+A live run pushes the generated branch and opens the pull request. Validation,
+conflict, and empty-pick failures push nothing. If the push outcome cannot be
+confirmed or pull request creation fails after a successful push, the job
+reports the destination branch for manual inspection and recovery.
+
+The generated commit message preserves the source author and original message:
 
 ```text
 Cherry-picks commit <full sha> into the ROCm <release label> branch.
@@ -39,41 +64,28 @@ JIRA ID: AIRDEL-1234
 Ticketless BKC cherry-picks omit the `JIRA ID` line and its following blank
 line.
 
-Destination branch names:
-
-| Release and ticket                                 | Destination branch                                                                              |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `release/therock-10.2`, `AIRDEL-1234`              | `shared/cherry-pick/therock-10.2-airdel-1234`                                                   |
-| `release/bkc/therock-10.2-20261013`, `AIRDEL-1234` | `shared/cherry-pick/bkc-therock-10.2-20261013-airdel-1234`                                      |
-| `release/bkc/therock-10.2-20261013`, no ticket     | `shared/cherry-pick/bkc-therock-10.2-20261013-<first seven characters of the first commit SHA>` |
-
 ## Running the script directly
 
-`build_tools/github_actions/cherry_pick_to_release.py` also defaults to dry-run
+`build_tools/github_actions/cherry_pick_to_release.py` defaults to dry-run
 mode. `CHERRY_PICK_DRY_RUN=true` or `false` sets the default explicitly.
-`--dry-run` and `--no-dry-run` override that environment setting: use
-`--dry-run` to build and report without publishing, or `--no-dry-run` to push
-the branch and create a pull request. A live run requires the selected App
-token and TheRock workflow provenance. A local dry run can omit both the token
-and workflow provenance; when provenance is omitted, the prospective pull
-request body leaves out the triggering-operator paragraph. Run the script with
-`--help` for the input options and corresponding environment variables.
+`--dry-run` and `--no-dry-run` override that environment setting. A live run
+requires the selected App token and TheRock workflow provenance. A local dry
+run can omit both; its prospective pull request body then omits the triggering
+operator paragraph. Run the script with `--help` for the input options and
+corresponding environment variables.
 
-## Access and repository configuration
+## Access and branch safety
 
-Operators need permission to dispatch workflows in TheRock. The existing
-`systems-assistant` performs operations in TheRock and rocm-systems, while
-`assistant-librarian` performs operations in rocm-libraries. An operator's
-personal target write access is not used. Before enabling live runs, confirm
-that each App installation has Contents, Pull requests, and Workflows write
-permission and that target rulesets allow the App to create
-`shared/cherry-pick/*` branches containing unsigned commits. The workflow
-never pushes directly to a release branch.
+Triggering the workflow requires write access to TheRock. The workflow
+publishes with repository-scoped GitHub App credentials: `systems-assistant`
+for TheRock and rocm-systems, and `assistant-librarian` for rocm-libraries. The
+person triggering the workflow does not need write access to rocm-systems or
+rocm-libraries.
 
-Branch creation uses an early existence check followed by a push with an
-explicit empty-value lease (`--force-with-lease=refs/heads/<branch>:`). This
-allows creation only while the destination branch is absent. The workflow
-also requires Git to confirm that a new branch was created before opening a
-pull request. An existing branch at the identical commit is rejected as well.
-These checks protect the destination even when another workflow or a manual
-push creates it during the run.
+The workflow expects each App installation to have Contents, Pull requests,
+and Workflows write permission. Target repository rulesets must allow the App
+to create `shared/cherry-pick/*` branches containing unsigned commits.
+
+A live run never pushes directly to a release branch. It creates the
+destination branch only if that branch is still absent, so retries or
+concurrent requests fail instead of replacing an existing branch.

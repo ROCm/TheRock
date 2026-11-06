@@ -1,7 +1,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Coordinate release cherry-picks and publish their pull requests."""
+r"""Coordinate release cherry-picks and publish their pull requests.
+
+Examples:
+
+    python3 build_tools/github_actions/cherry_pick_to_release.py --help
+
+    python3 build_tools/github_actions/cherry_pick_to_release.py \
+        --repository rocm-systems \
+        --commits abcdef0,1234567 \
+        --release-branch release/therock-10.2 \
+        --jira-id AIRDEL-1234 \
+        --dry-run
+
+The GitHub Actions workflow supplies the same inputs through environment
+variables.
+"""
 
 import argparse
 from collections.abc import Callable, Sequence
@@ -11,7 +26,6 @@ from pathlib import Path
 import re
 import sys
 import tempfile
-from typing import Protocol
 from urllib.parse import quote, urlsplit
 
 
@@ -42,7 +56,10 @@ from github_actions_api import (
 TARGET_OWNER = "ROCm"
 HOST_REPOSITORY = "ROCm/TheRock"
 MINIMUM_SHORT_SHA_LENGTH = 7
-SUPPORTED_REPOSITORIES = {
+# Target repository to GitHub App slug. The repository selects the bot
+# committer identity instead of accepting it as an independent operator input,
+# matching the repository-specific App token routing in the workflow.
+REPOSITORY_APP_SLUGS = {
     "TheRock": "systems-assistant",
     "rocm-systems": "systems-assistant",
     "rocm-libraries": "assistant-librarian",
@@ -53,19 +70,6 @@ JIRA_RE = re.compile(r"^[A-Z][A-Z0-9_]*-[1-9][0-9]*$")
 REGULAR_RELEASE_RE = re.compile(r"^release/therock-([0-9]+\.[0-9]+)$")
 BKC_RELEASE_RE = re.compile(r"^release/bkc/therock-([0-9]+\.[0-9]+)-([0-9]{8})$")
 CHERRY_PICK_MESSAGE_PREFIX = "Cherry-picks commit"
-
-
-class GitHubClient(Protocol):
-    """The subset of :class:`GitHubAPI` used by this script."""
-
-    def send_request(
-        self,
-        url: str,
-        timeout_seconds: int = 300,
-        *,
-        method: str = "GET",
-        body: object | None = None,
-    ) -> object: ...
 
 
 @dataclass(frozen=True)
@@ -94,8 +98,8 @@ class RunResult:
 
 def parse_repository(value: str) -> str:
     """Validate and return a supported target repository name."""
-    if value not in SUPPORTED_REPOSITORIES:
-        choices = ", ".join(sorted(SUPPORTED_REPOSITORIES))
+    if value not in REPOSITORY_APP_SLUGS:
+        choices = ", ".join(sorted(REPOSITORY_APP_SLUGS))
         raise CherryPickError(
             f"Unsupported repository {value!r}; expected one of: {choices}"
         )
@@ -252,7 +256,7 @@ def build_pr_body(
     return "\n".join(lines)
 
 
-def target_metadata(api: GitHubClient, repository: str) -> str:
+def target_metadata(api: GitHubAPI, repository: str) -> str:
     """Return and validate the selected target repository's default branch."""
     url = f"https://api.github.com/repos/{TARGET_OWNER}/{repository}"
     response = api.send_request(url)
@@ -269,7 +273,7 @@ def target_metadata(api: GitHubClient, repository: str) -> str:
     return default_branch
 
 
-def bot_identity(api: GitHubClient, app_slug: str) -> CommitIdentity:
+def bot_identity(api: GitHubAPI, app_slug: str) -> CommitIdentity:
     """Resolve the GitHub App bot account's commit identity."""
     login = f"{app_slug}[bot]"
     url = f"https://api.github.com/users/{quote(login, safe='')}"
@@ -301,7 +305,7 @@ def bot_identity(api: GitHubClient, app_slug: str) -> CommitIdentity:
 
 
 def create_pull_request(
-    api: GitHubClient,
+    api: GitHubAPI,
     repository: str,
     release_branch: str,
     pr_branch: str,
@@ -438,7 +442,7 @@ def execute_cherry_pick(
     app_token: str,
     workflow_run_url: str,
     workflow_actor: str,
-    api: GitHubClient,
+    api: GitHubAPI,
     summary_writer: Callable[[str], None] = gha_append_step_summary,
     clone_url: str | None = None,
     push_url: str | None = None,
@@ -451,7 +455,7 @@ def execute_cherry_pick(
     validate_ticket_requirement(release, jira_id)
     if not dry_run and not app_token.strip():
         raise CherryPickError("The selected GitHub App token is missing or empty")
-    app_slug = SUPPORTED_REPOSITORIES[repository]
+    app_slug = REPOSITORY_APP_SLUGS[repository]
     _validate_workflow_provenance(
         workflow_run_url, workflow_actor, required=not dry_run
     )

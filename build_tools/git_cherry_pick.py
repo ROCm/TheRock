@@ -3,6 +3,11 @@
 
 """Construct clean cherry-pick commits without a working tree.
 
+This module is an importable Git library and does not provide a command-line
+entry point. The release workflow coordinator in
+`build_tools/github_actions/cherry_pick_to_release.py` uses it without coupling
+the Git operations to GitHub Actions policy.
+
 A conventional `git cherry-pick` workflow starts from a checked-out branch. A
 full checkout materializes every tracked file even when the selected commit
 changes only a small number of them.

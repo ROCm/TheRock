@@ -36,16 +36,24 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: "cherry-pick-to-release-${{ inputs.repository }}-${{ inputs.release_branch }}-${{ inputs.jira_id }}"
-  cancel-in-progress: false
-
 jobs:
   cherry_pick:
     name: "${{ inputs.repository }} :: ${{ inputs.release_branch }}"
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
+      - name: Check out TheRock automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
       - name: Generate rocm-systems App token
         if: inputs.repository == 'rocm-systems'
         id: systems-token
@@ -84,18 +92,6 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-workflows: write
-
-      - name: Check out TheRock automation
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
-        with:
-          persist-credentials: false
-          submodules: false
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
 
       - name: Cherry-pick commits
         env:

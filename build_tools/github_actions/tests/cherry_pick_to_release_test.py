@@ -450,6 +450,21 @@ class WorkflowWiringTest(unittest.TestCase):
         )
         self.assertEqual(inputs["dry_run"]["default"], "true")
         self.assertEqual(inputs["jira_id"]["required"], "false")
+        self.assertNotIn("concurrency", self.workflow)
+
+    def test_tokens_are_generated_after_checkout_and_python_setup(self) -> None:
+        step_indices = {step["name"]: index for index, step in enumerate(self.steps)}
+        setup_finished = max(
+            step_indices["Check out TheRock automation"],
+            step_indices["Set up Python"],
+        )
+        for token_step in (
+            "Generate rocm-systems App token",
+            "Generate TheRock App token",
+            "Generate rocm-libraries App token",
+        ):
+            with self.subTest(token_step=token_step):
+                self.assertGreater(step_indices[token_step], setup_finished)
 
     def test_workflow_routes_each_repository_to_only_its_app(self) -> None:
         token_steps = {
