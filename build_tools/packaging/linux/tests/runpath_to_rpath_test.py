@@ -33,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -99,7 +100,22 @@ class TestRunpathToRpath(unittest.TestCase):
 
     def test_update_rpath_preserves_rpath_values(self):
         """Run update_rpath() and verify rpath values and tags after conversion."""
-        runpath_to_rpath.update_rpath(self.workdir, [])
+        # A RUNPATH library outside the tree, reachable only via a directory
+        # symlink, must not be modified (symlinks are not followed).
+        with tempfile.TemporaryDirectory() as outside_dir:
+            outside_so = Path(outside_dir) / "lib_outside.so"
+            shutil.copy2(self.runpath_so, outside_so)
+            (self.workdir / "linked").symlink_to(outside_dir, target_is_directory=True)
+            real_check_call = subprocess.check_call
+            with mock.patch.object(
+                runpath_to_rpath.subprocess, "check_call", side_effect=real_check_call
+            ) as check_call:
+                runpath_to_rpath.update_rpath(self.workdir, [])
+
+            self.assertEqual(_elf_rpath_info(outside_so), ("RUNPATH", RPATH_VALUE))
+        # Only the DT_RUNPATH library is patched; DT_RPATH ones are left untouched
+        patched = [Path(c.args[0][-1]) for c in check_call.call_args_list]
+        self.assertEqual(patched, [self.runpath_so])
 
         self.assertEqual(_elf_rpath_info(self.runpath_so)[1], RPATH_VALUE)
         self.assertEqual(_elf_rpath_info(self.rpath_so)[1], RPATH_VALUE)

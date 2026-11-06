@@ -565,7 +565,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-blas",
@@ -878,7 +878,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-sparse",
@@ -986,7 +986,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-solver",
@@ -1083,7 +1083,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-rocalution",
@@ -1162,7 +1162,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-rocalution-test",
@@ -1270,7 +1270,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-hiptensor-test",
@@ -1437,7 +1437,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-ccl-test",
@@ -1535,7 +1535,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-profiler-base",
@@ -2225,7 +2225,7 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-math-common",
@@ -2348,7 +2348,7 @@
       "doc"
     ],
     "Artifact": "composable-kernel",
-    "Gfxarch": "True",
+    "Gfxarch": "False",
     "DisablePackaging": "True"
   },
   {
@@ -2395,7 +2395,7 @@
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-rccl",
@@ -2437,7 +2437,7 @@
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-rccl-devel",
@@ -2847,7 +2847,7 @@
       }
     ],
     "Postinstall": "True",
-    "Gfxarch": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-rdc-test",

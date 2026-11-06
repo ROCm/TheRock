@@ -92,12 +92,13 @@ rpm_package = _load_module("rpm_package", LINUX_DIR / "rpm_package.py")
 
 # packaging_utils depends on sys.path setup above.
 from packaging_utils import (  # noqa: E402
+    _artifact_dir_name_index,
     GFX_HOST,
     GFX_META,
     PackageConfig,
     filter_components_fromartifactory,
-    filter_dependencies_by_artifacts,
     get_package_info,
+    get_package_list,
     has_artifact_for_arch,
     is_gfxarch_package,
     is_key_defined,
@@ -272,6 +273,9 @@ def _stage_package_artifacts(
                 if not manifest.exists():
                     raise RuntimeError(f"Failed to write artifact manifest: {manifest}")
                 created.append(artifact_dir / subdir_name / component)
+    # Staging changed the artifact tree; drop cached listings of it.
+    _artifact_dir_name_index.cache_clear()
+    get_package_list.cache_clear()
     return created
 
 
@@ -966,6 +970,20 @@ class BuildPackageVariantsRoutingTest(BuildPackageTestCase):
         mock_simple.assert_called_once_with(PKG_DEVELOPER_TOOLS, cfg)
         mock_gfxarch.assert_not_called()
 
+    def test_gfxarch_false_ignores_arch_artifacts(self) -> None:
+        """Gfxarch: False in package.json keeps a package generic even when
+        arch-specific artifacts exist."""
+        cfg = _kpack_config(self.temp_dir)
+        _stage_package_artifacts(
+            "amdrocm-fft-devel",
+            cfg.artifacts_dir,
+            TEST_GFX_TARGET,
+            dir_suffix_override=TEST_GFX_TARGET,
+        )
+        self.assertFalse(
+            is_gfxarch_package(get_package_info("amdrocm-fft-devel"), cfg.artifacts_dir)
+        )
+
 
 # ---------------------------------------------------------------------------
 # create_package_config — CLI → PackageConfig (real function, no hand-built config)
@@ -1033,18 +1051,43 @@ class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
 
 
 # ---------------------------------------------------------------------------
+# _package_index — package.json lookup index
+# ---------------------------------------------------------------------------
+class PackageIndexTest(BuildPackageTestCase):
+    """``_package_index`` indexes ``package.json`` and rejects duplicate names."""
+
+    def test_duplicate_package_name_raises(self) -> None:
+        import packaging_utils
+
+        duplicated = [{"Package": "amdrocm-dup"}, {"Package": "amdrocm-dup"}]
+        packaging_utils._package_index.cache_clear()
+        try:
+            with patch.object(
+                packaging_utils, "read_package_json_file", return_value=duplicated
+            ):
+                with self.assertRaisesRegex(ValueError, "amdrocm-dup"):
+                    packaging_utils._package_index()
+        finally:
+            packaging_utils._package_index.cache_clear()
+
+
+# ---------------------------------------------------------------------------
 # parse_input_package_list — real package.json names
 # ---------------------------------------------------------------------------
 class ParseInputPackageListTest(BuildPackageTestCase):
     """``parse_input_package_list`` filters names against ``package.json``."""
 
     def test_explicit_pkg_names_filter_package_json(self) -> None:
-        pkg_list, skipped = build_package.parse_input_package_list(
-            pkg_name=[PKG_CORE_SDK, PKG_CK, "no-such-package"],
-            artifact_dir=self.artifacts_dir(),
-        )
-        self.assertEqual(set(pkg_list), {PKG_CORE_SDK, PKG_CK})
-        self.assertEqual(skipped, [])
+        # No artifacts staged: metapackage is built, CK is skipped,
+        # unknown names are warned about and dropped.
+        with self.assertLogs(level="WARNING") as logs:
+            pkg_list, skipped = build_package.parse_input_package_list(
+                pkg_names=[PKG_CORE_SDK, PKG_CK, "no-such-package"],
+                artifact_dir=self.artifacts_dir(),
+            )
+        self.assertEqual(pkg_list, [PKG_CORE_SDK])
+        self.assertEqual(skipped, [PKG_CK])
+        self.assertIn("no-such-package", "\n".join(logs.output))
 
 
 # ---------------------------------------------------------------------------
