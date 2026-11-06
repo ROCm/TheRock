@@ -8,6 +8,7 @@ See docs/development/s3_buckets.md.
 
 from dataclasses import dataclass, field
 import os
+import re
 import sys
 
 
@@ -102,6 +103,43 @@ _RELEASE_STREAM_BY_TYPE = {
     "nightly-bkc": "bkc",
     "prerelease": "rc",
 }
+
+# Release types whose published multi-arch tarballs can be resolved for
+# download. This covers "release", which has no automated upload credentials
+# but is public to read, and leaves out the BKC types, which this resolver has
+# no published tarball index for.
+_ALLOWED_TARBALL_DOWNLOAD_RELEASE_TYPES = {
+    "dev",
+    "nightly",
+    "prerelease",
+    "release",
+}
+
+# Streams to read published files from, extending the upload mapping above with
+# "release", which is served from https://stable.repo.amd.com/.
+_DOWNLOAD_STREAM_BY_RELEASE_TYPE = {
+    **_RELEASE_STREAM_BY_TYPE,
+    "release": "stable",
+}
+
+# First ROCm (major, minor) that each release type publishes to the
+# repo.amd.com product layout. Earlier versions are only in the legacy indexes;
+# see RELEASES.md and docs/packaging/legacy_multi_arch_releases.md.
+_FIRST_PRODUCT_LAYOUT_ROCM_VERSION = {
+    "dev": (10, 1),
+    "nightly": (10, 1),
+    "prerelease": (10, 1),
+    "release": (10, 0),
+}
+
+# Legacy multi-arch tarball indexes that still receive releases. The dev and
+# nightly legacy indexes are frozen and so are deliberately absent here.
+_LEGACY_TARBALL_INDEX_URLS = {
+    "prerelease": "https://rocm.prereleases.amd.com/tarball-multi-arch",
+    "release": "https://repo.amd.com/rocm/tarball-multi-arch",
+}
+
+_ROCM_VERSION_PREFIX_PATTERN = re.compile(r"(\d+)\.(\d+)\.")
 
 
 def get_artifacts_bucket_config(
@@ -229,6 +267,69 @@ def get_release_package_index_url(release_type: str) -> str:
     """Return the aggregate pip index URL for a final release stream."""
     stream = get_release_stream(release_type)
     return f"https://{stream}.repo.amd.com/rocm/whl-next/"
+
+
+def parse_rocm_version_prefix(version: str) -> tuple[int, int]:
+    """Return the (major, minor) prefix of a ROCm version string.
+
+    Every published version starts with "major.minor.patch", whatever suffix
+    follows it: "10.1.0a20260901", "10.0.0rc4", "7.14.1",
+    "10.1.0.dev0+<hash>".
+
+    Raises:
+        ValueError: If the version does not start with "major.minor.".
+    """
+    match = _ROCM_VERSION_PREFIX_PATTERN.match(version)
+    if not match:
+        raise ValueError(f"version={version!r} does not start with 'major.minor.'")
+    return int(match[1]), int(match[2])
+
+
+def get_release_tarball_index_url(
+    release_type: str,
+    version: str | None = None,
+) -> str:
+    """Return the index URL publishing a release type's multi-arch tarballs.
+
+    Reads go through the CDN in front of the bucket: that needs no AWS
+    credentials, and the repo.amd.com buckets grant no anonymous S3 read.
+
+    Args:
+        release_type: "dev", "nightly", "prerelease", or "release".
+        version: ROCm version to resolve, which selects between the
+            repo.amd.com product layout and the legacy index. If None, the
+            product layout index is returned.
+
+    Raises:
+        ValueError: If release_type is invalid, if version cannot be parsed, or
+            if version predates the product layout and its legacy index is
+            frozen.
+    """
+    if release_type not in _ALLOWED_TARBALL_DOWNLOAD_RELEASE_TYPES:
+        raise ValueError(
+            f"release_type={release_type!r} is invalid, "
+            f"expected one of {_ALLOWED_TARBALL_DOWNLOAD_RELEASE_TYPES}"
+        )
+
+    stream = _DOWNLOAD_STREAM_BY_RELEASE_TYPE[release_type]
+    product_layout_url = f"https://{stream}.repo.amd.com/rocm/core/tarball"
+    if version is None:
+        return product_layout_url
+
+    first_product_layout_version = _FIRST_PRODUCT_LAYOUT_ROCM_VERSION[release_type]
+    if parse_rocm_version_prefix(version) >= first_product_layout_version:
+        return product_layout_url
+
+    legacy_url = _LEGACY_TARBALL_INDEX_URLS.get(release_type)
+    if legacy_url is None:
+        first_major, first_minor = first_product_layout_version
+        raise ValueError(
+            f"{release_type} multi-arch tarballs are published from ROCm "
+            f"{first_major}.{first_minor} onwards, so version={version!r} is "
+            "only in the frozen legacy index; see "
+            "docs/packaging/legacy_multi_arch_releases.md"
+        )
+    return legacy_url
 
 
 def get_artifacts_bucket_config_for_workflow_run(
