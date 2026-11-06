@@ -19,7 +19,8 @@ reverse-edge ``dependency -> {consumers}`` schema).
   gitlink path, so the file set is stable whether or not submodules are checked
   out) and traverses from the root listfile.
 - Extracts each ``therock_cmake_subproject_declare()``'s name, ``BUILD_DEPS``,
-  ``RUNTIME_DEPS``, and ``COMPILER_TOOLCHAIN``.
+  ``RUNTIME_DEPS``, ``COMPILER_TOOLCHAIN``, and Flang edges implied by
+  ``FORTRAN_OPTIONAL`` / ``FORTRAN_REQUIRED``.
 - Models the dependency-relevant CMake subset: ``set``/``unset``,
   ``list(APPEND/PREPEND/REMOVE_ITEM)``, ``${var}`` and ``;``-list expansion,
   ``if()`` branch union, ``foreach()`` (incl. ``IN LISTS``/``IN ITEMS``/
@@ -77,6 +78,8 @@ _DECLARATION_FLAGS = {
     "OUTPUT_ON_FAILURE",
     "NO_INSTALL_RPATH",
     "FPRINT_SOURCE_HASH",
+    "FORTRAN_REQUIRED",
+    "FORTRAN_OPTIONAL",
 }
 _DECLARATION_ONE_VALUE_ARGS = {
     "EXTERNAL_SOURCE_DIR",
@@ -886,6 +889,11 @@ class RepositoryAnalyzer:
         runtime_deps = self._resolve_dependency_section(
             sections.get("RUNTIME_DEPS", []), environment, relative_path, node.line
         )
+        # Match therock_subproject.cmake: FORTRAN_* appends a Flang toolchain
+        # RUNTIME_DEP (amd-llvm-flang or amd-llvm). Include both as a may-depend
+        # superset so the static graph covers either delivery path.
+        if "FORTRAN_OPTIONAL" in sections or "FORTRAN_REQUIRED" in sections:
+            runtime_deps.update({"amd-llvm-flang", "amd-llvm"})
         toolchains = self._resolve_dependency_section(
             sections.get("COMPILER_TOOLCHAIN", []),
             environment,

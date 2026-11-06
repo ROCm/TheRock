@@ -533,6 +533,14 @@ artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
+[artifacts.amd-llvm-flang]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_name = "FLANG_STANDALONE"
+feature_group = "ALL"
+disable_platforms = ["windows"]
+
 [artifacts.hipify]
 artifact_group = "compiler"
 type = "target-neutral"
@@ -642,7 +650,7 @@ source_paths = ["hip-tests"]
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "rocprofiler-sdk", "spdlog", "amd-llvm-flang"]
 split_databases = ["rocblas", "hipblaslt"]
 source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller", "origami", "tensile", "stinkytofu"]
 
@@ -674,7 +682,7 @@ source_paths = ["rocsparse", "hipsparse", "hipsparselt"]
 [artifacts.solver]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse", "amd-llvm-flang"]
 source_paths = ["rocsolver", "hipsolver"]
 
 [artifacts.rocalution]
@@ -861,7 +869,7 @@ disable_processors = ["ppc64le"]
 [artifacts.rocprofiler-systems-examples]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-systems"]
+artifact_deps = ["rocprofiler-systems", "amd-llvm-flang"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 disable_processors = ["ppc64le"]

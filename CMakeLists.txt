@@ -249,6 +249,126 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
+# Master Flang switch. Not implied by COMPILER=ON (default ON for full trees).
+# Path when ON:
+#   Default: standalone amd-llvm-flang (FLANG_STANDALONE=ON).
+#   Opt-in dist: COMPILER_FORTRAN_DISTRIBUTION=ON and FLANG_STANDALONE=OFF.
+#   If both are ON, prefer standalone (disable the fortran distribution).
+option(THEROCK_ENABLE_FLANG
+  "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" ON)
+
+# Prerequisite only: Flang needs amd-llvm and is Linux-only today.
+if(THEROCK_ENABLE_FLANG AND (WIN32 OR NOT THEROCK_ENABLE_COMPILER))
+  message(STATUS
+    "Disabling THEROCK_ENABLE_FLANG (requires THEROCK_ENABLE_COMPILER on non-Windows)")
+  set(THEROCK_ENABLE_FLANG OFF CACHE BOOL
+    "Build/install Flang (standalone amd-llvm-flang and/or amd-llvm fortran distribution)" FORCE)
+  set(THEROCK_ENABLE_FLANG OFF)
+endif()
+
+# FLANG=OFF must win over a cached/topology FLANG_STANDALONE=ON.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_ENABLE_FLANG_STANDALONE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE OFF CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+endif()
+
+# Per-distribution toggles for amd-llvm staging (see clang/cmake/caches/ROCm.cmake).
+# Defined after topology so THEROCK_ENABLE_COMPILER exists. Compose
+# THEROCK_AMD_LLVM_DISTRIBUTION; empty aggregate = full cmake --install.
+if(THEROCK_ENABLE_COMPILER)
+  option(THEROCK_ENABLE_COMPILER_DISTRIBUTION
+    "Stage LLVM 'compiler' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION
+    "Stage LLVM 'runtimes' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION
+    "Stage LLVM 'dev' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
+    "Stage LLVM 'tools' distribution for amd-llvm" ON)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
+    "Stage LLVM 'fortran' distribution for amd-llvm (default ON when FLANG is ON)" OFF
+    "THEROCK_ENABLE_FLANG" OFF)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
+    "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
+    "NOT WIN32" OFF)
+  option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
+    "Stage LLVM 'utils' distribution for amd-llvm" ON)
+
+  set(_therock_amd_llvm_distribution)
+  if(THEROCK_ENABLE_COMPILER_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution compiler)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution runtimes)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution dev)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution tools)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution fortran)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution multilibs)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution utils)
+  endif()
+  # FORCE so toggling THEROCK_ENABLE_COMPILER_*_DISTRIBUTION updates the effective
+  # list on reconfigure. Override by flipping the per-distribution options.
+  set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+    "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+    FORCE)
+  unset(_therock_amd_llvm_distribution)
+endif()
+
+# Prefer standalone over fortran distribution when both are enabled.
+if(THEROCK_ENABLE_FLANG
+   AND THEROCK_ENABLE_FLANG_STANDALONE
+   AND THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "FLANG_STANDALONE and COMPILER_FORTRAN_DISTRIBUTION both ON; "
+    "preferring standalone amd-llvm-flang (disabling fortran distribution)")
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION OFF CACHE BOOL
+    "Stage LLVM 'fortran' distribution for amd-llvm" FORCE)
+  set(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION OFF)
+  if(THEROCK_ENABLE_COMPILER)
+    set(_therock_amd_llvm_distribution "${THEROCK_AMD_LLVM_DISTRIBUTION}")
+    list(REMOVE_ITEM _therock_amd_llvm_distribution fortran)
+    set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+      "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+      FORCE)
+    unset(_therock_amd_llvm_distribution)
+  endif()
+endif()
+
+
+# Full-tree default only. Stage configures pass ALL=OFF and must not inherit
+# standalone just because FLANG's option default is ON.
+if(THEROCK_ENABLE_ALL
+   AND THEROCK_ENABLE_FLANG
+   AND NOT THEROCK_ENABLE_FLANG_STANDALONE
+   AND NOT THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+  message(STATUS
+    "ENABLE_ALL + FLANG=ON with no delivery path selected; "
+    "defaulting FLANG_STANDALONE=ON")
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON CACHE BOOL
+    "Enables amd-llvm-flang (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(THEROCK_ENABLE_FLANG_STANDALONE ON)
+endif()
+
+message("!!!!!THEROCK_ENABLE_FLANG_STANDALONE: ${THEROCK_ENABLE_FLANG_STANDALONE}")
+message("!!!!!THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION: ${THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION}")
+
+# No Flang toolchain => no Fortran clients/wrappers/tests in subprojects.
+# FLAGS.cmake runs before topology, so sync the effective policy here.
+if(NOT THEROCK_ENABLE_FLANG AND THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+  set(THEROCK_FLAG_BUILD_FORTRAN_LIBS OFF CACHE BOOL
+    "Build Fortran components in sub-projects (requires THEROCK_ENABLE_FLANG)" FORCE)
+  set(ROCM_BUILD_FORTRAN_LIBS OFF)
+endif()
+
 ################################################################################
 # Manual features that don't map to artifacts
 ################################################################################

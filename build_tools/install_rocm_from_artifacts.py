@@ -53,6 +53,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--libhipcxx | --no-libhipcxx]
     [--hipthreads | --no-hipthreads]
     [--dev | --no-dev]
+    [--flang | --no-flang]
     [--tests | --no-tests]
     [--base-only]
 
@@ -481,11 +482,17 @@ def retrieve_artifacts_by_run_id(args):
             args.sparse,
             args.libhipcxx,
             args.hipthreads,
+            args.flang,
         ]
     ):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+
+        def append_artifact_pattern(pattern: str):
+            if pattern not in argv:
+                argv.append(pattern)
+
         if args.sanity:
             argv.append("core-ocl_run")  # clinfo for the OpenCL sanity test
             argv.append("hipify_run")  # hipify-clang for the HIPIFY sanity test
@@ -508,6 +515,12 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("ncurses")
             # rocgdb tests require amd-llvm_dev for compiler headers/tools.
             argv.append("amd-llvm_dev")
+            # The rocgdb test harness looks up flang when the LLVM toolchain
+            # runs. Standalone Flang is the default, so that driver is in
+            # amd-llvm-flang_run (lib/llvm/bin/flang), not amd-llvm.
+            if "amd-llvm-flang" not in extra_artifacts:
+                extra_artifacts.append("amd-llvm-flang")
+            append_artifact_pattern("amd-llvm-flang_run")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -681,6 +694,15 @@ def retrieve_artifacts_by_run_id(args):
                 # hipRAND/rocRAND headers live in rand's _dev component (the
                 # extra_artifacts expansion below only pulls _lib/_test).
                 argv.append("rand_dev")
+
+        if args.flang:
+            # _lib (and _test with --tests) come from extra_artifacts expansion.
+            # --debug-tools may already have added the artifact for the rocgdb
+            # LLVM toolchain's flang driver.
+            if "amd-llvm-flang" not in extra_artifacts:
+                extra_artifacts.append("amd-llvm-flang")
+            append_artifact_pattern("amd-llvm-flang_run")
+            append_artifact_pattern("amd-llvm-flang_dev")
 
         # Fetch _lib (always), _dev (when --dev) and _test (when --tests) for
         # each artifact. Some projects have self-contained _test archives (just
@@ -1120,6 +1142,13 @@ def main(argv):
         "--libhipcxx",
         default=False,
         help="Include 'libhipcxx' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--flang",
+        default=False,
+        help="Include 'amd-llvm-flang' artifacts (Flang driver, flang-rt, Fortran modules)",
         action=argparse.BooleanOptionalAction,
     )
 

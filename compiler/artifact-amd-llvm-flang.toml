@@ -1,0 +1,30 @@
+[options]
+unmatched_exclude = [
+  "lib/llvm/lib/objects-*/**",
+]
+
+[components.lib."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/lib/libFortran*.a",
+  "lib/llvm/lib/libflang*.a",
+  # flang-rt from the runtimes ExternalProject (shared and/or static)
+  "lib/llvm/lib/**/libflang_rt*",
+  "lib/llvm/lib/libflang_rt*",
+]
+
+[components.run."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/bin/**",
+  # omp_lib.mod (+ kinds) and flang-rt intrinsic modules
+  "lib/llvm/lib/clang/*/finclude/**",
+]
+
+[components.dev."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/include/flang/**",
+  "lib/llvm/lib/cmake/flang/**",
+]
+
+[components.dbg."compiler/amd-llvm-flang/stage"]
+
+[components.doc."compiler/amd-llvm-flang/stage"]
