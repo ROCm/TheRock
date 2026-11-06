@@ -79,6 +79,11 @@ rm -rf $RPM_BUILD_ROOT
 {{ rpm_scripts['%post'] }}
 {% endif %}
 
+{% if rpm_scripts['%posttrans'] %}
+%posttrans
+{{ rpm_scripts['%posttrans'] }}
+{% endif %}
+
 {% if rpm_scripts['%preun'] %}
 %preun
 {{ rpm_scripts['%preun'] }}
