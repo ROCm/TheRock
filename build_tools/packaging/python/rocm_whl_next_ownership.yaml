@@ -207,6 +207,9 @@ python_indexes:
       pillow:
         owner_path: core/whl-next
         stream_group: all
+      pyelftools:
+        owner_path: core/whl-next
+        stream_group: all
       rocm:
         owner_path: core/whl-next
         stream_group: all
@@ -258,6 +261,16 @@ python_indexes:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1153:
         owner_path: core/whl-next
+      rocm-sdk-device-gfx1170:
+        owner_path: core/whl-next
+        streams:
+          - dev
+          - nightly
+      rocm-sdk-device-gfx1171:
+        owner_path: core/whl-next
+        streams:
+          - dev
+          - nightly
       rocm-sdk-device-gfx1200:
         owner_path: core/whl-next
       rocm-sdk-device-gfx1201:

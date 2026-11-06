@@ -110,7 +110,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -141,7 +141,7 @@ jobs:
           ref: ${{ fromJSON(inputs.external_repo_config).ref }}
           path: ${{ fromJSON(inputs.external_repo_config).checkout_path }}
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -153,9 +153,7 @@ jobs:
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
           choco install --no-progress -y ccache
-          # ninja pinned due to a bug in the 1.13.0 release:
-          # https://github.com/ninja-build/ninja/issues/2616
-          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y ninja --version 1.13.2
           choco install --no-progress -y strawberryperl
           # win_flex/win_bison are required by the amd-mesa (libva/d3d12) build.
           if [[ "${STAGE_NAME}" == "media-libs" ]]; then
@@ -235,6 +233,8 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
+            -DTHEROCK_WINDOWS_LINK_CPU_AFFINITY=ON \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -297,7 +297,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

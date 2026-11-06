@@ -38,7 +38,10 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
+from github_actions.amdgpu_family_matrix import (
+    get_all_families_for_trigger_types,
+    is_framework_test_disabled_for_family,
+)
 from github_actions.github_actions_api import gha_set_output
 
 # Values of --test-size, as the module docstring above describes them. A size
@@ -114,6 +117,15 @@ def build_test_matrix(
     size: str,
     today: date,
 ) -> dict[str, list[dict[str, str | int]]]:
+    # Check if JAX tests are disabled for this family
+    if is_framework_test_disabled_for_family(
+        amdgpu_family=target,
+        platform=platform,
+        framework="jax",
+    ):
+        print(f"Skipping {target}: JAX tests disabled for this family")
+        return {"include": []}
+
     entry = platform_entry(target, platform)
     if entry is None:
         raise ValueError(f"No {platform} AMDGPU family entry found for {target!r}")

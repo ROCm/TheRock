@@ -1,7 +1,7 @@
 ---
 author: Abhilash Reddy Endurthi (endurthiabhilash)
 created: 2026-07-28
-modified: 2026-08-04
+modified: 2026-09-29
 status: draft
 ---
 
@@ -271,10 +271,12 @@ rather than each regenerating its own — they do not have the full source tree
 present at configure time anyway, so a checked-in graph is strictly better for
 them.
 
-A later refinement: each build stage could emit the slice of the graph it knows
-and a downstream step could merge them, avoiding the single `ENABLE_ALL` full-tree
-configure in the drift job. Sequenced after the committed-graph + drift-check
-lands.
+A later refinement drops the drift job's `ENABLE_ALL` configure: a Python parser
+reads the super-project CMake directly — no submodules, no configure (~0.3 s
+versus ~6 min) — and runs cross-platform in `unit_tests.yml`. It unions both
+`if()` branches, so its conservative *may-depend* graph is a superset of any real
+configure's graph. Only the generator changes; the committed-graph and drift
+contract stays intact.
 
 ## Generalizing to the full level ladder
 
@@ -357,6 +359,11 @@ committed-graph choice does add a regenerate-and-recommit step on dependency edi
 but the drift check turns that from *silent* staleness into a *loud* CI failure —
 the same contract `BUILD_TOPOLOGY.toml` already carries.
 
+Parsing the super-project CMake (see CI integration) softens this rejection. With
+no configure to run (~0.3 s), we could compute the graph dynamically on every run
+and never commit it. We still commit it for reviewability and for external-repo
+consumers that lack a full source tree.
+
 ### C: Cut selection at the build-stage boundary
 
 An earlier draft of this RFC selected only consumers in the *same*
@@ -389,6 +396,11 @@ blowing the per-PR SLA. Transitive closure is retained, but as the opt-in **leve
 - **CI:** the per-PR change-detection job reads the committed graph directly and
   validates `test_policies.toml` against it; a low-frequency drift-check job
   regenerates the graph from a configure and fails on mismatch.
+- **Generator:** a later refinement replaces
+  `cmake/therock_emit_consumer_graph.cmake` and the drift configure with a Python
+  generator that uses the pinned `cmake-parser` dependency and runs cross-platform
+  in `unit_tests.yml`. Only the generator changes; the committed-graph and drift
+  contract stays intact.
 - **Behavioral parity:** existing couplings (e.g. rocGDB → rocgdb-cpu/gpu,
   hipCUB/rocThrust → rocPRIM, amdsmi → hip-tests/rocrtst) are preserved — as
   direct graph consumers or migrated `test_include` overrides — so selection
@@ -424,10 +436,13 @@ unknown component fails) and the `--explain` output.
 - **Drift-check trigger scope.** The drift job regenerates the graph only when
   graph-affecting files change. Is the trigger path set (`**/CMakeLists.txt`, the
   emit/registration cmake, the committed graph) sufficient, or can an edge change
-  slip past it?
+  slip past it? **Resolved:** the parser runs on every PR in `unit_tests.yml` (no
+  configure), so the drift check can run on every PR rather than only when
+  graph-affecting paths change.
 - **Cross-repo selection.** How should the graph interact with external-repo CI
   (rocm-systems / rocm-libraries) where only a subset of source is present at
-  configure time?
+  configure time? **Resolved:** external repos consume TheRock's committed graph
+  directly; the parser keeps it cheap to regenerate and drift-check.
 - **Identifier-space mapping.** Selection uses three identifier spaces that do
   not currently share an authoritative mapping: external-repo *subtree paths*
   (`projects/clr`, `shared/rocroller`), the *consumer-graph keys* the selector
@@ -437,7 +452,10 @@ unknown component fails) and the `--explain` output.
   expects graph keys and only strips a leading `projects/`, so unmapped inputs
   select nothing beyond themselves and underscore/hyphen skew drops matrix jobs.
   A normalization layer (subtree path -> graph key -> matrix key) is needed; it is
-  sequenced with the external-repo CI work rather than this change.
+  sequenced with the external-repo CI work rather than this change. **Resolved:**
+  the parser derives the mapping from `EXTERNAL_SOURCE_DIR` — a `subtree_map`
+  (subtree path -> graph key(s)) plus a matrix-key layer — replacing the
+  hand-maintained `_EXTERNAL_SUBTREE_ALIASES` and `_CI_TEST_SELECTOR_ALIASES` dicts.
 - **Test tiers for levels 1/2/5.** The depth ladder covers levels 3-5 by
   selection radius, but true level 5 (unit-only) and level 1 (full QA / nightly)
   need a per-project `test_tier` output the test-runner job honors. Should that
@@ -446,3 +464,8 @@ unknown component fails) and the `--explain` output.
   name. Should the public RFC and code adopt a different name for the gating
   levels? The mechanism does not depend on the label, so renaming is a mechanical
   substitution once a name is chosen.
+
+## Revision History
+
+- 2026-07-28: Abhilash Reddy Endurthi: Initial draft.
+- 2026-09-29: Abhilash Reddy Endurthi: Replace the drift job's `ENABLE_ALL` configure with a Python `cmake-parser` generator that runs cross-platform in `unit_tests.yml`; resolve the drift-trigger, cross-repo, and identifier-mapping open questions.

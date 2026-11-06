@@ -161,21 +161,15 @@ def run_linux(args: argparse.Namespace) -> int:
     if args.setup_only:
         steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
     else:
-        steps.append(
-            (
-                "Running test",
-                f"{args.test_script} || echo 'Test failed with exit code '$?",
-            )
-        )
+        steps.append(("Running test", args.test_script))
 
     total = len(steps)
-    lines = ["set -e"]
+    lines = ["set -e", "set -o pipefail"]
     for i, (desc, cmd) in enumerate(steps, 1):
         lines.append(f"echo '[{i}/{total}] {desc}'")
-        if i == total:
-            lines.append("set +e")
         lines.append(cmd)
-    lines.append("exec /bin/bash")
+    if args.setup_only:
+        lines.append("exec /bin/bash")
 
     docker_cmd = [
         "docker",

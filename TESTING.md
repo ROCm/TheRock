@@ -170,9 +170,11 @@ Build environments:
 
 #### Super-project CMake build - Validation methods
 
-We are evaluating adding unit tests for certain features of the CMake
-build system itself, see https://github.com/ROCm/TheRock/pull/6984 for
-example.
+Unit tests for the CMake build system live in [`cmake/tests/`](/cmake/tests).
+Tests such as [`rocm_build_flags_test.py`](/cmake/tests/rocm_build_flags_test.py)
+use small CMake projects to exercise helpers without configuring the full
+super-project or initializing its submodules. Some tests compile small programs
+and require a host compiler, in addition to CMake and Ninja.
 
 The CI systems in [TheRock](https://github.com/ROCm/TheRock) and component
 repositories like [rocm-systems](https://github.com/ROCm/rocm-systems)
@@ -341,8 +343,16 @@ and particularly the
 
 All Python unit tests should be run as part of
 [`.github/workflows/unit_tests.yml`](/.github/workflows/unit_tests.yml), with
-the help of files like
-[`build_tools/pyproject.toml`](/build_tools/pyproject.toml).
+test discovery and coverage configured in [`pyproject.toml`](/pyproject.toml).
+The explicit `testpaths` list selects unit tests and excludes suites that need
+build artifacts or other integration-test environments.
+
+To run the tests:
+
+```bash
+python -m pip install -r requirements-test.txt
+pytest
+```
 
 Note that simple unit tests do not fully replace integration testing using real
 build tools, packages, or remote APIs.

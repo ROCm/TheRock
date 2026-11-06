@@ -110,10 +110,11 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     ]
 
     # to preserve fail-fast behavior
-    assert len(dist_names_list) >= 1, (
-        "No distribution candidates found for 'rocm_sdk_devel'. "
-        "Ensure rocm[devel] is installed in the current environment."
-    )
+    if not dist_names_list:
+        raise AssertionError(
+            "No distribution candidates found for 'rocm_sdk_devel'. "
+            "Ensure rocm[devel] is installed in the current environment."
+        )
     # Try to find candidates until found one with files and a usable RECORD
     record_pkg_file = None
     dist_files = None

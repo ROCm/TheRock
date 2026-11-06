@@ -18,11 +18,21 @@ if(WIN32)
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  # Disable CIR on Windows. https://github.com/ROCm/llvm-project/pull/5071 enables CIR by default.
+  set(CLANG_ENABLE_CIR OFF)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
+  # MLIR is a dependency of cir/flang. If it is not explicitly on LLVM_ENABLE_PROJECTS then it is added
+  # to LLVM_DEPENDENCY_ONLY_PROJECTS, which causes issues:
+  # 1. MLIR_INCLUDE_TESTS=off, this disables the check-mlir target, which the CI tries to run.
+  # 2. MLIR_ENABLE_PDL_IN_PATTERNMATCH_default=0, which causes some mlir tests to fail because PDL
+  #    support is expected.
+  # 3. Compilation failure: error: no type named ‘type’ in ‘struct std::enable_if.
+  #    This stems from #include "llvm/ADT/TypeSwitch.h" not being located. When PDL is OFF,
+  #    a different header path is taken.
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang;mlir" CACHE STRING "Enable LLVM projects" FORCE)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
@@ -54,11 +64,22 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      # ppc64le has native 128-bit long double, so libquadmath is not needed.
-      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
-        set(FLANG_RUNTIME_F128_MATH_LIB "")
+      # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
+      # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
+      # into libflang_rt.runtime instead of building libflang_rt.quadmath.
+      #
+      # This must be a typed cache entry, not a normal variable.
+      # flang/cmake/modules/FlangCommon.cmake declares the variable with
+      # set(... CACHE STRING) and LLVM sets cmake_minimum_required(3.20), so
+      # CMP0126 is OLD there and that call would discard a normal variable of
+      # the same name, leaving the flang driver and the flang-rt runtimes build
+      # with different values. An existing typed cache entry makes the
+      # FlangCommon.cmake declaration a no-op, so this selection is
+      # authoritative for both.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le|riscv64")
+        set(FLANG_RUNTIME_F128_MATH_LIB "" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
       else()
-        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
       endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out

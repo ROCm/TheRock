@@ -22,7 +22,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import urlopen, Request
 
 
@@ -188,10 +188,11 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
-        assert self._gh_cli_path is not None, (
-            "_send_request_via_gh_cli called without gh CLI path set. "
-            "Call get_auth_method() first."
-        )
+        if self._gh_cli_path is None:
+            raise AssertionError(
+                "_send_request_via_gh_cli called without gh CLI path set. "
+                "Call get_auth_method() first."
+            )
 
         # Strip the base URL to get the API path
         api_path = url.removeprefix("https://api.github.com")
@@ -249,6 +250,8 @@ class GitHubAPI:
         Raises:
             GitHubAPIError: If the request fails for any reason.
         """
+        if urlsplit(url).scheme != "https" or not urlsplit(url).netloc:
+            raise GitHubAPIError(f"Expected an HTTPS API URL: {url}")
         headers = self._get_request_headers()
         data: bytes | None = None
         if body is not None:
@@ -257,14 +260,18 @@ class GitHubAPI:
         request = Request(url, data=data, headers=headers, method=method)
 
         try:
-            with urlopen(request, timeout=timeout_seconds) as response:
+            with urlopen(
+                request,
+                timeout=timeout_seconds,
+                # HTTPS URL checked above.
+            ) as response:  # nosec B310
                 response_body = response.read().decode("utf-8")
         except HTTPError as e:
             # Try to read the error response body for more context
             error_body = ""
             try:
                 error_body = e.read().decode("utf-8")
-            except Exception:
+            except (OSError, UnicodeError):
                 pass  # If we can't read it, continue with generic message
 
             if e.code == 403:
@@ -477,7 +484,7 @@ def gha_append_step_summary(summary: str, mirror_to_job_file: bool = True):
     # Use double newlines to split sections in markdown.
     block = summary + "\n\n"
 
-    with open(step_summary_file, "a") as f:
+    with open(step_summary_file, "a", encoding="utf-8") as f:
         # Use double newlines to split sections in markdown.
         f.write(block)
 
@@ -553,6 +560,22 @@ def gha_load_github_event() -> dict[str, Any]:
             f"got {type(data).__name__}"
         )
     return data
+
+
+def gha_get_pr_labels() -> list[str]:
+    """Read PR label names from the GitHub Actions event payload.
+
+    Returns an empty list when ``GITHUB_EVENT_PATH`` is not set (e.g.
+    local development) or when the event is not a ``pull_request``.
+    """
+    if not os.environ.get("GITHUB_EVENT_PATH"):
+        return []
+    try:
+        event = gha_load_github_event()
+    except (FileNotFoundError, ValueError, RuntimeError, KeyError):
+        return []
+    pr_obj = event.get("pull_request", {})
+    return [label["name"] for label in pr_obj.get("labels", [])]
 
 
 def is_current_run_pr_from_fork() -> bool:

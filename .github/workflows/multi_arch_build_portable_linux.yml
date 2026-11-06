@@ -5,7 +5,7 @@
 #
 # This workflow builds TheRock in stages:
 # 1. compiler-runtime (generic) - sysdeps, base, compiler, runtimes, profiler-core
-# 2. emulation (generic) - rocjitsu, rocjitsu-hotswap, mirage
+# 2. emulation (generic) - rocjitsu, rocjitsu-hotswap, mirage (independent)
 # 3. runtime-tests (generic) - hip-tests, rocrtst (parallel to math-libs)
 # 4. wsl-rocdxg (generic) - WSL-only ROCDXG bridge library (after compiler-runtime)
 # 5. math-libs (per-arch) - BLAS, FFT, etc.
@@ -13,7 +13,7 @@
 # 7. storage-libs (generic) - hipfile (parallel to math-libs)
 # 8. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 9. dctools-core (generic) - RDC (parallel to math-libs)
-# 10. profiler-apps (generic) - rocprofiler-systems (after storage-libs)
+# 10. profiler-apps (generic) - rocprofiler-systems, rocprofiler-compute (after storage-libs)
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
@@ -96,12 +96,12 @@ jobs:
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - name: "Quartz - started - build ROCm"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_portable_linux.yml
@@ -137,11 +137,9 @@ jobs:
   # STAGE: emulation (generic)
   # ==========================================================================
   emulation:
-    needs: compiler-runtime
     if: >-
       ${{
         !cancelled() && !failure() &&
-        !contains(needs.*.result, 'cancelled') &&
         !contains(inputs.prebuilt_stages, 'emulation') &&
         !contains(inputs.skip_stages, 'emulation')
       }}
@@ -521,7 +519,7 @@ jobs:
         media-libs,
         wsl-rocdxg,
       ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Report reused stage results
         env:
@@ -532,12 +530,12 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
     name: "Quartz - completed - build ROCm"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build ROCm"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_portable_linux.yml

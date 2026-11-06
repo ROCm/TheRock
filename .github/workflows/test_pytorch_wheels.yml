@@ -17,10 +17,16 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       package_index_url:
-        description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
-        required: true
+        description: Full Python package index URL for use with --index-url.
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      package_find_links_url:
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -69,8 +75,16 @@ on:
         required: true
         type: string
       package_index_url:
-        required: true
+        description: Full Python package index URL for use with --index-url.
         type: string
+        default: ""
+      package_find_links_url:
+        description: >-
+          Flat package page for use with --find-links. For CI artifacts, set this
+          to the run's python/index.html and package_index_url to
+          https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -114,7 +128,8 @@ jobs:
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # Linux uses the digest-pinned image below; other platforms run without a container.
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39' || null }} # zizmor: ignore[unpinned-images]
       # SYS_PTRACE is required by PyTorch's test infra, which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --ipc host
@@ -138,6 +153,7 @@ jobs:
       TORCH_VERSION: ${{ inputs.torch_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -152,7 +168,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -168,9 +184,10 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
+          allow-prereleases: true
 
       # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
       # select GPU-specific device packages. Expand the family to get the
@@ -191,6 +208,7 @@ jobs:
             --torch-version="${TORCH_VERSION}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --device-extras="${DEVICE_EXTRAS}"
 
       - name: Set git options
@@ -209,6 +227,7 @@ jobs:
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       # Here we checkout the same version of PyTorch that wheels were built from
@@ -286,7 +305,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports-${{ inputs.amdgpu_family }}
           path: external-builds/pytorch/pytorch/test/test-reports/
@@ -301,7 +320,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

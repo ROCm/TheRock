@@ -14,7 +14,8 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  # Every job publishes a container image to GHCR.
+  packages: write # zizmor: ignore[excessive-permissions]
 
 jobs:
   publish_build_manylinux_x86_64:
