@@ -2,7 +2,10 @@
 """Unit tests for publish_rocm_to_release_buckets.py."""
 
 import os
+import re
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,7 +13,9 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 from github_actions.publish_rocm_to_release_buckets import main
+from _therock_utils.storage_backend import LocalStorageBackend
 from _therock_utils.storage_location import StorageLocation
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
 class TestPublishRocmToReleaseBuckets(unittest.TestCase):
@@ -113,8 +118,9 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl, deb, rpm
-        self.assertEqual(mock_copy.call_count, 5)
+        # Calls: tarballs, python -> v3/whl-staging, python -> v3/whl, deb, rpm,
+        # amd-repo-setup packages
+        self.assertEqual(mock_copy.call_count, 6)
         # deb packages
         deb_source, deb_dest = mock_copy.call_args_list[3].args
         self.assertEqual(deb_source.bucket, "therock-dev-artifacts")
@@ -131,6 +137,60 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertRegex(
             rpm_dest.relative_path, r"^v5/rocm/core/packages/rpm/\d{8}-123$"
         )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_repo_setup_packages_go_to_the_stream_core_bucket(self, mock_copy):
+        mock_copy.return_value = 2
+        cases = [
+            ("dev", "therock-dev-artifacts", "therock-repo-amd-dev-core"),
+            ("nightly", "therock-nightly-artifacts", "therock-repo-amd-nightly-core"),
+            ("prerelease", "therock-prerelease-artifacts", "therock-repo-amd-rc-core"),
+        ]
+        for release_type, source_bucket, dest_bucket in cases:
+            with self.subTest(release_type=release_type):
+                mock_copy.reset_mock()
+                main(
+                    [
+                        "--run-id",
+                        "123",
+                        "--platform",
+                        "linux",
+                        "--release-type",
+                        release_type,
+                        "--dry-run",
+                    ]
+                )
+
+                # Last call, after the package repositories.
+                source, dest = mock_copy.call_args_list[-1].args
+                self.assertEqual(source.bucket, source_bucket)
+                self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
+                self.assertEqual(dest.bucket, dest_bucket)
+                self.assertEqual(dest.relative_path, "v5/amd-repo-setup")
+                # A published package is never replaced by default.
+                self.assertEqual(
+                    mock_copy.call_args_list[-1].kwargs, {"skip_existing": True}
+                )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_overwrite_flag_disables_skip_existing(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "nightly",
+                "--overwrite-repo-setup-packages",
+                "--dry-run",
+            ]
+        )
+
+        source, _ = mock_copy.call_args_list[-1].args
+        self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
+        self.assertEqual(mock_copy.call_args_list[-1].kwargs, {"skip_existing": False})
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_windows_copies_native_msi_packages(self, mock_copy):
@@ -441,6 +501,254 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 self.assertEqual(
                     tarball_dest.relative_path, "v5/rocm/core/tarball-asan"
                 )
+
+
+class TestRepoSetupPackagesArePublished(unittest.TestCase):
+    """The amd-repo-setup packages are published to ``v5/amd-repo-setup/``.
+
+    ``repo_setup_package()`` puts them under ``{run_id}-linux/amd-repo-setup/``,
+    outside ``packages/{pkg_type}/``, so they reach the release bucket through
+    their own step rather than inside the package repositories.
+
+    These tests drive main() with a real ``LocalStorageBackend`` and assert
+    files on disk, unlike the rest of this module, which mocks
+    ``copy_directory`` and checks the locations passed to it. Mocking the copy
+    cannot show what is actually transported. The local backend ignores the
+    bucket; ``test_repo_setup_packages_go_to_the_stream_core_bucket`` covers it.
+    """
+
+    RUN_ID = "12345"
+    RELEASE_TYPES = ("prerelease", "nightly")
+    PROFILES = ("ubuntu2404", "rhel10")
+
+    @staticmethod
+    def _file_name(release_type, profile, run_id):
+        """Return the builder's file name for a package of this run.
+
+        rc keeps the builder's default suffix; nightly carries the run id.
+        """
+        if profile == "ubuntu2404":
+            if release_type == "nightly":
+                return f"amd-repo-setup_7.14.0~20261105-{run_id}~ubuntu2404_all.deb"
+            return "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb"
+        if release_type == "nightly":
+            return f"amd-repo-setup-7.14.0~20261105-{run_id}.nightly.el10.noarch.rpm"
+        return "amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm"
+
+    @staticmethod
+    def _write(path, contents=b"CONTENTS"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+
+    def _staging(self):
+        staging = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, staging, ignore_errors=True)
+        return staging
+
+    def _published(
+        self,
+        release_type,
+        *extra_args,
+        repo_setup_packages=True,
+        run_id=RUN_ID,
+        staging=None,
+        package_bytes=b"CONTENTS",
+    ):
+        """Seed a run's outputs, run the real publish, return what it wrote.
+
+        Returns paths relative to the staging root, excluding every source
+        run's own prefix. Pass ``staging`` to publish a further run into the
+        same release bucket.
+        """
+        if staging is None:
+            staging = self._staging()
+        # The local backend maps a location to staging/<relative path> whatever
+        # its bucket, so the source tree can be seeded from any root.
+        root = WorkflowOutputRoot("unused", "", run_id, "linux")
+        # main() fails if a run has no tarball or Python package.
+        self._write(
+            root.tarball("therock-dist-linux-gfx94X-dcgpu-7.14.0.tar.gz").local_path(
+                staging
+            )
+        )
+        python = root.python_packages("gfx94X-dcgpu").relative_path
+        self._write(staging / f"{python}/rocm_sdk_core-7.14.0-py3-none-any.whl")
+        # Layout mirrors upload_package_repo.py: APT uses pool/ + dists/, rpm
+        # puts packages under x86_64/ with repodata/ alongside.
+        repositories = {
+            "deb": ["pool/main/r/rocm/rocm_7.14.0_amd64.deb", "dists/stable/Release"],
+            "rpm": ["x86_64/rocm-7.14.0.x86_64.rpm", "x86_64/repodata/repomd.xml"],
+        }
+        for pkg_type, contents in repositories.items():
+            base = root.native_linux_packages(pkg_type).relative_path
+            for rel in contents:
+                self._write(staging / f"{base}/{rel}")
+        if repo_setup_packages:
+            for profile in self.PROFILES:
+                location = root.repo_setup_package(
+                    profile, self._file_name(release_type, profile, run_id)
+                )
+                self._write(location.local_path(staging), package_bytes)
+
+        backend = LocalStorageBackend(staging_dir=staging)
+        with mock.patch(
+            "github_actions.publish_rocm_to_release_buckets.create_storage_backend",
+            return_value=backend,
+        ):
+            main(
+                [
+                    "--run-id",
+                    run_id,
+                    "--platform",
+                    "linux",
+                    "--release-type",
+                    release_type,
+                    *extra_args,
+                ]
+            )
+
+        written = {
+            p.relative_to(staging).as_posix()
+            for p in staging.rglob("*")
+            if p.is_file()
+            and not re.match(r"[0-9]+-linux/", p.relative_to(staging).as_posix())
+        }
+        self.assertTrue(written, "publish wrote nothing outside the source prefix")
+        return written
+
+    @staticmethod
+    def _repo_setup_files(written):
+        return {
+            p
+            for p in written
+            if "amd-repo-setup/" in p
+            or p.rsplit("/", 1)[-1].startswith("amd-repo-setup")
+        }
+
+    def test_repo_setup_packages_are_published(self):
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                written = self._published(release_type)
+
+                # Exactly these, under the builder's file names: in their own
+                # folder, and nowhere else (in particular, not inside the
+                # package repositories).
+                self.assertEqual(
+                    self._repo_setup_files(written),
+                    {
+                        f"v5/amd-repo-setup/{profile}/"
+                        + self._file_name(release_type, profile, self.RUN_ID)
+                        for profile in self.PROFILES
+                    },
+                )
+
+    def test_each_nightly_build_adds_its_own_package(self):
+        # Two nightly builds publish into the same release bucket. The second
+        # adds its packages next to the first's and replaces nothing.
+        staging = self._staging()
+        self._published(
+            "nightly", run_id="111", staging=staging, package_bytes=b"RUN-1"
+        )
+        written = self._published(
+            "nightly", run_id="222", staging=staging, package_bytes=b"RUN-2"
+        )
+
+        self.assertEqual(
+            self._repo_setup_files(written),
+            {
+                f"v5/amd-repo-setup/{profile}/"
+                + self._file_name("nightly", profile, run_id)
+                for profile in self.PROFILES
+                for run_id in ("111", "222")
+            },
+        )
+        for profile in self.PROFILES:
+            first = staging / (
+                f"v5/amd-repo-setup/{profile}/"
+                + self._file_name("nightly", profile, "111")
+            )
+            self.assertEqual(first.read_bytes(), b"RUN-1")
+
+    def _publish_the_same_rc_twice(self, *extra_args):
+        """Publish an rc build, then a rebuild of the same rc with new bytes.
+
+        rc packages keep the builder's default suffix, so the rebuild's files
+        have the same names as the first build's. Returns the published bytes
+        of each profile's package.
+        """
+        staging = self._staging()
+        self._published(
+            "prerelease", run_id="111", staging=staging, package_bytes=b"RUN-1"
+        )
+        with self.assertLogs(level="INFO") as logs:
+            self._published(
+                "prerelease",
+                *extra_args,
+                run_id="222",
+                staging=staging,
+                package_bytes=b"RUN-2",
+            )
+        published = {
+            profile: (
+                staging
+                / f"v5/amd-repo-setup/{profile}"
+                / self._file_name("prerelease", profile, "222")
+            ).read_bytes()
+            for profile in self.PROFILES
+        }
+        return published, "\n".join(logs.output)
+
+    def test_a_published_package_is_not_replaced(self):
+        published, logs = self._publish_the_same_rc_twice()
+
+        self.assertEqual(published, {p: b"RUN-1" for p in self.PROFILES})
+        self.assertIn("already exists, not replaced", logs)
+
+    def test_overwrite_replaces_a_published_package(self):
+        published, _ = self._publish_the_same_rc_twice(
+            "--overwrite-repo-setup-packages"
+        )
+
+        self.assertEqual(published, {p: b"RUN-2" for p in self.PROFILES})
+
+    def test_repository_is_still_published(self):
+        # Without this, the test above would also pass if publishing the
+        # package repositories had stopped.
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                written = self._published(release_type)
+
+                # nightly adds a dated folder after the format, so match the
+                # tail below it.
+                for suffix in (
+                    "/pool/main/r/rocm/rocm_7.14.0_amd64.deb",
+                    "/dists/stable/Release",
+                    "/x86_64/rocm-7.14.0.x86_64.rpm",
+                    "/x86_64/repodata/repomd.xml",
+                ):
+                    self.assertTrue(
+                        any(p.endswith(suffix) for p in written),
+                        f"nothing published ending in {suffix}; got {sorted(written)}",
+                    )
+
+    def test_run_without_repo_setup_packages_still_publishes(self):
+        # Builds that do not build the package upload none; that must not fail
+        # the publish.
+        for release_type in self.RELEASE_TYPES:
+            with self.subTest(release_type=release_type):
+                written = self._published(release_type, repo_setup_packages=False)
+
+                self.assertEqual(self._repo_setup_files(written), set())
+
+    def test_asan_does_not_publish_repo_setup_packages(self):
+        written = self._published("nightly", "--build-variant", "asan")
+
+        self.assertEqual(self._repo_setup_files(written), set())
+
+    def test_skip_native_packages_skips_repo_setup_packages(self):
+        written = self._published("nightly", "--skip-native-packages")
+
+        self.assertEqual(self._repo_setup_files(written), set())
 
 
 if __name__ == "__main__":

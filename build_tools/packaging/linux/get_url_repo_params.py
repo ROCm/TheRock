@@ -617,31 +617,25 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
     """Emit every parameter the amd-repo-setup build matrix needs, in one output.
 
     Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
-    the build line configures and what follows from it -- ``stream``, ``tier``,
-    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
-    public stream gets all five empty, which callers read as "no package for
-    this line"; the matrix is still emitted.
+    the build line configures and what follows from it -- ``stream``,
+    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``, ``version_suffix``.
+    A line with no public stream gets all five empty, which callers read as
+    "no package for this line"; the matrix is still emitted.
     """
     # Deferred: build_repo_setup_package imports jinja2 at module level, and this
     # script's other subcommands run in a workflow job that installs no Python
     # packages. Only this subcommand needs the builder.
-    from build_repo_setup_package import (
-        REPO_ID_PREFIX,
-        is_signed,
-        list_profiles,
-        repo_id,
-        stream_shape,
-    )
+    from build_repo_setup_package import is_signed, list_profiles, stream_shape
 
     profiles = list_profiles(args.pkg_type)
     outputs = {
         "os_profiles": json.dumps(profiles),
         "images": json.dumps(get_container_image_map(profiles)),
         "stream": "",
-        "tier": "",
         "repo_base_url": "",
         "gpg_key_url": "",
         "repo_sub_folder": "",
+        "version_suffix": "",
     }
     stream = get_public_repo_stream(args.release_type)
     if stream:
@@ -652,9 +646,6 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
             )
             return 1
         outputs["stream"] = stream
-        # Names the stream's package file (amd-repo-setup-<tier>.<fmt>): the repo
-        # file stem without its prefix, so rc is "stablerc".
-        outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
         outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
         outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
             args.release_type, signed=is_signed(stream)
@@ -662,12 +653,18 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
         # A build_id stream serves each build from its own dated folder; a flat
         # one serves one tree at the root, and the builder rejects a sub-folder
         # there. The run id is only validated where it is used.
+        #
+        # A build_id stream's version carries only the date, so two builds on
+        # the same day would produce the same package file. The run id as the
+        # version suffix keeps each build's package distinct, so publishing one
+        # never replaces another. A flat stream keeps the builder's default.
         if shape == _SHAPE_BUILD_ID:
             try:
                 outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
             except ValueError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
+            outputs["version_suffix"] = args.run_id
     gha_set_output(outputs)
     return 0
 
@@ -954,9 +951,9 @@ def main(argv: list[str] | None = None) -> int:
     p_rp = subparsers.add_parser(
         "get-repo-setup-params",
         help=(
-            "Print os_profiles=, images=, stream=, tier=, repo_base_url=, "
-            "gpg_key_url= and repo_sub_folder= for an amd-repo-setup build. The last "
-            "five are empty for a line with no public repository (e.g. ci/dev)."
+            "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url=, "
+            "repo_sub_folder= and version_suffix= for an amd-repo-setup build. The "
+            "last five are empty for a line with no public repository (e.g. ci/dev)."
         ),
     )
     p_rp.add_argument(

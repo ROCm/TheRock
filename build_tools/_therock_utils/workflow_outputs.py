@@ -268,6 +268,38 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
+    def repo_setup_packages(self) -> StorageLocation:
+        """Location for the ``amd-repo-setup`` bootstrap packages directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/amd-repo-setup``, which
+        holds one folder per distro (see ``repo_setup_package()``).
+        ``publish_rocm_to_release_buckets.py`` publishes it as is to
+        ``v5/amd-repo-setup/`` in the release bucket.
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/amd-repo-setup")
+
+    def repo_setup_package(self, os_profile: str, filename: str) -> StorageLocation:
+        """Location for an ``amd-repo-setup`` bootstrap package.
+
+        ``{run_id}-linux/amd-repo-setup/{os_profile}/{filename}`` (e.g.
+        ``12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261013-12345~ubuntu2404_all.deb``).
+
+        The package keeps the file name the builder gave it, which carries its
+        version. On a per-build stream such as nightly the version includes the
+        run id, so each build's package has its own name and publishing one
+        never replaces another. The folder sits outside ``packages/``, so the
+        package is published to its own folder rather than into the package
+        repositories.
+
+        Args:
+            os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
+            filename: The built package's file name.
+        """
+        return StorageLocation(
+            self.bucket,
+            f"{self.repo_setup_packages().relative_path}/{os_profile}/{filename}",
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self, artifact_group: str = "") -> StorageLocation:

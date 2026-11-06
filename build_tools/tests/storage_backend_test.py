@@ -969,6 +969,62 @@ class TestLocalStorageBackendCopyDirectory(unittest.TestCase):
             self.assertEqual(count, 1)
             self.assertFalse((staging_dir / "v3").exists())
 
+    def _copy_over_existing(self, **kwargs):
+        """Copy two files to a destination that already holds one of them.
+
+        Returns the copy count and the destination's contents.
+        """
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "pkgs"
+            (src_dir / "sub").mkdir(parents=True)
+            (src_dir / "sub" / "old.deb").write_bytes(b"new-bytes")
+            (src_dir / "sub" / "new.deb").write_bytes(b"new-bytes")
+            dst_dir = staging_dir / "v5" / "sub"
+            dst_dir.mkdir(parents=True)
+            (dst_dir / "old.deb").write_bytes(b"published")
+
+            source = StorageLocation("bucket", "run-1/pkgs")
+            dest = StorageLocation("bucket", "v5")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest, **kwargs)
+
+            return count, {
+                f.name: f.read_bytes() for f in dst_dir.iterdir() if f.is_file()
+            }
+
+    def test_replaces_existing_files_by_default(self):
+        count, published = self._copy_over_existing()
+
+        self.assertEqual(count, 2)
+        self.assertEqual(published, {"old.deb": b"new-bytes", "new.deb": b"new-bytes"})
+
+    def test_skip_existing_leaves_existing_files_in_place(self):
+        # Logged as a warning: a skip is worth noticing in the job log.
+        with self.assertLogs(level="WARNING") as logs:
+            count, published = self._copy_over_existing(skip_existing=True)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(published, {"old.deb": b"published", "new.deb": b"new-bytes"})
+        self.assertTrue(
+            any("sub/old.deb already exists, not replaced" in m for m in logs.output)
+        )
+
+    def test_skip_existing_copies_into_an_empty_destination(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+            src_dir = staging_dir / "run-1" / "pkgs"
+            src_dir.mkdir(parents=True)
+            (src_dir / "a.deb").write_bytes(b"data")
+
+            source = StorageLocation("bucket", "run-1/pkgs")
+            dest = StorageLocation("bucket", "v5")
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.copy_directory(source, dest, skip_existing=True)
+
+            self.assertEqual(count, 1)
+            self.assertTrue((staging_dir / "v5" / "a.deb").is_file())
+
 
 # ---------------------------------------------------------------------------
 # S3StorageBackend.copy_files
