@@ -146,6 +146,8 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
+from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -166,6 +168,57 @@ is_windows = platform.system() == "Windows"
 
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
+
+
+@dataclass(frozen=True)
+class CodecSource:
+    name: str  # Also the top-level directory in the archive.
+    url: str
+    sha256: str
+    cmake_args: list[str]
+
+
+# Image codecs for torchvision's image extension on Linux. They are built as
+# static, position independent libraries and linked into the extension, so the
+# wheel needs no extra shared libraries and the build image needs no -devel
+# packages. Listed in dependency order: libpng links against zlib.
+TORCHVISION_CODEC_SOURCES = [
+    CodecSource(
+        name="zlib-1.3.2",
+        url="https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/zlib-1.3.2.tar.gz",
+        sha256="bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
+        cmake_args=["-DZLIB_BUILD_SHARED=OFF", "-DZLIB_BUILD_TESTING=OFF"],
+    ),
+    CodecSource(
+        name="libpng-1.6.59",
+        url="https://github.com/pnggroup/libpng/archive/refs/tags/v1.6.59.tar.gz",
+        sha256="2540302a1844ad2b2b501977abecfa850f265f97b78f065a712ab4074a89f5b5",
+        cmake_args=["-DPNG_SHARED=OFF", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF"],
+    ),
+    CodecSource(
+        name="libjpeg-turbo-3.2.1",
+        url="https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.1/libjpeg-turbo-3.2.1.tar.gz",
+        sha256="c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f",
+        cmake_args=["-DENABLE_SHARED=OFF", "-DWITH_TURBOJPEG=OFF"],
+    ),
+    CodecSource(
+        name="libwebp-1.6.0",
+        url="https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+        sha256="e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564",
+        cmake_args=[
+            "-DBUILD_SHARED_LIBS=OFF",
+            "-DWEBP_BUILD_ANIM_UTILS=OFF",
+            "-DWEBP_BUILD_CWEBP=OFF",
+            "-DWEBP_BUILD_DWEBP=OFF",
+            "-DWEBP_BUILD_GIF2WEBP=OFF",
+            "-DWEBP_BUILD_IMG2WEBP=OFF",
+            "-DWEBP_BUILD_VWEBP=OFF",
+            "-DWEBP_BUILD_WEBPINFO=OFF",
+            "-DWEBP_BUILD_WEBPMUX=OFF",
+            "-DWEBP_BUILD_EXTRAS=OFF",
+        ],
+    ),
+]
 
 # List of library preloads for Linux to generate into _rocm_init.py.
 # These are loaded with RTLD_GLOBAL on `import torch` via _rocm_init.py so
@@ -1360,6 +1413,75 @@ def do_build_pytorch_audio(
     copy_to_output(args, built_wheel)
 
 
+def build_torchvision_codecs(build_dir: Path) -> Path:
+    """Build static zlib, libpng, libjpeg-turbo and libwebp into a prefix.
+
+    torchvision's setup.py only warns when it can't find the codec headers, and
+    then builds an image extension whose decode_png/decode_jpeg/decode_webp
+    raise at runtime. The manylinux build image deliberately carries no -devel
+    packages, so we build the codecs here and return the install prefix.
+    """
+    prefix = build_dir / "install"
+    remove_dir_if_exists(build_dir)
+    build_dir.mkdir(parents=True)
+
+    for src in TORCHVISION_CODEC_SOURCES:
+        archive = build_dir / f"{src.name}.tar.gz"
+        print(f"Downloading {src.url}")
+        urllib.request.urlretrieve(src.url, archive)  # nosec B310 (fixed HTTPS URL)
+        actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+        if actual != src.sha256:
+            raise RuntimeError(
+                f"SHA256 mismatch for {src.url}: {actual} != {src.sha256}"
+            )
+        with tarfile.open(archive, "r:gz") as tar:
+            tar.extractall(build_dir, filter="data")
+        run_command(
+            [
+                "cmake",
+                "-G",
+                "Ninja",
+                "-S",
+                build_dir / src.name,
+                "-B",
+                build_dir / f"{src.name}-build",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+                f"-DCMAKE_INSTALL_PREFIX={prefix}",
+                "-DCMAKE_INSTALL_LIBDIR=lib",
+                f"-DCMAKE_PREFIX_PATH={prefix}",
+                # Ignore CMAKE_PREFIX_PATH from the environment (e.g. ROCm's).
+                "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=OFF",
+                *src.cmake_args,
+            ],
+            cwd=build_dir,
+        )
+        run_command(
+            [
+                "cmake",
+                "--build",
+                build_dir / f"{src.name}-build",
+                "--target",
+                "install",
+            ],
+            cwd=build_dir,
+        )
+
+    # torchvision links the image extension with -lpng alone, so a static
+    # libpng would leave zlib's symbols unresolved. Fold zlib's objects into
+    # the archive that -lpng finds.
+    lib_dir = prefix / "lib"
+    (lib_dir / "libpng.a").unlink()  # A symlink to libpng16.a.
+    subprocess.run(
+        ["ar", "-M"],
+        cwd=lib_dir,
+        input="CREATE libpng.a\nADDLIB libpng16.a\nADDLIB libz.a\nSAVE\nEND\n",
+        text=True,
+        check=True,
+    )
+    return prefix
+
+
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
@@ -1395,6 +1517,21 @@ def do_build_pytorch_vision(
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
+
+    if not is_windows:
+        codec_prefix = build_torchvision_codecs(
+            pytorch_vision_dir / "build" / "image-codecs"
+        )
+        env.update(
+            {
+                "TORCHVISION_INCLUDE": str(codec_prefix / "include"),
+                "TORCHVISION_LIBRARY": str(codec_prefix / "lib"),
+                # setup.py locates libpng through libpng-config.
+                "PATH": str(codec_prefix / "bin") + os.path.pathsep + env["PATH"],
+            }
+        )
+        # Keep the static codecs' symbols out of the extension's exports.
+        add_env_compiler_flags(env, "LDFLAGS", "-Wl,--exclude-libs,ALL")
 
     run_command(
         [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env
