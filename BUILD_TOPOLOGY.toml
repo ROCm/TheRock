@@ -657,7 +657,7 @@ source_paths = ["rocblas", "hipblas", "hipblas-common", "hipblaslt", "rocroller"
 [artifacts.rand]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "amd-llvm-flang"]
+artifact_deps = ["core-runtime", "core-hip"]
 source_paths = ["rocrand", "hiprand", "primbench"]
 
 [artifacts.fft]
