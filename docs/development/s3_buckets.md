@@ -119,22 +119,30 @@ Internal release types map to public streams as follows:
 
 #### Product release buckets
 
-`<stream>` is one of `dev`, `nightly`, `rc`, or `bkc`.
+`<stream>` is one of `dev`, `nightly`, `weekly`, `rc`, `bkc`,
+`stable-staging`, or `stable`.
 
-| Bucket pattern                      | Contents                                                 | Object prefixes                                                        |
-| ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `therock-repo-amd-<stream>-core`    | ROCm Core Python packages, tarballs, and native packages | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/` |
-| `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                  | `v5/rocm/pytorch/whl-next/`                                            |
-| `therock-repo-amd-<stream>-jax`     | JAX Python packages                                      | `v5/rocm/jax/whl-next/`                                                |
+| Bucket pattern                      | Contents                                                         | Object prefixes                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `therock-repo-amd-<stream>-core`    | ROCm Core packages plus mirrored third-party Python dependencies | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/`, `v5/rocm/third-party/whl-next/` |
+| `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                          | `v5/rocm/pytorch/whl-next/`                                                                             |
+| `therock-repo-amd-<stream>-jax`     | JAX Python packages                                              | `v5/rocm/jax/whl-next/`                                                                                 |
 
 Public downloads use the matching stream hostname and omit the internal `v5`
 prefix. For example, nightly Core tarballs are at
 https://nightly.repo.amd.com/rocm/core/tarball/ and nightly native packages
 are under https://nightly.repo.amd.com/rocm/core/packages/.
 
-Pip installs must use the aggregate index, such as
+Public product paths and S3 bucket ownership are separate. In particular,
+`/rocm/third-party/whl-next/` is served from the existing Core bucket and uses
+the Core publication roles, lifecycle, and indexing infrastructure. There is no
+third-party release bucket.
+
+Pip installs spanning multiple products should use the aggregate index, such as
 https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
-publication and indexer inputs, not self-contained install entry points.
+also directly consumable when only one product namespace is needed; for
+example, mirrored dependencies are available from
+https://nightly.repo.amd.com/rocm/third-party/whl-next/.
 
 For local and automated third-party Python dependency publication, see
 [Mirroring Third-Party Python Dependencies](../packaging/python_packaging.md#mirroring-third-party-python-dependencies).

@@ -150,7 +150,10 @@ def test_checked_in_manifest_loads() -> None:
     )
     assert "jax-rocm7-plugin" not in index.packages
     assert "jax-rocm7-pjrt" not in index.packages
+    assert {"ml-dtypes", "opt-einsum", "tomli"}.isdisjoint(index.packages)
     assert index.packages["jax-rocm10-plugin"].owner_path == "jax/whl-next"
+    assert index.packages["filelock"].owner_path == "third-party/whl-next"
+    assert index.packages["rocm-profiler"].owner_path == "core/whl-next"
     assert index.packages["rocm-sdk-core"].owner_path == "core/whl-next"
     assert index.packages["torch"].owner_path == "pytorch/whl-next"
 
@@ -173,14 +176,23 @@ def test_checked_in_manifest_bkc_contains_only_gfx1250_targets() -> None:
     } | expected_bkc_target_packages
 
     assert set(index.active_packages("bkc")) == expected_bkc_packages
-    assert index.owner_paths("bkc") == {"core/whl-next", "pytorch/whl-next"}
+    assert index.owner_paths("bkc") == {
+        "core/whl-next",
+        "pytorch/whl-next",
+        "third-party/whl-next",
+    }
 
 
 def test_checked_in_manifest_uses_known_owner_paths() -> None:
     manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
     manifest = load_ownership_manifest(manifest_path)
     index = manifest.python_indexes[0]
-    known_owner_paths = {"core/whl-next", "jax/whl-next", "pytorch/whl-next"}
+    known_owner_paths = {
+        "core/whl-next",
+        "jax/whl-next",
+        "pytorch/whl-next",
+        "third-party/whl-next",
+    }
 
     assert {
         *[package.owner_path for package in index.packages.values()],
@@ -411,7 +423,18 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     content_root = tmp_path / "content"
     output_dir = tmp_path / "out"
     _write_complete_content_root(content_root)
-    manifest = parse_ownership_manifest(_valid_manifest())
+    data = _valid_manifest()
+    index = data["python_indexes"][0]
+    assert isinstance(index, dict)
+    packages = index["packages"]
+    assert isinstance(packages, dict)
+    packages["filelock"] = {"owner_path": "third-party/whl-next"}
+    packages["jax"] = {"owner_path": "jax/whl-next"}
+    _write_product_root(content_root, "third-party/whl-next", ["filelock"])
+    _write_package_page(content_root, "third-party/whl-next", "filelock")
+    _write_product_root(content_root, "jax/whl-next", ["jax"])
+    _write_package_page(content_root, "jax/whl-next", "jax")
+    manifest = parse_ownership_manifest(data)
 
     outputs = generate_outputs(
         manifest,
@@ -431,6 +454,8 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
 <html>
   <body>
     <a href="apex/">apex</a><br/>
+    <a href="filelock/">filelock</a><br/>
+    <a href="jax/">jax</a><br/>
     <a href="rocm-sdk-core/">rocm-sdk-core</a><br/>
     <a href="rocm-sdk-devel/">rocm-sdk-devel</a><br/>
     <a href="torch/">torch</a><br/>
@@ -456,6 +481,11 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
                 "target": "/rocm/core/whl-next/rocm-sdk-devel/",
             },
             {
+                "owner_path": "jax/whl-next",
+                "package": "jax",
+                "target": "/rocm/jax/whl-next/jax/",
+            },
+            {
                 "owner_path": "pytorch/whl-next",
                 "package": "apex",
                 "target": "/rocm/pytorch/whl-next/apex/",
@@ -464,6 +494,11 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
                 "owner_path": "pytorch/whl-next",
                 "package": "torch",
                 "target": "/rocm/pytorch/whl-next/torch/",
+            },
+            {
+                "owner_path": "third-party/whl-next",
+                "package": "filelock",
+                "target": "/rocm/third-party/whl-next/filelock/",
             },
         ],
     }
@@ -476,17 +511,21 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     assert validation_report["stream"] == "nightly"
     assert validation_report["generation_mode"] == "content"
     assert validation_report["content_validated"] is True
-    assert validation_report["package_count"] == 4
+    assert validation_report["package_count"] == 6
     assert validation_report["unpublished_package_count"] == 0
     assert validation_report["owners"] == {
         "core/whl-next": {"package_count": 2},
+        "jax/whl-next": {"package_count": 1},
         "pytorch/whl-next": {"package_count": 2},
+        "third-party/whl-next": {"package_count": 1},
     }
     assert [package["name"] for package in validation_report["packages"]] == [
         "rocm-sdk-core",
         "rocm-sdk-devel",
+        "jax",
         "apex",
         "torch",
+        "filelock",
     ]
     assert {package["source"] for package in validation_report["packages"]} == {"exact"}
     assert validation_report["unpublished_packages"] == []

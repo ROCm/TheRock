@@ -8,6 +8,7 @@ For example, ``https://nightly.repo.amd.com/rocm/whl-next/`` is the aggregate
 nightly index. Its package URLs route to product-local indexes such as:
 
     /rocm/core/whl-next/
+    /rocm/third-party/whl-next/
     /rocm/pytorch/whl-next/
     /rocm/jax/whl-next/
 

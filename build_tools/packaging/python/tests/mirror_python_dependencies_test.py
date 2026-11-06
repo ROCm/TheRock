@@ -89,7 +89,9 @@ def _snapshot_wheel() -> SnapshotWheel:
         size=len(_WHEEL_BYTES),
         sha256=_WHEEL_SHA256,
         relative_path=f"wheels/demo-package/{_WHEEL_FILENAME}",
-        destination_key=("v5/rocm/core/whl-next/demo-package/" + _WHEEL_FILENAME),
+        destination_key=(
+            "v5/rocm/third-party/whl-next/demo-package/" + _WHEEL_FILENAME
+        ),
     )
 
 
@@ -99,7 +101,7 @@ def _write_snapshot(snapshot_dir: Path) -> DependencySnapshot:
     wheel_path.parent.mkdir(parents=True)
     wheel_path.write_bytes(_WHEEL_BYTES)
     snapshot = DependencySnapshot(
-        schema_version=1,
+        schema_version=2,
         created_at="2026-08-25T00:00:00+00:00",
         source_revision="abc123",
         wheels=(wheel,),
@@ -115,7 +117,7 @@ def _write_snapshot_with_filename(snapshot_dir: Path, filename: str) -> None:
         wheel,
         filename=filename,
         relative_path=f"wheels/demo-package/{filename}",
-        destination_key=f"v5/rocm/core/whl-next/demo-package/{filename}",
+        destination_key=f"v5/rocm/third-party/whl-next/demo-package/{filename}",
     )
     mirror.write_snapshot_manifest(
         replace(snapshot, wheels=(modified_wheel,)),
@@ -354,7 +356,30 @@ def test_resolve_snapshot_downloads_once_and_round_trips(
 
     assert download_count == 1
     assert len(snapshot.wheels) == 1
+    assert snapshot.schema_version == 2
+    assert snapshot.wheels[0].destination_key == (
+        "v5/rocm/third-party/whl-next/demo-package/" + _WHEEL_FILENAME
+    )
     assert mirror.load_snapshot(output_dir) == snapshot
+
+
+def test_load_snapshot_rejects_version_1_without_retargeting(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    snapshot = _write_snapshot(snapshot_dir)
+    wheel = replace(
+        snapshot.wheels[0],
+        destination_key=("v5/rocm/core/whl-next/demo-package/" + _WHEEL_FILENAME),
+    )
+    mirror.write_snapshot_manifest(
+        replace(snapshot, schema_version=1, wheels=(wheel,)),
+        snapshot_dir / "manifest.json",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Unsupported snapshot schema 1; expected 2",
+    ):
+        mirror.load_snapshot(snapshot_dir)
 
 
 def test_resolve_failure_removes_partial_output(
@@ -634,7 +659,7 @@ def test_publish_skips_existing_wheel_when_refresh_disabled(tmp_path: Path) -> N
 
 
 def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
-    _write_snapshot(tmp_path)
+    snapshot = _write_snapshot(tmp_path)
     client = FakeS3Client()
     summary = mirror.publish_snapshot(
         snapshot_dir=tmp_path,
@@ -645,6 +670,16 @@ def test_publish_dry_run_does_not_write(tmp_path: Path) -> None:
     )
     assert summary.uploaded == 1
     assert client.head_bucket_calls == [{"Bucket": "test-bucket"}]
+    assert client.head_object_calls == [
+        {
+            "Bucket": "test-bucket",
+            "ChecksumMode": "ENABLED",
+            "Key": snapshot.wheels[0].destination_key,
+        }
+    ]
+    assert snapshot.wheels[0].destination_key.startswith(
+        "v5/rocm/third-party/whl-next/"
+    )
     assert not client.put_calls
     assert not client.copy_calls
 
