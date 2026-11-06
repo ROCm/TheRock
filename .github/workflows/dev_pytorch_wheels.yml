@@ -1,0 +1,250 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Developer entry point to build and test PyTorch wheels from a ROCm/pytorch
+# branch on Linux and/or Windows.
+#
+# Wraps multi_arch_build_portable_linux_pytorch_wheels.yml and
+# multi_arch_build_windows_pytorch_wheels.yml with GPU checkboxes and ROCm
+# version keywords (resolved by resolve_dev_pytorch_wheel_inputs.py), then
+# summarizes the standard test suite from every platform in this run.
+#
+# Dev wheel versions carry only the PyTorch commit and ROCm version, so two
+# concurrent runs of the same branch and ROCm version overwrite each other's
+# torch wheel on the dev index. Run them one at a time.
+
+name: Dev PyTorch Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_linux:
+        description: Build and test on Linux.
+        type: boolean
+        default: true
+      build_windows:
+        description: Build and test on Windows (consumer GPUs only).
+        type: boolean
+        default: false
+      datacenter_instinct_gpus:
+        description: >-
+          Datacenter (Instinct) GPUs, "dcgpu" families, Linux only:
+          gfx90a (MI200), gfx94X-dcgpu (MI300), gfx950-dcgpu (MI350),
+          gfx125X-dcgpu (MI450).
+        type: boolean
+        default: true
+      consumer_radeon_gpus:
+        description: >-
+          Consumer (Radeon / Navi) GPUs, "dgpu" families, Linux and Windows:
+          gfx103X-all (RX 6000), gfx110X-all (RX 7000), gfx120X-all (RX 9000),
+          gfx1151 (Strix Halo).
+        type: boolean
+        default: false
+      extra_amdgpu_families:
+        description: >-
+          Optional extra GPU families, semicolon-separated (e.g.
+          'gfx1150;gfx101X-dgpu'). Find your GPU's family in
+          https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake
+        type: string
+        default: ""
+      pytorch_branch:
+        description: >-
+          Branch on ROCm/pytorch to build (e.g. release/2.13). Push your branch
+          to ROCm/pytorch first: tests check out sources from there. 'nightly'
+          builds upstream pytorch/pytorch nightly.
+        type: string
+        default: "release/2.13"
+      python_version:
+        description: Python version to build and test.
+        type: choice
+        options:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+        default: "3.12"
+      rocm_version:
+        description: >-
+          'latest' = newest on the index, 'trunk' = the ROCm version
+          pytorch/pytorch trunk CI uses (.ci/docker/build.sh; pair with the
+          stable index), or a version like 10.1.0.
+        type: string
+        default: latest
+      rocm_package_index_url:
+        description: ROCm package index. With stable, use rocm_version 'trunk'.
+        type: choice
+        options:
+          - https://nightly.repo.amd.com/rocm/whl-next/
+          - https://stable.repo.amd.com/rocm/whl-next/
+        default: https://nightly.repo.amd.com/rocm/whl-next/
+      test_level:
+        description: "'standard' runs the GPU test suite; 'none' only builds."
+        type: choice
+        options:
+          - standard
+          - none
+        default: standard
+
+run-name: >-
+  Dev PyTorch Wheels (${{ inputs.pytorch_branch }}, py ${{ inputs.python_version }},
+  ROCm ${{ inputs.rocm_version }}, tests ${{ inputs.test_level }})
+
+permissions:
+  contents: read
+
+jobs:
+  resolve_inputs:
+    name: Resolve Dev PyTorch Wheel Inputs
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      linux_amdgpu_families: ${{ steps.resolve.outputs.linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ steps.resolve.outputs.windows_amdgpu_families }}
+      rocm_version: ${{ steps.resolve.outputs.rocm_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: pip install packaging==25.0
+
+      - name: Resolve inputs
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUILD_LINUX: ${{ inputs.build_linux }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+          DATACENTER_INSTINCT_GPUS: ${{ inputs.datacenter_instinct_gpus }}
+          CONSUMER_RADEON_GPUS: ${{ inputs.consumer_radeon_gpus }}
+          EXTRA_AMDGPU_FAMILIES: ${{ inputs.extra_amdgpu_families }}
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+          PYTORCH_BRANCH: ${{ inputs.pytorch_branch }}
+        run: |
+          python external-builds/pytorch/resolve_dev_pytorch_wheel_inputs.py \
+            --build-linux "${BUILD_LINUX}" \
+            --build-windows "${BUILD_WINDOWS}" \
+            --datacenter-instinct-gpus "${DATACENTER_INSTINCT_GPUS}" \
+            --consumer-radeon-gpus "${CONSUMER_RADEON_GPUS}" \
+            --extra-amdgpu-families "${EXTRA_AMDGPU_FAMILIES}" \
+            --rocm-version "${ROCM_VERSION}" \
+            --rocm-package-index-url "${ROCM_PACKAGE_INDEX_URL}" \
+            --pytorch-git-ref "${PYTORCH_BRANCH}"
+
+  build_linux:
+    name: Linux
+    needs: resolve_inputs
+    if: ${{ needs.resolve_inputs.outputs.linux_amdgpu_families != '' }}
+    permissions:
+      id-token: write
+      contents: read
+      # The callee's dispatch_pytorch_wheels_full_test job requests this even
+      # though run_full_pytorch_tests stays off here.
+      actions: write
+    uses: ./.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      amdgpu_families: ${{ needs.resolve_inputs.outputs.linux_amdgpu_families }}
+      exclude_implicit_targets: auto
+      test_amdgpu_families: auto
+      test_level: ${{ inputs.test_level }}
+      python_version: ${{ inputs.python_version }}
+      pytorch_git_ref: ${{ inputs.pytorch_branch }}
+      pytorch_gitrepo_origin: https://github.com/ROCm/pytorch.git
+      rocm_version: ${{ needs.resolve_inputs.outputs.rocm_version }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
+      # Published dev torch is on dev.repo.amd.com; its ROCm deps are not.
+      test_package_extra_index_url: ${{ inputs.rocm_package_index_url }}
+      release_type: dev
+
+  build_windows:
+    name: Windows
+    needs: resolve_inputs
+    if: ${{ needs.resolve_inputs.outputs.windows_amdgpu_families != '' }}
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/multi_arch_build_windows_pytorch_wheels.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      amdgpu_families: ${{ needs.resolve_inputs.outputs.windows_amdgpu_families }}
+      exclude_implicit_targets: auto
+      test_amdgpu_families: auto
+      test_level: ${{ inputs.test_level }}
+      python_version: ${{ inputs.python_version }}
+      pytorch_git_ref: ${{ inputs.pytorch_branch }}
+      pytorch_gitrepo_origin: https://github.com/ROCm/pytorch.git
+      rocm_version: ${{ needs.resolve_inputs.outputs.rocm_version }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
+      test_package_extra_index_url: ${{ inputs.rocm_package_index_url }}
+      release_type: dev
+
+  test_summary:
+    name: Dev PyTorch Wheels Test Summary
+    if: ${{ always() && needs.resolve_inputs.result == 'success' }}
+    needs: [resolve_inputs, build_linux, build_windows]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+
+      - name: Summarize builds
+        env:
+          LINUX_RESULT: ${{ needs.build_linux.result }}
+          LINUX_TORCH_VERSION: ${{ needs.build_linux.outputs.torch_version }}
+          LINUX_PACKAGE_INDEX_URL: ${{ needs.build_linux.outputs.package_index_url }}
+          WINDOWS_RESULT: ${{ needs.build_windows.result }}
+          WINDOWS_TORCH_VERSION: ${{ needs.build_windows.outputs.torch_version }}
+          WINDOWS_PACKAGE_INDEX_URL: ${{ needs.build_windows.outputs.package_index_url }}
+          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+        run: |
+          {
+            echo "## Dev PyTorch Wheels: builds"
+            echo ""
+            echo "| Platform | Result | torch | Index |"
+            echo "|---|---|---|---|"
+            echo "| Linux | ${LINUX_RESULT} | \`${LINUX_TORCH_VERSION:-n/a}\` | ${LINUX_PACKAGE_INDEX_URL:-n/a} |"
+            echo "| Windows | ${WINDOWS_RESULT} | \`${WINDOWS_TORCH_VERSION:-n/a}\` | ${WINDOWS_PACKAGE_INDEX_URL:-n/a} |"
+            echo ""
+            for version_index in "${LINUX_TORCH_VERSION}@${LINUX_PACKAGE_INDEX_URL}" \
+                                 "${WINDOWS_TORCH_VERSION}@${WINDOWS_PACKAGE_INDEX_URL}"; do
+              version="${version_index%@*}"
+              index="${version_index#*@}"
+              [[ -n "${version}" ]] || continue
+              echo "\`\`\`bash"
+              echo "pip install --index-url ${index} --extra-index-url ${ROCM_PACKAGE_INDEX_URL} \"torch[device-<gfx target>]==${version}\""
+              echo "\`\`\`"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Download test reports
+        if: ${{ inputs.test_level != 'none' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          pattern: test-reports-*
+
+      - name: Summarize tests
+        if: ${{ inputs.test_level != 'none' }}
+        run: |
+          mkdir -p artifacts
+          python3 external-builds/pytorch/summarize_test_results.py \
+            --standard-dir artifacts

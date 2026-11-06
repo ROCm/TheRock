@@ -27,6 +27,12 @@ on:
           https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
         type: string
         default: ""
+      package_extra_index_url:
+        description: >-
+          Optional --extra-index-url for dependencies missing from
+          package_index_url, e.g. ROCm from stable.repo.amd.com for dev torch.
+        type: string
+        default: ""
       python_version:
         required: true
         type: string
@@ -83,6 +89,12 @@ on:
           Flat package page for use with --find-links. For CI artifacts, set this
           to the run's python/index.html and package_index_url to
           https://dev.repo.amd.com/rocm/whl-next/ for dependencies.
+        type: string
+        default: ""
+      package_extra_index_url:
+        description: >-
+          Optional --extra-index-url for dependencies missing from
+          package_index_url, e.g. ROCm from stable.repo.amd.com for dev torch.
         type: string
         default: ""
       python_version:
@@ -154,6 +166,7 @@ jobs:
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
       PACKAGE_FIND_LINKS_URL: ${{ inputs.package_find_links_url }}
+      PACKAGE_EXTRA_INDEX_URL: ${{ inputs.package_extra_index_url }}
       QUARTZ_REPORTING_WORKFLOW: test_pytorch_wheels.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test PyTorch wheels"
       VENV_DIR: ${{ github.workspace }}/.venv
@@ -227,6 +240,7 @@ jobs:
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
+            --extra-index-url="${PACKAGE_EXTRA_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
@@ -286,9 +300,12 @@ jobs:
       # custom skip-list integration, serialized execution, GPU selection, and
       # more. The list of included test suites is limited here compared to in
       # test_pytorch_wheels_full.yml.
+      # The completion marker tells the count step the runner exited rather
+      # than timing out mid-run, so partial counts are flagged incomplete.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
+          set +e
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
@@ -302,15 +319,43 @@ jobs:
               test_autograd \
             -- \
             --continue-on-collection-errors
+          test_exit_code=$?
+          reports_dir=external-builds/pytorch/pytorch/test/test-reports
+          mkdir -p "${reports_dir}"
+          touch "${reports_dir}/therock-test-complete.txt"
+          exit "${test_exit_code}"
+
+      # Lets summarize_test_results.py --standard-dir identify the report set
+      # even when it is the only artifact downloaded (no name directory).
+      - name: Label test reports
+        if: always()
+        run: |
+          reports_dir=external-builds/pytorch/pytorch/test/test-reports
+          if [[ -d "${reports_dir}" ]]; then
+            printf '{"os": "%s", "amdgpu_family": "%s"}\n' \
+              "${RUNNER_OS}" "${AMDGPU_FAMILY}" > "${reports_dir}/therock-test-report.json"
+          fi
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-reports-${{ inputs.amdgpu_family }}
+          # The OS keeps Linux and Windows reports for one family distinct when
+          # a single run tests both (dev_pytorch_wheels.yml).
+          name: test-reports-${{ runner.os }}-${{ inputs.amdgpu_family }}
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+      # Step outputs flow into the Quartz completed notification below
+      # (failed_test_count, passed_test_count, ..., results_complete).
+      - name: Count test results
+        id: test-counts
+        if: always()
+        run: |
+          python ./external-builds/pytorch/summarize_test_results.py \
+            --reports-dir external-builds/pytorch/pytorch/test/test-reports \
+            --counts-output
 
       - name: Capture job summary
         id: summary
