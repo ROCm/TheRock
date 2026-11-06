@@ -10,12 +10,16 @@ here. The mocked-boto3 cases verify only that our orchestration glue around
 download_fileobj preserves atomic-write and MD5-verification invariants.
 """
 
+import concurrent.futures
+import errno
 import hashlib
 import io
+import json
 import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -412,9 +416,8 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
     Multiple .dvc pointer files can reference files with the same content hash
     (e.g. identical small tensors in different subdirectories). When fetched
     concurrently, all workers call _store_in_cache with the same cache_file
-    path. Each uses a unique temp name, but the final os.replace races on
-    Windows and raises PermissionError. The fix catches PermissionError and
-    verifies the winner wrote the correct content before treating it as success.
+    path. Publication must leave a competing winner in place while preserving
+    the caller's verified output. Cache consumers validate entries before use.
     """
 
     def test_concurrent_calls_with_same_cache_file_do_not_raise(self):
@@ -424,26 +427,26 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             md5 = _md5_hex(data)
             cache_file = fda._cache_path(tmp / "cache", md5)
 
-            # Simulate the Windows race: both workers arrive at os.replace
-            # concurrently. Caller 1 writes cache_file; caller 2 then gets
-            # PermissionError because Windows won't replace a file another
-            # handle still has open. We model this with a two-phase barrier:
-            # both workers reach the gate, then caller 1 does the real replace
+            # Both workers arrive at publication concurrently. Caller 1
+            # writes cache_file; caller 2 then gets PermissionError, as on
+            # Windows when publication collides with a competing publisher.
+            # We model this with a two-phase barrier:
+            # both workers reach the gate, then caller 1 creates the real link
             # and only after that does caller 2 raise PermissionError, so
             # cache_file already exists when the exception handler checks it.
-            original_replace = os.replace
+            original_link = os.link
             call_count = [0]
             lock = threading.Lock()
             gate = threading.Barrier(2)
             done = threading.Event()
 
-            def patched_replace(src, dst):
+            def patched_publish(src, dst):
                 with lock:
                     call_count[0] += 1
                     n = call_count[0]
                 gate.wait(timeout=5)
                 if n == 1:
-                    original_replace(src, dst)
+                    original_link(src, dst)
                     done.set()
                 else:
                     done.wait(timeout=5)
@@ -462,9 +465,8 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
                 except Exception as e:
                     errors.append(e)
 
-            # Patch fda's reference to os.replace (not the os module itself)
-            # so both threads see the same controlled replacement.
-            with mock.patch.object(fda.os, "replace", side_effect=patched_replace):
+            # Exercise Windows publication and its PermissionError handling.
+            with mock.patch.object(fda.os, "link", side_effect=patched_publish):
                 threads = [
                     threading.Thread(target=worker, args=(src1,)),
                     threading.Thread(target=worker, args=(src2,)),
@@ -479,6 +481,403 @@ class TestStoreInCacheConcurrency(unittest.TestCase):
             self.assertEqual(cache_file.read_bytes(), data)
             leftover = list(cache_file.parent.glob("*.tmp"))
             self.assertEqual(leftover, [], f"leftover temp files: {leftover}")
+
+    def test_windows_publication_preserves_winning_cache_entry(self) -> None:
+        data = b"shared content"
+        for winner_data in (data, b"broken content", b"truncated"):
+            with self.subTest(
+                winner_data=winner_data
+            ), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                src = tmp / "source"
+                src.write_bytes(data)
+                winner = tmp / "winner"
+                winner.write_bytes(winner_data)
+                cache_file = fda._cache_path(tmp / "cache", _md5_hex(data))
+                original_link = os.link
+                original_rename = os.rename
+                original_open = Path.open
+
+                def unreadable_winner(path, *args, **kwargs):
+                    if path == cache_file:
+                        raise PermissionError("another process holds the cache open")
+                    return original_open(path, *args, **kwargs)
+
+                def link_and_publish_winner(source: Path, target: Path) -> None:
+                    # Another worker publishes after our cache-miss check,
+                    # immediately before our attempted publication.
+                    if not cache_file.exists():
+                        original_link(winner, cache_file)
+                    original_link(source, target)
+
+                def windows_rename(source: Path, target: Path) -> None:
+                    if sys.platform == "win32":
+                        original_rename(source, target)
+                    else:
+                        # Model Windows' no-overwrite rename with real files.
+                        original_link(source, target)
+                        source.unlink()
+
+                with (
+                    mock.patch.object(
+                        fda.os, "link", side_effect=link_and_publish_winner
+                    ),
+                    mock.patch.object(fda.os, "rename", side_effect=windows_rename),
+                    mock.patch.object(Path, "open", unreadable_winner),
+                ):
+                    fda._store_in_cache(src, cache_file)
+
+                # Replacing the winner creates a Windows delete/rename window
+                # during which readers can get PermissionError opening it.
+                self.assertTrue(cache_file.samefile(winner))
+                self.assertEqual(cache_file.read_bytes(), winner_data)
+                self.assertEqual(src.read_bytes(), data)
+                self.assertEqual(list(cache_file.parent.glob("*.tmp")), [])
+
+
+class TestCacheSynchronization(unittest.TestCase):
+    def test_duplicate_outputs_and_manifests_fetch_once(self):
+        data = b"tiny tensor"
+        md5 = _md5_hex(data)
+        manifest = json.dumps([{"md5": md5, "relpath": "child.bin"}]).encode()
+        manifest_md5 = _md5_hex(manifest) + ".dir"
+        for directory in (False, True):
+            with self.subTest(directory=directory), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                project = tmp / "project"
+                (project / ".dvc").mkdir(parents=True)
+                (project / ".dvc/config").write_text(
+                    "[core]\n remote = storage\n['remote \"storage\"']\n"
+                    " url = s3://b/pfx\n allow_anonymous_login = true\n"
+                )
+                out_md5 = manifest_md5 if directory else md5
+                size = len(data)
+                for i in range(12):
+                    (project / f"{i}.dvc").write_text(
+                        f"outs:\n- md5: {out_md5}\n  size: {size}\n  path: out-{i}\n"
+                    )
+                payloads = {("b", f"pfx/files/md5/{md5[:2]}/{md5[2:]}"): data}
+                if directory:
+                    payloads[
+                        ("b", f"pfx/files/md5/{manifest_md5[:2]}/{manifest_md5[2:]}")
+                    ] = manifest
+                fake = _FakeS3(payloads)
+                messages = []
+                with mock.patch.object(fda, "_make_s3_client", return_value=fake):
+                    try:
+                        result = fda.pull(
+                            project,
+                            jobs=12,
+                            cache_dir=tmp / "cache",
+                            log=messages.append,
+                        )
+                    except fda.FetchError:
+                        self.fail("\n".join(messages))
+                self.assertEqual(result.fetched, 1)
+                self.assertEqual(result.cached, 11)
+                self.assertEqual(len(fake.calls), 2 if directory else 1)
+                for i in range(12):
+                    dest = project / f"out-{i}"
+                    if directory:
+                        dest /= "child.bin"
+                    self.assertEqual(dest.read_bytes(), data)
+                self.assertEqual(list(tmp.rglob("*.tmp")), [])
+
+    def test_independent_hashes_remain_parallel(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            remote = fda._Remote("storage", "b", "pfx", True)
+            payloads = [b"alpha", b"beta"]
+            barrier = threading.Barrier(2)
+
+            class ConcurrentS3:
+                def download_fileobj(self, bucket, key, file):
+                    barrier.wait(timeout=5)
+                    file.write(
+                        next(
+                            data
+                            for data in payloads
+                            if fda._s3_key(remote, _md5_hex(data)) == key
+                        )
+                    )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                futures = [
+                    ex.submit(
+                        fda._materialize_file,
+                        ConcurrentS3(),
+                        remote,
+                        _md5_hex(data),
+                        len(data),
+                        tmp / str(i),
+                        tmp / "cache",
+                        lambda _: None,
+                    )
+                    for i, data in enumerate(payloads)
+                ]
+                for future in futures:
+                    self.assertEqual(future.result(timeout=6).fetched, 1)
+
+    def test_cache_locks_share_canonical_path_and_are_released(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            cache_dir = fda._prepare_cache_dir(tmp / "cache", lambda _: None)
+            alias = fda._prepare_cache_dir(tmp / "sub/../cache", lambda _: None)
+            self.assertIsNotNone(cache_dir)
+            self.assertIsNotNone(alias)
+            lock = fda._cache_lock(cache_dir, "a" * 32)
+            self.assertIs(lock, fda._cache_lock(alias, "a" * 32))
+            self.assertIsNot(lock, fda._cache_lock(cache_dir, "b" * 32))
+            with lock:
+                self.assertFalse(lock.acquire(blocking=False))
+            self.assertTrue(lock.acquire(blocking=False))
+            lock.release()
+            del lock
+            self.assertFalse(fda._cache_locks)
+
+    def test_cache_lock_is_stable_across_entry_creation_and_eviction(self):
+        with tempfile.TemporaryDirectory() as t:
+            cache_dir = Path(t) / "cache"
+            md5 = _md5_hex(b"tiny")
+            cache_file = fda._cache_path(cache_dir, md5)
+            real_resolve = Path.resolve
+
+            def resolve_directory_only(path, *args, **kwargs):
+                if path == cache_file:
+                    raise AssertionError(
+                        "cache entry resolution is unstable on Windows"
+                    )
+                return real_resolve(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "resolve", resolve_directory_only):
+                lock = fda._cache_lock(cache_dir, md5)
+                cache_file.parent.mkdir(parents=True, exist_ok=True)
+                cache_file.write_bytes(b"corrupt")
+                with lock:
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                    cache_file.unlink()
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                    source = Path(t) / "source"
+                    source.write_bytes(b"tiny")
+                    os.link(source, cache_file)
+                    self.assertIs(lock, fda._cache_lock(cache_dir, md5))
+                self.assertEqual(cache_file.read_bytes(), b"tiny")
+
+    def test_downloads_do_not_share_staging_file(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            data = b"small payload"
+            remote = fda._Remote("storage", "b", "pfx", True)
+            first_open = threading.Event()
+            second_done = threading.Event()
+
+            class OrderedS3:
+                def download_fileobj(self, bucket, key, file):
+                    file.write(data)
+                    file.flush()
+                    if threading.current_thread().name == "first":
+                        first_open.set()
+                        if not second_done.wait(5):
+                            raise RuntimeError("second download timed out")
+
+            errors = []
+
+            def download(name):
+                try:
+                    fda._download_blob(
+                        OrderedS3(), remote, _md5_hex(data), tmp / "same", len(data)
+                    )
+                except Exception as err:
+                    errors.append(err)
+                finally:
+                    if name == "second":
+                        second_done.set()
+
+            first = threading.Thread(target=download, args=("first",), name="first")
+            first.start()
+            self.assertTrue(first_open.wait(5))
+            second = threading.Thread(target=download, args=("second",), name="second")
+            second.start()
+            first.join(6)
+            second.join(6)
+            self.assertEqual(errors, [])
+            self.assertEqual((tmp / "same").read_bytes(), data)
+            self.assertEqual(list(tmp.glob("*.tmp")), [])
+
+
+class TestDirectCachePublication(unittest.TestCase):
+    def test_publication_does_not_rename_cache_path(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            source, cache = tmp / "source", tmp / "cache/key"
+            source.write_bytes(b"tiny")
+            with mock.patch.object(
+                fda.os, "rename", side_effect=AssertionError("rename window")
+            ), mock.patch.object(
+                fda.os, "replace", side_effect=AssertionError("replace window")
+            ):
+                fda._store_in_cache(source, cache)
+            self.assertTrue(source.samefile(cache))
+
+    def test_concurrent_publication_keeps_cache_readable(self):
+        # #8505: real Windows rename/replace publication can expose a cache
+        # pathname that ordinary Python readers temporarily cannot open.
+        # Force simultaneous misses, but do not inject filesystem errors.
+        # The small payload and bounded rounds keep this in routine CI.
+        workers = 12
+        data = b"same verified tensor contents" * 100
+        real_exists = Path.exists
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            sources = [root / f"source-{i}" for i in range(workers)]
+            for source in sources:
+                source.write_bytes(data)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                for iteration in range(100):
+                    with self.subTest(iteration=iteration):
+                        cache_file = root / f"cache-{iteration}" / "entry"
+                        gate = threading.Barrier(workers)
+                        state = threading.local()
+                        done = threading.Event()
+                        observed = threading.Event()
+                        reader_errors = []
+
+                        def synchronized_miss(path):
+                            if path == cache_file and not getattr(
+                                state, "checked", False
+                            ):
+                                present = real_exists(path)
+                                state.checked = True
+                                gate.wait(timeout=5)
+                                return present
+                            return real_exists(path)
+
+                        def read_cache():
+                            try:
+                                while not done.is_set():
+                                    if real_exists(cache_file):
+                                        contents = cache_file.read_bytes()
+                                        if contents != data:
+                                            raise AssertionError(
+                                                "incorrect published contents"
+                                            )
+                                        observed.set()
+                                    else:
+                                        time.sleep(0)
+                            except Exception as error:
+                                reader_errors.append(error)
+                                observed.set()
+
+                        reader = threading.Thread(target=read_cache, daemon=True)
+                        reader.start()
+                        try:
+                            with mock.patch.object(Path, "exists", synchronized_miss):
+                                futures = [
+                                    executor.submit(
+                                        fda._store_in_cache, source, cache_file
+                                    )
+                                    for source in sources
+                                ]
+                                # Wait for all publishers before reporting an error, so
+                                # no worker outlives the patched miss gate or temp files.
+                                concurrent.futures.wait(futures)
+                                for future in futures:
+                                    future.result()
+                            self.assertTrue(
+                                observed.wait(5), "reader did not open the cache"
+                            )
+                        finally:
+                            done.set()
+                            reader.join(timeout=5)
+                        self.assertFalse(reader.is_alive(), "cache reader did not stop")
+                        self.assertEqual(
+                            reader_errors, [], "publication denied a cache reader"
+                        )
+                        self.assertEqual(cache_file.read_bytes(), data)
+                        self.assertEqual(list(cache_file.parent.glob("*.tmp")), [])
+
+    def test_cross_volume_source_uses_cache_local_link(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            source, cache = tmp / "source", tmp / "cache/key"
+            source.write_bytes(b"tiny")
+            original_link = os.link
+
+            def link(src, dest):
+                if src == source:
+                    raise OSError(errno.EXDEV, "different volume")
+                return original_link(src, dest)
+
+            with mock.patch.object(fda.os, "link", side_effect=link), mock.patch.object(
+                fda.os, "rename", side_effect=AssertionError("rename window")
+            ), mock.patch.object(
+                fda.os, "replace", side_effect=AssertionError("replace window")
+            ):
+                fda._store_in_cache(source, cache)
+            self.assertEqual(cache.read_bytes(), b"tiny")
+            self.assertFalse(source.samefile(cache))
+            self.assertEqual(list(cache.parent.glob("*.tmp")), [])
+
+    def test_no_hardlink_filesystem_retains_copy_fallback(self):
+        # EPERM is a PermissionError, unlike ENOTSUP. Both can mean that the
+        # filesystem does not support hardlinks, rather than a competing writer.
+        for error in (errno.ENOTSUP, errno.EPERM):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                source, cache = tmp / "source", tmp / "cache/key"
+                source.write_bytes(b"tiny")
+                with mock.patch.object(
+                    fda.os, "link", side_effect=OSError(error, "no hardlinks")
+                ):
+                    fda._store_in_cache(source, cache)
+                self.assertEqual(cache.read_bytes(), b"tiny")
+                self.assertEqual(source.read_bytes(), b"tiny")
+                self.assertEqual(list(cache.parent.glob("*.tmp")), [])
+
+    def test_manifest_publication_does_not_rename_cache_path(self):
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                manifest = b"[]"
+                md5 = _md5_hex(manifest) + ".dir"
+                remote = fda._Remote("storage", "b", "pfx", True)
+                s3 = _FakeS3({("b", fda._s3_key(remote, md5)): manifest})
+                cache_file = fda._cache_path(tmp / "cache", md5)
+                if corrupt:
+                    cache_file.parent.mkdir(parents=True)
+                    cache_file.write_bytes(b"bad manifest")
+                real_replace, real_rename = os.replace, os.rename
+
+                def guarded(real):
+                    def move(src, dest):
+                        if dest == cache_file:
+                            raise AssertionError("manifest cache rename window")
+                        return real(src, dest)
+
+                    return move
+
+                messages = []
+                with (
+                    mock.patch.object(
+                        fda.os, "replace", side_effect=guarded(real_replace)
+                    ),
+                    mock.patch.object(
+                        fda.os, "rename", side_effect=guarded(real_rename)
+                    ),
+                ):
+                    fda._materialize_dir(
+                        s3,
+                        remote,
+                        fda._Out(md5, 0, "out"),
+                        tmp / "out",
+                        tmp / "cache",
+                        messages.append,
+                    )
+                self.assertEqual(cache_file.read_bytes(), manifest)
+                self.assertEqual(len(s3.calls), 1)
+                self.assertEqual(list(tmp.rglob("*.tmp")), [])
+                if corrupt:
+                    self.assertTrue(any("discarding" in m for m in messages))
 
 
 class TestMaterializeFile(unittest.TestCase):
@@ -587,6 +986,142 @@ class TestMaterializeFile(unittest.TestCase):
             self.assertEqual(cache_file.read_bytes(), data)
 
 
+class TestCacheFailureRecovery(unittest.TestCase):
+    def test_manifest_cleanup_failure_preserves_successful_fetch(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            manifest = b"[]"
+            md5 = _md5_hex(manifest) + ".dir"
+            remote = fda._Remote("storage", "b", "pfx", True)
+            s3 = _FakeS3({("b", fda._s3_key(remote, md5)): manifest})
+            real_tempdir, real_unlink = tempfile.TemporaryDirectory, os.unlink
+            blocked_deletes = []
+
+            def private_tempdir(**kwargs):
+                # Keep deliberately undeletable staging files inside our fixture
+                # so the outer cleanup removes them after the fault is released.
+                return real_tempdir(dir=tmp, **kwargs)
+
+            def unlink(path, *args, **kwargs):
+                if Path(path).name == "manifest":
+                    blocked_deletes.append(path)
+                    raise PermissionError(errno.EACCES, "cache reader holds file open")
+                return real_unlink(path, *args, **kwargs)
+
+            with (
+                mock.patch.object(fda.tempfile, "TemporaryDirectory", private_tempdir),
+                mock.patch.object(fda.os, "unlink", unlink),
+            ):
+                fda._materialize_dir(
+                    s3,
+                    remote,
+                    fda._Out(md5, 0, "out"),
+                    tmp / "out",
+                    tmp / "cache",
+                    lambda _: None,
+                )
+            self.assertTrue(blocked_deletes)
+            self.assertEqual(fda._cache_path(tmp / "cache", md5).read_bytes(), manifest)
+            self.assertEqual(len(s3.calls), 1)
+
+    def test_pull_recovers_from_cache_errors(self):
+        for directory in (False, True):
+            for fault in ("root", "read", "evict", "store", "copy"):
+                with self.subTest(directory=directory, fault=fault):
+                    self._check_cache_failure(directory, fault)
+
+    def test_cache_fallback_rejects_corrupt_downloads(self):
+        for directory in (False, True):
+            with self.subTest(directory=directory):
+                self._check_cache_failure(directory, "read", corrupt_download=True)
+
+    def _check_cache_failure(self, directory, fault, corrupt_download=False):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t).resolve()
+            project = tmp / "project"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc/config").write_text(
+                "[core]\n remote = storage\n['remote \"storage\"']\n"
+                " url = s3://b/pfx\n allow_anonymous_login = true\n"
+            )
+            data = b"verified content"
+            md5 = _md5_hex(data)
+            manifest = json.dumps([{"md5": md5, "relpath": "child.bin"}]).encode()
+            out_md5 = _md5_hex(manifest) + ".dir" if directory else md5
+            (project / "out.dvc").write_text(
+                f"outs:\n- md5: {out_md5}\n  size: {len(data)}\n  path: out\n"
+            )
+            dest = project / "out/child.bin" if directory else project / "out"
+            cache_dir = tmp / "cache"
+            # A copy failure concerns the child payload; the other directory
+            # cases exercise the manifest's own cache handling.
+            cache_file = fda._cache_path(cache_dir, md5 if fault == "copy" else out_md5)
+            cached_data = manifest if directory and fault != "copy" else data
+            if fault == "root":
+                cache_dir.write_bytes(b"not a directory")
+            elif fault in ("read", "evict", "copy"):
+                cache_file.parent.mkdir(parents=True)
+                cache_file.write_bytes(b"corrupt" if fault == "evict" else cached_data)
+
+            remote = fda._Remote("storage", "b", "pfx", True)
+            payloads = {("b", fda._s3_key(remote, md5)): data}
+            if directory:
+                payloads[("b", fda._s3_key(remote, out_md5))] = manifest
+            if corrupt_download:
+                payloads[("b", fda._s3_key(remote, out_md5))] = b"X" * len(cached_data)
+            s3 = _FakeS3(payloads)
+            real_open, real_unlink = Path.open, Path.unlink
+            real_link, real_copy = os.link, fda.shutil.copy2
+
+            def denied(path):
+                return PermissionError(errno.EACCES, "cache unavailable", str(path))
+
+            def open_file(path, *args, **kwargs):
+                if fault == "read" and path == cache_file:
+                    raise denied(path)
+                return real_open(path, *args, **kwargs)
+
+            def unlink(path, *args, **kwargs):
+                if fault == "evict" and path == cache_file:
+                    raise denied(path)
+                return real_unlink(path, *args, **kwargs)
+
+            def link(src, dst):
+                if (fault == "store" and dst == cache_file) or (
+                    fault == "copy" and src == cache_file
+                ):
+                    raise denied(dst)
+                return real_link(src, dst)
+
+            def copy(src, dst):
+                if (fault == "store" and dst.parent == cache_file.parent) or (
+                    fault == "copy" and src == cache_file
+                ):
+                    raise denied(dst)
+                return real_copy(src, dst)
+
+            messages = []
+            with (
+                mock.patch.object(fda, "_make_s3_client", return_value=s3),
+                mock.patch.object(Path, "open", open_file),
+                mock.patch.object(Path, "unlink", unlink),
+                mock.patch.object(fda.os, "link", link),
+                mock.patch.object(fda.shutil, "copy2", copy),
+            ):
+                if corrupt_download:
+                    with self.assertRaisesRegex(fda.FetchError, "1 file"):
+                        fda.pull(project, cache_dir=cache_dir, log=messages.append)
+                else:
+                    result = fda.pull(project, cache_dir=cache_dir, log=messages.append)
+                    self.assertEqual(result.fetched, 1)
+                    self.assertEqual(dest.read_bytes(), data)
+            self.assertTrue(any("warn" in m and "cache" in m for m in messages))
+            if corrupt_download:
+                self.assertFalse(dest.exists())
+                self.assertTrue(any("md5 mismatch" in m for m in messages))
+            self.assertEqual(list(tmp.rglob("*.tmp")), [])
+
+
 class TestPullEndToEnd(unittest.TestCase):
     """End-to-end pull() with mocked boto3."""
 
@@ -648,15 +1183,83 @@ class TestPullEndToEnd(unittest.TestCase):
             )
             fake_s3 = _FakeS3({("b", f"pfx/files/md5/{md5[:2]}/{md5[2:]}"): b"hello"})
 
+            messages = []
             with mock.patch.object(fda, "_make_s3_client", return_value=fake_s3):
                 with self.assertRaisesRegex(fda.FetchError, "1 file"):
-                    fda.pull(project, cache_dir=None, log=lambda _: None)
+                    fda.pull(project, cache_dir=None, log=messages.append)
             self.assertFalse((project / "x.bin").exists())
+            self.assertTrue(any("md5 mismatch" in m for m in messages))
+            self.assertFalse(any("Traceback" in m for m in messages))
 
     def test_pull_no_dvc_config_raises(self):
         with tempfile.TemporaryDirectory() as t:
             with self.assertRaisesRegex(fda.FetchError, "no .dvc/config"):
                 fda.pull(Path(t), log=lambda _: None)
+
+    def test_pull_preserves_destination_failure_tracebacks(self):
+        # Unexpected failures still need the worker stack. Cache I/O errors
+        # are recoverable, but denied destinations are fatal. Aggregate
+        # two failures, including the cause of an exception from a helper.
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            project = tmp / "proj"
+            (project / ".dvc").mkdir(parents=True)
+            (project / ".dvc" / "config").write_text(
+                "[core]\n    remote = storage\n"
+                "['remote \"storage\"']\n    url = s3://b/pfx\n"
+                "    allow_anonymous_login = true\n"
+            )
+            data = b"present content"
+            md5 = _md5_hex(data)
+            for name in ("a", "b"):
+                (project / f"{name}.dvc").write_text(
+                    f"outs:\n- md5: {md5}\n  size: {len(data)}\n"
+                    f"  hash: md5\n  path: {name}.bin\n"
+                )
+                (project / f"{name}.bin").write_bytes(data)
+            real_open = Path.open
+
+            def denied_destination_open(path, *args, **kwargs):
+                if path.suffix == ".bin":
+                    try:
+                        raise OSError("underlying filesystem failure")
+                    except OSError as cause:
+                        raise PermissionError(
+                            13, "Permission denied", str(path)
+                        ) from cause
+                return real_open(path, *args, **kwargs)
+
+            messages = []
+            with (
+                mock.patch.object(fda, "_make_s3_client", return_value=_FakeS3({})),
+                mock.patch.object(Path, "open", denied_destination_open),
+            ):
+                with self.assertRaisesRegex(fda.FetchError, "2 file\\(s\\)"):
+                    fda.pull(project, jobs=2, cache_dir=None, log=messages.append)
+
+            for name in ("a", "b"):
+                self.assertTrue(
+                    any(
+                        f"ERROR     {project.resolve() / f'{name}.dvc'}:" in m
+                        for m in messages
+                    )
+                )
+            stacks = [m for m in messages if "Traceback (most recent call last)" in m]
+            self.assertEqual(len(stacks), 2)
+            for stack in stacks:
+                self.assertIn("in _process_pointer", stack)
+                self.assertIn("in _materialize_file", stack)
+                self.assertIn("in _md5_of", stack)
+                self.assertIn("in denied_destination_open", stack)
+                self.assertIn("underlying filesystem failure", stack)
+                self.assertIn("direct cause", stack)
+                self.assertIn("PermissionError: [Errno 13] Permission denied", stack)
+                self.assertTrue(
+                    any(
+                        repr(str(project.resolve() / f"{name}.bin")) in stack
+                        for name in ("a", "b")
+                    )
+                )
 
 
 class TestParsePerOutputRemote(unittest.TestCase):
