@@ -504,6 +504,10 @@ class TestDebugToolsAmdLlvmDev(unittest.TestCase):
     def test_debug_tools_includes_amd_llvm_dev(self) -> None:
         argv = _captured_fetch_argv(_make_run_id_args(debug_tools=True))
         self.assertIn("amd-llvm_dev", argv)
+        # The LLVM toolchain in the rocgdb tests requires the standalone Flang
+        # driver (amd-llvm-flang_run) and its _lib component.
+        self.assertIn("amd-llvm-flang_run", argv)
+        self.assertIn("amd-llvm-flang_lib", argv)
 
 
 class TestRocprofilerSystemsHipfile(unittest.TestCase):

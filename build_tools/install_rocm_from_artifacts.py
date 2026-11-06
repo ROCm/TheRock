@@ -515,6 +515,12 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("ncurses")
             # rocgdb tests require amd-llvm_dev for compiler headers/tools.
             argv.append("amd-llvm_dev")
+            # The rocgdb test harness looks up flang when the LLVM toolchain
+            # runs. Standalone Flang is the default, so that driver is in
+            # amd-llvm-flang_run (lib/llvm/bin/flang), not amd-llvm.
+            if "amd-llvm-flang" not in extra_artifacts:
+                extra_artifacts.append("amd-llvm-flang")
+            append_artifact_pattern("amd-llvm-flang_run")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -691,7 +697,10 @@ def retrieve_artifacts_by_run_id(args):
 
         if args.flang:
             # _lib (and _test with --tests) come from extra_artifacts expansion.
-            extra_artifacts.append("amd-llvm-flang")
+            # --debug-tools may already have added the artifact for the rocgdb
+            # LLVM toolchain's flang driver.
+            if "amd-llvm-flang" not in extra_artifacts:
+                extra_artifacts.append("amd-llvm-flang")
             append_artifact_pattern("amd-llvm-flang_run")
             append_artifact_pattern("amd-llvm-flang_dev")
 
