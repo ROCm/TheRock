@@ -1536,10 +1536,22 @@ def do_build_pytorch_vision(
             cwd=pytorch_vision_dir,
             env=env,
         )
+        # lddtree does not search the conda prefix, so libjpeg and libwebp
+        # were omitted. Scope LD_LIBRARY_PATH to this call: the pre-build
+        # script's yum already finished, and conda's libsolv breaks it.
+        relocate_env = dict(env)
+        if not is_windows:
+            conda_lib = str(Path(env["CONDA_PREFIX"]) / "lib")
+            current_ld = relocate_env.get(
+                "LD_LIBRARY_PATH", os.environ.get("LD_LIBRARY_PATH", "")
+            )
+            relocate_env["LD_LIBRARY_PATH"] = conda_lib + (
+                os.pathsep + current_ld if current_ld else ""
+            )
         run_command(
             [sys.executable, relocate],
             cwd=pytorch_vision_dir,
-            env=env,
+            env=relocate_env,
         )
         built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
         print(f"Found built wheel: {built_wheel}")
