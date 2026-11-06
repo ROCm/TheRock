@@ -1361,6 +1361,41 @@ def do_build_pytorch_audio(
     copy_to_output(args, built_wheel)
 
 
+# Same Miniforge release as pytorch/test-infra's aarch64 wheel builds.
+_MINIFORGE_VERSION = "26.3.2-3"
+
+
+def _ensure_build_conda(env: dict[str, str]) -> str:
+    """Return a conda executable, installing Miniforge into a temp prefix if absent.
+
+    The manylinux image has no conda. The install is build-local and not baked
+    into the image. LD_LIBRARY_PATH is left alone; conda's libsolv breaks yum.
+    """
+    existing = shutil.which("conda", path=env.get("PATH"))
+    if existing:
+        return existing
+    if is_windows:
+        raise RuntimeError("conda not found on PATH for torchvision codec install")
+    machine = platform.machine()
+    prefix = Path(tempfile.gettempdir()) / f"therock-miniforge-{machine}"
+    conda_exe = prefix / "bin" / "conda"
+    if not conda_exe.is_file():
+        name = f"Miniforge3-Linux-{machine}.sh"
+        url = (
+            "https://github.com/conda-forge/miniforge/releases/download/"
+            f"{_MINIFORGE_VERSION}/{name}"
+        )
+        print(f"Installing Miniforge {_MINIFORGE_VERSION} to {prefix}: {url}")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = Path(temp_dir) / name
+            urllib.request.urlretrieve(url, installer)
+            run_command(
+                ["bash", installer, "-b", "-p", prefix], cwd=Path(temp_dir), env=env
+            )
+    env["PATH"] = os.pathsep.join([str(prefix / "bin"), env.get("PATH", "")])
+    return str(conda_exe)
+
+
 def do_build_pytorch_vision(
     args: argparse.Namespace, pytorch_vision_dir: Path, env: dict[str, str]
 ):
@@ -1395,7 +1430,8 @@ def do_build_pytorch_vision(
 
     # setup.py looks for libjpeg and libwebp under CONDA_PREFIX. On Windows,
     # libpng is found through pngfix.exe in Library/bin.
-    conda_base = capture(["conda", "info", "--base"], cwd=pytorch_vision_dir)
+    conda_exe = _ensure_build_conda(env)
+    conda_base = capture([conda_exe, "info", "--base"], cwd=pytorch_vision_dir)
     conda_prefix = [line.strip() for line in conda_base.splitlines() if line.strip()]
     if not conda_prefix:
         raise RuntimeError("`conda info --base` did not report a prefix")
@@ -1406,7 +1442,7 @@ def do_build_pytorch_vision(
             library_bin + os.pathsep + env.get("PATH", os.environ.get("PATH", ""))
         )
     run_command(
-        ["conda", "install", "-y", "libpng", "libjpeg-turbo", "libwebp>=1.3.2"],
+        [conda_exe, "install", "-y", "libpng", "libjpeg-turbo", "libwebp>=1.3.2"],
         cwd=pytorch_vision_dir,
         env=env,
     )
