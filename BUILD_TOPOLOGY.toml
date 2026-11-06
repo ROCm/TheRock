@@ -655,7 +655,7 @@ source_paths = ["rocrand", "hiprand", "primbench"]
 [artifacts.fft]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand"]
 source_paths = ["rocfft", "hipfft"]
 
 [artifacts.prim]
