@@ -65,8 +65,9 @@ Subprojects opt into the toolchain with `therock_cmake_subproject_declare`:
   `flang`; otherwise configure without a Fortran toolchain.
 - `FORTRAN_REQUIRED` — fail configure if Fortran libs / Flang are unavailable.
 
-Wired examples today: `rocBLAS`, `hipBLAS`, `rocSOLVER` (`BUILD_FORTRAN_CLIENTS`),
-and `rocRAND` / `hipRAND` (`BUILD_FORTRAN_WRAPPER`). Project CMake then skips
+Wired examples today: `rocBLAS`, `hipBLAS`, `rocSOLVER` (`BUILD_FORTRAN_CLIENTS`).
+rocRAND and hipRAND leave `BUILD_FORTRAN_WRAPPER` at its upstream default (`OFF`);
+that hand-written wrapper is deprecated. Project CMake then skips
 Fortran samples/clients when those options are off; C/C++ clients are unchanged.
 
 ## Developer Builds
@@ -140,5 +141,6 @@ be absent, and math-lib Fortran clients/samples should not build.
   `CLANG_ENABLE_AMDFLANG` tied to `THEROCK_ENABLE_FLANG`).
 - Other Fortran-aware projects (hipSOLVER, hipfort, …) can adopt the same
   `FORTRAN_OPTIONAL` + `BUILD_FORTRAN_*` mapping pattern.
-- rocRAND / hipRAND may still install Fortran source trees under the package
-  prefix for config compatibility; prefer fixing that upstream when possible.
+- rocRAND / hipRAND still install a Fortran config that checks
+  `src/fortran` when `BUILD_FORTRAN_WRAPPER` is enabled. TheRock does not
+  enable that deprecated wrapper.
