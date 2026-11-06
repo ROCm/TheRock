@@ -1,0 +1,173 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+# Trigger, monitor and retry artifact tests. See ROCm/TheRock#9054.
+
+name: Component Test Retry
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: "Known-good artifact run ID; blank selects the latest successful main nightly"
+        type: string
+        default: ""
+      artifact_repository:
+        description: "Repository owning the artifact run"
+        type: string
+        default: "ROCm/rockrel"
+      amdgpu_families:
+        description: "Comma-separated family names or aliases (blank = all configured)"
+        type: string
+        default: ""
+      platforms:
+        description: "Comma-separated platforms: linux,windows,wsl"
+        type: string
+        default: "linux,windows"
+      test_type:
+        description: "Test tier; family-specific policies still apply"
+        type: choice
+        options: [quick, standard, comprehensive, full]
+        default: standard
+      test_labels:
+        description: "Optional component filter, e.g. test:rocblas,test:hipblas"
+        type: string
+        default: ""
+      max_retries:
+        description: "Additional failed-job retries (2 = 3 total attempts)"
+        type: string
+        default: "2"
+      poll_interval:
+        description: "Seconds between run-status checks (30–900)"
+        type: string
+        default: "60"
+      monitor_timeout_minutes:
+        description: "Shared monitoring budget for all attempts (1–350 minutes)"
+        type: string
+        default: "350"
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    name: Validate Baseline and Configure Targets
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.configure.outputs.matrix }}
+      artifact_run_id: ${{ steps.baseline.outputs.artifact_run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Checkout CI Config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+          persist-credentials: false
+      - name: Set Up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Determine Artifact Run
+        id: baseline
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+          ARTIFACT_REPOSITORY: ${{ inputs.artifact_repository }}
+        run: |
+          python build_tools/github_actions/configure_component_test_retry.py \
+            --resolve-baseline-only \
+            --artifact-run-id "$ARTIFACT_RUN_ID" \
+            --artifact-repository "$ARTIFACT_REPOSITORY"
+      - name: Configure Targets
+        id: configure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI_CONFIG_PATH: ${{ github.workspace }}/ci-config
+          ARTIFACT_RUN_ID: ${{ steps.baseline.outputs.artifact_run_id }}
+          ARTIFACT_REPOSITORY: ${{ inputs.artifact_repository }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          PLATFORMS: ${{ inputs.platforms }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          TEST_LABELS: ${{ inputs.test_labels }}
+          MAX_RETRIES: ${{ inputs.max_retries }}
+          POLL_INTERVAL: ${{ inputs.poll_interval }}
+          MONITOR_TIMEOUT: ${{ inputs.monitor_timeout_minutes }}
+        run: |
+          python build_tools/github_actions/configure_component_test_retry.py \
+            --artifact-run-id "$ARTIFACT_RUN_ID" \
+            --artifact-repository "$ARTIFACT_REPOSITORY" \
+            --families "$AMDGPU_FAMILIES" \
+            --platforms "$PLATFORMS" \
+            --test-type "$TEST_TYPE" \
+            --test-labels "$TEST_LABELS" \
+            --max-retries "$MAX_RETRIES" \
+            --poll-interval "$POLL_INTERVAL" \
+            --timeout-minutes "$MONITOR_TIMEOUT"
+
+  trigger_monitor_retry:
+    name: Retry Tests (${{ matrix.family }}, ${{ matrix.platform }})
+    needs: configure
+    runs-on: ubuntu-26.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.configure.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Set Up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Dispatch Artifact Tests Once
+        id: dispatch
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          ref: ${{ github.sha }}
+          wait-for-completion: false
+          # Configure escapes test_labels before inserting it into this JSON string.
+          inputs: |
+            {
+              "artifact_group": "${{ matrix.family }}",
+              "artifact_run_id": "${{ needs.configure.outputs.artifact_run_id }}",
+              "amdgpu_families": "${{ matrix.family }}",
+              "amdgpu_targets": "${{ matrix.targets }}",
+              "test_runs_on": "${{ matrix.runner }}",
+              "test_runs_on_cpu": "${{ matrix.cpu_runner }}",
+              "test_type": "${{ matrix.test_type }}",
+              "test_labels": "${{ matrix.test_labels }}",
+              "release_type": "ci",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ github.sha }}",
+              "build_variant": "release"
+            }
+      - name: Monitor and Retry Failed Jobs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ steps.dispatch.outputs.runId }}
+          MAX_RETRIES: ${{ inputs.max_retries }}
+          POLL_INTERVAL: ${{ inputs.poll_interval }}
+          MONITOR_TIMEOUT: ${{ inputs.monitor_timeout_minutes }}
+        run: |
+          python build_tools/github_actions/monitor_workflow_run.py \
+            --repository "$REPOSITORY" \
+            --run-id "$RUN_ID" \
+            --max-retries "$MAX_RETRIES" \
+            --poll-interval "$POLL_INTERVAL" \
+            --timeout-minutes "$MONITOR_TIMEOUT"
