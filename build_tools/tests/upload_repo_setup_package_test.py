@@ -216,7 +216,10 @@ def test_upload_fails_without_a_package(tmp_path, monkeypatch):
 def test_upload_rejects_an_unexpected_file_name(tmp_path, monkeypatch, bad):
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
-    args = ursp.parse_args(_argv(tmp_path, filename=bad, output_dir=staging))
+    args = ursp.parse_args(_argv(tmp_path, output_dir=staging))
+    # Windows cannot create a file whose name holds a newline, so hand the
+    # upload the name directly; the check runs before the file is read.
+    monkeypatch.setattr(ursp, "find_package", lambda dest_dir, pkg_type: dest_dir / bad)
 
     with pytest.raises(ValueError, match="unexpected file name"):
         ursp.upload(args)
