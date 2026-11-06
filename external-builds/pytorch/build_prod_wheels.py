@@ -1365,22 +1365,45 @@ def do_build_pytorch_audio(
 _MINIFORGE_VERSION = "26.3.2-3"
 
 
-def _ensure_build_conda(env: dict[str, str]) -> str:
-    """Return a conda executable, installing Miniforge into a temp prefix if absent.
+def _conda_exe_from_which(found: str) -> str:
+    # Windows `conda` is often conda.bat. subprocess cannot run a .bat without a shell.
+    path = Path(found)
+    if path.suffix.lower() not in {".bat", ".cmd"}:
+        return found
+    conda_exe = path.resolve().parent.parent / "Scripts" / "conda.exe"
+    if conda_exe.is_file():
+        return str(conda_exe)
+    return found
 
-    The manylinux image has no conda. The install is build-local and not baked
-    into the image. LD_LIBRARY_PATH is left alone; conda's libsolv breaks yum.
-    """
-    existing = shutil.which("conda", path=env.get("PATH"))
-    if existing:
-        return existing
+
+def _install_miniforge(env: dict[str, str]) -> str:
+    """Install Miniforge into a build-local prefix. Not part of the image."""
+    machine = platform.machine().lower()
+    # NSIS treats /D= as the rest of the command line, so the Windows prefix
+    # cannot contain spaces.
+    prefix = (
+        Path("C:/therock-miniforge")
+        if is_windows
+        else Path(tempfile.gettempdir()) / f"therock-miniforge-{machine}"
+    )
     if is_windows:
-        raise RuntimeError("conda not found on PATH for torchvision codec install")
-    machine = platform.machine()
-    prefix = Path(tempfile.gettempdir()) / f"therock-miniforge-{machine}"
-    conda_exe = prefix / "bin" / "conda"
+        names = {
+            "amd64": "Miniforge3-Windows-x86_64.exe",
+            "x86_64": "Miniforge3-Windows-x86_64.exe",
+        }
+        conda_exe = prefix / "Scripts" / "conda.exe"
+        bin_dir = prefix / "Scripts"
+    else:
+        names = {
+            "x86_64": "Miniforge3-Linux-x86_64.sh",
+            "aarch64": "Miniforge3-Linux-aarch64.sh",
+        }
+        conda_exe = prefix / "bin" / "conda"
+        bin_dir = prefix / "bin"
+    if machine not in names:
+        raise RuntimeError(f"No Miniforge installer for {platform.machine()}")
     if not conda_exe.is_file():
-        name = f"Miniforge3-Linux-{machine}.sh"
+        name = names[machine]
         url = (
             "https://github.com/conda-forge/miniforge/releases/download/"
             f"{_MINIFORGE_VERSION}/{name}"
@@ -1389,11 +1412,40 @@ def _ensure_build_conda(env: dict[str, str]) -> str:
         with tempfile.TemporaryDirectory() as temp_dir:
             installer = Path(temp_dir) / name
             urllib.request.urlretrieve(url, installer)
-            run_command(
-                ["bash", installer, "-b", "-p", prefix], cwd=Path(temp_dir), env=env
-            )
-    env["PATH"] = os.pathsep.join([str(prefix / "bin"), env.get("PATH", "")])
+            if is_windows:
+                # NSIS: /D= must be the last argument and must not be quoted.
+                run_command(
+                    [
+                        installer,
+                        "/InstallationType=JustMe",
+                        "/RegisterPython=0",
+                        "/AddToPath=0",
+                        "/S",
+                        f"/D={prefix}",
+                    ],
+                    cwd=Path(temp_dir),
+                    env=env,
+                )
+            else:
+                run_command(
+                    ["bash", installer, "-b", "-p", prefix],
+                    cwd=Path(temp_dir),
+                    env=env,
+                )
+    env["PATH"] = os.pathsep.join([str(bin_dir), env.get("PATH", "")])
     return str(conda_exe)
+
+
+def _ensure_build_conda(env: dict[str, str]) -> str:
+    """Return a conda executable, installing Miniforge into a temp prefix if absent.
+
+    The install is build-local and is not baked into the image. LD_LIBRARY_PATH
+    is left alone; conda's libsolv breaks the Linux image's yum.
+    """
+    existing = shutil.which("conda", path=env.get("PATH"))
+    if existing:
+        return _conda_exe_from_which(existing)
+    return _install_miniforge(env)
 
 
 def do_build_pytorch_vision(
