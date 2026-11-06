@@ -173,29 +173,49 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
-    def test_structured_whl_next(self, mock_upload_files):
-        self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
-        mock_upload_files.return_value = 1
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "dev",
-                "--structured",
-                "--python-index",
-                "whl-next",
-                "--dry-run",
-            ]
-        )
+    @mock.patch("github_actions.publish_pytorch_to_release_bucket.gha_set_output")
+    def test_structured_whl_next(self, mock_set_output, mock_upload_files):
+        # Test regular, ASAN, and explicit override use correct index
+        test_cases = [
+            ("release", None, "whl-next"),  # Regular build -> whl-next
+            ("asan", None, "whl-next-asan"),  # ASAN build -> whl-next-asan
+            ("asan", "whl-next", "whl-next"),  # Explicit override -> whl-next
+        ]
+        for build_variant, explicit_index, expected_index in test_cases:
+            with self.subTest(
+                build_variant=build_variant, explicit_index=explicit_index
+            ):
+                mock_upload_files.reset_mock()
+                mock_set_output.reset_mock()
+                self._touch("torch-2.10.0-cp312-cp312-linux_x86_64.whl")
+                mock_upload_files.return_value = 1
+                args = [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "dev",
+                    "--structured",
+                    "--build-variant",
+                    build_variant,
+                    "--dry-run",
+                ]
+                if explicit_index:
+                    args.extend(["--python-index", explicit_index])
+                main(args)
 
-        (uploads,) = mock_upload_files.call_args.args
-        _source, dest = uploads[0]
-        self.assertEqual(
-            dest.relative_path,
-            "v5/rocm/pytorch/whl-next/torch/"
-            "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
-        )
+                (uploads,) = mock_upload_files.call_args.args
+                _source, dest = uploads[0]
+                self.assertEqual(
+                    dest.relative_path,
+                    f"v5/rocm/pytorch/{expected_index}/torch/"
+                    "torch-2.10.0-cp312-cp312-linux_x86_64.whl",
+                )
+                mock_set_output.assert_called_once_with(
+                    {
+                        "package_index_url": "https://dev.repo.amd.com/rocm/"
+                        f"{expected_index}/"
+                    }
+                )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
     def test_structured_raises_when_no_wheels(self, mock_upload_files):
