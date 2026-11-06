@@ -19,34 +19,37 @@ The following operations are covered in these smoke tests:
 - **Matrix-Vector Multiplication (`torch.mv`)**
 - **General Matrix Multiplication (`torch.matmul`)**
 - **Convolution (`torch.conv2d` and `torch.nn.functional.conv_transpose2d`)**
+- **Scaled Dot-Product Attention (`torch.nn.functional.scaled_dot_product_attention`)**
 
-## Windows AOTriton SDPA packaging
+## Scaled Dot-Product Attention (SDPA)
 
-`TestSDPA` checks the installed wheel on a physical Windows gfx1151 GPU, addressing
-the packaging-test gap described in [#7315](https://github.com/ROCm/TheRock/issues/7315#issuecomment-5274800279).
-It forces FLASH without a mask and EFFICIENT with additive bias on BF16
-`[1, 2, 16, 64]` inputs, plus EFFICIENT on vision inputs `[54, 12, 196, 64]`.
-These shapes reproduce a historical runtime/image mismatch without model downloads.
-The reference is independent CPU FP32 matmul/softmax using the same CPU-generated,
-BF16-quantized inputs; `atol=rtol=0.03` is the validated BF16 acceptance threshold.
+`TestSDPA` is a representative smoketest for fused scaled dot-product attention,
+a core operation for modern ML workloads. On ROCm, the fused FLASH_ATTENTION and
+EFFICIENT_ATTENTION backends dispatch to AOTriton kernels whose usability depends
+on how the wheel was built and packaged: a wheel that ships mismatched kernel
+images can fail at kernel launch time with only a deferred error
+([#7315](https://github.com/ROCm/TheRock/issues/7315),
+[#7992](https://github.com/ROCm/TheRock/issues/7992)).
 
-Each case has its own process, inherits the runner's GPU isolation, enables only
-one fused backend, and observes the actual aten SDPA operator with a narrowly scoped
-`TorchDispatchMode`. Non-clearing HIP error checks immediately after SDPA, after
-synchronization and after a downstream tensor operation catch deferred launch errors.
-Missing required backends or runtime libraries fail; other platforms/architectures
-are explicitly outside scope, and no available GPU is reported as NOT RUN (skipped).
-This covers BF16 forward execution, not backward, performance or other GPU families.
+Each test forces a single fused backend with `torch.nn.attention.sdpa_kernel`, so
+an unavailable kernel raises immediately instead of silently falling back to the
+unfused MATH backend, and checks the BF16 output against an independent CPU FP32
+reference computed from the same BF16-quantized inputs (`atol=rtol=0.03` covers
+BF16 rounding on the tested shapes). Covered configurations, all BF16:
 
-Run against an installed ROCm torch package (including the appropriate device extras
-for multi-arch wheels, e.g. `torch[device-gfx1151]`), not a PyTorch source checkout:
+- FLASH_ATTENTION, Q/K/V `[1, 2, 16, 64]`, no mask
+- EFFICIENT_ATTENTION, Q/K/V `[1, 2, 16, 64]`, additive bias
+- EFFICIENT_ATTENTION, Q/K/V `[54, 12, 196, 64]`, additive bias (a larger
+  vision-transformer-shaped input)
+
+Not covered: the MATH backend, other dtypes, backward passes, performance, and
+comprehensive attention configurations. Broader coverage is planned by running
+pytorch's own `test_transformers.py`
+([#9641](https://github.com/ROCm/TheRock/issues/9641)).
+
+Run against an installed ROCm torch wheel with the standard runner (see
+`run_pytorch_smoke_tests.py` for options):
 
 ```bash
-python external-builds/pytorch/run_pytorch_smoke_tests.py --amdgpu-family gfx1151 -- -v -s -k fused_sdpa
+python external-builds/pytorch/run_pytorch_smoke_tests.py --amdgpu-family gfx1151 -- -v -k fused_sdpa
 ```
-
-The existing `test_pytorch_wheels.yml` smoke-test step discovers these tests
-automatically. Selected Windows release jobs currently test the primary Python 3.11
-row after wheel publication; a failure fails that test job, not publication.
-This adds no Windows GPU presubmit scheduling or release gate. Ordinary hosted CPU
-unit CI does not run these GPU smoke tests.
