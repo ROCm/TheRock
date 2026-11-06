@@ -33,6 +33,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ.pop("AMDGPU_TARGETS", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -431,6 +432,40 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             exclude_family={"linux": ["gfx1100"]},
         )
         self.assertIn("inc-noexc", self._selected_names())
+
+    def test_amdgpu_targets_override_static_targets(self):
+        # The caller's targets (after its family overrides) win over the matrix.
+        self._inject_job("exc-static", exclude_family={"linux": ["gfx942"]})
+        os.environ["AMDGPU_TARGETS"] = "gfx950"
+        self.assertIn("exc-static", self._selected_names())
+
+    def test_blank_amdgpu_targets_falls_back_to_static_targets(self):
+        self._inject_job("exc-blank", exclude_family={"linux": ["gfx942"]})
+        os.environ["AMDGPU_TARGETS"] = " , "
+        self.assertNotIn("exc-blank", self._selected_names())
+
+    def test_gfx125x_hipblaslt_and_tensilelite_excluded_for_gfx1250(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        for targets in (None, "gfx1250"):
+            with self.subTest(targets=targets):
+                if targets is None:
+                    os.environ.pop("AMDGPU_TARGETS", None)
+                else:
+                    os.environ["AMDGPU_TARGETS"] = targets
+                names = self._selected_names()
+                self.assertNotIn("hipblaslt", names)
+                self.assertNotIn("tensilelite", names)
+                self.assertNotIn("tensilelite-common", names)
+
+    def test_gfx125x_hipblaslt_and_tensilelite_run_for_gfx1250_strict(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["AMDGPU_TARGETS"] = "gfx1250-strict"
+        names = self._selected_names()
+        self.assertIn("hipblaslt", names)
+        self.assertIn("tensilelite", names)
+        self.assertIn("tensilelite-common", names)
+        # Components excluded by the family string stay excluded.
+        self.assertNotIn("rocblas", names)
 
     # -----------------------
     # test_types tier gating
