@@ -158,9 +158,12 @@ on:
         type: string
         default: ""
       rocm_version:
-        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        description: >-
+          Optional ROCm package version to install and build against. Leave
+          blank to install the latest version from the selected package source;
+          the source defaults to the nightly ROCm repository.
         type: string
-        required: true
+        default: ""
       rocm_package_find_links_url:
         description: >-
           URL for pip --find-links to install ROCm packages (flat page). Set
@@ -359,6 +362,7 @@ jobs:
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
       - name: Determine optional arguments passed to `build_prod_wheels.py`
+        if: ${{ inputs.rocm_version != '' }}
         run: |
           python build_tools/github_actions/determine_version.py \
             --rocm-version "${ROCM_VERSION}"
