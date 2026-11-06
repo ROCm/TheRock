@@ -542,6 +542,17 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${_ROCPROFSYS_GFX_TARGETS}")
     endif()
 
+    # OpenMP Fortran examples find_program(NAMES amdflang). FORTRAN_OPTIONAL
+    # adds amd-llvm-flang (or amd-llvm dist) to RUNTIME_DEPS and puts
+    # lib/llvm/bin on CMAKE_PROGRAM_PATH; toolchain also sets
+    # CMAKE_Fortran_COMPILER / amdflang_EXECUTABLE.
+    set(_rocprofsys_disable_examples "lulesh;openmp-target;causal")
+    if(NOT THEROCK_ENABLE_FLANG)
+      list(APPEND _rocprofsys_disable_examples "fortran")
+    endif()
+    string(REPLACE ";" "\\;" _rocprofsys_disable_examples
+      "${_rocprofsys_disable_examples}")
+
     therock_cmake_subproject_declare(rocprofiler-systems-examples
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
@@ -549,7 +560,8 @@ if(THEROCK_ENABLE_ROCPROFSYS)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
-        -DROCPROFSYS_DISABLE_EXAMPLES="lulesh\\;openmp-target\\;causal"
+        -DROCPROFSYS_DISABLE_EXAMPLES="${_rocprofsys_disable_examples}"
+      FORTRAN_OPTIONAL
       COMPILER_TOOLCHAIN
         amd-hip
       INSTALL_RPATH_DIRS

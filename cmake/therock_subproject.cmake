@@ -813,10 +813,15 @@ function(therock_cmake_subproject_activate target_name)
     get_target_property(_fortran_dist_dir "${_fortran_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_fortran_stamp_dir "${_fortran_toolchain_subproject}" THEROCK_STAMP_DIR)
     set(_fortran_compiler "${_fortran_dist_dir}/lib/llvm/bin/flang${CMAKE_EXECUTABLE_SUFFIX}")
+    set(_fortran_amdflang "${_fortran_dist_dir}/lib/llvm/bin/amdflang${CMAKE_EXECUTABLE_SUFFIX}")
+    if(NOT EXISTS "${_fortran_amdflang}")
+      set(_fortran_amdflang "${_fortran_compiler}")
+    endif()
     list(APPEND _compiler_toolchain_addl_depends "${_fortran_stamp_dir}/stage.stamp")
     file(APPEND "${_cmake_project_toolchain_file}"
       "set(CMAKE_Fortran_COMPILER \"${_fortran_compiler}\")\n"
       "set(LLVM_Fortran_COMPILER \"${_fortran_compiler}\")\n"
+      "set(amdflang_EXECUTABLE \"${_fortran_amdflang}\" CACHE FILEPATH \"amdflang for subprojects\")\n"
     )
     if(THEROCK_VERBOSE)
       message(STATUS "  Fortran toolchain: ${_fortran_toolchain_subproject} (${_fortran_compiler})")
