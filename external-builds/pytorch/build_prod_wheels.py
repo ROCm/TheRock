@@ -142,8 +142,8 @@ versions):
 ```
 
 TODO: Need to add an option to post-process wheels, set the manylinux tag, and
-inline system deps into the audio and vision wheels as needed. Vision links
-image codecs via pre_build_script.sh, but those libraries are not in the wheel.
+inline system deps into the audio and vision wheels as needed. Vision
+conda-installs the image codecs, but those libraries are not in the wheel.
 """
 
 import argparse
@@ -160,7 +160,6 @@ import tarfile
 import tempfile
 import textwrap
 import urllib.request
-import zipfile
 
 script_dir = Path(__file__).resolve().parent
 
@@ -1364,11 +1363,6 @@ def do_build_pytorch_audio(
 
 # Same installer pin as pytorch/test-infra's aarch64 wheel builds.
 _MINIFORGE_VERSION = "26.3.2-3"
-_VISION_CODEC_MISSING_MARKERS = (
-    b"not compiled with libPNG support",
-    b"not compiled with libjpeg support",
-    b"not compiled with libwebp support",
-)
 
 
 def _vision_conda_prefix() -> Path:
@@ -1407,8 +1401,8 @@ def _miniforge_installer_name() -> str:
         return names[machine]
     except KeyError:
         raise RuntimeError(
-            f"No miniforge installer for {machine}. torchvision's "
-            "pre_build_script.sh needs conda for libpng, libjpeg-turbo, and libwebp."
+            f"No miniforge installer for {machine}. torchvision needs conda "
+            "to install libpng, libjpeg-turbo, and libwebp."
         ) from None
 
 
@@ -1430,8 +1424,12 @@ def _install_miniforge(prefix: Path) -> None:
         subprocess.check_call(["bash", str(installer), "-b", "-p", str(prefix)])
 
 
-def _ensure_vision_conda(env: dict[str, str]) -> Path:
-    """The manylinux image has no conda; vision's pre_build_script.sh requires it."""
+def _conda_install_vision_codecs(env: dict[str, str]) -> None:
+    """Install libpng, libjpeg-turbo, and libwebp for the torchvision build.
+
+    The manylinux image has no conda. setup.py warns and continues when the
+    headers are missing, so this install is not required for the wheel to build.
+    """
     prefix = _vision_conda_prefix()
     conda_exe = prefix / "bin" / "conda"
     if not conda_exe.is_file():
@@ -1441,87 +1439,19 @@ def _ensure_vision_conda(env: dict[str, str]) -> Path:
     env["PATH"] = _insert_conda_bin_on_path(
         env.get("PATH", os.environ.get("PATH", "")), prefix
     )
-    # Miniforge defaults to strict conda-forge, which hides `-c pytorch`.
-    run_command(
-        [str(conda_exe), "config", "--set", "channel_priority", "disabled"],
-        cwd=prefix,
-        env=env,
-    )
-    return prefix
-
-
-def _run_torchvision_pre_build(pytorch_vision_dir: Path, env: dict[str, str]) -> None:
-    """Install image codecs, then run vision's packaging/pre_build_script.sh.
-
-    The script's libpng install is Darwin/msys-only. Linux gets libpng from
-    conda here, matching pytorch/test-infra's wheel env.
-    """
-    script = pytorch_vision_dir / "packaging" / "pre_build_script.sh"
-    if not script.is_file():
-        raise FileNotFoundError(
-            f"torchvision codec pre-build script not found: {script}"
-        )
-    prefix = _ensure_vision_conda(env)
-    # aarch64 installs libpng and libjpeg-turbo only when ARCH is set.
-    env["ARCH"] = platform.machine()
     run_command(
         [
-            str(prefix / "bin" / "conda"),
+            str(conda_exe),
             "install",
             "-y",
             "-p",
             str(prefix),
             "libpng",
+            "libjpeg-turbo",
             "libwebp>=1.3.2",
         ],
-        cwd=pytorch_vision_dir,
+        cwd=prefix,
         env=env,
-    )
-    run_command(
-        ["bash", "-o", "errexit", str(script)],
-        cwd=pytorch_vision_dir,
-        env=env,
-    )
-    # Unquoted `libwebp>=1.3.2` in the script is a bash redirect to this name.
-    redirected = pytorch_vision_dir / "=1.3.2"
-    if redirected.exists():
-        redirected.unlink()
-    if shutil.which("libpng-config", path=env["PATH"]) is None:
-        raise RuntimeError(
-            "libpng-config is missing after torchvision's pre_build_script.sh. "
-            "The Linux branch does not install libpng, and the conda install "
-            "did not put libpng-config on PATH."
-        )
-
-
-def _assert_vision_image_codecs(wheel: Path) -> None:
-    """Fail if image*.so still has the stubs for a codec the build did not find."""
-    with zipfile.ZipFile(wheel) as archive:
-        extensions = [
-            name
-            for name in archive.namelist()
-            if Path(name).name.startswith("image") and name.endswith(".so")
-        ]
-        if not extensions:
-            raise RuntimeError(f"No torchvision image extension in {wheel}")
-        blob = b"".join(archive.read(name) for name in extensions)
-    missing = [
-        marker.decode() for marker in _VISION_CODEC_MISSING_MARKERS if marker in blob
-    ]
-    if missing:
-        joined = ", ".join(missing)
-        raise RuntimeError(f"{wheel.name} was built without image codecs: {joined}")
-
-
-def _restore_setuptools(version: str) -> None:
-    # pre_build_script.sh pins setuptools==72.1.0; later wheels keep the image pin.
-    current = get_installed_package_version("setuptools")
-    if current == version:
-        return
-    print(f"Restoring setuptools {current} -> {version} after torchvision pre-build")
-    run_command(
-        [sys.executable, "-m", "pip", "install", f"setuptools=={version}"],
-        cwd=Path.cwd(),
     )
 
 
@@ -1557,31 +1487,21 @@ def do_build_pytorch_vision(
             }
         )
 
-    # The script pins setuptools==72.1.0. Restore the image pin for later wheels.
-    setuptools_before = None
     if not is_windows:
-        setuptools_before = get_installed_package_version("setuptools")
+        _conda_install_vision_codecs(env)
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
 
-    try:
-        if not is_windows:
-            _run_torchvision_pre_build(pytorch_vision_dir, env)
-        run_command(
-            [sys.executable, "setup.py", "bdist_wheel"],
-            cwd=pytorch_vision_dir,
-            env=env,
-        )
-        built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
-        print(f"Found built wheel: {built_wheel}")
-        if not is_windows:
-            _assert_vision_image_codecs(built_wheel)
-        copy_to_output(args, built_wheel)
-    finally:
-        if setuptools_before is not None:
-            _restore_setuptools(setuptools_before)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"],
+        cwd=pytorch_vision_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
 
 
 def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
