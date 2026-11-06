@@ -1,0 +1,52 @@
+# Package files
+
+## `amdrocm-blas-dev.msi`
+
+| Destination                                           | Source                                                                                         |
+| :---------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| `include/hipblas/hipblas-export.h`                    | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblas/hipblas-export.h`                    |
+| `include/hipblas/hipblas-version.h`                   | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblas/hipblas-version.h`                   |
+| `include/hipblas/hipblas.h`                           | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblas/hipblas.h`                           |
+| `include/hipblas/hipblas_module.f90`                  | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblas/hipblas_module.f90`                  |
+| `include/hipblaslt-export.h`                          | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-export.h`                          |
+| `include/hipblaslt-version.h`                         | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-version.h`                         |
+| `include/hipblaslt/hipblaslt-export.h`                | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-export.h`                          |
+| `include/hipblaslt/hipblaslt-ext-op.h`                | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-ext-op.h`                |
+| `include/hipblaslt/hipblaslt-ext.hpp`                 | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-ext.hpp`                 |
+| `include/hipblaslt/hipblaslt-types.h`                 | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-types.h`                 |
+| `include/hipblaslt/hipblaslt-version.h`               | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-version.h`                         |
+| `include/hipblaslt/hipblaslt.h`                       | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt.h`                       |
+| `include/hipblaslt/hipblaslt_bfloat6.h`               | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_bfloat6.h`               |
+| `include/hipblaslt/hipblaslt_e5m3.h`                  | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_e5m3.h`                  |
+| `include/hipblaslt/hipblaslt_e8.h`                    | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_e8.h`                    |
+| `include/hipblaslt/hipblaslt_float4.h`                | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float4.h`                |
+| `include/hipblaslt/hipblaslt_float6.h`                | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float6.h`                |
+| `include/hipblaslt/hipblaslt_float8.h`                | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float8.h`                |
+| `include/rocblas/internal/asan_helpers.hpp`           | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/asan_helpers.hpp`           |
+| `include/rocblas/internal/rocblas-auxiliary.h`        | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-auxiliary.h`        |
+| `include/rocblas/internal/rocblas-beta.h`             | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-beta.h`             |
+| `include/rocblas/internal/rocblas-complex-types.h`    | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-complex-types.h`    |
+| `include/rocblas/internal/rocblas-export.h`           | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-export.h`           |
+| `include/rocblas/internal/rocblas-exported-proto.hpp` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-exported-proto.hpp` |
+| `include/rocblas/internal/rocblas-functions.h`        | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-functions.h`        |
+| `include/rocblas/internal/rocblas-macros.h`           | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-macros.h`           |
+| `include/rocblas/internal/rocblas-types.h`            | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-types.h`            |
+| `include/rocblas/internal/rocblas-version.h`          | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas-version.h`          |
+| `include/rocblas/internal/rocblas_bfloat16.h`         | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas_bfloat16.h`         |
+| `include/rocblas/internal/rocblas_block_sizes.h`      | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas_block_sizes.h`      |
+| `include/rocblas/internal/rocblas_device_malloc.hpp`  | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas_device_malloc.hpp`  |
+| `include/rocblas/internal/rocblas_xfloat32.h`         | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/internal/rocblas_xfloat32.h`         |
+| `include/rocblas/rocblas.h`                           | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/rocblas.h`                           |
+| `include/rocblas/rocblas_module.f90`                  | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/include/rocblas/rocblas_module.f90`                  |
+| `lib/cmake/hipblas/hipblas-config-version.cmake`      | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-config-version.cmake`      |
+| `lib/cmake/hipblas/hipblas-config.cmake`              | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-config.cmake`              |
+| `lib/cmake/hipblas/hipblas-targets-release.cmake`     | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-targets-release.cmake`     |
+| `lib/cmake/hipblas/hipblas-targets.cmake`             | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/hipblas-targets.cmake`             |
+| `lib/cmake/hipblaslt/hipblaslt-config-version.cmake`  | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/hipblaslt-config-version.cmake`  |
+| `lib/cmake/hipblaslt/hipblaslt-config.cmake`          | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/hipblaslt-config.cmake`          |
+| `lib/cmake/hipblaslt/hipblaslt-targets-release.cmake` | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/hipblaslt-targets-release.cmake` |
+| `lib/cmake/hipblaslt/hipblaslt-targets.cmake`         | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/hipblaslt-targets.cmake`         |
+| `lib/cmake/rocblas/rocblas-config-version.cmake`      | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/rocblas-config-version.cmake`      |
+| `lib/cmake/rocblas/rocblas-config.cmake`              | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/rocblas-config.cmake`              |
+| `lib/cmake/rocblas/rocblas-targets-release.cmake`     | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/rocblas-targets-release.cmake`     |
+| `lib/cmake/rocblas/rocblas-targets.cmake`             | `%BUILD_ROOT%/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/rocblas-targets.cmake`             |

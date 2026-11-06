@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_ck_i" Name="include">
+      <Directory Id="amdrocm_ck_ic" Name="ck" />
+      <Directory Id="amdrocm_ck_inckti" Name="ck_tile" />
+      <Directory Id="amdrocm_ck_ih" Name="half" />
+    </Directory>
+    <Directory Id="amdrocm_ck_l" Name="lib">
+      <Directory Id="amdrocm_ck_lc" Name="cmake">
+        <Directory Id="amdrocm_ck_lcck" Name="composable_kernel" />
+      </Directory>
+    </Directory>
+    <Directory Id="amdrocm_ck_s" Name="share">
+      <Directory Id="amdrocm_ck_sd" Name="doc">
+        <Directory Id="amdrocm_ck_sdc" Name="composablekernel" />
+      </Directory>
+    </Directory>
+</Include>
