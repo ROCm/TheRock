@@ -1338,7 +1338,7 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
                 set(_normalize_changed_project(key, alias_map)), expected, key
             )
 
-    def test_overrides_not_in_generated_map(self) -> None:
+    def test_redundant_overrides_are_retired(self) -> None:
         # Each override must be genuinely non-derivable: the generated map either
         # lacks the key or maps it to a value that does not cover the override.
         # Guards against an override hiding a value the parser already derives.
@@ -1350,8 +1350,8 @@ class TestGeneratedSubtreeMapResolution(unittest.TestCase):
             gen = generated_lower.get(key.lower())
             self.assertFalse(
                 gen is not None and set(values) <= gen,
-                f"{key} is derivable from the generated subtree_map ({gen}); "
-                "retire it instead of keeping an override",
+                f"{key}: override is covered by the generated map ({gen}); "
+                "delete it — the generated map already derives the correct value",
             )
 
     # Overrides REPLACE (not union) the generated value on a shared key, so an
