@@ -266,7 +266,18 @@ name, so it is replaced along with them whenever the project has a stage
 directory in the artifact; keeping the baseline's would fail with `Cannot find Symbol` once the two builds' versions differ (`HIPCUB_400700_NS` vs
 `HIPCUB_400701_NS`). Other projects' baseline binaries in that artifact then
 load the instrumented kpack, so only the swapped project's tests are expected
-to pass. The instrumented stack lives under
+to pass.
+
+A hip\* wrapper also brings the backend it calls at runtime from the same
+artifact (`SAME_ARTIFACT_BACKENDS`: hipRAND brings rocRAND, hipFFT rocFFT, and
+so on). Otherwise the instrumented wrapper runs against the baseline's backend,
+which may be a different version than the one it was built with: hipRAND's
+linkage test then fails comparing `hiprandGetVersion()` (answered by
+librocrand) with the `ROCRAND_VERSION` it was compiled against. The backend's
+objects are not in the wrapper's `--object-globs`, so its own code stays out of
+the report, but header templates both instantiate share profile counters.
+Dependencies in other artifacts (fftw3, rocBLAS for hipSOLVER) still come from
+the baseline. The instrumented stack lives under
 `<run_id>-coverage`, so even a baseline from the same workflow run is never
 overwritten by it.
 

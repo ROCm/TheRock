@@ -226,6 +226,55 @@ class TestReplaceInstrumentedLibraries(unittest.TestCase):
             [".kpack/rocwmma_test_gfx942.kpack", "bin/gemm_xdl-validate"],
         )
 
+    def test_wrapper_brings_its_backend_from_the_same_build(self):
+        # hipRAND's linkage test compares the librocrand version against the
+        # rocRAND headers it was built with, so rocRAND must be swapped too.
+        hiprand = "math-libs/hipRAND/stage"
+        rocrand = "math-libs/rocRAND/stage"
+        members = {
+            "artifact_manifest.txt": f"{hiprand}\n{rocrand}\n".encode(),
+            f"{hiprand}/lib/libhiprand.so.1.1": b"instrumented hiprand",
+            f"{rocrand}/lib/librocrand.so.1.1": b"instrumented rocrand",
+        }
+        self.assertEqual(
+            self._replaced_files(
+                "rand_lib_generic.tar.xz",
+                mod.replacement_folders(["hiprand"]),
+                members,
+            ),
+            ["lib/libhiprand.so.1.1", "lib/librocrand.so.1.1"],
+        )
+
+
+class TestReplacementFolders(unittest.TestCase):
+    def test_wrapper_adds_its_same_artifact_backend(self):
+        self.assertEqual(
+            mod.replacement_folders(["hiprand"]), {"rand": ["hipRAND", "rocRAND"]}
+        )
+
+    def test_backend_is_not_listed_twice(self):
+        self.assertEqual(
+            mod.replacement_folders(["hipfft", "rocfft"]),
+            {"fft": ["hipFFT", "rocFFT"]},
+        )
+
+    def test_backend_alone_does_not_bring_its_wrapper(self):
+        self.assertEqual(mod.replacement_folders(["rocrand"]), {"rand": ["rocRAND"]})
+
+    def test_backends_ship_in_their_wrappers_artifact(self):
+        folders = {folder for _, folder in mod.COMPONENT_MAP.values()}
+        for comp, backends in mod.SAME_ARTIFACT_BACKENDS.items():
+            artifact = mod.COMPONENT_MAP[comp][0]
+            for backend in backends:
+                with self.subTest(comp=comp, backend=backend):
+                    self.assertIn(backend, folders)
+                    owner = next(
+                        name
+                        for name, folder in mod.COMPONENT_MAP.values()
+                        if folder == backend
+                    )
+                    self.assertEqual(owner, artifact)
+
 
 if __name__ == "__main__":
     unittest.main()

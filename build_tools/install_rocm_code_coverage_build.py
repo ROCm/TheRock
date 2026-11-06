@@ -22,6 +22,7 @@ import re
 import sys
 import argparse
 import platform
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 from install_rocm_from_artifacts import main as install_from_artifacts_main
@@ -65,6 +66,34 @@ COMPONENT_MAP = {
     "rpp": ("rpp", "rpp"),
     "composablekernel": ("composable-kernel", "composable_kernel"),
 }
+
+# Backend library folders a hip* wrapper calls at runtime that ship in the same
+# artifact. They are swapped along with the wrapper so both come from one
+# build: hipRAND's linkage test compares hiprandGetVersion() (answered by
+# librocrand) against the ROCRAND_VERSION it was compiled with, and fails when
+# the baseline's rocRAND is a different version than the coverage build's.
+SAME_ARTIFACT_BACKENDS = {
+    "hipblas": ("rocBLAS",),
+    "hipfft": ("rocFFT",),
+    "hiprand": ("rocRAND",),
+    "hipsolver": ("rocSOLVER",),
+    "hipsparse": ("rocSPARSE",),
+}
+
+
+def replacement_folders(components: Iterable[str]) -> dict[str, list[str]]:
+    """Map each artifact to swap to the library folders to extract from it.
+
+    A selected component brings its own folder plus its SAME_ARTIFACT_BACKENDS.
+    """
+    artifacts: dict[str, list[str]] = {}
+    for comp in components:
+        name, folder = COMPONENT_MAP[comp]
+        folders = artifacts.setdefault(name, [])
+        for f in (folder, *SAME_ARTIFACT_BACKENDS.get(comp, ())):
+            if f not in folders:
+                folders.append(f)
+    return artifacts
 
 
 def _read_passthrough_options(passthrough_argv):
@@ -336,11 +365,9 @@ def main(argv):
     install_from_artifacts_main(extra_args)
 
     # collect artifacts details as per the user options
-    artifacts = {}
-    for comp, (name, folder) in COMPONENT_MAP.items():
-        if not getattr(args, f"replace_{comp}"):
-            continue  # skip for non-selected components
-        artifacts.setdefault(name, []).append(folder)
+    artifacts = replacement_folders(
+        comp for comp in COMPONENT_MAP if getattr(args, f"replace_{comp}")
+    )
 
     if not artifacts:
         log("No --replace-* components specified; nothing to download.")
