@@ -21,6 +21,32 @@ logger = TheRockLogger(__name__)
 # Setup paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# Directories under /etc owned by the OS (filesystem, glibc). Packages install
+# files into them but must not own the directories themselves.
+SYSTEM_ETC_DIRS = frozenset({"/etc", "/etc/ld.so.conf.d"})
+
+
+def list_etc_entries(staging_dir):
+    """List the %files entries for the /etc files staged in staging_dir.
+
+    Parameters:
+    staging_dir : Directory staged by stage_etc_files
+
+    Returns: %dir lines for package-specific directories (never
+    SYSTEM_ETC_DIRS) followed by %config(noreplace) lines for the files.
+    """
+    staging_dir = Path(staging_dir)
+    dirs, files = set(), []
+    for path in staging_dir.rglob("*"):
+        system_path = "/etc/" + path.relative_to(staging_dir).as_posix()
+        if path.is_dir() and not path.is_symlink():
+            dirs.add(system_path)
+        else:
+            files.append(system_path)
+    return [f"%dir {d}" for d in sorted(dirs - SYSTEM_ETC_DIRS)] + [
+        f"%config(noreplace) {f}" for f in sorted(files)
+    ]
+
 
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
     """Create a non-versioned RPM meta package (.rpm).
@@ -159,6 +185,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
+    # etc/ files install at the system /etc rather than the prefix. They are
+    # staged next to the specfile and listed individually, as config files,
+    # so the package never owns OS directories.
+    etc_staging_dir = Path(specfile).parent / "etc_staging"
+    etc_files = []
+    if stage_etc_files(sourcedir_list, etc_staging_dir, version, config.version_suffix):
+        etc_files = list_etc_entries(etc_staging_dir)
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -189,6 +223,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
+        "etc_staging_dir": etc_staging_dir,
+        "etc_files": etc_files,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
@@ -260,6 +296,7 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     binaries = json_pkg_config["binaries"]
     core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
     llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+    enable_ldconfig = is_key_defined(json_pkg_config, "enable_ldconfig")
 
     unsupported_scripts = set(scripts) - set(rpm_sections)
     if unsupported_scripts:
@@ -278,6 +315,7 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         "binaries": binaries,
         "core_symlinks": core_symlinks,
         "llvm_symlinks": llvm_symlinks,
+        "enable_ldconfig": enable_ldconfig,
     }
 
     rpm_script_sections = {}
