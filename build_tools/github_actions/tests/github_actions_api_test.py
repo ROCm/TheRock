@@ -889,8 +889,14 @@ class GitHubActionsUtilsTest(unittest.TestCase):
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_workflow_run_by_id(self):
         """Test querying a workflow run by its ID."""
-        workflow_run = gha_query_workflow_run_by_id("ROCm/TheRock", "18022609292")
-        self.assertEqual(workflow_run["repository"]["full_name"], "ROCm/TheRock")
+        run_id = os.environ.get("GITHUB_RUN_ID")
+        repository = self._saved_env.get("GITHUB_REPOSITORY")
+        if not run_id or not repository:
+            self.skipTest("Requires a current GitHub Actions run")
+
+        # query the current run
+        workflow_run = gha_query_workflow_run_by_id(repository, run_id)
+        self.assertEqual(workflow_run["repository"]["full_name"], repository)
 
         # Verify fields depended on by WorkflowOutputRoot and find_artifacts_for_commit
         self.assertIn("id", workflow_run)
