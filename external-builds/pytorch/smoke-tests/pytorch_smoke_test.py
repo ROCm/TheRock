@@ -3,13 +3,18 @@
 
 import ctypes
 import importlib
+import importlib.metadata
 import importlib.util
+import json
 import logging
 import platform
 import re
+import subprocess
+import sys
 
 import pytest
 import torch
+from packaging.version import Version
 
 
 class TestROCmAvailability:
@@ -232,3 +237,175 @@ class TestRocmSdkLibraries:
             f"dlsym(RTLD_DEFAULT, '{symbol}') returned NULL — "
             f"'{lib}' was not preloaded with RTLD_GLOBAL by _rocm_init.py"
         )
+
+
+def _installed_rocm_origami_version():
+    # Package metadata only: importing origami next to an incompatible ROCm SDK
+    # liborigami.so.1 can crash the process.
+    try:
+        return Version(importlib.metadata.version("rocm-origami"))
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+_ROCM_ORIGAMI_VERSION = _installed_rocm_origami_version()
+
+# (BLOCK_M, BLOCK_N, BLOCK_K, waves_per_eu) candidates from Inductor's ROCm mm configs.
+_ORIGAMI_TILES = [
+    (32, 32, 128, 0),
+    (64, 128, 32, 2),
+    (128, 64, 32, 2),
+    (128, 128, 32, 2),
+]
+_ORIGAMI_RESULT_PREFIX = "ORIGAMI_RESULT "
+
+# Calls origami the way Inductor's max-autotune does
+# (torch/_inductor/heuristics/template/triton.py), after a GPU matmul has loaded
+# hipBLASLt and with it the ROCm SDK's liborigami.so.1. Selection is repeated with
+# garbage collection in between so that heap corruption surfaces as a crash.
+_ORIGAMI_CHILD_SCRIPT = r"""
+import gc
+import json
+import sys
+from types import SimpleNamespace
+
+import torch
+
+RESULT_PREFIX, TILES = sys.argv[1], json.loads(sys.argv[2])
+
+
+def report(result):
+    print(RESULT_PREFIX + json.dumps(result), flush=True)
+
+
+a = torch.randn(256, 512, device="cuda", dtype=torch.float16)
+b = torch.randn(512, 128, device="cuda", dtype=torch.float16)
+torch.mm(a, b)
+torch.cuda.synchronize()
+with open("/proc/self/maps") as maps:
+    sdk_liborigami_loaded = any("liborigami.so" in line for line in maps)
+
+import origami
+
+try:
+    origami.get_hardware_for_device(0)
+except RuntimeError as e:
+    if "unsupported architecture" not in str(e):
+        raise
+    report({"skip": str(e)})
+    sys.exit(0)
+
+configs = [
+    SimpleNamespace(
+        kwargs={"BLOCK_M": bm, "BLOCK_N": bn, "BLOCK_K": bk, "waves_per_eu": wpe}
+    )
+    for bm, bn, bk, wpe in TILES
+]
+m = n = k = 2048
+runs = []
+for _ in range(20):
+    selector = origami.OrigamiMatmulSelector(
+        configs,
+        m,
+        n,
+        k,
+        torch.float16,
+        torch.float16,
+        torch.float16,
+        torch.device("cuda", 0),
+        (k, 1),
+        (n, 1),
+    )
+    hardware = selector._hardware
+    topk = origami.select_topk_configs(
+        selector._problem, hardware, selector._configs, 2
+    )
+    runs.append(
+        {
+            "N_CU": hardware.N_CU,
+            "NUM_XCD": hardware.NUM_XCD,
+            "compute_clock_ghz": hardware.compute_clock_ghz,
+            "lds_capacity": hardware.lds_capacity,
+            "L2_capacity": hardware.L2_capacity,
+            "selected": [selector.macrotile_m, selector.macrotile_n, selector.macrotile_k],
+            "topk": [[r.config.mt.m, r.config.mt.n, r.config.mt.k] for r in topk],
+        }
+    )
+    del selector, hardware, topk
+    gc.collect()
+
+report({"sdk_liborigami_loaded": sdk_liborigami_loaded, "runs": runs})
+"""
+
+
+@pytest.mark.skipif(platform.system() != "Linux", reason="Linux only")
+@pytest.mark.skipif(
+    importlib.util.find_spec("origami") is None, reason="rocm-origami not installed"
+)
+class TestOrigamiSdkCoexistence:
+    """Verify that origami GEMM selection works next to the ROCm SDK's liborigami.so.1.
+
+    PyTorch's ROCm CI image installs rocm-origami (see
+    install_pytorch_ci_packages.py), and Inductor calls it during max-autotune.
+    ROCm 10+ ships liborigami.so.1 for hipBLASLt, and `import torch` preloads it
+    with RTLD_GLOBAL. A rocm-origami build that exports its bundled copy of
+    origami then binds to the SDK copy, whose structs have a different layout,
+    and corrupts the heap (ROCM-29472). PyTorch disables origami on ROCm 10+, so
+    its own tests no longer reach this path; this test calls origami directly.
+    """
+
+    @pytest.mark.xfail(
+        _ROCM_ORIGAMI_VERSION is not None and _ROCM_ORIGAMI_VERSION < Version("0.0.3"),
+        reason=(
+            "AIHPBLAS-4697: rocm-origami before 0.0.3 exports its bundled origami, "
+            "which collides with the ROCm SDK liborigami.so.1 (ROCM-29472)"
+        ),
+        strict=False,
+    )
+    def test_gemm_selection_with_sdk_liborigami(self):
+        # A child process, so that a crash fails this test instead of aborting
+        # the whole smoke-test run.
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-X",
+                "faulthandler",
+                "-c",
+                _ORIGAMI_CHILD_SCRIPT,
+                _ORIGAMI_RESULT_PREFIX,
+                json.dumps(_ORIGAMI_TILES),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        returncode = proc.returncode
+        stderr_tail = "\n".join(proc.stderr.splitlines()[-40:])
+        assert (
+            returncode == 0
+        ), f"origami child process exited with {returncode}:\n{stderr_tail}"
+        results = [
+            line[len(_ORIGAMI_RESULT_PREFIX) :]
+            for line in proc.stdout.splitlines()
+            if line.startswith(_ORIGAMI_RESULT_PREFIX)
+        ]
+        assert results, f"origami child process reported no result:\n{stderr_tail}"
+        result = json.loads(results[-1])
+        if "skip" in result:
+            pytest.skip(result["skip"])
+
+        logging.info(
+            "ROCm SDK liborigami.so loaded: %s", result["sdk_liborigami_loaded"]
+        )
+        num_cus = torch.cuda.get_device_properties(0).multi_processor_count
+        tiles = {tile[:3] for tile in _ORIGAMI_TILES}
+        for run in result["runs"]:
+            assert run["N_CU"] == num_cus, run
+            # A struct layout mismatch scrambles the fields after N_CU.
+            assert 1 <= run["NUM_XCD"] <= 16, run
+            assert 0 < run["compute_clock_ghz"] < 10, run
+            assert 0 < run["lds_capacity"] < 2**30, run
+            assert 0 < run["L2_capacity"] < 2**30, run
+            assert tuple(run["selected"]) in tiles, run
+            assert run["topk"], run
+            assert all(tuple(tile) in tiles for tile in run["topk"]), run
