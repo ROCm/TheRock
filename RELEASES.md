@@ -321,7 +321,7 @@ for a full list of supported AMD GPUs.
 | AMD Instinct MI25                                    | gfx900     | `device-gfx900`  |
 | AMD Radeon RX 9070 / XT, AI PRO R9700 / R9600D       | gfx1201    | `device-gfx1201` |
 | AMD Radeon RX 9060 / XT                              | gfx1200    | `device-gfx1200` |
-| AMD Radeon 820M iGPU                                 | gfx1153    | `device-gfx1153` |
+| AMD Ryzen AI 5 330 (Radeon 820M) / Ryzen AI 5 435    | gfx1153    | `device-gfx1153` |
 | AMD Ryzen AI 7 350                                   | gfx1152    | `device-gfx1152` |
 | AMD Ryzen AI Max+ PRO 395                            | gfx1151    | `device-gfx1151` |
 | AMD Ryzen AI 9 HX 375                                | gfx1150    | `device-gfx1150` |
