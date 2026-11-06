@@ -688,7 +688,7 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
-            "disabled_framework_tests": ["pytorch", "jax"],
+            "disabled_framework_tests": ["jax"],
         },
         "windows": {
             "test-runs-on": "windows-gfx117x-gpu-rocm",
@@ -698,7 +698,7 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
-            "disabled_framework_tests": ["pytorch", "jax"],
+            "disabled_framework_tests": ["jax"],
         },
     },
 }
