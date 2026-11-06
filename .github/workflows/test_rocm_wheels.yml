@@ -222,8 +222,7 @@ jobs:
         run: |
           python build_tools/setup_venv.py "${PROFILER_VENV_DIR}" \
             --packages "rocm[profiler]==${ROCM_VERSION}" \
-            --index-url="${PACKAGE_INDEX_URL}" \
-            --extra-index-url=https://pypi.org/simple \
+            --index-url="${PACKAGE_INDEX_URL:-https://nightly.repo.amd.com/rocm/whl-next/}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 

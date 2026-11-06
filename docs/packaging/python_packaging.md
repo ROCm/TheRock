@@ -265,10 +265,18 @@ Existing core installations can instead request `rocm-sdk-core[rocpd]` or an
 exporter extra at their installed core version. Extras can be combined; none
 of these dependencies are selected on Windows or macOS.
 
-As with `rocm-profiler[compute-analyze]`, third-party dependencies come from
-PyPI. Add `--extra-index-url=https://pypi.org/simple` when the primary index is
-the ROCm index. These extras do not depend on new AMD mirror routes. Offline
-installations must supply the selected dependencies in their wheelhouse.
+The selected ROCm index must provide the ROCm wheels and the complete dependency
+closure for each requested extra. User installations do not require an external
+PyPI index. The mirroring tool obtains upstream wheels for publication to the
+ROCm index; offline installations must supply them in their wheelhouse.
+
+Before publishing ROCm wheels with these extras, publish the configured
+dependencies and deploy their aggregate-index ownership routes using the
+[mirroring procedure](#mirroring-third-party-python-dependencies). The mirror
+retains pandas 2.3.3, python-dateutil 3.0.0, and Pillow 12.3.0 alongside current
+releases for Python 3.10; numpy's existing 2.2.6 retention is reused. These are
+mirror-retention policies, not runtime version pins. Updating source metadata
+alone does not deploy the dependencies or repair previously published wheels.
 
 The SDK's installed requirements file combines analysis and optional exporters,
 including the obsolete `dataclasses` backport. The core wheel declares the
@@ -291,8 +299,8 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 The recommended way to install profiling tools is via the meta package:
 
 ```bash
-python -m pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
-  --extra-index-url https://pypi.org/simple "rocm[profiler]"
+python -m pip install --pre --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+  "rocm[profiler]"
 ```
 
 This will install:

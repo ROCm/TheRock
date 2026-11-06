@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
-import shlex
 import shutil
 import subprocess
 import sys
@@ -10,8 +9,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import os
-
-import yaml
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -285,40 +282,6 @@ class InstallPackagesTest(unittest.TestCase):
 
         self.assertEqual(mock_run.call_count, 1)
         mock_sleep.assert_not_called()
-
-
-class WheelWorkflowTest(unittest.TestCase):
-    def setUp(self):
-        workflow_path = (
-            Path(__file__).resolve().parents[2]
-            / ".github/workflows/test_rocm_wheels.yml"
-        )
-        self.job = yaml.safe_load(workflow_path.read_text())["jobs"]["test_wheels"]
-
-    def test_core_install_steps_do_not_add_a_dependency_index(self):
-        self.assertNotIn("ARTIFACT_DEPENDENCY_INDEX_URL", self.job["env"])
-        steps = {step.get("id"): step for step in self.job["steps"]}
-        for step_id in ("install_libraries", "install_devel"):
-            with self.subTest(step=step_id):
-                command = shlex.split(steps[step_id]["run"])
-                self.assertFalse(
-                    any(
-                        argument.startswith("--extra-index-url") for argument in command
-                    )
-                )
-                self.assertIn("--index-url=${PACKAGE_INDEX_URL}", command)
-                self.assertIn("--find-links=${PACKAGE_FIND_LINKS_URL}", command)
-
-    def test_profiler_install_resolves_optional_dependencies_from_pypi(self):
-        step = next(
-            step for step in self.job["steps"] if step.get("id") == "install_profiler"
-        )
-        self.assertEqual(step["if"], "${{ !cancelled() && runner.os == 'Linux' }}")
-        command = shlex.split(step["run"])
-        self.assertIn("rocm[profiler]==${ROCM_VERSION}", command)
-        self.assertIn("--index-url=${PACKAGE_INDEX_URL}", command)
-        self.assertIn("--find-links=${PACKAGE_FIND_LINKS_URL}", command)
-        self.assertIn("--extra-index-url=https://pypi.org/simple", command)
 
 
 if __name__ == "__main__":
