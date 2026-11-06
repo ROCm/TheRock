@@ -16,24 +16,15 @@ therock_subproject_fetch(therock-grpc-sources
   # Originally mirrored from: https://github.com/grpc/grpc.git
   URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/grpc-v1.78.1.tar.gz"
   URL_HASH "SHA256=96e1d4c82735a6867b9045d782d3f4f7477224496fec5386ca3adae1f2059796"
-  PATCH_COMMAND bash -c "sed -i 's/\\r$//' ${CMAKE_SOURCE_DIR}/build/third-party/grpc/source/third_party/boringssl-with-bazel/src/include/openssl/target.h && ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/grpc"
 )
 
 set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")
-
-# Use amd-llvm on ppc64le to avoid GCC/Clang TLS ABI mismatch when
-# gRPC static libs are linked into clang-compiled RDC binaries.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
-  set(_grpc_compiler_toolchain COMPILER_TOOLCHAIN amd-llvm)
-else()
-  set(_grpc_compiler_toolchain)
-endif()
 
 therock_cmake_subproject_declare(therock-grpc
   USE_DIST_AMDGPU_TARGETS
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   BINARY_DIR "${_binary_dir}"
-  ${_grpc_compiler_toolchain}
+  COMPILER_TOOLCHAIN amd-llvm
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD
   OUTPUT_ON_FAILURE
