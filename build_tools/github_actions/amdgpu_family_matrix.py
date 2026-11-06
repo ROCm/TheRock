@@ -449,7 +449,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "asan-debug", "host-asan"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
