@@ -71,7 +71,6 @@ setup(
             "amdclang++=rocm_sdk_core._cli:amdclangpp",
             "amdclang-cpp=rocm_sdk_core._cli:amdclang_cpp",
             "amdclang-cl=rocm_sdk_core._cli:amdclang_cl",
-            "amdflang=rocm_sdk_core._cli:amdflang",
             "amdlld=rocm_sdk_core._cli:amdlld",
             "hipcc=rocm_sdk_core._cli:hipcc",
             "hipconfig=rocm_sdk_core._cli:hipconfig",
@@ -80,6 +79,7 @@ setup(
         ]
         + (
             [
+                "amdflang=rocm_sdk_core._cli:amdflang",
                 # These tools are only available on Linux.
                 "amd-smi=rocm_sdk_core._cli:amd_smi",
                 "hipify-perl=rocm_sdk_core._cli:hipify_perl",
