@@ -334,6 +334,7 @@ def create_backend_from_env(
     run_id: Optional[str] = None,
     github_repository: Optional[str] = None,
     platform: Optional[str] = None,
+    release_type: Optional[str] = None,
 ) -> ArtifactBackend:
     """Create the appropriate backend based on environment variables.
 
@@ -344,6 +345,10 @@ def create_backend_from_env(
 
     For S3 backend (when THEROCK_LOCAL_STAGING_DIR is not set):
     - Uses WorkflowOutputRoot.from_workflow_run() for bucket selection
+
+    Args:
+        release_type: Release type override (e.g. "ci", "nightly"). If None,
+            falls back to the RELEASE_TYPE environment variable.
     """
     import platform as platform_module
 
@@ -363,6 +368,9 @@ def create_backend_from_env(
         )
 
     output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=run_id, platform=platform_name, github_repository=github_repository
+        run_id=run_id,
+        platform=platform_name,
+        github_repository=github_repository,
+        release_type=release_type,
     )
     return S3Backend(output_root=output_root)
