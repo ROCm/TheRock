@@ -142,13 +142,15 @@ class TestSDPA:
     """Smoke tests for fused scaled dot-product attention (SDPA) kernels.
 
     On ROCm, the fused SDPA backends dispatch to AOTriton kernels that only
-    work when the installed wheel ships matching kernel images, and a
-    packaging mismatch can surface as a deferred kernel launch failure
-    instead of an obvious error (issues #7315 and #7992). Each test forces a
-    single fused backend and checks the result against an independent CPU
+    work when the installed wheel ships matching kernel images. A packaging
+    mismatch can surface either as a deferred kernel launch failure or as a
+    silently wrong (finite) output (issues #7315 and #7992). Each test forces
+    a single fused backend and checks the result against an independent CPU
     FP32 reference computed from the same BF16-quantized inputs. Forcing the
-    backend makes an unavailable kernel fail immediately here instead of
-    silently falling back to the unfused MATH backend.
+    backend prevents silent fallback to the unfused MATH backend: a backend
+    the dispatcher cannot select raises immediately, while a kernel-image
+    mismatch may instead return an incorrect output without raising, which
+    the numerical comparison detects.
     """
 
     @pytest.mark.parametrize(
