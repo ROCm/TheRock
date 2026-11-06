@@ -102,9 +102,8 @@ add_custom_target(amdflang-sidecar ALL
   VERBATIM
 )
 # TheRock INSTALL_DESTINATION is lib/llvm, so DESTINATION bin -> lib/llvm/bin.
-install(PROGRAMS "${_amdllvm_src}"
-  DESTINATION bin
-  RENAME "amdllvm${CMAKE_EXECUTABLE_SUFFIX}")
+# Ship only the amdflang symlink. amdllvm stays in the amd-llvm artifact;
+# the relative link resolves once both artifacts share a prefix.
 install(CODE "
   file(CREATE_LINK
     \"amdllvm${CMAKE_EXECUTABLE_SUFFIX}\"
