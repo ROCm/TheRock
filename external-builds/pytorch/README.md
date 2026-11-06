@@ -10,6 +10,7 @@ Table of contents:
 
 - [Support status](#support-status)
 - [Build instructions](#build-instructions)
+- [Compiler cache](#compiler-cache)
 - [Running/testing PyTorch](#runningtesting-pytorch)
 - [Advanced build instructions](#advanced-build-instructions)
 - [Development instructions](#development-instructions)
@@ -203,6 +204,46 @@ mix/match build steps.
     --pytorch-vision-dir C:/b/vision ^
     --output-dir %HOME%/tmp/pyout
   ```
+
+## Compiler cache
+
+PyTorch wheel builds cache compiles with
+[sccache](https://github.com/mozilla/sccache), not the ccache setup that covers
+TheRock's CMake stages (see
+[CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)).
+
+### Local builds
+
+Pass `--use-sccache` or `--use-ccache` (not both) to `build_prod_wheels.py build`:
+
+- `--use-sccache` sets the CMake C/C++ compiler launchers and, on Linux,
+  `HIP_CLANG_LAUNCHER`, so hipcc also routes HIP device compiles through
+  sccache.
+- `--sccache-no-wrap` skips `HIP_CLANG_LAUNCHER` and caches host C/C++ only,
+  for hipcc from ROCm older than 7.13.
+
+sccache must be installed, and it uses its own configuration (a local disk
+cache unless you point it elsewhere). See
+[`setup_sccache_rocm.py`](/build_tools/setup_sccache_rocm.py).
+
+### CI and release builds
+
+The Linux and Windows wheel workflows default to `cache_type: sccache`
+(`ccache` and `none` are also accepted) and store entries in S3, with a bucket
+and an OIDC-assumed IAM role per release type (see
+[cache buckets](/docs/development/s3_buckets.md#cache-buckets)):
+
+| Builds  | Bucket                                   | Key prefix                                             |
+| ------- | ---------------------------------------- | ------------------------------------------------------ |
+| CI      | `therock-pytorch-sccache-ci`             | `linux/<artifact_group>/`, `windows/<artifact_group>/` |
+| Release | `therock-pytorch-sccache-<release_type>` | `linux/multiarch/v1/`, `windows/multiarch/v1/`         |
+
+`dev-bkc` and `nightly-bkc` release builds use the `dev` and `nightly` buckets.
+
+Fork pull requests, and runs outside `ROCm/TheRock`, cannot assume the role, so
+[`compute_pytorch_cache_type.py`](/build_tools/github_actions/compute_pytorch_cache_type.py)
+switches the CI workflows to `cache_type=none` for them and they build
+uncached. Each workflow prints `sccache --show-stats` after the build.
 
 ## Running/testing PyTorch
 
