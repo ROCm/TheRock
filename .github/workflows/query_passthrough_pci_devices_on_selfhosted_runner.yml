@@ -1,0 +1,121 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Query vfio-pci devices on self-hosted runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_hostname:
+        description: "Self-hosted runner hostname. The runner must also have this value as a runner label so the correct self-hosted runner can be selected."
+        required: true
+        type: string
+        default: "kpack_old_kernel_test"
+
+permissions:
+  contents: read
+
+run-name: Query vfio-pci devices on ${{ inputs.runner_hostname }}
+
+jobs:
+  query_vfio_pci_devices:
+    name: Query vfio-pci devices
+    # Register each runner with labels:
+    # self-hosted, linux, x64, kvm, vfio, and its hostname (for example, myservername).
+    runs-on: [self-hosted, linux, x64, kvm, vfio, "${{ inputs.runner_hostname }}"]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Install host prerequisites
+        run: |
+          set -euo pipefail
+
+          if command -v lspci >/dev/null && command -v python3 >/dev/null; then
+            exit 0
+          fi
+
+          if command -v apt-get >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y pciutils python3
+          elif command -v dnf >/dev/null; then
+            sudo dnf install -y pciutils python3
+          else
+            echo "Unsupported runner OS: install pciutils and python3 on the self-hosted runner."
+            exit 1
+          fi
+
+      - name: Query vfio-pci devices
+        run: |
+          set -euo pipefail
+
+          lspci -Dnnk > "${RUNNER_TEMP}/lspci-vfio-query.txt"
+
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          lspci_output = (Path(os.environ["RUNNER_TEMP"]) / "lspci-vfio-query.txt").read_text()
+          pci_header = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\s+")
+          pci_id = re.compile(r"\s*\[[0-9a-fA-F]{4}:[0-9a-fA-F]{4}\]")
+          revision = re.compile(r"\s+\(rev [^)]+\)$")
+
+          records = []
+          current = None
+
+          def finish_current():
+              if current and current.get("driver") == "vfio-pci":
+                  records.append(current.copy())
+
+          for line in lspci_output.splitlines():
+              if pci_header.match(line):
+                  finish_current()
+                  bdf, description = line.split(None, 1)
+                  if ": " in description:
+                      device_type, device_name = description.split(": ", 1)
+                  else:
+                      device_type, device_name = description, "Unknown device"
+
+                  device_type = pci_id.sub("", device_type).strip()
+
+                  device_name = revision.sub("", device_name)
+                  device_name = pci_id.sub("", device_name)
+                  device_name = device_name.replace("[AMD/ATI]", "").strip()
+
+                  bracket_names = [
+                      value.strip()
+                      for value in re.findall(r"\[([^\]]+)\]", device_name)
+                      if value.strip() and value.strip() != "AMD/ATI"
+                  ]
+                  if bracket_names:
+                      device_name = bracket_names[-1]
+                  else:
+                      device_name = re.sub(r"\s*\[[^\]]+\]", "", device_name).strip()
+
+                  current = {
+                      "bdf": bdf,
+                      "type": device_type,
+                      "name": device_name or "Unknown device",
+                      "driver": "",
+                  }
+              elif current:
+                  driver_match = re.search(r"Kernel driver in use:\s*(\S+)", line)
+                  if driver_match:
+                      current["driver"] = driver_match.group(1)
+
+          finish_current()
+
+          if not records:
+              print("No PCI devices are currently bound to vfio-pci.")
+              raise SystemExit(0)
+
+          for record in records:
+              print(f"- {record['bdf']} {record['type']}, {record['name']}")
+
+          print()
+          print("pci_devices:")
+          print(" ".join(record["bdf"] for record in records))
+          PY
