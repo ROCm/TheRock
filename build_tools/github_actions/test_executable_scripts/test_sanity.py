@@ -20,6 +20,20 @@ env = os.environ.copy()
 # THEROCK_CI_DEBUG mode forces it back on); sanity inherits "1".
 env["AMD_LOG_LEVEL"] = "4"
 
+# Avoid conflicting agent visibility between HIP_VISIBLE_DEVICES and
+# GPU_DEVICE_ORDINAL; HIP_VISIBLE_DEVICES supersedes.
+# Some CI runners inject both via their GPU-isolation env-file
+# (/etc/podinfo/gha-gpu-isolation-settings). Newer HIP treats the mismatch
+# as a fatal conflict, causing hipErrorNoDevice for HIP API calls while
+# rocminfo (which uses HSA directly) still works. See TheRock#5979.
+if env.get("HIP_VISIBLE_DEVICES"):
+    gpu_device_ordinal = env.pop("GPU_DEVICE_ORDINAL", None)
+    if gpu_device_ordinal is not None:
+        logging.warning(
+            f"Unset GPU_DEVICE_ORDINAL={gpu_device_ordinal!r} "
+            "(HIP_VISIBLE_DEVICES takes precedence)"
+        )
+
 # The sanity checks run tools like 'offload-arch' which may search for DLLs on
 # multiple search paths (PATH, CWD, system32, etc.).
 # For typical "installs" of ROCm, the rocm/bin/ dir can be expected to be
