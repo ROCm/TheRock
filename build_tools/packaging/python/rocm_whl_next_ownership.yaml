@@ -179,6 +179,9 @@ python_indexes:
       apex:
         owner_path: pytorch/whl-next
         stream_group: all
+      charset-normalizer:
+        owner_path: core/whl-next
+        stream_group: all
       filelock:
         owner_path: core/whl-next
         stream_group: all
@@ -204,10 +207,25 @@ python_indexes:
       numpy:
         owner_path: core/whl-next
         stream_group: all
+      otf2:
+        owner_path: core/whl-next
+        stream_group: all
+      pandas:
+        owner_path: core/whl-next
+        stream_group: all
       pillow:
         owner_path: core/whl-next
         stream_group: all
       pyelftools:
+        owner_path: core/whl-next
+        stream_group: all
+      python-dateutil:
+        owner_path: core/whl-next
+        stream_group: all
+      pytz:
+        owner_path: core/whl-next
+        stream_group: all
+      reportlab:
         owner_path: core/whl-next
         stream_group: all
       rocm:
@@ -307,6 +325,9 @@ python_indexes:
       setuptools:
         owner_path: core/whl-next
         stream_group: all
+      six:
+        owner_path: core/whl-next
+        stream_group: all
       sympy:
         owner_path: core/whl-next
         stream_group: all
@@ -323,5 +344,8 @@ python_indexes:
         owner_path: pytorch/whl-next
         stream_group: all
       typing-extensions:
+        owner_path: core/whl-next
+        stream_group: all
+      tzdata:
         owner_path: core/whl-next
         stream_group: all
