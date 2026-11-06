@@ -12,7 +12,7 @@ Example usage:
   The following string is appended to the file specified in the "GITHUB_ENV"
   environment variable:
 
-    optional_build_prod_arguments=--rocm-sdk-version ==7.0.0 --version-suffix +rocm7.0.0
+    optional_build_prod_arguments=--rocm-sdk-version ===7.0.0 --version-suffix +rocm7.0.0
 
 Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 `--no-write-env-file`.
@@ -86,7 +86,7 @@ def main(argv: list[str]):
 
     parsed_version = parse(args.rocm_version)
     version_suffix = derive_version_suffix(args.rocm_version)
-    rocm_sdk_version = f"=={parsed_version}"
+    rocm_sdk_version = f"==={parsed_version}"
     optional_build_prod_arguments = (
         f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
     )
