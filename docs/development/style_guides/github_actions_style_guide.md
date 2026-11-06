@@ -57,7 +57,7 @@ Benefits:
 ```yaml
 jobs:
   build:
-    runs-on: ubuntu-24.04  # We can change this across our projects when we want
+    runs-on: ubuntu-26.04  # We can change this across our projects when we want
 ```
 
 ❌ **Avoid:**
@@ -378,7 +378,7 @@ on:
 
 jobs:
   notify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Notify Quartz
         uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
@@ -493,7 +493,7 @@ jobs:
   trigger_workflow:
     permissions:
       actions: write # Dispatch a downstream workflow.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
@@ -527,7 +527,7 @@ jobs:
     uses: ./.github/workflows/test.yml
 
   trigger_workflow:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:

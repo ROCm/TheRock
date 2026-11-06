@@ -452,6 +452,10 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-systems
+    HARDENING_DEFERRED
+      "PAPI (autotools, when ROCPROFSYS_USE_PAPI and ROCPROFSYS_BUILD_PAPI are enabled)"
+      "libiberty (autotools, when built internally instead of using an external library)"
+      "elfutils (autotools, when ROCPROFSYS_BUILD_ELFUTILS is enabled)"
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
@@ -533,7 +537,9 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
+      therock_filter_amdgpu_targets(_ROCPROFSYS_GFX_TARGETS
+      rocprofiler-systems-examples ${THEROCK_TEST_AMDGPU_TARGETS})
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${_ROCPROFSYS_GFX_TARGETS}")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems-examples

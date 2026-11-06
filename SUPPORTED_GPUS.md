@@ -58,6 +58,7 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx117x** | ✅            |               |               |
 | **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
@@ -80,6 +81,14 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | GCN5.0       | gfx90c      | ✅            |               |               |
 | GCN5.0       | gfx900      | ✅            |               |               |
 
+### Architecture-independent - Linux
+
+This target produces an architecture-independent SPIR-V code object that the runtime finalizes to the concrete device ISA.
+
+| Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
+| ------------ | ----------- | ------------- | ------------- | ------------- |
+| GPU-Generic  | amdgcnspirv |               |               |               |
+
 ## ROCm on Windows
 
 Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md) on current status of development.
@@ -90,6 +99,7 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx117x** | ✅            |               |               |
 | **RDNA3.5**  | **gfx1153** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1152** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |

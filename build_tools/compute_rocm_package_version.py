@@ -6,11 +6,12 @@
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
 For usage from other Python scripts, call the `compute_version()` function
-directly. When used from GitHub Actions, this writes all three version outputs
-to GITHUB_OUTPUT:
+directly. When used from GitHub Actions, this writes all version outputs to
+GITHUB_OUTPUT:
   - 'rocm_package_version' for wheel packages
   - 'rocm_deb_package_version' for deb packages
   - 'rocm_rpm_package_version' for rpm packages
+  - 'rocm_msi_package_version' for Windows MSI packages
 
 Sample usage:
 
@@ -18,6 +19,7 @@ Sample usage:
   # rocm_package_version=7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
   # rocm_deb_package_version=7.10.0~dev20251203
   # rocm_rpm_package_version=7.10.0~20251203gf689a8e
+  # rocm_msi_package_version=7.10.3929.0   (major.minor.<days-since-2016-04-01>.0)
 
   python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2
   # rocm_package_version=7.10.0rc2
@@ -39,11 +41,32 @@ Sample usage:
 
   python compute_rocm_package_version.py --release-type=nightly --override-base-version=7.99.0
   # 7.99.0a20251021
+
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=asan
+  # rocm_package_version=7.10.0a20251021+asan
+
+  python compute_rocm_package_version.py --release-type=dev --build-variant=asan
+  # rocm_package_version=7.10.0.dev0+sha.asan
+
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=asan-debug
+  # rocm_package_version=7.10.0a20251021+asandebug  (dashes removed from variant)
+
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=host-asan
+  # rocm_package_version=7.10.0a20251021+hostasan
+
+  python compute_rocm_package_version.py --release-type=nightly --build-variant=tsan
+  # rocm_package_version=7.10.0a20251021+tsan
+
+  python compute_rocm_package_version.py --release-type=nightly-bkc --build-variant=asan
+  # rocm_package_version=10.1.0a20260811+bkc.20260814.asan
+
+  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2 --build-variant=asan
+  # rocm_package_version=7.10.0rc2+asan
 """
 
 import argparse
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 import json
 import os
@@ -55,6 +78,16 @@ from github_actions.github_actions_api import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
+
+# Epoch for the MSI ProductVersion build field: the first ROCm release (ROCm 1.0,
+# April 2016). The MSI version's third field is the number of days since this
+# date, giving a strictly increasing, WiX-legal integer. See compute_msi_build_field.
+MSI_EPOCH = date(2016, 4, 1)
+
+# Windows Installer compares only the first three ProductVersion fields and caps
+# the third (build) field at 65535. days-since-MSI_EPOCH stays under this until
+# ~year 2195, after which a build would raise rather than silently wrap.
+MSI_BUILD_FIELD_MAX = 65535
 
 
 def _log(*args, **kwargs):
@@ -137,9 +170,31 @@ def get_current_date():
     return datetime.today().strftime("%Y%m%d")
 
 
+def compute_msi_build_field(today: date | None = None) -> int:
+    """Return the MSI ProductVersion build field: days since MSI_EPOCH.
+
+    This is the third field of the four-field MSI version. It increases by one
+    per day, so a later build always outranks an earlier one within its
+    major.minor line (Windows Installer compares only the first three fields).
+    Raises if it would exceed the installer's 65535 limit.
+    """
+    if today is None:
+        today = date.today()
+    days = (today - MSI_EPOCH).days
+    if days < 0:
+        raise ValueError(f"build date {today} precedes the MSI epoch {MSI_EPOCH}")
+    if days > MSI_BUILD_FIELD_MAX:
+        raise ValueError(
+            f"MSI build field {days} exceeds the Windows Installer limit of "
+            f"{MSI_BUILD_FIELD_MAX} (third ProductVersion field)"
+        )
+    return days
+
+
 def compute_version(
     package_type: str = "wheel",
     release_type: str | None = None,
+    build_variant: str | None = None,
     custom_version_suffix: str | None = None,
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
@@ -149,9 +204,12 @@ def compute_version(
     """Compute package version based on package type and release type.
 
     Args:
-        package_type: Type of package ("wheel", "deb", or "rpm")
+        package_type: Type of package ("wheel", "deb", "rpm", or "msi")
         release_type: Release type ("ci", "dev", "dev-bkc", "nightly",
             "nightly-bkc", "prerelease", or "release")
+        build_variant: Build variant (e.g., "release", "asan", "asan-debug",
+            "host-asan", "tsan"). Empty or "release" uses default behavior.
+            Other variants add a sanitized suffix (dashes removed) to wheel packages.
         custom_version_suffix: Custom suffix to override automatic suffix
         prerelease_version: Prerelease version number
         override_base_version: Override the base version from version.json
@@ -184,41 +242,64 @@ def compute_version(
             )
 
     # Handle wheel packages (Python packaging standards)
+    # Build version using parts: base_version + pre_release_tag + local_parts
+    # Pre-release tag is appended directly (e.g., "a20261007", "rc2", ".dev0")
+    # Local parts are joined: first with "+", rest with "."
     if package_type == "wheel":
         if custom_version_suffix:
             # Trust the custom suffix to satisfy the general rules:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/
-            version_suffix = custom_version_suffix
-        elif release_type == "release":
-            version_suffix = ""
+            # Return early since custom suffix overrides all other logic
+            rocm_package_version = base_version + custom_version_suffix
+            _log(f"Custom suffix : '{custom_version_suffix}'")
+            _log(f"Full version  : '{rocm_package_version}'")
+            return rocm_package_version
+
+        pre_release_tag = ""
+        local_parts: list[str] = []
+
+        if release_type == "release":
+            pass  # No pre-release tag or local parts for stable release
         elif release_type in ("ci", "dev", "dev-bkc"):
             # Construct a dev release version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
             git_sha = get_git_sha(override_git_sha=override_git_sha)
-            version_suffix = f".dev0+{git_sha}"
+            pre_release_tag = ".dev0"
+            local_parts.append(git_sha)
         elif release_type == "nightly":
             # Construct a nightly (a / "alpha") version:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            version_suffix = f"a{current_date}"
+            pre_release_tag = f"a{current_date}"
         elif release_type == "nightly-bkc":
-            version_suffix = f"a{release_metadata['base-date']}+bkc.{current_date}"
+            pre_release_tag = f"a{release_metadata['base-date']}"
+            local_parts.append(f"bkc.{current_date}")
         elif release_type == "prerelease":
             # Construct a prerelease (rc / "release candidate") version
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            version_suffix = f"rc{prerelease_version}"
+            pre_release_tag = f"rc{prerelease_version}"
         else:
             raise ValueError(
                 f"Unhandled release type '{release_type}' for wheel packages"
             )
-        _log(f"Version suffix: '{version_suffix}'")
 
-        rocm_package_version = base_version + version_suffix
+        # Add build variant suffix for non-release builds (e.g., asan, tsan)
+        # Sanitize variant: remove dashes (host-asan -> hostasan)
+        if build_variant and build_variant != "release":
+            sanitized_variant = build_variant.replace("-", "")
+            local_parts.append(sanitized_variant)
+            _log(f"Build variant : '{build_variant}' -> '{sanitized_variant}'")
+
+        # Compose final version: base + pre_release_tag + local_parts
+        rocm_package_version = base_version + pre_release_tag
+        if local_parts:
+            rocm_package_version += "+" + ".".join(local_parts)
+
         _log(f"Full version  : '{rocm_package_version}'")
 
         return rocm_package_version
 
-    # Handle native packages (deb/rpm)
-    else:  # package_type in ["deb", "rpm"]
+    # Handle native Linux packages (deb/rpm)
+    elif package_type in ("deb", "rpm"):
         if custom_version_suffix:
             # Custom suffix uses the provided value
             version_suffix_str = f"{custom_version_suffix}"
@@ -259,6 +340,36 @@ def compute_version(
         _log(f"Full version  : '{rocm_package_version}'")
 
         return rocm_package_version
+
+    # Handle native Windows packages (MSI; WiX ProductVersion: numeric
+    # major.minor.build.0).
+    #
+    # Unlike the other package types, the MSI version does NOT carry a dev/nightly
+    # suffix: Windows Installer versions must be numeric #.#.#.# and it compares
+    # only the first three fields. We keep major.minor from version.json visible
+    # and put the build DATE (days since the ROCm 1.0 epoch) in the third field,
+    # so every build outranks the previous one within its major.minor line. The
+    # marketing patch (e.g. 10.2.0) is surfaced separately via the MSI's
+    # ARPDISPLAYVERSION property, not here. Cross-line coexistence (10.2 vs 10.3)
+    # is handled by a per-major.minor UpgradeCode in the generator, so this field
+    # never has to order across lines. All release types share one shape; a
+    # release simply has the highest build field in its line because it is built
+    # last (no further nightlies follow a major.minor's release).
+    elif package_type == "msi":
+        parts = base_version.split(".")
+        if len(parts) < 2 or not parts[0] or not parts[1]:
+            raise ValueError(
+                f"base version must be at least major.minor for msi (got "
+                f"{base_version!r})"
+            )
+        major, minor = parts[0], parts[1]
+        build_field = compute_msi_build_field()
+        rocm_package_version = f"{major}.{minor}.{build_field}.0"
+        _log(f"Full version  : '{rocm_package_version}'")
+        return rocm_package_version
+
+    else:
+        raise AssertionError(f"Unexpected package type: {package_type}")
 
 
 def main(argv):
@@ -303,6 +414,14 @@ def main(argv):
         help="Explicit git SHA to embed in the version instead of auto-detecting",
     )
 
+    parser.add_argument(
+        "--build-variant",
+        type=str,
+        help="Build variant (e.g., 'release', 'asan', 'asan-debug', 'host-asan', 'tsan'). "
+        "Empty or 'release' uses default behavior. Other variants add a "
+        "sanitized suffix (dashes removed) to wheel packages.",
+    )
+
     args = parser.parse_args(argv)
 
     # Validation
@@ -313,14 +432,20 @@ def main(argv):
             "--prerelease-version is required when release type is 'prerelease'"
         )
 
+    # Warn if --custom-version-suffix is used with --build-variant
+    # (custom suffix takes precedence and build variant is ignored)
+    if args.custom_version_suffix and args.build_variant:
+        _log("Warning: --build-variant is ignored when --custom-version-suffix is set")
+
     version_data = load_version_file()
 
-    # Compute versions for all three package types: wheel, deb, and rpm
+    # Compute versions for all package types: wheel, deb, rpm, and msi.
     outputs = {}
-    for pkg_type in ["wheel", "deb", "rpm"]:
+    for pkg_type in ["wheel", "deb", "rpm", "msi"]:
         version = compute_version(
             package_type=pkg_type,
             release_type=args.release_type,
+            build_variant=args.build_variant,
             custom_version_suffix=args.custom_version_suffix,
             prerelease_version=args.prerelease_version,
             override_base_version=args.override_base_version,
@@ -331,7 +456,7 @@ def main(argv):
         # Set appropriate output variable based on package type
         if pkg_type == "wheel":
             outputs["rocm_package_version"] = version
-        else:  # deb or rpm
+        else:  # deb, rpm, or msi
             outputs[f"rocm_{pkg_type}_package_version"] = version
 
     gha_set_output(outputs)

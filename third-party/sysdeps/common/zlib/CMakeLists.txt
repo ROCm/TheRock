@@ -94,6 +94,13 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      "-DTHEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+      "-DTHEROCK_HARDENING_POLICY=${THEROCK_HARDENING_POLICY}"
+      "-DTHEROCK_HARDENING_EXCLUDED=${THEROCK_HARDENING_EXCLUDED}"
+      # Do not forward THEROCK_SANITIZER until this nested build also receives
+      # the sanitizer compile and link options from its wrapper.
+      -DTHEROCK_COMPILER_HARDENING_PROJECT_INCLUDE=ON
+      "-DCMAKE_PROJECT_INCLUDE=${THEROCK_SOURCE_DIR}/cmake/therock_compiler_hardening.cmake"
       # Force lib/ to match the hardcoded paths throughout this file.
       -DCMAKE_INSTALL_LIBDIR=lib
       # On Windows we only use the static library; skip the shared build
