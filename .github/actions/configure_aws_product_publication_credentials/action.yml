@@ -17,7 +17,6 @@ inputs:
     required: true
   aws_profile:
     description: 'Named AWS profile to store the credentials in.'
-    required: false
     default: ""
 
 runs:
