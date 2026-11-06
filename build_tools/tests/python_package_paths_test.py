@@ -16,8 +16,11 @@ import pytest
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.python_package_paths import (
+    INDEX_NAMES,
     PlannedCopy,
     PlannedUpload,
+    build_variant_index_suffix,
+    get_python_index,
     is_accepted_artifact,
     package_name_from_filename,
     pep503_normalize,
@@ -102,6 +105,56 @@ def test_package_name_from_filename(filename: str, expected: str) -> None:
 )
 def test_is_accepted_artifact(filename: str, expected: bool) -> None:
     assert is_accepted_artifact(filename) is expected
+
+
+# ---------------------------------------------------------------------------
+# get_python_index
+# ---------------------------------------------------------------------------
+
+
+def test_index_names() -> None:
+    assert INDEX_NAMES == (
+        "whl",
+        "whl-next",
+        "whl-asan",
+        "whl-next-asan",
+        "whl-tsan",
+        "whl-next-tsan",
+        "whl-debug",
+        "whl-next-debug",
+    )
+
+
+def test_get_python_index_default() -> None:
+    assert get_python_index() == "whl-next"
+
+
+@pytest.mark.parametrize(
+    "index_type, suffix",
+    [("wheels", None), ("whl-next-asan", None), ("whl-next", "msan")],
+)
+def test_get_python_index_rejects_unknown(index_type: str, suffix: str | None) -> None:
+    with pytest.raises(ValueError):
+        get_python_index(index_type, suffix)
+
+
+@pytest.mark.parametrize(
+    "build_variant, expected",
+    [
+        ("release", None),
+        ("asan", "asan"),
+        ("asan-debug", "asan"),
+        ("host-asan", "asan"),
+        ("host-asan-debug", "asan"),
+    ],
+)
+def test_build_variant_index_suffix(build_variant: str, expected: str | None) -> None:
+    assert build_variant_index_suffix(build_variant) == expected
+
+
+def test_build_variant_index_suffix_rejects_unknown() -> None:
+    with pytest.raises(ValueError, match="build_variant="):
+        build_variant_index_suffix("tsan")
 
 
 # ---------------------------------------------------------------------------
