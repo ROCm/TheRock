@@ -85,12 +85,33 @@ do_remove_alternatives() {
 {% endif %}
 }
 
+do_unregister_icd() {
+    # Remove OpenCL ICD vendor files registered by the postinst script.
+    #
+    # Called only on final removal, never on upgrade: the replacement
+    # package's postinst rewrites the file, and deleting it mid-upgrade
+    # would leave a window where OpenCL is unavailable.
+    #
+    # No install prefix is needed here -- the vendor file always lives in
+    # the system-wide /etc/OpenCL/vendors/ directory.
+{% for icd in icd_files | default([]) %}
+    rm -f "/etc/OpenCL/vendors/{{ icd.name }}-{{ version_major }}.{{ version_minor }}.icd"
+{% endfor %}
+
+    true
+}
+
 if [ -e /etc/os-release ] &&
    source /etc/os-release &&
    is_debian_like "${ID_LIKE:-$ID}"
 then
     case "$1" in
-        remove|upgrade)
+        remove)
+            do_remove_alternatives
+            do_unregister_icd
+            ;;
+
+        upgrade)
             do_remove_alternatives
             ;;
 
@@ -104,4 +125,9 @@ then
     esac
 else
     do_remove_alternatives
+    # RPM %preun passes the number of remaining installations in $1;
+    # 0 means this is a final removal rather than an upgrade.
+    if [ "${1:-0}" = "0" ]; then
+        do_unregister_icd
+    fi
 fi
