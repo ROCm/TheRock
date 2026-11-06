@@ -23,7 +23,8 @@ builds, etc):
 The following commands check out custom patched versions into this directory,
 which the script will use by default if they exist. Otherwise, checkout your
 own and specify `--root-checkout-dir` or the more specific `--pytorch-dir`,
-`--pytorch-audio-dir`, and `--pytorch-vision-dir` options during the build step.
+`--pytorch-audio-dir`, `--pytorch-vision-dir`, and `--pytorch-torchcodec-dir`
+options during the build step.
 
 ```
 # On Linux, using default paths (nested under this folder):
@@ -33,6 +34,7 @@ python pytorch_torch_repo.py checkout
 python pytorch_audio_repo.py checkout
 python pytorch_apex_repo.py checkout
 python pytorch_vision_repo.py checkout
+python pytorch_torchcodec_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
@@ -146,6 +148,7 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
+import importlib.metadata
 import json
 import os
 from pathlib import Path
@@ -163,6 +166,10 @@ import urllib.request
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
+
+# Newest Python that upstream torchcodec lists as supported (release and nightly,
+# see the compatibility table in its README).
+TORCHCODEC_MAX_PYTHON = (3, 14)
 
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
@@ -510,6 +517,10 @@ def apply_root_checkout_dir(args: argparse.Namespace) -> None:
         args.pytorch_vision_dir = directory_if_exists(
             root_checkout_dir / "pytorch_vision"
         )
+    if args.pytorch_torchcodec_dir is None:
+        args.pytorch_torchcodec_dir = directory_if_exists(
+            root_checkout_dir / "pytorch_torchcodec"
+        )
     if args.triton_dir is None:
         args.triton_dir = directory_if_exists(root_checkout_dir / "triton")
     if args.apex_dir is None:
@@ -550,6 +561,12 @@ def validate_build_args(
         args.build_pytorch_audio = args.pytorch_audio_dir is not None
     if args.build_pytorch_vision is None:
         args.build_pytorch_vision = args.pytorch_vision_dir is not None
+    if args.build_pytorch_torchcodec is None:
+        # Only the Linux build is supported for now, so on Windows an existing
+        # checkout is ignored unless --build-pytorch-torchcodec is given.
+        args.build_pytorch_torchcodec = (
+            args.pytorch_torchcodec_dir is not None and not is_windows
+        )
     if args.build_apex is None:
         args.build_apex = args.apex_dir is not None
 
@@ -574,6 +591,17 @@ def validate_build_args(
         source_dir=args.pytorch_vision_dir,
         build_option="--build-pytorch-vision",
         dir_option="--pytorch-vision-dir",
+    )
+    if args.build_pytorch_torchcodec and is_windows:
+        parser.error(
+            "--build-pytorch-torchcodec is not supported on Windows yet, only Linux"
+        )
+    validate_project_dir(
+        parser,
+        build_enabled=args.build_pytorch_torchcodec,
+        source_dir=args.pytorch_torchcodec_dir,
+        build_option="--build-pytorch-torchcodec",
+        dir_option="--pytorch-torchcodec-dir",
     )
     validate_project_dir(
         parser,
@@ -756,9 +784,10 @@ def _do_build_wheels_core(
     pytorch_dir: Path | None,
     pytorch_audio_dir: Path | None,
     pytorch_vision_dir: Path | None,
+    pytorch_torchcodec_dir: Path | None,
     apex_dir: Path | None,
 ) -> None:
-    """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
+    """Execute all wheel builds (triton, pytorch, audio, vision, torchcodec, apex)."""
     # Build triton.
     triton_requirement = None
     if args.build_triton:
@@ -786,6 +815,12 @@ def _do_build_wheels_core(
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
+    # Build pytorch torchcodec.
+    if args.build_pytorch_torchcodec:
+        do_build_pytorch_torchcodec(args, pytorch_torchcodec_dir, dict(env))
+    else:
+        print("--- Not build pytorch-torchcodec (no --pytorch-torchcodec-dir)")
+
     # Build apex.
     if args.build_apex:
         do_build_apex(args, apex_dir, dict(env))
@@ -806,6 +841,7 @@ def do_build(args: argparse.Namespace):
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    pytorch_torchcodec_dir: Path | None = args.pytorch_torchcodec_dir
     apex_dir: Path | None = args.apex_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
@@ -905,6 +941,7 @@ def do_build(args: argparse.Namespace):
             pytorch_dir,
             pytorch_audio_dir,
             pytorch_vision_dir,
+            pytorch_torchcodec_dir,
             apex_dir,
         )
     finally:
@@ -1404,6 +1441,101 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def check_torchcodec_build_requirements() -> None:
+    """Fails early if the torchcodec build requirements are not installed.
+
+    torchcodec builds with scikit-build-core and needs the pybind11 CMake
+    package. The wheel is built with `--no-isolation`, so these must be installed
+    by the caller (CI: external-builds/pytorch/requirements-ci.txt).
+    """
+    install_hint = (
+        "install the torchcodec build requirements with: python -m pip install -r "
+        f"{Path(__file__).resolve().parent / 'requirements-ci.txt'}"
+    )
+    try:
+        scikit_build_core_version = importlib.metadata.version("scikit-build-core")
+    except importlib.metadata.PackageNotFoundError:
+        raise RuntimeError(
+            f"torchcodec build requires scikit-build-core>=0.10; {install_hint}"
+        ) from None
+    if parse(scikit_build_core_version) < parse("0.10"):
+        raise RuntimeError(
+            f"torchcodec build requires scikit-build-core>=0.10, found "
+            f"{scikit_build_core_version}; {install_hint}"
+        )
+
+    pybind11_cmake_dir = subprocess.run(
+        [sys.executable, "-m", "pybind11", "--cmakedir"],
+        capture_output=True,
+        text=True,
+    )
+    if (
+        pybind11_cmake_dir.returncode != 0
+        or not (
+            Path(pybind11_cmake_dir.stdout.strip()) / "pybind11Config.cmake"
+        ).exists()
+    ):
+        raise RuntimeError(
+            f"torchcodec build requires pybind11 with its CMake files; {install_hint}"
+        )
+
+
+def do_build_pytorch_torchcodec(
+    args: argparse.Namespace, pytorch_torchcodec_dir: Path, env: dict[str, str]
+):
+    python_version = tuple(sys.version_info[:2])
+    if python_version > TORCHCODEC_MAX_PYTHON:
+        python_str = ".".join(str(v) for v in python_version)
+        max_python_str = ".".join(str(v) for v in TORCHCODEC_MAX_PYTHON)
+        print(
+            f"--- Not building torchcodec: Python {python_str} is newer than the "
+            f"newest Python ({max_python_str}) that upstream torchcodec supports"
+        )
+        return
+
+    check_torchcodec_build_requirements()
+
+    # Compute version (dev builds are tagged with the torchcodec source commit).
+    # torchcodec's version provider honors BUILD_VERSION.
+    build_version = compute_build_version(
+        pytorch_torchcodec_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
+    )
+    print(f"  pytorch torchcodec BUILD_VERSION: {build_version}")
+    env["BUILD_VERSION"] = build_version
+
+    # Upstream torchcodec has no ROCm/HIP support, so this is a CPU-only build.
+    # BUILD_AGAINST_ALL_FFMPEG_FROM_S3 links the wheel against upstream's
+    # pre-built non-GPL FFmpeg, as its CMake requires for wheel builds.
+    env.update(
+        {
+            "ENABLE_CUDA": "0",
+            "BUILD_AGAINST_ALL_FFMPEG_FROM_S3": "1",
+            "TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR": "1",
+        }
+    )
+    # By default torchcodec requires the libjpeg, libpng, libwebp, libavif and
+    # other image codec development libraries, which the build image does not
+    # provide. Build video and audio decoding only unless the caller overrides.
+    if "TORCHCODEC_BUILD_IMAGE" not in os.environ:
+        env["TORCHCODEC_BUILD_IMAGE"] = "0"
+
+    remove_dir_if_exists(pytorch_torchcodec_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(pytorch_torchcodec_dir / "build")
+
+    run_command(
+        [sys.executable, "-m", "build", "--wheel", "--no-isolation"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(pytorch_torchcodec_dir / "dist", "torchcodec")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
     # Compute version.
     build_version = (apex_dir / "version.txt").read_text().strip()
@@ -1520,9 +1652,10 @@ def main(argv: list[str]):
         type=Path,
         help=(
             "Root directory containing PyTorch source checkouts named pytorch, "
-            "pytorch_audio, pytorch_vision, triton, and apex. Explicit "
-            "--pytorch-dir, --pytorch-audio-dir, --pytorch-vision-dir, "
-            "--triton-dir, and --apex-dir arguments override this."
+            "pytorch_audio, pytorch_vision, pytorch_torchcodec, triton, and apex. "
+            "Explicit --pytorch-dir, --pytorch-audio-dir, --pytorch-vision-dir, "
+            "--pytorch-torchcodec-dir, --triton-dir, and --apex-dir arguments "
+            "override this."
         ),
     )
     build_p.add_argument(
@@ -1553,6 +1686,12 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="pinned triton directory",
+    )
+    build_p.add_argument(
+        "--pytorch-torchcodec-dir",
+        default=None,
+        type=Path,
+        help="pytorch torchcodec source directory",
     )
     build_p.add_argument(
         "--apex-dir",
@@ -1587,6 +1726,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-torchcodec",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torchcodec (requires --pytorch-torchcodec-dir). Linux only",
     )
     build_p.add_argument(
         "--build-apex",
