@@ -216,7 +216,35 @@ jobs:
 
       - name: Build stage
         run: |
-          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          mkdir -p "${BUILD_DIR}/logs"
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0 2>&1 | tee "${BUILD_DIR}/logs/build_stage.log"
+
+      # Preserve project-level timings for the ASAN dashboard. Ninja records
+      # completed targets even when a later target fails, so this also captures
+      # useful partial data on failed builds.
+      - name: Capture project build timings
+        if: always()
+        run: |
+          if [[ -f "${BUILD_DIR}/.ninja_log" ]]; then
+            python3 build_tools/analyze_build_times.py \
+              --build-dir "${BUILD_DIR}" \
+              --json-output "${BUILD_DIR}/logs/asan_build_metrics.json" \
+              --stage "${STAGE_NAME}" \
+              --architectures "${AMDGPU_FAMILIES}" \
+              --conclusion "${{ job.status }}"
+          else
+            echo "Ninja timing log was not created; no project timing artifact to upload."
+          fi
+
+      - name: Upload project build timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: asan-build-metrics-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'shared' }}
+          path: ${{ env.BUILD_DIR }}/logs/asan_build_metrics.json
+          if-no-files-found: ignore
+          retention-days: 90
 
       - name: Generate failed log summaries
         if: ${{ !cancelled() }}
