@@ -8,6 +8,66 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
+if(THEROCK_ENABLE_HIPDNN)
+  ##############################################################################
+  # hipDNN
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipDNN
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipDNN"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DHIP_DNN_BUILD_PLUGINS=OFF
+      -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      therock-googletest
+      therock-fmt
+      therock-spdlog
+      therock-flatbuffers
+      therock-nlohmann-json
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipDNN
+  SUBDIRS
+    .
+  )
+
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_data_sdk lib/cmake/hipdnn_data_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_flatbuffers_sdk lib/cmake/hipdnn_flatbuffers_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_plugin_sdk lib/cmake/hipdnn_plugin_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_test_sdk lib/cmake/hipdnn_test_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_frontend lib/cmake/hipdnn_frontend)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_backend lib/cmake/hipdnn_backend)
+  therock_cmake_subproject_activate(hipDNN)
+
+  therock_provide_artifact(hipdnn
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipdnn.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      hipDNN
+  )
+endif(THEROCK_ENABLE_HIPDNN)
+
 set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
   therock_check_subproject_targets(_miopen_enabled MIOpen)
@@ -27,6 +87,12 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   set(optional_miopen_build_deps)
   if(_miopen_use_ck)
     list(APPEND optional_miopen_build_deps composable_kernel)
+  endif()
+
+  # MIOpen's configure needs hipdnn_frontend when the wrapper is on. hipDNN must
+  # be declared before MIOpen, so its block is above this one.
+  if(THEROCK_FLAG_MIOPEN_ENABLE_HIPDNN_WRAPPER)
+    list(APPEND optional_miopen_build_deps hipDNN)
   endif()
 
   if(MSVC)
@@ -88,66 +154,6 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
       MIOpen
   )
 endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
-
-if(THEROCK_ENABLE_HIPDNN)
-  ##############################################################################
-  # hipDNN
-  ##############################################################################
-
-  therock_cmake_subproject_declare(hipDNN
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipDNN"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
-      -DHIP_DNN_BUILD_PLUGINS=OFF
-      -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
-      -DENABLE_CLANG_TIDY=OFF
-      -DENABLE_CLANG_FORMAT=OFF
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      therock-googletest
-      therock-fmt
-      therock-spdlog
-      therock-flatbuffers
-      therock-nlohmann-json
-    RUNTIME_DEPS
-      hip-clr
-  )
-  therock_cmake_subproject_glob_c_sources(hipDNN
-  SUBDIRS
-    .
-  )
-
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_data_sdk lib/cmake/hipdnn_data_sdk)
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_flatbuffers_sdk lib/cmake/hipdnn_flatbuffers_sdk)
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_plugin_sdk lib/cmake/hipdnn_plugin_sdk)
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_test_sdk lib/cmake/hipdnn_test_sdk)
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_frontend lib/cmake/hipdnn_frontend)
-  therock_cmake_subproject_provide_package(hipDNN hipdnn_backend lib/cmake/hipdnn_backend)
-  therock_cmake_subproject_activate(hipDNN)
-
-  therock_provide_artifact(hipdnn
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-hipdnn.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-      test
-    SUBPROJECT_DEPS
-      hipDNN
-  )
-endif(THEROCK_ENABLE_HIPDNN)
 
 if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   ##############################################################################
