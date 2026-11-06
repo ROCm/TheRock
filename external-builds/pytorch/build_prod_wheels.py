@@ -1393,16 +1393,23 @@ def do_build_pytorch_vision(
             }
         )
 
-    if not is_windows:
-        # setup.py looks for libjpeg and libwebp under CONDA_PREFIX.
-        env["CONDA_PREFIX"] = capture(
-            ["conda", "info", "--base"], cwd=pytorch_vision_dir
+    # setup.py looks for libjpeg and libwebp under CONDA_PREFIX. On Windows,
+    # libpng is found through pngfix.exe in Library/bin.
+    conda_base = capture(["conda", "info", "--base"], cwd=pytorch_vision_dir)
+    conda_prefix = [line.strip() for line in conda_base.splitlines() if line.strip()]
+    if not conda_prefix:
+        raise RuntimeError("`conda info --base` did not report a prefix")
+    env["CONDA_PREFIX"] = conda_prefix[-1]
+    if is_windows:
+        library_bin = str(Path(env["CONDA_PREFIX"]) / "Library" / "bin")
+        env["PATH"] = (
+            library_bin + os.pathsep + env.get("PATH", os.environ.get("PATH", ""))
         )
-        run_command(
-            ["conda", "install", "-y", "libpng", "libjpeg-turbo", "libwebp>=1.3.2"],
-            cwd=pytorch_vision_dir,
-            env=env,
-        )
+    run_command(
+        ["conda", "install", "-y", "libpng", "libjpeg-turbo", "libwebp>=1.3.2"],
+        cwd=pytorch_vision_dir,
+        env=env,
+    )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
