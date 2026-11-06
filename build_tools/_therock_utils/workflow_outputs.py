@@ -278,28 +278,26 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/amd-repo-setup")
 
-    def repo_setup_package(
-        self, os_profile: str, tier: str, pkg_type: str
-    ) -> StorageLocation:
-        """Location for the ``amd-repo-setup`` bootstrap package.
+    def repo_setup_package(self, os_profile: str, filename: str) -> StorageLocation:
+        """Location for an ``amd-repo-setup`` bootstrap package.
 
-        ``{run_id}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}``
-        (e.g. ``12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup-nightly.deb``).
+        ``{run_id}-linux/amd-repo-setup/{os_profile}/{filename}`` (e.g.
+        ``12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261013-12345~ubuntu2404_all.deb``).
 
-        The tier is part of the file name, and the name is fixed per tier so
-        the download URL does not change with the package version. The folder
-        sits outside ``packages/``, so the package is published to its own
-        folder rather than into the package repositories.
+        The package keeps the file name the builder gave it, which carries its
+        version. On a per-build stream such as nightly the version includes the
+        run id, so each build's package has its own name and publishing one
+        never replaces another. The folder sits outside ``packages/``, so the
+        package is published to its own folder rather than into the package
+        repositories.
 
         Args:
             os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
-            tier: Repository tier (e.g. 'stable', 'stablerc', 'nightly').
-            pkg_type: Package type ('deb' or 'rpm').
+            filename: The built package's file name.
         """
         return StorageLocation(
             self.bucket,
-            f"{self.repo_setup_packages().relative_path}/{os_profile}"
-            f"/amd-repo-setup-{tier}.{pkg_type}",
+            f"{self.repo_setup_packages().relative_path}/{os_profile}/{filename}",
         )
 
     # -- Python packages --------------------------------------------------------

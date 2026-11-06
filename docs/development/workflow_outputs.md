@@ -140,7 +140,7 @@ families in parallel, producing identically-named log files (e.g.,
         *.msi                                   (one per package, e.g. amdrocm-runtime.msi)
 
     amd-repo-setup/{os_profile}/                (repo setup packages)
-        amd-repo-setup-{tier}.deb               (or .rpm; one per tier)
+        amd-repo-setup*.deb or *.rpm            (the builder's file names, one per build)
 
     python/
         *.whl                                   (generic wheels, e.g., rocm_sdk_core)
@@ -265,8 +265,9 @@ root.native_windows_packages(
 )  # {run_id}-windows/packages/msi — loose .msi installers
 root.repo_setup_packages()  # {run_id}-linux/amd-repo-setup — published as a whole
 root.repo_setup_package(
-    os_profile="ubuntu2404", tier="nightly", pkg_type="deb"
-)  # {run_id}-linux/amd-repo-setup/ubuntu2404/amd-repo-setup-nightly.deb
+    os_profile="ubuntu2404",
+    filename="amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb",
+)  # {run_id}-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
 root.python_packages(artifact_group="gfx110X-all")
 root.tarballs()
 ```

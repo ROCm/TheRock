@@ -26,16 +26,24 @@ import upload_repo_setup_package as ursp  # noqa: E402
 RUN_ID = "12345"
 BUCKET = "therock-prerelease-artifacts"
 
+# What the builder names an rc package of each format.
+BUILT_FILES = {
+    "rpm": "amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm",
+    "deb": "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb",
+}
+
 # The key the upload is expected to write, spelled out here so a change to the
 # uploaded layout has to be made deliberately in two places.
-EXPECTED_RPM_KEY = "12345-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm"
+EXPECTED_RPM_KEY = (
+    "12345-linux/amd-repo-setup/rhel10/amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm"
+)
 
 
-def _built_dir(tmp_path, pkg_type="rpm"):
+def _built_dir(tmp_path, pkg_type="rpm", filename=None):
     """Return a builder output directory holding one built package."""
     dest = tmp_path / "repo-setup-package-out"
     dest.mkdir(exist_ok=True)
-    pkg = dest / f"amd-repo-setup-7.14.0-1.stablerc.el10.noarch.{pkg_type}"
+    pkg = dest / (filename or BUILT_FILES.get(pkg_type, f"amd-repo-setup.{pkg_type}"))
     if not pkg.exists():
         pkg.write_bytes(b"PKG-CONTENTS")
     return dest
@@ -43,12 +51,12 @@ def _built_dir(tmp_path, pkg_type="rpm"):
 
 def _argv(tmp_path, **overrides):
     pkg_type = overrides.get("pkg_type", "rpm")
-    dest = overrides.get("dest_dir") or _built_dir(tmp_path, pkg_type)
+    dest = overrides.get("dest_dir") or _built_dir(
+        tmp_path, pkg_type, overrides.get("filename")
+    )
     argv = [
         "--dest-dir",
         str(dest),
-        "--tier",
-        overrides.get("tier", "stablerc"),
         "--run-id",
         overrides.get("run_id", RUN_ID),
         "--os-profile",
@@ -80,7 +88,6 @@ def _stub_bucket(monkeypatch, external_repo=""):
 def test_parse_args_ok(tmp_path):
     args = ursp.parse_args(_argv(tmp_path))
     assert args.run_id == RUN_ID
-    assert args.tier == "stablerc"
     assert args.pkg_type == "rpm"
     assert args.output_dir is None
     assert args.dry_run is False
@@ -150,22 +157,6 @@ def test_parse_args_accepts_a_numeric_run_id(tmp_path):
     )
 
 
-@pytest.mark.parametrize(
-    "bad",
-    # The tier goes into the file name; a slash or ".." would turn it into a
-    # path. Empty is what get-repo-setup-params emits for a line with no stream.
-    ["../x", "a/b", "nightly\n", "night ly", "", ".", "Nightly", "stable-rc"],
-)
-def test_parse_args_rejects_bad_tier(tmp_path, bad):
-    with pytest.raises(SystemExit):
-        ursp.parse_args(_argv(tmp_path, tier=bad))
-
-
-@pytest.mark.parametrize("good", ["stable", "stablerc", "nightly"])
-def test_parse_args_accepts_real_tiers(tmp_path, good):
-    assert ursp.parse_args(_argv(tmp_path, tier=good)).tier == good
-
-
 # --- finding the built package ------------------------------------------------
 
 
@@ -180,7 +171,7 @@ def test_find_package_ignores_the_builders_work_tree(tmp_path):
     dest = _built_dir(tmp_path)
     nested = dest / "rpm" / "amd-repo-setup" / "RPMS" / "noarch"
     nested.mkdir(parents=True)
-    (nested / "amd-repo-setup-7.14.0-1.stablerc.el10.noarch.rpm").write_bytes(b"X")
+    (nested / BUILT_FILES["rpm"]).write_bytes(b"X")
 
     assert ursp.find_package(dest, "rpm").parent == dest
 
@@ -192,7 +183,7 @@ def test_find_package_rejects_an_empty_dir(tmp_path):
 
 def test_find_package_rejects_two_packages(tmp_path):
     dest = _built_dir(tmp_path)
-    (dest / "amd-repo-setup-7.14.0-2.stablerc.el10.noarch.rpm").write_bytes(b"X")
+    (dest / "amd-repo-setup-7.14.0~rc2-2.rc.el10.noarch.rpm").write_bytes(b"X")
     with pytest.raises(ValueError, match="found 2"):
         ursp.find_package(dest, "rpm")
 
@@ -211,6 +202,23 @@ def test_upload_fails_without_a_package(tmp_path, monkeypatch):
     args = ursp.parse_args(_argv(tmp_path, dest_dir=empty, output_dir=staging))
 
     with pytest.raises(ValueError, match="expected exactly one .rpm"):
+        ursp.upload(args)
+    assert not staging.exists()
+
+
+@pytest.mark.parametrize(
+    "bad",
+    # The name ends up in the object key and in $GITHUB_OUTPUT: a newline could
+    # add a further step output, and a space or a leading "-" or "." is never
+    # a name the builder produces.
+    ["amd-repo\nsetup.rpm", "amd repo setup.rpm", "-amd-repo-setup.rpm", ".rpm"],
+)
+def test_upload_rejects_an_unexpected_file_name(tmp_path, monkeypatch, bad):
+    _stub_bucket(monkeypatch)
+    staging = tmp_path / "staging"
+    args = ursp.parse_args(_argv(tmp_path, filename=bad, output_dir=staging))
+
+    with pytest.raises(ValueError, match="unexpected file name"):
         ursp.upload(args)
     assert not staging.exists()
 
@@ -234,13 +242,33 @@ def test_upload_writes_file_at_expected_key(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "pkg_type,os_profile",
-    [("deb", "ubuntu2404"), ("rpm", "rhel8"), ("rpm", "rhel10"), ("rpm", "sles16")],
+    "pkg_type,os_profile,filename",
+    [
+        # rc keeps the builder's default suffix; nightly carries the run id.
+        ("deb", "ubuntu2404", "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb"),
+        (
+            "deb",
+            "ubuntu2404",
+            "amd-repo-setup_7.14.0~20261105-12345~ubuntu2404_all.deb",
+        ),
+        ("rpm", "rhel8", "amd-repo-setup-7.14.0~rc2-1.rc.el8.noarch.rpm"),
+        (
+            "rpm",
+            "rhel10",
+            "amd-repo-setup-7.14.0~20261105-12345.nightly.el10.noarch.rpm",
+        ),
+        (
+            "rpm",
+            "sles16",
+            "amd-repo-setup-7.14.0~20261105-12345.nightly.sles16.noarch.rpm",
+        ),
+    ],
 )
-@pytest.mark.parametrize("tier", ["stable", "stablerc", "nightly"])
-def test_upload_key_per_profile_and_tier(
-    tmp_path, monkeypatch, pkg_type, os_profile, tier
+def test_upload_keeps_the_built_file_name(
+    tmp_path, monkeypatch, pkg_type, os_profile, filename
 ):
+    # The package is uploaded under exactly the name the builder gave it,
+    # version and "~" included, so each build's package keeps its own name.
     _stub_bucket(monkeypatch)
     staging = tmp_path / "staging"
     args = ursp.parse_args(
@@ -249,17 +277,15 @@ def test_upload_key_per_profile_and_tier(
             output_dir=staging,
             pkg_type=pkg_type,
             os_profile=os_profile,
-            tier=tier,
+            filename=filename,
         )
     )
 
     key = ursp.upload(args)
 
-    expected = (
-        f"{RUN_ID}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}"
-    )
+    expected = f"{RUN_ID}-linux/amd-repo-setup/{os_profile}/{filename}"
     assert key == expected
-    assert (staging / expected).is_file()
+    assert (staging / expected).read_bytes() == b"PKG-CONTENTS"
 
 
 def test_upload_carries_external_repo_prefix(tmp_path, monkeypatch):

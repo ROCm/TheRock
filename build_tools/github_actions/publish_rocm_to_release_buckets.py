@@ -44,10 +44,12 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
-    amd-repo-setup packages (prerelease):
+    amd-repo-setup packages (nightly, prerelease), under the builder's file names:
 
-    s3://therock-prerelease-artifacts/12345-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm
-      -> s3://therock-repo-amd-rc-core/v5/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm
+    s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+      -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+    s3://therock-prerelease-artifacts/12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm
+      -> s3://therock-repo-amd-rc-core/v5/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm
 
     native windows packages (dev/nightly), with ``--platform windows``:
 
@@ -293,15 +295,20 @@ def publish_repo_setup_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
+    overwrite: bool = False,
 ) -> None:
     """Copy the amd-repo-setup packages from the artifacts bucket to the release bucket.
 
-    The packages were uploaded by upload_repo_setup_package.py, one per distro
-    with a fixed file name per tier, so each run replaces the previous run's
-    package:
+    The packages were uploaded by upload_repo_setup_package.py, one per distro,
+    under the file names the builder gave them. A nightly package's version
+    includes the run id, so each build adds its own file:
 
-        s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup-nightly.deb
-          -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup-nightly.deb
+        s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+          -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+
+    A published package is never replaced: a file that already exists at the
+    destination is left as it is, unless ``overwrite`` is set to re-publish a
+    corrected package by hand.
 
     Not every build uploads them, so finding none is not an error.
     """
@@ -309,7 +316,9 @@ def publish_repo_setup_packages(
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     dest = StorageLocation(dest_bucket.name, "v5/amd-repo-setup")
     logger.info("amd-repo-setup packages: %s -> %s", source.s3_uri, dest.s3_uri)
-    count = backend.copy_directory(source, dest)
+    if overwrite:
+        logger.warning("Replacing any amd-repo-setup packages already published")
+    count = backend.copy_directory(source, dest, skip_existing=not overwrite)
     logger.info("Copied %d amd-repo-setup packages", count)
 
 
@@ -400,6 +409,13 @@ def main(argv: list[str]) -> None:
         "amd-repo-setup packages)",
     )
     parser.add_argument(
+        "--overwrite-repo-setup-packages",
+        action="store_true",
+        help="Replace amd-repo-setup packages that are already published. For "
+        "re-publishing a corrected package by hand; by default a published "
+        "package is never replaced",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
     )
     parser.add_argument(
@@ -443,7 +459,12 @@ def main(argv: list[str]) -> None:
         # configures. ASAN builds don't build the package, and their packages
         # go to packages-asan/, which it doesn't configure.
         if not is_asan:
-            publish_repo_setup_packages(artifacts_root, args.release_type, backend)
+            publish_repo_setup_packages(
+                artifacts_root,
+                args.release_type,
+                backend,
+                overwrite=args.overwrite_repo_setup_packages,
+            )
         else:
             logger.info("Skipping amd-repo-setup packages for ASAN build variant")
     if artifacts_root.platform == "windows" and not args.skip_native_packages:

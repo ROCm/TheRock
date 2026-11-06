@@ -2,6 +2,7 @@
 """Unit tests for publish_rocm_to_release_buckets.py."""
 
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -166,6 +167,30 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
                 self.assertEqual(dest.bucket, dest_bucket)
                 self.assertEqual(dest.relative_path, "v5/amd-repo-setup")
+                # A published package is never replaced by default.
+                self.assertEqual(
+                    mock_copy.call_args_list[-1].kwargs, {"skip_existing": True}
+                )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
+    def test_overwrite_flag_disables_skip_existing(self, mock_copy):
+        mock_copy.return_value = 2
+        main(
+            [
+                "--run-id",
+                "123",
+                "--platform",
+                "linux",
+                "--release-type",
+                "nightly",
+                "--overwrite-repo-setup-packages",
+                "--dry-run",
+            ]
+        )
+
+        source, _ = mock_copy.call_args_list[-1].args
+        self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
+        self.assertEqual(mock_copy.call_args_list[-1].kwargs, {"skip_existing": False})
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     def test_windows_copies_native_msi_packages(self, mock_copy):
@@ -493,26 +518,53 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
     """
 
     RUN_ID = "12345"
-    # The tier each release line's builds upload.
-    TIERS = {"prerelease": "stablerc", "nightly": "nightly"}
-    PACKAGES = (("ubuntu2404", "deb"), ("rhel10", "rpm"))
+    RELEASE_TYPES = ("prerelease", "nightly")
+    PROFILES = ("ubuntu2404", "rhel10")
 
     @staticmethod
-    def _write(path):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"CONTENTS")
+    def _file_name(release_type, profile, run_id):
+        """Return the builder's file name for a package of this run.
 
-    def _published(self, release_type, *extra_args, repo_setup_packages=True):
-        """Seed a run's outputs, run the real publish, return what it wrote.
-
-        Returns paths relative to the staging root, excluding the source run's
-        own prefix.
+        rc keeps the builder's default suffix; nightly carries the run id.
         """
+        if profile == "ubuntu2404":
+            if release_type == "nightly":
+                return f"amd-repo-setup_7.14.0~20261105-{run_id}~ubuntu2404_all.deb"
+            return "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb"
+        if release_type == "nightly":
+            return f"amd-repo-setup-7.14.0~20261105-{run_id}.nightly.el10.noarch.rpm"
+        return "amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm"
+
+    @staticmethod
+    def _write(path, contents=b"CONTENTS"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+
+    def _staging(self):
         staging = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, staging, ignore_errors=True)
+        return staging
+
+    def _published(
+        self,
+        release_type,
+        *extra_args,
+        repo_setup_packages=True,
+        run_id=RUN_ID,
+        staging=None,
+        package_bytes=b"CONTENTS",
+    ):
+        """Seed a run's outputs, run the real publish, return what it wrote.
+
+        Returns paths relative to the staging root, excluding every source
+        run's own prefix. Pass ``staging`` to publish a further run into the
+        same release bucket.
+        """
+        if staging is None:
+            staging = self._staging()
         # The local backend maps a location to staging/<relative path> whatever
         # its bucket, so the source tree can be seeded from any root.
-        root = WorkflowOutputRoot("unused", "", self.RUN_ID, "linux")
+        root = WorkflowOutputRoot("unused", "", run_id, "linux")
         # main() fails if a run has no tarball or Python package.
         self._write(
             root.tarball("therock-dist-linux-gfx94X-dcgpu-7.14.0.tar.gz").local_path(
@@ -532,11 +584,11 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
             for rel in contents:
                 self._write(staging / f"{base}/{rel}")
         if repo_setup_packages:
-            for profile, pkg_type in self.PACKAGES:
+            for profile in self.PROFILES:
                 location = root.repo_setup_package(
-                    profile, self.TIERS[release_type], pkg_type
+                    profile, self._file_name(release_type, profile, run_id)
                 )
-                self._write(location.local_path(staging))
+                self._write(location.local_path(staging), package_bytes)
 
         backend = LocalStorageBackend(staging_dir=staging)
         with mock.patch(
@@ -546,7 +598,7 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
             main(
                 [
                     "--run-id",
-                    self.RUN_ID,
+                    run_id,
                     "--platform",
                     "linux",
                     "--release-type",
@@ -555,11 +607,11 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
                 ]
             )
 
-        source = f"{self.RUN_ID}-linux/"
         written = {
             p.relative_to(staging).as_posix()
             for p in staging.rglob("*")
-            if p.is_file() and not p.relative_to(staging).as_posix().startswith(source)
+            if p.is_file()
+            and not re.match(r"[0-9]+-linux/", p.relative_to(staging).as_posix())
         }
         self.assertTrue(written, "publish wrote nothing outside the source prefix")
         return written
@@ -574,24 +626,95 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
         }
 
     def test_repo_setup_packages_are_published(self):
-        for release_type, tier in self.TIERS.items():
+        for release_type in self.RELEASE_TYPES:
             with self.subTest(release_type=release_type):
                 written = self._published(release_type)
 
-                # Exactly these: in their own folder, and nowhere else (in
-                # particular, not inside the package repositories).
+                # Exactly these, under the builder's file names: in their own
+                # folder, and nowhere else (in particular, not inside the
+                # package repositories).
                 self.assertEqual(
                     self._repo_setup_files(written),
                     {
-                        f"v5/amd-repo-setup/{profile}/amd-repo-setup-{tier}.{pkg_type}"
-                        for profile, pkg_type in self.PACKAGES
+                        f"v5/amd-repo-setup/{profile}/"
+                        + self._file_name(release_type, profile, self.RUN_ID)
+                        for profile in self.PROFILES
                     },
                 )
+
+    def test_each_nightly_build_adds_its_own_package(self):
+        # Two nightly builds publish into the same release bucket. The second
+        # adds its packages next to the first's and replaces nothing.
+        staging = self._staging()
+        self._published(
+            "nightly", run_id="111", staging=staging, package_bytes=b"RUN-1"
+        )
+        written = self._published(
+            "nightly", run_id="222", staging=staging, package_bytes=b"RUN-2"
+        )
+
+        self.assertEqual(
+            self._repo_setup_files(written),
+            {
+                f"v5/amd-repo-setup/{profile}/"
+                + self._file_name("nightly", profile, run_id)
+                for profile in self.PROFILES
+                for run_id in ("111", "222")
+            },
+        )
+        for profile in self.PROFILES:
+            first = staging / (
+                f"v5/amd-repo-setup/{profile}/"
+                + self._file_name("nightly", profile, "111")
+            )
+            self.assertEqual(first.read_bytes(), b"RUN-1")
+
+    def _publish_the_same_rc_twice(self, *extra_args):
+        """Publish an rc build, then a rebuild of the same rc with new bytes.
+
+        rc packages keep the builder's default suffix, so the rebuild's files
+        have the same names as the first build's. Returns the published bytes
+        of each profile's package.
+        """
+        staging = self._staging()
+        self._published(
+            "prerelease", run_id="111", staging=staging, package_bytes=b"RUN-1"
+        )
+        with self.assertLogs(level="INFO") as logs:
+            self._published(
+                "prerelease",
+                *extra_args,
+                run_id="222",
+                staging=staging,
+                package_bytes=b"RUN-2",
+            )
+        published = {
+            profile: (
+                staging
+                / f"v5/amd-repo-setup/{profile}"
+                / self._file_name("prerelease", profile, "222")
+            ).read_bytes()
+            for profile in self.PROFILES
+        }
+        return published, "\n".join(logs.output)
+
+    def test_a_published_package_is_not_replaced(self):
+        published, logs = self._publish_the_same_rc_twice()
+
+        self.assertEqual(published, {p: b"RUN-1" for p in self.PROFILES})
+        self.assertIn("already exists, not replaced", logs)
+
+    def test_overwrite_replaces_a_published_package(self):
+        published, _ = self._publish_the_same_rc_twice(
+            "--overwrite-repo-setup-packages"
+        )
+
+        self.assertEqual(published, {p: b"RUN-2" for p in self.PROFILES})
 
     def test_repository_is_still_published(self):
         # Without this, the test above would also pass if publishing the
         # package repositories had stopped.
-        for release_type in self.TIERS:
+        for release_type in self.RELEASE_TYPES:
             with self.subTest(release_type=release_type):
                 written = self._published(release_type)
 
@@ -611,7 +734,7 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
     def test_run_without_repo_setup_packages_still_publishes(self):
         # Builds that do not build the package upload none; that must not fail
         # the publish.
-        for release_type in self.TIERS:
+        for release_type in self.RELEASE_TYPES:
             with self.subTest(release_type=release_type):
                 written = self._published(release_type, repo_setup_packages=False)
 

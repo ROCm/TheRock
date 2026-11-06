@@ -128,6 +128,7 @@ class StorageBackend(ABC):
         source: StorageLocation,
         dest: StorageLocation,
         include: list[str] | None = None,
+        skip_existing: bool = False,
     ) -> int:
         """Copy files from *source* to *dest*, preserving relative paths.
 
@@ -139,6 +140,8 @@ class StorageBackend(ABC):
             source: Source directory location.
             dest: Destination directory location.
             include: Optional glob patterns to filter filenames.
+            skip_existing: Leave files that already exist at the destination
+                in place instead of replacing them. Lists the destination.
 
         Returns:
             Number of files copied.
@@ -164,6 +167,14 @@ class StorageBackend(ABC):
             rel = f.relative_path.removeprefix(source_prefix)
             dest_loc = StorageLocation(dest.bucket, f"{dest.relative_path}/{rel}")
             pairs.append((f, dest_loc))
+        if skip_existing and pairs:
+            existing = {loc.relative_path for loc in self.list_files(dest)}
+            for _, dst in pairs:
+                if dst.relative_path in existing:
+                    logger.warning("%s already exists, not replaced", dst.s3_uri)
+            pairs = [
+                (src, dst) for src, dst in pairs if dst.relative_path not in existing
+            ]
         logger.info(
             "copy_directory: %s -> %s/%s (%d files)",
             source.s3_uri,

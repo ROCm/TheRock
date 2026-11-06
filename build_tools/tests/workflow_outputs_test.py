@@ -175,10 +175,8 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         self._assert_relative_path(loc, "99999-linux/amd-repo-setup")
 
     def test_repo_setup_package(self):
-        loc = self.root.repo_setup_package("foo", "bar", "baz")
-        self._assert_relative_path(
-            loc, "99999-linux/amd-repo-setup/foo/amd-repo-setup-bar.baz"
-        )
+        loc = self.root.repo_setup_package("foo", "bar.deb")
+        self._assert_relative_path(loc, "99999-linux/amd-repo-setup/foo/bar.deb")
 
     # -- Python packages --
 

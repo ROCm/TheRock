@@ -2858,8 +2858,8 @@ class InstallRepoSetupPackageTest(unittest.TestCase):
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_published_file_name_is_found(self, mock_streaming):
-        # The published copy is named <name>-<tier>.<fmt>, not dpkg's
-        # <name>_<version>_<arch>.deb; the harness installs either.
+        # A file named <name>*.<fmt> other than dpkg's
+        # <name>_<version>_<arch>.deb is installed too.
         mock_streaming.return_value = 0
         with tempfile.TemporaryDirectory() as d:
             pkg = Path(d) / f"{_PKG}-stablerc.deb"

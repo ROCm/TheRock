@@ -598,10 +598,10 @@ _REPO_SETUP_PARAMS_KEYS = {
     "os_profiles",
     "images",
     "stream",
-    "tier",
     "repo_base_url",
     "gpg_key_url",
     "repo_sub_folder",
+    "version_suffix",
 }
 
 
@@ -632,20 +632,21 @@ class GetRepoSetupParamsTest(unittest.TestCase):
             get_url_repo_params.get_container_image_map(["rhel8", "rhel10", "sles16"]),
         )
         self.assertEqual(out["stream"], "nightly")
-        self.assertEqual(out["tier"], "nightly")
         self.assertEqual(
             out["repo_base_url"], "https://nightly.repo.amd.com/rocm/core/packages"
         )
         self.assertEqual(out["gpg_key_url"], "")
         # The date is the current UTC date; assert the structure, not the value.
         self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
+        # The run id keeps each build's package file distinct.
+        self.assertEqual(out["version_suffix"], "12345")
 
     def test_flat_streams_are_signed_with_no_build_folder(self):
         cases = {
-            "release": ("stable", "stable", "https://stable.repo.amd.com/rocm"),
-            "prerelease": ("rc", "stablerc", "https://rc.repo.amd.com/rocm"),
+            "release": ("stable", "https://stable.repo.amd.com/rocm"),
+            "prerelease": ("rc", "https://rc.repo.amd.com/rocm"),
         }
-        for release_type, (stream, tier, root) in cases.items():
+        for release_type, (stream, root) in cases.items():
             with self.subTest(release_type=release_type):
                 code, output = self._run("deb", release_type)
                 self.assertEqual(code, 0)
@@ -653,10 +654,11 @@ class GetRepoSetupParamsTest(unittest.TestCase):
                 self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
                 self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
                 self.assertEqual(out["stream"], stream)
-                self.assertEqual(out["tier"], tier)
                 self.assertEqual(out["repo_base_url"], f"{root}/core/packages")
                 self.assertEqual(out["gpg_key_url"], f"{root}/gpg/packages.gpg")
                 self.assertEqual(out["repo_sub_folder"], "")
+                # Empty, so the builder keeps its default suffix.
+                self.assertEqual(out["version_suffix"], "")
 
     def test_line_without_a_stream_still_emits_the_matrix(self):
         code, output = self._run("deb", "ci")
@@ -666,28 +668,12 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
         for key in (
             "stream",
-            "tier",
             "repo_base_url",
             "gpg_key_url",
             "repo_sub_folder",
+            "version_suffix",
         ):
             self.assertEqual(out[key], "", key)
-
-    def test_tier_names_each_line_explicitly(self):
-        # The tier becomes the uploaded file name (amd-repo-setup-<tier>.<fmt>),
-        # so pin it per line rather than deriving the expectation the same way
-        # the code does. rc's tier is "stablerc", not its stream name.
-        cases = {
-            "release": "stable",
-            "prerelease": "stablerc",
-            "nightly": "nightly",
-            "ci": "",
-        }
-        for release_type, tier in cases.items():
-            with self.subTest(release_type=release_type):
-                code, output = self._run("rpm", release_type)
-                self.assertEqual(code, 0)
-                self.assertEqual(_outputs(output)["tier"], tier)
 
     def test_hostile_run_id_on_a_build_id_stream_writes_nothing(self):
         code, output = self._run("deb", "nightly", run_id="1\nEOF_mag1c\ninjected=yes")
@@ -699,7 +685,9 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         # A flat stream has no build folder, so the run id is never used there.
         code, output = self._run("deb", "release", run_id="not-a-number")
         self.assertEqual(code, 0)
-        self.assertEqual(_outputs(output)["repo_sub_folder"], "")
+        out = _outputs(output)
+        self.assertEqual(out["repo_sub_folder"], "")
+        self.assertEqual(out["version_suffix"], "")
 
     def test_outputs_follow_the_stream_shape_not_its_name(self):
         # Register a build_id stream that is not called "nightly". Its outputs
@@ -713,8 +701,8 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         out = _outputs(output)
         self.assertEqual(out["stream"], "weekly")
-        self.assertEqual(out["tier"], "weekly")
         self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
+        self.assertEqual(out["version_suffix"], "12345")
         self.assertEqual(out["gpg_key_url"], "")
 
     def test_rejects_an_unknown_package_type(self):
