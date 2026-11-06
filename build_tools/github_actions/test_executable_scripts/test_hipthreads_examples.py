@@ -112,6 +112,8 @@ def build_environment() -> dict:
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
     environ_vars["CMAKE_GENERATOR"] = "Ninja"
+    # TEMPORARY (users/marsavic/hipthreads-vcores-64): run the examples at each device's occupancy cap.
+    environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "64"
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
     if IS_WINDOWS:

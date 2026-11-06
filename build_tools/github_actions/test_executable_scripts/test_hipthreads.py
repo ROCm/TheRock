@@ -68,6 +68,9 @@ environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
 # after this many seconds, so one stuck test can't burn the whole job timeout.
 # Honored by the vendored test executor (test/utils/run.py).
 environ_vars["HIPTHREADS_TEST_TIMEOUT"] = "20"
+# TEMPORARY (users/marsavic/hipthreads-vcores-64): request far more scheduler vcores than most GPUs can hold, so
+# hardware_concurrency() is clamped to each device's full occupancy and the suite runs at the cap.
+environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "64"
 
 # Add ROCm binaries to PATH (also the hipcc location).
 prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
