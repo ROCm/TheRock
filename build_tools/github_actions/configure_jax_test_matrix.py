@@ -24,8 +24,9 @@ PyTorch pipeline, so re-running a whole Sunday nightly on a later day gives
 that day's matrix; dispatch a large run to get the multi-accelerator tests
 back.
 
-The end-to-end workloads run as a step of the multi-GPU job rather than a job
-of their own, so they follow whatever this emits.
+The end-to-end workloads from ROCm/jax-lab run as a step of the multi-GPU job
+rather than a job of their own, so they follow whatever this emits: two of them
+for medium, all of them for large, and only on the Python version jax-lab runs.
 """
 
 import argparse
@@ -36,6 +37,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+_THEROCK_DIR = _BUILD_TOOLS_DIR.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from github_actions.amdgpu_family_matrix import (
@@ -74,6 +76,21 @@ TIMEOUT_MINUTES_SMALL = 45
 # there is no reduced form of the multi-accelerator script.
 SMALL_TEST_LIST = "external-builds/jax/test_selection/small_tests.txt"
 
+# The ROCm/jax-lab workloads each size runs on the multi-GPU job, for
+# external-builds/jax/run_jax_e2e.py.
+E2E_LISTS = {
+    TEST_SIZE_MEDIUM: "external-builds/jax/test_selection/e2e_medium.txt",
+    TEST_SIZE_LARGE: "external-builds/jax/test_selection/e2e_large.txt",
+}
+# jax-lab runs and pins this Python alone, so the other rows skip the workloads.
+E2E_PYTHON_VERSION = "3.12"
+# What run_jax_e2e.py gives each workload, so the step's budget is their sum.
+E2E_MINUTES_PER_WORKLOAD = 60
+
+# A job's budget before its end-to-end step: room for the longest subset plus
+# its setup, where installing the ROCm packages alone has taken over an hour.
+TIMEOUT_MINUTES_JOB = 240
+
 
 def platform_entry(target: str, platform: str) -> dict | None:
     """The family matrix entry for a target, or None if nothing matches.
@@ -110,11 +127,32 @@ def wants_multi_gpu(size: str, today: date) -> bool:
     return size == TEST_SIZE_MEDIUM and today.weekday() == WEEKLY_MULTI_GPU_WEEKDAY
 
 
+def e2e_workloads(size: str, python_version: str) -> tuple[str, int]:
+    """The end-to-end list the multi-GPU job runs, and its budget in minutes.
+
+    An empty list runs none, which is every size without one and every Python
+    jax-lab does not run.
+    """
+    e2e_list = E2E_LISTS.get(size, "")
+    if not e2e_list:
+        return "", 0
+    if python_version != E2E_PYTHON_VERSION:
+        print(
+            f"End-to-end workloads run on the Python {E2E_PYTHON_VERSION} job"
+            f" alone, not {python_version}"
+        )
+        return "", 0
+    lines = (_THEROCK_DIR / e2e_list).read_text().splitlines()
+    count = sum(1 for line in lines if line.partition("#")[0].strip())
+    return e2e_list, count * E2E_MINUTES_PER_WORKLOAD
+
+
 def build_test_matrix(
     *,
     target: str,
     platform: str,
     size: str,
+    python_version: str,
     today: date,
 ) -> dict[str, list[dict[str, str | int]]]:
     # Check if JAX tests are disabled for this family
@@ -144,6 +182,9 @@ def build_test_matrix(
                 ),
                 # Empty means the whole subset, which is every size but small.
                 "test_list": SMALL_TEST_LIST if small else "",
+                "e2e_list": "",
+                "e2e_timeout_minutes": 0,
+                "job_timeout_minutes": TIMEOUT_MINUTES_JOB,
             }
         )
     else:
@@ -158,12 +199,16 @@ def build_test_matrix(
     if wants_multi_gpu(size, today):
         multi_runner = entry.get("test-runs-on-multi-gpu")
         if multi_runner:
+            e2e_list, e2e_minutes = e2e_workloads(size, python_version)
             include.append(
                 {
                     "test_subset": TEST_SUBSET_MULTI,
                     "test_runs_on": multi_runner,
                     "test_timeout_minutes": TIMEOUT_MINUTES_MULTI,
                     "test_list": "",
+                    "e2e_list": e2e_list,
+                    "e2e_timeout_minutes": e2e_minutes,
+                    "job_timeout_minutes": TIMEOUT_MINUTES_JOB + e2e_minutes,
                 }
             )
         else:
@@ -199,6 +244,11 @@ def main(argv: list[str]) -> None:
         required=True,
         help="How much of the suite this run is worth",
     )
+    parser.add_argument(
+        "--python-version",
+        required=True,
+        help="Python version of the wheels under test, e.g. 3.12",
+    )
     args = parser.parse_args(argv)
 
     today = today_utc()
@@ -220,6 +270,7 @@ def main(argv: list[str]) -> None:
         target=args.target,
         platform=args.platform,
         size=args.test_size,
+        python_version=args.python_version,
         today=today,
     )
     gha_set_output(
