@@ -61,6 +61,10 @@ import subprocess
 
 
 def compute_compiler_fingerprint():
+    # A Nix derivation output is already named with a hash of all the inputs we
+    # care about, so use it verbatim.
+    if compiler_exe.is_relative_to("/nix/store"):
+        return str(compiler_exe)
     ldd_lines = (
         subprocess.check_output(["ldd", str(compiler_exe)]).decode().splitlines()
     )
