@@ -19,3 +19,12 @@ if(THEROCK_SANITIZER STREQUAL "ASAN")
   message(STATUS "Enabling BUILD_ADDRESS_SANITIZER for RCCL
 (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()
+
+# RCCL later force-sets CMAKE_C/CXX_FLAGS_RELEASE to -O3, which removes the
+# compact host -Oz. Restoring it is deferred to the end of this directory:
+# compile rules read those cache entries at generate time.
+if(NOT COMMAND therock_asan_compact_preserve_host_oz)
+  list(APPEND CMAKE_MODULE_PATH "${THEROCK_SOURCE_DIR}/cmake")
+  include(therock_subproject_utils)
+endif()
+therock_asan_compact_preserve_host_oz()
