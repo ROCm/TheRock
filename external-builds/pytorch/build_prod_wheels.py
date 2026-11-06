@@ -1397,12 +1397,6 @@ def _insert_conda_bin_on_path(path: str, conda_prefix: Path) -> str:
     return os.pathsep.join(parts)
 
 
-def _prepend_entry(env: dict[str, str], name: str, entry: str) -> None:
-    current = env.get(name, os.environ.get(name, ""))
-    parts = [part for part in current.split(os.pathsep) if part and part != entry]
-    env[name] = os.pathsep.join([entry, *parts])
-
-
 def _miniforge_installer_name() -> str:
     machine = platform.machine()
     names = {
@@ -1447,8 +1441,6 @@ def _ensure_vision_conda(env: dict[str, str]) -> Path:
     env["PATH"] = _insert_conda_bin_on_path(
         env.get("PATH", os.environ.get("PATH", "")), prefix
     )
-    _prepend_entry(env, "LIBRARY_PATH", str(prefix / "lib"))
-    _prepend_entry(env, "LD_LIBRARY_PATH", str(prefix / "lib"))
     # Miniforge defaults to strict conda-forge, which hides `-c pytorch`.
     run_command(
         [str(conda_exe), "config", "--set", "channel_priority", "disabled"],
