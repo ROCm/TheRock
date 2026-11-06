@@ -1005,6 +1005,9 @@ test_matrix = {
         "job_name": "miopenprovider",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        # The workloads suite (ROCm/rocm-libraries workload graphs) runs
+        # for hours; this opt-in step timeout also marks the component as running it.
+        "workloads_timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1024,6 +1027,8 @@ test_matrix = {
         "job_name": "hipblasltprovider",
         "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 30,
+        # See miopenprovider: opt-in step timeout for the workloads suite.
+        "workloads_timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1542,6 +1547,13 @@ def run():
             )
             continue
 
+        # workloads is opt-in: it runs only for components that declare
+        # "workloads_timeout_minutes". Sanity still runs, as for every tier.
+        workload_timeout = test_matrix[key].get("workloads_timeout_minutes")
+        if test_type == "workloads" and key != "sanity" and workload_timeout is None:
+            logging.info(f"Excluding job {job_name}: no workloads suite")
+            continue
+
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
@@ -1593,6 +1605,8 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            if test_type == "workloads" and key != "sanity":
+                job_config_data["timeout_minutes"] = workload_timeout
 
             # A component declares the families it is advisory on via
             # "expect_failure" (see the key reference above). Resolve that
