@@ -2258,10 +2258,9 @@ def expand_build_configs(
         build_variant.startswith("host-asan")
         and ci_inputs.is_pull_request
         and os.environ.get("GITHUB_REPOSITORY") == "ROCm/rocm-systems"
-        and "gfx90a" not in linux_families
     ):
-        linux_families.append("gfx90a")
-        print("  rocm-systems host-asan pull request adds gfx90a")
+        linux_families = ["gfx90a"]
+        print("  rocm-systems host-asan pull request uses gfx90a")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
@@ -2423,10 +2422,9 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         effective_variant.startswith("host-asan")
         and ci_inputs.is_pull_request
         and os.environ.get("GITHUB_REPOSITORY") == "ROCm/rocm-systems"
-        and "gfx90a" not in targets.linux_families
     ):
-        targets.linux_families.append("gfx90a")
-        print("  rocm-systems host-asan pull request adds gfx90a")
+        targets.linux_families[:] = ["gfx90a"]
+        print("  rocm-systems host-asan pull request uses gfx90a")
     targets.log()
 
     print("\n=== Deciding job configuration ===")

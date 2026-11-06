@@ -2603,7 +2603,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(entry["test-runs-on"], "")
 
     def test_rocm_systems_host_asan_pr_uses_gfx90a_runner(self):
-        """A rocm-systems host-asan pull request tests on the gfx90a runner."""
+        """A rocm-systems host-asan pull request builds and tests only gfx90a."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/rocm-systems"}):
             result = cm.expand_build_configs(
@@ -2618,13 +2618,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             (info["amdgpu_family"], info["test-runs-on"])
             for info in result.linux.per_family_info
         ]
-        self.assertEqual(
-            got,
-            [
-                ("gfx94X-dcgpu", ""),
-                ("gfx90a", "linux-gfx90a-1gpu-ossci-rocm"),
-            ],
-        )
+        self.assertEqual(got, [("gfx90a", "linux-gfx90a-1gpu-ossci-rocm")])
 
     def test_asan_debug_nightly_has_no_sandbox_runner(self):
         """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
