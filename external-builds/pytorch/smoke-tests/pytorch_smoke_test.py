@@ -5,11 +5,13 @@ import ctypes
 import importlib
 import importlib.util
 import logging
+import math
 import platform
 import re
 
 import pytest
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 
 class TestROCmAvailability:
@@ -134,6 +136,75 @@ class TestConvolutions:
         weight = weight.to(memory_format=torch.channels_last)
         o = torch.conv2d(input, weight, None, (2, 1), (1, 1), (1, 1), 1)
         assert o.is_contiguous(memory_format=torch.channels_last)
+
+
+class TestSDPA:
+    """Smoke tests for fused scaled dot-product attention (SDPA) kernels.
+
+    On ROCm, the fused SDPA backends dispatch to AOTriton kernels that only
+    work when the installed wheel ships matching kernel images. A packaging
+    mismatch can surface either as a deferred kernel launch failure or as a
+    silently wrong (finite) output (issues #7315 and #7992). Each test forces
+    a single fused backend and checks the result against an independent CPU
+    FP32 reference computed from the same BF16-quantized inputs. Forcing the
+    backend prevents silent fallback to the unfused MATH backend: a backend
+    the dispatcher cannot select raises immediately, while a kernel-image
+    mismatch may instead return an incorrect output without raising, which
+    the numerical comparison detects.
+    """
+
+    @pytest.mark.parametrize(
+        "backend,shape,use_bias",
+        [
+            pytest.param(SDPBackend.FLASH_ATTENTION, (1, 2, 16, 64), False, id="flash"),
+            pytest.param(
+                SDPBackend.EFFICIENT_ATTENTION,
+                (1, 2, 16, 64),
+                True,
+                id="efficient-bias",
+            ),
+            pytest.param(
+                SDPBackend.EFFICIENT_ATTENTION,
+                (54, 12, 196, 64),
+                True,
+                id="vision-bias",
+            ),
+        ],
+    )
+    def test_fused_sdpa(self, backend, shape, use_bias):
+        generator = torch.Generator(device="cpu").manual_seed(7992)
+        q, k, v = [
+            torch.randn(shape, generator=generator).to(torch.bfloat16) for _ in range(3)
+        ]
+        bias = (
+            (torch.randn((*shape[:-1], shape[-2]), generator=generator) * 0.1).to(
+                torch.bfloat16
+            )
+            if use_bias
+            else None
+        )
+        # Independent CPU reference: same BF16 input values, FP32 arithmetic.
+        scores = (q.float() @ k.float().transpose(-2, -1)) / math.sqrt(shape[-1])
+        if bias is not None:
+            scores += bias.float()
+        expected = torch.softmax(scores, dim=-1) @ v.float()
+
+        with sdpa_kernel([backend]):
+            actual = torch.nn.functional.scaled_dot_product_attention(
+                q.to("cuda"),
+                k.to("cuda"),
+                v.to("cuda"),
+                attn_mask=bias.to("cuda") if bias is not None else None,
+                dropout_p=0.0,
+            )
+        actual_cpu = actual.cpu().float()
+
+        assert actual.shape == shape
+        assert actual.dtype == torch.bfloat16
+        assert actual.device.type == "cuda"
+        assert torch.isfinite(actual_cpu).all()
+        logging.info(f"max_abs_error={(actual_cpu - expected).abs().max().item()}")
+        torch.testing.assert_close(actual_cpu, expected, atol=0.03, rtol=0.03)
 
 
 class TestOpenBLASAvailability:
