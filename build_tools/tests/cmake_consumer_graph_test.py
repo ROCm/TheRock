@@ -11,7 +11,6 @@ import pytest
 
 from _therock_utils.cmake_consumer_graph import (
     _DECLARATION_KEYWORDS,
-    _PROVIDE_ARTIFACT_KEYWORDS,
     AnalysisError,
     RepositoryAnalyzer,
     compare_graphs,
@@ -435,88 +434,6 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
     assert len(subtree_map) >= len(expected)
 
 
-def test_source_dir_map_from_provide_artifact(tmp_path: Path) -> None:
-    _write(
-        tmp_path / "CMakeLists.txt",
-        """
-set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-libraries")
-set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
-therock_cmake_subproject_declare(hip-clr
-  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
-therock_cmake_subproject_declare(rocblas
-  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas)
-therock_cmake_subproject_declare(intermediate
-  BUILD_DEPS rocblas)
-therock_provide_artifact(core-hip
-  DESCRIPTOR artifact.toml
-  SUBPROJECT_DEPS hip-clr)
-therock_provide_artifact(blas
-  COMPONENTS dev lib
-  SUBPROJECT_DEPS rocblas hip-clr)
-therock_provide_artifact(meta
-  SUBPROJECT_DEPS intermediate)
-""",
-    )
-    tracked = {Path("CMakeLists.txt")}
-    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
-
-    # Artifact -> the source subtrees its SUBPROJECT_DEPS build from (fan-in over
-    # deps). 'meta' depends only on a subproject with no EXTERNAL_SOURCE_DIR, so it
-    # derives nothing and is omitted.
-    assert result.build_source_dir_map() == {
-        "blas": ["projects/clr", "projects/rocblas"],
-        "core-hip": ["projects/clr"],
-    }
-
-
-def test_source_dir_map_unresolved_subproject_deps_is_omitted(tmp_path: Path) -> None:
-    # SUBPROJECT_DEPS feeds the informational source_dir_map only, so an unresolved
-    # variable must not abort the analysis: the offending artifact is omitted (with
-    # a skipped diagnostic) and the graph/subtree_map still build.
-    _write(
-        tmp_path / "CMakeLists.txt",
-        """
-set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
-therock_cmake_subproject_declare(hip-clr
-  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
-therock_provide_artifact(good
-  SUBPROJECT_DEPS hip-clr)
-therock_provide_artifact(thing
-  SUBPROJECT_DEPS ${UNDEFINED_DEPS})
-""",
-    )
-    tracked = {Path("CMakeLists.txt")}
-    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
-
-    # The unresolvable artifact is omitted; the resolvable one is kept.
-    assert result.build_source_dir_map() == {"good": ["projects/clr"]}
-    # The failure is visible as a diagnostic, not silently swallowed.
-    assert any("UNDEFINED_DEPS" in skipped.reason for skipped in result.skipped_paths)
-    # The graph and subtree map are unaffected and still build.
-    assert result.build_subtree_map() == {"projects/clr": ["hip-clr"]}
-    assert isinstance(result.build_consumer_graph(), dict)
-
-
-def test_source_dir_map_matches_committed() -> None:
-    # The parser generates the committed source-dir map, so build_source_dir_map()
-    # must equal the committed file exactly. Skips outside a git checkout.
-    repo_root = Path(__file__).resolve().parents[2]
-    committed = repo_root / "test_tools" / "therock_source_dir_map.json"
-    if not (
-        (repo_root / ".git").exists()
-        and committed.exists()
-        and (repo_root / "CMakeLists.txt").exists()
-    ):
-        pytest.skip("not a TheRock git checkout with a committed source-dir map")
-
-    result = RepositoryAnalyzer(repo_root).analyze()
-    committed_map = json.loads(committed.read_text(encoding="utf-8"))
-    assert result.build_source_dir_map() == committed_map, (
-        "committed source-dir map is out of sync with the parser; regenerate it "
-        "with build_tools/generate_consumer_graph.py and commit the result"
-    )
-
-
 def test_subtree_map_uses_forward_slashes(tmp_path: Path) -> None:
     # Keys come from Path.as_posix(), so a Windows separator can never reach the
     # committed map even when relativizing a deeply nested source dir.
@@ -538,34 +455,6 @@ therock_cmake_subproject_declare(deep
 
     assert subtree_map == {"projects/clr/opencl/khronos": ["deep"]}
     assert all("\\" not in key for key in subtree_map)
-
-
-def test_source_dir_map_uses_forward_slashes(tmp_path: Path) -> None:
-    # Same forward-slash guarantee for the artifact source-dir map.
-    _write(
-        tmp_path / "CMakeLists.txt",
-        """
-set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
-therock_cmake_subproject_declare(clr
-  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl)
-therock_provide_artifact(clr-artifact
-  SUBPROJECT_DEPS clr)
-""",
-    )
-    tracked = {Path("CMakeLists.txt")}
-
-    source_dir_map = (
-        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked)
-        .analyze()
-        .build_source_dir_map()
-    )
-
-    assert source_dir_map == {"clr-artifact": ["projects/clr/opencl"]}
-    assert all(
-        "\\" not in subtree
-        for subtrees in source_dir_map.values()
-        for subtree in subtrees
-    )
 
 
 def test_unsupported_compiler_toolchain_raises(tmp_path: Path) -> None:
@@ -652,11 +541,6 @@ def _parse_argv_keywords(cmake_text: str, function_name: str) -> set[str]:
 @pytest.mark.parametrize(
     "cmake_relpath, function_name, expected",
     [
-        (
-            "cmake/therock_artifacts.cmake",
-            "therock_provide_artifact",
-            _PROVIDE_ARTIFACT_KEYWORDS,
-        ),
         (
             "cmake/therock_subproject.cmake",
             "therock_cmake_subproject_declare",

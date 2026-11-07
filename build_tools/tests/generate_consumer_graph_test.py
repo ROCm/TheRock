@@ -75,7 +75,6 @@ def test_read_committed_map_present_parses(tmp_path: Path) -> None:
 # fixed analysis result, keeping them off the real committed files.
 _FAKE_GRAPH = {"foo": {"consumers": ["bar"]}}
 _FAKE_SUBTREE = {"projects/foo": ["foo"]}
-_FAKE_SOURCE_DIR = {"art": ["projects/foo"]}
 
 
 class _FakeResult:
@@ -84,9 +83,6 @@ class _FakeResult:
 
     def build_subtree_map(self) -> dict:
         return _FAKE_SUBTREE
-
-    def build_source_dir_map(self) -> dict:
-        return _FAKE_SOURCE_DIR
 
 
 class _FakeAnalyzer:
@@ -103,7 +99,6 @@ def _redirect_into(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
     paths = {
         "CONSUMER_GRAPH_PATH": tmp_path / "test_tools" / "therock_consumer_graph.json",
         "SUBTREE_MAP_PATH": tmp_path / "test_tools" / "therock_subtree_map.json",
-        "SOURCE_DIR_MAP_PATH": tmp_path / "test_tools" / "therock_source_dir_map.json",
     }
     for attr, path in paths.items():
         monkeypatch.setattr(gcg, attr, path)
@@ -117,7 +112,7 @@ def test_check_passes_on_committed_tree(capsys: pytest.CaptureFixture[str]) -> N
     assert "match the committed files" in capsys.readouterr().out
 
 
-def test_write_mode_creates_all_three_files(
+def test_write_mode_creates_both_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     paths = _redirect_into(tmp_path, monkeypatch)
@@ -125,7 +120,6 @@ def test_write_mode_creates_all_three_files(
     assert gcg.main([]) == 0
     assert json.loads(paths["CONSUMER_GRAPH_PATH"].read_text()) == _FAKE_GRAPH
     assert json.loads(paths["SUBTREE_MAP_PATH"].read_text()) == _FAKE_SUBTREE
-    assert json.loads(paths["SOURCE_DIR_MAP_PATH"].read_text()) == _FAKE_SOURCE_DIR
     assert "Wrote consumer graph" in capsys.readouterr().out
 
 
@@ -145,16 +139,14 @@ def test_check_returns_one_on_drift(
 def test_check_reports_drift_when_committed_map_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A missing committed subtree/source-dir map reads as full drift, not a
-    # FileNotFoundError crash. Write all three first so the graph round-trips and
-    # only the deleted maps register as drift.
+    # A missing committed subtree map reads as full drift, not a
+    # FileNotFoundError crash. Write both first so the graph round-trips and
+    # only the deleted map registers as drift.
     paths = _redirect_into(tmp_path, monkeypatch)
     assert gcg.main([]) == 0
     capsys.readouterr()
     paths["SUBTREE_MAP_PATH"].unlink()
-    paths["SOURCE_DIR_MAP_PATH"].unlink()
 
     assert gcg.main(["--check"]) == 1
     out = capsys.readouterr().out
     assert "subtree map differs from" in out
-    assert "source-dir map differs from" in out

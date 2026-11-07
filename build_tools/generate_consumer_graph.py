@@ -5,21 +5,13 @@
 """Generate the committed consumer-graph metadata from the super-project CMake.
 
 Statically parses the tracked CMake files (no configure, no submodules) and writes
-three committed files:
+two committed files:
 
 * ``test_tools/therock_consumer_graph.json`` — the reverse-dependency consumer graph.
 * ``test_tools/therock_subtree_map.json`` — each external source subtree mapped to the
   graph key(s) built from it.
-* ``test_tools/therock_source_dir_map.json`` — each artifact mapped to the source
-  subtree(s) its therock_provide_artifact() SUBPROJECT_DEPS build from. No code reads
-  this file yet; it is committed so its parser-derived artifact→subtree mapping can be
-  checked against the hand-curated BUILD_TOPOLOGY.toml source_paths, which only partly
-  overlap (see SourceDirMapVsBuildTopologyTest in build_topology_test.py). Its intended
-  consumer is BuildTopology.get_alias_to_artifact_map
-  (build_tools/_therock_utils/build_topology.py): repointing it onto this map retires
-  the derivable source_paths while keeping the non-derivable ones as hand overrides.
 
-This parser generates all three files. See cmake_consumer_graph.py for the full
+This parser generates both files. See cmake_consumer_graph.py for the full
 description and limitations.
 
 ``--check`` analyzes in memory and diffs the result against ALL committed files
@@ -45,7 +37,6 @@ CONSUMER_GRAPH_PATH = THEROCK_DIR / "test_tools" / "therock_consumer_graph.json"
 SUBTREE_MAP_PATH = THEROCK_DIR / "test_tools" / "therock_subtree_map.json"
 # Informational artifact→source-subtree map; committed and drift-gated but not yet
 # consumed by selection (see module docstring).
-SOURCE_DIR_MAP_PATH = THEROCK_DIR / "test_tools" / "therock_source_dir_map.json"
 
 
 def _write_json(path: Path, data: object) -> None:
@@ -97,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         "--check",
         action="store_true",
         help=(
-            "Diff the generated graph, subtree map, and source-dir map against the "
+            "Diff the generated graph and subtree map against the "
             "committed files without writing; exit non-zero on any difference. This "
             "is the drift gate."
         ),
@@ -106,7 +97,6 @@ def main(argv: list[str] | None = None) -> int:
     result = RepositoryAnalyzer(THEROCK_DIR).analyze()
     graph = result.build_consumer_graph()
     subtree_map = result.build_subtree_map()
-    source_dir_map = result.build_source_dir_map()
 
     if args.check:
         differs = False
@@ -136,31 +126,17 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(subtree_delta))
             differs = True
 
-        committed_source_dir = _read_committed_map(SOURCE_DIR_MAP_PATH)
-        source_dir_delta = _map_delta(source_dir_map, committed_source_dir, "artifact")
-        if source_dir_delta:
-            print(
-                "Generated source-dir map differs from "
-                f"{SOURCE_DIR_MAP_PATH.relative_to(THEROCK_DIR).as_posix()}:"
-            )
-            print("\n".join(source_dir_delta))
-            differs = True
-
         if differs:
             return 1
-        print(
-            "Generated consumer graph, subtree map, and source-dir map match the "
-            "committed files."
-        )
+        print("Generated consumer graph and subtree map match the committed files.")
         return 0
 
     _write_json(CONSUMER_GRAPH_PATH, graph)
     _write_json(SUBTREE_MAP_PATH, subtree_map)
-    _write_json(SOURCE_DIR_MAP_PATH, source_dir_map)
     print(
-        f"Wrote consumer graph ({len(graph)} subprojects), subtree map "
-        f"({len(subtree_map)} subtrees), and source-dir map ({len(source_dir_map)} "
-        f"artifacts) to {CONSUMER_GRAPH_PATH.parent.relative_to(THEROCK_DIR).as_posix()}/"
+        f"Wrote consumer graph ({len(graph)} subprojects) and subtree map "
+        f"({len(subtree_map)} subtrees) to "
+        f"{CONSUMER_GRAPH_PATH.parent.relative_to(THEROCK_DIR).as_posix()}/"
     )
     return 0
 

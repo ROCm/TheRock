@@ -106,9 +106,9 @@ Test selection is split across two files:
 1. **Generated artifacts.** A static parser
    (`build_tools/_therock_utils/cmake_consumer_graph.py`, driven by
    `build_tools/generate_consumer_graph.py`) reads the super-project CMake and
-   writes the reverse-dependency `therock_consumer_graph.json`, the subtree map
-   (subtree path -> graph key), and the source-dir map. All are committed under
-   `test_tools/`; a CI drift gate fails on any difference (see CI integration).
+   writes the reverse-dependency `therock_consumer_graph.json` and the subtree map
+   (subtree path -> graph key). Both are committed under `test_tools/`; a CI
+   drift gate fails on any difference (see CI integration).
 1. **`test_policies.toml` — hand-maintained.** What the graph cannot derive: each
    component's gating level (how far to walk the graph) and any
    `test_include` / `test_exclude`.
@@ -127,7 +127,7 @@ graph — is handled by the drift check and validation below.
    both sides of every `if()`, so the graph is a conservative *may-depend*
    superset of any single configure's edges.
 1. **Commit the generated graph.** The parser writes
-   `therock_consumer_graph.json` (plus the subtree and source-dir maps),
+   `therock_consumer_graph.json` (plus the subtree map),
    **committed to the repo**, so the change-detection path reads a checked-in file
    with no configure on the hot path. A CI drift gate regenerates them and fails
    if the committed copies differ (see CI integration).
@@ -241,7 +241,7 @@ cross-platform in `unit_tests.yml`. It unions both sides of every `if()`, so the
 graph is a conservative *may-depend* superset: it may carry an edge no single
 configure activates, but never omits one a real configure produces.
 
-The generated `therock_consumer_graph.json` (plus the subtree and source-dir maps)
+The generated `therock_consumer_graph.json` (plus the subtree map)
 is **committed to the repo**, so the per-PR change-detection job reads the
 checked-in files directly — no `cmake`, no source fetch on the hot path. A **drift
 gate** keeps them honest: `generate_consumer_graph.py --check` (exercised by the
