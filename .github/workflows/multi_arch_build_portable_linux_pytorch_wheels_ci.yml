@@ -8,7 +8,8 @@
 #     via rocm_package_find_links_url) or a PEP 503 index (via
 #     rocm_package_index_url); provide whichever one applies.
 #   - Builds torch only (no torchvision, torchaudio, or triton)
-#   - No S3 upload, staging, testing, or promotion — just build + sanity check
+#   - Uploads split wheels to the CI artifacts bucket; does not publish to
+#     release buckets or promote packages
 #   - Uses sccache with S3-backed storage (configurable via cache_type input)
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, triton, etc.)
@@ -57,10 +58,11 @@ on:
           `rocm-sdk targets` fallback.
         type: string
         default: ""
-      kpack_split:
-        description: "'true' if this is a kpack-split flat build."
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion.
         type: string
-        default: "false"
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
@@ -106,11 +108,18 @@ on:
           - sccache
           - ccache
         default: sccache
+      exclude_implicit_targets:
+        description: >-
+          Semicolon-separated gfx targets to exclude when introduced only by
+          family expansion. Use 'auto' to resolve the policy from the PyTorch
+          ref.
+        type: string
+        default: "auto"
       build_runs_on:
         description: >-
           Build runner label. On workflow_dispatch, default to the self-hosted
           ROCm Linux pool so runs land on a runner with sccache/mirror access;
-          otherwise the runs-on expression falls back to 'ubuntu-24.04', which
+          otherwise the runs-on expression falls back to 'ubuntu-26.04', which
           cannot complete a full PyTorch build.
         type: string
         default: "aws-linux-scale-rocm-prod"
@@ -123,15 +132,15 @@ run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, 
 jobs:
   build_pytorch_wheels:
     name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     permissions:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce # 2026-10-30
     env:
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
       PYTHON_VERSION: ${{ inputs.python_version }}
@@ -235,14 +244,21 @@ jobs:
         if: ${{ inputs.amdgpu_families != '' }}
         id: expand
         run: |
+          # Excluded implicit targets remain available when requested directly.
+          exclude_implicit_targets="${EXCLUDE_IMPLICIT_TARGETS}"
+          if [[ "${exclude_implicit_targets}" == "auto" ]]; then
+            exclude_implicit_targets=$(python build_tools/github_actions/configure_pytorch_release_matrix.py \
+              --platform linux \
+              --resolve-excluded-implicit-targets "${PYTORCH_GIT_REF}")
+          fi
           targets=$(python build_tools/github_actions/expand_amdgpu_families.py \
-            --amdgpu-families "${AMDGPU_FAMILIES}")
+            --amdgpu-families "${AMDGPU_FAMILIES}" \
+            --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
 
-      # inputs.amdgpu_families is only populated by the multi-arch caller
-      # today. Legacy single-family CI (ci_linux.yml) leaves it empty and
-      # falls back to `rocm-sdk targets` inside build_prod_wheels.py.
+      # Callers without amdgpu_families fall back to `rocm-sdk targets`
+      # inside build_prod_wheels.py.
       # TODO(#4687): Make --pytorch-rocm-arch required here once every
       # caller plumbs the value through and the fallback in
       # build_prod_wheels.py::get_rocm_sdk_targets is removed.
@@ -303,15 +319,13 @@ jobs:
       # smaller host wheel plus one device wheel per gfx target. Source-install
       # from the TheRock checkout — kpack has no published wheel today.
       # The outer actions/checkout skips submodules for speed, so pull in
-      # rocm-systems only when we actually need it.
+      # rocm-systems here for the splitter.
       - name: Init rocm-systems submodule
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git submodule update --init --depth=1 rocm-systems
 
       - name: Install kpack tooling
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           pip install \
             -e rocm-systems/python/rocm-bootstrap \
@@ -321,7 +335,6 @@ jobs:
       # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
       # document the standalone developer workflow.
       - name: Split PyTorch fat wheel
-        if: ${{ inputs.kpack_split == 'true' }}
         run: |
           # The splitter writes the host wheel under the same filename as the
           # input, so relocate the fat wheel out of PACKAGE_DIST_DIR first.
@@ -350,13 +363,10 @@ jobs:
         with:
           release_type: ci
 
-      # Appends to the same therock-ci-artifacts/<run>-linux/python/ prefix
-      # that the ROCm python job already populated — one find-links URL
-      # covers the whole SDK + PyTorch stack.
+      # When ROCm was built in this run, its wheels share this prefix;
+      # otherwise only the new PyTorch wheels are uploaded.
       - name: Upload PyTorch wheels
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGE_DIST_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            --multiarch
+            --run-id="${{ github.run_id }}"

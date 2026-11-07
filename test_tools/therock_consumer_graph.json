@@ -47,6 +47,7 @@
   "amdsmi": {
     "consumers": [
       "hipblaslt",
+      "hipccl_tests",
       "hipcub",
       "hipsparselt",
       "libhipcxx",
@@ -83,6 +84,8 @@
       "hipblas-common",
       "hipblaslt",
       "hipblasltprovider",
+      "hipccl",
+      "hipccl_tests",
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
@@ -97,6 +100,7 @@
       "hipsparselt",
       "hiptensor",
       "hipthreads",
+      "hrr",
       "libhipcxx",
       "miopen",
       "miopenprovider",
@@ -162,6 +166,17 @@
       "hip-clr"
     ]
   },
+  "hipccl": {
+    "consumers": [
+      "hipccl_tests",
+      "rocalution",
+      "rocsolver",
+      "rocsparse"
+    ]
+  },
+  "hipccl_tests": {
+    "consumers": []
+  },
   "hipcub": {
     "consumers": []
   },
@@ -226,6 +241,9 @@
     "consumers": []
   },
   "hipthreads": {
+    "consumers": []
+  },
+  "hrr": {
     "consumers": []
   },
   "hrx": {
@@ -351,6 +369,8 @@
       "hipblas-common",
       "hipblaslt",
       "hipcc",
+      "hipccl",
+      "hipccl_tests",
       "hipcub",
       "hipfft",
       "hipfile",
@@ -501,6 +521,7 @@
   "rocrand": {
     "consumers": [
       "composable_kernel",
+      "hipccl_tests",
       "hipdnn_integration_tests",
       "hiprand",
       "miopen",
@@ -666,6 +687,7 @@
       "hipblas",
       "hipblaslt",
       "hipblasltprovider",
+      "hipccl_tests",
       "hipcub",
       "hipdnn",
       "hipdnn_integration_tests",
@@ -695,7 +717,8 @@
       "rocsolver",
       "rocsparse",
       "rocthrust",
-      "rocwmma"
+      "rocwmma",
+      "rpp"
     ]
   },
   "therock-grpc": {
@@ -853,6 +876,8 @@
   },
   "therock-sqlite3": {
     "consumers": [
+      "hipccl",
+      "hipccl_tests",
       "miopen",
       "profiler-hub",
       "rocprofiler-compute",

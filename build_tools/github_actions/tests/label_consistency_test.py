@@ -79,7 +79,14 @@ class SelectionReachability(unittest.TestCase):
         selectable = drtd._to_ci_test_selectors(
             drtd.get_subprojects_to_test(sorted(graph))
         )
-        unreachable = sorted(set(ftc.test_matrix) - selectable - self._ALWAYS_SCHEDULED)
+        # Split jobs (e.g. multi-GPU variants) declare a base_project and are
+        # scheduled whenever that base is selected.
+        unreachable = sorted(
+            key
+            for key, job in ftc.test_matrix.items()
+            if job.get("base_project", key) not in selectable
+            and key not in self._ALWAYS_SCHEDULED
+        )
         self.assertEqual(
             unreachable,
             [],

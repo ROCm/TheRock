@@ -150,7 +150,7 @@ run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_versi
 
 jobs:
   prepare_matrix:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
@@ -163,7 +163,7 @@ jobs:
       - name: "Quartz - started - test PyTorch wheels (full suite)"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: test_pytorch_wheels_full.yml
@@ -201,7 +201,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare_matrix.outputs.matrix) }}
     container:
       # Linux uses the digest-pinned image below; other platforms run without a container.
-      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }} # zizmor: ignore[unpinned-images]
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39' || null }} # zizmor: ignore[unpinned-images]
       # SYS_PTRACE is required by PyTorch's test infra which uses gdb to
       # collect stack traces on segfaults and hangs (torch/testing/_internal).
       options: --shm-size=10g
@@ -250,9 +250,10 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
+          allow-prereleases: true
 
       # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
       # select GPU-specific device packages. Expand the family to get the
@@ -426,7 +427,7 @@ jobs:
     if: always()
     needs: test_wheels
     name: Test Summary
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -466,12 +467,12 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [prepare_matrix, test_wheels, test_summary]
     name: "Quartz - completed - test PyTorch wheels (full suite)"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - name: "Quartz - completed - test PyTorch wheels (full suite)"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: test_pytorch_wheels_full.yml

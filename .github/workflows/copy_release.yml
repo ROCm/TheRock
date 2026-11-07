@@ -17,6 +17,7 @@ on:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
         default: "3.12"
       include_torch:
         description: Copy 'torch' packages in addition to 'rocm' packages?
@@ -43,7 +44,7 @@ run-name: >-
 jobs:
   copy_python_packages:
     name: Copy nightly -> dev | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       id-token: write

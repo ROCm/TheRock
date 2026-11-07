@@ -51,6 +51,10 @@
   "projects/hipblaslt": [
     "hipblaslt"
   ],
+  "projects/hipccl/hipccl3": [
+    "hipccl",
+    "hipccl_tests"
+  ],
   "projects/hipcub": [
     "hipcub"
   ],
@@ -83,6 +87,9 @@
   ],
   "projects/hipthreads": [
     "hipthreads"
+  ],
+  "projects/hrr": [
+    "hrr"
   ],
   "projects/miopen": [
     "miopen"

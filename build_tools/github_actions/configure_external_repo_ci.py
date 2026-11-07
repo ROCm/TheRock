@@ -105,6 +105,13 @@ FULL_TEST_TRIGGER_PATTERNS = [
 # on an unmapped shared/*, dnn-providers/*, or emulation/* path, so keep this list
 # in lock-step with TheRock when adding directories.
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    # hipCCL is a monorepo-native project (projects/hipccl/hipccl3, the unified
+    # rocPRIM+hipCUB+rocThrust superbuild); it has no upstream repo to subtree-
+    # sync, so it is absent from rocm-libraries repos-config.json. Without this,
+    # edits under projects/hipccl are unclassified and fall back to the full
+    # test suite. Resolves to the hipccl graph node -> prim test jobs via
+    # _EXTERNAL_SUBTREE_ALIASES in determine_rocm_test_dependencies.py.
+    "projects/hipccl",
     "dnn-providers/cmake",
     "shared/amdgpu-windows-interop",
     "shared/kpack",
