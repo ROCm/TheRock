@@ -62,6 +62,7 @@ NAME_MAPPING = {
 # Top-level directories for ROCm components
 ROCM_COMPONENT_DIRS = {
     "base",
+    "bindings",
     "compiler",
     "core",
     "comm-libs",

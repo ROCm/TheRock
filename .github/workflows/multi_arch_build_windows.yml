@@ -9,7 +9,7 @@
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
 # 4. debug-tools (generic) - amd-dbgapi (rocgdb eventually).
 #
-# Stages disabled on Windows: comm-libs, dctools-core, profiler-apps
+# Stages disabled on Windows: comm-libs, dctools-core, profiler-apps, fortran-bindings
 # (see BUILD_TOPOLOGY.toml disable_platforms)
 #
 # media-libs runs on Windows and builds sysdeps-amd-mesa (VA-API) and rocdecode

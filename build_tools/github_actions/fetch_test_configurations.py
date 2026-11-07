@@ -198,6 +198,23 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+# Fortran binding test jobs, mapped to the binding family whose artifacts they
+# test (see install_rocm_from_artifacts.py --fortran-bindings).
+FORTRAN_BINDING_TEST_JOBS = {
+    "runtime-fortran": "runtime",
+    **{
+        f"{lib}-fortran": family
+        for family, libs in {
+            "blas": ("rocblas", "hipblas"),
+            "solver": ("rocsolver", "hipsolver"),
+            "sparse": ("rocsparse", "hipsparse"),
+            "fft": ("rocfft", "hipfft"),
+            "rand": ("rocrand", "hiprand"),
+        }.items()
+        for lib in libs
+    },
+}
+
 
 # Runner assignment for test components
 # =====================================
@@ -692,6 +709,28 @@ test_matrix = {
             "linux": 1,
             "windows": 1,
         },
+    },
+    # One job per binding subproject, named after it for consumer-based test
+    # selection, fetching only its binding family.
+    **{
+        job: {
+            "job_name": job,
+            "fetch_artifact_args": f"--fortran-bindings={family} --tests",
+            "timeout_minutes": 15,
+            "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
+            "platform": ["linux"],
+            "total_shards_dict": {
+                "linux": 1,
+            },
+            # The bindings are not built in sanitizer builds.
+            "skip_build_variant": [
+                "asan",
+                "host-asan",
+                "asan-debug",
+                "host-asan-debug",
+            ],
+        }
+        for job, family in FORTRAN_BINDING_TEST_JOBS.items()
     },
     "hiprand": {
         "job_name": "hiprand",

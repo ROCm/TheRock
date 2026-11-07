@@ -1,0 +1,25 @@
+[components.dev."bindings/fortran/rocsolver-fortran/stage"]
+include = [
+  "share/rocsolver/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hipsolver-fortran/stage"]
+include = [
+  "share/hipsolver/fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/rocsolver-fortran/stage"]
+include = [
+  "bin/rocsolver_fortran_test_*",
+  "bin/rocsolver-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hipsolver-fortran/stage"]
+include = [
+  "bin/hipsolver_fortran_test_*",
+  "bin/hipsolver-fortran/**",
+]
+optional = true

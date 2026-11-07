@@ -93,6 +93,8 @@ Sub-project directories:
   [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)
   and [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg).
 - [`profiler/`](/profiler/) : Profiler sub-projects
+- [`bindings/fortran/`](/bindings/fortran/) : Fortran bindings for the ROCm
+  libraries, built after the libraries they wrap.
 
 Note that there is nothing in the build system which ensures naming consistency,
 however, we try to name leaf directories after their global sub-project
