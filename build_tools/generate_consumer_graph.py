@@ -2,17 +2,22 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate test_tools/therock_consumer_graph.json from the super-project CMake.
+"""Generate the committed consumer-graph metadata from the super-project CMake.
 
 Statically parses the tracked CMake files (no configure, no submodules) and writes
-the reverse-dependency consumer graph. See cmake_consumer_graph.py for the full
+two committed files:
+
+* ``test_tools/therock_consumer_graph.json`` — the reverse-dependency consumer graph.
+* ``test_tools/therock_subtree_map.json`` — each external source subtree mapped to the
+  graph key(s) built from it.
+
+This parser generates both files. See cmake_consumer_graph.py for the full
 description and limitations.
 
-``--check`` analyzes in memory and diffs the result against the committed graph
-without writing, exiting non-zero on any difference. While the committed graph is
-still emitted by CMake, this parser is a conservative *superset* of it, so
-``--check`` reports that expected superset delta; it is intentionally not wired
-into any CI gate.
+``--check`` analyzes in memory and diffs the result against ALL committed files
+without writing, exiting non-zero on any difference. It is the drift gate: the
+``Test build_tools`` pytest step enforces the same invariant, so a stale committed
+file fails CI.
 """
 
 import argparse
@@ -29,6 +34,9 @@ from _therock_utils.cmake_consumer_graph import (
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 CONSUMER_GRAPH_PATH = THEROCK_DIR / "test_tools" / "therock_consumer_graph.json"
+SUBTREE_MAP_PATH = THEROCK_DIR / "test_tools" / "therock_subtree_map.json"
+# Informational artifact→source-subtree map; committed and drift-gated but not yet
+# consumed by selection (see module docstring).
 
 
 def _write_json(path: Path, data: object) -> None:
@@ -36,7 +44,7 @@ def _write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _print_delta(comparison) -> None:
+def _print_graph_delta(comparison) -> None:
     """Print a concise summary of how the generated graph differs from committed."""
     for label, items in (
         ("generated-only nodes", comparison.generated_only_nodes),
@@ -49,27 +57,52 @@ def _print_delta(comparison) -> None:
             print(f"    {item}")
 
 
+def _map_delta(generated: dict, committed: dict, noun: str) -> list[str]:
+    """Return human-readable difference lines between two ``str -> list`` maps."""
+    lines: list[str] = []
+    generated_keys, committed_keys = set(generated), set(committed)
+    for key in sorted(generated_keys - committed_keys):
+        lines.append(f"    generated-only {noun}: {key} -> {generated[key]}")
+    for key in sorted(committed_keys - generated_keys):
+        lines.append(f"    committed-only {noun}: {key} -> {committed[key]}")
+    for key in sorted(generated_keys & committed_keys):
+        if generated[key] != committed[key]:
+            lines.append(
+                f"    {noun} {key}: generated {generated[key]} != committed {committed[key]}"
+            )
+    return lines
+
+
+def _read_committed_map(path: Path) -> dict:
+    """Committed JSON map, or empty if missing so --check reports full drift."""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate test_tools/therock_consumer_graph.json from the super-project CMake."
+        description="Generate the committed consumer-graph metadata from the super-project CMake."
     )
     parser.add_argument(
         "--check",
         action="store_true",
         help=(
-            "Diff the generated graph against the committed one without writing; "
-            "exit non-zero on any difference. The parser is currently a superset "
-            "of the committed graph, so this reports that expected delta and is not "
-            "wired into a CI gate."
+            "Diff the generated graph and subtree map against the "
+            "committed files without writing; exit non-zero on any difference. This "
+            "is the drift gate."
         ),
     )
     args = parser.parse_args(argv)
     result = RepositoryAnalyzer(THEROCK_DIR).analyze()
     graph = result.build_consumer_graph()
+    subtree_map = result.build_subtree_map()
 
     if args.check:
-        committed = load_consumer_graph(CONSUMER_GRAPH_PATH)
-        comparison = compare_graphs(graph, committed)
+        differs = False
+
+        committed_graph = load_consumer_graph(CONSUMER_GRAPH_PATH)
+        comparison = compare_graphs(graph, committed_graph)
         if (
             comparison.generated_only_nodes
             or comparison.reference_only_nodes
@@ -80,15 +113,30 @@ def main(argv: list[str] | None = None) -> int:
                 "Generated consumer graph differs from "
                 f"{CONSUMER_GRAPH_PATH.relative_to(THEROCK_DIR).as_posix()}:"
             )
-            _print_delta(comparison)
+            _print_graph_delta(comparison)
+            differs = True
+
+        committed_subtree = _read_committed_map(SUBTREE_MAP_PATH)
+        subtree_delta = _map_delta(subtree_map, committed_subtree, "subtree")
+        if subtree_delta:
+            print(
+                "Generated subtree map differs from "
+                f"{SUBTREE_MAP_PATH.relative_to(THEROCK_DIR).as_posix()}:"
+            )
+            print("\n".join(subtree_delta))
+            differs = True
+
+        if differs:
             return 1
-        print("Generated consumer graph matches the committed graph.")
+        print("Generated consumer graph and subtree map match the committed files.")
         return 0
 
     _write_json(CONSUMER_GRAPH_PATH, graph)
+    _write_json(SUBTREE_MAP_PATH, subtree_map)
     print(
-        f"Wrote consumer graph for {len(graph)} subprojects to "
-        f"{CONSUMER_GRAPH_PATH.relative_to(THEROCK_DIR).as_posix()}"
+        f"Wrote consumer graph ({len(graph)} subprojects) and subtree map "
+        f"({len(subtree_map)} subtrees) to "
+        f"{CONSUMER_GRAPH_PATH.parent.relative_to(THEROCK_DIR).as_posix()}/"
     )
     return 0
 
