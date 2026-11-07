@@ -25,7 +25,7 @@ Those few facts live in a `metadata/` directory in each binding.
 
 Each library ships:
 
-- one module, named after the library (`use rocblas`, `use hip`)
+- one module, named after the library (`use rocblas`, `use hip`); hipFFT adds `hipfftxt` for its Xt and Mp API, and `hipfftw` for its FFTW interface
 - a static archive, `lib<lib>_fortran.a`
 - its `.mod` files under `include/fortran/<compiler>/`
 - the generated source under `share/<lib>/fortran/`
@@ -422,8 +422,15 @@ Like NVIDIA (`use cublas`, not `nvfort_cublas`), it drops the prefix, and it put
 The unprefixed name is also the name of some libraries' own modules (`rocblas_module.f90`, `rocsparse.f90`, ...): while those are deprecated, a program uses one or the other, and once they are removed the generated module is the only `rocblas`.
 The HIP runtime module becomes `hip`, so a program writes `use hip` where it wrote `use hipfort`.
 The cross-cutting modules `hipfort_check` and `hipfort_auxiliary` disappear, and their contents come from the library module the program already uses: `hipCheck` from `hip`, `rocblasCheck` from `rocblas`.
+hipFFT is the one library split in two modules, `hipfft` and `hipfftxt`, both in `libhipfft_fortran.a` and the `hipfft-fortran` package.
+Every `hipfftXt*` and `hipfftMp*` routine is in `hipfftxt`, including `hipfftXtSetWorkArea` although `hipfft.h` declares it, and every other `hipfft*` routine is in `hipfft`.
+`hipfftxt` uses and re-exports `hipfft`, so `use hipfftxt` alone gives the whole API.
+hipFFTW, a separate C library, keeps its own `hipfftw` module and archive.
 Handles are `type(c_ptr)` (see [Ambiguous or unmappable C](#ambiguous-or-unmappable-c), in the [generator appendix](#appendix-the-generator-rocm-fortran-generator)).
 A library that needs another library's types `use`s that library's module: rocSOLVER, for instance, uses rocBLAS.
+
+The `hip*` module names follow NVIDIA's [CUDA Fortran interface modules](https://docs.nvidia.com/hpc-sdk/compilers/fortran-cuda-interfaces/), with `hip` for `cu`: `cublas` becomes `hipblas`, `cufft` and `cufftXt` become `hipfft` and `hipfftxt` (Fortran names are case-insensitive, so `use hipfftXt` works), `cusparse` becomes `hipsparse`, `cusolverDn` becomes `hipsolver`, `curand` becomes `hiprand`, and `cudafor` becomes `hip`.
+Routine and constant names map the same way (`cublasSgemm` to `hipblasSgemm`, `CUBLAS_OP_N` to `HIPBLAS_OP_N`), so porting a CUDA Fortran library call is mostly a rename, apart from handle declarations and CUDA Fortran's language extensions, which have no HIP counterpart.
 
 The generator emits the packaged, unprefixed modules that are committed in the monorepos' `bindings/fortran/`, while `ROCm/hipfort` keeps its split, prefixed layout until 11.0.
 Both are generated, so keeping the two costs little.
@@ -525,6 +532,8 @@ The first edit is to the module names: the `hipfort_` prefix is dropped, and eac
 | `use hipfort_<lib>` (+ `_enums`, `_types`)¹        | `use <lib>`   |
 
 ¹ `_types` exists only for rocRAND, hipFFT and hipFFTW.
+
+hipFFT is the exception to one module per library: hipfort gets the same split before its Xt API ships, and `hipfort_hipfftxt` (+ `_enums`, `_types`) becomes `use hipfftxt`.
 
 Other modules fold in the same way.
 For users of a library's own module, `use rocsparse_enums`, `use hipsparse_enums`, `use rocblas_enums`, `use hipblas_enums` and `use hipsolver_enums` become `use <lib>`.
@@ -657,7 +666,7 @@ The rollout has four stages, each with a clear exit.
 
 The rollout is done when:
 
-- `rocm-systems`' `bindings/fortran/` (`hip`, `roctx`) and the ten `bindings/fortran/<lib>/` of `rocm-libraries` (eleven modules) carry generated source, tests and, where needed, curated metadata
+- `rocm-systems`' `bindings/fortran/` (`hip`, `roctx`) and the ten `bindings/fortran/<lib>/` of `rocm-libraries` (twelve modules) carry generated source, tests and, where needed, curated metadata
 - a header change that changes a binding is followed by the bot's pull request within one run, and that pull request is merged within five business days
 - every release branch is cut with no binding drift, and every release tag passes the regeneration check
 - `find_package(<lib>-fortran)` exposes `<ns>::<lib>_fortran` when the binding is built, where `<ns>` is the C library's namespace
@@ -793,9 +802,9 @@ Using the modules does not.
    bindings/fortran/  (committed, packaged track: one module per library, no prefix)
      rocm-systems bindings/fortran/:  hip.F90, roctx.F90
      rocm-libraries bindings/fortran/<lib>/:  rocblas.F90, hipblas.F90, rocsparse.F90,
-       hipsparse.F90, rocfft.F90, hipfft.F90 + hipfftw.F90 (both in bindings/fortran/hipfft/), rocsolver.F90,
+       hipsparse.F90, rocfft.F90, hipfft.F90 + hipfftxt.F90 + hipfftw.F90 (in bindings/fortran/hipfft/), rocsolver.F90,
        hipsolver.F90, rocrand.F90, hiprand.F90
-            →  HIP runtime + ROCTx + 10 libraries (11 library modules)
+            →  HIP runtime + ROCTx + 10 libraries (12 library modules)
 ```
 
 For each library, the engine parses the headers as C and emits the interface blocks, the enum and `#define` constants, the derived types and the check routine.
@@ -999,7 +1008,7 @@ rocm-libraries/  bindings/fortran/rocblas/   a standalone project, built against
 ```
 
 HIP and ROCTx share `rocm-systems`' `bindings/fortran/`, outside `projects/hip/` and `projects/rocprofiler-sdk/`, like every binding outside its library's project.
-hipFFT's binding directory holds two bindings and installs two packages from one build, `hipfft-fortran` (`hip::hipfft_fortran`) and `hipfftw-fortran` (`hip::hipfftw_fortran`), each with its own `HIPFFT_*` / `HIPFFTW_*` overrides.
+hipFFT's binding directory holds two bindings and installs two packages from one build, `hipfft-fortran` (`hip::hipfft_fortran`, modules `hipfft` and `hipfftxt`) and `hipfftw-fortran` (`hip::hipfftw_fortran`, module `hipfftw`), each with its own `HIPFFT_*` / `HIPFFTW_*` overrides.
 Each binding is owned in the monorepo's root `.github/CODEOWNERS` by the library's review team and the Fortran-bindings team, `@ROCm/rocm-fortran-maintainers`.
 Each is also declared in the monorepo's `.github/repos-config.json`, under the `bindings/fortran` category, so that the monorepo's CI detects changes to it.
 A team needs write access to a repository for its CODEOWNERS entry to take effect, so the Fortran-bindings team needs it in both monorepos.
@@ -1030,7 +1039,7 @@ It ignores the compiler version, and `<LIB>_FORTRAN_COMPILER_DIR` (for example `
 The array tiers produce `.mod` files of the same name that are not interchangeable: the precompiled amdflang set is the default tier, `assumed-shape`, and a site that wants another tier builds its own set under its own prefix or `<LIB>_FORTRAN_COMPILER_DIR`.
 `find_package(rocblas-fortran)` resolves the subdirectory matching the consuming project's compiler, so CMake users never write these paths, and a non-CMake build passes them as `-I` and `-L`.
 
-The generated `.F90` installs too, under `share/<lib>/fortran/` (`share/hipfft/fortran/` holds both `hipfft.F90` and `hipfftw.F90`).
+The generated `.F90` installs too, under `share/<lib>/fortran/` (`share/hipfft/fortran/` holds `hipfft.F90`, `hipfftxt.F90` and `hipfftw.F90`).
 A user of another compiler builds the binding from it without cloning a monorepo, and installed source always matches the installed library.
 They compile it with `-DUSE_ASSUMED_SHAPE=1` for the `assumed-shape` tier, or `-DUSE_ASSUMED_RANK=1` for the `assumed-rank` tier.
 Without a macro, the source yields the `none` tier.
