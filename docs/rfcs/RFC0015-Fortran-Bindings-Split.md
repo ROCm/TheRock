@@ -686,7 +686,7 @@ All these pull requests share one shape:
 
 - the options of [Building the bindings](#building-the-bindings)
 - a static `<lib>_fortran` target in the C library's namespace (`roc::` for ROCTx)
-- the `<lib>-fortran` package, installed beside the C one with a forwarder config so that `find_package(<lib>-fortran)` resolves
+- the `<lib>-fortran` package, installed in its own `<libdir>/cmake/<lib>-fortran/` so that `find_package(<lib>-fortran)` resolves
 - the install tree of [Layout after the split](#layout-after-the-split)
 - the test convention of [Tests and documentation](#tests-and-documentation)
 
@@ -954,11 +954,12 @@ Its default is `ON`.
 
 For discovery, the Fortran target ships as its own per-library config package, `<lib>-fortran`.
 A consumer writes `find_package(rocblas-fortran)`, which `find_dependency()`s the C library.
-The config file sits beside the C one (`<libdir>/cmake/rocblas/rocblas-fortran-config.cmake`), and a forwarder in `<libdir>/cmake/rocblas-fortran/` lets `find_package` resolve the hyphenated name.
-HIP and ROCTx install theirs directly in `<libdir>/cmake/<lib>-fortran/`.
+Every binding installs it in its own directory, `<libdir>/cmake/<lib>-fortran/` (`<libdir>/cmake/rocblas-fortran/rocblas-fortran-config.cmake`), where `find_package` looks by default.
+Nothing goes into the C library's `<libdir>/cmake/<lib>/`: that directory belongs to the C package, and rocRAND and hipRAND already install a `<lib>-fortran-config.cmake` of their own there for their hand-written wrappers.
+A separate directory also keeps the C and Fortran distro packages from shipping the same file.
 
-Keeping the config beside the C one allows a later step.
-Once rocm-cmake grows an `include(<lib>-fortran-config.cmake OPTIONAL)` hook in the generated C config, `find_package(rocblas)` alone will expose `roc::rocblas_fortran` when the binding is installed, and ignore it otherwise.
+A later step stays possible.
+Once rocm-cmake grows a hook in the generated C config that optionally includes `../<lib>-fortran/<lib>-fortran-config.cmake`, `find_package(rocblas)` alone will expose `roc::rocblas_fortran` when the binding is installed, and ignore it otherwise.
 Until then the `-fortran` package is the entry point, and consumer code written against it keeps working afterwards.
 The same is possible for HIP and ROCTx, whose C configs come from clr and rocprofiler-sdk rather than from rocm-cmake, but it touches two projects the bindings otherwise stay out of.
 It is a possibility to propose to their owners later, not part of this RFC, and until then `find_package(hip-fortran)` and `find_package(roctx-fortran)` are the entry points.
@@ -1022,8 +1023,7 @@ A `.mod` only works with the compiler that wrote it, so artifacts install under 
    <datadir>/rocblas/fortran/          rocblas.F90          ← the generated source
    <datadir>/hip/fortran/              hip.F90
    <datadir>/roctx/fortran/            roctx.F90
-   <libdir>/cmake/rocblas/             rocblas-fortran-config.cmake  → roc::rocblas_fortran
-   <libdir>/cmake/rocblas-fortran/     forwarder, so find_package(rocblas-fortran) resolves
+   <libdir>/cmake/rocblas-fortran/     rocblas-fortran-config.cmake  → roc::rocblas_fortran
    <libdir>/cmake/hip-fortran/         hip-fortran-config.cmake      → hip::hip_fortran
    <libdir>/cmake/roctx-fortran/       roctx-fortran-config.cmake    → roc::roctx_fortran
 ```
