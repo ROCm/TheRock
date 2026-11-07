@@ -1,0 +1,142 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Ownership outside the source roots in each repository's repos-config.json.
+# Patterns use fnmatch syntax. Multiple project owners are combined;
+# full_test_paths always retain broad testing. Unmatched files keep the fallback.
+
+["rocm/rocm-libraries"]
+full_test_paths = [
+    # Repository-wide build, dependency, formatting and coverage configuration.
+    ".clang-format",
+    ".cmake-format.py",
+    ".dvc/*",
+    ".dvcignore",
+    ".gitignore",
+    ".gitmodules",
+    ".pre-commit-config.yaml",
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    "cmake/*",
+    "codecov.yml",
+    ".github/dependabot.yml",
+    ".github/docs-config.json",
+    ".github/labeler.yml",
+    ".github/requirements.txt",
+    ".github/skip-ci-config.toml",
+    ".github/actions/*",
+    # Shared automation and its fixtures. Keep new scripts unclassified until
+    # their component ownership or shared role has been established.
+    ".github/scripts/apply-labels.py",
+    ".github/scripts/collect-labels.py",
+    ".github/scripts/component_ci.py",
+    ".github/scripts/github_cli_client.py",
+    ".github/scripts/import_subrepo_prs.py",
+    ".github/scripts/merge-submodules.py",
+    ".github/scripts/notify_teams.py",
+    ".github/scripts/pr_base_freshness.py",
+    ".github/scripts/pr_category_label.py",
+    ".github/scripts/pr_merge_sync_patches.py",
+    ".github/scripts/pre_commit_helper.py",
+    ".github/scripts/tests/*",
+    "test/team_notification_fixtures/*",
+    "tools/libraries_pr_bot/*",
+    "skills/therock-local-build/scripts/*",
+    "skills/worktree-venv/scripts/*",
+    # Workflows that manage the repository or shared checks.
+    ".github/workflows/auto-retry-failed.yml",
+    ".github/workflows/clang-tidy.yml",
+    ".github/workflows/close-stale-prs.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/component-ci.yml",
+    ".github/workflows/docs-pr-preview-cleanup.yml",
+    ".github/workflows/docs-pr-preview.yml",
+    ".github/workflows/initial-setup.yml",
+    ".github/workflows/issue-import.yml",
+    ".github/workflows/labeler.yml",
+    ".github/workflows/libraries-pr-bot.yml",
+    ".github/workflows/merge-submodules.yml",
+    ".github/workflows/multiple_pr_import.yml",
+    ".github/workflows/pr-base-freshness.yml",
+    ".github/workflows/pr-import.yml",
+    ".github/workflows/pr-merge-sync-patches-manual.yml",
+    ".github/workflows/pr-merge-sync-patches.yml",
+    ".github/workflows/pr-org-label.yml",
+    ".github/workflows/pre-commit.yml",
+    ".github/workflows/shared-ctest-ci.yml",
+    ".github/workflows/update-docs.yml",
+    ".github/workflows/update-release-staging-subtree.yml",
+    ".github/workflows/update-subtrees.yml",
+    # These files affect test execution across components.
+    "test/therock/test_runner.py",
+    "test/therock/lsan.supp",
+    # The hipDNN install suite is not selected by the hipDNN consumer-graph
+    # node. Keep its drivers and superbuild coverage broad until that suite
+    # can be selected through component ownership.
+    "test/therock/test_hipdnn_install.py",
+    "test/therock/hipdnn_install_tests/*",
+    ".github/workflows/hipdnn-superbuild-ci.yml",
+    ".github/requirements-hipdnn-superbuild-ci.txt",
+    ".github/scripts/check_wheel_freshness.py",
+    # HostNumerics has no consumer-graph node yet. Preserve broad coverage
+    # until its integrations can be represented by project ownership.
+    "shared/hostnumerics/*",
+    ".github/workflows/hostnumerics-ci.yml",
+]
+
+["rocm/rocm-libraries".project_paths]
+"projects/hipblaslt" = [
+    ".github/workflows/hipblaslt-asan-ci.yml",
+    ".github/workflows/hipblaslt-drop-build.yml",
+    ".github/workflows/component-ci-geko.yml",
+    "test/therock/test_hipblaslt.py",
+]
+"projects/hipblaslt/tensilelite" = [
+    ".github/scripts/blas_nightly_report.py",
+    ".github/scripts/run_rocjitsu_hipblaslt_gemm_race_checks.sh",
+    ".github/scripts/run_rocjitsu_hipblaslt_race_check.sh",
+    ".github/workflows/component-ci-hipblaslt-rocjitsu-scripts.yml",
+    ".github/workflows/component-ci-logic-corpus.yml",
+    ".github/workflows/component-ci-rocisa.yml",
+    ".github/workflows/component-ci-tensilelite-coverage.yml",
+    ".github/workflows/gfx1250_hipblaslt_tensilelite_test.yml",
+    ".github/workflows/hipblaslt-local-kernels-ci.yml",
+    ".github/workflows/therock-rocjitsu-race-check-linux.yml",
+]
+"shared/stinkytofu" = [
+    ".github/workflows/component-ci-stinkytofu.yml",
+    ".github/workflows/component-ci-rocisa.yml",
+]
+"projects/miopen" = [
+    ".github/workflows/component-ci-miopen.yml",
+    ".github/workflows/miopen-wrapper-flag-on.yml",
+    "test/therock/test_miopen.py",
+]
+"projects/hipdnn" = [
+    "test/therock/test_hipdnn.py",
+    "test/therock/test_hipdnn_cudnn_samples.py",
+    "test/therock/test_hipdnn_samples.py",
+]
+"dnn-providers/hipblaslt-provider" = [
+    "test/therock/test_hipblasltprovider.py",
+]
+"dnn-providers/hip-kernel-provider" = [
+    "test/therock/test_hipkernelprovider.py",
+]
+"dnn-providers/miopen-provider" = [
+    "test/therock/test_miopenprovider.py",
+]
+"projects/hipcub" = ["test/therock/test_hipcub.py"]
+"projects/hipfft" = ["test/therock/test_hipfft.py"]
+"projects/hiprand" = ["test/therock/test_hiprand.py"]
+"projects/hipsolver" = ["test/therock/test_hipsolver.py"]
+"projects/hipsparse" = ["test/therock/test_hipsparse.py"]
+"projects/hipsparselt" = ["test/therock/test_hipsparselt.py"]
+"projects/rocfft" = ["test/therock/test_rocfft.py"]
+"projects/rocprim" = ["test/therock/test_rocprim.py"]
+"projects/rocrand" = ["test/therock/test_rocrand.py"]
+"projects/rocsolver" = ["test/therock/test_rocsolver.py"]
+"projects/rocsparse" = ["test/therock/test_rocsparse.py"]
+"projects/rocthrust" = ["test/therock/test_rocthrust.py"]
+"projects/rocwmma" = ["test/therock/test_rocwmma.py"]
+"shared/rocroller" = ["test/therock/test_rocroller.py"]

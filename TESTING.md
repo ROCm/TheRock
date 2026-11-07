@@ -282,6 +282,10 @@ We test our GitHub Actions workflows using a combination of these practices:
 - Add unit tests like
   [`build_tools/github_actions/tests/workflow_dispatch_inputs_test.py`](/build_tools/github_actions/tests/workflow_dispatch_inputs_test.py)
   where actionlint falls short.
+- External-repository file ownership is covered by
+  [`configure_external_repo_workflow_test.py`](/build_tools/github_actions/tests/configure_external_repo_workflow_test.py).
+  These tests exercise component workflows mixed with source changes, downstream
+  consumer selection, and the broad fallback for shared or unknown files.
 - Test changes to workflows using "CI" and "dev" environments isolated from
   production (see
   ["Testing release workflows" in `github_actions_debugging.md`](/docs/development/github_actions_debugging.md#testing-release-workflows)

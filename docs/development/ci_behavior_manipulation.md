@@ -157,6 +157,37 @@ When both `test_labels` and `changed_projects` are set, the effective test set
 is the **intersection** of both filters — only components that match both a
 `test_labels` entry and a `changed_projects` dependency are run.
 
+## External-repository file classification
+
+For rocm-libraries and rocm-systems runs,
+[`configure_external_repo_ci.py`](../../build_tools/github_actions/configure_external_repo_ci.py)
+identifies changed source projects from the calling repository's
+`.github/repos-config.json`. Ownership of component workflows, test drivers,
+and other files outside those source roots is declared in
+[`external_repo_ci_paths.toml`](../../build_tools/github_actions/external_repo_ci_paths.toml).
+The rules are part of the pinned TheRock revision used by the caller.
+
+Each `project_paths` entry maps file patterns to an existing project root.
+All matching owners are combined with projects whose sources changed. Normal
+consumer selection still applies: editing hipBLASLt and its ASAN workflow
+selects hipBLASLt and its consumers, without selecting rocFFT. This selection
+does not require a PR label. A new component workflow or test driver should
+receive an ownership entry alongside its implementation.
+
+`full_test_paths` records files whose impact requires broad coverage, including
+shared build/CI infrastructure. It also records components whose tests cannot
+yet be represented by the consumer graph, with the reason beside each rule.
+These changes retain the all-components quick test selection. TheRock workflow
+changes without component ownership retain the caller's repository-level policy,
+alongside any changed monorepo-native projects absent from `repos-config.json`.
+Neither rule overrides the separate decision to skip a documentation-only run.
+
+An unknown non-documentation file, or an owner missing from the calling
+repository's configuration, retains the all-components fallback. The configure
+log lists these files so missing ownership can be addressed without silently
+dropping coverage. Avoid broad component patterns such as `.github/*`: a shared
+script or a different component's workflow must not acquire that owner.
+
 ## Prebuilt stages
 
 > [!NOTE]

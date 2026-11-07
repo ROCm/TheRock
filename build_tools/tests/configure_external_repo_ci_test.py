@@ -309,6 +309,15 @@ class ConfigureTest(unittest.TestCase):
 class GetUnclassifiedPathsTest(unittest.TestCase):
     """Tests for get_unclassified_paths()."""
 
+    def test_nested_root_is_classified_without_a_parent_entry(self):
+        self.assertEqual(
+            get_unclassified_paths(
+                ["projects/hipblaslt/tensilelite/pyproject.toml"],
+                {"projects/hipblaslt/tensilelite"},
+            ),
+            [],
+        )
+
     def test_unmapped_nonskippable_is_unclassified(self):
         valid = {"projects/rocblas"}
         self.assertEqual(

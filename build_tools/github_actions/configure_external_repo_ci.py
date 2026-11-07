@@ -42,7 +42,9 @@ import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, fields
+import tomllib
+from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import (
     Callable,
     Iterable,
@@ -128,6 +130,14 @@ class ConfigureResult:
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
     test_type: str  # "quick" when run_all_tests=True, otherwise "standard"
+
+
+@dataclass
+class PathClassification:
+    projects: set[str] = field(default_factory=set)
+    full_test_paths: set[str] = field(default_factory=set)
+    workflow_paths: set[str] = field(default_factory=set)
+    unclassified_paths: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -289,11 +299,6 @@ def set_github_output(outputs: Mapping[str, str]) -> None:
             f.write(f"{k}={v}\n")
 
 
-def _subtree_prefix(path: str) -> str:
-    """First two path components, matching find_matched_subtrees()."""
-    return "/".join(path.split("/", 2)[:2])
-
-
 def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> List[str]:
     """Non-skippable changed paths that map to no known subtree.
 
@@ -307,8 +312,49 @@ def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> Li
     return [
         p
         for p in paths
-        if not is_skippable(p) and _subtree_prefix(p) not in valid_prefixes
+        if not is_skippable(p) and not find_matched_subtrees([p], valid_prefixes)
     ]
+
+
+def classify_paths(
+    paths: Iterable[str], github_repo: str, valid_prefixes: set[str]
+) -> PathClassification:
+    """Resolve source roots and repository-specific ownership of other files."""
+    policy_path = Path(__file__).with_name("external_repo_ci_paths.toml")
+    with policy_path.open("rb") as f:
+        policy = tomllib.load(f).get(github_repo.lower(), {})
+
+    result = PathClassification()
+    source_paths = set()
+    for path in paths:
+        if matches_patterns([path], FULL_TEST_TRIGGER_PATTERNS) or (
+            not is_skippable(path)
+            and matches_patterns([path], policy.get("full_test_paths", []))
+        ):
+            result.full_test_paths.add(path)
+            continue
+
+        owners = {
+            project
+            for project, patterns in policy.get("project_paths", {}).items()
+            if not is_skippable(path) and matches_patterns([path], patterns)
+        }
+        if owners:
+            # A stale or misspelled owner must not silently select no tests.
+            if owners <= valid_prefixes:
+                result.projects.update(owners)
+            else:
+                result.unclassified_paths.add(path)
+        elif matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS):
+            result.workflow_paths.add(path)
+        else:
+            source_paths.add(path)
+
+    result.projects.update(find_matched_subtrees(source_paths, valid_prefixes))
+    result.unclassified_paths.update(
+        get_unclassified_paths(source_paths, valid_prefixes)
+    )
+    return result
 
 
 def configure(
@@ -362,15 +408,35 @@ def configure(
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Shared CI and test-selection changes can affect other repositories.
-    if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("Shared CI files changed - running all tests")
+    config = load_repo_config(config_path)
+    if not config:
+        logger.warning("No config loaded - running all tests")
         return ConfigureResult(
             changed_projects="", run_all_tests=True, test_type="quick"
         )
 
-    # Apply the calling repository's workflow test policy.
-    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+    own_projects = get_valid_prefixes(config)
+    classification = classify_paths(
+        modified_paths,
+        github_repo,
+        own_projects | CI_RELEVANT_NON_SUBTREE_PREFIXES,
+    )
+    if classification.full_test_paths:
+        logger.info(
+            "Files requiring broad coverage %s - running all tests",
+            sorted(classification.full_test_paths),
+        )
+    if classification.unclassified_paths:
+        logger.info(
+            "Unclassified non-skippable change(s) %s - running all tests",
+            sorted(classification.unclassified_paths),
+        )
+    if classification.full_test_paths or classification.unclassified_paths:
+        return ConfigureResult(
+            changed_projects="", run_all_tests=True, test_type="quick"
+        )
+
+    if classification.workflow_paths:
         workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
         if workflow_test_scope != "configured-projects":
             logger.info(
@@ -381,66 +447,17 @@ def configure(
                 changed_projects="", run_all_tests=True, test_type="quick"
             )
 
-        config = load_repo_config(config_path)
-        if not config:
-            logger.warning("No config loaded - running all tests")
-            return ConfigureResult(
-                changed_projects="", run_all_tests=True, test_type="quick"
-            )
-
-        own_projects = get_valid_prefixes(config)
-
-        # A second, unknown change must retain the conservative full run.
-        other_paths = {
-            path
-            for path in modified_paths
-            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
-        }
-        unclassified = get_unclassified_paths(other_paths, own_projects)
-        if unclassified:
-            logger.info(
-                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-                " - running all tests"
-            )
-            return ConfigureResult(
-                changed_projects="", run_all_tests=True, test_type="quick"
-            )
-
         logger.info(
             "Workflow changed in %s - testing configured projects",
             github_repo,
         )
         return ConfigureResult(
-            changed_projects=",".join(sorted(own_projects)),
+            changed_projects=",".join(sorted(own_projects | classification.projects)),
             run_all_tests=False,
             test_type="standard",
         )
 
-    # Find changed projects from config
-    config = load_repo_config(config_path)
-    if not config:
-        logger.warning("No config loaded - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
-
-    valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
-
-    # Conservative guard: if any non-skippable change cannot be classified to a
-    # known subtree, we cannot reason about its build/test impact. Narrowing on
-    # just the recognized subset would silently drop the unclassified change, so
-    # fall back to a full run instead.
-    unclassified = get_unclassified_paths(modified_paths, valid_prefixes)
-    if unclassified:
-        logger.info(
-            f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-            " - running all tests"
-        )
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
-        )
-
-    matched = find_matched_subtrees(modified_paths, valid_prefixes)
+    matched = sorted(classification.projects)
     logger.info(f"Matched projects: {matched}")
 
     return ConfigureResult(
