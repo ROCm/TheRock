@@ -318,10 +318,10 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  test_xla:
+  trigger_xla_tests:
     needs: [build_tarballs]
     name: Trigger XLA tests
-    if: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx94X-dcgpu') }}
+    if: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx950-dcgpu') }}
     runs-on: ubuntu-26.04
     permissions:
       actions: write
@@ -374,7 +374,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels, test_xla]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels, trigger_xla_tests]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-26.04
     timeout-minutes: 10
