@@ -534,6 +534,15 @@ test_matrix = {
             "windows": 1,
         },
     },
+    "dbgapi-cpu": {
+        "job_name": "dbgapi-cpu",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_dbgapi.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+        "linux_cpu_runner": True,
+    },
     "rocgdb-cpu": {
         **_rocgdb_common,
         "job_name": "rocgdb-cpu",
