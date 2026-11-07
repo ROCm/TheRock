@@ -231,13 +231,23 @@ jobs:
           cmake --build "${BUILD_DIR}" --target build-test-amd-comgr -- -k 0
 
       # Rocjitsu and mirage build tests report failures without gating CI.
+      - name: Install emulation test tools
+        if: ${{ !cancelled() && inputs.stage_name == 'emulation' }}
+        run: |
+          # The pinned manylinux image installs Rust's minimal profile.
+          rustup component add clippy rustfmt
+          # Container hooks ignore Docker --init; explicitly reap orphaned
+          # children from Mirage's process-tree cleanup tests below.
+          yum install -y tini
+
       - name: Run build tests (emulation, non-blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'emulation' }}
         continue-on-error: true
         env:
           TEATIME_FORCE_INTERACTIVE: 1
+          RUST_TEST_THREADS: 4
         run: |
-          cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
+          tini -s -- cmake --build "${BUILD_DIR}" --target therock-build-tests -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
