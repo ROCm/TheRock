@@ -288,6 +288,9 @@ jobs:
       # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
         timeout-minutes: 120
+        env:
+          # Enable AOTriton's experimental Navi kernels for transformer coverage.
+          TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: "1"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
@@ -300,7 +303,9 @@ jobs:
               test_unary_ufuncs \
               test_binary_ufuncs \
               test_autograd \
+              test_transformers \
             -- \
+            --ignore-win-blocklist \
             --continue-on-collection-errors
 
       - name: Upload test reports
