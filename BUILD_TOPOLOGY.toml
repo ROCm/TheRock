@@ -511,6 +511,13 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
 
+[artifacts.tracelogging]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = ["sysdeps-lttng-ust"]
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
+disable_platforms = ["windows"]  # Windows uses the Windows SDK's TraceLoggingProvider.h
+
 [artifacts.grpc]
 artifact_group = "third-party-libs"
 type = "target-neutral"

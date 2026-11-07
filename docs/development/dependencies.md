@@ -222,6 +222,19 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 - Import library: `SQLite::SQLite3`
 - Alternatives: none
 
+## TraceLogging
+
+The LTTng flavour of [TraceLogging](https://github.com/microsoft/tracelogging)
+(`TraceLoggingProvider.h` and the static `lttngh` library), with which the HIP
+and HSA runtimes write their API trace events through liblttng-ust. Built with
+the LTTng feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), Linux only; on Windows
+the same header comes from the Windows SDK.
+
+- Canonical method: `find_package(tracelogging CONFIG)`
+- Import library: `tracelogging::tracelogging`
+- Dependencies: links liblttng-ust and liblttng-ust-tracepoint (see LTTng-UST
+  above); the package config finds them itself.
+
 ## util-linux
 
 Provides the `libmount` (mount table parsing/manipulation) and `libblkid`
