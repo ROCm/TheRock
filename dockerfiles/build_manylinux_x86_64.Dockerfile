@@ -90,6 +90,9 @@ RUN yum install -y epel-release && \
       glibc-gconv-extra \
       vim-common \
       git-lfs \
+      autoconf \
+      automake \
+      libtool \
     && yum install -y \
       texinfo \
       flex \
