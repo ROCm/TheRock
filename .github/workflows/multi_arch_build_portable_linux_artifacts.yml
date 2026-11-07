@@ -49,6 +49,13 @@ on:
         required: false
         default: ""
         description: "CMake preset name for this build variant (optional)"
+      extra_cmake_options:
+        type: string
+        required: false
+        default: ""
+        description: >-
+          Extra -D options appended to the configure command, after the
+          stage-derived arguments. Used by variant builds such as coverage.
       release_type:
         description: 'Release type; controls artifact bucket and IAM role'
         type: string
@@ -71,6 +78,14 @@ on:
         default: ""
       rebuild_artifacts:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
+        type: string
+        default: ""
+      artifact_run_id:
+        description: >-
+          Run id to fetch inbound artifacts from and push this stage's artifacts
+          and logs under. Empty uses github.run_id. A variant build sharing a
+          workflow run with a regular one (coverage) passes its own id, since the
+          two produce artifacts with the same names.
         type: string
         default: ""
       quartz_tracking_id:
@@ -100,6 +115,7 @@ jobs:
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
@@ -162,7 +178,7 @@ jobs:
       - name: Fetch inbound artifacts
         run: |
           python build_tools/artifact_manager.py fetch \
-            --run-id=${{ github.run_id }} \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --output-dir="${BUILD_DIR}" \
@@ -212,7 +228,8 @@ jobs:
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.external_repo_config != '' && format('-DTHEROCK_{0}_SOURCE_DIR={1}', fromJSON(inputs.external_repo_config).source_package, fromJSON(inputs.external_repo_config).checkout_path) || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }} \
-            ${{ steps.stage_config.outputs.cmake_args }}
+            ${{ steps.stage_config.outputs.cmake_args }} \
+            ${{ inputs.extra_cmake_options }}
 
       - name: Build stage
         run: |
@@ -265,7 +282,7 @@ jobs:
       - name: Push stage artifacts
         run: |
           python build_tools/artifact_manager.py push \
-            --run-id ${{ github.run_id }} \
+            --run-id "${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}"
 
@@ -273,7 +290,7 @@ jobs:
         if: ${{ always() }}
         run: |
           python build_tools/github_actions/post_stage_upload.py \
-            --run-id=${{ github.run_id }} \
+            --run-id="${ARTIFACT_RUN_ID}" \
             --stage="${STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
