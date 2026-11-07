@@ -31,6 +31,7 @@ benefit from further discussion.
 - [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
 - [RFC0014: Code Coverage Infrastructure for TheRock](./RFC0014-Code-Coverage-Infrastructure.md)
 - [RFC0015: Distributing Fortran Bindings Across rocm-systems and rocm-libraries](./RFC0015-Fortran-Bindings-Split.md)
+- [RFC0016: An Experimental API Tier for ROCm Libraries](./RFC0016-Experimental-API-Tier.md)
 
 ## Adding an RFC
 
