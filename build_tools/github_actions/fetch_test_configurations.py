@@ -1745,7 +1745,7 @@ def run():
         if "test_script" not in component:
             continue
         component["test_script"] = (
-            f"python {_get_script_path('retry_test_command.py')} --command "
+            f'python {_get_script_path("retry_test_command.py")} --bash "$BASH" --command '
             + shlex.quote(component["test_script"])
         )
 

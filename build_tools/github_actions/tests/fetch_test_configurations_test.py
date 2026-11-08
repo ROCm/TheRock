@@ -79,9 +79,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     command = shlex.split(component["test_script"])
                     self.assertEqual(command[0], "python")
                     self.assertTrue(command[1].endswith("/retry_test_command.py"))
-                    self.assertEqual(command[2], "--command")
-                    self.assertEqual(len(command), 4)
-                    self.assertNotIn("retry_test_command.py", command[3])
+                    self.assertEqual(command[2:5], ["--bash", "$BASH", "--command"])
+                    self.assertEqual(len(command), 6)
+                    self.assertNotIn("retry_test_command.py", command[5])
 
     # -----------------------
     # Basic selection tests

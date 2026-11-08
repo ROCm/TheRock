@@ -229,9 +229,10 @@ jobs:
           # Default unset components to the platform backend, mirroring the runtime fix
           # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
           GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
-          RETRY_THIS_STEP: "true"
+          # The command wrapper owns retries; disable the runner's outer hook.
+          RETRY_THIS_STEP: "false"
+          TEST_COMMAND_RETRY_ENABLED: "true"
           RETRY_COUNT: "1"
-          RETRY_DELAY: "7"
           STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
           STEP_NAME: >-
             Test ${{ fromJSON(inputs.component).job_name }}

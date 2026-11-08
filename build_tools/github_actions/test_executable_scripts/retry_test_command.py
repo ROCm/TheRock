@@ -13,17 +13,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--command", required=True, help="Test command to run in Bash")
     parser.add_argument(
+        "--bash",
+        default="bash" if sys.platform != "win32" else None,
+        help="Bash executable; pass the parent shell's $BASH on Windows",
+    )
+    parser.add_argument(
         "--retry-count",
         type=int,
-        default=3,
+        default=os.environ.get("RETRY_COUNT", "1"),
         help="Number of retries after the initial attempt (default: RETRY_COUNT or 1)",
     )
     args = parser.parse_args()
+    if not args.bash:
+        parser.error("--bash is required on Windows to select Git Bash instead of WSL")
     if args.retry_count < 0:
         parser.error("--retry-count must be non-negative")
 
     retry_count = args.retry_count
-    if os.environ.get("RETRY_THIS_STEP", "true").lower() != "true":
+    if os.environ.get("TEST_COMMAND_RETRY_ENABLED", "true").lower() != "true":
         retry_count = 0
     step_name = os.environ.get("STEP_NAME") or "Test command"
     for attempt in range(1, retry_count + 2):
@@ -32,7 +39,7 @@ def main() -> int:
         # assignments, quoting and command chains, and stop on shell failures.
         result = subprocess.run(
             [
-                "bash",
+                args.bash,
                 "--noprofile",
                 "--norc",
                 "-e",
