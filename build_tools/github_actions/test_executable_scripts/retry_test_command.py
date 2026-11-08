@@ -4,11 +4,9 @@
 """Retry a component's complete test launch command using the workflow policy."""
 
 import argparse
-import math
 import os
 import subprocess
 import sys
-import time
 
 
 def main() -> int:
@@ -20,17 +18,9 @@ def main() -> int:
         default=os.environ.get("RETRY_COUNT", "1"),
         help="Number of retries after the initial attempt (default: RETRY_COUNT or 1)",
     )
-    parser.add_argument(
-        "--retry-delay",
-        type=float,
-        default=os.environ.get("RETRY_DELAY", "7"),
-        help="Seconds between attempts (default: RETRY_DELAY or 7)",
-    )
     args = parser.parse_args()
     if args.retry_count < 0:
         parser.error("--retry-count must be non-negative")
-    if not math.isfinite(args.retry_delay) or args.retry_delay < 0:
-        parser.error("--retry-delay must be finite and non-negative")
 
     retry_count = args.retry_count
     if os.environ.get("RETRY_THIS_STEP", "true").lower() != "true":
@@ -61,11 +51,10 @@ def main() -> int:
         if attempt <= retry_count:
             print(
                 f"{step_name}: exited with {result.returncode}; "
-                f"retrying in {args.retry_delay:g} seconds",
+                "retrying immediately",
                 file=sys.stderr,
                 flush=True,
             )
-            time.sleep(args.retry_delay)
     return result.returncode
 
 

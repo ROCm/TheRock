@@ -24,8 +24,6 @@ class RetryTestCommandTest(unittest.TestCase):
                 str(WRAPPER),
                 "--retry-count",
                 str(retries),
-                "--retry-delay",
-                "0",
                 "--command",
                 command,
             ],
