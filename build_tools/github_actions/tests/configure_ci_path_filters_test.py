@@ -136,6 +136,7 @@ class TestGetJobsForChanges(unittest.TestCase):
         paths = [
             "external-builds/pytorch/skip_tests/generic.py",
             ".github/workflows/multi_arch_build_windows_pytorch_wheels_ci.yml",
+            "build_tools/github_actions/write_pytorch_versions.py",
         ]
         self.assertEqual(get_jobs_for_changes(paths), {"pytorch"})
 
@@ -143,6 +144,7 @@ class TestGetJobsForChanges(unittest.TestCase):
         paths = [
             "external-builds/jax/install_jax_wheels.py",
             ".github/workflows/test_multi_arch_linux_jax_wheels.yml",
+            "build_tools/github_actions/configure_jax_release_matrix.py",
         ]
         self.assertEqual(get_jobs_for_changes(paths), {"jax"})
 
@@ -166,6 +168,8 @@ class TestGetJobsForChanges(unittest.TestCase):
             "docs/development/ci_overview.md",
             "external-builds/uccl/build_prod_wheels.py",
             "external-builds/pytorch/tests/repo_management_test.py",
+            "build_tools/github_actions/tests/configure_pytorch_release_matrix_test.py",
+            "build_tools/github_actions/tests/configure_jax_release_matrix_test.py",
             ".github/workflows/pre-commit.yml",
         ]
         self.assertEqual(get_jobs_for_changes(paths), {"pytorch"})
