@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import platform as platform_module
+import shlex
 from pathlib import Path
 
 from github_actions_api import *
@@ -1737,6 +1738,16 @@ def run():
     all_components = [
         _build_container_options(c, platform) for c in components_with_runners
     ]
+
+    # Wrap after composing commands and platform-specific entries so every
+    # component, including sanity and chained suites, uses the same policy.
+    for component in all_components:
+        if "test_script" not in component:
+            continue
+        component["test_script"] = (
+            f"python {_get_script_path('retry_test_command.py')} --command "
+            + shlex.quote(component["test_script"])
+        )
 
     # Separate sanity from the regular component matrix.
     sanity_component = next(

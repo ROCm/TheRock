@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import sys
 import json
+import shlex
 import unittest
 from unittest.mock import patch
 
@@ -61,6 +62,26 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def _get_components(self):
         self.assertIn("components", self.gha_output)
         return json.loads(self.gha_output["components"])
+
+    def test_all_emitted_commands_use_retry_wrapper(self):
+        for platform in ("linux", "windows"):
+            with self.subTest(platform=platform):
+                sys.argv = ["fetch_test_configurations.py", f"--platform={platform}"]
+                if platform == "windows":
+                    os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+                fetch_test_configurations.run()
+                components = self._get_components()
+                sanity = json.loads(self.gha_output["sanity_component"])
+                if sanity:
+                    components.append(sanity)
+                self.assertTrue(components)
+                for component in components:
+                    command = shlex.split(component["test_script"])
+                    self.assertEqual(command[0], "python")
+                    self.assertTrue(command[1].endswith("/retry_test_command.py"))
+                    self.assertEqual(command[2], "--command")
+                    self.assertEqual(len(command), 4)
+                    self.assertNotIn("retry_test_command.py", command[3])
 
     # -----------------------
     # Basic selection tests
@@ -320,7 +341,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     if j["job_name"] == "tensilelite-common"
                 )
                 self.assertTrue(
-                    job["test_script"].startswith("TEST_CATEGORY=hw-common ")
+                    shlex.split(job["test_script"])[-1].startswith(
+                        "TEST_CATEGORY=hw-common "
+                    )
                 )
                 self.assertIn("pytest_runner.py", job["test_script"])
                 self.assertNotIn(
