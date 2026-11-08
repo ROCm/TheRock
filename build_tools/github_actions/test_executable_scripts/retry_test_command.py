@@ -15,7 +15,7 @@ def main() -> int:
     parser.add_argument(
         "--retry-count",
         type=int,
-        default=os.environ.get("RETRY_COUNT", "1"),
+        default=3,
         help="Number of retries after the initial attempt (default: RETRY_COUNT or 1)",
     )
     args = parser.parse_args()
