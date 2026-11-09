@@ -302,6 +302,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
+          allow-prereleases: true
 
       - name: Select Python version
         run: |
@@ -590,7 +591,7 @@ jobs:
         # Keep CMD for compatibility with the Windows wheel build and validation.
         shell: cmd # zizmor: ignore[misfeature]
         run: |
-          python build_tools/github_actions/write_torch_versions.py --dist-dir "%PACKAGE_DIST_DIR%"
+          python build_tools/github_actions/write_pytorch_versions.py --dist-dir "%PACKAGE_DIST_DIR%"
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
