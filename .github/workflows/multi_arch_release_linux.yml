@@ -322,25 +322,19 @@ jobs:
     needs: [build_tarballs]
     name: Trigger XLA tests
     if: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx950-dcgpu') }}
-    runs-on: ubuntu-26.04
+    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      test_amdgpu_target: gfx950
+      rocm_distro_url: ${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).gfx950_dcgpu }}
+      rocm_distro_hash: no_hash
+      xla_ref: rocm-jaxlib-v0.11.2
+      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
-      actions: write
-    steps:
-      - name: Trigger XLA tests
-        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
-        with:
-          workflow: test_multi_arch_linux_xla.yml
-          inputs: |
-            {
-              "test_amdgpu_family": "gfx950",
-              "rocm_distro_url": "${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).gfx950_dcgpu }}",
-              "rocm_distro_hash": "no_hash",
-              "xla_ref": "rocm-jaxlib-v0.11.2",
-              "test_runs_on": "linux-gfx950-1gpu-ccs-ossci-rocm",
-              "repository": "${{ inputs.repository || github.repository }}",
-              "ref": "${{ inputs.ref || '' }}",
-              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
-            }
+      contents: read
 
 
   # The JAX release workflow publishes its wheels to the release index, then tests
