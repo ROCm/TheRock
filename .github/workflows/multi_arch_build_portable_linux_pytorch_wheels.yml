@@ -238,7 +238,7 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d666e4613c1ca919bc7d1a31a4c368740b66c34b5c19ef95ba15cd31db7783fb # 2026-10-29
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce # 2026-10-30
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}
@@ -275,7 +275,7 @@ jobs:
       - name: "Quartz - started - build PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
@@ -529,7 +529,7 @@ jobs:
       - name: Write PyTorch package version outputs
         id: pytorch-versions
         run: |
-          python build_tools/github_actions/write_torch_versions.py \
+          python build_tools/github_actions/write_pytorch_versions.py \
             --dist-dir "${PACKAGE_DIST_DIR}"
 
       - name: Configure AWS Credentials
@@ -674,7 +674,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_portable_linux_pytorch_wheels.yml
