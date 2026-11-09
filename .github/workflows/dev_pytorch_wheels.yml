@@ -94,10 +94,10 @@ permissions:
 
 # Runs that would publish the same torch wheel wait for each other. GitHub
 # keeps one pending run per group: a newer queued run cancels an older one.
+# Keep the group on one line without the raw index URL; the multi-line form
+# failed workflow validation at startup.
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{ inputs.pytorch_branch }}-py${{ inputs.python_version }}-${{
-    inputs.rocm_package_index_url }}-${{ inputs.rocm_version }}
+  group: dev-pytorch-wheels-${{ inputs.pytorch_branch }}-py${{ inputs.python_version }}-${{ contains(inputs.rocm_package_index_url, 'nightly') && 'nightly' || 'stable' }}-${{ inputs.rocm_version }}
   cancel-in-progress: false
 
 jobs:
