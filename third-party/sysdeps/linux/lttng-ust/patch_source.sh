@@ -37,9 +37,9 @@ LIBS=(
 )
 
 # Every per-library Makefile.am under src/lib may reference any sibling .la
-# (cross-library LIBADD/DEPENDENCIES), so rewrite them all.
-for makefile in "$SOURCE_DIR"/src/lib/*/Makefile.am; do
-  [ -f "$makefile" ] || continue
+# (cross-library LIBADD/DEPENDENCIES), and the tests link them the same way,
+# so rewrite every Makefile.am in the tree.
+while IFS= read -r -d '' makefile; do
   for lib in "${LIBS[@]}"; do
     suffix="${lib#liblttng-ust}"          # "", "-common", "-cyg-profile-fast", ...
     suffix="${suffix//-/_}"               # "", "_common", "_cyg_profile_fast", ...
@@ -48,6 +48,6 @@ for makefile in "$SOURCE_DIR"/src/lib/*/Makefile.am; do
     canon_old="${lib//-/_}_la_"
     sed -i "s/${canon_old}/${newname}_la_/g" "$makefile"
   done
-done
+done < <(find "$SOURCE_DIR" -name Makefile.am -print0)
 
 echo "lttng-ust source patch complete."

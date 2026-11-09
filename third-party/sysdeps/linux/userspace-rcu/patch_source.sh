@@ -33,7 +33,9 @@ for lib in "${LIBS[@]}"; do
   suffix="${suffix//-/_}"                # "", "_common", "_bp", ...
   newname="librocm_sysdeps_urcu${suffix}"
   # .la target filename references
-  sed -i "s/${lib}\.la/${newname}.la/g" "$MAKEFILE_AM"
+  # The tests and examples link the libraries by their .la files too, so
+  # rewrite these references in every Makefile.am, not just src/.
+  find "$SOURCE_DIR" -name Makefile.am -exec sed -i "s/${lib}\.la/${newname}.la/g" {} +
   # Automake-canonicalized variable prefix (dashes -> underscores).
   canon_old="${lib//-/_}_la_"
   sed -i "s/${canon_old}/${newname}_la_/g" "$MAKEFILE_AM"
