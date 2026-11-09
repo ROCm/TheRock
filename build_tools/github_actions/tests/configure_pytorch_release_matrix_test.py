@@ -64,7 +64,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.12",
                     "amdgpu_families": "gfx110X-all",
-                    "test_amdgpu_families": "auto",
+                    "test_amdgpu_families": "none",
                 },
             ],
         )
@@ -144,7 +144,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             platform="windows",
         )
 
-        # The row still builds and publishes wheels; only its tests are skipped.
+        # Windows rows build and publish wheels with tests skipped.
         self.assertEqual(
             matrix,
             [
@@ -158,12 +158,11 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
 
     def test_only_windows_nightly_python_314_skips_tests(self):
-        # Each neighbor of the skipped (platform, ref, python version) keeps the
-        # normal "auto" behavior.
-        for platform, ref, python_version in (
-            ("linux", "nightly", "3.14"),
-            ("windows", "nightly", "3.13"),
-            ("windows", "release/2.13", "3.14"),
+        # Linux keeps tests. Windows stays none for every ref and Python.
+        for platform, ref, python_version, test_families in (
+            ("linux", "nightly", "3.14", "auto"),
+            ("windows", "nightly", "3.13", "none"),
+            ("windows", "release/2.13", "3.14", "none"),
         ):
             with self.subTest(platform=platform, ref=ref, py=python_version):
                 matrix = m.generate_pytorch_matrix_for_release_type(
@@ -175,7 +174,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                 )
 
                 self.assertEqual(len(matrix), 1)
-                self.assertEqual(matrix[0]["test_amdgpu_families"], "auto")
+                self.assertEqual(matrix[0]["test_amdgpu_families"], test_families)
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # The generate_pytorch_matrix_for_release_type script produces matrix
