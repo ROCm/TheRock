@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import write_jax_bazel_cache_credentials
 from write_jax_bazel_cache_credentials import (
     TOKEN_NAME,
-    WRITER_AWS_PROFILE,
+    WRITER_REGION,
     WRITER_ROLE,
     WRITER_SECRET_ID,
     fetch_writer_token,
@@ -57,21 +57,21 @@ class FetchWriterTokenTest(unittest.TestCase):
     """Tests reading the writer JWT from Secrets Manager."""
 
     def _fetch(self, secret: dict, github_actions: bool = False):
-        session = mock.MagicMock()
-        client = session.return_value.client.return_value
+        make_client = mock.MagicMock()
+        client = make_client.return_value
         client.get_secret_value.return_value = {"SecretString": json.dumps(secret)}
         stdout = io.StringIO()
         env = {"GITHUB_ACTIONS": "true" if github_actions else "false"}
         with mock.patch.object(
-            write_jax_bazel_cache_credentials.boto3, "Session", session
+            write_jax_bazel_cache_credentials.boto3, "client", make_client
         ), mock.patch.dict(os.environ, env), mock.patch.object(sys, "stdout", stdout):
             token = fetch_writer_token()
-        return token, session, client, stdout.getvalue()
+        return token, make_client, client, stdout.getvalue()
 
-    def test_reads_the_token_property_with_the_writer_profile(self):
-        token, session, client, _ = self._fetch({"token": "test-writer\n"})
+    def test_reads_the_token_property_from_the_writer_secret(self):
+        token, make_client, client, _ = self._fetch({"token": "test-writer\n"})
         self.assertEqual(token, "test-writer")
-        self.assertEqual(session.call_args.kwargs["profile_name"], WRITER_AWS_PROFILE)
+        make_client.assert_called_once_with("secretsmanager", region_name=WRITER_REGION)
         client.get_secret_value.assert_called_once_with(SecretId=WRITER_SECRET_ID)
 
     def test_masks_the_token_in_github_actions(self):
@@ -155,7 +155,7 @@ class MainTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             plan = _outputs(self._run(Path(tmp), Path(tmp), ["--plan", *MAIN_PUSH]))
             self.assertEqual(plan["writer_role"], WRITER_ROLE)
-            self.assertEqual(plan["aws_profile"], WRITER_AWS_PROFILE)
+            self.assertEqual(plan["aws_region"], WRITER_REGION)
             plan = _outputs(self._run(Path(tmp), Path(tmp), ["--plan"]))
             self.assertEqual(plan["writer_role"], "")
 

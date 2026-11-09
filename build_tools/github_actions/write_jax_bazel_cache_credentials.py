@@ -50,9 +50,6 @@ WRITER_ROLE = "arn:aws:iam::692859939525:role/therock-jax-cache-writer-main"
 WRITER_SECRET_ID = "/ossci/ci/ROCm/TheRock/main/jax-bazel-cache-writer"
 WRITER_SECRET_KEY = "token"
 WRITER_REGION = "us-east-2"
-# The workflow stores the role's credentials under this profile, not in the
-# environment, so they cannot leak into later AWS steps of the job.
-WRITER_AWS_PROFILE = "jax-bazel-cache-writer"
 
 
 def _log(msg: str) -> None:
@@ -99,11 +96,12 @@ def materialize_credentials(source_dir: Path, dest_dir: Path) -> Path | None:
 
 
 def fetch_writer_token() -> str:
-    """Reads the writer JWT with the credentials of the assumed writer role."""
-    session = boto3.Session(profile_name=WRITER_AWS_PROFILE, region_name=WRITER_REGION)
-    secret = session.client("secretsmanager").get_secret_value(
-        SecretId=WRITER_SECRET_ID
-    )
+    """Reads the writer JWT with the writer role's credentials.
+
+    The workflow passes those credentials to this step's environment only.
+    """
+    client = boto3.client("secretsmanager", region_name=WRITER_REGION)
+    secret = client.get_secret_value(SecretId=WRITER_SECRET_ID)
     token = json.loads(secret["SecretString"]).get(WRITER_SECRET_KEY, "").strip()
     if not token:
         raise ValueError(f"{WRITER_SECRET_ID} has no {WRITER_SECRET_KEY!r} value")
@@ -128,8 +126,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--plan",
         action="store_true",
-        help="Only print which AWS role to assume (writer_role, aws_region, "
-        "aws_profile); empty when the run reads with the runner's token.",
+        help="Only print which AWS role to assume (writer_role, aws_region); "
+        "empty when the run reads with the runner's token.",
     )
     parser.add_argument(
         "--source-dir",
@@ -169,7 +167,6 @@ def main(argv: list[str] | None = None) -> None:
             {
                 "writer_role": WRITER_ROLE if writer else "",
                 "aws_region": WRITER_REGION if writer else "",
-                "aws_profile": WRITER_AWS_PROFILE if writer else "",
             }
         )
         return

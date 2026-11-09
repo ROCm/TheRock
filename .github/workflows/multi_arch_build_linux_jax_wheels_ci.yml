@@ -257,18 +257,25 @@ jobs:
           python build_tools/github_actions/write_jax_bazel_cache_credentials.py --plan
 
       - name: Configure AWS credentials for the Bazel cache writer
+        id: cache_writer_aws
         if: ${{ steps.cache_plan.outputs.writer_role != '' }}
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           aws-region: ${{ steps.cache_plan.outputs.aws_region }}
           role-to-assume: ${{ steps.cache_plan.outputs.writer_role }}
-          aws-profile: ${{ steps.cache_plan.outputs.aws_profile }}
           role-duration-seconds: 900
+          # Only the next step gets these: not the job environment or the disk,
+          # where a later job on a reused runner could read them.
+          output-credentials: true
+          output-env-credentials: false
 
       - name: Stage Bazel remote cache credentials
         id: cache_credentials
         env:
           JAX_BAZEL_CACHE_CREDENTIALS_DIR: ${{ vars.JAX_BAZEL_CACHE_CREDENTIALS_DIR }}
+          AWS_ACCESS_KEY_ID: ${{ steps.cache_writer_aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.cache_writer_aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.cache_writer_aws.outputs.aws-session-token }}
         run: |
           python build_tools/github_actions/write_jax_bazel_cache_credentials.py
 
