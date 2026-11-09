@@ -289,15 +289,13 @@ environ_vars = build_environment()
 logging.info(f"ROCM_PATH: {environ_vars['ROCM_PATH']}")
 logging.info(f"EXAMPLES_ROOT: {EXAMPLES_ROOT}")
 
-# TEMPORARY (users/marsavic/hipthreads-vcores-64): diagnostic sweep instead of a pass/fail run. saxpy and spmm run
-# once at the occupancy cap; the raytracer, which hangs at the cap on gfx117X, runs for every (vcores per WGP, CU mask)
-# pair. HIPTHREADS_DEBUG_NO_CU_MASK needs the matching temporary hipThreads change, which also prints the vcore count
-# and mask state at launch. Low vcore counts go first, so a GPU reset caused by a hang can't spoil the clean runs.
+# TEMPORARY (users/marsavic/hipthreads-vcores-64): diagnostic sweep instead of a pass/fail run. Every example runs at
+# the default vcore count and at the occupancy cap, the latter with hipStreamWriteValue (a ROCclr kernel) and with
+# HIPTHREADS_DEBUG_NO_STREAMOPS=1 (DMA writes). Both debug switches need the matching temporary hipThreads change;
+# setting HIPTHREADS_DEBUG_NO_CU_MASK (0 keeps the mask) prints the launch configuration. Low vcore counts go first, so
+# a GPU reset caused by a hang can't spoil the clean runs.
 DIAG_TIMEOUT_SECONDS = 60
-DIAG_SWEEP = {
-    "inOneWeekend": [(v, m) for v in ["16", "24", "28", "32", "64"] for m in ["0", "1"]],
-}
-DIAG_DEFAULT = [("64", "0")]
+DIAG_RUNS = [("16", "0"), ("64", "0"), ("64", "1")]
 
 
 def run_diag(example: dict, binary: Path, env: dict) -> tuple[str, float, str]:
@@ -338,19 +336,20 @@ def run_diag(example: dict, binary: Path, env: dict) -> tuple[str, float, str]:
 rows = []
 for example in EXAMPLES:
     binary = configure_and_build(example, gpu_arch, environ_vars)
-    for vcores, mask in DIAG_SWEEP.get(example["name"], DIAG_DEFAULT):
+    for vcores, no_streamops in DIAG_RUNS:
         env = dict(
             environ_vars,
             HIPTHREADS_VCORES_PER_WGP=vcores,
-            HIPTHREADS_DEBUG_NO_CU_MASK=mask,
+            HIPTHREADS_DEBUG_NO_CU_MASK="0",
+            HIPTHREADS_DEBUG_NO_STREAMOPS=no_streamops,
         )
         status, seconds, launch = run_diag(example, binary, env)
-        mask_state = "off" if mask == "1" else "on"
-        rows.append((example["name"], vcores, mask_state, status, seconds, launch))
-        logging.info(f"{example['name']} vcores/WGP={vcores} cu_mask={mask_state}: {status} in {seconds:.1f}s [{launch}]")
+        writes = "dma" if no_streamops == "1" else "kernel"
+        rows.append((example["name"], vcores, writes, status, seconds, launch))
+        logging.info(f"{example['name']} vcores/WGP={vcores} writes={writes}: {status} in {seconds:.1f}s [{launch}]")
 
 logging.info("==== hipThreads examples occupancy diagnostic ====")
-print(f"{'example':<14} {'v/WGP':>5} {'mask':>4} {'result':<9} {'secs':>6}  launch", flush=True)
-for name, vcores, mask_state, status, seconds, launch in rows:
-    print(f"{name:<14} {vcores:>5} {mask_state:>4} {status:<9} {seconds:6.1f}  {launch}", flush=True)
+print(f"{'example':<14} {'v/WGP':>5} {'writes':>6} {'result':<9} {'secs':>6}  launch", flush=True)
+for name, vcores, writes, status, seconds, launch in rows:
+    print(f"{name:<14} {vcores:>5} {writes:>6} {status:<9} {seconds:6.1f}  {launch}", flush=True)
 # Always succeed: the table is the result, and a failing job would only be retried by the runner.

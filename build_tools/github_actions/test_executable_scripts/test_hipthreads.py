@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -183,8 +184,10 @@ if not HIPTHREADS_SOURCE_DIR.exists():
 
 # TEMPORARY (users/marsavic/hipthreads-vcores-64): instead of the full suite, run a diagnostic sweep of the tests
 # that hang at the occupancy cap on gfx94X/gfx950/gfx117X. Each test is compiled once through lit, then its binary is
-# run directly for every (vcores per WGP, CU mask) pair. HIPTHREADS_DEBUG_NO_CU_MASK needs the matching temporary
-# hipThreads change, which also prints the vcore count and mask state at launch.
+# run directly for every (vcores per WGP, stream-write route) pair. HIPTHREADS_DEBUG_NO_STREAMOPS=1 makes hipThreads
+# write words with the DMA engine instead of hipStreamWriteValue (a ROCclr kernel). Both debug switches need the
+# matching temporary hipThreads change; setting HIPTHREADS_DEBUG_NO_CU_MASK (0 keeps the mask) prints the launch
+# configuration. Afterwards the full suite runs once at the cap with DMA writes (Linux only: Windows is too slow).
 DIAG_TESTS = [
     "std/thread/thread.threads/thread.thread.class/thread.thread.constr/robust_against_adl.pass.cpp",
     "std/thread/thread.condition/thread.condition.condvar/wait.pass.cpp",
@@ -242,6 +245,42 @@ def run_with_amd_log(exe: Path, env: dict, log_path: Path) -> None:
     logging.info("---- end of AMD_LOG_LEVEL=4 output ----")
 
 
+def threading_main_registers(exe: Path) -> str:
+    """Reads threading_main's register use from the test binary's embedded gfx code object."""
+    llvm_bin = OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin"
+    suffix = ".exe" if IS_WINDOWS else ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            # --offloading writes the images next to its input, so extract from a copy.
+            shutil.copy2(exe, Path(tmp) / exe.name)
+            subprocess.run(
+                [str(llvm_bin / f"llvm-objdump{suffix}"), "--offloading", exe.name],
+                cwd=tmp, check=True, capture_output=True,
+            )
+            images = [p for p in Path(tmp).iterdir() if "amdgcn" in p.name]
+            if not images:
+                return "no device image found"
+            notes = subprocess.run(
+                [str(llvm_bin / f"llvm-readelf{suffix}"), "--notes", str(images[0])],
+                check=True, capture_output=True, text=True,
+            ).stdout
+    except (OSError, subprocess.CalledProcessError) as e:
+        return f"unavailable ({e})"
+    # Each kernel in the metadata is a "- .key: value" list item; nested lists (its args) are indented further.
+    lines = notes.splitlines()
+    name_idx = next((i for i, l in enumerate(lines) if re.match(r"\s*\.name:.*threading_main", l)), None)
+    if name_idx is None:
+        return "threading_main not found"
+    field_indent = len(lines[name_idx]) - len(lines[name_idx].lstrip())
+    is_item_start = lambda l: re.match(rf"^ {{{field_indent - 2}}}- \.", l) is not None
+    start = next(i for i in range(name_idx, -1, -1) if is_item_start(lines[i]) or i == 0)
+    end = next((i for i in range(name_idx + 1, len(lines)) if is_item_start(lines[i])), len(lines))
+    block = "\n".join(lines[start:end])
+    keys = r"vgpr_count|agpr_count|sgpr_count|private_segment_fixed_size|uses_dynamic_stack"
+    fields = dict(re.findall(rf"^[ -]*\.({keys}):\s*(\S+)", block, re.MULTILINE))
+    return " ".join(f"{k}={v}" for k, v in sorted(fields.items()))
+
+
 # Compile (and run once at the default vcore count) through lit, so the binaries are built exactly as in the suite.
 compile_env = dict(environ_vars, HIPTHREADS_VCORES_PER_WGP="16")
 cmd = ["lit", "-v", "-j", "1"] + [
@@ -258,6 +297,7 @@ exec_root = (
 )
 
 rows = []
+vgprs = {}
 amd_log_done = False
 for test in DIAG_TESTS:
     test_path = Path(test)
@@ -266,19 +306,22 @@ for test in DIAG_TESTS:
         logging.error(f"Binary not found for {test}: {exe}")
         rows.append((test_path.name, "-", "-", "NO BINARY", 0.0, ""))
         continue
-    for mask in ["0", "1"]:
+    vgprs[test_path.name] = threading_main_registers(exe)
+    logging.info(f"{test_path.name}: threading_main {vgprs[test_path.name]}")
+    for no_streamops in ["0", "1"]:
         for vcores in DIAG_VCORES_PER_WGP:
             env = dict(
                 environ_vars,
                 HIPTHREADS_VCORES_PER_WGP=vcores,
-                HIPTHREADS_DEBUG_NO_CU_MASK=mask,
+                HIPTHREADS_DEBUG_NO_CU_MASK="0",
+                HIPTHREADS_DEBUG_NO_STREAMOPS=no_streamops,
             )
             status, seconds, lines = run_diag(exe, env)
             launch = next((l for l in lines if "debug launch" in l), "")
             launch = launch.split("debug launch: ", 1)[-1]
-            rows.append((test_path.name, vcores, "off" if mask == "1" else "on", status, seconds, launch))
-            logging.info(f"{test_path.name} vcores/WGP={vcores} cu_mask={'off' if mask == '1' else 'on'}: "
-                         f"{status} in {seconds:.1f}s [{launch}]")
+            writes = "dma" if no_streamops == "1" else "kernel"
+            rows.append((test_path.name, vcores, writes, status, seconds, launch))
+            logging.info(f"{test_path.name} vcores/WGP={vcores} writes={writes}: {status} in {seconds:.1f}s [{launch}]")
             if status != "PASS":
                 for line in lines[-20:]:
                     print(f"    | {line}", flush=True)
@@ -287,7 +330,19 @@ for test in DIAG_TESTS:
                 run_with_amd_log(exe, env, OUTPUT_ARTIFACTS_PATH / "hipthreads-diag-amdlog.txt")
 
 logging.info("==== hipThreads occupancy diagnostic ====")
-print(f"{'test':<28} {'v/WGP':>5} {'mask':>4} {'result':<9} {'secs':>6}  launch")
-for name, vcores, mask, status, seconds, launch in rows:
-    print(f"{name:<28} {vcores:>5} {mask:>4} {status:<9} {seconds:6.1f}  {launch}")
+for name, regs in vgprs.items():
+    print(f"{name:<28} threading_main {regs}", flush=True)
+print(f"{'test':<28} {'v/WGP':>5} {'writes':>6} {'result':<9} {'secs':>6}  launch", flush=True)
+for name, vcores, writes, status, seconds, launch in rows:
+    print(f"{name:<28} {vcores:>5} {writes:>6} {status:<9} {seconds:6.1f}  {launch}", flush=True)
+
+if not IS_WINDOWS:
+    full_env = dict(
+        environ_vars,
+        HIPTHREADS_VCORES_PER_WGP="64",
+        HIPTHREADS_DEBUG_NO_STREAMOPS="1",
+    )
+    cmd = ["lit", "-v", "-j", "1", str(HIPTHREADS_SOURCE_DIR / "test")]
+    logging.info(f"++ Full suite at the cap with DMA writes [{os.getcwd()}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, env=full_env)
 # Always succeed: the table is the result, and a failing job would only be retried by the runner.
