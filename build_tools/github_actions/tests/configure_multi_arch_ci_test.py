@@ -242,6 +242,36 @@ class TestCIInputs(unittest.TestCase):
         )
         inputs.validate()
 
+    def test_skip_rocm_rejects_conflicting_inputs(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:skip-rocm"],
+        )
+        cases = [
+            (
+                {"pr_labels": ["ci:skip-rocm", label]},
+                "conflicts with.*require ROCm artifacts",
+            )
+            for label in (
+                "ci:build-python-packages",
+                "ci:build-native-linux",
+                "ci:build-native-windows",
+            )
+        ] + [
+            ({"build_stages": ["compiler-runtime"]}, "cannot be combined"),
+            ({"prebuilt_stages": "compiler-runtime"}, "cannot be combined"),
+            ({"baseline_run_id": "54321"}, "cannot be combined"),
+        ]
+        inputs.validate()
+        for overrides, message in cases:
+            with self.subTest(overrides=overrides):
+                with self.assertRaisesRegex(ValueError, message):
+                    replace(inputs, **overrides).validate()
+
 
 class TestCIInputsFromEnviron(unittest.TestCase):
     """Test CIInputs.from_environ() with event payload fixtures.
@@ -265,6 +295,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.linux_amdgpu_families, [])
         self.assertEqual(inputs.windows_amdgpu_families, [])
         self.assertEqual(inputs.python_versions, [])
+        self.assertEqual(inputs.built_rocm_version, "")
         self.assertEqual(inputs.build_stages, [])
         self.assertEqual(inputs.prebuilt_stages, "")
         self.assertEqual(inputs.baseline_run_id, "")
@@ -288,6 +319,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BUILD_PYTORCH": "false",
                 "BUILD_JAX": "true",
                 "PYTHON_VERSION": "3.12",
+                "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -313,6 +345,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertFalse(inputs.build_pytorch)
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
+        self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -600,7 +633,7 @@ class TestDecideJobs(unittest.TestCase):
         return cm.CIInputs(**defaults)
 
     def test_all_job_groups_run(self):
-        """All job groups are set to run (subgraph selection is Phase 4)."""
+        """Without path selection, default inputs run ROCm and PyTorch."""
         result = cm.decide_jobs(
             self._inputs(), git_context=cm.GitContext(), targets=cm.TargetSelection()
         )
@@ -611,6 +644,129 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_skip_rocm_uses_published_packages_without_baseline_lookup(self, reuse):
+        jobs = cm.decide_jobs(
+            self._inputs(
+                pr_labels=["ci:skip-rocm"],
+                build_jax=True,
+            ),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+        )
+        reuse.assert_not_called()
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.test_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.PREBUILT)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.test_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm.stage_decisions, {})
+        self.assertEqual(jobs.build_rocm.baseline_run_id, "")
+
+    def test_skip_rocm_rejects_non_release_variant(self):
+        with self.assertRaisesRegex(ValueError, "requires build_variant='release'"):
+            cm.decide_jobs(
+                self._inputs(pr_labels=["ci:skip-rocm"], build_variant="asan"),
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(),
+            )
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes")
+    def test_framework_only_changes_select_the_pruned_graph(self, classify):
+        for frameworks in ({"pytorch"}, {"jax"}, {"pytorch", "jax"}):
+            with self.subTest(frameworks=frameworks):
+                classify.return_value = frameworks
+                jobs = cm.decide_jobs(
+                    self._inputs(build_pytorch=True, build_jax=True),
+                    cm.GitContext(),
+                    cm.TargetSelection(),
+                )
+                self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+                self.assertEqual(jobs.test_rocm.action, cm.JobAction.SKIP)
+                self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.PREBUILT)
+                self.assertEqual(
+                    jobs.build_pytorch.action,
+                    cm.JobAction.RUN if "pytorch" in frameworks else cm.JobAction.SKIP,
+                )
+                self.assertEqual(jobs.test_pytorch.action, jobs.build_pytorch.action)
+                self.assertEqual(
+                    jobs.build_jax.action,
+                    cm.JobAction.RUN if "jax" in frameworks else cm.JobAction.SKIP,
+                )
+
+    @patch(
+        "configure_multi_arch_ci.get_jobs_for_changes",
+        return_value={"pytorch", "jax"},
+    )
+    def test_framework_selection_respects_disabled_build_input(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(build_pytorch=False, build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"jax"})
+    def test_explicit_framework_labels_override_path_selection(self, classify):
+        # JAX is affected and enabled by the input, but ci:skip-jax takes precedence.
+        # Likewise, ci:build-pytorch enables PyTorch despite its input and paths.
+        jobs = cm.decide_jobs(
+            self._inputs(
+                build_pytorch=False,
+                build_jax=True,
+                pr_labels=["ci:build-pytorch", "ci:skip-jax"],
+            ),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.SKIP)
+
+    @patch(
+        "configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch", "rocm"}
+    )
+    def test_other_changes_retain_workflow_input_selection(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(build_pytorch=False, build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch"})
+    def test_implicit_selection_preserves_explicit_rocm_requests(self, classify):
+        jobs = cm.decide_jobs(
+            self._inputs(pr_labels=["ci:build-native-windows"], build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        classify.assert_called_once_with(None)
+
+    @patch("configure_multi_arch_ci.get_jobs_for_changes", return_value={"pytorch"})
+    def test_implicit_selection_does_not_use_published_packages_for_asan(
+        self, classify
+    ):
+        jobs = cm.decide_jobs(
+            self._inputs(build_variant="asan", build_jax=True),
+            cm.GitContext(),
+            cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_rocm_python.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_pytorch.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.build_jax.action, cm.JobAction.RUN)
+        classify.assert_called_once_with(None)
 
     def test_build_pytorch_input_skips_pytorch_jobs(self):
         result = cm.decide_jobs(
@@ -908,6 +1064,7 @@ class TestDecideJobs(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
             build_stages=["compiler-runtime", "runtime-tests"],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
         jobs = cm.decide_jobs(inputs, cm.GitContext(), targets)
@@ -1766,8 +1923,13 @@ class TestExpandBuildConfigs(unittest.TestCase):
     test updates here.
     """
 
+    def setUp(self):
+        cm._get_published_rocm_version.cache_clear()
+        self.addCleanup(cm._get_published_rocm_version.cache_clear)
+
     def _inputs(self, **kwargs):
         defaults = dict(
+            built_rocm_version="10.2.0.dev0+abcdef",
             run_id="12345",
             event_name="push",
             commit_ref="main",
@@ -1786,16 +1948,138 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="",
-            build_pytorch=True,
-            build_jax=False,
+            build_rocm=True,
             build_native_linux=True,
             build_native_windows=False,
             build_python_packages=True,
+            build_pytorch=True,
+            build_jax=False,
         )
         d = config.to_dict()
         # to_dict keys should match dataclass fields.
         expected_keys = {f.name for f in fields(cm.BuildConfig)}
         self.assertEqual(set(d.keys()), expected_keys)
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        return_value="10.1.0",
+    )
+    def test_published_packages_replace_source_package_dependency(self, lookup):
+        jobs = replace(
+            _jobs(build_jax=True),
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.SKIP),
+            test_rocm=cm.TestRocmDecision(action=cm.JobAction.SKIP),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.PREBUILT),
+        )
+        configs = cm.expand_build_configs(
+            self._inputs(),
+            cm.GitContext(),
+            cm.TargetSelection(linux_families=["gfx94x"], windows_families=["gfx110x"]),
+            jobs,
+        )
+        for platform in ("linux", "windows"):
+            with self.subTest(platform=platform):
+                config = getattr(configs, platform)
+                self.assertFalse(config.build_rocm)
+                self.assertFalse(config.build_native_linux)
+                self.assertFalse(config.build_python_packages)
+                self.assertEqual(config.test_python_packages_matrix, [])
+                self.assertTrue(config.build_pytorch)
+                self.assertTrue(config.pytorch_build_matrix)
+                self.assertEqual(
+                    config.rocm_package_index_url,
+                    "https://nightly.repo.amd.com/rocm/whl-next/",
+                )
+                self.assertEqual(config.rocm_package_find_links_url, "")
+                self.assertEqual(config.framework_rocm_version, "10.1.0")
+
+        lookup.assert_called_once_with("rocm", configs.linux.rocm_package_index_url)
+        self.assertTrue(configs.linux.build_jax)
+        self.assertTrue(configs.linux.jax_build_matrix)
+        self.assertFalse(configs.windows.build_jax)
+        self.assertEqual(configs.windows.jax_build_matrix, [])
+
+    @patch("configure_multi_arch_ci.get_latest_python_package_version")
+    def test_no_package_inputs_when_package_builds_are_disabled(self, lookup):
+        for package_action in (cm.JobAction.RUN, cm.JobAction.PREBUILT):
+            with self.subTest(package_action=package_action):
+                jobs = replace(
+                    _jobs(build_pytorch=False, build_jax=False),
+                    build_rocm_python=cm.JobGroupDecision(action=package_action),
+                )
+                configs = cm.expand_build_configs(
+                    self._inputs(build_python_packages=False, built_rocm_version=""),
+                    cm.GitContext(),
+                    cm.TargetSelection(
+                        linux_families=["gfx94x"], windows_families=["gfx110x"]
+                    ),
+                    jobs,
+                )
+                for config in (configs.linux, configs.windows):
+                    self.assertFalse(config.build_python_packages)
+                    self.assertFalse(config.build_pytorch)
+                    self.assertFalse(config.build_jax)
+                    self.assertEqual(config.rocm_package_find_links_url, "")
+                    self.assertEqual(config.rocm_package_index_url, "")
+                    self.assertEqual(config.framework_rocm_version, "")
+        lookup.assert_not_called()
+
+    @patch("configure_multi_arch_ci.get_latest_python_package_version")
+    @patch("configure_multi_arch_ci.WorkflowOutputRoot.from_workflow_run")
+    def test_source_builds_resolve_run_package_urls(self, output_root, lookup):
+        output_root.return_value.python_packages.return_value.https_url = (
+            "https://packages.example/run/python"
+        )
+        configs = cm.expand_build_configs(
+            self._inputs(release_type="nightly"),
+            cm.GitContext(),
+            cm.TargetSelection(linux_families=["gfx94x"], windows_families=["gfx110x"]),
+            _jobs(),
+        )
+        self.assertEqual(
+            output_root.call_args_list,
+            [
+                call(run_id="12345", platform="linux", release_type="nightly"),
+                call(run_id="12345", platform="windows", release_type="nightly"),
+            ],
+        )
+        for config in (configs.linux, configs.windows):
+            self.assertEqual(
+                config.rocm_package_find_links_url,
+                "https://packages.example/run/python/index.html",
+            )
+            self.assertEqual(config.rocm_package_index_url, "")
+            self.assertEqual(config.framework_rocm_version, "10.2.0.dev0+abcdef")
+        lookup.assert_not_called()
+
+    def test_missing_built_framework_dependency_version_fails(self):
+        with self.assertRaisesRegex(ValueError, "No ROCm package version"):
+            cm.expand_build_configs(
+                self._inputs(built_rocm_version=""),
+                cm.GitContext.empty(),
+                cm.TargetSelection(linux_families=["gfx94x"]),
+                _jobs(),
+            )
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        side_effect=RuntimeError("Index unavailable"),
+    )
+    def test_published_version_failure_does_not_fall_back_to_built_version(
+        self, lookup
+    ):
+        jobs = replace(
+            _jobs(),
+            build_rocm=cm.BuildRocmDecision(action=cm.JobAction.SKIP),
+            build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.PREBUILT),
+        )
+        with self.assertRaisesRegex(RuntimeError, "Index unavailable"):
+            cm.expand_build_configs(
+                self._inputs(),
+                cm.GitContext.empty(),
+                cm.TargetSelection(linux_families=["gfx94x"]),
+                jobs,
+            )
 
     def test_empty_targets_both_none(self):
         """Empty targets on both platforms → both None."""
@@ -1819,11 +2103,12 @@ class TestExpandBuildConfigs(unittest.TestCase):
             build_variant_label="release",
             build_variant_suffix="",
             build_variant_cmake_preset="release",
-            build_pytorch=True,
-            build_jax=False,
+            build_rocm=True,
             build_native_linux=True,
             build_native_windows=False,
             build_python_packages=True,
+            build_pytorch=True,
+            build_jax=False,
         )
         # Present config → valid JSON
         serialized = json.dumps(config.to_dict())
@@ -1844,6 +2129,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         targets = cm.select_targets(inputs)
         result = cm.expand_build_configs(
@@ -2001,6 +2287,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -2013,11 +2300,30 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx110X-all",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
             ],
         )
+
+    def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        exclusions = {
+            row["pytorch_git_ref"]: row["exclude_implicit_targets"]
+            for row in result.linux.pytorch_build_matrix
+        }
+        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
@@ -2196,7 +2502,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     base_ref="HEAD^1",
                     build_variant="asan",
                 )
-                ci_inputs = cm.CIInputs(**defaults)
+                ci_inputs = cm.CIInputs(
+                    **defaults, built_rocm_version="10.2.0.dev0+abcdef"
+                )
                 result = cm.expand_build_configs(
                     ci_inputs=ci_inputs,
                     git_context=cm.GitContext(),
@@ -2226,6 +2534,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="asan",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         result = cm.expand_build_configs(
             ci_inputs=ci_inputs,
@@ -2656,8 +2965,12 @@ class TestWriteOutputs(unittest.TestCase):
                     build_stages=stages,
                     prebuilt_stages=prebuilt,
                     baseline_run_id="123" if prebuilt else "",
+                    built_rocm_version="10.2.0.dev0+abcdef",
                 )
-                outputs = cm.configure(inputs, cm.GitContext.empty())
+                outputs = cm.configure(
+                    inputs,
+                    cm.GitContext.empty(),
+                )
                 github_output, _ = self._write_outputs(outputs)
                 values = dict(line.split("=", 1) for line in github_output.splitlines())
                 linux = json.loads(values["linux_build_config"])
@@ -2682,6 +2995,10 @@ class TestWriteOutputs(unittest.TestCase):
 class TestConfigurePipeline(unittest.TestCase):
     """Test the full pipeline via configure()."""
 
+    def setUp(self):
+        cm._get_published_rocm_version.cache_clear()
+        self.addCleanup(cm._get_published_rocm_version.cache_clear)
+
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
         outputs = cm.CIOutputs.skipped()
@@ -2700,10 +3017,118 @@ class TestConfigurePipeline(unittest.TestCase):
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        return_value="10.2.0a20261015",
+    )
+    def test_pytorch_path_selects_pytorch_with_published_rocm_packages(self, lookup):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            build_pytorch=True,
+            build_jax=True,
+            built_rocm_version="10.2.0.dev0+abcdef",
+        )
+        outputs = cm.configure(
+            inputs,
+            cm.GitContext(
+                changed_files=["external-builds/pytorch/skip_tests/generic.py"]
+            ),
+        )
+        self.assertTrue(outputs.is_ci_enabled)
+        for config in (outputs.builds.linux, outputs.builds.windows):
+            self.assertIsNotNone(config)
+            # Only build PyTorch, using packages from repo.amd.com.
+            self.assertFalse(config.build_rocm)
+            self.assertFalse(config.build_python_packages)
+            self.assertFalse(config.build_native_windows)
+            self.assertTrue(config.build_pytorch)
+            self.assertFalse(config.build_jax)
+            self.assertEqual(config.framework_rocm_version, "10.2.0a20261015")
+            self.assertEqual(
+                config.rocm_package_index_url,
+                "https://nightly.repo.amd.com/rocm/whl-next/",
+            )
+            self.assertEqual(config.rocm_package_find_links_url, "")
+        lookup.assert_called_once_with(
+            "rocm", "https://nightly.repo.amd.com/rocm/whl-next/"
+        )
+
+    @patch(
+        "configure_multi_arch_ci.get_latest_python_package_version",
+        return_value="10.1.0",
+    )
+    def test_framework_labels_select_builds_without_rocm(self, lookup):
+        # These are distinct graphs: either framework alone, or both together.
+        for frameworks in (("pytorch",), ("jax",), ("pytorch", "jax")):
+            with self.subTest(frameworks=frameworks):
+                labels = ["ci:skip-rocm"] + [f"ci:build-{name}" for name in frameworks]
+                inputs = _run_from_environ(
+                    event_name="pull_request",
+                    event_payload={
+                        "pull_request": {
+                            "labels": [{"name": label} for label in labels]
+                        }
+                    },
+                    extra_env={"BUILD_PYTORCH": "false", "BUILD_JAX": "false"},
+                )
+                outputs = cm.configure(
+                    inputs,
+                    cm.GitContext(
+                        changed_files=["external-builds/pytorch/build_prod_wheels.py"]
+                    ),
+                )
+                self.assertTrue(outputs.is_ci_enabled)
+                for platform in ("linux", "windows"):
+                    config = getattr(outputs.builds, platform)
+                    self.assertIsNotNone(config)
+                    payload = config.to_dict()
+                    self.assertFalse(payload["build_rocm"])
+                    self.assertFalse(payload["build_python_packages"])
+                    self.assertFalse(payload["build_native_linux"])
+                    self.assertFalse(payload["build_native_windows"])
+                    self.assertEqual(payload["build_pytorch"], "pytorch" in frameworks)
+                    self.assertEqual(
+                        payload["build_jax"],
+                        "jax" in frameworks and platform == "linux",
+                    )
+                    self.assertEqual(payload["prebuilt_stages"], "")
+                    self.assertEqual(payload["baseline_run_id"], "")
+                    self.assertEqual(payload["rocm_package_find_links_url"], "")
+                    expected_index = (
+                        "https://nightly.repo.amd.com/rocm/whl-next/"
+                        if payload["build_pytorch"] or payload["build_jax"]
+                        else ""
+                    )
+                    self.assertEqual(payload["rocm_package_index_url"], expected_index)
+                    self.assertEqual(
+                        payload["framework_rocm_version"],
+                        "10.1.0" if expected_index else "",
+                    )
+        lookup.assert_called_once_with(
+            "rocm", "https://nightly.repo.amd.com/rocm/whl-next/"
+        )
+
+    def test_skip_rocm_does_not_fail_inactive_asan_workflow(self):
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            build_variant="asan",
+            event_payload={"pull_request": {"labels": [{"name": "ci:skip-rocm"}]}},
+        )
+        outputs = cm.configure(
+            inputs,
+            cm.GitContext(changed_files=["CMakeLists.txt"]),
+        )
+        self.assertFalse(outputs.is_ci_enabled)
 
     def test_test_labels_thread_to_outputs(self):
         """test_labels on CIInputs pass through to CIOutputs."""
@@ -2715,6 +3140,7 @@ class TestConfigurePipeline(unittest.TestCase):
             build_variant="release",
             linux_test_labels=["test:rccl"],
             windows_test_labels=["test:rccl"],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, ["test:rccl"])
@@ -2728,6 +3154,7 @@ class TestConfigurePipeline(unittest.TestCase):
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         outputs = cm.configure(inputs, cm.GitContext.empty())
         self.assertEqual(outputs.linux_test_labels, [])
@@ -2761,6 +3188,7 @@ class TestConfigurePipeline(unittest.TestCase):
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
 
         outputs = cm.configure(inputs, cm.GitContext.empty())
@@ -2787,6 +3215,7 @@ class TestConfigurePipeline(unittest.TestCase):
             prebuilt_stages="compiler-runtime,runtime-tests",
             baseline_run_id="12345",
             baseline_repository="ROCm/TheRock",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
 
         with patch.dict(
@@ -3032,8 +3461,12 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                         commit_ref="feature" if event == "pull_request" else "main",
                         base_ref="main" if event == "pull_request" else "HEAD^",
                         build_variant="release",
+                        built_rocm_version="10.2.0.dev0+abcdef",
                     )
-                    outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+                    outputs = cm.configure(
+                        ci_inputs,
+                        cm.GitContext.empty(),
+                    )
                     built = self._get_built_families(outputs)
                     for f in expected_built:
                         self.assertIn(f, built, f"{f} should be built on {event}")
@@ -3073,8 +3506,12 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                             else ("HEAD^" if event == "push" else None)
                         ),
                         build_variant="release",
+                        built_rocm_version="10.2.0.dev0+abcdef",
                     )
-                    outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+                    outputs = cm.configure(
+                        ci_inputs,
+                        cm.GitContext.empty(),
+                    )
                     tested = self._get_tested_families(outputs)
                     for f in expected_tested:
                         self.assertIn(f, tested, f"{f} should be tested on {event}")
@@ -3096,8 +3533,12 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                 base_ref="main",
                 build_variant="release",
                 pr_labels=["ci:run-all-archs"],
+                built_rocm_version="10.2.0.dev0+abcdef",
             )
-            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            outputs = cm.configure(
+                ci_inputs,
+                cm.GitContext.empty(),
+            )
             built = self._get_built_families(outputs)
             tested = self._get_tested_families(outputs)
 
@@ -3130,6 +3571,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                 commit_ref="feature",
                 base_ref="main",
                 build_variant="release",
+                built_rocm_version="10.2.0.dev0+abcdef",
             )
             git_context = cm.GitContext(
                 changed_files=["some-submodule"],
@@ -3154,8 +3596,12 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                 base_ref=None,
                 build_variant="release",
                 linux_amdgpu_families=["all"],
+                built_rocm_version="10.2.0.dev0+abcdef",
             )
-            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            outputs = cm.configure(
+                ci_inputs,
+                cm.GitContext.empty(),
+            )
             built = self._get_built_families(outputs)
             tested = self._get_tested_families(outputs)
 
@@ -3176,8 +3622,12 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                 base_ref=None,
                 build_variant="release",
                 linux_amdgpu_families=["mock-nightly-only"],
+                built_rocm_version="10.2.0.dev0+abcdef",
             )
-            outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+            outputs = cm.configure(
+                ci_inputs,
+                cm.GitContext.empty(),
+            )
 
             self.assertEqual(self._get_built_families(outputs), ["mock-nightly-only"])
             self.assertEqual(self._get_tested_families(outputs), ["mock-nightly-only"])
@@ -3237,6 +3687,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
                     ),
                     build_variant="release",
                     **extra_inputs,
+                    built_rocm_version="10.2.0.dev0+abcdef",
                 )
                 outputs = cm.configure(ci_inputs, git_context)
                 family_info = self._find_family_info(outputs, family_name)
@@ -3261,6 +3712,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
             base_ref="main",
             build_variant="release",
             linux_amdgpu_families=["gfx950"],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         outputs = cm.configure(ci_inputs, cm.GitContext.empty())
         family_info = self._find_family_info(outputs, "gfx950-dcgpu")
@@ -3287,6 +3739,7 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
             base_ref=None,
             build_variant="release",
             linux_amdgpu_families=["gfx125x"],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         git_context = cm.GitContext.empty()
         outputs = cm.configure(ci_inputs, git_context)
@@ -3460,6 +3913,7 @@ class TestTriggerHelpers(unittest.TestCase):
             base_ref="main",
             build_variant="release",
             pr_labels=["ci:gfx125X-dcgpu"],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         outputs = cm.configure(ci_inputs, cm.GitContext.empty())
         # _find_family_info is on TestRealFamilyMatrix; inline the lookup here.
@@ -3558,6 +4012,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             commit_ref="feature",
             base_ref="HEAD^",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         targets = cm.TargetSelection(linux_families=["gfx94x"])
 
@@ -3583,6 +4038,7 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
             commit_ref="main",
             base_ref="HEAD^1",
             build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         # gfx103x doesn't have multi-label config
         targets = cm.TargetSelection(linux_families=["gfx103x"])
@@ -3613,6 +4069,7 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
             base_ref="HEAD^1",
             build_variant="release",
             pr_labels=pr_labels or [],
+            built_rocm_version="10.2.0.dev0+abcdef",
         )
         result = cm.expand_build_configs(
             ci_inputs=ci_inputs,

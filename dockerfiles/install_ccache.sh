@@ -11,8 +11,8 @@ CCACHE_VERSION="$1"
 
 ARCH="$(uname -m)"
 case "${CCACHE_VERSION}:${ARCH}" in
-    4.11.2:x86_64)
-        CCACHE_SHA256="c97655c75e1e7137d9bc9a9c854220fcbe14f1d7224c64a18c43c70195567ccb"
+    4.12.1:x86_64)
+        CCACHE_SHA256="742e6a6e17c0a060046874eece2949b221c228e1119698a4c6e0b096cbc87152"
         ;;
     *)
         echo "Unsupported ccache version/architecture: ${CCACHE_VERSION}/${ARCH}" >&2
