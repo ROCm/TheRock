@@ -272,7 +272,10 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
             configure_coverage_ci.build_coverage_cmake_options(
                 sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
             ),
-            ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"],
+            [
+                "-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON",
+                "-DTHEROCK_FLAG_BUILD_HIPCCL=OFF",
+            ],
         )
 
     def test_both_groups_collapse_to_the_combined_option(self):
@@ -283,7 +286,7 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
                     - configure_coverage_ci.BLOCKED_PROJECTS
                 )
             ),
-            ["-DTHEROCK_COVERAGE_ALL=ON"],
+            ["-DTHEROCK_COVERAGE_ALL=ON", "-DTHEROCK_FLAG_BUILD_HIPCCL=OFF"],
         )
 
     def test_blocked_project_is_named_rather_than_folded_into_a_group(self):
@@ -306,14 +309,34 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         # rocPRIM alone would instrument nothing the report reads.
         self.assertEqual(
             configure_coverage_ci.build_coverage_cmake_options(["rocprim"]),
-            ["-DROCPRIM_ENABLE_COVERAGE=ON", "-DROCPRIM_TESTS_ENABLE_COVERAGE=ON"],
+            [
+                "-DROCPRIM_ENABLE_COVERAGE=ON",
+                "-DROCPRIM_TESTS_ENABLE_COVERAGE=ON",
+                "-DTHEROCK_FLAG_BUILD_HIPCCL=OFF",
+            ],
+        )
+
+    def test_prim_projects_build_the_legacy_subprojects(self):
+        # hipCCL has no hipCUB subproject for HIPCUB_ENABLE_COVERAGE to reach.
+        for key in sorted(configure_coverage_ci.PRIM_PROJECTS):
+            with self.subTest(key=key):
+                self.assertIn(
+                    "-DTHEROCK_FLAG_BUILD_HIPCCL=OFF",
+                    configure_coverage_ci.build_coverage_cmake_options([key]),
+                )
+
+    def test_prim_projects_are_rocprim_hipcub_and_rocthrust(self):
+        self.assertEqual(
+            configure_coverage_ci.PRIM_PROJECTS,
+            {"rocprim", "hipcub", "rocthrust"},
         )
 
     def test_one_group_does_not_claim_to_cover_the_other(self):
         options = configure_coverage_ci.build_coverage_cmake_options(
             sorted(configure_coverage_ci.ROCM_LIBRARIES_PROJECTS)
         )
-        self.assertEqual(options, ["-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON"])
+        self.assertNotIn("-DTHEROCK_COVERAGE_ALL=ON", options)
+        self.assertNotIn("-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON", options)
 
     def test_no_selection_produces_no_options(self):
         self.assertEqual(configure_coverage_ci.build_coverage_cmake_options([]), [])

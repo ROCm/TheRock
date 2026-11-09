@@ -514,12 +514,15 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="amdsmi",
         source_repo=ROCM_SYSTEMS,
     ),
+    #
+    # rocm-systems -- profiler-apps stage
+    #
     "rocprofiler-compute": CoverageProject(
         cmake_target="rocprofiler-compute",
         artifact_names=["rocprofiler-compute"],
         artifact_relpaths=["profiler/rocprofiler-compute/stage"],
         unsupported_reason="a Python tool with no native instrumentation option",
-        stage=STAGE_COMPILER_RUNTIME,
+        stage=STAGE_PROFILER_APPS,
         test_component="rocprofiler-compute",
         coverage_config="projects/rocprofiler-compute/test_categories_coverage.yaml",
         object_globs=["lib/librocprofiler-compute*.so*"],
@@ -527,9 +530,6 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         codecov_flag="rocprofiler-compute",
         source_repo=ROCM_SYSTEMS,
     ),
-    #
-    # rocm-systems -- profiler-apps stage
-    #
     "rocprofiler-systems": CoverageProject(
         cmake_target="rocprofiler-systems",
         artifact_names=["rocprofiler-systems"],
@@ -596,6 +596,11 @@ ROCM_SYSTEMS_PROJECTS: frozenset[str] = frozenset(
     k
     for k, v in COVERAGE_PROJECTS.items()
     if v.source_repo == ROCM_SYSTEMS and v.coverage_option and not v.blocked_reason
+)
+# Projects shipped in the prim artifact, built by the legacy rocPRIM/hipCUB/
+# rocThrust subprojects or, by default, the unified hipCCL superbuild.
+PRIM_PROJECTS: frozenset[str] = frozenset(
+    k for k, v in COVERAGE_PROJECTS.items() if "prim" in v.artifact_names
 )
 
 # Group-alias tokens accepted by PROJECTS_TO_TEST (and the projects_to_test CI
@@ -767,6 +772,13 @@ def build_coverage_cmake_options(project_keys: list[str]) -> list[str]:
         project = COVERAGE_PROJECTS[key]
         for target in [project.cmake_target, *project.extra_cmake_targets]:
             options.append(f"-D{target.upper()}_ENABLE_COVERAGE=ON")
+
+    # The unified hipCCL superbuild has no rocPRIM/hipCUB/rocThrust subprojects
+    # for their coverage flags to reach, so it ships uninstrumented tests whose
+    # stage dirs (hipCCL_tests) the replacement does not recognize. Build the
+    # legacy subprojects these entries are registered against instead.
+    if selected & PRIM_PROJECTS:
+        options.append("-DTHEROCK_FLAG_BUILD_HIPCCL=OFF")
     return options
 
 

@@ -268,6 +268,13 @@ directory in the artifact; keeping the baseline's would fail with `Cannot find S
 load the instrumented kpack, so only the swapped project's tests are expected
 to pass.
 
+The prim projects (rocPRIM, hipCUB, rocThrust) are built in the coverage run
+with `-DTHEROCK_FLAG_BUILD_HIPCCL=OFF`. The default unified hipCCL superbuild
+has no rocPRIM/hipCUB/rocThrust subprojects for their `<PROJECT>_ENABLE_COVERAGE`
+flags to reach, so it would ship uninstrumented tests, all under one
+`hipCCL_tests` stage directory. With no stage directory of its own, hipCUB would
+not take the shared kpack, and its host binaries would fail with `device kernel image is invalid` against the baseline's kernels.
+
 A hip\* wrapper also brings the backend it calls at runtime from the same
 artifact (`SAME_ARTIFACT_BACKENDS`: hipRAND brings rocRAND, hipFFT rocFFT, and
 so on). Otherwise the instrumented wrapper runs against the baseline's backend,
