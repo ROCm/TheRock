@@ -57,10 +57,12 @@ Product indexes may intentionally contain packages outside aggregate ownership.
 
 Publish the package to the affected product buckets and wait for the product
 indexer to create its package page and wheel links. Mirrored dependencies are
-published by the rockrel
+third-party wheels from PyPI that `mirror_python_dependencies.py` copies into
+the core product index, so that ROCm packages and their requirements can be
+installed from the same index. They are published by the rockrel
 [`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
-workflow: its weekly run covers `dev` and a manual dispatch can
-target particular release streams. Verify those links before
+workflow, which runs weekly and can be dispatched manually. It currently
+publishes to `dev` only. Verify those links before
 deploying a new aggregate route. For mirrored dependencies, the public package
 page is `/rocm/core/whl-next/<normalized-package>/`.
 

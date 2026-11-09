@@ -235,11 +235,11 @@ should also be available through the aggregate index used by pip, add its core
 ownership mapping and redeploy the aggregate index.
 
 The rockrel
-[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/blob/main/.github/workflows/mirror_python_dependencies.yml)
+[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
 workflow runs weekly and can also be run manually. It resolves one snapshot and
 publishes it with `--refresh-existing` to the core bucket of each selected
-release stream. Scheduled runs and the default `all` input publish to `dev` and
-`nightly`; a manual run can instead target particular release streams. If
+release stream. Both scheduled and manual runs currently publish to `dev` only;
+other release streams are enabled in the workflow one at a time. If
 a run fails, rerun the workflow. Each run is idempotent, and older versions
 remain subject to their normal retention policy.
 
