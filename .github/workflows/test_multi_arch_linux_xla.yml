@@ -125,20 +125,6 @@ jobs:
     # fallback covers pull_request, where there is no inputs context at all.
     timeout-minutes: ${{ fromJSON(inputs.test_timeout_minutes || '240') }}
 
-    # Test cases excluded from the run. A single combination, so this does not
-    # fan out: the matrix is the one place a workflow can hold a real YAML list
-    # `join()` below turns it into the negative gtest filter.
-    #
-    # A value-parameterized name is <Instantiation>/<Fixture>.<Test>/<Param>.
-    strategy:
-      matrix:
-        include:
-          - excluded_tests:
-              - HloOpProfilerTest.BasicMeasurementsAreCorrect
-              - StreamExecutorGpuClientTest.NumaNode # Numa test doesn't work on DO nodes, rbe
-              - PrngTest.PassInGlobalRngSeed
-              - CommandBufferTests/CommandBufferTest.Convolutions* # TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
-
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
 
@@ -170,7 +156,13 @@ jobs:
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
       ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
-      XLA_TEST_FILTER: "-${{ join(matrix.excluded_tests, ':') }}"
+      # Negative gtest filter, colon-separated:
+      #   HloOpProfilerTest.BasicMeasurementsAreCorrect
+      #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
+      #   PrngTest.PassInGlobalRngSeed
+      #   CommandBufferTests/CommandBufferTest.Convolutions* — TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
+      XLA_TEST_FILTER: >-
+        -HloOpProfilerTest.BasicMeasurementsAreCorrect:StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:CommandBufferTests/CommandBufferTest.Convolutions*
       ROCM_COMMON_BAZEL_ARGS: >-
         --config=rocm_ci_hermetic
         --config=rocm_rbe_dynamic
