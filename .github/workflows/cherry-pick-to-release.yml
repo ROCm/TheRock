@@ -59,7 +59,7 @@ jobs:
         id: systems-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          client-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: ROCm
           repositories: rocm-systems
@@ -72,7 +72,7 @@ jobs:
         id: therock-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
+          client-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
           owner: ROCm
           repositories: TheRock
@@ -85,7 +85,7 @@ jobs:
         id: libraries-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
+          client-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
           private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
           owner: ROCm
           repositories: rocm-libraries

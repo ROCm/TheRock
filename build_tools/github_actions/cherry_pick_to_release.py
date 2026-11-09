@@ -26,6 +26,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+from typing import cast
 from urllib.parse import quote, urlsplit
 
 
@@ -283,24 +284,14 @@ def bot_identity(api: GitHubAPI, app_slug: str) -> CommitIdentity:
             f"Malformed bot response for {login}: expected an object, "
             f"got {type(response).__name__}"
         )
-    response_login = response.get("login")
-    if not isinstance(response_login, str) or not response_login:
-        raise CherryPickError(f"Bot response for {login} has no valid login")
-    if response_login.lower() != login.lower():
-        raise CherryPickError(
-            f"Bot lookup for {login} returned unexpected login {response_login!r}"
-        )
-    email = response.get("email")
-    if email is not None:
-        if not isinstance(email, str) or not email.strip():
-            raise CherryPickError(f"Bot response for {login} has a malformed email")
-    else:
+    email = cast(str | None, response.get("email"))
+    if email is None:
         account_id = response.get("id")
-        if not isinstance(account_id, int) or isinstance(account_id, bool):
+        if not isinstance(account_id, int):
             raise CherryPickError(
-                f"Bot response for {login} has neither a usable email nor numeric ID"
+                f"Bot response for {login} has no numeric ID for its fallback email"
             )
-        email = f"{account_id}+{response_login}@users.noreply.github.com"
+        email = f"{account_id}+{login}@users.noreply.github.com"
     return CommitIdentity(name=login, email=email)
 
 
@@ -372,27 +363,42 @@ def _validate_workflow_provenance(
         )
 
 
-def _conflict_summary(
-    repository: str, release_branch: str, error: CherryPickConflictError
+def _failure_summary(
+    repository: str,
+    commits_value: str,
+    release_branch: str,
+    jira_id_value: str,
+    error: Exception,
 ) -> str:
-    return "\n".join(
-        [
-            "# Cherry-pick conflict",
-            "",
-            f"- Target repository: `{TARGET_OWNER}/{repository}`",
-            f"- Release branch: `{release_branch}`",
-            "",
-            f"Commit `{error.commit}` did not apply cleanly.",
-            "",
-            "Git diagnostics:",
-            "",
-            "```",
-            error.diagnostics.rstrip(),
-            "```",
-            "",
-            "Nothing was pushed and no pull request was created.",
-        ]
-    )
+    commits = [item for item in re.split(r"[,\s]+", commits_value.strip()) if item]
+    lines = [
+        "# Cherry-pick to release failed",
+        "",
+        f"- Target repository: `{TARGET_OWNER}/{repository}`",
+        f"- Release branch: `{release_branch}`",
+        "- Requested commits:",
+    ]
+    lines.extend(f"  - `{commit}`" for commit in commits)
+    if not commits:
+        lines.append("  - not provided")
+    jira_id = jira_id_value.strip()
+    lines.append(f"- JIRA ID: `{jira_id}`" if jira_id else "- JIRA ID: not provided")
+    lines.extend(["", "## Failure", ""])
+    if isinstance(error, CherryPickConflictError):
+        lines.extend(
+            [
+                f"Commit `{error.commit}` did not apply cleanly.",
+                "",
+                "## Git diagnostics",
+                "",
+                "```text",
+                error.diagnostics.rstrip(),
+                "```",
+            ]
+        )
+    else:
+        lines.extend(["```text", str(error), "```"])
+    return "\n".join(lines)
 
 
 def _dry_run_summary(result: RunResult) -> str:
@@ -503,8 +509,12 @@ def execute_cherry_pick(
             )
         except CherryPickConflictError as exc:
             summary_writer(
-                _conflict_summary(
-                    repository=repository, release_branch=release.branch, error=exc
+                _failure_summary(
+                    repository=repository,
+                    commits_value=commits_value,
+                    release_branch=release.branch,
+                    jira_id_value=jira_id_value,
+                    error=exc,
                 )
             )
             raise
@@ -614,16 +624,20 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workflow-run-url",
         default=os.getenv("WORKFLOW_RUN_URL", ""),
-        help="URL of the originating TheRock Actions run, included in the pull "
-        "request body; required for live runs and optional for local dry runs "
+        help="Link to the ROCm/TheRock Actions run that invoked this script, "
+        "added to the pull request body. Must be provided together with "
+        "--workflow-actor. Set automatically by the cherry-pick-to-release "
+        "workflow; required for live runs, optional for dry runs "
         "(env: WORKFLOW_RUN_URL)",
     )
     parser.add_argument(
         "--workflow-actor",
         default=os.getenv("WORKFLOW_ACTOR", ""),
-        help="GitHub login of the triggering operator, included with the workflow "
-        "run provenance; required for live runs and optional for local dry runs "
-        "(env: WORKFLOW_ACTOR)",
+        help="GitHub login of the user who triggered the workflow, added to the "
+        "pull request body with the workflow run link. Must be provided together "
+        "with --workflow-run-url. Set automatically by the "
+        "cherry-pick-to-release workflow; required for live runs, optional for "
+        "dry runs (env: WORKFLOW_ACTOR)",
     )
     parser.add_argument(
         "--dry-run",
@@ -657,6 +671,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             api=api,
         )
     except (CherryPickError, GitHubAPIError) as exc:
+        if not isinstance(exc, CherryPickConflictError):
+            gha_append_step_summary(
+                _failure_summary(
+                    repository=args.repository,
+                    commits_value=args.commits,
+                    release_branch=args.release_branch,
+                    jira_id_value=args.jira_id,
+                    error=exc,
+                )
+            )
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0

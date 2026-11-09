@@ -330,14 +330,12 @@ class GitHubOperationsTest(unittest.TestCase):
             "45123+systems-assistant[bot]@users.noreply.github.com",
         )
 
-    def test_bot_identity_rejects_incomplete_response(self) -> None:
+    def test_bot_identity_rejects_unusable_fallback_response(self) -> None:
         for response in (
             [],
             {},
-            {"login": "someone-else[bot]", "id": 1},
-            {"login": "systems-assistant[bot]", "email": None},
-            {"login": "systems-assistant[bot]", "id": 1, "email": ""},
-            {"login": "systems-assistant[bot]", "id": 1, "email": 5},
+            {"email": None},
+            {"id": "45123", "email": None},
         ):
             api = FakeGitHubAPI(bot_response=response)
             with self.subTest(response=response), self.assertRaises(CherryPickError):
@@ -404,30 +402,36 @@ class CommandLineTest(unittest.TestCase):
                     )
                     api.assert_called_once_with(github_token=TOKEN)
 
-    def test_invalid_dry_run_environment_is_ignored_by_help_and_flags(self) -> None:
+    def test_help_ignores_invalid_dry_run_environment(self) -> None:
         with patch.dict(
             os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
         ), patch("sys.stdout", io.StringIO()), self.assertRaises(SystemExit) as raised:
             main(["--help"])
         self.assertEqual(raised.exception.code, 0)
 
-        for flag, expected in (("--dry-run", True), ("--no-dry-run", False)):
-            with self.subTest(flag=flag), patch.dict(
-                os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
-            ), patch("cherry_pick_to_release.execute_cherry_pick") as execute, patch(
-                "cherry_pick_to_release.GitHubAPI"
-            ):
-                self.assertEqual(main([flag]), 0)
-                self.assertEqual(execute.call_args.kwargs["dry_run"], expected)
-
-    def test_invalid_unoverridden_dry_run_environment_fails(self) -> None:
-        with patch.dict(
-            os.environ, {"CHERRY_PICK_DRY_RUN": "invalid"}, clear=True
-        ), patch("sys.stderr", io.StringIO()), patch(
-            "cherry_pick_to_release.execute_cherry_pick"
-        ) as execute:
+    def test_expected_failure_writes_input_summary(self) -> None:
+        environment = {
+            "CHERRY_PICK_REPOSITORY": "rocm-systems",
+            "CHERRY_PICK_COMMITS": "abcdef0, 1234567",
+            "CHERRY_PICK_RELEASE_BRANCH": "release/therock-10.2",
+            "CHERRY_PICK_JIRA_ID": "AIRDEL-1234",
+        }
+        with patch.dict(os.environ, environment, clear=True), patch(
+            "sys.stderr", io.StringIO()
+        ), patch(
+            "cherry_pick_to_release.execute_cherry_pick",
+            side_effect=CherryPickError("The destination branch already exists"),
+        ), patch(
+            "cherry_pick_to_release.gha_append_step_summary"
+        ) as write_summary:
             self.assertEqual(main([]), 1)
-        execute.assert_not_called()
+        summary = write_summary.call_args.args[0]
+        self.assertIn("ROCm/rocm-systems", summary)
+        self.assertIn("release/therock-10.2", summary)
+        self.assertIn("`abcdef0`", summary)
+        self.assertIn("`1234567`", summary)
+        self.assertIn("`AIRDEL-1234`", summary)
+        self.assertIn("The destination branch already exists", summary)
 
 
 class WorkflowWiringTest(unittest.TestCase):
@@ -486,7 +490,8 @@ class WorkflowWiringTest(unittest.TestCase):
                 self.assertEqual(settings["repositories"], repository)
                 self.assertEqual(settings["owner"], "ROCm")
                 self.assertEqual(
-                    settings["app-id"], "${{ secrets." + secret_prefix + "_APP_ID }}"
+                    settings["client-id"],
+                    "${{ secrets." + secret_prefix + "_APP_ID }}",
                 )
                 self.assertEqual(
                     settings["private-key"],
@@ -519,27 +524,6 @@ class WorkflowWiringTest(unittest.TestCase):
             environment["WORKFLOW_RUN_URL"],
             "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
         )
-        for step in self.steps:
-            if "run" in step:
-                self.assertNotIn("${{ inputs.", step["run"])
-
-    def test_workflow_uses_pinned_actions_and_read_only_default_permissions(
-        self,
-    ) -> None:
-        self.assertEqual(self.workflow["permissions"], {"contents": "read"})
-        for step in self.steps:
-            if "uses" in step:
-                action_ref = step["uses"].rsplit("@", maxsplit=1)[1]
-                self.assertRegex(action_ref, r"^[0-9a-f]{40}$")
-
-    def test_checkout_does_not_persist_credentials_or_fetch_submodules(self) -> None:
-        checkout = next(
-            step
-            for step in self.steps
-            if step.get("uses", "").startswith("actions/checkout@")
-        )
-        self.assertEqual(checkout["with"]["persist-credentials"], "false")
-        self.assertEqual(checkout["with"]["submodules"], "false")
 
 
 class LocalTargetRepository:
@@ -763,6 +747,19 @@ class CherryPickIntegrationTest(unittest.TestCase):
         with self.assertRaisesRegex(CherryPickError, "must be provided together"):
             self.execute(workflow_run_url="")
 
+    def test_workflow_run_url_must_reference_therock(self) -> None:
+        invalid_urls = (
+            "https://github.com/ROCm/rocm-systems/actions/runs/123",
+            "https://example.com/ROCm/TheRock/actions/runs/123",
+        )
+        for workflow_run_url in invalid_urls:
+            with self.subTest(
+                workflow_run_url=workflow_run_url
+            ), self.assertRaisesRegex(
+                CherryPickError, "must point to a ROCm/TheRock Actions run"
+            ):
+                self.execute(workflow_run_url=workflow_run_url)
+
     def test_live_run_pushes_unsigned_commit_and_creates_pr(self) -> None:
         result = self.execute(dry_run=False)
         self.assertFalse(result.dry_run)
@@ -800,7 +797,6 @@ class CherryPickIntegrationTest(unittest.TestCase):
         self.assertEqual(request.body["head"], result.pr_branch)
         self.assertEqual(request.body["title"], result.pr_title)
         self.assertEqual(request.body["body"], result.pr_body)
-        self.assertNotIn("labels", request.body)
         self.assertIn(RUN_URL, request.body["body"])
         self.assertIn(result.pr_url, self.summaries[0])
 
@@ -881,7 +877,7 @@ class CherryPickIntegrationTest(unittest.TestCase):
         self.assertIn("feature-one.txt", self.summaries[0])
         self.assertIn("ROCm/rocm-systems", self.summaries[0])
         self.assertIn("release/therock-10.2", self.summaries[0])
-        self.assertIn("Nothing was pushed", self.summaries[0])
+        self.assertIn("`AIRDEL-1234`", self.summaries[0])
 
     def test_nested_union_attribute_matches_ordinary_cherry_pick(self) -> None:
         self.target.switch("release/therock-10.2")

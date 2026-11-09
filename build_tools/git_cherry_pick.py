@@ -91,6 +91,7 @@ def _run_git(
     *,
     input_text: str | None = None,
     check: bool = True,
+    capture_stderr: bool = False,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = ["git"]
@@ -106,6 +107,7 @@ def _run_git(
             command,
             input=input_text,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE if capture_stderr else None,
             text=True,
             encoding="utf-8",
             env=env,
@@ -117,6 +119,8 @@ def _run_git(
     if check and result.returncode != 0:
         if result.stdout:
             print(result.stdout, file=sys.stderr, end="", flush=True)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="", flush=True)
         raise CherryPickError(
             f"{shlex.join(command)} failed with status {result.returncode}"
         )
@@ -322,42 +326,34 @@ def push_branch(
     """Create an absent branch and verify creation without exposing credentials."""
     destination = f"refs/heads/{branch}"
     refspec = f"{head}:{destination}"
-    command = [
-        "git",
-        "-C",
-        os.fspath(repo),
+    args = [
         "push",
         "--porcelain",
         f"--force-with-lease={destination}:",
         remote_url,
         refspec,
     ]
-    print(f"+ {shlex.join(command)}", file=sys.stderr, flush=True)
-    env = os.environ.copy()
-    env["GIT_TERMINAL_PROMPT"] = "0"
+    extra_env = {"GIT_TERMINAL_PROMPT": "0"}
     encoded_credentials: str | None = None
     if token is not None:
         encoded_credentials = base64.b64encode(
             f"x-access-token:{token}".encode("utf-8")
         ).decode("ascii")
-        config_index = int(env.get("GIT_CONFIG_COUNT", "0"))
-        env["GIT_CONFIG_COUNT"] = str(config_index + 1)
-        env[f"GIT_CONFIG_KEY_{config_index}"] = "http.https://github.com/.extraheader"
-        env[f"GIT_CONFIG_VALUE_{config_index}"] = (
+        config_index = int(os.getenv("GIT_CONFIG_COUNT", "0"))
+        extra_env["GIT_CONFIG_COUNT"] = str(config_index + 1)
+        extra_env[f"GIT_CONFIG_KEY_{config_index}"] = (
+            "http.https://github.com/.extraheader"
+        )
+        extra_env[f"GIT_CONFIG_VALUE_{config_index}"] = (
             f"AUTHORIZATION: basic {encoded_credentials}"
         )
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-        )
-    except OSError as exc:
-        raise CherryPickError(
-            f"Could not execute git push for {remote_description} branch {branch!r}"
-        ) from exc
+    result = _run_git(
+        repo,
+        args,
+        check=False,
+        capture_stderr=True,
+        extra_env=extra_env,
+    )
     detail = result.stderr or ""
     for secret in (token, encoded_credentials):
         if secret is not None:

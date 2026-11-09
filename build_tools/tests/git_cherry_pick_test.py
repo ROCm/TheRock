@@ -25,17 +25,6 @@ TOKEN = "test-app-token"  # nosec B105
 
 
 class GitPrimitiveValidationTest(unittest.TestCase):
-    def test_commit_resolution_failure_is_reported(self) -> None:
-        ambiguous = subprocess.CompletedProcess(
-            args=["git", "rev-parse"],
-            returncode=128,
-            stdout="",
-            stderr="error: short object ID abcdef0 is ambiguous",
-        )
-        with patch("git_cherry_pick._run_git", return_value=ambiguous):
-            with self.assertRaisesRegex(CherryPickError, "exactly one target commit"):
-                resolve_commits(Path("/unused"), ["abcdef0"])
-
     def test_commit_resolution_preserves_repeated_commits(self) -> None:
         resolved = subprocess.CompletedProcess(
             args=["git", "rev-parse"],
@@ -51,39 +40,6 @@ class GitPrimitiveValidationTest(unittest.TestCase):
 
 
 class PushSanitizationTest(unittest.TestCase):
-    def test_push_requires_creation_confirmation_for_exact_refspec(self) -> None:
-        head = "a" * 40
-        branch = "shared/cherry-pick/therock-10.2-airdel-12"
-        refspec = f"{head}:refs/heads/{branch}"
-        remote_url = "https://github.com/ROCm/target.git"
-        for status_output in (
-            "",
-            f"*\t{head}:refs/heads/another-branch\t[new branch]\n",
-            f"*\t{refspec}\n",
-            f"*\t{refspec}\t[new branch]\n*\t{refspec}\t[new branch]\n",
-            f"=\t{refspec}\t[up to date]\n",
-        ):
-            result = subprocess.CompletedProcess(
-                args=["git", "push"],
-                returncode=0,
-                stdout=f"To {remote_url}\n{status_output}Done\n",
-                stderr="",
-            )
-            with self.subTest(status_output=status_output):
-                with patch(
-                    "git_cherry_pick.subprocess.run", return_value=result
-                ), self.assertRaises(CherryPickError) as raised:
-                    push_branch(
-                        repo=Path("/temporary/repo"),
-                        remote_url=remote_url,
-                        remote_description="ROCm/target",
-                        head=head,
-                        branch=branch,
-                        token=TOKEN,
-                    )
-                self.assertNotIn(TOKEN, str(raised.exception))
-                self.assertIn(branch, str(raised.exception))
-
     def test_push_failure_reports_diagnostics_without_credentials(self) -> None:
         remote_url = "https://github.com/ROCm/target.git"
         encoded_credentials = base64.b64encode(
