@@ -54,12 +54,13 @@ def _is_test_tarball(name: str) -> bool:
     return "-tests-" in name
 
 
-def _select_multiarch_tarball_file(
+def _select_multiarch_tarball_url(
     *,
     tarball_files: list[Path],
+    output_root: WorkflowOutputRoot,
     platform: str,
-) -> Path | None:
-    """Gets the default "multiarch" tarball from a list of tarball files.
+) -> str | None:
+    """Gets the default "multiarch" tarball URL from a list of tarball files.
 
     Note: this should look simpler once we drop the "multiarch" part of the
     file name, at which point the file will just be therock-dist-{platform}.
@@ -69,60 +70,11 @@ def _select_multiarch_tarball_file(
     non_test_tarball_files = [f for f in tarball_files if not _is_test_tarball(f.name)]
 
     for f in non_test_tarball_files:
-        if f.name.startswith(f"therock-dist-{platform}-multiarch-"):
-            return f
+        name = f.name
+        if name.startswith(f"therock-dist-{platform}-multiarch-"):
+            return _tarball_url(output_root, name)
 
     return None
-
-
-def _version_from_multiarch_name(name: str, platform: str) -> str:
-    """Recovers the version string shared by every tarball in a run.
-
-    Taken from the multiarch name rather than parsed out of each file, because
-    a family is not separable from a version by splitting on "-": family names
-    contain them too (gfx94X-dcgpu).
-    """
-    prefix = f"therock-dist-{platform}-multiarch-"
-    return name[len(prefix) : -len(".tar.gz")]
-
-
-def _select_family_tarball_urls(
-    *,
-    tarball_files: list[Path],
-    output_root: WorkflowOutputRoot,
-    platform: str,
-    version: str,
-) -> dict[str, str]:
-    """Maps each per-family tarball to its family name.
-
-    These sit alongside the multiarch entry so a consumer that only wants one
-    architecture can take just that one, rather than unpacking a distro holding
-    every family in the release.
-
-    Each family is emitted twice when its name contains "-": once under the
-    family name itself, and once with "-" replaced by "_". GitHub Actions
-    expressions read "-" as subtraction, so the canonical key is only reachable
-    as ``fromJSON(...)['gfx950-dcgpu']`` while the alias also allows
-    ``fromJSON(...).gfx950_dcgpu``.
-    """
-    prefix = f"therock-dist-{platform}-"
-    suffix = f"-{version}.tar.gz"
-
-    urls: dict[str, str] = {}
-    for f in tarball_files:
-        name = f.name
-        if _is_test_tarball(name):
-            continue
-        if not name.startswith(prefix) or not name.endswith(suffix):
-            continue
-        family = name[len(prefix) : -len(suffix)]
-        if family == "multiarch":
-            continue
-        url = _tarball_url(output_root, name)
-        urls[family] = url
-        urls[family.replace("-", "_")] = url
-
-    return urls
 
 
 def run(
@@ -167,31 +119,18 @@ def run(
 
     logger.info("Uploaded %d files", count)
 
-    multiarch_tarball_file = _select_multiarch_tarball_file(
+    multiarch_tarball_url = _select_multiarch_tarball_url(
         tarball_files=tarball_files,
+        output_root=output_root,
         platform=platform,
     )
 
-    if not multiarch_tarball_file:
+    if not multiarch_tarball_url:
         raise ValueError(
             "No multiarch tarball URL was produced; check tarball naming and upload logic"
         )
 
-    tarball_urls = {
-        "multiarch": _tarball_url(output_root, multiarch_tarball_file.name),
-    }
-    tarball_urls.update(
-        _select_family_tarball_urls(
-            tarball_files=tarball_files,
-            output_root=output_root,
-            platform=platform,
-            version=_version_from_multiarch_name(multiarch_tarball_file.name, platform),
-        )
-    )
-
-    logger.info("Tarball URLs: %s", ", ".join(sorted(tarball_urls)))
-
-    gha_set_output({"tarball_urls": json.dumps(tarball_urls)})
+    gha_set_output({"tarball_urls": json.dumps({"multiarch": multiarch_tarball_url})})
 
     return 0
 
