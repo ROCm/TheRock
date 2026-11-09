@@ -141,8 +141,10 @@ def generate_jax_matrix(
     *,
     jax_refs: list[str],
     python_versions: list[str],
+    debug: bool = False,
 ) -> list[dict[str, str | bool]]:
     matrix: list[dict[str, str | bool]] = []
+    debug_rows: list[dict[str, str | bool]] = []
     for py in python_versions:
         for ref in jax_refs:
             ref_cfg = JAX_REF_CONFIGS[ref]
@@ -177,10 +179,23 @@ def generate_jax_matrix(
                     # Whether the release build uploads and then tests the
                     # wheels; CI uploads to run-scoped artifacts either way.
                     "publish": ref_cfg.get("publish", True),
+                    "variant": "release",
+                    "run_tests": True,
                 }
             )
+            # The same build with debug symbols, published but not tested.
+            if debug:
+                debug_rows.append(
+                    {
+                        **matrix[-1],
+                        "jax_label": f"{matrix[-1]['jax_label']} debug",
+                        "variant": "debug",
+                        "run_tests": False,
+                    }
+                )
 
-    return matrix
+    # Release builds queue first.
+    return matrix + debug_rows
 
 
 def generate_jax_matrix_for_release_type(
@@ -211,6 +226,7 @@ def generate_jax_matrix_for_release_type(
     return generate_jax_matrix(
         jax_refs=refs,
         python_versions=versions,
+        debug=release_type != "ci",
     )
 
 

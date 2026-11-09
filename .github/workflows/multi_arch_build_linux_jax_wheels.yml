@@ -54,6 +54,14 @@ on:
         description: "Upload the wheels to the release bucket and test them from there. False builds only."
         type: boolean
         default: true
+      variant:
+        description: "release, or debug: the same wheels with debug symbols and a .debug local label, published to whl-next-debug."
+        type: string
+        default: "release"
+      run_tests:
+        description: "Test the published wheels. False publishes without testing."
+        type: boolean
+        default: true
       rocm_version:
         description: "ROCm package version to install and build against."
         type: string
@@ -283,11 +291,13 @@ jobs:
         id: resolve_jax_version
         env:
           WHEEL_TYPE: ${{ inputs.wheel_type }}
+          VARIANT: ${{ inputs.variant }}
         run: |
           python build_tools/github_actions/resolve_jax_version.py \
             --wheel-type "${WHEEL_TYPE}" \
             --rocm-version "${ROCM_VERSION}" \
-            --jax-source-dir jax-source
+            --jax-source-dir jax-source \
+            --variant "${VARIANT}"
 
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
@@ -296,12 +306,14 @@ jobs:
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
           ML_WHEEL_VERSION_SUFFIX: ${{ steps.resolve_jax_version.outputs.ml_wheel_version_suffix }}
           JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
+          VARIANT_BAZEL_OPTIONS: ${{ steps.resolve_jax_version.outputs.bazel_options }}
         run: |
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
             --env ML_WHEEL_VERSION_SUFFIX \
             --env JAX_WHEELS \
+            --env VARIANT_BAZEL_OPTIONS \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
@@ -315,6 +327,7 @@ jobs:
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
+                ${VARIANT_BAZEL_OPTIONS} \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
@@ -340,11 +353,14 @@ jobs:
       - name: Upload JAX wheels to release bucket
         id: publish_jax_wheels
         if: ${{ inputs.publish }}
+        env:
+          PYTHON_INDEX: ${{ steps.resolve_jax_version.outputs.python_index }}
         run: |
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
-            --structured
+            --structured \
+            --python-index="${PYTHON_INDEX}"
 
 
       - name: Capture job summary
@@ -355,7 +371,7 @@ jobs:
   configure_jax_tests:
     name: Configure JAX Tests
     # The tests install from the release index, so unpublished wheels go untested.
-    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
+    if: ${{ inputs.publish && inputs.run_tests && inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}

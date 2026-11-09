@@ -42,6 +42,8 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "gfx_arch",
                 "wheel_type",
                 "publish",
+                "variant",
+                "run_tests",
             },
         )
 
@@ -254,6 +256,37 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             platform="linux",
         )
         self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-v0.12.0"})
+
+    def test_release_runs_add_an_untested_debug_build_of_every_row(self):
+        for release_type in set(m.RELEASE_TYPES) - {"ci"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type, platform="linux"
+                )
+                release = {
+                    (row["python_version"], row["jax_ref"]): row
+                    for row in matrix
+                    if row["variant"] == "release"
+                }
+                debug = [row for row in matrix if row["variant"] == "debug"]
+                self.assertEqual(
+                    {(row["python_version"], row["jax_ref"]) for row in debug},
+                    set(release),
+                )
+                for row in debug:
+                    twin = release[(row["python_version"], row["jax_ref"])]
+                    self.assertEqual(row["jax_label"], f"{twin['jax_label']} debug")
+                    self.assertEqual(row["publish"], twin["publish"])
+                    self.assertFalse(row["run_tests"])
+                    self.assertTrue(twin["run_tests"])
+                # Release builds queue first.
+                self.assertEqual(matrix[len(release) :], debug)
+
+    def test_ci_builds_no_debug_rows(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci", platform="linux"
+        )
+        self.assertEqual({row["variant"] for row in matrix}, {"release"})
 
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):
