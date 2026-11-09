@@ -74,7 +74,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--python-index",
         default="whl-next",
-        choices=["whl", "whl-next"],
+        choices=["whl", "whl-next", "whl-next-debug"],
         help="Product-local index name for structured publishing (default: "
         "whl-next). Selects the v5/rocm/jax/<index>/ path segment.",
     )

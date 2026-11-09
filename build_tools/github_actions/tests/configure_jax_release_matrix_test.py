@@ -99,6 +99,8 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "gfx_arch",
                 "wheel_type",
                 "publish",
+                "variant",
+                "run_tests",
             },
         )
 
@@ -206,14 +208,21 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                     platform="linux",
                     python_versions=["3.13"],
                 )
-                self.assertEqual([row["jax_ref"] for row in matrix], refs)
+                self.assertEqual(
+                    [row["jax_ref"] for row in matrix if row["variant"] == "release"],
+                    refs,
+                )
 
     def test_explicit_refs_get_all_default_python_versions(self):
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="dev", platform="linux", jax_refs=["rocm-jaxlib-vFAKE-old"]
         )
         self.assertEqual(
-            [(row["python_version"], row["jax_ref"]) for row in matrix],
+            [
+                (row["python_version"], row["jax_ref"])
+                for row in matrix
+                if row["variant"] == "release"
+            ],
             list(product(["3.11", "3.12", "3.13"], ["rocm-jaxlib-vFAKE-old"])),
         )
 
@@ -370,6 +379,37 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             [("3.12", "rocm-jaxlib-vFAKE-new")],
         )
 
+    def test_release_runs_add_an_untested_debug_build_of_every_row(self):
+        for release_type in set(m.RELEASE_TYPES) - {"ci"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type, platform="linux"
+                )
+                release = {
+                    (row["python_version"], row["jax_ref"]): row
+                    for row in matrix
+                    if row["variant"] == "release"
+                }
+                debug = [row for row in matrix if row["variant"] == "debug"]
+                self.assertEqual(
+                    {(row["python_version"], row["jax_ref"]) for row in debug},
+                    set(release),
+                )
+                for row in debug:
+                    twin = release[(row["python_version"], row["jax_ref"])]
+                    self.assertEqual(row["jax_label"], f"{twin['jax_label']} debug")
+                    self.assertEqual(row["publish"], twin["publish"])
+                    self.assertFalse(row["run_tests"])
+                    self.assertTrue(twin["run_tests"])
+                # Release builds queue first.
+                self.assertEqual(matrix[len(release) :], debug)
+
+    def test_ci_builds_no_debug_rows(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci", platform="linux"
+        )
+        self.assertEqual({row["variant"] for row in matrix}, {"release"})
+
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):
             m.generate_jax_matrix_for_release_type(
@@ -409,7 +449,8 @@ class ConfiguredJaxReleaseMatrixTest(unittest.TestCase):
                     )
                     self.assertTrue(matrix)
                     combinations = {
-                        (row["python_version"], row["jax_ref"]) for row in matrix
+                        (row["python_version"], row["jax_ref"], row["variant"])
+                        for row in matrix
                     }
                     self.assertEqual(len(matrix), len(combinations))
 
