@@ -44,6 +44,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:skip-native-windows`   | Skip native Windows package builds.                                                                                                                                                               |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:skip-rocm`             | Skip ROCm builds and tests; use published ROCm packages for frameworks. See [Building frameworks with published ROCm](#building-frameworks-with-published-rocm).                                  |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
 | `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
@@ -99,6 +100,35 @@ and `ci:test:gfx...` labels the complete architecture selection.
 Only the architecture selection is narrowed. Package builds, `test:...`,
 `test_filter:...`, and `ci:platform:...` keep their usual meaning. Pull requests
 only; other triggers already state their coverage explicitly.
+
+#### Building frameworks with published ROCm
+
+When CI-relevant changes are confined to PyTorch or JAX files, CI can skip ROCm
+builds and use published ROCm packages. Ownership is listed under `[job_paths]`
+in [`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml).
+
+Explicit labels override automatic selection:
+
+- Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
+  build frameworks using the latest nightly ROCm packages.
+- Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
+  workflow enables by default.
+
+> [!NOTE]
+> Automatic use of published packages is disabled by:
+>
+> - Build variants other than `release`, until ROCm releases include Python
+>   packages for other build variants (see
+>   https://github.com/ROCm/TheRock/issues/3161 for example).
+> - `ci:build-python-packages`, `ci:build-native-linux`, or
+>   `ci:build-native-windows` labels, which request ROCm packaging jobs.
+> - Nonempty `build_stages`, `prebuilt_stages`, or `baseline_run_id` inputs,
+>   which request specific stage builds or artifact reuse.
+> - An `external_repo` input, whose changes are treated as ROCm changes.
+
+See
+[ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
+for more details.
 
 ### Push
 

@@ -10,5 +10,6 @@ include = [
 include = [
   "bin/rj_pretranslate",
   "bin/rocjitsu-pretranslate.py",
+  "libexec/rocjitsu/rocjitsu-memory",
   "share/rocjitsu/**",
 ]
