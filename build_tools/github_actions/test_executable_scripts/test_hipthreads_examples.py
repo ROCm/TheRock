@@ -22,6 +22,7 @@ import os
 import platform
 import shlex
 import subprocess
+import time
 from pathlib import Path
 
 from libhipcxx_utils import (
@@ -112,8 +113,6 @@ def build_environment() -> dict:
     environ_vars["HIP_PLATFORM"] = "amd"
     environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
     environ_vars["CMAKE_GENERATOR"] = "Ninja"
-    # TEMPORARY (users/marsavic/hipthreads-vcores-64): run the examples at each device's occupancy cap.
-    environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "64"
 
     prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
     if IS_WINDOWS:
@@ -290,8 +289,68 @@ environ_vars = build_environment()
 logging.info(f"ROCM_PATH: {environ_vars['ROCM_PATH']}")
 logging.info(f"EXAMPLES_ROOT: {EXAMPLES_ROOT}")
 
+# TEMPORARY (users/marsavic/hipthreads-vcores-64): diagnostic sweep instead of a pass/fail run. saxpy and spmm run
+# once at the occupancy cap; the raytracer, which hangs at the cap on gfx117X, runs for every (vcores per WGP, CU mask)
+# pair. HIPTHREADS_DEBUG_NO_CU_MASK needs the matching temporary hipThreads change, which also prints the vcore count
+# and mask state at launch. Low vcore counts go first, so a GPU reset caused by a hang can't spoil the clean runs.
+DIAG_TIMEOUT_SECONDS = 60
+DIAG_SWEEP = {
+    "inOneWeekend": [(v, m) for v in ["16", "24", "28", "32", "64"] for m in ["0", "1"]],
+}
+DIAG_DEFAULT = [("64", "0")]
+
+
+def run_diag(example: dict, binary: Path, env: dict) -> tuple[str, float, str]:
+    """Runs one example. Returns (status, seconds, launch line)."""
+    stdout_path = binary.parent.parent / f"{example['name']}.stdout.log"
+    cmd = [str(binary), *example["args"]]
+    start = time.monotonic()
+    with open(stdout_path, "wt") as stdout_file:
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=EXAMPLES_ROOT / example["subdir"],
+                stdout=stdout_file,
+                stderr=subprocess.STDOUT,
+                env=env,
+                timeout=DIAG_TIMEOUT_SECONDS,
+            )
+            if result.returncode != 0:
+                status = f"EXIT {result.returncode}"
+            elif not _file_contains(stdout_path, example["marker"]):
+                status = "NO MARKER"
+            else:
+                status = "PASS"
+        except subprocess.TimeoutExpired:
+            status = "HANG"
+    seconds = time.monotonic() - start
+    launch = ""
+    with open(stdout_path, "rt", errors="replace") as f:
+        for line in f:
+            if "debug launch: " in line:
+                launch = line.split("debug launch: ", 1)[1].strip()
+                break
+    if status != "PASS":
+        _dump_tail(stdout_path, lines=20)
+    return status, seconds, launch
+
+
+rows = []
 for example in EXAMPLES:
     binary = configure_and_build(example, gpu_arch, environ_vars)
-    run_example(example, binary, environ_vars)
+    for vcores, mask in DIAG_SWEEP.get(example["name"], DIAG_DEFAULT):
+        env = dict(
+            environ_vars,
+            HIPTHREADS_VCORES_PER_WGP=vcores,
+            HIPTHREADS_DEBUG_NO_CU_MASK=mask,
+        )
+        status, seconds, launch = run_diag(example, binary, env)
+        mask_state = "off" if mask == "1" else "on"
+        rows.append((example["name"], vcores, mask_state, status, seconds, launch))
+        logging.info(f"{example['name']} vcores/WGP={vcores} cu_mask={mask_state}: {status} in {seconds:.1f}s [{launch}]")
 
-logging.info("All hipThreads example apps built and ran successfully.")
+logging.info("==== hipThreads examples occupancy diagnostic ====")
+print(f"{'example':<14} {'v/WGP':>5} {'mask':>4} {'result':<9} {'secs':>6}  launch", flush=True)
+for name, vcores, mask_state, status, seconds, launch in rows:
+    print(f"{name:<14} {vcores:>5} {mask_state:>4} {status:<9} {seconds:6.1f}  {launch}", flush=True)
+# Always succeed: the table is the result, and a failing job would only be retried by the runner.

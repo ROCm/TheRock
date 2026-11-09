@@ -15,6 +15,7 @@ hipThreads test/lit.cfg). This script:
   3. Invokes lit directly.
 """
 
+import collections
 import json
 import logging
 import os
@@ -22,6 +23,8 @@ import platform
 import shlex
 import shutil
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 from libhipcxx_utils import get_gpu_architecture_portable, prepend_env_path
@@ -68,9 +71,6 @@ environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
 # after this many seconds, so one stuck test can't burn the whole job timeout.
 # Honored by the vendored test executor (test/utils/run.py).
 environ_vars["HIPTHREADS_TEST_TIMEOUT"] = "20"
-# TEMPORARY (users/marsavic/hipthreads-vcores-64): request far more scheduler vcores than most GPUs can hold, so
-# hardware_concurrency() is clamped to each device's full occupancy and the suite runs at the cap.
-environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "64"
 
 # Add ROCm binaries to PATH (also the hipcc location).
 prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))
@@ -181,13 +181,113 @@ if not HIPTHREADS_SOURCE_DIR.exists():
     logging.error(f"Test sources not found at: {HIPTHREADS_SOURCE_DIR}")
     raise FileNotFoundError(HIPTHREADS_SOURCE_DIR)
 
-# Run the lit suite.
-cmd = [
-    "lit",
-    "-v",
-    "-j",
-    "1",
-    str(HIPTHREADS_SOURCE_DIR / "test"),
+# TEMPORARY (users/marsavic/hipthreads-vcores-64): instead of the full suite, run a diagnostic sweep of the tests
+# that hang at the occupancy cap on gfx94X/gfx950/gfx117X. Each test is compiled once through lit, then its binary is
+# run directly for every (vcores per WGP, CU mask) pair. HIPTHREADS_DEBUG_NO_CU_MASK needs the matching temporary
+# hipThreads change, which also prints the vcore count and mask state at launch.
+DIAG_TESTS = [
+    "std/thread/thread.threads/thread.thread.class/thread.thread.constr/robust_against_adl.pass.cpp",
+    "std/thread/thread.condition/thread.condition.condvar/wait.pass.cpp",
+    "std/thread/thread.mutex/thread.lock/thread.lock.unique/mutex.pass.cpp",
+    "std/thread/thread.condition/thread.condition.condvar/wait_pred.pass.cpp",
+    "std/thread/thread.mutex/thread.mutex.requirements/thread.mutex.requirements.mutex/thread.mutex.class/lock.pass.cpp",
+    # Control: passes everywhere at 64.
+    "std/thread/thread.threads/thread.thread.class/thread.thread.member/join.pass.cpp",
+]
+DIAG_VCORES_PER_WGP = ["16", "24", "28", "31", "32", "64"]
+DIAG_TIMEOUT_SECONDS = 10
+DIAG_LOG_TAIL_LINES = 300
+
+
+def run_diag(exe: Path, env: dict) -> tuple[str, float, list[str]]:
+    """Runs one test binary. Returns (status, seconds, output lines)."""
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            [str(exe)],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+            timeout=DIAG_TIMEOUT_SECONDS,
+        )
+        status = "PASS" if result.returncode == 0 else f"EXIT {result.returncode}"
+        output = result.stdout
+    except subprocess.TimeoutExpired as e:
+        status = "HANG"
+        output = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+    return status, time.monotonic() - start, output.splitlines()
+
+
+def run_with_amd_log(exe: Path, env: dict, log_path: Path) -> None:
+    """Reruns a hanging config with AMD_LOG_LEVEL=4 and prints the tail of its output."""
+    env = dict(env, AMD_LOG_LEVEL="4")
+    tail = collections.deque(maxlen=DIAG_LOG_TAIL_LINES)
+    with open(log_path, "wt", errors="replace") as log_file:
+        proc = subprocess.Popen(
+            [str(exe)], env=env, stdout=log_file, stderr=subprocess.STDOUT
+        )
+        try:
+            proc.wait(timeout=DIAG_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    with open(log_path, "rt", errors="replace") as log_file:
+        for line in log_file:
+            tail.append(line.rstrip("\n"))
+    logging.info(f"---- last {len(tail)} lines of AMD_LOG_LEVEL=4 output ({log_path}) ----")
+    for line in tail:
+        print(line, flush=True)
+    logging.info("---- end of AMD_LOG_LEVEL=4 output ----")
+
+
+# Compile (and run once at the default vcore count) through lit, so the binaries are built exactly as in the suite.
+compile_env = dict(environ_vars, HIPTHREADS_VCORES_PER_WGP="16")
+cmd = ["lit", "-v", "-j", "1"] + [
+    str(HIPTHREADS_SOURCE_DIR / "test" / t) for t in DIAG_TESTS
 ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, check=True, env=environ_vars)
+subprocess.run(cmd, env=compile_env)
+
+# Mirrors config.test_exec_root in hipThreads test/lit.cfg.
+exec_root = (
+    Path(tempfile.gettempdir()) / "hipthreads-lit"
+    if IS_WINDOWS
+    else HIPTHREADS_BUILD_DIR / "test"
+)
+
+rows = []
+amd_log_done = False
+for test in DIAG_TESTS:
+    test_path = Path(test)
+    exe = exec_root / test_path.parent / "Output" / (test_path.name + ".dir") / "t.tmp.exe"
+    if not exe.exists():
+        logging.error(f"Binary not found for {test}: {exe}")
+        rows.append((test_path.name, "-", "-", "NO BINARY", 0.0, ""))
+        continue
+    for mask in ["0", "1"]:
+        for vcores in DIAG_VCORES_PER_WGP:
+            env = dict(
+                environ_vars,
+                HIPTHREADS_VCORES_PER_WGP=vcores,
+                HIPTHREADS_DEBUG_NO_CU_MASK=mask,
+            )
+            status, seconds, lines = run_diag(exe, env)
+            launch = next((l for l in lines if "debug launch" in l), "")
+            launch = launch.split("debug launch: ", 1)[-1]
+            rows.append((test_path.name, vcores, "off" if mask == "1" else "on", status, seconds, launch))
+            logging.info(f"{test_path.name} vcores/WGP={vcores} cu_mask={'off' if mask == '1' else 'on'}: "
+                         f"{status} in {seconds:.1f}s [{launch}]")
+            if status != "PASS":
+                for line in lines[-20:]:
+                    print(f"    | {line}", flush=True)
+            if status == "HANG" and not amd_log_done:
+                amd_log_done = True
+                run_with_amd_log(exe, env, OUTPUT_ARTIFACTS_PATH / "hipthreads-diag-amdlog.txt")
+
+logging.info("==== hipThreads occupancy diagnostic ====")
+print(f"{'test':<28} {'v/WGP':>5} {'mask':>4} {'result':<9} {'secs':>6}  launch")
+for name, vcores, mask, status, seconds, launch in rows:
+    print(f"{name:<28} {vcores:>5} {mask:>4} {status:<9} {seconds:6.1f}  {launch}")
+# Always succeed: the table is the result, and a failing job would only be retried by the runner.
