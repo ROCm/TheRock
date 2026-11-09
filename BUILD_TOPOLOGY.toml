@@ -821,14 +821,14 @@ disable_platforms = ["windows"]
 [artifacts.aqlprofile]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime"]
+artifact_deps = ["core-runtime", "core-hip"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-register is in base
+artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio", "core-hip"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
