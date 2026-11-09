@@ -61,6 +61,59 @@ endif()
 include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
 therock_get_meson_compiler_env(_meson_cc _meson_cxx)
 
+# If this wrapper gains an AMD compiler toolchain, sanitizer enablement must
+# also pass the sanitizer compile and link options into the Meson build.
+set(_hardening_fortify ON)
+if(THEROCK_SANITIZER)
+  set(_hardening_fortify OFF)
+endif()
+therock_get_hardening_command_flags(
+  _hardening_c_flags
+  _hardening_c_link_flags
+  _unused_c_executable_flags
+  _unused_c_executable_link_flags
+  LANGUAGE C
+  FORTIFY "${_hardening_fortify}"
+)
+therock_get_hardening_command_flags(
+  _hardening_cxx_flags
+  _hardening_cxx_link_flags
+  _unused_cxx_executable_flags
+  _unused_cxx_executable_link_flags
+  LANGUAGE CXX
+  FORTIFY "${_hardening_fortify}"
+)
+# Cache initial CPPFLAGS alongside CMake's cached CFLAGS/CXXFLAGS so a later
+# policy reconfigure retains them even when the environment is no longer set.
+set(LIBDRM_CPPFLAGS "$ENV{CPPFLAGS}" CACHE STRING
+  "Preprocessor flags for libdrm's Meson build")
+set(_meson_c_args "${CMAKE_C_FLAGS} ${LIBDRM_CPPFLAGS}")
+set(_meson_cxx_args "${CMAKE_CXX_FLAGS} ${LIBDRM_CPPFLAGS}")
+set(_meson_c_link_args "-Wl,-rpath='$$ORIGIN'")
+set(_meson_cxx_link_args "-Wl,-rpath='$$ORIGIN'")
+set(_meson_pie false)
+if(CMAKE_C_FLAGS)
+  string(APPEND _meson_c_link_args " ${CMAKE_C_FLAGS}")
+endif()
+if(CMAKE_CXX_FLAGS)
+  string(APPEND _meson_cxx_link_args " ${CMAKE_CXX_FLAGS}")
+endif()
+if(_hardening_c_flags)
+  string(APPEND _meson_c_args " ${_hardening_c_flags}")
+endif()
+if(_hardening_cxx_flags)
+  string(APPEND _meson_cxx_args " ${_hardening_cxx_flags}")
+endif()
+if(_hardening_c_link_flags)
+  string(APPEND _meson_c_link_args " ${_hardening_c_link_flags}")
+endif()
+if(_hardening_cxx_link_flags)
+  string(APPEND _meson_cxx_link_args " ${_hardening_cxx_link_flags}")
+endif()
+if(_hardening_c_flags)
+  set(_meson_pie true)
+endif()
+
 # Meson refuses to build if the source dir is a subdir of the build dir, so
 # make it a sibling.
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
@@ -81,13 +134,19 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Escaping hack: experimentally determined to persist through the layers.
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN'"
       "CC=${_meson_cc}"
       "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure
+        # Meson reads environment flags only on its first setup. Explicitly
+        # setting these options on every reconfigure makes policy switches
+        # update an existing build directory in both directions.
+        "-Dc_args=${_meson_c_args}"
+        "-Dcpp_args=${_meson_cxx_args}"
+        "-Dc_link_args=${_meson_c_link_args}"
+        "-Dcpp_link_args=${_meson_cxx_link_args}"
+        "-Db_pie=${_meson_pie}"
         # We generate relocatable, arch neutral directory layouts and use
         # DESTDIR to install int ot the lib/rocm_sysdeps tree.
         --prefix "/"

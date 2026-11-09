@@ -346,6 +346,17 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
         )
         self.assertEqual(r, "dnn-providers/cmake")
 
+    def test_hipccl_monorepo_dir_surfaces_prefix(self):
+        # projects/hipccl is monorepo-native (not subtree-synced); edits there
+        # must classify to the projects/hipccl prefix, not fall back to the
+        # full test suite.
+        r = self._configure(
+            ["projects/hipccl/hipccl3/rocprim/foo.hpp"],
+            repo="ROCm/rocm-libraries",
+        )
+        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r.changed_projects, "projects/hipccl")
+
     def test_mixed_recognized_and_unclassified_runs_all(self):
         r = self._configure(
             ["projects/rocm-core/src/x.cpp", "tools/rocm-build/helper.py"]
