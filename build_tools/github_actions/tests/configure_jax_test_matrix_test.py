@@ -121,6 +121,16 @@ class BuildTestMatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.matrix(target="gfx-not-a-family")
 
+    def test_family_with_jax_disabled_returns_empty_matrix(self):
+        """Families with jax in disabled_framework_tests return empty matrix."""
+        with mock.patch.object(
+            matrix_script,
+            "is_framework_test_disabled_for_family",
+            return_value=True,
+        ):
+            matrix = self.matrix(target="gfx94X-dcgpu", size="large")
+        self.assertEqual(matrix, {"include": []})
+
     def test_only_small_narrows_the_single_gpu_job(self):
         small = job_for(self.matrix(size="small"), "all")
         medium = job_for(self.matrix(size="medium"), "all")

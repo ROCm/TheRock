@@ -800,7 +800,8 @@ def select_baseline_run(
             for artifact in group_requirements
         )
     else:
-        assert required_artifacts is not None
+        if required_artifacts is None:
+            raise AssertionError("Required artifacts must be specified")
         requirements = _dedupe_required_artifacts(required_artifacts)
 
     required_jobs = _dedupe_nonempty_strings(

@@ -33,9 +33,7 @@ def is_windows():
 
 def run_command(command: list[str], cwd=None, env: dict[str, str] | None = None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
-    process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
-    )
+    process = subprocess.run(command, capture_output=True, cwd=cwd, text=True, env=env)
     if process.returncode != 0:
         logger.error(f"Command failed!")
         logger.error("command stdout:")
@@ -72,7 +70,17 @@ def clinfo_output() -> str:
             clinfo = Path(directory) / "clinfo.exe"
             shutil.copy2(THEROCK_BIN_DIR / "clinfo.exe", clinfo)
             shutil.copy2(vendor, Path(directory) / "OpenCL.dll")
-            return run_command([str(clinfo)], cwd=directory, env=env).stdout
+            # Keep Comgr beside the vendor so CLR cannot pick up an older
+            # driver-installed DLL from System32 before searching PATH.
+            shutil.copy2(
+                THEROCK_BIN_DIR / "amd_comgr.dll",
+                Path(directory) / "amd_comgr.dll",
+            )
+            process = run_command([str(clinfo)], cwd=directory, env=env)
+            # clinfo can exit successfully even when device initialization fails.
+            if process.stderr:
+                logger.info("clinfo stderr:\n%s", process.stderr)
+            return process.stdout
 
     lib_dir = THEROCK_BIN_DIR.parent / "lib"
     vendor = lib_dir / "opencl" / "libamdocl64.so"
@@ -96,6 +104,10 @@ class TestROCmSanity:
     @pytest.mark.skipif(
         is_asan(),
         reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
+    )
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="clinfo test is disabled for gfx125X-dcgpu due to hangs",
     )
     @pytest.mark.parametrize(
         "to_search",
@@ -237,8 +249,7 @@ class TestROCmSanity:
         )
 
         # Running and checking the executable
-        platform_executable_prefix = "./" if not is_windows() else ""
-        hip_check_executable = f"{platform_executable_prefix}hip_check"
+        hip_check_executable = str(THEROCK_BIN_DIR / hip_check_executable_file)
         process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR))
         check.equal(process.returncode, 0)
         check.greater(

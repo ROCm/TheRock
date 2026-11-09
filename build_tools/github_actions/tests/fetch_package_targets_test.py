@@ -69,28 +69,34 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertTrue(any("gfx120X-all" == t["amdgpu_family"] for t in targets))
 
     def test_gfx94x_multi_label_selects_first(self):
-        """Test that first label can be selected via random.choices."""
+        """Test that first label can be selected via SystemRandom.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
         first_label = {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5}
-        with patch("random.choices", return_value=[first_label]):
+        with patch(
+            "amdgpu_family_matrix.random.SystemRandom.choices",
+            return_value=[first_label],
+        ):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["test_machine"], "linux-gfx942-1gpu-ccs-ossci-rocm")
 
     def test_gfx94x_multi_label_selects_second(self):
-        """Test that second label can be selected via random.choices."""
+        """Test that second label can be selected via SystemRandom.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
         second_label = {"label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm", "count": 28}
-        with patch("random.choices", return_value=[second_label]):
+        with patch(
+            "amdgpu_family_matrix.random.SystemRandom.choices",
+            return_value=[second_label],
+        ):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)
@@ -99,14 +105,17 @@ class FetchPackageTargetsTest(unittest.TestCase):
         )
 
     def test_gfx94x_multi_label_selects_third(self):
-        """Test that third label can be selected via random.choices."""
+        """Test that third label can be selected via SystemRandom.choices."""
         args = {
             "AMDGPU_FAMILIES": "gfx94x",
             "THEROCK_PACKAGE_PLATFORM": "linux",
         }
 
         third_label = {"label": "linux-gfx942-1gpu-ossci-rocm", "count": 5}
-        with patch("random.choices", return_value=[third_label]):
+        with patch(
+            "amdgpu_family_matrix.random.SystemRandom.choices",
+            return_value=[third_label],
+        ):
             targets = fetch_package_targets.determine_package_targets(args)
 
         self.assertEqual(len(targets), 1)

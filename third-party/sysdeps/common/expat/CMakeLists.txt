@@ -72,6 +72,69 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(EXPAT_BUILD VERSION "2.7.5")
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_expat_cc _unused_expat_cxx)
+set(_expat_base_cc "${_expat_cc}")
+
+# Autoconf supplies -g -O2 only when CFLAGS is absent. Keep that behavior and
+# put general hardening options in the compiler command. When the user did set
+# CFLAGS, use its actual optimization level to decide fortification.
+# If this wrapper gains an AMD compiler toolchain, sanitizer enablement must
+# also pass the sanitizer compile and link options into the Autotools build.
+set(_hardening_fortify ON)
+if(THEROCK_SANITIZER)
+  set(_hardening_fortify OFF)
+elseif(DEFINED ENV{CFLAGS})
+  therock_hardening_flags_are_optimized(
+    _hardening_fortify "$ENV{CFLAGS}"
+  )
+endif()
+therock_get_hardening_command_flags(
+  _hardening_c_flags
+  _hardening_shared_link_flags
+  _hardening_executable_c_flags
+  _hardening_executable_link_flags
+  LANGUAGE C
+  FORTIFY "${_hardening_fortify}"
+)
+# Append policy options after all autotools/user arguments. In particular,
+# later -Wp definitions must not override fortify enablement or its reset.
+# Keeping CFLAGS untouched also preserves Autoconf's default optimization.
+function(_expat_wrap_compiler out_var flags)
+  if(NOT flags)
+    set(${out_var} "${_expat_base_cc}" PARENT_SCOPE)
+    return()
+  endif()
+  set(_wrapper "${CMAKE_CURRENT_BINARY_DIR}/${out_var}.sh")
+  file(GENERATE OUTPUT "${_wrapper}"
+    CONTENT "#!/bin/sh\nexec ${_expat_base_cc} \"$@\" ${flags}\n"
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  )
+  set(${out_var} "${out_var}.sh" PARENT_SCOPE)
+endfunction()
+_expat_wrap_compiler(_expat_cc "${_hardening_c_flags}")
+_expat_wrap_compiler(_expat_executable_cc "${_hardening_executable_c_flags}")
+# Autoconf splits CC as a command; resolve wrapper names through PATH so their
+# build-directory paths can contain spaces.
+set(_expat_build_env)
+if(_hardening_c_flags)
+  list(APPEND _expat_build_env "PATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{PATH}")
+endif()
+set(_expat_make "${CMAKE_COMMAND}" -E env ${_expat_build_env} -- make)
+set(_expat_executable_ld "${_expat_base_cc}")
+if(_hardening_executable_link_flags)
+  string(APPEND
+    _expat_executable_ld " ${_hardening_executable_link_flags}"
+  )
+endif()
+
+# Preserve explicit CFLAGS across later builds without suppressing Autoconf's
+# optimization defaults when the variable was originally absent.
+set(_expat_configure_env)
+if(DEFINED ENV{CFLAGS})
+  list(APPEND _expat_configure_env "CFLAGS=$ENV{CFLAGS}")
+endif()
+
 # Apply patch source only on Linux
 set(patch_source_commands)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -90,9 +153,12 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
+      "CC=${_expat_cc}"
+      ${_expat_build_env}
+      ${_expat_configure_env}
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_hardening_shared_link_flags} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${SOURCE_DIR}/configure"
@@ -110,10 +176,19 @@ add_custom_target(
       # will potentially alter the timestamp of acinclude.m4, which will
       # trigger a reconfigure with a version of aclocal we do not have.
       --disable-maintainer-mode
+  # Autotools does not track compiler or linker command changes as build
+  # dependencies. Clean after reconfiguration so policy switches rebuild all
+  # objects with the current hardening flags.
   COMMAND
-    make V=1
+    ${_expat_make} clean
   COMMAND
-    make install
+    ${_expat_make} -C lib V=1
+  COMMAND
+    ${_expat_make} -C xmlwf V=1
+      "CC=${_expat_executable_cc}"
+      "CCLD=${_expat_executable_ld}"
+  COMMAND
+    ${_expat_make} install
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"

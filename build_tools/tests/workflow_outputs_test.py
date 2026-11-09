@@ -32,8 +32,8 @@ class TestStorageLocation(unittest.TestCase):
 
     def test_local_path(self):
         loc = StorageLocation("my-bucket", "12345-linux/logs/group/build.log")
-        result = loc.local_path(Path("/tmp/staging"))
-        expected = Path("/tmp/staging/12345-linux/logs/group/build.log")
+        result = loc.local_path(Path("/fake/staging"))
+        expected = Path("/fake/staging/12345-linux/logs/group/build.log")
         self.assertEqual(result, expected)
 
     def test_frozen(self):
@@ -167,10 +167,6 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
     # -- Python packages --
 
     def test_python_packages(self):
-        loc = self.root.python_packages("gfx110X-all")
-        self._assert_relative_path(loc, "99999-linux/python/gfx110X-all")
-
-    def test_python_packages_no_artifact_group(self):
         loc = self.root.python_packages()
         self._assert_relative_path(loc, "99999-linux/python")
 

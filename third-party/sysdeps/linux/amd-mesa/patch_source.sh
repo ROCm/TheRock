@@ -83,37 +83,60 @@ sed -i "/description: 'Userspace Video Acceleration (VA) DRM interface'/a\  libr
 # Modify libva meson.build to set driverdir to libdir
 sed -i "/driverdir = join_paths(get_option('prefix'), get_option('libdir'), 'dri')/c\    driverdir = join_paths(get_option('prefix'), get_option('libdir'))" "$LIBVA_MAIN_MESON_BUILD"
 
-# This eliminates the need for LIBVA_DRIVERS_PATH environment variable
+# Make libva find the VA driver shipped alongside it without LIBVA_DRIVERS_PATH.
+# The driver search path is built in priority order:
+#   1. The directory containing libva itself (TheRock ships libva and the mesa
+#      VA driver side by side, so this is expected to always succeed).
+#   2. $ROCM_PATH/lib/rocm_sysdeps/lib
+#   3. $LIBVA_DRIVERS_PATH, or the compiled-in VA_DRIVERS_PATH if unset.
+# va_openDriver() walks the ':'-separated list and stops at the first driver
+# that loads, so a stale ROCM_PATH or LIBVA_DRIVERS_PATH can no longer shadow
+# the bundled driver.
 sed -i '/^[[:space:]]*char \*search_path = NULL;/a\    char *temp_path = NULL;' "$LIBVA_SOURCE"
+VA_SEARCH_PATH_PATCH="$(mktemp)"
+trap 'rm -f "$VA_SEARCH_PATH_PATCH"' EXIT
+cat > "$VA_SEARCH_PATH_PATCH" <<'EOF'
+    {
+        char *self_dir = NULL;
+        char *rocm_dir = NULL;
+        char *rocm_path = secure_getenv("ROCM_PATH");
+        Dl_info dl_info;
+
+        if (dladdr((void *)va_openDriver, &dl_info) && dl_info.dli_fname) {
+            const char *last_slash = strrchr(dl_info.dli_fname, '/');
+            if (last_slash)
+                self_dir = strndup(dl_info.dli_fname, last_slash - dl_info.dli_fname);
+        }
+        if (rocm_path && asprintf(&rocm_dir, "%s/lib/rocm_sysdeps/lib", rocm_path) == -1)
+            rocm_dir = NULL;
+
+        if (asprintf(&temp_path, "%s%s%s%s%s",
+                     self_dir ? self_dir : "", self_dir ? ENV_VAR_SEPARATOR : "",
+                     rocm_dir ? rocm_dir : "", rocm_dir ? ENV_VAR_SEPARATOR : "",
+                     search_path ? search_path : VA_DRIVERS_PATH) == -1)
+            temp_path = NULL;
+        else
+            search_path = temp_path;
+
+        free(self_dir);
+        free(rocm_dir);
+        if (!search_path)
+            search_path = VA_DRIVERS_PATH;
+    }
+EOF
 sed -i "/^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*$/{
     N
     /^[[:space:]]*if[[:space:]]*(![[:space:]]*search_path)[[:space:]]*\n[[:space:]]*search_path[[:space:]]*=[[:space:]]*VA_DRIVERS_PATH;/{
-        c\
-    if (!search_path) {\
-        char *rocm_path = secure_getenv(\"ROCM_PATH\");\
-        if (rocm_path) {\
-            if (asprintf(&temp_path, \"%s/lib/rocm_sysdeps/lib\", rocm_path) == -1) {\
-                temp_path = NULL;\
-            } else {\
-                search_path = temp_path;\
-            }\
-        } else {\
-            Dl_info dl_info;\
-            if (dladdr((void *)va_openDriver, &dl_info) && dl_info.dli_fname) {\
-                const char *last_slash = strrchr(dl_info.dli_fname, '/');\
-                if (last_slash) {\
-                    temp_path = strndup(dl_info.dli_fname, last_slash - dl_info.dli_fname);\
-                    if (temp_path)\
-                        search_path = temp_path;\
-                }\
-            }\
-            if (!search_path)\
-                search_path = VA_DRIVERS_PATH;\
-        }\
-    }
+        r $VA_SEARCH_PATH_PATCH
+        d
     }
 }" "$LIBVA_SOURCE"
 sed -i '/^[[:space:]]*search_path = strdup((const char \*)*search_path);$/a\    if (temp_path) { free(temp_path); temp_path = NULL; }' "$LIBVA_SOURCE"
+if ! grep -q 'asprintf(&rocm_dir, "%s/lib/rocm_sysdeps/lib", rocm_path)' "$LIBVA_SOURCE" ||
+   ! grep -q 'if (temp_path) { free(temp_path); temp_path = NULL; }' "$LIBVA_SOURCE"; then
+  echo "ERROR: Failed to patch the VA driver search path in $LIBVA_SOURCE" >&2
+  exit 1
+fi
 
 # Modify pkgconfig generation to make driverdir relative to ${libdir} for relocatable packages
 sed -i "/va_vars = vars + \['driverdir=' + driverdir\]/c\va_vars = vars + ['driverdir=\${libdir}']" "$LIBVA_PKGCONFIG_MESON_BUILD"

@@ -46,7 +46,7 @@ NAME_MAPPING = {
     "ocl-clr": "core-ocl",
     "ROCR-Runtime": "core-runtime",
     "blas": "rocBLAS",
-    "prim": "rocPRIM",
+    "prim": "hipCCL",
     "fft": "rocFFT",
     "rand": "rocRAND",
     "miopen": "MIOpen",
@@ -307,10 +307,7 @@ def get_system_info() -> Dict[str, str]:
         pass
 
     # Get CPU cores
-    try:
-        info["cpu_cores"] = str(os.cpu_count() or "Unknown")
-    except Exception:
-        pass
+    info["cpu_cores"] = str(os.cpu_count() or "Unknown")
 
     # Get memory from /proc/meminfo
     try:

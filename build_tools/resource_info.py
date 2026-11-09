@@ -34,7 +34,7 @@ Output:
 import os
 import sys
 import time
-import random
+import uuid
 import datetime
 import subprocess
 import shlex
@@ -268,7 +268,8 @@ def therock_components_compile_classifier(
                     .read_text(encoding="utf-8", errors="ignore")
                     .lower()
                 )
-            except Exception:
+            except OSError:
+                # Missing response files do not prevent command-based classification.
                 pass
 
     m = CMAKEFILES_TARGET_RE.search(cmd_str) or CMAKEFILES_TARGET_RE.search(lower_cmd)
@@ -324,8 +325,8 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     comp = therock_components_compile_classifier(repo_root, pwd, cmd_str)
 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    rand = random.randint(0, 999999)
-    log_file = Path(log_dir) / f"build-{comp}-{ts}-{rand}.log"
+    log_id = uuid.uuid4().hex
+    log_file = Path(log_dir) / f"build-{comp}-{ts}-{log_id}.log"
 
     start_epoch_s = time.time()
     start_wall = time.monotonic()
@@ -391,8 +392,8 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
             f.write(f"real_min={(real_seconds / 60.0):.6f}\n")
             f.write(f"user_min={(user_seconds / 60.0):.6f}\n")
             f.write(f"sys_min={(sys_seconds / 60.0):.6f}\n")
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"Could not write resource log {log_file}: {e}", file=sys.stderr)
 
     return returncode
 
@@ -519,8 +520,8 @@ def print_summary_links(log_dir: str) -> None:
         if md_path.exists():
             print(f"Markdown: {md_path}")
         print()
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"Could not print summary links: {e}", file=sys.stderr)
 
 
 def generate_summaries(log_dir: str) -> None:
@@ -668,11 +669,12 @@ def generate_summaries(log_dir: str) -> None:
                 )
 
         os.replace(str(tmp_md_path), str(md_path))
-    except Exception:
+    except OSError as e:
+        print(f"Could not write Markdown summary: {e}", file=sys.stderr)
         try:
-            os.remove(str(tmp_md_path))
-        except Exception:
-            pass
+            tmp_md_path.unlink(missing_ok=True)
+        except OSError as cleanup_error:
+            print(f"Could not remove {tmp_md_path}: {cleanup_error}", file=sys.stderr)
 
     html_path = Path(log_dir) / "comp-summary.html"
     try:
@@ -748,8 +750,8 @@ def generate_summaries(log_dir: str) -> None:
         )
 
         html_path.write_text(html_doc, encoding="utf-8")
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"Could not write HTML summary: {e}", file=sys.stderr)
 
     print_summary_links(log_dir)
 
@@ -769,8 +771,8 @@ def main() -> int:
             os.makedirs(log_dir, exist_ok=True)
             load_components_from_build_topology(repo_root)
             generate_summaries(log_dir)
-        except Exception:
-            pass
+        except OSError as e:
+            print(f"Could not generate resource summaries: {e}", file=sys.stderr)
         return 0
 
     rc = run_and_log_command(repo_root, log_dir)

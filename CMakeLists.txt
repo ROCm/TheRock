@@ -124,7 +124,7 @@ option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
 
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
-option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" ON)
+option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
 set(THEROCK_COMGR_DLL_NAME "" CACHE STRING "Override the Comgr DLL name for the comgr build and CLR load (e.g. amd_comgr_opencl.dll); empty = component default")
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -209,6 +209,7 @@ option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifa
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
 option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
+option(THEROCK_WINDOWS_LINK_CPU_AFFINITY "On Windows, pin each link step of sub-projects built with the amd-llvm/amd-hip toolchains to one random CPU (works around lld-link silently dropping inputs on AMD Turin hosts, see #9469)" OFF)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
 ################################################################################

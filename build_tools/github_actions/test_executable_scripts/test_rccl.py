@@ -28,7 +28,7 @@ def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
         check=False,
     )
 
-    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+(?:-strict)?$", re.IGNORECASE)
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
 

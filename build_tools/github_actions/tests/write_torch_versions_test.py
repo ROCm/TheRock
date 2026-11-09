@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-import write_torch_versions
+import write_pytorch_versions
 
 
 class WriteTorchVersionsTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class WriteTorchVersionsTest(unittest.TestCase):
         with self._dist_dir(
             "torch-2.14.0+rocm10.1.0rc3.asan-cp312-cp312-linux_x86_64.whl"
         ) as dist_dir:
-            versions = write_torch_versions.get_all_wheel_versions(
+            versions = write_pytorch_versions.get_all_wheel_versions(
                 dist_dir, os="Linux", torch_only=True
             )
 
@@ -27,7 +27,7 @@ class WriteTorchVersionsTest(unittest.TestCase):
             "torch-2.14.0+rocm10.1.0rc3-cp312-cp312-linux_x86_64.whl"
         ) as dist_dir:
             with self.assertRaises(FileNotFoundError):
-                write_torch_versions.get_all_wheel_versions(dist_dir, os="Linux")
+                write_pytorch_versions.get_all_wheel_versions(dist_dir, os="Linux")
 
     def _dist_dir(self, *names: str):
         import tempfile
