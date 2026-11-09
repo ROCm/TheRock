@@ -319,15 +319,15 @@ jobs:
             }
 
   trigger_xla_tests:
-    needs: [build_tarballs]
+    needs: [build_python_packages]
     name: Trigger XLA tests
     if: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx950-dcgpu') }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       test_amdgpu_target: gfx950
-      rocm_distro_url: ${{ fromJSON(needs.build_tarballs.outputs.tarball_urls).gfx950_dcgpu }}
-      rocm_distro_hash: no_hash
+      rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
       xla_ref: rocm-jaxlib-v0.11.2
       test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
       repository: ${{ inputs.repository || github.repository }}
