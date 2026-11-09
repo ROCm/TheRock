@@ -436,5 +436,15 @@ rocm-sdk test
 If you are having any problem with your ROCm Python installation, it is
 recommended to run this to verify integrity and basic functionality.
 
+When `rocm[libraries]` is installed, the tests also check that at least one GPU
+reported by `offload-arch` has device code installed, which catches installing
+`rocm-sdk-device-*` packages for the wrong GPU. To list the GPU targets that
+have device code installed, as opposed to every target the distribution was
+built for (`rocm-sdk targets`), run:
+
+```bash
+rocm-sdk targets --installed
+```
+
 Providing the output of `rocm-sdk test` in any bug reports is greatly
 appreciated.

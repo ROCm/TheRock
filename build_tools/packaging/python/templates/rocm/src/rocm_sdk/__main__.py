@@ -5,8 +5,6 @@
 
 import argparse
 import importlib.util
-import json
-from pathlib import Path
 import sys
 
 from . import _dist_info as di
@@ -97,13 +95,10 @@ def _do_version(args: argparse.Namespace):
 
 
 def _do_targets(args: argparse.Namespace):
-    core_mod_name = di.ALL_PACKAGES["core"].get_py_package_name()
-    core_mod = importlib.import_module(core_mod_name)
-    core_path = Path(core_mod.__file__).parent  # Chop __init__.py
-    dist_info_path = core_path / "share" / "therock" / "dist_info.json"
-    with open(dist_info_path, "rb") as f:
-        dist_info_struct = json.load(f)
-    print(dist_info_struct["dist_amdgpu_targets"])
+    if args.installed:
+        print(";".join(di.get_installed_gpu_targets()))
+    else:
+        print(";".join(di.get_dist_amdgpu_targets()))
 
 
 def main(argv: list[str] | None = None):
@@ -147,6 +142,15 @@ def main(argv: list[str] | None = None):
     # 'targets' subcommand.
     targets_p = sub_p.add_parser(
         "targets", help="Print information about the GPU targets that are supported"
+    )
+    targets_p.add_argument(
+        "--installed",
+        action="store_true",
+        help=(
+            "Print only the GPU targets that have device code installed (for "
+            "multi-arch installs, the installed rocm-sdk-device-* packages) "
+            "instead of every target the distribution was built for"
+        ),
     )
     targets_p.set_defaults(func=_do_targets)
 
