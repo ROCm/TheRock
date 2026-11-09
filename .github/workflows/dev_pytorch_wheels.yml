@@ -10,8 +10,8 @@
 # summarizes the standard test suite from every platform in this run.
 #
 # Dev wheel versions carry only the PyTorch commit and ROCm version, so two
-# concurrent runs of the same branch and ROCm version overwrite each other's
-# torch wheel on the dev index. Run them one at a time.
+# concurrent runs of the same branch and ROCm version would overwrite each
+# other's torch wheel on the dev index; the concurrency group below queues them.
 
 name: Dev PyTorch Wheels
 
@@ -92,10 +92,17 @@ run-name: >-
 permissions:
   contents: read
 
+# Runs that would publish the same torch wheel wait for each other. GitHub
+# keeps one pending run per group: a newer queued run cancels an older one.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ inputs.pytorch_branch }}-py${{ inputs.python_version }}-${{
+    inputs.rocm_package_index_url }}-${{ inputs.rocm_version }}
+  cancel-in-progress: false
+
 jobs:
   resolve_inputs:
     name: Resolve Dev PyTorch Wheel Inputs
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:

@@ -300,12 +300,13 @@ jobs:
       # custom skip-list integration, serialized execution, GPU selection, and
       # more. The list of included test suites is limited here compared to in
       # test_pytorch_wheels_full.yml.
-      # The completion marker tells the count step the runner exited rather
-      # than timing out mid-run, so partial counts are flagged incomplete.
+      # The marker and runner output are copied in only after the runner exits,
+      # so a timed-out step, or a module killed by a signal, reads incomplete.
       - name: Run PyTorch tests
         timeout-minutes: 120
         run: |
           set +e
+          runner_output="${RUNNER_TEMP}/therock-runner-output.log"
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
             --device-query "${DEVICE_QUERY}" \
@@ -318,10 +319,11 @@ jobs:
               test_binary_ufuncs \
               test_autograd \
             -- \
-            --continue-on-collection-errors
-          test_exit_code=$?
+            --continue-on-collection-errors 2>&1 | tee "${runner_output}"
+          test_exit_code=${PIPESTATUS[0]}
           reports_dir=external-builds/pytorch/pytorch/test/test-reports
           mkdir -p "${reports_dir}"
+          cp "${runner_output}" "${reports_dir}/therock-runner-output.log"
           touch "${reports_dir}/therock-test-complete.txt"
           exit "${test_exit_code}"
 
@@ -332,8 +334,8 @@ jobs:
         run: |
           reports_dir=external-builds/pytorch/pytorch/test/test-reports
           if [[ -d "${reports_dir}" ]]; then
-            printf '{"os": "%s", "amdgpu_family": "%s"}\n' \
-              "${RUNNER_OS}" "${AMDGPU_FAMILY}" > "${reports_dir}/therock-test-report.json"
+            python -c 'import json, os; print(json.dumps({"os": os.environ["RUNNER_OS"], "amdgpu_family": os.environ["AMDGPU_FAMILY"]}))' \
+              > "${reports_dir}/therock-test-report.json"
           fi
 
       - name: Upload test reports

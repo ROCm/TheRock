@@ -31,9 +31,10 @@ Table of contents:
 > nightly ROCm; pick `rocm_version: trunk` with the stable index to match the
 > ROCm version upstream PyTorch trunk CI uses. No package copying is needed.
 >
-> Avoid concurrent runs for the same branch and ROCm version, even with
-> different GPU families: their torch wheels share one version on the dev
-> index, so a later run overwrites the earlier run's wheel before it is tested.
+> Runs for the same branch, Python, and ROCm version queue behind each other,
+> even with different GPU families: their torch wheels share one version on the
+> dev index, so a concurrent run would overwrite the other's wheel. Only one run
+> can wait per group; queueing a third cancels the waiting one.
 
 Let's say we want to test
 [`.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml`](/.github/workflows/multi_arch_build_portable_linux_pytorch_wheels.yml),

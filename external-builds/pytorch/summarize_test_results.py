@@ -13,7 +13,9 @@ Two modes of operation:
    multiple downloaded artifact directories named
    ``test-reports-<config>-<shard>-<num_shards>``.  Produces one unified
    table with a *Config* and *Shard* column so all failures are visible in
-   one place.  Called from a post-matrix summary job.
+   one place.  Called from a post-matrix summary job.  Also writes
+   ``failed_test_count``, ``observed_report_count``, ``expected_report_count``,
+   and ``results_complete`` to ``$GITHUB_OUTPUT``.
 
 3. **Standard** (``--standard-dir``) — scans artifact directories named
    ``test-reports-<os>-<amdgpu_family>`` from test_pytorch_wheels.yml and
@@ -24,6 +26,10 @@ Two modes of operation:
    ``passed_test_count``, ``failed_test_count``, ``skipped_test_count``, and
    ``results_complete`` for one test-reports directory to ``$GITHUB_OUTPUT``
    so the job's Quartz notification carries them.
+
+Every mode counts a test's final outcome: a test that passed on a retry is
+flaky, not failed. ``results_complete`` uses `check_report_set`, so a timed-out
+runner or a module killed by a signal never certifies a partial count.
 
 Usage:
     # Per-shard (inside matrix job):
@@ -53,16 +59,20 @@ from pathlib import Path
 _RERUN_TAGS = ("rerun", "rerunFailure", "rerunError", "flakyFailure", "flakyError")
 
 
-def parse_junit_testcases(xml_path: Path) -> list[dict]:
+def parse_junit_testcases(xml_path: Path, *, strict: bool = False) -> list[dict]:
     """Extract every test case from a JUnit XML file with its outcome.
 
     Status is one of PASSED, FAILED, ERROR, or SKIPPED. ``rerun`` is True when
-    the case carries rerun/flaky records from an earlier attempt.
+    the case carries rerun/flaky records from an earlier attempt. With
+    ``strict``, an unparseable or non-JUnit file raises instead of reading as
+    empty.
     """
     results = []
     try:
         tree = ET.parse(xml_path)
     except ET.ParseError:
+        if strict:
+            raise
         return results
 
     root = tree.getroot()
@@ -72,6 +82,8 @@ def parse_junit_testcases(xml_path: Path) -> list[dict]:
         testsuites = [root]
     elif root.tag == "testsuites":
         testsuites = root.findall("testsuite")
+    if not testsuites and strict:
+        raise ValueError(f"Not a JUnit report: {xml_path}")
 
     for suite in testsuites:
         for testcase in suite.findall("testcase"):
@@ -128,7 +140,7 @@ def collect_results(reports_dir: Path) -> list[dict]:
     for xml_file in sorted(reports_dir.rglob("*.xml")):
         failures = parse_junit_xml(xml_file)
         for f in failures:
-            f["report_file"] = str(xml_file.relative_to(reports_dir))
+            f["report_file"] = xml_file.relative_to(reports_dir).as_posix()
         all_failures.extend(failures)
     return all_failures
 
@@ -144,6 +156,61 @@ def derive_test_file(report_path: str) -> str:
         test_dir_name = parts[1] if parts[0].startswith("python") else parts[0]
         return test_dir_name.replace(".", "/")
     return report_path
+
+
+# ---------------------------------------------------------------------------
+# Report completeness (shared by every mode that publishes counts)
+# ---------------------------------------------------------------------------
+
+# The test step writes both files after the runner exits, so a timed-out or
+# killed step leaves no marker.
+COMPLETION_MARKER = "therock-test-complete.txt"
+RUNNER_OUTPUT = "therock-runner-output.log"
+# run_test.py renames each launched module's log to <module>_<shard>_<hex>_.log
+# once its process exits, including when it dies by signal.
+_MODULE_LOG_RE = re.compile(r"(?P<module>.+)_\d+\.\d+_[0-9a-f]{16}_\.log")
+# run_test.py's failure message for a module killed by a signal.
+_SIGNAL_RE = re.compile(r"Received signal: SIG\w+")
+
+
+def check_report_set(reports_dir: Path) -> list[str]:
+    """Returns why a test-reports directory is incomplete; empty if complete.
+
+    Complete means the runner exited, its output reports no module killed by
+    a signal, every JUnit file parses, and every module the runner launched
+    wrote a report. Pytest writes a module's JUnit file at session end, so a
+    crashed module otherwise vanishes from the counts.
+    """
+    if not reports_dir.is_dir():
+        return ["no test reports"]
+    problems = []
+    if not (reports_dir / COMPLETION_MARKER).is_file():
+        problems.append("the test runner did not exit")
+    runner_output = reports_dir / RUNNER_OUTPUT
+    if not runner_output.is_file():
+        problems.append("the test runner output is missing")
+    elif _SIGNAL_RE.search(runner_output.read_text(errors="replace")):
+        problems.append("a test module was killed by a signal")
+
+    xml_files = sorted(reports_dir.rglob("*.xml"))
+    if not xml_files:
+        problems.append("no JUnit reports")
+    for xml_file in xml_files:
+        try:
+            parse_junit_testcases(xml_file, strict=True)
+        except (ET.ParseError, ValueError):
+            problems.append(f"unreadable report {xml_file.name}")
+
+    reported = {xml_file.parent.name for xml_file in xml_files}
+    launched = {
+        m.group("module")
+        for log in reports_dir.glob("*_.log")
+        if (m := _MODULE_LOG_RE.fullmatch(log.name))
+    }
+    missing = sorted(launched - reported)
+    if missing:
+        problems.append(f"no report from launched module(s) {', '.join(missing)}")
+    return problems
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +265,7 @@ def write_shard_summary(
 # Combined summary (called from the post-matrix summary job)
 # ---------------------------------------------------------------------------
 
-_ARTIFACT_RE = re.compile(r"test-reports-(?P<config>[^-]+)-(?P<shard>\d+)-(?P<num>\d+)")
+_ARTIFACT_RE = re.compile(r"test-reports-(?P<config>.+)-(?P<shard>\d+)-(?P<num>\d+)")
 
 
 def _build_report_header(
@@ -243,12 +310,20 @@ def write_combined_summary(
     combined_dir: Path,
     amdgpu_family: str,
     summary_file: str,
+    expected_report_count: int | None = None,
+    github_output: str = "",
     torch_version: str = "",
     python_version: str = "",
     package_index_url: str = "",
     pytorch_git_ref: str = "",
-) -> None:
-    """Scan all artifact directories and write one combined table."""
+) -> dict[str, object]:
+    """Scan all shard artifact directories and write one combined table.
+
+    ``failed_test_count`` counts tests whose final outcome failed or errored;
+    a test that passed on a retry is not a failure. ``results_complete`` is
+    true only when every expected shard reported and each is complete (see
+    `check_report_set`).
+    """
     lines: list[str] = []
 
     if torch_version and amdgpu_family:
@@ -263,39 +338,64 @@ def write_combined_summary(
         )
 
     rows: list[tuple[str, int, str]] = []
-    shard_dirs = sorted(combined_dir.iterdir())
+    observed_report_count = 0
+    incomplete: list[str] = []
+    shard_dirs = sorted(combined_dir.iterdir()) if combined_dir.is_dir() else []
 
     for artifact_dir in shard_dirs:
-        if not artifact_dir.is_dir():
+        m = _ARTIFACT_RE.fullmatch(artifact_dir.name)
+        if not artifact_dir.is_dir() or not m:
             continue
-        m = _ARTIFACT_RE.match(artifact_dir.name)
-        if not m:
-            continue
+        observed_report_count += 1
         config = m.group("config")
         shard = m.group("shard")
-        num = m.group("num")
-        shard_label = f"{shard}/{num}"
+        shard_label = f"{shard}/{m.group('num')}"
 
-        failures = collect_results(artifact_dir)
-        seen = set()
-        for f in failures:
-            test_file = derive_test_file(f["report_file"])
-            key = (config, shard_label, test_file, f["class"], f["test"])
-            if key in seen:
+        problems = check_report_set(artifact_dir)
+        if problems:
+            incomplete.append(f"{config} {shard_label}: {'; '.join(problems)}")
+        for (test_file, cls, test), outcome in sorted(
+            collect_outcomes(artifact_dir).items()
+        ):
+            if outcome["status"] not in ("FAILED", "ERROR"):
                 continue
-            seen.add(key)
-            msg = f["message"].replace("|", "\\|").replace("\n", " ")[:100]
             rows.append(
                 (
                     config,
                     int(shard),
-                    f"| {config} | {shard_label} | {test_file} "
-                    f"| {f['class']} | {f['test']} | {f['status']} | {msg} |",
+                    f"| {config} | {shard_label} | {test_file} | {cls} | {test} "
+                    f"| {outcome['status']} | {_escape(outcome['message'])} |",
                 )
             )
 
-    if not rows:
+    results_complete = (
+        expected_report_count is not None
+        and expected_report_count > 0
+        and observed_report_count == expected_report_count
+        and not incomplete
+    )
+    expected_display = (
+        str(expected_report_count) if expected_report_count is not None else "unknown"
+    )
+    completeness = "complete" if results_complete else "incomplete"
+    lines.append(
+        f"**Reports:** {observed_report_count} observed / {expected_display} "
+        f"expected ({completeness})"
+    )
+    lines.append("")
+    for reason in incomplete:
+        lines.append(f"- Incomplete shard {reason}")
+    if incomplete:
+        lines.append("")
+
+    if not rows and results_complete:
         lines.append(f"### All tests passed — {amdgpu_family} :white_check_mark:")
+        lines.append("")
+    elif not rows:
+        lines.append(
+            f"### No failed tests found in available reports — {amdgpu_family} "
+            ":warning:"
+        )
         lines.append("")
     else:
         rows.sort(key=lambda r: (r[0], r[1]))
@@ -312,6 +412,14 @@ def write_combined_summary(
         lines.append("")
 
     _emit(lines, summary_file)
+    outputs: dict[str, object] = {
+        "failed_test_count": len(rows),
+        "observed_report_count": observed_report_count,
+        "expected_report_count": expected_report_count or 0,
+        "results_complete": results_complete,
+    }
+    _write_github_outputs(outputs, github_output)
+    return outputs
 
 
 # ---------------------------------------------------------------------------
@@ -366,29 +474,17 @@ def count_outcomes(outcomes: dict) -> dict[str, int]:
     return counts
 
 
-# Written by the test step once the runner exits, so a timed-out or killed
-# run is reported incomplete instead of as a clean (partial) count.
-COMPLETION_MARKER = "therock-test-complete.txt"
-
-
 def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, object]:
     """Writes test counts for one reports directory as step outputs.
 
-    Output names match the full suite's ``failed_test_count`` contract;
-    ``failed_test_count`` includes errored tests. ``results_complete`` is
-    always written; the counts are written only when test cases were found.
+    ``failed_test_count`` has the same meaning as in the combined mode: final
+    outcome failed or errored. ``results_complete`` is always written; the
+    counts are written only when test cases were found.
     """
-    xml_files = sorted(reports_dir.rglob("*.xml")) if reports_dir.is_dir() else []
-    parseable = True
-    for xml_file in xml_files:
-        try:
-            ET.parse(xml_file)
-        except ET.ParseError:
-            parseable = False
-    outcomes = collect_outcomes(reports_dir) if xml_files else {}
-    complete = (
-        bool(outcomes) and parseable and (reports_dir / COMPLETION_MARKER).is_file()
-    )
+    problems = check_report_set(reports_dir)
+    for problem in problems:
+        print(f"Incomplete test reports: {problem}")
+    outcomes = collect_outcomes(reports_dir) if reports_dir.is_dir() else {}
 
     outputs: dict[str, object] = {}
     if outcomes:
@@ -401,13 +497,11 @@ def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, object
         }
     else:
         print(f"No test cases found under {reports_dir}; writing no counts")
-    outputs["results_complete"] = "true" if complete else "false"
+    outputs["results_complete"] = bool(outcomes) and not problems
 
-    lines = [f"{name}={value}" for name, value in outputs.items()]
-    print("\n".join(lines))
-    if output_file:
-        with open(output_file, "a") as fh:
-            fh.write("\n".join(lines) + "\n")
+    for name, value in outputs.items():
+        print(f"{name}={_output_value(value)}")
+    _write_github_outputs(outputs, output_file)
     return outputs
 
 
@@ -481,6 +575,15 @@ def write_standard_summary(standard_dir: Path, summary_file: str) -> int:
         lines.append(f"| **Total** | | {cells} |")
     lines.append("")
 
+    for os_name, family, reports_dir in find_report_sets(standard_dir):
+        problems = check_report_set(reports_dir)
+        if problems:
+            lines.append(
+                f"> [!WARNING]\n> Incomplete results for {os_name} | {family}: "
+                f"{'; '.join(problems)}. Counts may omit tests."
+            )
+            lines.append("")
+
     for os_name, family, outcomes in groups:
         label = f"{os_name} | {family}"
         failures = sorted(
@@ -536,6 +639,18 @@ def write_standard_summary(standard_dir: Path, summary_file: str) -> int:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _output_value(value: object) -> str:
+    return str(value).lower() if isinstance(value, bool) else str(value)
+
+
+def _write_github_outputs(outputs: dict[str, object], output_file: str) -> None:
+    if not output_file:
+        return
+    with open(output_file, "a") as fh:
+        for key, value in outputs.items():
+            fh.write(f"{key}={_output_value(value)}\n")
 
 
 def _emit(lines: list[str], summary_file: str) -> None:
@@ -598,6 +713,12 @@ def main() -> int:
         "--pytorch-git-ref",
         default=os.getenv("PYTORCH_GIT_REF", ""),
     )
+    parser.add_argument(
+        "--expected-report-count",
+        type=int,
+        default=None,
+        help="Number of report artifacts expected from the prepared test matrix",
+    )
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
@@ -614,13 +735,14 @@ def main() -> int:
         return 0
 
     if args.combined_dir:
-        if not args.combined_dir.is_dir():
-            print(f"Combined directory not found: {args.combined_dir}")
-            return 0
+        # A missing directory still writes outputs (incomplete), so absent
+        # artifacts are never read as zero failures.
         write_combined_summary(
             args.combined_dir,
             args.amdgpu_family,
             summary_file,
+            expected_report_count=args.expected_report_count,
+            github_output=os.getenv("GITHUB_OUTPUT", ""),
             torch_version=args.torch_version,
             python_version=args.python_version,
             package_index_url=args.package_index_url,

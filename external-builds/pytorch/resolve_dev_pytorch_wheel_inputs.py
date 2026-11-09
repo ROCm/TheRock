@@ -226,7 +226,13 @@ def resolve_rocm_version(
         ) from e
     if normalized in versions:
         return normalized, "exact"
-    in_series = newest_version(versions, normalized)
+    # Only a bare series ("10" or "10.1") widens to its newest match; a full
+    # version such as 10.1.0 or 10.1.0a20261109 must exist exactly.
+    requested_version = Version(normalized)
+    is_series = len(requested_version.release) < 3 and str(
+        requested_version
+    ) == ".".join(str(part) for part in requested_version.release)
+    in_series = newest_version(versions, normalized) if is_series else None
     if in_series:
         return in_series, f"newest {normalized} on index"
     raise ValueError(
