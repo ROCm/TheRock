@@ -69,19 +69,22 @@ SANITIZERS = {
 
 
 def selected_sanitizer(args) -> SanitizerSpec | None:
-    """Return the sanitizer selected by ``--build-variant``.
+    """Return the sanitizer row for ``--build-variant``.
 
-    ``asan``, ``asan-debug``, and ``host-asan`` all select AddressSanitizer.
-    ``release`` selects none.
+    ``release`` and an empty value select none. A variant that contains
+    ``asan`` selects the ``asan`` row, including ``asan-debug`` and
+    ``host-asan``. A new CI label with that text needs no second list.
+    Any other name is an error.
     """
-    variant = getattr(args, "build_variant", "") or ""
-    selected = [spec for spec in SANITIZERS.values() if spec.name in variant]
-    if not selected:
+    variant = (getattr(args, "build_variant", "") or "").strip()
+    if not variant or variant == "release":
         return None
-    if len(selected) > 1:
-        names = ", ".join(spec.name for spec in selected)
-        raise RuntimeError(f"only one sanitizer can be selected, got {names}")
-    return selected[0]
+    if "asan" in variant:
+        return SANITIZERS["asan"]
+    raise ValueError(
+        f"unknown build variant {variant!r}. "
+        "Expected release, or a variant containing 'asan'."
+    )
 
 
 def apply_sanitizer_companion_policy(parser, args) -> None:
