@@ -240,6 +240,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
     DESCRIPTOR artifact-miopenprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -288,6 +289,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
