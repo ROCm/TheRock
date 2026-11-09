@@ -219,9 +219,10 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
 # ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
 WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
-# ci:exactly makes the attached arch labels the complete family selection:
-# the trigger-based default families are dropped so that only the labeled
-# archs build and test. Packaging jobs are unaffected.
+# ci:exactly makes the attached arch labels the complete family selection: the
+# families the trigger or the workflow inputs would otherwise select are
+# dropped so that only the labeled archs build and test. Packaging jobs are
+# unaffected.
 EXACTLY_LABEL = "ci:exactly"
 
 
@@ -322,10 +323,10 @@ class CIInputs:
         arch label, test labels requiring stages not in build_stages, or
         ci:run-wsl on a partial build without the wsl-rocdxg stage.
         """
-        # ci:exactly drops the trigger defaults, so the arch labels become the
+        # ci:exactly drops the default families, so the arch labels become the
         # whole selection. Without one, nothing would build and CI would report
         # a green run that did no work.
-        if self.is_exactly and not any(
+        if self.contains_ci_exactly_label and not any(
             label.lower().startswith(("ci:gfx", "ci:build:gfx"))
             or label == "ci:run-all-archs"
             for label in self.pr_labels
@@ -397,15 +398,6 @@ class CIInputs:
         return self.event_name == "pull_request"
 
     @property
-    def is_exactly(self) -> bool:
-        """True when ci:exactly should suppress the default GPU families.
-
-        Only meaningful on pull requests, matching the other arch labels.
-        Other triggers already state their coverage explicitly.
-        """
-        return self.is_pull_request and EXACTLY_LABEL in self.pr_labels
-
-    @property
     def is_push(self) -> bool:
         return self.event_name == "push"
 
@@ -416,6 +408,11 @@ class CIInputs:
     @property
     def is_workflow_dispatch(self) -> bool:
         return self.event_name == "workflow_dispatch"
+
+    @property
+    def contains_ci_exactly_label(self) -> bool:
+        """True when ci:exactly should suppress the default GPU families."""
+        return EXACTLY_LABEL in self.pr_labels
 
     @staticmethod
     def from_environ() -> "CIInputs":
@@ -1041,7 +1038,7 @@ def _apply_arch_labels(
     Labels are classified into batches and applied in priority order so that
     behavior is deterministic regardless of label iteration order:
 
-      0. ci:exactly — drops the trigger defaults so only labeled families run
+      0. ci:exactly — drops the default families so only labeled families run
       1. ci:run-all-archs — overrides both platform lists to all families
       2. ci:gfx* — adds family to builds AND tests (bypasses trigger gating)
       3. ci:build:gfx* — adds family to builds only
@@ -1055,7 +1052,9 @@ def _apply_arch_labels(
     linux_test_only: list[str] = []
     windows_test_only: list[str] = []
 
-    if not ci_inputs.is_pull_request:
+    # Arch labels come from the PR payload or the workflow_dispatch pr_labels
+    # input; push/schedule have no labels to apply.
+    if not (ci_inputs.is_pull_request or ci_inputs.is_workflow_dispatch):
         return linux_build_only, windows_build_only, linux_test_only, windows_test_only
 
     # Classify labels into batches first, then apply in priority order.
@@ -1078,10 +1077,10 @@ def _apply_arch_labels(
             target = label.lower().removeprefix("ci:").split("-")[0]
             gfx_targets.append((label, target))
 
-    # 0. ci:exactly drops the trigger defaults so the labels below are the only
+    # 0. ci:exactly drops the default families so the labels below are the only
     # thing that selects families. CIInputs.validate() guarantees at least one
     # such label is present.
-    if ci_inputs.is_exactly:
+    if ci_inputs.contains_ci_exactly_label:
         linux_names.clear()
         windows_names.clear()
         print(f"  Label '{EXACTLY_LABEL}' -> dropping default families")
@@ -1339,6 +1338,17 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
     windows_test_only = _filter_families_by_platform(
         windows_test_only, "windows", all_families
     )
+
+    # The labels survived validation but the platform filters above emptied the
+    # selection, e.g. ci:exactly + ci:gfx94x + ci:platform:windows (gfx94x has
+    # no Windows entry). Fail instead of reporting a green run that built
+    # nothing.
+    if ci_inputs.contains_ci_exactly_label and not linux_names and not windows_names:
+        raise ValueError(
+            f"{EXACTLY_LABEL} selected no architectures to build. The labeled "
+            f"families are not available on the platforms left after applying "
+            f"ci:platform:* labels."
+        )
 
     return TargetSelection(
         linux_families=linux_names,

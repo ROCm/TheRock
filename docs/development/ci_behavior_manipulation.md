@@ -88,18 +88,21 @@ The architecture labels above _add to_ the default presubmit families. Add
 `ci:exactly` to drop those defaults, making the `ci:gfx...`, `ci:build:gfx...`,
 and `ci:test:gfx...` labels the complete architecture selection.
 
-| Labels                                   | Result                                 |
-| ---------------------------------------- | -------------------------------------- |
-| `ci:gfx950`                              | Presubmit families **plus** gfx950     |
-| `ci:exactly` + `ci:gfx950`               | gfx950 only                            |
-| `ci:exactly` + `ci:build:gfx950`         | gfx950 only, no tests                  |
-| `ci:exactly` + `ci:gfx950` + `ci:gfx94x` | gfx950 and gfx94x only                 |
-| `ci:exactly` + `ci:run-all-archs`        | All architectures                      |
-| `ci:exactly` (alone)                     | **Error**: no architecture would build |
+| Labels                                             | Result                                 |
+| -------------------------------------------------- | -------------------------------------- |
+| `ci:gfx950`                                        | Presubmit families **plus** gfx950     |
+| `ci:exactly` + `ci:gfx950`                         | gfx950 only                            |
+| `ci:exactly` + `ci:build:gfx950`                   | gfx950 only, no tests                  |
+| `ci:exactly` + `ci:gfx950` + `ci:gfx94x`           | gfx950 and gfx94x only                 |
+| `ci:exactly` + `ci:run-all-archs`                  | All architectures                      |
+| `ci:exactly` (alone)                               | **Error**: no architecture would build |
+| `ci:exactly` + `ci:test:gfx950`                    | **Error**: no build label              |
+| `ci:exactly` + `ci:gfx94x` + `ci:platform:windows` | **Error**: gfx94x has no Windows build |
 
 Only the architecture selection is narrowed. Package builds, `test:...`,
-`test_filter:...`, and `ci:platform:...` keep their usual meaning. Pull requests
-only; other triggers already state their coverage explicitly.
+`test_filter:...`, and `ci:platform:...` keep their usual meaning. `ci:exactly`
+also works on `workflow_dispatch` through the `pr_labels` input, where it drops
+the caller-supplied `linux_amdgpu_families` / `windows_amdgpu_families`.
 
 #### Building frameworks with published ROCm
 
