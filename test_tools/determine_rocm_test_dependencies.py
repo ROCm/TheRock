@@ -136,6 +136,9 @@ _EXTERNAL_SUBTREE_ALIASES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 _CI_TEST_SELECTOR_ALIASES = {
+    # The cuDNN sample corpus is the only CI for hipDNN's cuDNN compatibility
+    # layer, so every hipDNN change selects it alongside hipDNN's own tests.
+    "hipdnn": ["hipdnn", "hipdnn-cudnn-samples"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "miopen": ["miopen", "miopen-dbsync"],
