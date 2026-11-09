@@ -54,10 +54,22 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
       LIB_NAMES liblttng-ust.so liblttng-ust-common.so liblttng-ust-tracepoint.so
-                liblttng-ust-ctl.so liblttng-ust-dl.so liblttng-ust-fd.so
+                liblttng-ust-dl.so liblttng-ust-fd.so
                 liblttng-ust-fork.so liblttng-ust-libc-wrapper.so
                 liblttng-ust-pthread-wrapper.so liblttng-ust-cyg-profile.so
                 liblttng-ust-cyg-profile-fast.so
+    )
+
+    # liblttng-ust-ctl cannot be dlopened on its own: it leaves
+    # lttng_ust_sigbus_state for its user (lttng-consumerd) to define with
+    # DEFINE_LTTNG_UST_SIGBUS_STATE(). Check its renamed SONAME instead.
+    add_test(
+      NAME lttng-ust_ctl_soname_test
+      COMMAND "${PATCHELF}" --print-soname
+        "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/lib/liblttng-ust-ctl.so"
+    )
+    set_tests_properties(lttng-ust_ctl_soname_test PROPERTIES
+      PASS_REGULAR_EXPRESSION "^librocm_sysdeps_lttng_ust_ctl\\.so\\.[0-9]+"
     )
 
     add_test(
