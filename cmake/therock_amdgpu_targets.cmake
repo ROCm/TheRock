@@ -277,6 +277,10 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     composable_kernel
     # THEROCK_ENABLE_HIPKERNELPROVIDER
     hipkernelprovider
+    # rocrtst: OpenCL test kernels built with -mcpu=${target}
+    rocrtst
+    # hip-tests: hipHostRegister.cc __builtin_amdgcn_global_atomic_fadd_f32 rejected for amdgcnspirv
+    hip-tests
 
     # INFRA:
     # THEROCK_ENABLE_MIRAGE - no-op: declared with DISABLE_AMDGPU_TARGETS
@@ -293,7 +297,7 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     # THEROCK_ENABLE_HIPDNN_SAMPLES
     hipDNN_samples
     # THEROCK_ENABLE_ROCPROFSYS
-    rocprofiler-systems 
+    rocprofiler-systems
     # THEROCK_ENABLE_ROCPROFILER_SYSTEMS_EXAMPLES - built under ROCPROFSYS + THEROCK_BUILD_TESTING
     rocprofiler-systems-examples
     # THEROCK_ENABLE_BLAS
