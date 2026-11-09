@@ -10,7 +10,34 @@ exclude_dirs:
   - .git
   - .venv
   - venv
-  - test
+  # Match a directory component, not substrings such as build_tools.
+  - '*/build/*'
+  # Vendored third-party code is maintained upstream.
+  - '*/build_tools/third_party/*'
+  # Bandit does not recognize submodules. Keep this list in sync with .gitmodules.
+  - '*/base/half/*'
+  - '*/base/rocm-cmake/*'
+  - '*/compiler/amd-llvm/*'
+  - '*/compiler/hipify/*'
+  - '*/compiler/spirv-llvm-translator/*'
+  - '*/debug-tools/rocgdb/source/*'
+  - '*/math-libs/libhipcxx/*'
+  - '*/rocm-docs/*'
+  - '*/rocm-libraries/*'
+  - '*/rocm-systems/*'
+  - '*/third-party/sysdeps/common/mesa-fork/*'
+  # Downloaded sources listed in external-builds/pytorch/.gitignore.
+  - '*/external-builds/pytorch/src/*'
+  - '*/external-builds/pytorch/pytorch/*'
+  - '*/external-builds/pytorch/pytorch_audio/*'
+  - '*/external-builds/pytorch/pytorch_vision/*'
+  - '*/external-builds/pytorch/triton/*'
+
+# Assertions are expected in tests; keep other checks enabled for these files.
+assert_used:
+  skips:
+    - '*_test.py'
+    - '*/test_*.py'
 
 skips:
   - B404 # import subprocess

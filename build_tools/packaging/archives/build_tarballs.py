@@ -214,7 +214,8 @@ def compress_with_zlib_ng(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
     )
-    assert tar_process.stdout is not None
+    if tar_process.stdout is None:
+        raise AssertionError("Expected a stdout pipe from tar")
     try:
         with tar_process.stdout:
             with gzip_ng_threaded.open(

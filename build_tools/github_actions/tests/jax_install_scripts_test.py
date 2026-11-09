@@ -54,17 +54,20 @@ class InstallJaxWheelsTest(unittest.TestCase):
         self.assertIn("jax==0.11.0", commands[1])
         self.assertIn("jaxlib==0.11.0", commands[1])
 
-    def test_a_built_jaxlib_comes_from_the_index_and_jax_from_pypi(self):
+    def test_a_built_jaxlib_and_jax_come_from_the_index_together(self):
+        # A tip build makes jax and jaxlib from its own checkout, so neither
+        # exists on PyPI and both must come from where the plugin does.
         commands = wheels.install_commands(
-            wheel_args(jaxlib_version="0.11.0.dev20260804")
+            wheel_args(
+                jax_version="0.12.0.dev20261002",
+                jaxlib_version="0.12.0.dev20261002+rocm7.14.0a20261002",
+            )
         )
 
-        self.assertEqual(len(commands), 3)
-        self.assertIn("--index-url", commands[1])
-        self.assertIn("jaxlib==0.11.0.dev20260804", commands[1])
-        # jax itself is never built here, so it always comes from PyPI.
-        self.assertNotIn("--index-url", commands[2])
-        self.assertIn("jax==0.11.0", commands[2])
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[1][commands[1].index("--index-url") + 1], INDEX_URL)
+        self.assertIn("jax==0.12.0.dev20261002", commands[1])
+        self.assertIn("jaxlib==0.12.0.dev20261002+rocm7.14.0a20261002", commands[1])
 
     def test_a_run_with_nowhere_to_install_from_is_rejected(self):
         # jax_rocm<major>_plugin is a published name, so leaving pip on PyPI

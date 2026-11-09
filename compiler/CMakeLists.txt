@@ -22,7 +22,7 @@ if(THEROCK_ENABLE_COMPILER)
     elseif(EXISTS "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang")
       execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env
-        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/lib:${CMAKE_BINARY_DIR}/third-party/sysdeps/linux/liblzma/build/stage/lib/rocm_sysdeps/lib:$ENV{LD_LIBRARY_PATH}"
         "${CMAKE_BINARY_DIR}/compiler/amd-llvm/stage/lib/llvm/bin/clang"
         --print-target-triple
         OUTPUT_VARIABLE LLVM_HOST_TRIPLE
@@ -126,7 +126,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_DEFAULT_UNWINDLIB=libgcc
       -DCLANG_ENABLE_AMDCLANG=ON
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
-      -DLLVM_BUILD_LLVM_C_DYLIB=OFF
 
       # Build optimizations
       -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
@@ -169,6 +168,7 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
+      ${THEROCK_BUNDLED_LIBLZMA}
       ${THEROCK_BUNDLED_NUMACTL}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}

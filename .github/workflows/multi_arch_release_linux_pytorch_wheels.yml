@@ -60,6 +60,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -126,6 +134,14 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      pytorch_git_refs:
+        description: >-
+          PyTorch refs to build (comma/semicolon separated). Use 'all' for the
+          full default set for the release type, a subset of the available
+          release refs (e.g. 'release/2.12, release/2.13'), or a custom
+          branch/tag/SHA for bring-up.
+        type: string
+        default: "all"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly wheel builds complete.
         type: boolean
@@ -146,6 +162,7 @@ run-name: >-
   Release Linux PyTorch Wheels
   (${{ inputs.release_type }}, ${{ inputs.rocm_version }},
   ${{ inputs.amdgpu_families }}, py ${{ inputs.python_version || 'all' }},
+  torch ${{ inputs.pytorch_git_refs }},
   full tests ${{ inputs.run_full_pytorch_tests }})
 
 permissions:
@@ -154,19 +171,20 @@ permissions:
 jobs:
   setup_matrix:
     name: Configure PyTorch Release Matrix
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       pytorch_matrix: ${{ steps.matrix.outputs.pytorch_matrix }}
     env:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       PYTHON_VERSION: ${{ inputs.python_version }}
+      PYTORCH_GIT_REFS: ${{ inputs.pytorch_git_refs }}
 
     steps:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
@@ -187,6 +205,7 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_pytorch_release_matrix.py \
             --python-versions="${PYTHON_VERSION}" \
+            --pytorch-git-refs="${PYTORCH_GIT_REFS}" \
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}"
@@ -210,6 +229,7 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      exclude_implicit_targets: ${{ matrix.exclude_implicit_targets }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
       test_level: ${{ contains(inputs.build_variant, 'asan') && 'none' || matrix.test_level }}
       build_variant: ${{ inputs.build_variant }}
@@ -233,12 +253,12 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [setup_matrix, build_pytorch_wheels]
     name: "Quartz - completed - release PyTorch wheels"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml

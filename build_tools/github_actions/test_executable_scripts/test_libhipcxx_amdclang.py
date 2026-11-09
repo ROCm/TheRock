@@ -69,6 +69,8 @@ logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
 logging.info(f"PATH: {environ_vars['PATH']}")
 
 LIBHIPCXX_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "libhipcxx"
+# Matches the LIBCUDACXX_TEST_TIMEOUT default in libhipcxx's test CMakeLists.
+LIBHIPCXX_TEST_TIMEOUT = 200
 
 try:
     os.chdir(LIBHIPCXX_BUILD_DIR)
@@ -116,6 +118,18 @@ else:
 # Add rc compiler for windows
 if is_windows:
     cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
+
+# On Windows, run tests through ArtifactBinExecutor so they load the artifact
+# amdhip64_7.dll instead of the one in System32 (see
+# libhipcxx_artifact_executor.py). lit evals LIBCUDACXX_EXECUTOR inside a
+# double-quoted string, so only single quotes may be used here.
+if is_windows:
+    prepend_env_path(environ_vars, "PYTHONPATH", str(SCRIPT_DIR))
+    cmd.append(
+        "-DLIBCUDACXX_EXECUTOR="
+        "__import__('libhipcxx_artifact_executor').ArtifactBinExecutor("
+        f"'{THEROCK_BIN_PATH.as_posix()}', {LIBHIPCXX_TEST_TIMEOUT})"
+    )
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)

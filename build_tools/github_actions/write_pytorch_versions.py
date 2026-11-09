@@ -104,7 +104,7 @@ def get_all_wheel_versions(
 
 def main(argv: list[str]):
     env_dist_dir = os.getenv("PACKAGE_DIST_DIR")
-    p = argparse.ArgumentParser(prog="write_torch_versions.py")
+    p = argparse.ArgumentParser(prog="write_pytorch_versions.py")
     p.add_argument(
         "--dist-dir",
         type=Path,
