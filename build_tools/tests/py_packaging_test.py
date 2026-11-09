@@ -17,6 +17,7 @@ import stat
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -98,6 +99,56 @@ class BuildPackagesConcurrencyTest(TmpDirTestCase):
             )
 
         self.assertEqual(check_call_mock.call_count, 2)
+
+    def test_each_package_logs_to_its_own_file(self):
+        """Concurrent setup.py output lands in separate per-package logs."""
+        package_dirs = self._make_package_dirs(2)
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            kwargs["stdout"].write(f"output of {name}\n")
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        log_dir = self.temp_dir / "logs"
+        for name in ("package-0", "package-1"):
+            self.assertEqual(
+                (log_dir / f"{name}.log").read_text(), f"output of {name}\n"
+            )
+
+    def test_failure_stops_queued_packages(self):
+        """A failing package re-raises; a package still queued never starts."""
+        package_dirs = self._make_package_dirs(3)
+        failed = threading.Event()
+        started: list[str] = []
+        started_lock = threading.Lock()
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            with started_lock:
+                started.append(name)
+            if name == "package-0":
+                failed.set()
+                raise subprocess.CalledProcessError(1, args[0])
+            if name == "package-1":
+                # Stay busy until package-0 has failed, so the abort flag is
+                # set before a worker can take package-2.
+                failed.wait(timeout=5)
+                time.sleep(0.2)
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        self.assertIn("package-0", started)
+        self.assertNotIn("package-2", started)
 
     def test_rejects_nonpositive_workers(self):
         with self.assertRaisesRegex(ValueError, "max_workers must be at least 1"):

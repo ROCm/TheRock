@@ -19,6 +19,7 @@ import subprocess
 import shutil
 import sys
 import tarfile
+import threading
 import time
 
 from .artifacts import ArtifactCatalog, ArtifactName
@@ -827,14 +828,17 @@ def _build_package_worker(
     *,
     effective_dist_dir: Path,
     wheel_compression: bool,
+    log_dir: Path,
 ) -> None:
     """Build one staged package by invoking its ``setup.py``.
 
     ``rocm`` is built as an sdist. Every other package is a wheel, written
     uncompressed when ``wheel_compression`` is false. ``build_packages``
     calls this directly for a single package and submits it to the thread
-    pool when several packages run together. Each call writes its output
-    into the shared ``effective_dist_dir``.
+    pool when several packages run together. Each call writes its artifacts
+    into the shared ``effective_dist_dir`` and its ``setup.py`` output to
+    ``log_dir/<package>.log``, so concurrent packages do not share one
+    console. On failure that log is printed before the error is re-raised.
     """
     child_name = child_path.name
 
@@ -863,9 +867,23 @@ def _build_package_worker(
         ]
     )
 
+    pkg_log = log_dir / f"{child_name}.log"
     start_time = time.monotonic()
     log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
-    subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
+    failed: subprocess.CalledProcessError | None = None
+    with pkg_log.open("w") as log_fh:
+        try:
+            subprocess.check_call(
+                build_args, cwd=child_path, stdout=log_fh, stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as exc:
+            failed = exc
+    if failed is not None:
+        # Read after the write handle is closed so Windows can open the file,
+        # and so the child's buffered output is on disk.
+        log(f"::: Python package {child_name} failed; full log: {pkg_log}")
+        log(pkg_log.read_text(errors="replace"))
+        raise failed
     duration = time.monotonic() - start_time
     log(f"::: Built python package {child_name} in {duration:.1f} seconds")
 
@@ -890,19 +908,23 @@ def build_packages(
     wheel_compression: bool = True,
     package_dirs: list[Path] | None = None,
     dist_dir: Path | None = None,
+    log_dir: Path | None = None,
     max_workers: int = 3,
 ) -> None:
     """Build independent package staging directories concurrently.
 
     Each worker launches one setuptools process. Wheel compression within each
     process remains single-threaded, so this controls package-level parallelism,
-    not compression threads.
+    not compression threads. Each package's output is written to
+    ``log_dir/<package>.log`` (default ``dest_dir/logs``).
     """
     if max_workers < 1:
         raise ValueError(f"max_workers must be at least 1, got {max_workers}")
 
     effective_dist_dir = dist_dir or (dest_dir / "dist")
     effective_dist_dir.mkdir(parents=True, exist_ok=True)
+    effective_log_dir = log_dir or (dest_dir / "logs")
+    effective_log_dir.mkdir(parents=True, exist_ok=True)
     if package_dirs is None:
         package_dirs = [
             p
@@ -923,17 +945,32 @@ def build_packages(
                 child_path,
                 effective_dist_dir=effective_dist_dir,
                 wheel_compression=wheel_compression,
+                log_dir=effective_log_dir,
             )
         return
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = [
-            executor.submit(
-                _build_package_worker,
+    # A worker that finishes after a failure would otherwise pick up the next
+    # queued package before the main thread can cancel it. Setting this flag
+    # in the failing worker makes every not-yet-started package a no-op.
+    abort = threading.Event()
+
+    def _build_unless_aborted(child_path: Path) -> None:
+        if abort.is_set():
+            return
+        try:
+            _build_package_worker(
                 child_path,
                 effective_dist_dir=effective_dist_dir,
                 wheel_compression=wheel_compression,
+                log_dir=effective_log_dir,
             )
+        except Exception:
+            abort.set()
+            raise
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(_build_unless_aborted, child_path)
             for child_path in package_dirs
         ]
         try:
