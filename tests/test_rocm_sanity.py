@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -126,6 +127,29 @@ class TestROCmSanity:
         check.is_not_none(
             re.search(to_search, clinfo_output),
             f"Failed to search for {to_search} in clinfo output:\n{clinfo_output}",
+        )
+
+    @pytest.mark.skipif(not is_windows(), reason="Windows DLL search isolation")
+    def test_comgr_load_without_host_dependencies(self) -> None:
+        # A fresh process prevents an already-loaded DLL from hiding a missing
+        # packaged dependency. Search only beside Comgr and in System32.
+        script = textwrap.dedent(
+            """
+            import ctypes
+            import sys
+
+            # LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32
+            comgr = ctypes.CDLL(sys.argv[1], winmode=0x00000100 | 0x00000800)
+            get_version = comgr.amd_comgr_get_version
+            get_version.argtypes = [ctypes.POINTER(ctypes.c_size_t)] * 2
+            get_version.restype = None
+            major, minor = ctypes.c_size_t(), ctypes.c_size_t()
+            get_version(ctypes.byref(major), ctypes.byref(minor))
+            assert major.value > 0, (major.value, minor.value)
+            """
+        )
+        run_command(
+            [sys.executable, "-I", "-c", script, str(THEROCK_BIN_DIR / "amd_comgr.dll")]
         )
 
     def test_hipify_version(self):
