@@ -59,7 +59,7 @@ Publish the package to the affected product buckets and wait for the product
 indexer to create its package page and wheel links. Mirrored dependencies are
 published by the rockrel
 [`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
-workflow: its weekly run covers `dev` and `nightly`, and a manual dispatch can
+workflow: its weekly run covers `dev` and a manual dispatch can
 target particular release streams. Verify those links before
 deploying a new aggregate route. For mirrored dependencies, the public package
 page is `/rocm/core/whl-next/<normalized-package>/`.
