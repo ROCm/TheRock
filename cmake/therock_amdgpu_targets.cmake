@@ -325,8 +325,8 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     # hipTensor
     # # THEROCK_ENABLE_ROCPROFV3
     # rocprofiler-sdk
-    # # [G1] roctracer
-    # # aqlprofile
+    roctracer
+    aqlprofile
     # rocprof-trace-decoder
     # # THEROCK_ENABLE_ROCPROFILER_COMPUTE
     # rocprofiler-compute
