@@ -248,7 +248,8 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   )
 endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
-if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
+# _blas_enabled is set by math-libs (configured before ml-libs).
+if(THEROCK_ENABLE_HIPBLASLTPROVIDER AND _blas_enabled)
   ##############################################################################
   # hipDNN hipBLASLt provider
   ##############################################################################
@@ -295,7 +296,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     SUBPROJECT_DEPS
       hipblasltprovider
   )
-endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
+endif(THEROCK_ENABLE_HIPBLASLTPROVIDER AND _blas_enabled)
 
 set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)

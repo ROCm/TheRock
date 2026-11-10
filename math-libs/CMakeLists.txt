@@ -458,7 +458,16 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
   )
 endif(THEROCK_ENABLE_FFT AND _fft_enabled)
 
+# The BLAS group (incl. sparse/solver) is anchored on rocBLAS: if every requested
+# target is excluded for rocBLAS (e.g. an amdgcnspirv-only shard), none of the
+# group can build, so skip it instead of configuring with an empty target list.
+set(_blas_enabled OFF)
 if(THEROCK_ENABLE_BLAS)
+  therock_check_subproject_targets(_blas_enabled rocBLAS)
+endif()
+set(_blas_enabled ${_blas_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_BLAS AND _blas_enabled)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
@@ -499,6 +508,10 @@ if(THEROCK_ENABLE_ROCWMMA)
   if(_rocwmma_enable_benchmarks)
     list(APPEND _rocwmma_optional_deps amdsmi)
   endif()
+  # rocBLAS is only used for test validation/benchmarks.
+  if(_blas_enabled)
+    list(APPEND _rocwmma_optional_deps rocBLAS)
+  endif()
 
   therock_cmake_subproject_declare(rocWMMA
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocwmma"
@@ -510,7 +523,7 @@ if(THEROCK_ENABLE_ROCWMMA)
       -DROCM_DIR=
       "-DROCWMMA_BUILD_SAMPLES=$<BOOL:${_rocwmma_build_samples}>"
       "-DROCWMMA_BUILD_TESTS=$<BOOL:${_rocwmma_build_tests}>"
-      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=ON"
+      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=$<BOOL:${_blas_enabled}>"
       "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<BOOL:${_rocwmma_enable_benchmarks}>"
       "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${_rocwmma_enable_benchmarks}>"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
@@ -524,7 +537,6 @@ if(THEROCK_ENABLE_ROCWMMA)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
-      rocBLAS
       ${_rocwmma_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
