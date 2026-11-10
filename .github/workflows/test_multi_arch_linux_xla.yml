@@ -50,7 +50,7 @@ on:
         # environment, so a number input there is rejected and the workflow
         # cannot be run by hand. Converted with fromJSON() where it is used.
         type: string
-        default: "240"
+        default: "120"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
