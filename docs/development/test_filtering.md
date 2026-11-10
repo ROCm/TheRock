@@ -47,6 +47,10 @@
   - Execution time: hours (step timeout 180 min)
   - Target: periodic workload coverage of the hipDNN providers
 
+External repositories (rocm-libraries, rocm-systems) set the test type in `configure_external_repo_ci.py`.
+On a `workflow_dispatch` run, a `test_filter:<type>` label in the `pr_labels` input (passed as the `PR_LABELS` environment variable) sets the test type.
+Pull request, push, and scheduled runs ignore labels there, so an opt-in type such as `workloads` runs only on demand.
+
 ## Test filter implementation
 
 Test filter implementation is done with CTest.

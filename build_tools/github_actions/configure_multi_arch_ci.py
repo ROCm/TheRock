@@ -76,6 +76,7 @@ from amdgpu_family_matrix import (
     get_wsl_test_runner,
     select_build_runner,
 )
+from ci_test_filter import parse_test_filter_label
 from configure_ci_path_filters import (
     get_changed_files_for_external_repo,
     get_jobs_for_changes,
@@ -1366,17 +1367,6 @@ def select_targets(ci_inputs: CIInputs) -> TargetSelection:
 # ---------------------------------------------------------------------------
 
 
-_VALID_TEST_FILTER_TYPES = {
-    "quick",
-    "standard",
-    "comprehensive",
-    "full",
-    # Opt-in suites for components that declare "workloads_timeout_minutes"
-    # in fetch_test_configurations.py; only selectable via test_filter:.
-    "workloads",
-}
-
-
 def _determine_test_type(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1404,16 +1394,9 @@ def _determine_test_type(
         + ci_inputs.linux_test_labels
         + ci_inputs.windows_test_labels
     )
-    for label in all_labels:
-        if not label.startswith("test_filter:"):
-            continue
-        filter_type = label.split(":")[1]
-        if filter_type not in _VALID_TEST_FILTER_TYPES:
-            raise ValueError(
-                f"Unrecognized test_filter value: {filter_type!r}. "
-                f"Valid values: {sorted(_VALID_TEST_FILTER_TYPES)}"
-            )
-        return filter_type, f"test_filter label: {label}"
+    filter_type = parse_test_filter_label(all_labels)
+    if filter_type is not None:
+        return filter_type, f"test_filter label: test_filter:{filter_type}"
 
     # Priority 2: release builds run deeper test suites than regular CI.
     # * 'nightly' and 'nightly-bkc' get comprehensive (deeper than standard,

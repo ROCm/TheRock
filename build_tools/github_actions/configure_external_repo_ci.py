@@ -26,12 +26,18 @@ Usage:
         --head-sha def456 \
         --config-path .github/repos-config.json
 
+Environment:
+    PR_LABELS: Comma-separated labels from the workflow_dispatch pr_labels
+        input. Only workflow_dispatch runs read it, so pull request labels
+        never change the test type.
+
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths
     run_all_tests: "true" for schedule/dispatch, shared CI changes,
                 workflow changes without a configured project scope, or when
                 changed projects cannot be determined safely
-    test_type: "quick" when run_all_tests is true, "standard" otherwise
+    test_type: the test_filter: label type on workflow_dispatch; otherwise
+                "quick" when run_all_tests is true, "standard" otherwise
 """
 
 import argparse
@@ -54,6 +60,8 @@ from typing import (
     Type,
     TypeVar,
 )
+
+from ci_test_filter import parse_test_filter_label
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -127,7 +135,7 @@ class ConfigureResult:
 
     changed_projects: str  # Comma-separated list
     run_all_tests: bool
-    test_type: str  # "quick" when run_all_tests=True, otherwise "standard"
+    test_type: str  # See the module docstring "Outputs" section.
 
 
 @dataclass
@@ -317,19 +325,29 @@ def configure(
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
+    pr_labels: Iterable[str] = (),
 ) -> ConfigureResult:
     """Main configuration logic.
 
     Note: Skip-CI logic (for docs-only changes) is now handled by
     configure_multi_arch_ci.py using TOML config files. This function
     focuses on determining changed_projects and run_all_tests.
+
+    pr_labels is read only for workflow_dispatch: a `test_filter:<type>`
+    label there sets test_type (e.g. the opt-in "workloads" type).
     """
 
     # Schedule/workflow_dispatch events run all tests
     if event_name in ("schedule", "workflow_dispatch"):
         logger.info(f"{event_name} event - running all tests")
+        test_type = "quick"
+        if event_name == "workflow_dispatch":
+            filter_type = parse_test_filter_label(pr_labels)
+            if filter_type is not None:
+                logger.info(f"test_filter label - test type {filter_type}")
+                test_type = filter_type
         return ConfigureResult(
-            changed_projects="", run_all_tests=True, test_type="quick"
+            changed_projects="", run_all_tests=True, test_type=test_type
         )
 
     # Get modified paths via GitHub API
@@ -497,6 +515,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         base_sha=args.base_sha or None,
         head_sha=args.head_sha or None,
         config_path=args.config_path,
+        pr_labels=[
+            label.strip()
+            for label in os.environ.get("PR_LABELS", "").split(",")
+            if label.strip()
+        ],
     )
 
     set_github_output(
