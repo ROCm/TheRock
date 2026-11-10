@@ -301,6 +301,135 @@ class BuildEnvironmentTest(unittest.TestCase):
             self.assertIn(str(llvm_lib), ld)
 
 
+class ResolveAmdgpuTargetTest(unittest.TestCase):
+    def test_first_amdgpu_target_wins(self):
+        self.assertEqual(
+            pytest_runner.resolve_amdgpu_target("gfx1250, gfx942", "gfx125X"),
+            "gfx1250",
+        )
+
+    def test_falls_back_to_gpu_arch(self):
+        self.assertEqual(pytest_runner.resolve_amdgpu_target(None, "gfx942"), "gfx942")
+        self.assertEqual(pytest_runner.resolve_amdgpu_target("", "gfx942"), "gfx942")
+
+    def test_empty_when_nothing_known(self):
+        self.assertEqual(pytest_runner.resolve_amdgpu_target(None, None), "")
+
+
+class ApplyExecutionEnvironmentTest(unittest.TestCase):
+    def test_substitutes_tokens_and_overrides(self):
+        env = {"KEEP": "1", "OVERRIDE": "old"}
+        config = {
+            "execution_settings": {
+                "environment": {
+                    "OVERRIDE": "{ROCM_PATH}/x",
+                    "TARGET": "{AMDGPU_TARGETS}",
+                }
+            }
+        }
+
+        pytest_runner.apply_execution_environment(env, Path("/rocm"), config, "gfx942")
+
+        self.assertEqual(
+            env, {"KEEP": "1", "OVERRIDE": f"{Path('/rocm')}/x", "TARGET": "gfx942"}
+        )
+
+    def test_missing_or_null_environment_is_noop(self):
+        for config in ({}, {"execution_settings": {"environment": None}}):
+            env = {"A": "1"}
+            pytest_runner.apply_execution_environment(env, Path("/r"), config, "")
+            self.assertEqual(env, {"A": "1"})
+
+
+class RunPhaseAndMainTest(unittest.TestCase):
+    """run_phase()/main() must invoke pytest exactly as the former __main__ did."""
+
+    def setUp(self):
+        self._orig_env = os.environ.copy()
+        temporary_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_dir.cleanup)
+        self.rocm = Path(temporary_dir.name)
+        (self.rocm / "bin").mkdir()
+        self.component = self.rocm / "share/hipblaslt/tensilelite"
+        (self.component / "tests").mkdir(parents=True)
+        (self.component / "test_categories.yaml").write_text(
+            "test_categories:\n"
+            "  quick:\n"
+            "    test_paths: ['tests']\n"
+            "    pytest_markers: ['unit']\n"
+            "    pytest_args: ['--root={ROCM_PATH}', '--target={AMDGPU_TARGETS}']\n"
+            "    parallel_workers: 4\n"
+            "execution_settings:\n"
+            "  parallel_workers: 1\n"
+            "  category_timeouts:\n"
+            "    quick: 30\n"
+            "  environment:\n"
+            "    TEST_ROOT: '{ROCM_PATH}/configured'\n"
+        )
+        for var in ("TEST_CATEGORY", "PYTEST_TEST_TIMEOUT", "PYTEST_NUM_WORKERS"):
+            os.environ.pop(var, None)
+        os.environ.update(
+            {
+                "TEST_COMPONENT": "tensilelite",
+                "TEST_TYPE": "quick",
+                "THEROCK_BIN_DIR": str(self.rocm / "bin"),
+                "AMDGPU_FAMILIES": "gfx94X-dcgpu",
+                "AMDGPU_TARGETS": "gfx942",
+                "JUNIT_XML_DIR": "/junit",
+                "PYTHONPATH": "/pre/existing",
+            }
+        )
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_main_runs_configured_category(self):
+        with mock.patch.object(pytest_runner, "run_pytest", return_value=7) as run:
+            status = pytest_runner.main()
+
+        self.assertEqual(status, 7)
+        (
+            test_paths,
+            marker_expr,
+            pytest_args,
+            junit_xml,
+            timeout,
+            workers,
+            cwd,
+            env,
+        ) = run.call_args.args
+        rocm = self.rocm.resolve()
+        self.assertEqual(test_paths, ["tests"])
+        self.assertEqual(marker_expr, "(unit) and not skip-gfx94X")
+        self.assertEqual(pytest_args, [f"--root={rocm}", "--target=gfx942"])
+        self.assertEqual(junit_xml, str(Path("/junit") / "tensilelite.xml"))
+        self.assertEqual(timeout, 30)
+        self.assertEqual(workers, 4)
+        self.assertEqual(cwd, self.component.resolve())
+        # main's PYTHONPATH prepend is preserved.
+        self.assertEqual(
+            env["PYTHONPATH"],
+            f"{self.component.resolve()}{os.pathsep}/pre/existing",
+        )
+        self.assertEqual(env["TEST_ROOT"], f"{rocm}/configured")
+
+    def test_run_phase_applies_config_environment_to_given_env(self):
+        env = {"PYTHONPATH": "/custom"}
+        with mock.patch.object(pytest_runner, "run_pytest", return_value=0) as run:
+            pytest_runner.run_phase("tensilelite", "quick", None, None, self.rocm, env)
+
+        passed_env = run.call_args.args[7]
+        self.assertIs(passed_env, env)
+        self.assertEqual(passed_env["PYTHONPATH"], "/custom")
+        self.assertEqual(passed_env["TEST_ROOT"], f"{self.rocm}/configured")
+
+    def test_main_requires_component(self):
+        os.environ.pop("TEST_COMPONENT")
+        with self.assertRaises(SystemExit):
+            pytest_runner.main()
+
+
 class RunPytestTest(unittest.TestCase):
     def setUp(self):
         # A cwd with one existing and one missing test path.

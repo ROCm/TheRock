@@ -157,6 +157,20 @@ def extract_gpu_arch(amdgpu_families):
     return None
 
 
+def resolve_amdgpu_target(amdgpu_targets, gpu_arch):
+    """Resolve a concrete gfx target for {AMDGPU_TARGETS} substitution.
+
+    AMDGPU_TARGETS (set by test_component.yml from fetch-gfx-targets) carries
+    real targets like "gfx1250". Fallback: the gfx token extract_gpu_arch()
+    parsed from AMDGPU_FAMILIES -- only correct when that var holds a bare
+    target (e.g. NPI sets "gfx1250"), not when it holds a family name (e.g.
+    "gfx125X-dcgpu" -> "gfx125X", wrong).
+    """
+    return (amdgpu_targets.split(",")[0].strip() if amdgpu_targets else "") or (
+        gpu_arch or ""
+    )
+
+
 def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
     """
     Build a pytest -m expression from a category's marker config plus the
@@ -300,44 +314,48 @@ def build_environment(rocm_path, component_name):
     return env
 
 
-if __name__ == "__main__":
-    TEST_COMPONENT_NAME = os.getenv("TEST_COMPONENT")
-    TEST_TYPE = resolve_test_category()
-    AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-    AMDGPU_TARGETS = os.getenv("AMDGPU_TARGETS")
-    THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+def apply_execution_environment(env, rocm_path, config, amdgpu_target):
+    """Apply the component's execution_settings.environment to `env`.
 
-    if not TEST_COMPONENT_NAME:
-        _fail("TEST_COMPONENT environment variable is required but not set.")
-    if not THEROCK_BIN_DIR:
-        _fail("THEROCK_BIN_DIR environment variable is required but not set.")
+    {ROCM_PATH} and {AMDGPU_TARGETS} tokens are substituted with runtime values.
+    """
+    exec_settings = config.get("execution_settings", {})
+    for key, value in (exec_settings.get("environment", {}) or {}).items():
+        value = (
+            str(value)
+            .replace("{ROCM_PATH}", str(rocm_path))
+            .replace("{AMDGPU_TARGETS}", amdgpu_target)
+        )
+        env[key] = value
+        logging.info(f"Set environment variable: {key}={value}")
 
-    rocm_path = Path(THEROCK_BIN_DIR).resolve().parent
-    component_path = resolve_component_path(TEST_COMPONENT_NAME, rocm_path)
+
+def run_phase(
+    component_name, test_type, amdgpu_families, amdgpu_targets, rocm_path, env
+):
+    """Run the configured pytest category for an installed component.
+
+    `env` is the base environment (usually from build_environment()); the
+    component's execution_settings.environment is applied on top of it.
+    Returns pytest's exit status.
+    """
+    component_path = resolve_component_path(component_name, rocm_path)
     if not component_path.is_dir():
         _fail(f"Component test directory does not exist: {component_path}")
 
-    logging.info(f"Component: {TEST_COMPONENT_NAME} ({component_path})")
-    logging.info(f"Test category: {TEST_TYPE}")
+    logging.info(f"Component: {component_name} ({component_path})")
+    logging.info(f"Test category: {test_type}")
 
     config = load_test_categories_yaml(component_path / "test_categories.yaml")
     all_categories = config.get("test_categories", {})
-    category_config = lookup_category(all_categories, TEST_TYPE)
+    category_config = lookup_category(all_categories, test_type)
 
     test_paths = category_config.get("test_paths", [])
     if not test_paths:
-        _fail(f"Category '{TEST_TYPE}' defines no test_paths")
+        _fail(f"Category '{test_type}' defines no test_paths")
 
-    gpu_arch = extract_gpu_arch(AMDGPU_FAMILIES)
-    # Resolve a concrete gfx target for {AMDGPU_TARGETS} substitution.
-    # AMDGPU_TARGETS (set by test_component.yml from fetch-gfx-targets)
-    # carries real targets like "gfx1250". Fallback: extract_gpu_arch()
-    # parses a gfx token from AMDGPU_FAMILIES — only correct when that
-    # var holds a bare target (e.g. NPI sets "gfx1250"), not when it
-    # holds a family name (e.g. "gfx125X-dcgpu" → "gfx125X", wrong).
-    amdgpu_target = (
-        AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
-    ) or (gpu_arch or "")
+    gpu_arch = extract_gpu_arch(amdgpu_families)
+    amdgpu_target = resolve_amdgpu_target(amdgpu_targets, gpu_arch)
     marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
 
     # Extra pytest CLI options for this category.  {ROCM_PATH} and
@@ -357,37 +375,56 @@ if __name__ == "__main__":
     # pytest-timeout); PYTEST_NUM_WORKERS is the pytest-xdist worker count.
     timeout = get_env_int_override("PYTEST_TEST_TIMEOUT") or exec_settings.get(
         "category_timeouts", {}
-    ).get(TEST_TYPE)
+    ).get(test_type)
     # parallel_workers may be overridden per category (e.g. GPU GEMM tests want
     # more xdist workers than the default), falling back to the global setting.
     num_workers = get_env_int_override("PYTEST_NUM_WORKERS") or category_config.get(
         "parallel_workers", exec_settings.get("parallel_workers", 1)
     )
 
+    junit_xml = junit_xml_path(component_name)
+
+    apply_execution_environment(env, rocm_path, config, amdgpu_target)
+
+    return run_pytest(
+        test_paths,
+        marker_expr,
+        pytest_args,
+        junit_xml,
+        timeout,
+        num_workers,
+        component_path,
+        env,
+    )
+
+
+def junit_xml_path(component_name):
+    """Return the JUnit XML report path for `component_name`, or None."""
     junit_dir = os.getenv("JUNIT_XML_DIR")
-    junit_xml = (
-        str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
+    return str(Path(junit_dir) / f"{component_name}.xml") if junit_dir else None
+
+
+def main():
+    component_name = os.getenv("TEST_COMPONENT")
+    test_type = resolve_test_category()
+    therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+
+    if not component_name:
+        _fail("TEST_COMPONENT environment variable is required but not set.")
+    if not therock_bin_dir:
+        _fail("THEROCK_BIN_DIR environment variable is required but not set.")
+
+    rocm_path = Path(therock_bin_dir).resolve().parent
+    env = build_environment(rocm_path, component_name)
+    return run_phase(
+        component_name,
+        test_type,
+        os.getenv("AMDGPU_FAMILIES"),
+        os.getenv("AMDGPU_TARGETS"),
+        rocm_path,
+        env,
     )
 
-    env = build_environment(rocm_path, TEST_COMPONENT_NAME)
-    for key, value in (exec_settings.get("environment", {}) or {}).items():
-        value = (
-            str(value)
-            .replace("{ROCM_PATH}", str(rocm_path))
-            .replace("{AMDGPU_TARGETS}", amdgpu_target)
-        )
-        env[key] = value
-        logging.info(f"Set environment variable: {key}={value}")
 
-    sys.exit(
-        run_pytest(
-            test_paths,
-            marker_expr,
-            pytest_args,
-            junit_xml,
-            timeout,
-            num_workers,
-            component_path,
-            env,
-        )
-    )
+if __name__ == "__main__":
+    sys.exit(main())
