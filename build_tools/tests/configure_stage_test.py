@@ -4,18 +4,24 @@
 
 import json
 import os
+import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
 from configure_stage import (
+    TENSILELITE_REQUIREMENTS_PATH,
     filter_artifacts_for_stage,
     generate_cmake_args,
     get_artifact_features,
+    main,
+    resolve_python_requirements,
 )
 
 
@@ -55,6 +61,142 @@ class ArtifactResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
         self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", args)
         self.assertIn("-DTHEROCK_ENABLE_RCCL=ON", args)
+
+
+class RocmLibrariesSourceTest(unittest.TestCase):
+    TENSILELITE_REQUIREMENT = "-r projects/hipblaslt/tensilelite/requirements.txt"
+
+    def _make_source_root(self, parent: Path, name: str) -> Path:
+        source_root = parent / name
+        requirements_path = source_root / TENSILELITE_REQUIREMENTS_PATH
+        requirements_path.parent.mkdir(parents=True)
+        requirements_path.write_text("packaging\n")
+        return source_root
+
+    def test_resolves_tensilelite_requirement_against_source_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for name in ("external-rocm-libraries", "external checkout's files;"):
+                with self.subTest(name=name):
+                    source_root = self._make_source_root(Path(temp_dir), name)
+                    resolved = resolve_python_requirements(
+                        ["pkg-a", self.TENSILELITE_REQUIREMENT, "pkg-b"], source_root
+                    )
+                    self.assertEqual(
+                        shlex.split(" ".join(resolved)),
+                        [
+                            "pkg-a",
+                            "-r",
+                            str(source_root / TENSILELITE_REQUIREMENTS_PATH),
+                            "pkg-b",
+                        ],
+                    )
+
+    def test_matches_topology_entry_with_windows_path_constant(self):
+        # Exercise Windows separator semantics even when tests run on Linux.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_root = self._make_source_root(Path(temp_dir), "rocm-libraries")
+            with patch(
+                "configure_stage.TENSILELITE_REQUIREMENTS_PATH",
+                PureWindowsPath("projects/hipblaslt/tensilelite/requirements.txt"),
+            ):
+                resolved = resolve_python_requirements(
+                    [self.TENSILELITE_REQUIREMENT], source_root
+                )
+            self.assertEqual(
+                shlex.split(resolved[0]),
+                ["-r", str(source_root / TENSILELITE_REQUIREMENTS_PATH)],
+            )
+
+    def test_other_requirements_pass_through_unchanged(self):
+        self.assertEqual(
+            resolve_python_requirements(
+                ["-r other/requirements.txt", "pkg"], Path("/does/not/exist")
+            ),
+            ["-r other/requirements.txt", "pkg"],
+        )
+
+    def test_missing_requirements_reports_resolved_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_root = Path(temp_dir) / "missing-rocm-libraries"
+            expected_path = source_root / TENSILELITE_REQUIREMENTS_PATH
+            with self.assertRaises(FileNotFoundError) as error:
+                resolve_python_requirements([self.TENSILELITE_REQUIREMENT], source_root)
+            self.assertIn(str(expected_path.absolute()), str(error.exception))
+
+    def test_cli_writes_requirements_for_selected_checkout(self):
+        topology = get_topology()
+        topology.artifacts["blas"].python_requires = [
+            "pkg-a",
+            self.TENSILELITE_REQUIREMENT,
+            "pkg-b",
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "TheRock"
+            default_root = self._make_source_root(repo_root, "rocm-libraries")
+            external_root = self._make_source_root(
+                Path(temp_dir), "external checkout's files;"
+            )
+            for platform_name in ("linux", "windows"):
+                for source_root in (default_root, external_root):
+                    with self.subTest(platform=platform_name, source=source_root):
+                        output_file = Path(temp_dir) / "github-output.txt"
+                        output_file.unlink(missing_ok=True)
+                        argv = [
+                            "--stage",
+                            "math-libs",
+                            "--gha-output",
+                            "--platform",
+                            platform_name,
+                        ]
+                        if source_root == external_root:
+                            argv.extend(
+                                ["--rocm-libraries-source-dir", str(source_root)]
+                            )
+                        with (
+                            patch(
+                                "configure_stage.get_topology", return_value=topology
+                            ),
+                            patch(
+                                "configure_stage.__file__",
+                                str(repo_root / "build_tools/configure_stage.py"),
+                            ),
+                            patch.dict(os.environ, {"GITHUB_OUTPUT": str(output_file)}),
+                        ):
+                            main(argv)
+                        outputs = dict(
+                            line.split("=", 1)
+                            for line in output_file.read_text().splitlines()
+                        )
+                        self.assertEqual(
+                            shlex.split(outputs["pip_install_cmd"]),
+                            [
+                                "pkg-a",
+                                "-r",
+                                str(source_root / TENSILELITE_REQUIREMENTS_PATH),
+                                "pkg-b",
+                            ],
+                        )
+                        self.assertNotIn(
+                            "THEROCK_ROCM_LIBRARIES_SOURCE_DIR", outputs["cmake_args"]
+                        )
+
+    def test_cmake_args_do_not_set_rocm_libraries_source_dir(self):
+        # External-repo CI passes THEROCK_ROCM_LIBRARIES_SOURCE_DIR itself
+        # (detect_external_repo_config.py cmake_source_var); the stage
+        # generator must not emit a second, possibly conflicting, value.
+        topology = get_topology()
+        for platform_name in ("linux", "windows"):
+            with self.subTest(platform=platform_name):
+                cmake_args = generate_cmake_args(
+                    stage_name="math-libs",
+                    amdgpu_families="",
+                    dist_amdgpu_families="",
+                    topology=topology,
+                    platform_name=platform_name,
+                )
+                self.assertFalse(
+                    any("THEROCK_ROCM_LIBRARIES_SOURCE_DIR" in a for a in cmake_args)
+                )
 
 
 class FeatureOrientedResolutionTest(unittest.TestCase):
