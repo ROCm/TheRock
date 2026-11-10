@@ -13,6 +13,8 @@ include = [
   # Prebuilt c2h test executables and their relocatable CTest file.
   "bin/libcudacxx.test.*",
   "bin/libhipcxx/CTestTestfile.cmake",
+  # Prebuilt lit tests, run with LIBHIPCXX_PREBUILT_LIT_DIR.
+  "share/libhipcxx/lit/**",
 ]
 [components.test."math-libs/libhipcxx/build"]
 include = [
