@@ -263,6 +263,17 @@ def find_uncovered_components(
     return uncovered
 
 
+def get_artifact_component_files(
+    archive_index: list["ArchiveInfo"], artifact_name: str, component: str
+) -> set[str]:
+    """Collect flattened files for one artifact component across target variants."""
+    files = set()
+    for info in archive_index:
+        if info.artifact_name == artifact_name and info.component == component:
+            files.update(info.flattened_paths)
+    return files
+
+
 @pytest.fixture(scope="session")
 def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
     """Scan all archives once and return a flat list of ArchiveInfo."""
@@ -433,6 +444,46 @@ class TestArtifactStructure:
             "Checked %d artifacts, no within-artifact component overlaps",
             len(artifact_names),
         )
+
+    def test_tensilelite_wheel_artifact_layout(self, archive_index: list[ArchiveInfo]):
+        """Guard the BLAS test-artifact layout the TensileLite wheel runner uses.
+
+        Applies only once the pinned rocm-libraries ships TensileLite wheels
+        (share/hipblaslt/tensilelite/wheels/); older pins keep today's layout.
+        The client stays test-only in blas_test (Q097).
+        """
+        blas_lib_files = get_artifact_component_files(archive_index, "blas", "lib")
+        blas_test_files = get_artifact_component_files(archive_index, "blas", "test")
+
+        test_root = "share/hipblaslt/tensilelite/"
+        wheels = sorted(
+            path
+            for path in blas_test_files
+            if path.startswith(test_root + "wheels/") and path.endswith(".whl")
+        )
+        if not wheels:
+            pytest.skip("pinned rocm-libraries does not ship TensileLite wheels yet")
+
+        assert len(wheels) == 1 and wheels[0].startswith(
+            test_root + "wheels/tensilelite-"
+        ), f"blas_test must contain exactly one tensilelite wheel, found {wheels}"
+        assert any(
+            path.startswith(test_root + "tensilelite/Tests/")
+            for path in blas_test_files
+        ), "blas_test is missing installed-package TensileLite tests"
+        assert not any(
+            path.startswith(test_root + "tensilelite/Tests/unit/source_only/")
+            for path in blas_test_files
+        ), "blas_test must exclude source-only TensileLite tests"
+
+        client_dir = "libexec/hipblaslt/tensilelite/"
+        assert not any(
+            path.startswith(client_dir) for path in blas_lib_files
+        ), "blas_lib must not contain the test-only tensilelite-client"
+        if not is_windows_platform():
+            assert (
+                client_dir + "tensilelite-client" in blas_test_files
+            ), "blas_test is missing tensilelite-client"
 
     @pytest.mark.skipif(
         is_windows_platform(),
