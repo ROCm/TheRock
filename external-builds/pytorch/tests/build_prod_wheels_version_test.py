@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests for dev-build version tagging in build_prod_wheels.py."""
+"""Tests for build_prod_wheels.py helpers."""
 
 import os
 import subprocess
@@ -15,7 +15,31 @@ from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
-from build_prod_wheels import compute_build_version
+from build_prod_wheels import compute_build_version, has_aotriton_supported_arch
+
+
+class AOTritonArchSupportTest(unittest.TestCase):
+    def test_supported_arches(self):
+        for arch in (
+            "gfx90a",
+            "gfx942",
+            "gfx950",
+            "gfx1100",
+            "gfx1153",
+            "gfx1201",
+            "gfx1250",
+            "gfx942:xnack-",
+        ):
+            with self.subTest(arch=arch):
+                self.assertTrue(has_aotriton_supported_arch(arch))
+
+    def test_unsupported_arches(self):
+        for arches in ("", "gfx1170;gfx1171", "gfx1250-strict", "gfx1251"):
+            with self.subTest(arches=arches):
+                self.assertFalse(has_aotriton_supported_arch(arches))
+
+    def test_mixed_arches(self):
+        self.assertTrue(has_aotriton_supported_arch("gfx1170;gfx942"))
 
 
 class ComputeBuildVersionTest(unittest.TestCase):
