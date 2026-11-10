@@ -37,6 +37,19 @@ VERIFY_KEY_COMPONENTS = [
     "lib/cmake/profiler-hub/profiler-hub-config.cmake",
 ]
 
+# Directories the native install must create under the prefix. ``lib/cmake``
+# is where downstream ``find_package`` looks. These are fail-closed.
+INSTALL_LAYOUT_DIRS = (
+    "bin",
+    "lib",
+    "include",
+    "share",
+    "lib/cmake",
+)
+
+# Metapackages installed and removed together, in this order.
+METAPACKAGE_BASES = ("amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk")
+
 
 def metapackage_variant_suffix(build_variant: str) -> str:
     """Return the metapackage name variant segment for a CI build-variant label.
@@ -111,21 +124,52 @@ def major_minor_rocm_version_from_input(rocm_version: str | None) -> str | None:
     return f"{int(match.group(1))}.{int(match.group(2))}"
 
 
+def _metapackage_name(
+    base: str, variant_sep: str, ver: str | None, arch: str | None
+) -> str:
+    """Return one metapackage name with the shared suffix rules.
+
+    ``variant_sep`` is ``-asan`` or empty. ``ver`` and ``arch`` are left out of
+    the name when they are ``None``, so this covers versioned, arch-specific,
+    and unversioned targets. ``amdrocm-hpc-sdk`` uses the same order as
+    ``amdrocm`` and ``amdrocm-core-sdk``: optional ``-asan``, then major.minor,
+    then ``-arch``.
+
+    Args:
+        base: Metapackage stem, such as ``amdrocm-hpc-sdk``.
+        variant_sep: ``-asan`` for an ASan-family build, otherwise ``""``.
+        ver: Major.minor version, or ``None`` for an unversioned name.
+        arch: GPU architecture, or ``None`` when the name has no arch suffix.
+
+    Returns:
+        The package name, for example ``amdrocm-hpc-sdk-asan7.13-gfx94x``.
+    """
+    name = f"{base}{variant_sep}"
+    if ver:
+        name = f"{name}{ver}"
+    if arch:
+        name = f"{name}-{arch}"
+    return name
+
+
 def build_metapackage_names(
     *,
     gfx_arch: str | list[str] | None,
     rocm_version: str | None,
     build_variant: str = "",
 ) -> list[str]:
-    """Build ``amdrocm`` / ``amdrocm-core-sdk`` install or uninstall targets.
+    """Build the install or uninstall metapackage targets.
 
-    Naming rules (must match between install and uninstall scripts):
+    The list is ``amdrocm``, ``amdrocm-core-sdk``, then ``amdrocm-hpc-sdk``.
+    The HPC SDK is opt-in in ``package.json`` and is not pulled in by
+    ``amdrocm``. Naming rules (must match between install and uninstall):
 
-    - With ``gfx_arch`` and ``rocm_version``: one pair per arch
-      (``amdrocm{variant}{ver}-{arch}``, ``amdrocm-core-sdk{variant}{ver}-{arch}``).
-    - With ``rocm_version`` only: ``amdrocm{variant}{ver}`` and
-      ``amdrocm-core-sdk{variant}{ver}``.
-    - With neither: unversioned ``amdrocm{variant}`` and ``amdrocm-core-sdk{variant}``.
+    - With ``gfx_arch`` and ``rocm_version``: one trio per arch
+      (``amdrocm{variant}{ver}-{arch}``, and the same suffix on
+      ``amdrocm-core-sdk`` and ``amdrocm-hpc-sdk``).
+    - With ``rocm_version`` only: the three names with ``{variant}{ver}``.
+    - With neither: unversioned ``amdrocm{variant}``,
+      ``amdrocm-core-sdk{variant}``, and ``amdrocm-hpc-sdk{variant}``.
     - ASan-family build variants (``asan``, ``host-asan``, ``asan-debug``,
       ``host-asan-debug``) insert ``-asan`` before the version suffix
       (e.g. ``amdrocm-asan7.13-gfx94x``). Labels such as ``release`` do not
@@ -148,20 +192,17 @@ def build_metapackage_names(
         names: list[str] = []
         for arch in gfx_arch_list:
             names.extend(
-                [
-                    f"amdrocm{variant_sep}{ver}-{arch}",
-                    f"amdrocm-core-sdk{variant_sep}{ver}-{arch}",
-                ]
+                _metapackage_name(base, variant_sep, ver, arch)
+                for base in METAPACKAGE_BASES
             )
         return names
     if ver:
         return [
-            f"amdrocm{variant_sep}{ver}",
-            f"amdrocm-core-sdk{variant_sep}{ver}",
+            _metapackage_name(base, variant_sep, ver, None)
+            for base in METAPACKAGE_BASES
         ]
     return [
-        f"amdrocm{variant_sep}",
-        f"amdrocm-core-sdk{variant_sep}",
+        _metapackage_name(base, variant_sep, None, None) for base in METAPACKAGE_BASES
     ]
 
 

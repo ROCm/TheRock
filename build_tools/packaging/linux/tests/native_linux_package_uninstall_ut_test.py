@@ -151,8 +151,10 @@ class UninstallDebPackagesTest(unittest.TestCase):
         self.assertEqual(
             remove_cmd[4:],
             [
+                "amdrocm-hpc-sdk7.13-gfx1100",
                 "amdrocm-core-sdk7.13-gfx1100",
                 "amdrocm7.13-gfx1100",
+                "amdrocm-hpc-sdk7.13-gfx94x",
                 "amdrocm-core-sdk7.13-gfx94x",
                 "amdrocm7.13-gfx94x",
             ],

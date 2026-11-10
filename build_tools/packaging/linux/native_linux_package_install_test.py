@@ -15,7 +15,8 @@ Test modes (--test-type):
   1. Repo setup and install: set up package-manager repository and install
      ROCm packages. Arch suffixes in metapackage names are used only when both
      ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
-     With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
+     With ``--rocm-version`` only: ``amdrocm7.13``, ``amdrocm-core-sdk7.13``,
+     and ``amdrocm-hpc-sdk7.13``.
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
@@ -150,6 +151,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 from packaging_utils import normalize_target_list
 from native_linux_package_test_common import (
     ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
+    INSTALL_LAYOUT_DIRS,
     VERIFY_KEY_COMPONENTS,
     build_metapackage_names,
     derive_package_type,
@@ -1089,11 +1091,12 @@ gpgcheck=0
             if ver:
                 print(
                     "GPU Architecture(s): (none — generic versioned packages "
-                    f"amdrocm{ver}, amdrocm-core-sdk{ver})"
+                    f"amdrocm{ver}, amdrocm-core-sdk{ver}, amdrocm-hpc-sdk{ver})"
                 )
             else:
                 print(
-                    "GPU Architecture(s): (none — generic packages amdrocm, amdrocm-core-sdk)"
+                    "GPU Architecture(s): (none — generic packages amdrocm, "
+                    "amdrocm-core-sdk, amdrocm-hpc-sdk)"
                 )
         print(f"Repository URL: {self.repo_url or '(from amd-repo-setup package)'}")
         print(f"Packages (in order): {self.package_names}")
@@ -1148,6 +1151,10 @@ gpgcheck=0
             return False
 
         print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
+
+        if not self.verify_install_layout(install_path):
+            print("\n[FAIL] Basic verification FAILED (install layout)")
+            return False
 
         key_components = VERIFY_KEY_COMPONENTS
         print("\nChecking for key ROCm components:")
@@ -1243,6 +1250,41 @@ gpgcheck=0
             )
             return False
         print("\n[PASS] Basic verification PASSED")
+        return True
+
+    def verify_install_layout(self, install_path: Path) -> bool:
+        """Fail when the installed prefix is missing its basic directories.
+
+        The prefix must contain ``bin``, ``lib``, ``include``, ``share``, and
+        ``lib/cmake``. ``/usr/lib`` must exist because the dynamic linker
+        reads it.
+
+        Args:
+            install_path: Resolved or configured install prefix.
+
+        Returns:
+            True when every required path is present.
+        """
+        missing: list[str] = []
+        for relative in INSTALL_LAYOUT_DIRS:
+            path = install_path / relative
+            if not path.is_dir():
+                missing.append(str(path))
+                print(f" [FAIL] {relative} (not a directory)")
+            else:
+                print(f" [PASS] {relative}")
+
+        usr_lib = Path("/usr/lib")
+        if not usr_lib.is_dir():
+            missing.append(str(usr_lib))
+            print(" [FAIL] /usr/lib (not a directory)")
+        else:
+            print(" [PASS] /usr/lib")
+
+        if missing:
+            print(f"\n[FAIL] Install layout missing: {', '.join(missing)}")
+            return False
+        print("\n[PASS] Install layout")
         return True
 
     @staticmethod
@@ -1762,7 +1804,7 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         metavar="ARCH",
         help="GPU architecture(s), optional. Used in package names only with --rocm-version "
         "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
-        "(generic amdrocm / amdrocm-core-sdk). "
+        "(generic amdrocm / amdrocm-core-sdk / amdrocm-hpc-sdk). "
         "Repeat flag or list; commas and semicolons split within each value. Not used for simulate.",
     )
     parser.add_argument(
@@ -1982,7 +2024,7 @@ def run_tests(args: Namespace) -> int:
             )
             print(
                 "GPU Architecture(s): (none — generic versioned packages "
-                f"amdrocm{_gv}, amdrocm-core-sdk{_gv})"
+                f"amdrocm{_gv}, amdrocm-core-sdk{_gv}, amdrocm-hpc-sdk{_gv})"
             )
         else:
             print("GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)")

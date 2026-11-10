@@ -396,7 +396,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.gfx_arch)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_without_rocm_version_ignored_for_package_names(self):
@@ -410,7 +410,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.rocm_version_major_minor)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_with_rocm_version_uses_versioned_package_names(self):
@@ -424,7 +424,11 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.rocm_version_major_minor, "7.13")
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.13-gfx1100", "amdrocm-core-sdk7.13-gfx1100"],
+            [
+                "amdrocm7.13-gfx1100",
+                "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm-hpc-sdk7.13-gfx1100",
+            ],
         )
 
     def test_rocm_version_generic_uses_versioned_package_names(self):
@@ -436,7 +440,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.rocm_version_major_minor, "7.13")
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.13", "amdrocm-core-sdk7.13"],
+            ["amdrocm7.13", "amdrocm-core-sdk7.13", "amdrocm-hpc-sdk7.13"],
         )
 
     def test_major_minor_rocm_version_from_input(self):
@@ -469,7 +473,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx1151")
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_list_with_rocm_version_multi_arch_package_names(self):
@@ -484,8 +488,10 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             [
                 "amdrocm7.13-gfx1151",
                 "amdrocm-core-sdk7.13-gfx1151",
+                "amdrocm-hpc-sdk7.13-gfx1151",
                 "amdrocm7.13-gfx94x",
                 "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm-hpc-sdk7.13-gfx94x",
             ],
         )
 
@@ -499,7 +505,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.gfx_arch)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_os_profile_and_release_type_normalized_lower(self):
@@ -544,8 +550,10 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             [
                 "amdrocm7.13-gfx94x",
                 "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm-hpc-sdk7.13-gfx94x",
                 "amdrocm7.13-gfx1100",
                 "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm-hpc-sdk7.13-gfx1100",
             ],
         )
 
@@ -562,8 +570,10 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             [
                 "amdrocm7.13-gfx94x",
                 "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm-hpc-sdk7.13-gfx94x",
                 "amdrocm7.13-gfx1100",
                 "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm-hpc-sdk7.13-gfx1100",
             ],
         )
 
@@ -702,7 +712,7 @@ class ArgvFromCiEnvTest(unittest.TestCase):
             gfx_arch=args.gfx_arch,
             rocm_version=args.rocm_version,
         )
-        self.assertEqual(len(t.package_names), 4)
+        self.assertEqual(len(t.package_names), 6)
 
 
 class RunSimulateInstallTestTest(unittest.TestCase):
@@ -1104,6 +1114,12 @@ class RunTestsTestTypeTest(unittest.TestCase):
         self.assertEqual(args.gfx_arch, ["gfx94x;gfx1100"])
 
 
+def _write_install_layout(prefix: Path) -> None:
+    """Create the prefix directories the layout check requires."""
+    for relative in ("bin", "lib", "include", "share", "lib/cmake"):
+        (prefix / relative).mkdir(parents=True, exist_ok=True)
+
+
 class RunBasicVerificationTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.run_basic_verification()."""
 
@@ -1128,10 +1144,10 @@ class RunBasicVerificationTest(unittest.TestCase):
         # The file-security check is stubbed here (covered separately in its own tests).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1153,6 +1169,22 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
+    def test_returns_false_when_prefix_lib_is_missing(self):
+        """A prefix with key files but no lib directory fails the layout check."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "bin").mkdir()
+            (root / "include").mkdir()
+            (root / "share").mkdir()
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
+            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                repo_url="https://example.com",
+                os_profile="ubuntu2404",
+                install_prefix=d,
+            )
+            self.assertFalse(t.verify_install_layout(root))
+
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
         "verify_installed_file_security",
@@ -1167,10 +1199,10 @@ class RunBasicVerificationTest(unittest.TestCase):
 
         mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1193,10 +1225,10 @@ class RunBasicVerificationTest(unittest.TestCase):
             subprocess.TimeoutExpired("rocminfo", 30),
         ]
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1489,10 +1521,10 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         # (bad ownership or insecure permissions) fails Step 2.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1844,7 +1876,8 @@ class InstallDebPackagesTest(unittest.TestCase):
         self.assertIn("amdrocm7.13-gfx94x", cmd)
         self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
         self.assertIn("amdrocm7.13-gfx1100", cmd)
-        self.assertIn("amdrocm-core-sdk7.13-gfx1100", cmd)
+        self.assertIn("amdrocm-hpc-sdk7.13-gfx94x", cmd)
+        self.assertIn("amdrocm-hpc-sdk7.13-gfx1100", cmd)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
@@ -2098,7 +2131,11 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
+                    [
+                        "amdrocm-asan7.15-gfx942",
+                        "amdrocm-core-sdk-asan7.15-gfx942",
+                        "amdrocm-hpc-sdk-asan7.15-gfx942",
+                    ],
                 )
 
     def test_asan_family_with_rocm_version_only(self):
@@ -2112,7 +2149,11 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
+                    [
+                        "amdrocm-asan7.15",
+                        "amdrocm-core-sdk-asan7.15",
+                        "amdrocm-hpc-sdk-asan7.15",
+                    ],
                 )
 
     def test_asan_family_without_version_or_arch(self):
@@ -2125,7 +2166,7 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan", "amdrocm-core-sdk-asan"],
+                    ["amdrocm-asan", "amdrocm-core-sdk-asan", "amdrocm-hpc-sdk-asan"],
                 )
 
     def test_no_build_variant_unchanged(self):
@@ -2138,7 +2179,11 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
         )
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+            [
+                "amdrocm7.15-gfx942",
+                "amdrocm-core-sdk7.15-gfx942",
+                "amdrocm-hpc-sdk7.15-gfx942",
+            ],
         )
 
     def test_release_build_variant_does_not_alter_package_names(self):
@@ -2154,7 +2199,11 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
         )
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+            [
+                "amdrocm7.15-gfx942",
+                "amdrocm-core-sdk7.15-gfx942",
+                "amdrocm-hpc-sdk7.15-gfx942",
+            ],
         )
 
 
@@ -2344,10 +2393,10 @@ class VerifyNoRunpathTest(unittest.TestCase):
         # Even with enough components present, a failed RUNPATH check fails Step 2.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
