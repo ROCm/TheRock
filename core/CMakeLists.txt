@@ -595,7 +595,6 @@ if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
       doc
       lib
       run
-      sys
       test
     SUBPROJECT_DEPS
       ocl-clr
