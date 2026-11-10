@@ -11,6 +11,11 @@ import re
 
 import pytest
 import torch
+from torch.backends.cuda import (
+    SDPAParams,
+    can_use_efficient_attention,
+    can_use_flash_attention,
+)
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 
@@ -150,7 +155,8 @@ class TestSDPA:
     backend prevents silent fallback to the unfused MATH backend: a backend
     the dispatcher cannot select raises immediately, while a kernel-image
     mismatch may instead return an incorrect output without raising, which
-    the numerical comparison detects.
+    the numerical comparison detects. Unsupported AOTriton GPU families are
+    skipped; gfx942/gfx1151 must keep both fused backends enabled and usable.
     """
 
     @pytest.mark.parametrize(
@@ -172,6 +178,22 @@ class TestSDPA:
         ],
     )
     def test_fused_sdpa(self, backend, shape, use_bias):
+        arch = torch.cuda.get_device_properties(0).gcnArchName.split(":")[0]
+        must_support = arch in ("gfx942", "gfx1151")
+        # AOTriton target families match build_prod_wheels.py.
+        if not arch.startswith(("gfx90a", "gfx942", "gfx950", "gfx11", "gfx12")):
+            pytest.skip(f"AOTriton is unsupported on {arch}")
+
+        enabled = (
+            torch.backends.cuda.flash_sdp_enabled()
+            if backend == SDPBackend.FLASH_ATTENTION
+            else torch.backends.cuda.mem_efficient_sdp_enabled()
+        )
+        if must_support:
+            assert enabled, f"{backend.name} unexpectedly disabled on {arch}"
+        elif not enabled:
+            pytest.skip(f"{backend.name} disabled on {arch}")
+
         generator = torch.Generator(device="cpu").manual_seed(7992)
         q, k, v = [
             torch.randn(shape, generator=generator).to(torch.bfloat16) for _ in range(3)
@@ -189,12 +211,25 @@ class TestSDPA:
             scores += bias.float()
         expected = torch.softmax(scores, dim=-1) @ v.float()
 
+        q_gpu, k_gpu, v_gpu = (q.to("cuda"), k.to("cuda"), v.to("cuda"))
+        bias_gpu = bias.to("cuda") if bias is not None else None
+        params = SDPAParams(q_gpu, k_gpu, v_gpu, bias_gpu, 0.0, False, False)
+        can_use = (
+            can_use_flash_attention
+            if backend == SDPBackend.FLASH_ATTENTION
+            else can_use_efficient_attention
+        )
+        if must_support:
+            assert can_use(params), f"{backend.name} unexpectedly unusable on {arch}"
+        elif not can_use(params):
+            pytest.skip(f"{backend.name} cannot run these inputs on {arch}")
+
         with sdpa_kernel([backend]):
             actual = torch.nn.functional.scaled_dot_product_attention(
-                q.to("cuda"),
-                k.to("cuda"),
-                v.to("cuda"),
-                attn_mask=bias.to("cuda") if bias is not None else None,
+                q_gpu,
+                k_gpu,
+                v_gpu,
+                attn_mask=bias_gpu,
                 dropout_p=0.0,
             )
         actual_cpu = actual.cpu().float()

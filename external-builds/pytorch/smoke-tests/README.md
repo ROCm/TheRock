@@ -33,8 +33,14 @@ return an incorrect finite output without raising at all
 [#7992](https://github.com/ROCm/TheRock/issues/7992)).
 
 Each test forces a single fused backend with `torch.nn.attention.sdpa_kernel`,
-which prevents silent fallback to the unfused MATH backend: a fused kernel the
-dispatcher cannot select raises immediately. A kernel whose launch fails because
+preventing a silent fallback to MATH. The tests first apply the same AOTriton
+architecture-family policy as `build_prod_wheels.py`: gfx1030 and other
+unsupported families are skipped. On the known expected targets gfx942 and
+gfx1151, both `flash_sdp_enabled()` and `mem_efficient_sdp_enabled()` (for
+their corresponding cases), as well as input-level `can_use_*` eligibility,
+must pass or the test **fails**. This catches accidental disablement. Other
+AOTriton-family targets skip an individually disabled or ineligible backend,
+but must pass the correctness check whenever it can run. A kernel whose launch fails because
 of mismatched images can instead return an incorrect finite output without
 raising; the check of the BF16 output against an independent CPU FP32 reference
 computed from the same BF16-quantized inputs (`atol=rtol=0.03` covers BF16
