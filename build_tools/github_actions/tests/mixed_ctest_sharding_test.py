@@ -102,7 +102,8 @@ def test_test_failure_is_not_hidden(
     assert "gtest_suite" in visits and "pytest_suite" in visits
 
 
-def test_ctest_keeps_required_fixtures(monkeypatch, tmp_path, ctest_payload):
+@pytest.mark.parametrize("total", [1, 2, 10])
+def test_ctest_keeps_required_fixtures(monkeypatch, tmp_path, ctest_payload, total):
     cmake = shutil.which("cmake")
     if not cmake:
         pytest.skip("CMake is required")
@@ -118,8 +119,8 @@ def test_ctest_keeps_required_fixtures(monkeypatch, tmp_path, ctest_payload):
             "set_tests_properties(cleanup PROPERTIES FIXTURES_CLEANUP ready)\n"
             "set_tests_properties(gtest_suite pytest_suite PROPERTIES FIXTURES_REQUIRED ready)\n"
         )
-    for shard in (1, 2):
-        runner = load_runner(monkeypatch, tmp_path, shard, 2)
+    for shard in range(1, total + 1):
+        runner = load_runner(monkeypatch, tmp_path, shard, total)
         assert runner.main() == 0
         assert not marker.exists()
 

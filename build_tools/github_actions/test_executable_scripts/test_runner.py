@@ -663,7 +663,9 @@ def mixed_ctest_plan(cmd, shard_index, total_shards, env):
     if "--tests-information" in cmd:
         raise ValueError("mixed sharding cannot be combined with a CTest stride")
     discovery = subprocess.run(
-        [*cmd, "--show-only=json-v1"],
+        # Discover ownership without automatically pulled fixture dependencies.
+        # Execution below still lets CTest add those dependencies as needed.
+        [*cmd, "--show-only=json-v1", "--fixture-exclude-any", ".*"],
         cwd=THEROCK_DIR,
         env=env,
         capture_output=True,
