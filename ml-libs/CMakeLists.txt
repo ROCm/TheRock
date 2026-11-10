@@ -48,8 +48,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
-      "-DMIOPEN_HIPCONV_SANITIZER=${miopen-hipconv_SANITIZER}"
-      "-DMIOPEN_CKIMPL_SANITIZER=${miopen-ckimpl_SANITIZER}"
+      "-DHIPCONV_DISABLE_ASAN=${miopen-hipconv_DISABLE_ASAN}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
