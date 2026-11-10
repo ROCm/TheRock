@@ -1156,7 +1156,7 @@ test_matrix = {
         "additional_requirements_files": [
             _get_artifact_path("bin/libhipcxx/lit-amdclang/requirements-test.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx.py')} --variant amdclang",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -1178,7 +1178,7 @@ test_matrix = {
         "additional_requirements_files": [
             _get_artifact_path("bin/libhipcxx/lit-hiprtc/requirements-test.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx.py')} --variant hiprtc",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
