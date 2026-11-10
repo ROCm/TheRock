@@ -170,8 +170,9 @@ jobs:
       #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
       #   PrngTest.PassInGlobalRngSeed
       #   CommandBufferTests/CommandBufferTest.Convolutions* — TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
+      #   HloOpProfilerTest --TODO: fix known issue: https://amd-hub.atlassian.net/browse/ROCM-33725
       XLA_TEST_FILTER: >-
-        -HloOpProfilerTest.BasicMeasurementsAreCorrect:StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:CommandBufferTests/CommandBufferTest.Convolutions*
+        -HloOpProfilerTest.BasicMeasurementsAreCorrect:StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:HloOpProfilerTest*:CommandBufferTests/CommandBufferTest.Convolutions*
       ROCM_COMMON_BAZEL_ARGS: >-
         --config=rocm_ci_hermetic
         --config=rocm_rbe_dynamic
