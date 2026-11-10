@@ -222,7 +222,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: main
+          ref: users/justchen/azure-prod-windows-main-1109
           path: ci-config
         continue-on-error: true
 
