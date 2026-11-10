@@ -1748,6 +1748,32 @@ def _get_published_rocm_version(index_url: str) -> str:
     return get_latest_python_package_version("rocm", index_url)
 
 
+def _is_rocm_systems_host_asan_pull_request(
+    ci_inputs: CIInputs, build_variant: str
+) -> bool:
+    """A rocm-systems pull request running host-asan.
+
+    The caller names itself in the external_repo workflow input. The nightly
+    workflow sets that input too, so the pull-request and host-asan checks stay.
+    """
+    if not (
+        build_variant.startswith("host-asan")
+        and ci_inputs.is_pull_request
+        and ci_inputs.external_repo
+    ):
+        return False
+    try:
+        payload = json.loads(ci_inputs.external_repo)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    repository = payload.get("repository", "")
+    if not isinstance(repository, str):
+        return False
+    return repository.rsplit("/", 1)[-1] == "rocm-systems"
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1834,10 +1860,8 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         rocm_systems_gfx90a = (
-            build_variant.startswith("host-asan")
-            and family_name == "gfx90a"
-            and ci_inputs.is_pull_request
-            and os.environ.get("GITHUB_REPOSITORY") == "ROCm/rocm-systems"
+            family_name == "gfx90a"
+            and _is_rocm_systems_host_asan_pull_request(ci_inputs, build_variant)
         )
         if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
@@ -2254,11 +2278,7 @@ def expand_build_configs(
             print("  Using host-asan variant (push/pull_request default)")
 
     linux_families = list(targets.linux_families)
-    if (
-        build_variant.startswith("host-asan")
-        and ci_inputs.is_pull_request
-        and os.environ.get("GITHUB_REPOSITORY") == "ROCm/rocm-systems"
-    ):
+    if _is_rocm_systems_host_asan_pull_request(ci_inputs, build_variant):
         linux_families = ["gfx90a"]
         print("  rocm-systems host-asan pull request uses gfx90a")
 
@@ -2418,11 +2438,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
             or ci_inputs.is_pull_request
         ):
             effective_variant = "host-asan"
-    if (
-        effective_variant.startswith("host-asan")
-        and ci_inputs.is_pull_request
-        and os.environ.get("GITHUB_REPOSITORY") == "ROCm/rocm-systems"
-    ):
+    if _is_rocm_systems_host_asan_pull_request(ci_inputs, effective_variant):
         targets.linux_families[:] = ["gfx90a"]
         print("  rocm-systems host-asan pull request uses gfx90a")
     targets.log()

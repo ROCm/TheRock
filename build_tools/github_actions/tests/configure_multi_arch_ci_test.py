@@ -2605,15 +2605,18 @@ class TestExpandBuildConfigs(unittest.TestCase):
     def test_rocm_systems_host_asan_pr_uses_gfx90a_runner(self):
         """A rocm-systems host-asan pull request builds and tests only gfx90a."""
         targets = cm.TargetSelection(linux_families=["gfx94x"])
-        with patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/rocm-systems"}):
-            result = cm.expand_build_configs(
-                ci_inputs=self._inputs(
-                    event_name="pull_request", build_variant="host-asan"
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request",
+                build_variant="host-asan",
+                external_repo=json.dumps(
+                    {"repository": "ROCm/rocm-systems", "ref": "abc"}
                 ),
-                git_context=cm.GitContext(),
-                targets=targets,
-                jobs=_jobs(),
-            )
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
         got = [
             (info["amdgpu_family"], info["test-runs-on"])
             for info in result.linux.per_family_info
