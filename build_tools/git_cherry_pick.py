@@ -354,17 +354,25 @@ def push_branch(
         capture_stderr=True,
         extra_env=extra_env,
     )
-    detail = result.stderr or ""
-    for secret in (token, encoded_credentials):
-        if secret is not None:
-            detail = detail.replace(secret, "***")
-    if detail:
-        print(detail, file=sys.stderr, end="", flush=True)
+    redacted_outputs: list[str] = []
+    for output in (result.stdout, result.stderr):
+        detail = output or ""
+        for secret in (token, encoded_credentials):
+            if secret is not None:
+                detail = detail.replace(secret, "***")
+        redacted_outputs.append(detail)
+    stdout_detail, stderr_detail = redacted_outputs
     if result.returncode != 0:
+        if stdout_detail:
+            print(stdout_detail, file=sys.stderr, end="", flush=True)
+        if stderr_detail:
+            print(stderr_detail, file=sys.stderr, end="", flush=True)
         raise CherryPickError(
             f"Failed to push {remote_description} branch {branch!r} "
             f"(git exited with status {result.returncode})"
         )
+    if stderr_detail:
+        print(stderr_detail, file=sys.stderr, end="", flush=True)
 
     # An existing branch at the same commit yields a successful "up to date"
     # result even with the lease. Require confirmation of a newly created ref.

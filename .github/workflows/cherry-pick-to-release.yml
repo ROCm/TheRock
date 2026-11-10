@@ -47,6 +47,7 @@ jobs:
         timeout-minutes: 5
         with:
           persist-credentials: false
+          sparse-checkout: build_tools
           submodules: false
 
       - name: Set up Python

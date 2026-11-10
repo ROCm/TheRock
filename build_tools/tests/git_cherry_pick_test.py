@@ -48,7 +48,10 @@ class PushSanitizationTest(unittest.TestCase):
         result = subprocess.CompletedProcess(
             args=["git", "push"],
             returncode=1,
-            stdout="",
+            stdout=(
+                "!\trefs/heads/source:refs/heads/target\t[rejected] "
+                f"credentials were {TOKEN} and {encoded_credentials}\n"
+            ),
             stderr=(
                 "remote: GH013: repository rule violations; credentials were "
                 f"{TOKEN} and {encoded_credentials}"
@@ -88,6 +91,7 @@ class PushSanitizationTest(unittest.TestCase):
             environment["GIT_CONFIG_VALUE_1"],
             f"AUTHORIZATION: basic {encoded_credentials}",
         )
+        self.assertIn("[rejected]", stderr.getvalue())
         self.assertIn("GH013: repository rule violations", stderr.getvalue())
         self.assertNotIn(TOKEN, stderr.getvalue())
         self.assertNotIn(encoded_credentials, stderr.getvalue())
