@@ -245,6 +245,10 @@ jobs:
           # but CPU-only tests (linux_cpu_runner: True) can still run.
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
+          # Components with a jobs manifest (component_test_jobs.py) read it at the
+          # source revision recorded in this run's therock_manifest.json.
+          ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python ./build_tools/github_actions/fetch_test_configurations.py \
             --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}

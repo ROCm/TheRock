@@ -30,6 +30,7 @@ from amdgpu_family_matrix import (
     get_cpu_test_runner,
     select_weighted_label,
 )
+import component_test_jobs
 
 logging.basicConfig(level=logging.INFO)
 
@@ -261,6 +262,13 @@ _rocgdb_common = {
 # A component's "skip_build_variant" lists BUILD_VARIANT values (exact match) on which
 # it is not scheduled, e.g. ["asan", "host-asan", "asan-debug", "host-asan-debug"] for a
 # test that cannot work under ASAN. Omit the field to run on every build variant.
+#
+# A component's "jobs_manifest" ({"submodule": ..., "path": ...}) names a TOML file in
+# the component's source tree that splits its one job into several jobs selected by
+# CTest label, with per-tier shard counts and family exclusions. The file is read at
+# the submodule commit the run under test was built from. Without a manifest (or
+# outside CI) the component runs as the single job declared here. Schema and
+# behaviour: component_test_jobs.py.
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
@@ -1036,7 +1044,8 @@ test_matrix = {
         },
     },
     # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
-    # rocKE wheels, then delegates to test_runner.py.
+    # rocKE wheels, then delegates to test_runner.py. The jobs manifest splits
+    # this job by engine; total_shards_dict applies only without a manifest.
     "hipkernelprovider": {
         "job_name": "hipkernelprovider",
         "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
@@ -1047,6 +1056,10 @@ test_matrix = {
             "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
         ],
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
+        "jobs_manifest": {
+            "submodule": "rocm-libraries",
+            "path": "dnn-providers/hip-kernel-provider/ci_jobs.toml",
+        },
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 4,
@@ -1667,7 +1680,35 @@ def run():
                     )
                     continue
 
-            all_components.append(job_config_data)
+            manifest_spec = job_config_data.pop("jobs_manifest", None)
+            manifest = (
+                component_test_jobs.load_manifest(
+                    key,
+                    manifest_spec,
+                    platform=platform,
+                    artifact_group=os.getenv("ARTIFACT_GROUP"),
+                )
+                if manifest_spec
+                else None
+            )
+            if manifest is None:
+                all_components.append(job_config_data)
+                continue
+
+            expanded = component_test_jobs.expand_jobs(
+                job_config_data,
+                manifest,
+                platform=platform,
+                test_type=test_type,
+                is_excluded=lambda families: _family_matches(
+                    families, amdgpu_families, _family_gfx_targets
+                ),
+            )
+            logging.info(
+                f"Expanded {job_name} into {[j['job_name'] for j in expanded]} "
+                "from its jobs manifest"
+            )
+            all_components.extend(expanded)
 
     # Per-component runner selection for better load distribution
     # Each component gets its own independent random draw based on configured weights

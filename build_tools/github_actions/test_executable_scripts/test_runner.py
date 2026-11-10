@@ -11,12 +11,17 @@ TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "h
 TEST_TYPE: Test category to run - one of "quick", "standard", "comprehensive", or "full".
     Defaults to "quick". Invalid values fall back to "quick" with an error message.
 AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
+TEST_LABEL_INCLUDE / TEST_LABEL_EXCLUDE / TEST_LABEL_DISJOINT / TEST_LABEL_ALLOW_EMPTY:
+    Per-job CTest label filters for components split by a jobs manifest
+    (build_tools/github_actions/component_test_jobs.py), which prepends them
+    to the component's test_script.
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
 import sys
 import subprocess
+import json
 import re
 import os
 import platform
@@ -153,6 +158,16 @@ COMPONENT_CTEST_EXCLUSIONS = {
 }
 
 use_gtest_only_sharding = test_component_job_name in GTEST_ONLY_SHARDING_COMPONENTS
+
+# Per-job label filters for components split by a jobs manifest
+# (component_test_jobs.py). INCLUDE selects one group's tests and EXCLUDE drops
+# every group's tests (the remainder job). DISJOINT holds the other groups'
+# regexes: a selected test that also matches one would run in two jobs.
+# Regexes stay within the subset shared by Python re and CMake string(REGEX).
+TEST_LABEL_INCLUDE = os.getenv("TEST_LABEL_INCLUDE", "")
+TEST_LABEL_EXCLUDE = os.getenv("TEST_LABEL_EXCLUDE", "")
+TEST_LABEL_DISJOINT = os.getenv("TEST_LABEL_DISJOINT", "")
+TEST_LABEL_ALLOW_EMPTY = os.getenv("TEST_LABEL_ALLOW_EMPTY") == "1"
 
 # CTest runs serially by default; per-GPU overrides can be added below.
 # Example: if AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES: ctest_parallel_count = 4
@@ -595,11 +610,23 @@ def build_ctest_command(
     # which would wrongly pull those suites into the run.
     for label in include_labels:
         cmd.extend(["-L", f"^{label}$"])
+    # Repeated -L options are ANDed, so this narrows the tier to one group.
+    if TEST_LABEL_INCLUDE:
+        cmd.extend(["-L", TEST_LABEL_INCLUDE])
+        print(f"# Selecting tests with labels matching: {TEST_LABEL_INCLUDE}")
+    if TEST_LABEL_EXCLUDE:
+        le_patterns.append(TEST_LABEL_EXCLUDE)
+        print(f"# Excluding tests with labels matching: {TEST_LABEL_EXCLUDE}")
     if le_patterns:
         cmd.extend(["-LE", "|".join(le_patterns)])
 
     # Add common ctest parameters
     cmd.append("--output-on-failure")
+
+    # A group job that matches nothing usually means its labels drifted away
+    # from the tests; fail instead of reporting an empty pass.
+    if TEST_LABEL_INCLUDE and not TEST_LABEL_ALLOW_EMPTY:
+        cmd.append("--no-tests=error")
 
     # ctest_parallel_count is the module-level default (arch-tuned). Components
     # can override it via COMPONENT_OVERRIDES[...]["ctest_parallel_count"];
@@ -653,6 +680,62 @@ def build_ctest_command(
     return cmd
 
 
+# ctest options that decide which tests are selected, each followed by a value.
+_CTEST_SELECTION_OPTIONS = {"-L", "-LE", "--exclude-regex", "--test-dir"}
+
+
+def check_label_partition(cmd):
+    """Return problems with a jobs-manifest job's selection, before running it.
+
+    - A selected test whose labels also match another group would run in two
+      jobs (TEST_LABEL_DISJOINT).
+    - With gtest-only sharding, a non-gtest entry runs in full in every shard,
+      so a sharded job may only select gtest entries.
+    """
+    check_disjoint = bool(TEST_LABEL_DISJOINT)
+    check_sharding = (
+        bool(TEST_LABEL_INCLUDE or TEST_LABEL_EXCLUDE)
+        and use_gtest_only_sharding
+        and int(TOTAL_SHARDS) > 1
+    )
+    if not (check_disjoint or check_sharding):
+        return []
+
+    listing = ["ctest", "--show-only=json-v1"]
+    for option, value in zip(cmd, cmd[1:]):
+        if option in _CTEST_SELECTION_OPTIONS:
+            listing.extend([option, value])
+    result = subprocess.run(
+        listing,
+        cwd=THEROCK_DIR,
+        env=environ_vars,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    problems = []
+    for test in json.loads(result.stdout).get("tests", []):
+        labels = next(
+            (p["value"] for p in test.get("properties", []) if p["name"] == "LABELS"),
+            [],
+        )
+        if check_disjoint and any(re.search(TEST_LABEL_DISJOINT, l) for l in labels):
+            problems.append(
+                f"{test['name']}: labels {labels} also match another group "
+                f"({TEST_LABEL_DISJOINT}), so it would run in two jobs"
+            )
+        # ctest omits "command" when the executable is missing; such an entry
+        # fails on its own, so only judge entries whose command is known.
+        command = test.get("command")
+        if check_sharding and command and not any("--gtest" in a for a in command):
+            problems.append(
+                f"{test['name']}: not a gtest entry, so it would run in full in "
+                f"each of the {TOTAL_SHARDS} shards; give this job 1 shard"
+            )
+    return problems
+
+
 def main():
     # TEST_TYPE was normalized + validated at module load.
     category = TEST_TYPE
@@ -702,6 +785,12 @@ def main():
         resource_spec_file,
         AMDGPU_FAMILIES,
     )
+
+    problems = check_label_partition(cmd)
+    if problems:
+        for problem in problems:
+            print(f"::error::{problem}", file=sys.stderr)
+        return 1
 
     print(f"# Running: {' '.join(cmd)}")
     print()

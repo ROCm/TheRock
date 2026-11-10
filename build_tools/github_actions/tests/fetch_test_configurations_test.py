@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import unittest
+import tempfile
 from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
@@ -33,6 +34,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "full"
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
+        # Jobs manifests are fetched only inside CI; keep these tests offline.
+        os.environ.pop("ARTIFACT_RUN_ID", None)
+        os.environ.pop("TEST_JOBS_MANIFEST_HIPKERNELPROVIDER", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -250,6 +254,40 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertNotEqual(
             hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
         )
+
+    # -----------------------
+    # Jobs manifests (component_test_jobs.py)
+    # -----------------------
+
+    def _hkp_jobs(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipkernelprovider"
+        os.environ["TEST_TYPE"] = "standard"
+        fetch_test_configurations.run()
+        return {j["job_name"]: j for j in self._get_components()}
+
+    def test_jobs_manifest_splits_component(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        manifest = Path(tmp.name) / "ci_jobs.toml"
+        manifest.write_text(
+            'schema = 1\n[[group]]\nname = "asm-sdpa"\nlabels = ["^ASM_SDPA_ENGINE$"]\n'
+            "shards = { standard = 2 }\n"
+        )
+        os.environ["TEST_JOBS_MANIFEST_HIPKERNELPROVIDER"] = str(manifest)
+
+        jobs = self._hkp_jobs()
+
+        self.assertEqual(
+            set(jobs), {"hipkernelprovider-unit", "hipkernelprovider-asm-sdpa"}
+        )
+        self.assertEqual(jobs["hipkernelprovider-asm-sdpa"]["total_shards"], 2)
+        self.assertNotIn("jobs_manifest", jobs["hipkernelprovider-unit"])
+
+    def test_component_without_manifest_keeps_one_job(self):
+        jobs = self._hkp_jobs()
+        self.assertEqual(list(jobs), ["hipkernelprovider"])
+        self.assertEqual(jobs["hipkernelprovider"]["total_shards"], 4)
+        self.assertNotIn("jobs_manifest", jobs["hipkernelprovider"])
 
     # -----------------------
     # tensilelite ctest-stage gating (AIHPBLAS-4410)
