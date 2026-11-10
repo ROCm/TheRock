@@ -1160,8 +1160,9 @@ class RunBasicVerificationTest(unittest.TestCase):
         # Test that run_basic_verification returns False when fewer than VERIFY_MIN_COMPONENTS exist.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")  # only 1 component
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")  # only 1 component
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1169,21 +1170,34 @@ class RunBasicVerificationTest(unittest.TestCase):
             )
             self.assertFalse(t.run_basic_verification())
 
-    def test_returns_false_when_prefix_lib_is_missing(self):
-        """A prefix with key files but no lib directory fails the layout check."""
+    def test_fails_when_any_required_directory_is_missing(self):
+        """Removing any one directory from INSTALL_LAYOUT_DIRS fails the layout check."""
+        for missing in native_linux_package_install_test.INSTALL_LAYOUT_DIRS:
+            with self.subTest(missing=missing):
+                with tempfile.TemporaryDirectory() as d:
+                    root = Path(d)
+                    _write_install_layout(root)
+                    shutil.rmtree(root / missing)
+                    t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
+                        repo_url="https://example.com",
+                        os_profile="ubuntu2404",
+                        install_prefix=d,
+                    )
+                    with _suppress_script_output():
+                        self.assertFalse(t.verify_install_layout(root))
+
+    def test_passes_when_every_required_directory_is_present(self):
+        """A prefix with all INSTALL_LAYOUT_DIRS passes the layout check."""
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            (root / "bin").mkdir()
-            (root / "include").mkdir()
-            (root / "share").mkdir()
-            (root / "bin" / "rocminfo").write_text("")
-            (root / "bin" / "hipcc").write_text("")
+            _write_install_layout(root)
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
                 install_prefix=d,
             )
-            self.assertFalse(t.verify_install_layout(root))
+            with _suppress_script_output():
+                self.assertTrue(t.verify_install_layout(root))
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
