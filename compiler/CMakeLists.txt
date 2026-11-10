@@ -46,7 +46,18 @@ if(THEROCK_ENABLE_COMPILER)
   # frontend.
   ##############################################################################
 
-  set(_extra_llvm_cmake_args)
+  # Driver builds link the MSVC runtime statically so comgr does not use
+  # whatever msvcp140.dll the host app loaded. LLVM is statically linked into
+  # comgr, so both must use the same runtime. CMP0091 lets comgr honor it.
+  set(_driver_msvc_runtime_cmake_args)
+  if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND _driver_msvc_runtime_cmake_args
+      -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+      -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+    )
+  endif()
+
+  set(_extra_llvm_cmake_args ${_driver_msvc_runtime_cmake_args})
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
@@ -243,6 +254,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
       ${_comgr_dll_name_cmake_args}
       ${_comgr_debug_info_cmake_args}
+      ${_driver_msvc_runtime_cmake_args}
     BUILD_DEPS
       rocm-cmake
       ${_comgr_gtest_deps}
