@@ -463,42 +463,64 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   set(_libhipcxx_artifact_subproject_deps libhipcxx)
 
   if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_PRIM)
-    therock_cmake_subproject_declare(libhipcxx_tests
-      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_tests"
-      BACKGROUND_BUILD
-      DEFAULT_GPU_TARGETS
-        gfx942  # Fixes issue with empty target list for unsupported architectures.
-      CMAKE_ARGS
-        -DLIBHIPCXX_COPY_TO_BUILD=ON
-        -DHIP_PLATFORM=amd
-        -DROCM_PATH=
-        -DROCM_DIR=
-        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
-        -DCMAKE_CXX_STANDARD=17
-        -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl
-        -DLIBHIPCXX_INSTALL_TESTS=ON
-        -DLIBHIPCXX_PREBUILD_LIT_TESTS=ON
-      CMAKE_INCLUDES
-        therock_explicit_finders.cmake
-      COMPILER_TOOLCHAIN
-        amd-hip
-      BUILD_DEPS
-        rocm-cmake
-        libhipcxx
-        ${_libhipcxx_prim_build_deps}
-      RUNTIME_DEPS
-        amd-llvm
-        hip-clr
-        ${libhipcxx_runtime_deps}
+    # Separate background targets so the tests stay off the critical path of
+    # libraries that only need the libhipcxx headers. Each installs only its
+    # tests (libhipcxx_ENABLE_INSTALL_RULES=OFF): the c2h tests into bin/ and
+    # the prebuilt lit tests into bin/libhipcxx/lit-amdclang, and the hiprtc
+    # lit tests into bin/libhipcxx/lit-hiprtc with bin/hiprtcc.
+    set(_libhipcxx_tests_cmake_args
+      -DLIBHIPCXX_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
+      -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl
+      -Dlibhipcxx_ENABLE_INSTALL_RULES=OFF
+      -DLIBHIPCXX_INSTALL_TESTS=ON
+      -DLIBHIPCXX_PREBUILD_LIT_TESTS=ON
     )
-    therock_cmake_subproject_glob_c_sources(libhipcxx_tests
-      SUBDIRS
-        .
-    )
-    therock_cmake_subproject_require_host_program(libhipcxx_tests lit)
-    therock_cmake_subproject_activate(libhipcxx_tests)
-    list(APPEND _libhipcxx_artifact_subproject_deps libhipcxx_tests)
+    set(_libhipcxx_tests_variants libhipcxx_tests)
+    set(_libhipcxx_tests_extra_args "")
+    if(NOT WIN32)
+      # The hiprtc tests only run on Linux.
+      list(APPEND _libhipcxx_tests_variants libhipcxx_hiprtc_tests)
+      set(_libhipcxx_hiprtc_tests_extra_args
+        -DLIBHIPCXX_TEST_WITH_HIPRTC=ON
+        -DLIBCUDACXX_ENABLE_C2H_TESTS=OFF
+      )
+    endif()
+    foreach(_libhipcxx_tests IN LISTS _libhipcxx_tests_variants)
+      therock_cmake_subproject_declare(${_libhipcxx_tests}
+        EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/${_libhipcxx_tests}"
+        BACKGROUND_BUILD
+        DEFAULT_GPU_TARGETS
+          gfx942  # Fixes issue with empty target list for unsupported architectures.
+        CMAKE_ARGS
+          ${_libhipcxx_tests_cmake_args}
+          ${_${_libhipcxx_tests}_extra_args}
+        CMAKE_INCLUDES
+          therock_explicit_finders.cmake
+        COMPILER_TOOLCHAIN
+          amd-hip
+        BUILD_DEPS
+          rocm-cmake
+          libhipcxx
+          ${_libhipcxx_prim_build_deps}
+        RUNTIME_DEPS
+          amd-llvm
+          hip-clr
+          ${libhipcxx_runtime_deps}
+      )
+      therock_cmake_subproject_glob_c_sources(${_libhipcxx_tests}
+        SUBDIRS
+          .
+      )
+      therock_cmake_subproject_require_host_program(${_libhipcxx_tests} lit)
+      therock_cmake_subproject_activate(${_libhipcxx_tests})
+      list(APPEND _libhipcxx_artifact_subproject_deps ${_libhipcxx_tests})
+    endforeach()
   endif()
 
   therock_provide_artifact(libhipcxx

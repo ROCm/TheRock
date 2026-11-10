@@ -3,9 +3,8 @@
 
 """Runs the hipThreads lit test suite against pre-built TheRock artifacts.
 
-Unlike libhipcxx (which re-runs CMake + a ci/ shell script), hipThreads ships a
-self-contained lit suite driven entirely by environment variables (see the
-hipThreads test/lit.cfg). This script:
+hipThreads ships a self-contained lit suite driven entirely by environment
+variables (see the hipThreads test/lit.cfg). This script:
 
   1. Points lit at the test sources packaged in the `test` artifact
      (OUTPUT_ARTIFACTS_DIR/hipthreads, produced by HIPTHREADS_COPY_TO_BUILD).

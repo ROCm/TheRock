@@ -1479,6 +1479,12 @@
             "Components": [
               "test"
             ]
+          },
+          {
+            "Name": "libhipcxx_hiprtc_tests",
+            "Components": [
+              "test"
+            ]
           }
         ]
       }
