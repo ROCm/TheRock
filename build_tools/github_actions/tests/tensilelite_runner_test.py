@@ -25,21 +25,25 @@ class TempDirTestCase(unittest.TestCase):
         self.tmp = Path(temporary_dir.name)
 
 
-class LayoutSelectionTest(TempDirTestCase):
-    def test_no_wheels_uses_existing_path(self):
-        self.assertFalse(runner.uses_installed_wheel(self.tmp))
+class LayoutCheckTest(TempDirTestCase):
+    def test_requires_wheels(self):
+        with self.assertRaisesRegex(
+            runner.TensileLiteRunnerError, "No TensileLite wheels"
+        ):
+            runner.check_artifact_layout(self.tmp)
 
-    def test_unpacked_package_uses_existing_path(self):
+    def test_rejects_unpacked_package(self):
         (self.tmp / "wheels").mkdir()
         (self.tmp / "tensilelite").mkdir()
         (self.tmp / "tensilelite/__init__.py").touch()
-        self.assertFalse(runner.uses_installed_wheel(self.tmp))
+        with self.assertRaisesRegex(runner.TensileLiteRunnerError, "unpacked"):
+            runner.check_artifact_layout(self.tmp)
 
-    def test_wheels_without_unpacked_package_uses_installed_wheel(self):
+    def test_accepts_installed_wheel_layout(self):
         (self.tmp / "wheels").mkdir()
         # Installed tests may live under tensilelite/Tests without a package.
         (self.tmp / "tensilelite/Tests").mkdir(parents=True)
-        self.assertTrue(runner.uses_installed_wheel(self.tmp))
+        runner.check_artifact_layout(self.tmp)
 
 
 class FindWheelTest(TempDirTestCase):
@@ -232,12 +236,10 @@ class MainTest(TempDirTestCase):
         os.environ["TEST_COMPONENT"] = "rocblas"
         self.assertEqual(runner.main(), 1)
 
-    def test_existing_path_runs_pytest_runner_unchanged(self):
-        with mock.patch.object(
-            runner.pytest_runner, "main", return_value=5
-        ) as existing:
-            self.assertEqual(runner.main(), 5)
-        existing.assert_called_once_with()
+    def test_missing_wheels_is_an_error(self):
+        with mock.patch.object(runner.pytest_runner, "main") as existing:
+            self.assertEqual(runner.main(), 1)
+        existing.assert_not_called()
 
     def test_common_job_uses_same_runner(self):
         os.environ["TEST_COMPONENT"] = "tensilelite-common"

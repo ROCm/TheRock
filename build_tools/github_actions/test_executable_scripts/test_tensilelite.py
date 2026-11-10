@@ -8,30 +8,20 @@ Used by the ``tensilelite`` and ``tensilelite-common`` jobs. The test category
 handling (test_categories.yaml, markers, timeouts, workers, JUnit) is
 pytest_runner.py's; this script only decides what Python code those tests import.
 
-Two paths, chosen from the installed artifact layout under
-share/hipblaslt/tensilelite/:
+share/hipblaslt/tensilelite/wheels/ must hold the ``tensilelite`` wheel, and the
+artifact root must not carry an unpacked ``tensilelite`` package. The runner:
 
-Installed-wheel path
-    ``wheels/`` holds the ``tensilelite`` wheel and the artifact root has no
-    unpacked ``tensilelite`` package. The runner:
-
-    1. pip-installs that one wheel into this interpreter (``--no-deps``; the job
-       installs the test requirements);
-    2. sets ``PYTHONPATH`` to a temporary shim directory that exposes only
-       rocisa, rocisa_stinkytofu_adaptor and stinkytofu from the artifact root
-       (they have no distribution packaging yet), so nothing else in the
-       artifact root can shadow the installed wheel;
-    3. checks that ``tensilelite`` is imported from this interpreter's
-       site-packages, before pytest and again inside every pytest process
-       (pytest's default import mode can put the artifact root on sys.path);
-    4. runs ``python -m tensilelite --help`` against the real artifact root;
-    5. runs pytest_runner's configured category.
-
-Existing path
-    Otherwise (rocm-libraries pins that predate installed-wheel artifacts, or
-    still unpack the wheel into the artifact root), run pytest_runner.main()
-    unchanged. This is today's behaviour; it is removed once TheRock's
-    rocm-libraries pin ships installed-wheel artifacts.
+1. pip-installs that one wheel into this interpreter (``--no-deps``; the job
+   installs the test requirements);
+2. sets ``PYTHONPATH`` to a temporary shim directory that exposes only rocisa,
+   rocisa_stinkytofu_adaptor and stinkytofu from the artifact root (they have
+   no distribution packaging yet), so nothing else in the artifact root can
+   shadow the installed wheel;
+3. checks that ``tensilelite`` is imported from this interpreter's
+   site-packages, before pytest and again inside every pytest process
+   (pytest's default import mode can put the artifact root on sys.path);
+4. runs ``python -m tensilelite --help`` against the real artifact root;
+5. runs pytest_runner's configured category.
 
 TheRock does not interpret the wheel's version label. rocm-libraries owns that
 format, and the installed package validates it against the installed ROCm when
@@ -131,20 +121,15 @@ class TensileLiteRunnerError(RuntimeError):
     """An artifact contract failure with a user-facing diagnostic."""
 
 
-def uses_installed_wheel(component_root: Path) -> bool:
-    """Whether the artifact layout supports testing the installed wheel."""
+def check_artifact_layout(component_root: Path) -> None:
+    """Require the installed-wheel test-artifact layout."""
     if not (component_root / "wheels").is_dir():
-        logging.info(
-            "No TensileLite wheels in %s; using the existing path.", component_root
-        )
-        return False
+        raise TensileLiteRunnerError(f"No TensileLite wheels in {component_root}")
     if (component_root / PROJECT_NAME / "__init__.py").exists():
-        logging.info(
-            "The artifact root still carries an unpacked tensilelite package, "
-            "which would shadow the installed wheel; using the existing path."
+        raise TensileLiteRunnerError(
+            f"{component_root} carries an unpacked tensilelite package, which "
+            "would shadow the installed wheel"
         )
-        return False
-    return True
 
 
 def _project_name(wheel_name: str) -> str:
@@ -376,10 +361,8 @@ def main() -> int:
 
     rocm_path = Path(therock_bin_dir).resolve().parent
     component_root = pytest_runner.resolve_component_path(component_name, rocm_path)
-    if not uses_installed_wheel(component_root):
-        return pytest_runner.main()
-
     try:
+        check_artifact_layout(component_root)
         return run_installed_wheel(
             component_name,
             pytest_runner.resolve_test_category(),
