@@ -1195,6 +1195,15 @@ class TestDecideJobs(unittest.TestCase):
                 actual = getattr(result, field).action
                 self.assertEqual(actual, expected)
 
+    def test_exactly_label_leaves_packaging_alone(self):
+        """ci:exactly scopes the arch selection, not the packaging jobs."""
+        result = cm.decide_jobs(
+            self._inputs(build_pytorch=True, pr_labels=["ci:exactly"]),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -1425,6 +1434,177 @@ class TestSelectTargets(unittest.TestCase):
             sorted(result_gfx_first.linux_test_only_families),
             sorted(result_all_first.linux_test_only_families),
         )
+
+    def test_exactly_label_drops_default_families(self):
+        """ci:exactly limits the run to the labeled family only."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        without = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:gfx906"]))
+        with_exactly = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx906"])
+        )
+        # Without ci:exactly the label adds to the presubmit defaults.
+        self.assertGreater(len(without.linux_families), 1)
+        # With ci:exactly only the labeled family survives.
+        self.assertEqual(with_exactly.linux_families, ["gfx906"])
+        self.assertEqual(with_exactly.linux_test_only_families, ["gfx906"])
+
+    def test_exactly_label_honors_build_only_label(self):
+        """ci:exactly + ci:build:gfx* builds that family without testing it."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:build:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx950"])
+        self.assertEqual(result.linux_build_only_families, ["gfx950"])
+        self.assertEqual(result.linux_test_only_families, [])
+
+    def test_exactly_label_keeps_every_labeled_family(self):
+        """ci:exactly selects all labeled families, not just the first one."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:gfx950", "ci:gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(sorted(result.linux_families), ["gfx94x", "gfx950"])
+
+    def test_exactly_label_honors_test_only_label(self):
+        """ci:exactly + ci:build:gfx* + ci:test:gfx* builds and tests that family."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:build:gfx950", "ci:test:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx950"])
+        self.assertEqual(result.linux_test_only_families, ["gfx950"])
+
+    def test_exactly_label_composes_with_platform_label(self):
+        """ci:exactly narrows archs while ci:platform:* still narrows platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:gfx110X-all", "ci:platform:linux"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx110x"])
+        self.assertEqual(result.windows_families, [])
+
+    def test_exactly_label_with_platform_mismatch_raises(self):
+        """ci:exactly fails when no labeled family survives the platform filter."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # gfx94x has no Windows entry, so restricting to Windows leaves
+            # nothing to build.
+            pr_labels=["ci:exactly", "ci:gfx94x", "ci:platform:windows"],
+        )
+        # The arch label is present, so the input-level check passes.
+        inputs.validate()
+        with self.assertRaisesRegex(ValueError, "selected no architectures"):
+            cm.select_targets(inputs)
+
+    def test_exactly_label_with_only_test_label_raises(self):
+        """ci:exactly + ci:test:gfx* has no build label, so it fails fast."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:test:gfx950"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
+            inputs.validate()
+
+    def test_exactly_label_applies_to_workflow_dispatch(self):
+        """ci:exactly drops caller-supplied families on workflow_dispatch too."""
+        base = dict(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx110x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        without = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:gfx906"]))
+        with_exactly = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx906"])
+        )
+        self.assertEqual(sorted(without.linux_families), ["gfx110x", "gfx906"])
+        self.assertEqual(with_exactly.linux_families, ["gfx906"])
+
+    def test_exactly_label_without_arch_label_raises(self):
+        """ci:exactly with no arch label would build nothing, so it fails fast."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
+            inputs.validate()
+
+    def test_exactly_label_with_run_all_archs_runs_every_family(self):
+        """ci:run-all-archs is equivalent to labeling every arch by hand."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        run_all = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:run-all-archs"]))
+        for labels in (
+            ["ci:exactly", "ci:run-all-archs"],
+            ["ci:run-all-archs", "ci:exactly"],
+        ):
+            with self.subTest(labels=labels):
+                inputs = cm.CIInputs(**base, pr_labels=labels)
+                # ci:run-all-archs satisfies the ci:exactly arch-label contract.
+                inputs.validate()
+                result = cm.select_targets(inputs)
+                self.assertEqual(result.linux_families, run_all.linux_families)
+                self.assertEqual(result.windows_families, run_all.windows_families)
+
+    def test_exactly_label_ignored_for_push(self):
+        """Push carries no labels, so ci:exactly cannot narrow the defaults."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=["ci:exactly"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx950", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown ci:gfx label fails fast."""
@@ -2287,7 +2467,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
-                    "exclude_implicit_targets": "gfx1250-strict",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -2306,6 +2486,24 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 }
             ],
         )
+
+    def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        exclusions = {
+            row["pytorch_git_ref"]: row["exclude_implicit_targets"]
+            for row in result.linux.pytorch_build_matrix
+        }
+        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(

@@ -15,10 +15,10 @@ on:
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       artifact_group:
-        description: "artifact_group to build (e.g. 'gfx94X-dcgpu' for single family builds, 'multi-arch-release' for multi-arch builds with 'amdgpu_families' set)"
+        description: "Artifact group label for this build (e.g. 'multi-arch-release')"
         type: string
       amdgpu_families:
-        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
+        description: "GPU families as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all')"
         type: string
         default: ""
       linux_amdgpu_families:
@@ -29,10 +29,6 @@ on:
         description: "Windows side of the cross-platform family pair. See linux_amdgpu_families."
         type: string
         default: ""
-      multiarch_index:
-        description: "Enable multi-arch indexing (generates per-family indexes)"
-        type: boolean
-        default: false
       package_version:
         description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
@@ -77,9 +73,6 @@ on:
       windows_amdgpu_families:
         type: string
         default: ""
-      multiarch_index:
-        type: boolean
-        default: false
       package_version:
         type: string
       release_type:
@@ -104,9 +97,6 @@ on:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
         value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
-      kpack_split:
-        description: "true if this is a kpack-split flat build, false for legacy per-family"
-        value: ${{ jobs.build_rocm_wheels.outputs.kpack_split }}
 
 permissions:
   contents: read
@@ -122,14 +112,12 @@ jobs:
       id-token: write
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
-      kpack_split: ${{ steps.upload.outputs.kpack_split }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
       QUARTZ_REPORTING_WORKFLOW: build_windows_python_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm Python packages"
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
       WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
@@ -170,28 +158,16 @@ jobs:
 
       - name: Fetch artifacts
         run: |
-          if [ -n "${AMDGPU_FAMILIES}" ]; then
-            # Multi-arch mode: use artifact_manager.py to fetch all families
-            echo "Fetching artifacts for multiple families: ${AMDGPU_FAMILIES}"
-            python ./build_tools/artifact_manager.py fetch \
-              --run-id="${ARTIFACT_RUN_ID}" \
-              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
-              --stage=all \
-              --amdgpu-families="${AMDGPU_FAMILIES}" \
-              --expand-family-to-targets \
-              --output-dir="${OUTPUT_ROOT}"
-              # NOTE: artifact_manager.py appends /artifacts to --output-dir
-              # in non-flatten mode, so pass OUTPUT_ROOT here so that
-              # artifacts land in ARTIFACTS_DIR ($OUTPUT_ROOT/artifacts).
-          else
-            # Single-family mode: use fetch_artifacts.py (backward compatible)
-            echo "Fetching artifacts for single family: ${ARTIFACT_GROUP}"
-            python ./build_tools/fetch_artifacts.py \
-              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
-              --run-id="${ARTIFACT_RUN_ID}" \
-              --artifact-group="${ARTIFACT_GROUP}" \
-              --output-dir="${ARTIFACTS_DIR}"
-          fi
+          # artifact_manager.py appends /artifacts to --output-dir, so pass
+          # OUTPUT_ROOT so artifacts land in ARTIFACTS_DIR.
+          echo "Fetching artifacts for families: ${AMDGPU_FAMILIES}"
+          python ./build_tools/artifact_manager.py fetch \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+            --stage=all \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --expand-family-to-targets \
+            --output-dir="${OUTPUT_ROOT}"
 
       - name: Build Python packages
         run: |
@@ -215,9 +191,7 @@ jobs:
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGES_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            ${{ inputs.multiarch_index && '--multiarch' || '' }}
+            --run-id="${{ github.run_id }}"
 
       - name: Capture job summary
         id: summary
