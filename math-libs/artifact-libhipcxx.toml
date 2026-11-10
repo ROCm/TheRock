@@ -7,6 +7,13 @@ optional = true
 include = [
   "include/*",
 ]
+[components.test."math-libs/libhipcxx/stage"]
+optional = true
+include = [
+  # Prebuilt c2h test executables and their relocatable CTest file.
+  "bin/libcudacxx.test.*",
+  "bin/libhipcxx/CTestTestfile.cmake",
+]
 [components.test."math-libs/libhipcxx/build"]
 include = [
   "libhipcxx/**/*",

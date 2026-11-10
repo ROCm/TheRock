@@ -635,6 +635,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
       -DCMAKE_CXX_STANDARD=17
       -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl # Install into include/hipccl/
+      -DLIBHIPCXX_INSTALL_TESTS=${THEROCK_BUILD_TESTING}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

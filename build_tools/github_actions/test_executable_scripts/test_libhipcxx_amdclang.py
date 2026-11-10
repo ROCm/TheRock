@@ -5,8 +5,6 @@ import json
 import logging
 import os
 import shlex
-import shutil
-import sys
 import subprocess
 from pathlib import Path
 import platform
@@ -70,6 +68,12 @@ logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
 logging.info(f"PATH: {environ_vars['PATH']}")
 
 LIBHIPCXX_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "libhipcxx"
+# The c2h tests are built with libhipcxx and installed into bin/ with a
+# relocatable CTest file in bin/libhipcxx/.
+LIBHIPCXX_C2H_TEST_DIR = THEROCK_BIN_PATH / "libhipcxx"
+# Only the lit suite is configured here, so skip the c2h tests and their
+# Catch2 download.
+LIBHIPCXX_LIT_CMAKE_OPTIONS = ["-DLIBCUDACXX_ENABLE_C2H_TESTS=OFF"]
 # Matches the LIBCUDACXX_TEST_TIMEOUT default in libhipcxx's test CMakeLists.
 LIBHIPCXX_TEST_TIMEOUT = 200
 
@@ -104,6 +108,7 @@ cmd = [
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
     f"-DCMAKE_CXX_COMPILER={AMDCLANGPP}",
     "-GNinja",
+    *LIBHIPCXX_LIT_CMAKE_OPTIONS,
     "..",
 ]
 
@@ -137,40 +142,45 @@ if is_windows:
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
+CTEST_TIMEOUT = "300"
+steps = [
+    # Prebuilt c2h tests. They live in bin/ next to the artifact DLLs, so
+    # Windows loads those instead of System32's amdhip64_7.dll.
+    [
+        "ctest",
+        "--test-dir",
+        str(LIBHIPCXX_C2H_TEST_DIR),
+        "--output-on-failure",
+        "--timeout",
+        CTEST_TIMEOUT,
+    ],
+]
 if is_windows:
-    # Mirror ci/test_libhipcxx.sh without bash: build the c2h executables, run
-    # the CTest tests, then the lit suite. The lit CTest entry runs lit without
-    # -s, so every test result is printed as it finishes.
+    # Mirror ci/test_libhipcxx.sh without bash: run the remaining CTest tests,
+    # then the lit suite. The lit CTest entry runs lit without -s, so every
+    # test result is printed as it finishes.
     LIT_CTEST_NAME = r"^libcudacxx\.test\.lit$"
-    build_cmd = ["cmake", "--build", ".", "--target", "libcudacxx.test.c2h_all"]
-    logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(build_cmd)}")
-    failed_steps = []
-    if subprocess.run(build_cmd, env=environ_vars).returncode != 0:
-        failed_steps.append(shlex.join(build_cmd))
-    # CTest runs the c2h executables directly, so place the artifact
-    # DLLs next to them; otherwise System32's amdhip64_7.dll wins.
-    for dll in THEROCK_BIN_PATH.glob("*.dll"):
-        target = Path("bin") / dll.name
-        target.unlink(missing_ok=True)
-        try:
-            os.link(dll, target)
-        except OSError:
-            shutil.copy2(dll, target)
-    steps = [
-        ["ctest", "--output-on-failure", "--timeout", "300", "-E", LIT_CTEST_NAME],
-        ["ctest", "-V", "-R", LIT_CTEST_NAME],
+    steps += [
+        [
+            "ctest",
+            "--output-on-failure",
+            "--timeout",
+            CTEST_TIMEOUT,
+            "--exclude-regex",
+            LIT_CTEST_NAME,
+        ],
+        ["ctest", "--verbose", "--tests-regex", LIT_CTEST_NAME],
     ]
-    for cmd in steps:
-        logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-        if subprocess.run(cmd, env=environ_vars).returncode != 0:
-            failed_steps.append(shlex.join(cmd))
-    if failed_steps:
-        logging.error("Failed steps:\n  " + "\n  ".join(failed_steps))
-        sys.exit(1)
 else:
-    cmd = [
-        "bash",
-        "../ci/test_libhipcxx.sh",
-    ]
+    steps.append(
+        [
+            "bash",
+            "../ci/test_libhipcxx.sh",
+            "-cmake-options",
+            " ".join(LIBHIPCXX_LIT_CMAKE_OPTIONS),
+        ]
+    )
+
+for cmd in steps:
     logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True, env=environ_vars)
