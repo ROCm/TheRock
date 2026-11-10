@@ -84,6 +84,10 @@ pytorch = [
     ".github/workflows/multi_arch_build_portable_linux_pytorch_wheels_ci.yml",
     ".github/workflows/multi_arch_build_windows_pytorch_wheels_ci.yml",
 ]
+xla = [
+    "external-builds/xla/*",
+    ".github/workflows/test_multi_arch_linux_xla.yml",
+]
 jax = [
     "external-builds/jax/*",
     ".github/workflows/multi_arch_build_linux_jax_wheels_ci.yml",
@@ -123,7 +127,6 @@ filenames = [
     "test_artifacts.yml",
     "test_component.yml",
     "test_multi_arch_linux_jax_wheels.yml",
-    "test_multi_arch_linux_xla.yml",
     "test_native_linux_packages_install.yml",
     "test_rocm_wheels.yml",
 ]
