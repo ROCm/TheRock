@@ -140,7 +140,12 @@ BUILD_RUNNER_LABELS = {
 }
 
 
-def select_build_runner(platform: str, build_variant: str, size: str = "large") -> str:
+def select_build_runner(
+    platform: str,
+    build_variant: str,
+    size: str = "large",
+    triggers: set[str] | None = None,
+) -> str:
     """Select a build runner label based on platform, build variant, and size.
 
     Args:
@@ -149,6 +154,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
         size: runner pool size — "small", "medium", or "large" (default).
               Sanitizer variants always use the sanitizer (large) pool regardless
               of size. Platforms without a size-specific pool fall back to default.
+        triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
+                  When "submodule_bump" is present, uses the "bump" runner pool if
+                  configured, to isolate bump PRs from the weighted Azure/AWS split.
     """
     build_runner_labels = get_build_runner_labels()
     if platform not in build_runner_labels:
@@ -161,6 +169,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
     if "san" in build_variant:
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
+    elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
+        labels_config = platform_config["bump"]
+        context_name = f"build-runner-bump ({platform})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"
@@ -882,7 +893,9 @@ def get_build_runner_labels():
 def get_cpu_test_runner(platform: str) -> str:
     """Returns the CPU test runner label for components with linux_cpu_runner: True.
 
-    Falls back to the default build runner if no explicit cpu_test_runners config exists.
+    Prefers an explicit cpu_test_runners config, then draws from the "small" build
+    runner pool. These tests need no GPU and are light enough for small runners, so
+    this keeps them off the default pool that real builds compete for.
 
     Args:
         platform: "linux" or "windows"
@@ -897,19 +910,18 @@ def get_cpu_test_runner(platform: str) -> str:
         if platform in cpu_runners:
             return cpu_runners[platform]
 
-    # Fall back to the default build runner (CPU-only, no GPU)
+    # Otherwise draw from the build runner pools (CPU-only, no GPU). Prefer the
+    # "small" pool, falling back to "default" for platforms without one. Both are
+    # weighted lists, so select the same way builds do rather than taking the
+    # first entry -- that honors the provider split and skips zero-weight pools.
     build_runners = get_build_runner_labels()
-    if platform in build_runners and "default" in build_runners[platform]:
-        # Use the first runner with non-zero weight, or the first one
-        default_runners = build_runners[platform]["default"]
-        for runner in default_runners:
-            if runner.get("weight", 0) > 0:
-                return runner["label"]
-        # If all weights are zero, use the first one
-        if default_runners:
-            return default_runners[0]["label"]
-
-    return ""
+    platform_config = build_runners.get(platform)
+    if not platform_config:
+        return ""
+    labels_config = platform_config.get("small") or platform_config.get("default")
+    if not labels_config:
+        return ""
+    return select_weighted_label(labels_config, f"cpu-test-runner ({platform})")
 
 
 # Valid ML framework tests that can be disabled per-family

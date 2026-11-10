@@ -9,7 +9,7 @@ These release file types are supported:
 - [x] tarballs
 - [x] python packages
 - [x] native linux packages
-- [ ] native windows packages
+- [x] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
 
@@ -42,6 +42,11 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/deb/
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
+
+    native windows packages (dev/nightly), with ``--platform windows``:
+
+    s3://therock-dev-artifacts/12345-windows/packages/msi/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
 
 ASAN build variant:
 
@@ -129,32 +134,18 @@ def publish_python_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
-    kpack_split: bool,
     structured: bool = False,
     index: str = "whl-next",
 ) -> None:
     """Copy python packages from the artifacts bucket to the release python bucket.
 
-    The destination layout depends on kpack_split:
-      - kpack_split=False (per-family): publishes to both v3/whl-staging and
-        v3/whl. Test-gated promotion may later move wheels from staging to
-        release separately.
-      - kpack_split=True (multi-arch): publishes directly to v4/whl (no
-        staging index — tests run post-publish as a signal, not a gate).
+    By default, packages are published directly to v4/whl, without a staging
+    index:
 
-    Examples:
-
-        kpack split disabled (per-family subdirs):
-        s3://therock-dev-artifacts/12345-linux/python/gfx110X-all/*.whl
-          -> s3://therock-dev-python/v3/whl-staging/gfx110X-all/*.whl
-          -> s3://therock-dev-python/v3/whl/gfx110X-all/*.whl
-
-        kpack split enabled (flat):
         s3://therock-dev-artifacts/12345-linux/python/*.whl
           -> s3://therock-dev-python/v4/whl/*.whl
 
-    When ``structured`` is set (multi-arch only), packages are copied into
-    product-local package directories instead of the flat v4/whl prefix:
+    With ``structured``, packages are copied into product-local directories:
 
         s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-...whl
           -> s3://therock-repo-amd-dev-core/v5/rocm/core/<index>/rocm-sdk-core/rocm_sdk_core-...whl
@@ -172,20 +163,12 @@ def publish_python_packages(
 
     dest_bucket = get_release_bucket_config(release_type, "python")
 
-    if kpack_split:
-        # Multi-arch: publish directly (no staging index).
-        s3_subdirs = ["v4/whl"]
-    else:
-        # Per-family: publish to both staging and release.
-        s3_subdirs = ["v3/whl-staging", "v3/whl"]
-
-    for s3_subdir in s3_subdirs:
-        dest = StorageLocation(dest_bucket.name, s3_subdir)
-        logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
-        count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
-        logger.info("Copied %d python package files to %s", count, s3_subdir)
-        if count == 0:
-            raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
+    dest = StorageLocation(dest_bucket.name, "v4/whl")
+    logger.info("Python packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    count = backend.copy_directory(source, dest, include=["*.whl", "*.tar.gz"])
+    logger.info("Copied %d python package files", count)
+    if count == 0:
+        raise FileNotFoundError(f"No python packages found at {source.s3_uri}")
 
 
 def _publish_python_packages_structured(
@@ -278,6 +261,49 @@ def publish_native_linux_packages(
             raise FileNotFoundError(f"No {pkg_type} packages found at {source.s3_uri}")
 
 
+def publish_native_windows_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+) -> None:
+    """Copy native Windows MSI packages from the artifacts bucket to the release bucket.
+
+    The source MSIs were uploaded by upload_package_repo.py (called from
+    multi_arch_build_native_windows_packages.yml) as loose .msi files.
+
+    The destination follows RFC0012: Windows installer artifacts live under
+    ``core/windows-installers/`` (not ``core/packages/``). The current MSI is a
+    single OS-agnostic installer, so it is published to a flat
+    ``windows-installers/`` prefix rather than the per-OS subfolders RFC0012
+    reserves for OS-specific installers.
+
+    dev/nightly example:
+        s3://therock-dev-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+
+    prerelease example:
+        s3://therock-prerelease-artifacts/12345-windows/packages/msi/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/
+    """
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    today = datetime.date.today().strftime("%Y%m%d")
+
+    source = artifacts_root.native_windows_packages("msi")
+
+    base_path = "v5/rocm/core/windows-installers"
+    if release_type == "prerelease":
+        dest_prefix = base_path
+    else:
+        dest_prefix = f"{base_path}/{today}-{artifacts_root.run_id}"
+
+    dest = StorageLocation(dest_bucket.name, dest_prefix)
+    logger.info("Native msi packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    count = backend.copy_directory(source, dest)
+    logger.info("Copied %d files for msi packages", count)
+    if count == 0:
+        raise FileNotFoundError(f"No msi packages found at {source.s3_uri}")
+
+
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description="Publish ROCm release files to release buckets"
@@ -295,18 +321,11 @@ def main(argv: list[str]) -> None:
         choices=["dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"],
         help="Release type (determines source and destination buckets)",
     )
-    # String "true"/"false" because GitHub Actions outputs are strings.
-    parser.add_argument(
-        "--kpack-split",
-        default="false",
-        help='Whether kpack split is enabled ("true" or "false")',
-    )
     parser.add_argument(
         "--structured",
         action="store_true",
         help="Publish python packages into product-local package directories "
-        "(v5/rocm/core/<index>/<package>/) instead of the flat v4/whl prefix. "
-        "Multi-arch (--kpack-split true) only.",
+        "(v5/rocm/core/<index>/<package>/) instead of the flat v4/whl prefix.",
     )
     parser.add_argument(
         "--python-index",
@@ -334,10 +353,6 @@ def main(argv: list[str]) -> None:
     )
     args = parser.parse_args(argv)
 
-    kpack_split = args.kpack_split.lower() == "true"
-    if args.structured and not kpack_split:
-        parser.error("--structured requires --kpack-split true (multi-arch only)")
-
     artifacts_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
     )
@@ -350,7 +365,6 @@ def main(argv: list[str]) -> None:
             artifacts_root,
             args.release_type,
             backend,
-            kpack_split,
             structured=args.structured,
             index=args.python_index,
         )
@@ -360,6 +374,8 @@ def main(argv: list[str]) -> None:
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
         )
+    if artifacts_root.platform == "windows" and not args.skip_native_packages:
+        publish_native_windows_packages(artifacts_root, args.release_type, backend)
 
 
 if __name__ == "__main__":
