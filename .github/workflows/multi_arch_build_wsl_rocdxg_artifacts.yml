@@ -76,6 +76,7 @@ jobs:
       STAGE_NAME: ${{ inputs.stage_name }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       THEROCK_HOST_WORKSPACE: ${{ github.workspace }}
+      ROCM_LIBRARIES_SOURCE_DIR: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).submodule_path == 'rocm-libraries' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source && fromJSON(inputs.external_repo_config).checkout_path || 'rocm-libraries' }}
       MANYLINUX_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce # 2026-10-30
       # Clean, space-free mount target for the Windows SDK shared include dir
       # inside the container. Avoids the raw "(x86)" path segment that /bin/sh
@@ -215,6 +216,7 @@ jobs:
             --stage="${STAGE_NAME}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --platform=linux \
+            --rocm-libraries-source-dir="${ROCM_LIBRARIES_SOURCE_DIR}" \
             --gha-output
 
       - name: Install stage python deps

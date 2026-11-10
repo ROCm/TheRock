@@ -106,6 +106,7 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
+      ROCM_LIBRARIES_SOURCE_DIR: ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).submodule_path == 'rocm-libraries' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].needs_source && fromJSON(inputs.external_repo_config).checkout_path || 'rocm-libraries' }}
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -184,6 +185,7 @@ jobs:
             --artifacts="${REBUILD_ARTIFACTS}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --rocm-libraries-source-dir="${ROCM_LIBRARIES_SOURCE_DIR}" \
             --manylinux \
             --gha-output
 
