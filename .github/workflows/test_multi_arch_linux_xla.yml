@@ -38,10 +38,6 @@ on:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
         default: "ROCm/xla"
-      xla_commit:
-        description: "XLA commit to test. Empty uses xla_ref, which a moving ref like rocm-jaxlib-v0.11.2 may have advanced past."
-        type: string
-        default: ""
       test_runs_on:
         description: Runner label to execute tests on
         required: true
@@ -96,10 +92,6 @@ on:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
         default: "ROCm/xla"
-      xla_commit:
-        description: "XLA commit to test. Empty uses xla_ref."
-        type: string
-        default: ""
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
@@ -213,7 +205,7 @@ jobs:
           persist-credentials: false
           path: xla
           repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
-          ref: ${{ inputs.xla_commit || inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+          ref: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
 
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
