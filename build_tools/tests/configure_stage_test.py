@@ -199,6 +199,15 @@ class RocmLibrariesSourceTest(unittest.TestCase):
                 )
 
 
+class MathLibsTensileLiteRequirementsTest(unittest.TestCase):
+    def test_math_libs_stage_installs_tensilelite_requirements_once(self) -> None:
+        requires = get_topology().get_python_requires_for_stage("math-libs")
+        self.assertEqual(
+            requires.count("-r projects/hipblaslt/tensilelite/requirements.txt"),
+            1,
+        )
+
+
 class FeatureOrientedResolutionTest(unittest.TestCase):
     """Tests for feature-oriented artifact resolution."""
 
