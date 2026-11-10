@@ -19,3 +19,4 @@ The following operations are covered in these smoke tests:
 - **Matrix-Vector Multiplication (`torch.mv`)**
 - **General Matrix Multiplication (`torch.matmul`)**
 - **Convolution (`torch.conv2d` and `torch.nn.functional.conv_transpose2d`)**
+- **Origami GEMM selection next to the ROCm SDK's `liborigami.so.1`** (only when `rocm-origami` is installed; see `../install_pytorch_ci_packages.py`)
