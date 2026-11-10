@@ -290,5 +290,73 @@ class MainTest(TempDirTestCase):
         self.assertEqual(runner.main(), 1)
 
 
+class ProvenanceTest(TempDirTestCase):
+    def setUp(self):
+        super().setUp()
+        self.wheel = Path("tensilelite-5.0.0+devrocm7.12.0.dev0.abc-py3-none-any.whl")
+
+    def test_missing_values_are_recorded_as_absent(self):
+        provenance = runner.collect_provenance(
+            self.tmp, self.wheel, "5.0.0+devrocm7.12.0.dev0.abc", {}
+        )
+
+        self.assertEqual(provenance["tensilelite.wheel"], self.wheel.name)
+        self.assertEqual(
+            provenance["tensilelite.version"], "5.0.0+devrocm7.12.0.dev0.abc"
+        )
+        self.assertEqual(provenance["tensilelite_client.version"], "absent")
+        self.assertEqual(provenance["tensilelite_client.source_revision"], "absent")
+        self.assertEqual(provenance["therock.rocm_package_version"], "absent")
+        self.assertEqual(provenance["therock.the_rock_commit"], "absent")
+        self.assertTrue(provenance["python.version"])
+
+    @unittest.skipIf(os.name == "nt", "uses a shell-script client")
+    def test_records_client_and_manifest_verbatim(self):
+        client = self.tmp / "libexec/hipblaslt/tensilelite/tensilelite-client"
+        client.parent.mkdir(parents=True)
+        client.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = --version ]; then echo "client 5.0.0"; exit 0; fi\n'
+            "exit 2\n"
+        )
+        client.chmod(0o755)
+        manifest = self.tmp / "share/therock/therock_manifest.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(
+            '{"rocm_package_version": "7.12.0.dev0+abc", "the_rock_commit": "f00"}'
+        )
+
+        provenance = runner.collect_provenance(
+            self.tmp, self.wheel, "v", dict(os.environ)
+        )
+
+        self.assertEqual(provenance["tensilelite_client.version"], "client 5.0.0")
+        self.assertEqual(
+            provenance["tensilelite_client.source_revision"], "unavailable (exit 2)"
+        )
+        self.assertEqual(provenance["therock.rocm_package_version"], "7.12.0.dev0+abc")
+        self.assertEqual(provenance["therock.the_rock_commit"], "f00")
+
+    def test_writes_summary_and_junit_properties(self):
+        junit = self.tmp / "tensilelite.xml"
+        junit.write_text(
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<testsuites><testsuite name="pytest"><testcase name="t"/></testsuite></testsuites>'
+        )
+        summary = self.tmp / "summary.md"
+        with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}):
+            runner.write_provenance({"tensilelite.version": "5.0.0+g1"}, str(junit))
+
+        self.assertIn("| tensilelite.version | `5.0.0+g1` |", summary.read_text())
+        root = runner.ElementTree.parse(junit).getroot()
+        prop = root.find("testsuite/properties/property")
+        self.assertEqual(
+            prop.attrib, {"name": "tensilelite.version", "value": "5.0.0+g1"}
+        )
+
+    def test_missing_junit_is_ignored(self):
+        runner.write_provenance({"a": "b"}, str(self.tmp / "missing.xml"))
+
+
 if __name__ == "__main__":
     unittest.main()
