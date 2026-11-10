@@ -35,6 +35,16 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
 
+  # Translate the generic <comp_name>_SANITIZER preset convention (e.g.
+  # amd-llvm_SANITIZER) into hipconv's own HIPCONV_DISABLE_ASAN option (see
+  # projects/miopen/src/hipconv/CMakeLists.txt): hipconv is a subdirectory of
+  # the MIOpen subproject, not a subproject of its own, so it can't use
+  # therock_sanitizer_configure()'s per-subproject override directly.
+  set(_HIPCONV_DISABLE_ASAN OFF)
+  if("${miopen-hipconv_SANITIZER}" STREQUAL "OFF")
+    set(_HIPCONV_DISABLE_ASAN ON)
+  endif()
+
   therock_cmake_subproject_declare(MIOpen
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
@@ -48,7 +58,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
-      "-DHIPCONV_DISABLE_ASAN=${miopen-hipconv_DISABLE_ASAN}"
+      "-DHIPCONV_DISABLE_ASAN=${_HIPCONV_DISABLE_ASAN}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
