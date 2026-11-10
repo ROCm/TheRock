@@ -253,9 +253,10 @@ def run_pytest(
 
 def build_environment(rocm_path, component_name):
     """
-    Replicate the install-tree environment used by the legacy test_tensilelite.py
-    so that imports of Tensile / rocisa (which links libamdhip64) resolve and the
-    GPU unit tests can assemble kernels with amdclang++.
+    Build the install-tree environment so that imports of TensileLite / rocisa
+    (which links libamdhip64) resolve and the GPU unit tests can assemble
+    kernels with amdclang++. test_tensilelite.py reuses it for the
+    installed-wheel path and replaces only PYTHONPATH.
     """
     env = os.environ.copy()
     component_root = resolve_component_path(component_name, rocm_path)
