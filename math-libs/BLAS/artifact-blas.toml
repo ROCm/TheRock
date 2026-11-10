@@ -80,6 +80,10 @@ include = [
   "share/hipblaslt/samples/**",
 ]
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
+exclude = [
+  # Source/build contract tests stay in source CI, not installed artifacts.
+  "share/hipblaslt/tensilelite/tensilelite/Tests/unit/source_only/**",
+]
 include = [
   # Clients benchmarks
   "bin/hipblaslt-bench*",
