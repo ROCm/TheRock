@@ -52,8 +52,11 @@ project wide:
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_LIBMNL`
   - `THEROCK_BUNDLED_LIBNL`
+  - `THEROCK_BUNDLED_LIBXML2`
+  - `THEROCK_BUNDLED_LTTNG_TOOLS`
   - `THEROCK_BUNDLED_LTTNG_UST`
   - `THEROCK_BUNDLED_NUMACTL`
+  - `THEROCK_BUNDLED_POPT`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_USERSPACE_RCU`
   - `THEROCK_BUNDLED_UTIL_LINUX`
@@ -168,6 +171,33 @@ Supported sub-libraries: `libnl` (core), `libnl-genl` (generic netlink)
 - Alternatives: `pkg_check_modules(LIBNL3_GENL REQUIRED IMPORTED_TARGET libnl-genl-3.0)`
 - Dependencies: Automatically links `libnl::libnl`
 
+## libxml2
+
+XML parsing, a dependency of LTTng-tools (session save and load). Built with the LTTng
+feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), without Python bindings, ICU, compression or
+readline; the `xmllint` and `xmlcatalog` tools are not shipped.
+
+- Canonical method: `pkg_check_modules(LIBXML2 REQUIRED IMPORTED_TARGET libxml-2.0)`
+- Import library: `PkgConfig::LIBXML2`
+
+## LTTng-tools
+
+The LTTng session daemon (`lttng-sessiond`), consumer daemon (`lttng-consumerd`), relay
+daemon (`lttng-relayd`), the `lttng` command and `liblttng-ctl`, which controls sessions.
+The out-of-process collector starts a private session daemon and records the runtimes'
+trace events with it, so the daemon matches the bundled LTTng-UST. Built with the LTTng
+feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), with its dependencies (LTTng-UST,
+userspace-rcu, popt, libxml2). User-space tracing only: kernel tracing (kmod) is not built.
+
+- Canonical method: `pkg_check_modules(LTTNG_CTL REQUIRED IMPORTED_TARGET lttng-ctl)`
+- Import library: `PkgConfig::LTTNG_CTL`
+- Programs: `lib/rocm_sysdeps/bin/lttng`, `lttng-sessiond`, `lttng-relayd`;
+  `lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd`. They find the bundled libraries
+  through their RPATH.
+- Note: the session daemon has the consumer daemon's build-time path compiled in. Start
+  it with `--consumerd64-path=<rocm>/lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd`
+  (or set `LTTNG_CONSUMERD64_BIN`).
+
 ## LTTng-UST
 
 The LTTng userspace tracer, used by the HIP/HSA curated tracepoint providers.
@@ -205,6 +235,14 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
 - Vars: `NUMA_INCLUDE_DIRS`, `NUMA_INCLUDE_LIBRARIES` (can be used to avoid
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
+
+## popt
+
+Command-line option parsing, a dependency of LTTng-tools (the `lttng` command). Built with
+the LTTng feature group (`-DTHEROCK_ENABLE_LTTNG=ON`).
+
+- Canonical method: `pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)`
+- Import library: `PkgConfig::POPT`
 
 ## simde
 

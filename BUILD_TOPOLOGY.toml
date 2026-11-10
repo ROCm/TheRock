@@ -463,6 +463,27 @@ artifact_deps = ["sysdeps-userspace-rcu"]  # lttng-ust resolves userspace-rcu vi
 feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-popt]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG); dependency of lttng-tools
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libxml2]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG); dependency of lttng-tools
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-lttng-tools]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-lttng-ust", "sysdeps-popt", "sysdeps-libxml2"]
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
+disable_platforms = ["windows"]
+
 # --- Third-party libraries ---
 # Unlike third-party-sysdeps, these libraries are not given special treatment for portable distribution.
 
