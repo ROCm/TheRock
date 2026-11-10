@@ -3046,6 +3046,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "amd-dbgapi",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-dbgapi",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Disable_DWZ": "True",
