@@ -88,6 +88,10 @@ COMPONENT_DIR_MAPPING = {
     "hipblasltprovider": "hipblaslt_plugin",
     "hipkernelprovider": "hip_kernel_provider",
     "hiptensor": "hiptensor",
+    # bin/libhipcxx runs the c2h and amdclang++ lit tests; the hiprtc lit tests
+    # have their own directory.
+    "libhipcxx_amdclang": "libhipcxx",
+    "libhipcxx_hiprtc": "libhipcxx/lit-hiprtc",
     # Multi-GPU split jobs reuse the single-GPU component's test directory/binary.
     "hipfft-multi-gpu": "hipfft",
     "rocfft-multi-gpu": "rocfft",
@@ -216,6 +220,18 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   failing tests still show their full output; only passing-test noise is
 #   suppressed.
 COMPONENT_OVERRIDES = {
+    # The prebuilt lit tests are not installed as targets and have no RPATH,
+    # so they find the HIP runtime through LD_LIBRARY_PATH.
+    "libhipcxx_amdclang": {
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+    },
+    "libhipcxx_hiprtc": {
+        "additional_env_paths": {
+            "LD_LIBRARY_PATH": [["lib"]],
+        },
+    },
     # ctest fragments live under libexec, not bin.
     # ctest_parallel pinned to 1: tests are pytest runs that parallelize
     # internally (-n), so concurrent ctest jobs over-subscribe.
