@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,9 +14,11 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.build_topology import get_topology
 from configure_stage import (
+    TENSILELITE_REQUIREMENTS_PATH,
     filter_artifacts_for_stage,
     generate_cmake_args,
     get_artifact_features,
+    resolve_python_requirements,
 )
 
 
@@ -55,6 +58,68 @@ class ArtifactResolutionTest(unittest.TestCase):
         self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", args)
         self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", args)
         self.assertIn("-DTHEROCK_ENABLE_RCCL=ON", args)
+
+
+class RocmLibrariesSourceTest(unittest.TestCase):
+    TENSILELITE_REQUIREMENT = f"-r {TENSILELITE_REQUIREMENTS_PATH}"
+
+    def _make_source_root(self, parent: Path, name: str) -> Path:
+        source_root = parent / name
+        requirements_path = source_root / TENSILELITE_REQUIREMENTS_PATH
+        requirements_path.parent.mkdir(parents=True)
+        requirements_path.write_text("packaging\n")
+        return source_root
+
+    def test_resolves_tensilelite_requirement_against_source_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_root = self._make_source_root(
+                Path(temp_dir), "external-rocm-libraries"
+            )
+            self.assertEqual(
+                resolve_python_requirements(
+                    ["pkg-a", self.TENSILELITE_REQUIREMENT, "pkg-b"], source_root
+                ),
+                [
+                    "pkg-a",
+                    f"-r {source_root / TENSILELITE_REQUIREMENTS_PATH}",
+                    "pkg-b",
+                ],
+            )
+
+    def test_other_requirements_pass_through_unchanged(self):
+        self.assertEqual(
+            resolve_python_requirements(
+                ["-r other/requirements.txt", "pkg"], Path("/does/not/exist")
+            ),
+            ["-r other/requirements.txt", "pkg"],
+        )
+
+    def test_missing_requirements_reports_resolved_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_root = Path(temp_dir) / "missing-rocm-libraries"
+            expected_path = source_root / TENSILELITE_REQUIREMENTS_PATH
+            with self.assertRaisesRegex(
+                FileNotFoundError, str(expected_path.absolute())
+            ):
+                resolve_python_requirements([self.TENSILELITE_REQUIREMENT], source_root)
+
+    def test_cmake_args_do_not_set_rocm_libraries_source_dir(self):
+        # External-repo CI passes THEROCK_ROCM_LIBRARIES_SOURCE_DIR itself
+        # (detect_external_repo_config.py cmake_source_var); the stage
+        # generator must not emit a second, possibly conflicting, value.
+        topology = get_topology()
+        for platform_name in ("linux", "windows"):
+            with self.subTest(platform=platform_name):
+                cmake_args = generate_cmake_args(
+                    stage_name="math-libs",
+                    amdgpu_families="",
+                    dist_amdgpu_families="",
+                    topology=topology,
+                    platform_name=platform_name,
+                )
+                self.assertFalse(
+                    any("THEROCK_ROCM_LIBRARIES_SOURCE_DIR" in a for a in cmake_args)
+                )
 
 
 class FeatureOrientedResolutionTest(unittest.TestCase):

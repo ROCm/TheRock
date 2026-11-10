@@ -38,6 +38,7 @@ The script generates flags like:
 
 import argparse
 import platform as platform_module
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Optional, Set
@@ -48,6 +49,10 @@ from github_actions.manylinux_config import (
     DIST_PYTHON_EXECUTABLES,
     SHARED_PYTHON_EXECUTABLES,
 )
+
+
+ROCM_LIBRARIES_REQUIREMENTS_PREFIX = "-r "
+TENSILELITE_REQUIREMENTS_PATH = Path("projects/hipblaslt/tensilelite/requirements.txt")
 
 
 def log(msg: str):
@@ -273,6 +278,31 @@ def generate_cmake_args(
     return args
 
 
+def resolve_python_requirements(
+    python_requires: list[str], rocm_libraries_source_dir: Path
+) -> list[str]:
+    """Resolve requirements owned by the selected rocm-libraries checkout."""
+    resolved_requires = []
+    tensilelite_requirement = (
+        f"{ROCM_LIBRARIES_REQUIREMENTS_PREFIX}{TENSILELITE_REQUIREMENTS_PATH}"
+    )
+    for requirement in python_requires:
+        if requirement != tensilelite_requirement:
+            resolved_requires.append(requirement)
+            continue
+
+        requirements_path = rocm_libraries_source_dir / TENSILELITE_REQUIREMENTS_PATH
+        if not requirements_path.is_file():
+            raise FileNotFoundError(
+                "TensileLite requirements file not found at selected "
+                f"rocm-libraries source root: {requirements_path.absolute()}"
+            )
+        resolved_requires.append(
+            f"{ROCM_LIBRARIES_REQUIREMENTS_PREFIX}{shlex.quote(str(requirements_path))}"
+        )
+    return resolved_requires
+
+
 def main(argv: List[str] = None):
     parser = argparse.ArgumentParser(
         description="Generate CMake configuration for building a specific stage",
@@ -359,6 +389,15 @@ def main(argv: List[str] = None):
         default=None,
         help="CMake build directory containing artifact_subprojects.json manifest. "
         "If provided, uses accurate CMake-generated mappings for project resolution.",
+    )
+    parser.add_argument(
+        "--rocm-libraries-source-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "rocm-libraries",
+        help="rocm-libraries source root used to resolve requirements files "
+        "owned by rocm-libraries (default: TheRock submodule). This does not "
+        "set THEROCK_ROCM_LIBRARIES_SOURCE_DIR; external-repo CI passes that "
+        "through its own CMake arguments.",
     )
     parser.add_argument(
         "--skip-stages",
@@ -469,7 +508,10 @@ def main(argv: List[str] = None):
     if args.gha_output:
         # Get python requirements for this stage (only applicable for stage mode)
         if args.stage:
-            python_requires = topology.get_python_requires_for_stage(args.stage)
+            python_requires = resolve_python_requirements(
+                topology.get_python_requires_for_stage(args.stage),
+                args.rocm_libraries_source_dir,
+            )
             pip_install_cmd = " ".join(python_requires) if python_requires else ""
         else:
             pip_install_cmd = ""
