@@ -46,6 +46,13 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_run_id:
@@ -72,6 +79,9 @@ on:
         type: string
         default: ""
       ref:
+        type: string
+        default: ""
+      quartz_tracking_id:
         type: string
         default: ""
 
@@ -106,7 +116,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 

@@ -1,6 +1,166 @@
 # GitHub Actions style guide
 
+Table of Contents
+
+- [Style guidelines](#style-guidelines)
+  - [Avoid inline logic; call script files instead](#avoid-inline-logic-call-script-files-instead)
+  - [Pin action `uses:` versions to commit SHAs](#pin-action-uses-versions-to-commit-shas)
+  - [Pin action `runs-on:` labels to specific versions](#pin-action-runs-on-labels-to-specific-versions)
+  - [Use safe defaults for inputs](#use-safe-defaults-for-inputs)
+  - [Separate build and test stages](#separate-build-and-test-stages)
+  - [Security guidelines](#security-guidelines)
+    - [Security - Avoid template injection](#security---avoid-template-injection)
+    - [Security - Disable checkout credential persistence](#security---disable-checkout-credential-persistence)
+    - [Security - Limit usage and forwarding of secrets](#security---limit-usage-and-forwarding-of-secrets)
+    - [Security - Limit workflow permissions](#security---limit-workflow-permissions)
+    - [Security - Limit GitHub App token permissions](#security---limit-github-app-token-permissions)
+
 ## Style guidelines
+
+<!-- This heading was renamed, preserve the original tag to keep links working -->
+
+<a id="prefer-python-scripts-over-inline-bash"></a>
+
+### Avoid inline logic; call script files instead
+
+CI workflows should closely match the local workflows developers use: sequences of
+simple commands and calls to script files with explicit arguments. Put complex
+logic in script files, preferably Python for portability, so developers can run
+the same commands locally to reproduce, debug, and iterate on CI steps.
+
+Benefits:
+
+- **Reproducible locally:** Developers use the same commands in CI and day-to-day work
+- **Testable:** Script functions and command-line interfaces can be tested without expensive CI runs
+- **Portable:** Python scripts can share logic across Linux and Windows
+
+For guidance on where to put logic, see:
+
+- [CMake style guide](cmake_style_guide.md#put-build-and-test-behavior-in-the-build-system)
+  for choosing between `CMakeLists.txt`/`*.cmake` files, `CMakePresets.json`,
+  helper scripts, and other options.
+- [Python style guide](python_style_guide.md#script-structure-and-organization)
+  for organizing script files with reusable functions and command-line interfaces.
+
+✅ **Preferred:**
+
+Build with a standard command, then call a script with a command-line interface:
+
+```yaml
+- name: Build
+  run: cmake --build build
+
+- name: Process artifacts
+  shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+  run: |
+    python build_tools/process_artifacts.py \
+      --families "${AMDGPU_FAMILIES}" \
+      --artifact-dir artifacts \
+      --install-dir install
+```
+
+❌ **Avoid: inline Bash logic**
+
+```yaml
+- name: Process artifacts
+  shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+  run: |
+    for family in $(echo "${AMDGPU_FAMILIES}" | tr ',' ' '); do
+      if [[ -f "artifacts/${family}/rocm.tar.gz" ]]; then
+        tar -xzf "artifacts/${family}/rocm.tar.gz" -C "install/${family}"
+        echo "Extracted ${family}"
+      else
+        echo "::error::Missing artifact for ${family}"
+        exit 1
+      fi
+    done
+```
+
+Ask: would a local developer run this during day-to-day work? How would this
+logic be tested? Copying a loop out of YAML and reconstructing its environment
+makes local use cumbersome, and testing it through CI alone makes failures
+slow to diagnose.
+
+❌ **Avoid: inline Python logic**
+
+```yaml
+- name: Process artifacts
+  shell: bash
+  env:
+    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+  run: |
+    python3 - <<'EOF'
+    import os
+    import sys
+    import tarfile
+    from pathlib import Path
+
+    for family in os.environ["AMDGPU_FAMILIES"].replace(",", " ").split():
+        archive = Path("artifacts") / family / "rocm.tar.gz"
+        if archive.is_file():
+            with tarfile.open(archive, "r:gz") as tar:
+                tar.extractall(Path("install") / family, filter="data")
+            print(f"Extracted {family}")
+        else:
+            print(f"::error::Missing artifact for {family}")
+            sys.exit(1)
+    EOF
+```
+
+The same questions apply: would a local developer run this, and how would it
+be tested? Changing the inline language to Python does not make the logic
+available as a script that developers can run and test independently of CI.
+
+❌ **Avoid: importing Python scripts from inline code**
+
+```yaml
+- name: Select GPU runner
+  shell: bash
+  run: |
+    python3 - <<'PY'
+    import os
+    import sys
+
+    sys.path.insert(0, "TheRock/build_tools/github_actions")
+    from amdgpu_family_matrix import get_all_families_for_trigger_types, select_weighted_label
+
+    families = get_all_families_for_trigger_types(["presubmit", "postsubmit"])
+    config = families["gfx950"]["linux"]
+    labels = config.get("test-runs-on-labels")
+    runner = select_weighted_label(labels, "gfx950") if labels else config["test-runs-on"]
+    if not runner:
+        raise RuntimeError("No GPU runner configured for gfx950")
+    with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+        stream.write(f"runs_on={runner}\n")
+    PY
+```
+
+This should just run the script directly. Extend a script's CLI as needed to
+expose the desired behavior.
+
+Inline YAML code that depends on implementation details makes compatibility
+difficult to maintain, especially when the script comes from another repository
+whose tests do not exercise the calling workflow.
+
+🟡 **Acceptable with tradeoffs:**
+
+A narrow exception to "no inline python" is a simple interpreter or
+installed-package metadata query:
+
+```yaml
+- name: Report installed PyTorch revision
+  shell: bash
+  run: |
+    TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+    echo "Installed PyTorch revision: ${TORCH_SHA}"
+```
+
+Running Python code is the natural way to query `torch.version.git_version`.
+The code is concise and easy to run locally, so using it inline is acceptable.
 
 ### Pin action `uses:` versions to commit SHAs
 
@@ -66,56 +226,6 @@ jobs:
 jobs:
   build:
     runs-on: ubuntu-latest  # This could change outside of our control
-```
-
-### Prefer Python scripts over inline Bash
-
-Where possible, put workflow logic in Python scripts.
-
-Benefits:
-
-- **Testable:** Can be tested locally and with unit tests
-- **Debuggable:** Easier to debug with standard Python tools
-- **Portable:** Works consistently across platforms (Linux/Windows)
-- **Approachable:** Better error handling and logging support
-- **Modular:** Functions can be shared across multiple scripts
-
-> [!TIP]
-> Use your judgement for what logic is trivial enough to stay in bash.
->
-> Some signs of complicated bash are _conditionals_, _loops_, _regex_,
-> _piping command output_, and _string manipulation_.
-
-✅ **Preferred:**
-
-```yaml
-- name: Process artifacts
-  env:
-    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-  run: |
-    python build_tools/process_artifacts.py \
-      --families "${AMDGPU_FAMILIES}" \
-      --artifact-dir artifacts \
-      --install-dir install
-```
-
-❌ **Avoid:**
-
-```yaml
-- name: Process artifacts
-  shell: bash
-  env:
-    AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-  run: |
-    for family in $(echo "${AMDGPU_FAMILIES}" | tr ',' ' '); do
-      if [[ -f "artifacts/${family}/rocm.tar.gz" ]]; then
-        tar -xzf "artifacts/${family}/rocm.tar.gz" -C "install/${family}"
-        echo "Extracted ${family}"
-      else
-        echo "::error::Missing artifact for ${family}"
-        exit 1
-      fi
-    done
 ```
 
 ### Use safe defaults for inputs
