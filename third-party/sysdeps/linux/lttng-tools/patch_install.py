@@ -9,9 +9,10 @@
 #   daemon in lib/lttng/libexec/ -> ../.., the library -> its own directory;
 # - make the pkg-config file relocatable.
 #
-# The session daemon has the consumer daemon's install path compiled in. When the tree
-# is moved, start it with --consumerd64-path=<prefix>/lib/lttng/libexec/lttng-consumerd
-# (or set LTTNG_CONSUMERD64_BIN), as the out-of-process collector does.
+# The session daemon has build-time paths compiled in. When the tree is moved, start it
+# with --consumerd64-path=<prefix>/lib/lttng/libexec/lttng-consumerd (or set
+# LTTNG_CONSUMERD64_BIN) and LTTNG_SESSION_CONFIG_XSD_PATH=<prefix>/share/xml/lttng (it exits
+# at start without the session schema), as the out-of-process collector does.
 
 from pathlib import Path
 import os

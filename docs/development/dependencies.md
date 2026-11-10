@@ -194,9 +194,12 @@ userspace-rcu, popt, libxml2). User-space tracing only: kernel tracing (kmod) is
 - Programs: `lib/rocm_sysdeps/bin/lttng`, `lttng-sessiond`, `lttng-relayd`;
   `lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd`. They find the bundled libraries
   through their RPATH.
-- Note: the session daemon has the consumer daemon's build-time path compiled in. Start
-  it with `--consumerd64-path=<rocm>/lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd`
-  (or set `LTTNG_CONSUMERD64_BIN`).
+- Note: the session daemon has build-time paths compiled in, which do not exist once
+  installed. Start it with
+  `--consumerd64-path=<rocm>/lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd` (or set
+  `LTTNG_CONSUMERD64_BIN`) and with
+  `LTTNG_SESSION_CONFIG_XSD_PATH=<rocm>/lib/rocm_sysdeps/share/xml/lttng`: without the
+  session schema it exits at start ("XSD parsing failed").
 
 ## LTTng-UST
 
