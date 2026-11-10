@@ -46,6 +46,15 @@ on:
           check.
         type: string
         default: ""
+      pull_request_tests:
+        description: >-
+          Sanitizer variants on pull request events only: when true, run
+          tests on families that have a test runner, regardless of the
+          family's tests_on_trigger. Does not override ci:build:gfx*,
+          ci:cpu-test-only or run-full-tests-only. False keeps the
+          family-level behavior.
+        type: boolean
+        default: false
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
@@ -300,6 +309,7 @@ jobs:
           PR_LABELS: ${{ inputs.pr_labels }}
           PULL_REQUEST_OPT_IN_LABEL: ${{ inputs.pull_request_opt_in_label }}
           PULL_REQUEST_OPT_OUT_LABEL: ${{ inputs.pull_request_opt_out_label }}
+          PULL_REQUEST_TESTS: ${{ inputs.pull_request_tests }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}

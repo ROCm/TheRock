@@ -20,7 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
@@ -4556,6 +4556,171 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+class TestPullRequestTestsInput(unittest.TestCase):
+    """pull_request_tests input: sanitizer variants run tests on pull requests."""
+
+    @staticmethod
+    def _family(name, *, tests_on_trigger, runner="linux-runner", **extra):
+        info = {
+            "test-runs-on": runner,
+            "family": name,
+            "fetch-gfx-targets": ["gfx0000"],
+            "build_variants": ["release", "asan", "host-asan"],
+            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+            "tests_on_trigger": tests_on_trigger,
+        }
+        info.update(extra)
+        return {"linux": info}
+
+    def _expand(
+        self,
+        *,
+        build_variant="host-asan",
+        event_name="pull_request",
+        pull_request_tests=True,
+        pr_labels=None,
+        family=None,
+        build_only=None,
+        test_only=None,
+    ):
+        family = family or self._family("mock", tests_on_trigger=["nightly"])
+        all_families = {"mock": family}
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name=event_name,
+            commit_ref="feature" if event_name == "pull_request" else "main",
+            base_ref="HEAD^1",
+            build_variant=build_variant,
+            pr_labels=pr_labels or [],
+            built_rocm_version="10.2.0.dev0+abcdef",
+            pull_request_tests=pull_request_tests,
+        )
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            return_value=all_families,
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(
+                    linux_families=["mock"],
+                    linux_build_only_families=build_only or [],
+                    linux_test_only_families=test_only or [],
+                ),
+                jobs=_jobs(),
+            )
+        return result.linux.per_family_info[0]
+
+    def test_truthy_enables_tests_on_pr_for_sanitizer(self):
+        entry = self._expand(
+            family=self._family(
+                "mock",
+                tests_on_trigger=["nightly"],
+                trigger_test_label_only=True,
+                **{"test-runs-on-sandbox": "linux-sandbox"},
+            )
+        )
+        self.assertEqual(entry["test-runs-on"], "linux-sandbox")
+
+    def test_empty_default_keeps_tests_disabled(self):
+        entry = self._expand(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_release_variant_unchanged(self):
+        entry = self._expand(build_variant="release")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_release_variant_unchanged_when_family_tests_on_presubmit(self):
+        entry = self._expand(
+            build_variant="release",
+            family=self._family("mock", tests_on_trigger=["presubmit"]),
+        )
+        self.assertEqual(entry["test-runs-on"], "linux-runner")
+
+    def test_non_pull_request_events_ignore_input(self):
+        for event in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                self.assertFalse(
+                    cm._pull_request_tests_override_applies(
+                        "host-asan",
+                        cm.CIInputs(
+                            run_id="1",
+                            event_name=event,
+                            commit_ref="main",
+                            base_ref="HEAD^1",
+                            build_variant="host-asan",
+                            built_rocm_version="10.2.0.dev0+abcdef",
+                            pull_request_tests=True,
+                        ),
+                    )
+                )
+
+    def test_push_does_not_enable_tests(self):
+        entry = self._expand(event_name="push")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_build_only_label_still_disables_tests(self):
+        entry = self._expand(build_only=["mock"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_cpu_test_only_label_still_disables_gpu_tests(self):
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_family_without_runner_stays_disabled(self):
+        entry = self._expand(
+            family=self._family("mock", tests_on_trigger=["nightly"], runner="")
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_override_applies_to_sanitizer_variant_names_only(self):
+        """Matches asan* and host-asan* variants; not release or tsan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
+            pull_request_tests=True,
+        )
+        expected = {
+            "release": False,
+            "asan": True,
+            "asan-debug": True,
+            "host-asan": True,
+            "host-asan-debug": True,
+            "tsan": False,
+        }
+        self.assertEqual(
+            set(expected), set(all_build_variants["linux"]), "update expected"
+        )
+        for variant, applies in expected.items():
+            with self.subTest(variant=variant):
+                self.assertEqual(
+                    cm._pull_request_tests_override_applies(variant, ci_inputs),
+                    applies,
+                )
+
+    def test_from_environ_parses_boolean_input(self):
+        """setup_multi_arch.yml passes the boolean input as "true" or "false"."""
+        cases = [
+            ({"PULL_REQUEST_TESTS": "true"}, True),
+            ({"PULL_REQUEST_TESTS": "True"}, True),
+            ({"PULL_REQUEST_TESTS": "false"}, False),
+            ({"PULL_REQUEST_TESTS": ""}, False),
+            ({}, False),
+        ]
+        for extra_env, expected in cases:
+            with self.subTest(extra_env=extra_env):
+                inputs = _run_from_environ(
+                    "pull_request",
+                    {"pull_request": {"labels": []}},
+                    extra_env=extra_env,
+                )
+                self.assertIs(inputs.pull_request_tests, expected)
+
+
 class TestCpuTestOnlyLabel(unittest.TestCase):
     """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
 

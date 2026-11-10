@@ -342,6 +342,12 @@ class CIInputs:
     pull_request_opt_in_label: str = ""
     pull_request_opt_out_label: str = ""
 
+    # Test policy set by the calling workflow. Only evaluated for sanitizer
+    # variants (asan*, host-asan*) on pull_request events. When true, runs
+    # tests for families that have a test runner, overriding the family's
+    # tests_on_trigger / trigger_test_label_only.
+    pull_request_tests: bool = False
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -462,6 +468,9 @@ class CIInputs:
         build_native_windows = (
             os.environ.get("BUILD_NATIVE_WINDOWS", "true").lower() != "false"
         )
+        pull_request_tests = (
+            os.environ.get("PULL_REQUEST_TESTS", "false").strip().lower() == "true"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -554,6 +563,7 @@ class CIInputs:
             pull_request_opt_out_label=os.environ.get(
                 "PULL_REQUEST_OPT_OUT_LABEL", ""
             ).strip(),
+            pull_request_tests=pull_request_tests,
         )
         inputs.validate()
         return inputs
@@ -1819,6 +1829,21 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     return triggers
 
 
+def _pull_request_tests_override_applies(
+    build_variant: str, ci_inputs: CIInputs
+) -> bool:
+    """True when the caller's pull_request_tests input applies to this run.
+
+    Only sanitizer variants on pull_request events are affected; the release
+    variant and all other events keep the family-level test gating.
+    """
+    return (
+        ci_inputs.is_pull_request
+        and build_variant.startswith(("asan", "host-asan"))
+        and ci_inputs.pull_request_tests
+    )
+
+
 def _should_run_tests_for_family(
     platform_info: dict,
     ci_inputs: CIInputs,
@@ -1915,6 +1940,7 @@ def _expand_build_config_for_platform(
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
+    pr_tests_override = _pull_request_tests_override_applies(build_variant, ci_inputs)
     for label in ci_inputs.pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
@@ -1963,8 +1989,13 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # due to limited ASAN runner capacity and stability concerns,
+            # unless the calling workflow opts in via pull_request_tests.
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or pr_tests_override
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
@@ -2027,6 +2058,10 @@ def _expand_build_config_for_platform(
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
+            if not should_run and pr_tests_override:
+                should_run = True
+                reason = "pull_request_tests input"
+                print(f"  {family_name}: tests enabled ({reason})")
             if not should_run:
                 test_runs_on = ""
                 print(f"  {family_name}: tests disabled ({reason})")
