@@ -76,12 +76,8 @@ on:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
         type: string
         default: ""
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
-        description: "Branch, tag or SHA to checkout."
+      therock_ref:
+        description: "Branch, tag or SHA to checkout from TheRock repo."
         type: string
         default: ""
       xla_ref:
@@ -195,8 +191,8 @@ jobs:
         timeout-minutes: 15
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: "rocm/TheRock"
+          ref: ${{ inputs.therock_ref || '' }}
 
       - name: Checkout XLA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

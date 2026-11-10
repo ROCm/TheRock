@@ -330,8 +330,7 @@ jobs:
       rocm_package_version: ${{ inputs.rocm_package_version }}
       xla_ref: rocm-jaxlib-v0.11.2
       test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
-      repository: ${{ inputs.repository || github.repository }}
-      ref: ${{ inputs.ref || '' }}
+      therock_ref: ${{ inputs.ref || '' }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read
