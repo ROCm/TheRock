@@ -50,4 +50,18 @@ while IFS= read -r -d '' makefile; do
   done
 done < <(find "$SOURCE_DIR" -name Makefile.am -print0)
 
+# lttng-ust loads its own libraries at run time by SONAME: tracepoint.h (compiled into every
+# instrumented library) dlopens LTTNG_UST_TRACEPOINT_LIB_SONAME, which in turn loads
+# LTTNG_UST_LIB_SONAME. Point them at the renamed libraries; otherwise a process loads a
+# system lttng-ust next to the bundled one (two listener threads and fd trackers in one
+# process), or none at all.
+TRACER_H="$SOURCE_DIR/include/lttng/ust-tracer.h"
+sed -i -e 's/"liblttng-ust\.so\."/"librocm_sysdeps_lttng_ust.so."/' \
+       -e 's/"liblttng-ust-tracepoint\.so\."/"librocm_sysdeps_lttng_ust_tracepoint.so."/' \
+       -e 's/"liblttng-ust-ctl\.so\."/"librocm_sysdeps_lttng_ust_ctl.so."/' "$TRACER_H"
+if grep -q '"liblttng-ust' "$TRACER_H"; then
+  echo "error: unrenamed SONAME left in $TRACER_H" >&2
+  exit 1
+fi
+
 echo "lttng-ust source patch complete."
