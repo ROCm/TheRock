@@ -485,13 +485,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
         return jobs[0] if jobs else None
 
-    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+    def test_miopen_dbsync_include_family_covers_gfx942_gfx950_and_gfx90a(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+        self.assertEqual(
+            config["include_family"]["linux"], ["gfx942", "gfx950", "gfx90a"]
+        )
 
-    def test_miopen_dbsync_declares_no_advisory_families(self):
+    def test_miopen_dbsync_declares_only_gfx90a_advisory(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertNotIn("expect_failure", config)
+        self.assertEqual(config["expect_failure"], {"linux": ["gfx90a"]})
+
+    def test_miopen_dbsync_gfx90a_scheduled_on_cpu_runner_when_gpu_gated(self):
+        job = self._dbsync_job("gfx90a", True, "gfx90a")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_gfx90a_is_advisory(self):
+        job = self._dbsync_job("gfx90a", True, "gfx90a")
+        self.assertTrue(job["expect_failure"])
 
     def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
