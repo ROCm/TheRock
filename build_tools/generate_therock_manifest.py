@@ -10,6 +10,10 @@ import re
 import subprocess
 import sys
 
+from _therock_utils.external_repo_config import (
+    parse_and_validate_external_repo_config,
+)
+
 from github_actions.manifest_utils import capture, capture_optional, log
 
 
@@ -179,30 +183,6 @@ def rocm_version_from_package_version(rocm_package_version: str) -> str | None:
     return match.group(1)
 
 
-def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
-    """Parse and validate external repo configuration used by super-repo CI."""
-    if not raw:
-        return None
-
-    config = json.loads(raw)
-
-    if not isinstance(config, dict):
-        raise ValueError("EXTERNAL_REPO_CONFIG must be a JSON object")
-
-    submodule_path = config.get("submodule_path")
-    ref = config.get("ref")
-
-    if not isinstance(submodule_path, str) or not submodule_path.strip():
-        raise ValueError(
-            "EXTERNAL_REPO_CONFIG 'submodule_path' must be a non-empty string"
-        )
-
-    if not isinstance(ref, str) or not ref.strip():
-        raise ValueError("EXTERNAL_REPO_CONFIG 'ref' must be a non-empty string")
-
-    return config
-
-
 def build_manifest_schema(
     repo_root: Path,
     the_rock_commit: str,
@@ -222,6 +202,8 @@ def build_manifest_schema(
     external_repo_ref = None
     external_repo_matched = False
 
+    # Override the pin by resolved path and ref. The repository field is CI
+    # metadata; manifest URLs come from TheRock's .gitmodules, as in checkout.
     if external_repo_config:
         external_repo_submodule_path = external_repo_config["submodule_path"]
         external_repo_ref = external_repo_config["ref"]
@@ -288,6 +270,8 @@ def build_partial_manifest_schema(
     external_repo_ref = None
     external_repo_matched = False
 
+    # Override the pin by resolved path and ref. The repository field is CI
+    # metadata; manifest URLs come from TheRock's .gitmodules, as in checkout.
     if external_repo_config:
         external_repo_submodule_path = external_repo_config["submodule_path"]
         external_repo_ref = external_repo_config["ref"]
