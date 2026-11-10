@@ -148,10 +148,18 @@ def load_test_categories_yaml(yaml_path):
 
 
 def extract_gpu_arch(amdgpu_families):
-    """Extract the first gfx architecture token from AMDGPU_FAMILIES."""
+    """Extract the first gfx token from AMDGPU_FAMILIES.
+
+    Examples:
+        "gfx942"          -> "gfx942"
+        "gfx94X-dcgpu"    -> "gfx94X"          (family name; the "-dcgpu" suffix is dropped)
+        "gfx1250-strict"  -> "gfx1250-strict"  (a separate target; "-strict" is kept)
+    """
     if not amdgpu_families:
         return None
-    # Keep -strict (a target's stepping); -dcgpu and the like name a family.
+    # "-strict" is part of the target name (gfx1250-strict is its own target, with
+    # its own skip-gfx1250-strict marker), so keep it. Other suffixes such as
+    # "-dcgpu" or "-all" only group targets into a family, so drop them.
     match = re.search(r"gfx\w+(?:-strict)?", amdgpu_families)
     if match:
         gpu_arch = match.group(0)
@@ -162,16 +170,27 @@ def extract_gpu_arch(amdgpu_families):
 
 
 def resolve_skip_arch(gpu_arch, amdgpu_targets):
-    """Arch for the ``not skip-<arch>`` term.
+    """Pick the arch used in the ``not skip-<arch>`` pytest marker term.
 
-    *gpu_arch* (from AMDGPU_FAMILIES) may be a family (gfx125X, matches no
-    marker) or lack the target's stepping (gfx1250 for gfx1250-strict, whose
-    configs carry skip-gfx1250).  Prefer a lone AMDGPU_TARGETS entry; with
-    several (gfx120X-all) the runner may be any, so keep *gpu_arch*.
+    Test configs opt out of a GPU with markers named after a single target,
+    e.g. ``skip-gfx942`` or ``skip-gfx1250``. *gpu_arch* comes from
+    AMDGPU_FAMILIES and is often a family name, which matches no such marker.
+    AMDGPU_TARGETS is the comma-separated target list that
+    configure_multi_arch_ci.py builds from the family's "fetch-gfx-targets".
+    When it names exactly one target, that target is the GPU under test, so use it.
+
+    Examples (AMDGPU_FAMILIES, AMDGPU_TARGETS -> arch):
+        "gfx94X-dcgpu",  "gfx942"          -> "gfx942"
+        "gfx125X-dcgpu", "gfx1250"         -> "gfx1250"
+        "gfx1250",       "gfx1250-strict"  -> "gfx1250-strict"
+        "gfx120X-all",   "gfx1200,gfx1201" -> "gfx120X" (unchanged: either
+            target may be on the runner, and per-target skips still apply in
+            the test's own conftest, which sees the detected GPU)
+        "gfx942",        ""                -> "gfx942"  (unchanged)
     """
     if not gpu_arch:
         return gpu_arch
-    targets = [t.strip() for t in (amdgpu_targets or "").split(",") if t.strip()]
+    targets = [t for t in (amdgpu_targets or "").split(",") if t]
     return targets[0] if len(targets) == 1 else gpu_arch
 
 
