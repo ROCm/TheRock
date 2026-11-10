@@ -159,7 +159,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -220,13 +220,41 @@ jobs:
       - name: Set up virtual environment
         timeout-minutes: 15
         run: |
-          # The torch wheel already depends on the matching rocm runtime
-          # packages (PYTORCH_EXTRA_INSTALL_REQUIREMENTS pins rocm[libraries]),
-          # so installing torch is enough to pull the ROCm runtime.
+          # torch pulls the ROCm runtime. devel is required to JIT-compile
+          # extensions (test_mempool_* includes hipblas/hipblas.h).
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }}" \
+            --packages "torch[${{ steps.expand.outputs.device_extras }}]==${{ inputs.torch_version }} rocm[devel,${{ steps.expand.outputs.device_extras }}]" \
             --index-url=${{ inputs.package_index_url }} \
             --activate-in-future-github-actions-steps
+
+      - name: Initialize ROCm SDK and configure environment
+        run: |
+          rocm-sdk init
+
+          ROCM_HOME="$(rocm-sdk path --root)"
+          ROCM_BIN="$(rocm-sdk path --bin)"
+          ROCM_CMAKE_PREFIX="$(rocm-sdk path --cmake)"
+
+          ROCM_SYSDEPS="${ROCM_HOME}/lib/rocm_sysdeps"
+          ROCM_SYSDEPS_INCLUDE="${ROCM_SYSDEPS}/include"
+          ROCM_SYSDEPS_PKGCONFIG="${ROCM_SYSDEPS}/lib/pkgconfig"
+
+          echo "${ROCM_BIN}" >> "${GITHUB_PATH}"
+          echo "ROCM_PATH=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_HOME=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_SOURCE_DIR=${ROCM_HOME}" >> "${GITHUB_ENV}"
+          echo "ROCM_BIN=${ROCM_BIN}" >> "${GITHUB_ENV}"
+          echo "ROCM_CMAKE=${ROCM_CMAKE_PREFIX}" >> "${GITHUB_ENV}"
+          echo "CMAKE_PREFIX_PATH=${ROCM_CMAKE_PREFIX}:${CMAKE_PREFIX_PATH:-}" >> "${GITHUB_ENV}"
+          echo "HIP_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "ROCM_DEVICE_LIB_PATH=${ROCM_HOME}/lib/llvm/amdgcn/bitcode" >> "${GITHUB_ENV}"
+          echo "CPLUS_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${CPLUS_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "C_INCLUDE_PATH=${ROCM_SYSDEPS_INCLUDE}:${C_INCLUDE_PATH:-}" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=${ROCM_SYSDEPS_PKGCONFIG}:${PKG_CONFIG_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "LIBRARY_PATH=${ROCM_HOME}/lib/host-math/lib:${ROCM_SYSDEPS}/lib:${LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+          echo "CC=${ROCM_HOME}/lib/llvm/bin/clang" >> "${GITHUB_ENV}"
+          echo "CXX=${ROCM_HOME}/lib/llvm/bin/clang++" >> "${GITHUB_ENV}"
 
       - name: Install test requirements
         run: |
