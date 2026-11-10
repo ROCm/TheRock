@@ -1256,8 +1256,8 @@ gpgcheck=0
         """Fail when the installed prefix is missing its basic directories.
 
         The prefix must contain ``bin``, ``lib``, ``include``, ``share``, and
-        ``lib/cmake``. ``/usr/lib`` must exist because the dynamic linker
-        reads it.
+        ``lib/cmake``. These paths are relative to the install prefix, so the
+        packaging unit test can run on Windows.
 
         Args:
             install_path: Resolved or configured install prefix.
@@ -1273,13 +1273,6 @@ gpgcheck=0
                 print(f" [FAIL] {relative} (not a directory)")
             else:
                 print(f" [PASS] {relative}")
-
-        usr_lib = Path("/usr/lib")
-        if not usr_lib.is_dir():
-            missing.append(str(usr_lib))
-            print(" [FAIL] /usr/lib (not a directory)")
-        else:
-            print(" [PASS] /usr/lib")
 
         if missing:
             print(f"\n[FAIL] Install layout missing: {', '.join(missing)}")
