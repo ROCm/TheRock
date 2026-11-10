@@ -1748,6 +1748,8 @@ def _get_published_rocm_version(index_url: str) -> str:
     return get_latest_python_package_version("rocm", index_url)
 
 
+# Stop gap until the sanitizer enablement plan (ROCm/TheRock#9366) provides the
+# per-family host-asan configuration. Remove this helper and its call sites then.
 def _is_rocm_systems_host_asan_pull_request(
     ci_inputs: CIInputs, build_variant: str
 ) -> bool:
