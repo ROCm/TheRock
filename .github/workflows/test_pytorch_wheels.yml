@@ -288,9 +288,6 @@ jobs:
       # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
         timeout-minutes: 120
-        env:
-          # Enable AOTriton's experimental Navi kernels for transformer coverage.
-          TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: "1"
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
@@ -303,7 +300,24 @@ jobs:
               test_unary_ufuncs \
               test_binary_ufuncs \
               test_autograd \
-              test_transformers \
+            -- \
+            --continue-on-collection-errors
+
+      # Keep this separate from the core invocation because bypassing upstream's
+      # Windows blocklist would also re-enable blocklisted core modules.
+      - name: Run PyTorch transformer tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 60
+        env:
+          # Opt Navi into AOTriton kernels that are disabled by default so the
+          # transformer suite exercises them instead of only fallback paths.
+          TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: "1"
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
+            --include test_transformers \
             -- \
             --ignore-win-blocklist \
             --continue-on-collection-errors
