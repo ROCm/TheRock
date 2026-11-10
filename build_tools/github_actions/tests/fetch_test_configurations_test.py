@@ -322,7 +322,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 self.assertTrue(
                     job["test_script"].startswith("TEST_CATEGORY=hw-common ")
                 )
-                self.assertIn("pytest_runner.py", job["test_script"])
+                self.assertIn("test_tensilelite.py", job["test_script"])
                 self.assertNotIn(
                     "TEST_COMPONENT=hipblaslt-tensilelite", job["test_script"]
                 )
