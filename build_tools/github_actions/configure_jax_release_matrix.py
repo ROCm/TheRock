@@ -197,7 +197,7 @@ def generate_jax_matrix_for_release_type(
 
     # JAX is not supported for BKC releases today, so return an empty matrix.
     # See https://github.com/ROCm/rockrel/issues/88 for context.
-    if release_type in ("dev-bkc", "nightly-bkc"):
+    if release_type in ("dev", "dev-bkc", "nightly-bkc"):
         return []
 
     versions = python_versions or _default_python_versions(
