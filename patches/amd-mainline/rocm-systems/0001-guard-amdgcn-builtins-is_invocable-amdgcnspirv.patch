@@ -1,0 +1,640 @@
+From 17232a28759e0e88e775dc97f7808d8cab2043eb Mon Sep 17 00:00:00 2001
+From: idubinov <igor.dubinov@amd.com>
+Date: Tue, 10 Nov 2026 15:27:14 +0000
+Subject: [PATCH] Guard feature-gated AMDGCN builtins with is_invocable for
+ amdgcnspirv
+
+On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the
+target GPU is only known at JIT time), so clang rejects calls to
+feature-gated builtins (MFMA/SMFMAC/WMMA/async-LDS/global atomic fadd)
+that are guarded by __has_builtin() alone. Add a
+__builtin_amdgcn_is_invocable() guard (falls back to true when the
+predicate builtin is unavailable).
+
+- rocprofiler-compute: sample/rocflop.cpp, sample/mega_kernel,
+  sample/wmma_gemm_fp16
+- hip-tests: catch/unit/memory/hipHostRegister.cc
+---
+ .../catch/unit/memory/hipHostRegister.cc      |  16 +-
+ .../sample/mega_kernel/mega_kernel.hip        | 192 ++++++++++--------
+ .../rocprofiler-compute/sample/rocflop.cpp    | 166 ++++++++-------
+ .../sample/wmma_gemm_fp16/wmma_gemm_fp16.hip  | 111 +++++-----
+ 4 files changed, 265 insertions(+), 220 deletions(-)
+
+diff --git a/projects/hip-tests/catch/unit/memory/hipHostRegister.cc b/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
+index 851ae7748d..6f376210cc 100644
+--- a/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
++++ b/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
+@@ -38,16 +38,26 @@ template <typename T> __global__ void Inc(T* Ad) {
+ }
+ 
+ #if HT_AMD
++// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time), so clang requires an is_invocable guard as well.
++#if __has_builtin(__builtin_amdgcn_is_invocable)
++#define HOST_REGISTER_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
++#else
++#define HOST_REGISTER_IS_INVOCABLE(builtin) true
++#endif
++
+ __global__ void AtomicFAddKernelKernel(float* data, size_t n) {
+   size_t i = blockDim.x * blockIdx.x + threadIdx.x;
+   if (i < n) {
+ #if __has_builtin(__builtin_amdgcn_global_atomic_fadd_f32)
+-    __builtin_amdgcn_global_atomic_fadd_f32(data, 1.0f);
+-#else
++    if (HOST_REGISTER_IS_INVOCABLE(__builtin_amdgcn_global_atomic_fadd_f32)) {
++      __builtin_amdgcn_global_atomic_fadd_f32(data, 1.0f);
++      return;
++    }
++#endif
+     if (i == 0) {
+       *data = -1.0;
+     }
+-#endif
+   }
+ }
+ #endif
+diff --git a/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip b/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
+index 72641530d8..600c02272d 100644
+--- a/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
++++ b/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
+@@ -122,6 +122,15 @@
+ 
+ #include "mega_kernel_types.h"
+ 
++// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time), so clang requires an is_invocable guard as well.
++// Use nested ifs: clang only honors the first is_invocable in an && chain.
++#if __has_builtin(__builtin_amdgcn_is_invocable)
++#define MEGA_KERNEL_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
++#else
++#define MEGA_KERNEL_IS_INVOCABLE(builtin) true
++#endif
++
+ // ============================================================================
+ // NPI TOOLCHAIN WORKAROUND: gfx1250 fallback detection
+ // ============================================================================
+@@ -2671,104 +2680,114 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
+                                           TestResults* results, int lane_id, int tid) {
+     bool passed = true;
+ 
+-#if __has_builtin(__builtin_amdgcn_global_load_async_to_lds_b32)
+-    // MI350 (gfx950) / gfx1250: Full async LDS load/store support
+-    // global_load_async_to_lds_b8/b32/b64/b128: Load from global to LDS asynchronously
+-    // global_store_async_from_lds_b8/b32/b64/b128: Store from LDS to global asynchronously
+-
+-    // Initialize global source with test pattern
+-    if (tid < 64) {
+-        // First, copy test data to global memory
+-        global_src[tid] = (float)(tid * 10 + 1);
+-    }
+-
+-    // Initialize async barrier counter per block for gfx1250
+-    if (threadIdx.x == 0) {
+-        async_barrier_counter = 0;
+-    }
+-    __syncthreads();
+-
+-    // Perform async load from global to LDS
+-    // Only first thread in each block issues the async load for this test
+-    if (threadIdx.x == 0) {
+-        // Cast pointers to appropriate address spaces
+-        // address_space(1) = global, address_space(3) = local/LDS
+-        typedef int __attribute__((ext_vector_type(4))) vint4;
++#if __has_builtin(__builtin_amdgcn_global_load_async_to_lds_b128) && \
++    __has_builtin(__builtin_amdgcn_global_store_async_from_lds_b128)
++    if (MEGA_KERNEL_IS_INVOCABLE(__builtin_amdgcn_global_load_async_to_lds_b128)) {
++        if (MEGA_KERNEL_IS_INVOCABLE(__builtin_amdgcn_global_store_async_from_lds_b128)) {
++            // MI350 (gfx950) / gfx1250: Full async LDS load/store support
++            // global_load_async_to_lds_b8/b32/b64/b128: Load from global to LDS asynchronously
++            // global_store_async_from_lds_b8/b32/b64/b128: Store from LDS to global asynchronously
++
++            // Initialize global source with test pattern
++            if (tid < 64) {
++                // First, copy test data to global memory
++                global_src[tid] = (float)(tid * 10 + 1);
++            }
+ 
+-        // Load 16 bytes (4 ints) asynchronously from global to LDS
+-        __builtin_amdgcn_global_load_async_to_lds_b128(
+-            ((__attribute__((address_space(1))) vint4*)global_src),
+-            ((__attribute__((address_space(3))) vint4*)async_lds_buffer),
+-            0 /* offset */, 0 /* cache policy */);
+-    }
++            // Initialize async barrier counter per block for gfx1250
++            if (threadIdx.x == 0) {
++                async_barrier_counter = 0;
++            }
++            __syncthreads();
++
++            // Perform async load from global to LDS
++            // Only first thread in each block issues the async load for this test
++            if (threadIdx.x == 0) {
++                // Cast pointers to appropriate address spaces
++                // address_space(1) = global, address_space(3) = local/LDS
++                typedef int __attribute__((ext_vector_type(4))) vint4;
++
++                // Load 16 bytes (4 ints) asynchronously from global to LDS
++                __builtin_amdgcn_global_load_async_to_lds_b128(
++                    ((__attribute__((address_space(1))) vint4*)global_src),
++                    ((__attribute__((address_space(3))) vint4*)async_lds_buffer),
++                    0 /* offset */, 0 /* cache policy */);
++            }
+ 
+ #if defined(__gfx1250__)
+-    // GFX1250: Use DS atomic async barrier for synchronization
+-    // This signals that this thread has reached the barrier point
+-    // The barrier counter is atomically incremented
+-    if (__has_builtin(__builtin_amdgcn_ds_atomic_async_barrier_arrive_b64)) {
+-        __builtin_amdgcn_ds_atomic_async_barrier_arrive_b64(
+-            ((__attribute__((address_space(3))) long*)&async_barrier_counter));
+-    }
++            // GFX1250: Use DS atomic async barrier for synchronization
++            // This signals that this thread has reached the barrier point
++            // The barrier counter is atomically incremented
++            if (__has_builtin(__builtin_amdgcn_ds_atomic_async_barrier_arrive_b64)) {
++                __builtin_amdgcn_ds_atomic_async_barrier_arrive_b64(
++                    ((__attribute__((address_space(3))) long*)&async_barrier_counter));
++            }
+ 
+-    // Wait for async operations to complete
+-    // On gfx1250, use s_wait_asynccnt for async LDS operations
+-    __builtin_amdgcn_s_wait_asynccnt(0);  // Wait for async copy operations
++            // Wait for async operations to complete
++            // On gfx1250, use s_wait_asynccnt for async LDS operations
++            __builtin_amdgcn_s_wait_asynccnt(0);  // Wait for async copy operations
+ #else
+-    // Other architectures: Use unified s_waitcnt
+-    WAITCNT_ALL();  // Wait for all memory operations
++            // Other architectures: Use unified s_waitcnt
++            WAITCNT_ALL();  // Wait for all memory operations
+ #endif
+-    __syncthreads();
+-
+-    // Verify the data was loaded correctly to LDS
+-    if (tid < 4) {
+-        int expected = (int)(tid * 10 + 1);
+-        // Note: We loaded floats but stored as ints, reinterpret
+-        float* lds_as_float = (float*)async_lds_buffer;
+-        passed = passed && approx_equal_f32(lds_as_float[tid], (float)expected, 0.1f);
+-    }
+-    __syncthreads();
+-
+-    // Now test async store from LDS to global
+-    if (tid == 0) {
+-        // Modify LDS data
+-        async_lds_buffer[0] = 12345;
+-        async_lds_buffer[1] = 67890;
+-        async_lds_buffer[2] = 11111;
+-        async_lds_buffer[3] = 22222;
+-    }
+-    __syncthreads();
++            __syncthreads();
++
++            // Verify the data was loaded correctly to LDS
++            if (tid < 4) {
++                int expected = (int)(tid * 10 + 1);
++                // Note: We loaded floats but stored as ints, reinterpret
++                float* lds_as_float = (float*)async_lds_buffer;
++                passed = passed && approx_equal_f32(lds_as_float[tid], (float)expected, 0.1f);
++            }
++            __syncthreads();
++
++            // Now test async store from LDS to global
++            if (tid == 0) {
++                // Modify LDS data
++                async_lds_buffer[0] = 12345;
++                async_lds_buffer[1] = 67890;
++                async_lds_buffer[2] = 11111;
++                async_lds_buffer[3] = 22222;
++            }
++            __syncthreads();
+ 
+-    if (tid == 0) {
+-        typedef int __attribute__((ext_vector_type(4))) vint4;
++            if (tid == 0) {
++                typedef int __attribute__((ext_vector_type(4))) vint4;
+ 
+-        // Store 16 bytes from LDS to global asynchronously
+-        __builtin_amdgcn_global_store_async_from_lds_b128(
+-            ((__attribute__((address_space(1))) vint4*)(global_dst)),
+-            ((__attribute__((address_space(3))) vint4*)async_lds_buffer),
+-            0 /* offset */, 0 /* cache policy */);
+-    }
++                // Store 16 bytes from LDS to global asynchronously
++                __builtin_amdgcn_global_store_async_from_lds_b128(
++                    ((__attribute__((address_space(1))) vint4*)(global_dst)),
++                    ((__attribute__((address_space(3))) vint4*)async_lds_buffer),
++                    0 /* offset */, 0 /* cache policy */);
++            }
+ 
+ #if defined(__gfx1250__)
+-    // GFX1250: Use DS atomic async barrier for store synchronization
+-    if (__has_builtin(__builtin_amdgcn_ds_atomic_async_barrier_arrive_b64)) {
+-        __builtin_amdgcn_ds_atomic_async_barrier_arrive_b64(
+-            ((__attribute__((address_space(3))) long*)&async_barrier_counter));
+-    }
++            // GFX1250: Use DS atomic async barrier for store synchronization
++            if (__has_builtin(__builtin_amdgcn_ds_atomic_async_barrier_arrive_b64)) {
++                __builtin_amdgcn_ds_atomic_async_barrier_arrive_b64(
++                    ((__attribute__((address_space(3))) long*)&async_barrier_counter));
++            }
+ 
+-    // Wait for async store operations to complete
+-    __builtin_amdgcn_s_wait_asynccnt(0);  // Wait for async copy operations
++            // Wait for async store operations to complete
++            __builtin_amdgcn_s_wait_asynccnt(0);  // Wait for async copy operations
+ #else
+-    // Other architectures: Use unified s_waitcnt
+-    WAITCNT_ALL();
++            // Other architectures: Use unified s_waitcnt
++            WAITCNT_ALL();
+ #endif
+-    __syncthreads();
++            __syncthreads();
+ 
+-    // Verify the store (on subsequent kernel or by reading back)
+-    // For now, just check that no crash occurred
+-    passed = passed && true;
++            // Verify the store (on subsequent kernel or by reading back)
++            // For now, just check that no crash occurred
++            passed = passed && true;
+ 
+-#else
++            if (lane_id == 0) {
++                atomicAdd(&results->async_lds_load_passed, passed ? 1 : 0);
++                atomicAdd(&results->async_lds_store_passed, passed ? 1 : 0);
++            }
++            return;
++        }
++    }
++#endif
+     // Async LDS builtins not available - mark as bypassed
+     (void)global_src;
+     (void)global_dst;
+@@ -2779,13 +2798,6 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
+         atomicMin(&results->async_lds_load_passed, -1);
+         atomicMin(&results->async_lds_store_passed, -1);
+     }
+-    return;
+-#endif
+-
+-    if (lane_id == 0) {
+-        atomicAdd(&results->async_lds_load_passed, passed ? 1 : 0);
+-        atomicAdd(&results->async_lds_store_passed, passed ? 1 : 0);
+-    }
+ }
+ 
+ // ============================================================================
+diff --git a/projects/rocprofiler-compute/sample/rocflop.cpp b/projects/rocprofiler-compute/sample/rocflop.cpp
+index 4e638a139f..5a0d8efeb6 100644
+--- a/projects/rocprofiler-compute/sample/rocflop.cpp
++++ b/projects/rocprofiler-compute/sample/rocflop.cpp
+@@ -13,6 +13,14 @@
+ #include <sys/wait.h>
+ #include <fcntl.h>
+ 
++// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time), so clang requires an is_invocable guard as well.
++#if __has_builtin(__builtin_amdgcn_is_invocable)
++#define ROCFLOP_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
++#else
++#define ROCFLOP_IS_INVOCABLE(builtin) true
++#endif
++
+ using float16 = _Float16;
+ 
+ // Vector types. Useful for packed math (where supported) and MFMA inputs.
+@@ -60,62 +68,66 @@ template<typename T> __global__ void fma_throughput(vec4<T>* buffer, int count)
+ __global__ void matmul_fp16_throughput(vec4<float16>* inputs, vec4<float>* outputs, int count)
+ {
+ #if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x16f16)
+-    int grid_size = gridDim.x * blockDim.x;
+-    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+-
+-    vec4<float16>* ptr = inputs;
+-
+-    vec4<float16> value0 = ptr[0 * grid_size + tid];
+-    vec4<float16> value1 = ptr[1 * grid_size + tid];
+-    vec4<float16> value2 = ptr[2 * grid_size + tid];
+-    vec4<float16> value3 = ptr[3 * grid_size + tid];
+-
+-    vec4<float> accum0;
+-    vec4<float> accum1;
+-    vec4<float> accum2;
+-    vec4<float> accum3;
+-    for(int i = 0; i < count; i++) {
+-        for(int j = 0; j < 64; j++) {
+-            // 4 MFMA ops
+-            accum0 = __builtin_amdgcn_mfma_f32_16x16x16f16(value0, value0, accum0, 0, 0, 0);
+-            accum1 = __builtin_amdgcn_mfma_f32_16x16x16f16(value1, value1, accum1, 0, 0, 0);
+-            accum2 = __builtin_amdgcn_mfma_f32_16x16x16f16(value2, value2, accum2, 0, 0, 0);
+-            accum3 = __builtin_amdgcn_mfma_f32_16x16x16f16(value3, value3, accum3, 0, 0, 0);
++    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_mfma_f32_16x16x16f16)) {
++        int grid_size = gridDim.x * blockDim.x;
++        int tid = blockDim.x * blockIdx.x + threadIdx.x;
++
++        vec4<float16>* ptr = inputs;
++
++        vec4<float16> value0 = ptr[0 * grid_size + tid];
++        vec4<float16> value1 = ptr[1 * grid_size + tid];
++        vec4<float16> value2 = ptr[2 * grid_size + tid];
++        vec4<float16> value3 = ptr[3 * grid_size + tid];
++
++        vec4<float> accum0;
++        vec4<float> accum1;
++        vec4<float> accum2;
++        vec4<float> accum3;
++        for(int i = 0; i < count; i++) {
++            for(int j = 0; j < 64; j++) {
++                // 4 MFMA ops
++                accum0 = __builtin_amdgcn_mfma_f32_16x16x16f16(value0, value0, accum0, 0, 0, 0);
++                accum1 = __builtin_amdgcn_mfma_f32_16x16x16f16(value1, value1, accum1, 0, 0, 0);
++                accum2 = __builtin_amdgcn_mfma_f32_16x16x16f16(value2, value2, accum2, 0, 0, 0);
++                accum3 = __builtin_amdgcn_mfma_f32_16x16x16f16(value3, value3, accum3, 0, 0, 0);
++            }
+         }
+-    }
+ 
+-    outputs[tid] = accum0 + accum1 + accum2 + accum3;
++        outputs[tid] = accum0 + accum1 + accum2 + accum3;
++    }
+ #endif
+ }
+ 
+ __global__ void matmul_fp32_throughput(float* inputs, vec4<float>* outputs, int count)
+ {
+ #if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x4f32)
+-    int grid_size = gridDim.x * blockDim.x;
+-    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+-
+-    float* ptr = inputs;
+-
+-    float value0 = ptr[0 * grid_size + tid];
+-    float value1 = ptr[1 * grid_size + tid];
+-    float value2 = ptr[2 * grid_size + tid];
+-    float value3 = ptr[2 * grid_size + tid];
+-
+-    vec4<float> accum0;
+-    vec4<float> accum1;
+-    vec4<float> accum2;
+-    vec4<float> accum3;
+-    for(int i = 0; i < count; i++) {
+-        for(int j = 0; j < 64; j++) {
+-            // 4 MFMA ops
+-            accum0 = __builtin_amdgcn_mfma_f32_16x16x4f32(value0, value0, accum0, 0, 0, 0);
+-            accum1 = __builtin_amdgcn_mfma_f32_16x16x4f32(value1, value1, accum1, 0, 0, 0);
+-            accum2 = __builtin_amdgcn_mfma_f32_16x16x4f32(value2, value2, accum2, 0, 0, 0);
+-            accum3 = __builtin_amdgcn_mfma_f32_16x16x4f32(value3, value3, accum3, 0, 0, 0);
++    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_mfma_f32_16x16x4f32)) {
++        int grid_size = gridDim.x * blockDim.x;
++        int tid = blockDim.x * blockIdx.x + threadIdx.x;
++
++        float* ptr = inputs;
++
++        float value0 = ptr[0 * grid_size + tid];
++        float value1 = ptr[1 * grid_size + tid];
++        float value2 = ptr[2 * grid_size + tid];
++        float value3 = ptr[2 * grid_size + tid];
++
++        vec4<float> accum0;
++        vec4<float> accum1;
++        vec4<float> accum2;
++        vec4<float> accum3;
++        for(int i = 0; i < count; i++) {
++            for(int j = 0; j < 64; j++) {
++                // 4 MFMA ops
++                accum0 = __builtin_amdgcn_mfma_f32_16x16x4f32(value0, value0, accum0, 0, 0, 0);
++                accum1 = __builtin_amdgcn_mfma_f32_16x16x4f32(value1, value1, accum1, 0, 0, 0);
++                accum2 = __builtin_amdgcn_mfma_f32_16x16x4f32(value2, value2, accum2, 0, 0, 0);
++                accum3 = __builtin_amdgcn_mfma_f32_16x16x4f32(value3, value3, accum3, 0, 0, 0);
++            }
+         }
+-    }
+ 
+-    outputs[tid] = accum0 + accum1 + accum2 + accum3;
++        outputs[tid] = accum0 + accum1 + accum2 + accum3;
++    }
+ #endif
+ }
+ 
+@@ -125,38 +137,40 @@ __global__ void matmul_fp32_throughput(float* inputs, vec4<float>* outputs, int
+ __global__ void sparse_matmul_fp16_throughput(vec4<float16>* input0, vec8<float16>* input1, vec4<float>* outputs, int count)
+ {
+ #if __has_builtin(__builtin_amdgcn_smfmac_f32_16x16x32_f16)
+-    int grid_size = gridDim.x * blockDim.x;
+-    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+-
+-    vec4<float16>* x_ptr = input0;
+-    vec8<float16>* y_ptr = input1;
+-
+-    vec4<float16> x0 = x_ptr[0 * grid_size + tid];
+-    vec4<float16> x1 = x_ptr[1 * grid_size + tid];
+-    vec4<float16> x2 = x_ptr[2 * grid_size + tid];
+-    vec4<float16> x3 = x_ptr[3 * grid_size + tid];
+-
+-    vec8<float16> y0 = y_ptr[0 * grid_size + tid];
+-    vec8<float16> y1 = y_ptr[1 * grid_size + tid];
+-    vec8<float16> y2 = y_ptr[2 * grid_size + tid];
+-    vec8<float16> y3 = y_ptr[3 * grid_size + tid];
+-
+-    vec4<float> accum0;
+-    vec4<float> accum1;
+-    vec4<float> accum2;
+-    vec4<float> accum3;
+-
+-    for(int i = 0; i < count; i++) {
+-        for(int j = 0; j < 64; j++) {
+-            // 4 SMFMAC ops
+-            accum0 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x0, y0, accum0, 0, 0, 0);
+-            accum1 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x1, y1, accum1, 0, 0, 0);
+-            accum2 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x2, y2, accum2, 0, 0, 0);
+-            accum3 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x3, y3, accum3, 0, 0, 0);
++    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_smfmac_f32_16x16x32_f16)) {
++        int grid_size = gridDim.x * blockDim.x;
++        int tid = blockDim.x * blockIdx.x + threadIdx.x;
++
++        vec4<float16>* x_ptr = input0;
++        vec8<float16>* y_ptr = input1;
++
++        vec4<float16> x0 = x_ptr[0 * grid_size + tid];
++        vec4<float16> x1 = x_ptr[1 * grid_size + tid];
++        vec4<float16> x2 = x_ptr[2 * grid_size + tid];
++        vec4<float16> x3 = x_ptr[3 * grid_size + tid];
++
++        vec8<float16> y0 = y_ptr[0 * grid_size + tid];
++        vec8<float16> y1 = y_ptr[1 * grid_size + tid];
++        vec8<float16> y2 = y_ptr[2 * grid_size + tid];
++        vec8<float16> y3 = y_ptr[3 * grid_size + tid];
++
++        vec4<float> accum0;
++        vec4<float> accum1;
++        vec4<float> accum2;
++        vec4<float> accum3;
++
++        for(int i = 0; i < count; i++) {
++            for(int j = 0; j < 64; j++) {
++                // 4 SMFMAC ops
++                accum0 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x0, y0, accum0, 0, 0, 0);
++                accum1 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x1, y1, accum1, 0, 0, 0);
++                accum2 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x2, y2, accum2, 0, 0, 0);
++                accum3 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x3, y3, accum3, 0, 0, 0);
++            }
+         }
+-    }
+ 
+-    outputs[tid] = accum0 + accum1 + accum2 + accum3;
++        outputs[tid] = accum0 + accum1 + accum2 + accum3;
++    }
+ #endif
+ }
+ 
+diff --git a/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip b/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
+index eb6ef30017..b63d33fe95 100644
+--- a/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
++++ b/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
+@@ -9,6 +9,14 @@
+ 
+ #include "wmma_gemm_fp16_config.hpp"
+ 
++// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time), so clang requires an is_invocable guard as well.
++#if __has_builtin(__builtin_amdgcn_is_invocable)
++#define WMMA_GEMM_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
++#else
++#define WMMA_GEMM_IS_INVOCABLE(builtin) true
++#endif
++
+ using namespace wmma_gemm_fp16;
+ 
+ using Float16x4  = _Float16 __attribute__((ext_vector_type(4)));
+@@ -61,73 +69,74 @@ __device__ inline void inner_gemm(uint32_t sub_m_start,
+                                   const _Float16* __restrict__ b,
+                                   _Float16* __restrict__ d)
+ {
+-#if !__has_builtin(__builtin_amdgcn_wmma_f32_16x16x32_f16)
+-    (void)sub_m_start;
+-    (void)sub_n_start;
+-    (void)m;
+-    (void)n;
+-    (void)k;
+-    (void)a;
+-    (void)b;
+-    if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
+-        d[0] = _Float16(0);
+-    }
+-    return;
+-#else
+-    Floatx8 frag_acc = {};
++#if __has_builtin(__builtin_amdgcn_wmma_f32_16x16x32_f16)
++    if (WMMA_GEMM_IS_INVOCABLE(__builtin_amdgcn_wmma_f32_16x16x32_f16)) {
++        Floatx8 frag_acc = {};
+ 
+-    const uint32_t major_wave = __builtin_amdgcn_readfirstlane(threadIdx.x / kWaveSize);
+-    const uint32_t minor_wave = threadIdx.y;
++        const uint32_t major_wave = __builtin_amdgcn_readfirstlane(threadIdx.x / kWaveSize);
++        const uint32_t minor_wave = threadIdx.y;
+ 
+-    const uint32_t wave_row = major_wave * kWmmaM + sub_m_start;
+-    const uint32_t wave_col = minor_wave * kWmmaN + sub_n_start;
++        const uint32_t wave_row = major_wave * kWmmaM + sub_m_start;
++        const uint32_t wave_col = minor_wave * kWmmaN + sub_n_start;
+ 
+-    const bool full_block =
+-        (sub_m_start + kBlockM <= m) && (sub_n_start + kBlockN <= n) && (k >= kBlockK);
++        const bool full_block =
++            (sub_m_start + kBlockM <= m) && (sub_n_start + kBlockN <= n) && (k >= kBlockK);
+ 
+-    if (!full_block) {
+-        return;
+-    }
++        if (!full_block) {
++            return;
++        }
+ 
+-    const uint32_t k_tiles = k / kBlockK;
+-    uint32_t k_iter        = 0;
++        const uint32_t k_tiles = k / kBlockK;
++        uint32_t k_iter        = 0;
+ 
+-    Float16x16 reg_a = {};
+-    Float16x16 reg_b = {};
++        Float16x16 reg_a = {};
++        Float16x16 reg_b = {};
+ 
+-    load_row_major(reg_a, wave_row, 0, k, a);
+-    load_row_major(reg_b, wave_col, 0, k, b);
++        load_row_major(reg_a, wave_row, 0, k, a);
++        load_row_major(reg_b, wave_col, 0, k, b);
+ 
+-    if (k_tiles > 1) {
+-        do {
+-            const uint32_t next_k = (k_iter + 1) * kBlockK;
++        if (k_tiles > 1) {
++            do {
++                const uint32_t next_k = (k_iter + 1) * kBlockK;
+ 
+-            Float16x16 next_a = {};
+-            Float16x16 next_b = {};
++                Float16x16 next_a = {};
++                Float16x16 next_b = {};
+ 
+-            load_row_major(next_a, wave_row, next_k, k, a);
+-            load_row_major(next_b, wave_col, next_k, k, b);
++                load_row_major(next_a, wave_row, next_k, k, a);
++                load_row_major(next_b, wave_col, next_k, k, b);
+ 
+-            __builtin_amdgcn_sched_barrier(0);
+-            frag_acc = __builtin_amdgcn_wmma_f32_16x16x32_f16(
+-                0, reg_b, 0, reg_a, 0, frag_acc, 0, 0);
+-            __builtin_amdgcn_sched_barrier(0);
++                __builtin_amdgcn_sched_barrier(0);
++                frag_acc = __builtin_amdgcn_wmma_f32_16x16x32_f16(
++                    0, reg_b, 0, reg_a, 0, frag_acc, 0, 0);
++                __builtin_amdgcn_sched_barrier(0);
+ 
+-            reg_a = next_a;
+-            reg_b = next_b;
+-            ++k_iter;
+-        } while (k_iter < (k_tiles - 1));
+-    }
++                reg_a = next_a;
++                reg_b = next_b;
++                ++k_iter;
++            } while (k_iter < (k_tiles - 1));
++        }
+ 
+-    frag_acc = __builtin_amdgcn_wmma_f32_16x16x32_f16(0, reg_b, 0, reg_a, 0, frag_acc, 0, 0);
++        frag_acc = __builtin_amdgcn_wmma_f32_16x16x32_f16(0, reg_b, 0, reg_a, 0, frag_acc, 0, 0);
+ 
+-    Float16x8 frag_d = {};
+-    for (int i = 0; i < 8; ++i) {
+-        frag_d[i] = static_cast<_Float16>(frag_acc[i]);
+-    }
++        Float16x8 frag_d = {};
++        for (int i = 0; i < 8; ++i) {
++            frag_d[i] = static_cast<_Float16>(frag_acc[i]);
++        }
+ 
+-    write_output(frag_d, wave_row, wave_col, n, d);
++        write_output(frag_d, wave_row, wave_col, n, d);
++        return;
++    }
+ #endif
++    (void)sub_m_start;
++    (void)sub_n_start;
++    (void)m;
++    (void)n;
++    (void)k;
++    (void)a;
++    (void)b;
++    if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0) {
++        d[0] = _Float16(0);
++    }
+ }
+ 
+ __attribute__((amdgpu_flat_work_group_size(1, kFlatWorkgroupSize)))
+-- 
+2.43.0
+
