@@ -448,12 +448,15 @@ class TestArtifactStructure:
     def test_tensilelite_wheel_artifact_layout(self, archive_index: list[ArchiveInfo]):
         """Guard the BLAS test-artifact layout the TensileLite wheel runner uses.
 
-        Applies only once the pinned rocm-libraries ships TensileLite wheels
-        (share/hipblaslt/tensilelite/wheels/); older pins keep today's layout.
         The client stays test-only in blas_test (Q097).
         """
         blas_lib_files = get_artifact_component_files(archive_index, "blas", "lib")
         blas_test_files = get_artifact_component_files(archive_index, "blas", "test")
+
+        if is_windows_platform():
+            pytest.skip("hipBLASLt installs no TensileLite test artifacts on Windows")
+        if not blas_test_files:
+            pytest.skip("no blas test artifact in this artifact set")
 
         test_root = "share/hipblaslt/tensilelite/"
         wheels = sorted(
@@ -461,9 +464,6 @@ class TestArtifactStructure:
             for path in blas_test_files
             if path.startswith(test_root + "wheels/") and path.endswith(".whl")
         )
-        if not wheels:
-            pytest.skip("pinned rocm-libraries does not ship TensileLite wheels yet")
-
         assert len(wheels) == 1 and wheels[0].startswith(
             test_root + "wheels/tensilelite-"
         ), f"blas_test must contain exactly one tensilelite wheel, found {wheels}"
@@ -480,10 +480,9 @@ class TestArtifactStructure:
         assert not any(
             path.startswith(client_dir) for path in blas_lib_files
         ), "blas_lib must not contain the test-only tensilelite-client"
-        if not is_windows_platform():
-            assert (
-                client_dir + "tensilelite-client" in blas_test_files
-            ), "blas_test is missing tensilelite-client"
+        assert (
+            client_dir + "tensilelite-client" in blas_test_files
+        ), "blas_test is missing tensilelite-client"
 
     @pytest.mark.skipif(
         is_windows_platform(),
