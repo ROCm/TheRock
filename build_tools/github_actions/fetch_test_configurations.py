@@ -409,8 +409,10 @@ test_matrix = {
     # postsubmit, gfx120X-all is nightly), so it runs unsharded; the timeout is
     # sized for gfx950.
     #
-    # Until the pinned rocm-libraries ships the hw-common category,
-    # pytest_runner.py skips this job with a warning instead of failing.
+    # Runs through the same installed-wheel runner as "tensilelite"
+    # (test_tensilelite.py). Until the pinned rocm-libraries ships the
+    # hw-common category, the runner skips this job with a warning instead of
+    # failing.
     "tensilelite-common": {
         "job_name": "tensilelite-common",
         "fetch_artifact_args": "--blas --tests",
@@ -418,7 +420,7 @@ test_matrix = {
         "additional_requirements_files": [
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
-        "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('pytest_runner.py')}",
+        "test_script": f"TEST_CATEGORY=hw-common python {_get_script_path('test_tensilelite.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
