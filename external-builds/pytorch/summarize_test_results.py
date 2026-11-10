@@ -171,6 +171,10 @@ RUNNER_OUTPUT = "therock-runner-output.log"
 _MODULE_LOG_RE = re.compile(r"(?P<module>.+)_\d+\.\d+_[0-9a-f]{16}_\.log")
 # run_test.py's failure message for a module killed by a signal.
 _SIGNAL_RE = re.compile(r"Received signal: SIG\w+")
+# run_test.py's per-module outcome lines, e.g. "inductor/test_smoke 1/1 failed!".
+_MODULE_RESULT_RE = re.compile(
+    r"^(?P<test>\S+) \d+/\d+ (?P<result>failed!|was successful)", re.MULTILINE
+)
 
 
 def check_report_set(reports_dir: Path) -> list[str]:
@@ -178,8 +182,10 @@ def check_report_set(reports_dir: Path) -> list[str]:
 
     Complete means the runner exited, its output reports no module killed by
     a signal, every JUnit file parses, and every module the runner launched
-    wrote a report. Pytest writes a module's JUnit file at session end, so a
-    crashed module otherwise vanishes from the counts.
+    either wrote a report or was reported successful without one (modules
+    that skip on this platform exit 0 with no tests). Pytest writes a module's
+    JUnit file at session end, so a crashed or unimportable module otherwise
+    vanishes from the counts.
     """
     if not reports_dir.is_dir():
         return ["no test reports"]
@@ -187,10 +193,17 @@ def check_report_set(reports_dir: Path) -> list[str]:
     if not (reports_dir / COMPLETION_MARKER).is_file():
         problems.append("the test runner did not exit")
     runner_output = reports_dir / RUNNER_OUTPUT
+    output_text = ""
     if not runner_output.is_file():
         problems.append("the test runner output is missing")
-    elif _SIGNAL_RE.search(runner_output.read_text(errors="replace")):
-        problems.append("a test module was killed by a signal")
+    else:
+        output_text = runner_output.read_text(errors="replace")
+        if _SIGNAL_RE.search(output_text):
+            problems.append("a test module was killed by a signal")
+    succeeded, failed = set(), set()
+    for m in _MODULE_RESULT_RE.finditer(output_text):
+        module = m.group("test").replace("/", ".").replace("\\", ".")
+        (failed if m.group("result") == "failed!" else succeeded).add(module)
 
     xml_files = sorted(reports_dir.rglob("*.xml"))
     if not xml_files:
@@ -207,9 +220,17 @@ def check_report_set(reports_dir: Path) -> list[str]:
         for log in reports_dir.glob("*_.log")
         if (m := _MODULE_LOG_RE.fullmatch(log.name))
     }
-    missing = sorted(launched - reported)
+    # Fail closed: a module missing a report counts unless the runner said it
+    # succeeded (and never that it failed).
+    missing = sorted(
+        module
+        for module in launched - reported
+        if module not in succeeded or module in failed
+    )
     if missing:
-        problems.append(f"no report from launched module(s) {', '.join(missing)}")
+        problems.append(
+            f"no report from module(s) that did not succeed: {', '.join(missing)}"
+        )
     return problems
 
 
