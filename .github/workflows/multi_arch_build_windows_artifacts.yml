@@ -104,6 +104,7 @@ jobs:
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
       BUILD_DIR: B:\build
       CACHE_DIR: ${{ github.workspace }}/.cache
+      ROCM_LIBRARIES_SOURCE_DIR: rocm-libraries
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -203,6 +204,7 @@ jobs:
             --artifacts="${REBUILD_ARTIFACTS}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --rocm-libraries-source-dir="${ROCM_LIBRARIES_SOURCE_DIR}" \
             --gha-output
 
       - name: Install stage python deps
