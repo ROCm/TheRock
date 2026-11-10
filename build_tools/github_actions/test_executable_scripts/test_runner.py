@@ -15,6 +15,7 @@ AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
+import json
 import sys
 import subprocess
 import re
@@ -126,6 +127,8 @@ TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 # ctest entries and gtest splits the cases -- which yields complete, disjoint
 # coverage for any number of (gtest-binary) entries. Single-entry components are
 # unaffected either way, so this is safe to keep narrowly scoped.
+# hipkernelprovider also avoids the stride here; mixed_ctest_plan below then
+# distributes its non-GTest entries separately with GTest variables cleared.
 GTEST_ONLY_SHARDING_COMPONENTS = {"rocsparse", "hipsparse", "hipkernelprovider"}
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
@@ -647,6 +650,63 @@ def build_ctest_command(
     return cmd
 
 
+def mixed_ctest_plan(cmd, shard_index, total_shards, env):
+    """Split hipkernelprovider's selected entries without compounding shards.
+
+    Categorized GTest commands carry an explicit filter and run on every shard
+    with case-level sharding. All other entries run in full on exactly one
+    shard; clear GTest variables there so even an uncategorized GTest binary
+    cannot accidentally lose cases. CTest still owns fixtures and test policy.
+    """
+    if not 1 <= shard_index <= total_shards:
+        raise ValueError("SHARD_INDEX must be in [1, TOTAL_SHARDS]")
+    if "--tests-information" in cmd:
+        raise ValueError("mixed sharding cannot be combined with a CTest stride")
+    discovery = subprocess.run(
+        [*cmd, "--show-only=json-v1"],
+        cwd=THEROCK_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tests = json.loads(discovery.stdout)["tests"]
+    if not tests:
+        raise ValueError("no CTest entries match the selected component/tier")
+    gtests = []
+    other = []
+    for test in sorted(tests, key=lambda test: test["name"]):
+        if any(arg.startswith("--gtest_filter=") for arg in test.get("command", [])):
+            gtests.append(test["name"])
+        else:
+            other.append(test["name"])
+    owned = other[shard_index - 1 :: total_shards]
+    unsharded_env = {
+        key: value
+        for key, value in env.items()
+        if key
+        not in {"GTEST_SHARD_INDEX", "GTEST_TOTAL_SHARDS", "GTEST_SHARD_STATUS_FILE"}
+    }
+    plan = []
+    for names, test_env in ((gtests, env), (owned, unsharded_env)):
+        if names:
+            # CTest uses an extended regex, not Python regex syntax. Escape only
+            # its metacharacters; names remain argv data (no shell execution).
+            escaped_names = [
+                "".join(
+                    "\\" + char if char in r".^$*+?{}[]\|()" else char for char in name
+                )
+                for name in names
+            ]
+            pattern = "^(" + "|".join(escaped_names) + ")$"
+            plan.append(([*cmd, "-R", pattern, "--no-tests=error"], test_env))
+    print(
+        f"# Mixed shard {shard_index}/{total_shards}: "
+        f"{len(gtests)} case-sharded entries, {len(owned)}/{len(other)} whole entries"
+    )
+    return plan
+
+
 def main():
     # TEST_TYPE was normalized + validated at module load.
     category = TEST_TYPE
@@ -700,11 +760,24 @@ def main():
     print(f"# Running: {' '.join(cmd)}")
     print()
 
-    # Execute the command
+    # hipkernelprovider mixes categorized GTests, standalone native tests and
+    # pytest. GTest-only sharding repeats the latter on every runner. Keep the
+    # other components' established policies unchanged.
     try:
-        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars, check=False)
-        return result.returncode
+        plan = [(cmd, environ_vars)]
+        if test_component_job_name == "hipkernelprovider":
+            plan = mixed_ctest_plan(
+                cmd, int(SHARD_INDEX), int(TOTAL_SHARDS), environ_vars
+            )
+        returncode = 0
+        for test_cmd, test_env in plan:
+            logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(test_cmd)}")
+            result = subprocess.run(
+                test_cmd, cwd=THEROCK_DIR, env=test_env, check=False
+            )
+            if result.returncode and not returncode:
+                returncode = result.returncode
+        return returncode
     except Exception as e:
         print(f"Error running ctest: {e}", file=sys.stderr)
         return 1

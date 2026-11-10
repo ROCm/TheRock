@@ -653,6 +653,15 @@ Tests should
 - Use the common
   [`test_executable_scripts/test_runner.py`](/build_tools/github_actions/test_executable_scripts/test_runner.py)
 
+The `hipkernelprovider` runner uses mixed scheduling: categorized GTest entries
+are case-sharded across every runner, while standalone native and pytest CTest
+entries run in full on one assigned shard. The selected tier, GPU filters,
+resource policy and test timeouts are unchanged. Every shard must complete for
+the component verdict; a passing individual shard is not complete coverage.
+See [mixed scheduling](build_tools/github_actions/test_executable_scripts/README.md#mixed-hipkernelprovider-scheduling)
+for the partition and fixture contracts. Other components retain their existing
+scheduling policies.
+
 <!-- TODO: more content here and/or in the linked docs
 
 - patterns

@@ -68,9 +68,29 @@ ______________________________________________________________________
 
 - **Workflow:** `.github/workflows/test_component.yml` runs the test step with env vars such as `TEST_COMPONENT`, `TEST_TYPE`, `AMDGPU_FAMILIES`, `SHARD_INDEX`, `TOTAL_SHARDS`.
 - **Test script:** For components that use this mechanism, the test script is set to `python .../test_runner.py` in `build_tools/github_actions/fetch_test_configurations.py` (e.g. MIOpen).
-- **Sharding:** The workflow matrix uses `shard_arr` from the same config; the script passes sharding to ctest via `--tests-information` and to GTest via `GTEST_SHARD_INDEX` / `GTEST_TOTAL_SHARDS`.
+- **Sharding:** The workflow matrix uses `shard_arr` from the same config. Most components retain their CTest stride policy. `rocsparse` and `hipsparse` use GTest-only sharding: all selected entries run on every shard, with cases split by `GTEST_SHARD_INDEX` / `GTEST_TOTAL_SHARDS`. `hipkernelprovider` uses mixed scheduling as described below. Never combine an entry stride with case-level sharding for a multi-entry GTest suite; that silently omits cases.
 
 ______________________________________________________________________
+
+## Mixed hipkernelprovider scheduling
+
+The runner first discovers the selected CTest entries with `--show-only=json-v1`,
+keeping the existing tier, GPU and exclusion filters. Categorized commands with
+an explicit `--gtest_filter=` argument run on every shard with case-level GTest
+sharding. All other entries are sorted by name and assigned round-robin to one
+shard each. Their GTest sharding variables are cleared, so even an uncategorized
+GTest binary runs its complete suite on its assigned shard.
+
+Each group runs through CTest with the original timeouts, resource specification
+and test properties. CTest may pull required fixture setup/cleanup entries into
+a group; those dependencies may repeat where necessary. Empty owned groups run
+no command, but an empty overall selection or failed discovery is an error.
+Failure in either group makes the component job fail; both groups are executed.
+A complete verdict requires all configured shards, not one successful shard.
+
+This policy does not change other components' scheduling. The real-CTest tests in
+`../tests/mixed_ctest_sharding_test.py` check complete, disjoint case coverage,
+literal test-name selection, filter preservation and failure propagation.
 
 ## Adding a New Component to This Runner
 
