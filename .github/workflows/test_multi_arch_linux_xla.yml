@@ -22,11 +22,7 @@ on:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
         type: string
         default: ""
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
-        type: string
-        default: ""
-      ref:
+      therock_ref:
         description: "Branch, tag or SHA to checkout."
         type: string
         default: ""
