@@ -3,7 +3,13 @@
 
 if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
-    set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
+    # Driver builds only need the comgr DLL and PDB; the DLLs are tested
+    # downstream before they reach the driver package.
+    if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+      set(THEROCK_BUILD_COMGR_TESTS OFF)
+    else()
+      set(THEROCK_BUILD_COMGR_TESTS ${THEROCK_BUILD_TESTING})
+    endif()
   endif()
 
   if(THEROCK_CONDITION_IS_NON_WINDOWS)
