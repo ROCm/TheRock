@@ -240,6 +240,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
     DESCRIPTOR artifact-miopenprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -288,6 +289,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -295,7 +297,12 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  therock_check_subproject_targets(_hipkernelprovider_enabled hipkernelprovider)
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
@@ -341,9 +348,14 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
+set(_hipdnn_samples_enabled OFF)
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  therock_check_subproject_targets(_hipdnn_samples_enabled hipDNN_samples)
+endif()
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
@@ -382,4 +394,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif(THEROCK_ENABLE_HIPDNN_SAMPLES)
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)

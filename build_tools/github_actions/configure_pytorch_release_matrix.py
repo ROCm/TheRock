@@ -28,8 +28,9 @@ RELEASE_TYPES = [
 # TODO: add opt-ins for CI runs to use python versions and pytorch refs normally
 #       only included in release runs
 
-# Release matrices use this shared Python version range.
-RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14"]
+# Release matrices start with this shared version range, then omit unsupported
+# ref/version combinations below.
+RELEASE_PYTHON_VERSIONS = ["3.11", "3.12", "3.13", "3.14", "3.15"]
 CI_PYTHON_VERSIONS = {
     "linux": ["3.12"],
     "windows": ["3.12"],
@@ -65,16 +66,27 @@ CI_PYTORCH_REFS = {
 # new GPU families before the default PyTorch refs support them.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        "release/2.13": {"gfx90c"},
-        "release/2.14": {"gfx90c"},
-        "release/2.15": {"gfx90c"},
-        "nightly": {},
+        "release/2.13": {"gfx90c", "gfx117X-all"},
+        "release/2.14": {"gfx90c", "gfx117X-all"},
+        "release/2.15": {"gfx90c", "gfx117X-all"},
+        "nightly": {"gfx117X-all"},
     },
     "windows": {
-        "release/2.13": {"gfx90c"},
-        "release/2.14": {"gfx90c"},
-        "release/2.15": {"gfx90c"},
+        "release/2.13": {"gfx90c", "gfx117X-all"},
+        "release/2.14": {"gfx90c", "gfx117X-all"},
+        "release/2.15": {"gfx90c", "gfx117X-all"},
+        "nightly": {"gfx117X-all"},
     },
+}
+
+# Targets excluded from family expansion for PyTorch refs that do not support
+# them yet. Direct target selections remain available.
+EXCLUDED_IMPLICIT_TARGETS = {
+    "linux": {
+        "release/2.15": {"gfx1250-strict"},
+        "nightly": {"gfx1250-strict"},
+    },
+    "windows": {},
 }
 
 # Test coverage configuration.
@@ -168,6 +180,11 @@ def _filter_families(families_str: str, exclude: set[str]) -> str:
     )
 
 
+def resolve_excluded_implicit_targets(*, platform: str, pytorch_git_ref: str) -> str:
+    targets = EXCLUDED_IMPLICIT_TARGETS[platform].get(pytorch_git_ref, set())
+    return ";".join(sorted(targets))
+
+
 def _primary_test_python_version(pytorch_git_ref: str) -> str:
     """Return the primary test version for a PyTorch ref.
 
@@ -214,6 +231,7 @@ def generate_pytorch_matrix_for_release_type(
     # Build one matrix row per requested Python version and PyTorch ref. Each
     # row carries the AMDGPU families that the child build workflow should use
     # for that ref after filtering out families that are not supported yet.
+    # Rows also carry the per-ref implicit target exclusion policy.
     #
     # Example Linux output for release_type="dev" and
     # amdgpu_families="gfx94X-dcgpu;gfx125X-dcgpu":
@@ -223,13 +241,15 @@ def generate_pytorch_matrix_for_release_type(
     #     "python_version": "3.11",
     #     "pytorch_git_ref": "release/2.13",
     #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "exclude_implicit_targets": "gfx1250-strict",
     #     "test_level": "standard"
     #   },
     #   ...
     #   {
-    #     "python_version": "3.14",
+    #     "python_version": "3.15",
     #     "pytorch_git_ref": "nightly",
     #     "amdgpu_families": "gfx94X-dcgpu",
+    #     "exclude_implicit_targets": "gfx1250-strict",
     #     "test_level": "none"
     #   }
     # ]
@@ -247,6 +267,10 @@ def generate_pytorch_matrix_for_release_type(
                 "python_version": py,
                 "pytorch_git_ref": ref,
                 "amdgpu_families": families,
+                "exclude_implicit_targets": resolve_excluded_implicit_targets(
+                    platform=platform,
+                    pytorch_git_ref=ref,
+                ),
                 "test_level": _select_test_level(
                     release_type=release_type,
                     python_version=py,
@@ -416,7 +440,21 @@ def main(argv: list[str] | None = None) -> int:
             "filtered out of this list for that ref's matrix entry."
         ),
     )
+    parser.add_argument(
+        "--resolve-excluded-implicit-targets",
+        metavar="PYTORCH_GIT_REF",
+        help="Print the implicit target exclusions for a PyTorch ref and exit.",
+    )
     args = parser.parse_args(argv)
+
+    if args.resolve_excluded_implicit_targets is not None:
+        print(
+            resolve_excluded_implicit_targets(
+                platform=args.platform,
+                pytorch_git_ref=args.resolve_excluded_implicit_targets,
+            )
+        )
+        return 0
 
     python_versions = _split_values(args.python_versions) or None
     pytorch_git_refs = _resolve_cli_pytorch_git_refs(

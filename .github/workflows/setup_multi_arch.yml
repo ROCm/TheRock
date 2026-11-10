@@ -91,6 +91,10 @@ on:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
         default: true
+      build_native_windows:
+        description: "Build native Windows packages (MSI)."
+        type: boolean
+        default: true
       python_version:
         description: "Single Python version for wheel builds; empty uses the default matrix."
         type: string
@@ -150,6 +154,9 @@ on:
       rocm_rpm_package_version:
         description: ROCm RPM package version for native packages.
         value: ${{ jobs.setup.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version:
+        description: ROCm MSI package version for native Windows packages.
+        value: ${{ jobs.setup.outputs.rocm_msi_package_version }}
       ref:
         description: >-
           Resolved commit SHA from checkout. Use this instead of the input ref
@@ -177,6 +184,7 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
+      rocm_msi_package_version: ${{ steps.rocm_package_version.outputs.rocm_msi_package_version }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     env:
@@ -189,7 +197,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -233,6 +241,30 @@ jobs:
           sparse-checkout-cone-mode: false
         continue-on-error: true
 
+      # Note: Other scripts treat "dev releases" and "CI builds" differently.
+      # Here we set to a "dev" package version even for CI builds:
+      #
+      # release_type | package version | version example
+      # ------------ | --------------- | ------------------
+      # ci           | dev             | 7.10.0.dev0+f689a8
+      # dev          | dev             | 7.10.0.dev0+f689a8
+      # nightly      | nightly         | 7.10.0a20251021
+      # prerelease   | prerelease      | 7.10.0rc2
+      #
+      # Other scripts upload "ci" and "dev release" packages to different
+      # buckets, use different ccache namespaces, etc.
+      - name: Compute package version
+        id: rocm_package_version
+        env:
+          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+        run: |
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type="${BUILD_RELEASE_TYPE}" \
+            --prerelease-version="${PRERELEASE_VERSION}" \
+            --override-git-sha="${CHECKOUT_COMMIT}" \
+            --build-variant="${BUILD_VARIANT}"
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -240,12 +272,14 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
+          ROCM_PACKAGE_VERSION: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
+          BUILD_NATIVE_WINDOWS: ${{ inputs.build_native_windows }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
@@ -275,30 +309,6 @@ jobs:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
-      # Note: Other scripts treat "dev releases" and "CI builds" differently.
-      # Here we set to a "dev" package version even for CI builds:
-      #
-      # release_type | package version | version example
-      # ------------ | --------------- | ------------------
-      # ci           | dev             | 7.10.0.dev0+f689a8
-      # dev          | dev             | 7.10.0.dev0+f689a8
-      # nightly      | nightly         | 7.10.0a20251021
-      # prerelease   | prerelease      | 7.10.0rc2
-      #
-      # Other scripts upload "ci" and "dev release" packages to different
-      # buckets, use different ccache namespaces, etc.
-      - name: Compute package version
-        id: rocm_package_version
-        env:
-          CHECKOUT_COMMIT: ${{ steps.checkout.outputs.commit }}
-          BUILD_VARIANT: ${{ inputs.build_variant }}
-        run: |
-          python ./build_tools/compute_rocm_package_version.py \
-            --release-type="${BUILD_RELEASE_TYPE}" \
-            --prerelease-version="${PRERELEASE_VERSION}" \
-            --override-git-sha="${CHECKOUT_COMMIT}" \
-            --build-variant="${BUILD_VARIANT}"
-
       - name: Detect external repo config
         id: external_repo_config
         if: ${{ inputs.external_repo != '' }}
@@ -309,7 +319,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}
