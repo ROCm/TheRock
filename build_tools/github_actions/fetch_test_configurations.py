@@ -1370,9 +1370,8 @@ def run():
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    amdgpu_targets = [
-        t.strip() for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t.strip()
-    ]
+    # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
+    amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")

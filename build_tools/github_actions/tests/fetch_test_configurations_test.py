@@ -439,10 +439,45 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["AMDGPU_TARGETS"] = "gfx950"
         self.assertIn("exc-static", self._selected_names())
 
-    def test_blank_amdgpu_targets_falls_back_to_static_targets(self):
+    def test_empty_amdgpu_targets_falls_back_to_static_targets(self):
         self._inject_job("exc-blank", exclude_family={"linux": ["gfx942"]})
-        os.environ["AMDGPU_TARGETS"] = " , "
+        os.environ["AMDGPU_TARGETS"] = ""
         self.assertNotIn("exc-blank", self._selected_names())
+
+    # setUp's AMDGPU_FAMILIES is gfx94X-dcgpu; CI passes its one target.
+    def test_gfx94x_dcgpu_target_matches_exclude(self):
+        os.environ["AMDGPU_TARGETS"] = "gfx942"
+        self._inject_job("exc-942", exclude_family={"linux": ["gfx942"]})
+        self.assertNotIn("exc-942", self._selected_names())
+
+    def test_gfx94x_dcgpu_target_matches_include(self):
+        os.environ["AMDGPU_TARGETS"] = "gfx942"
+        self._inject_job("inc-942", include_family={"linux": ["gfx942"]})
+        self.assertIn("inc-942", self._selected_names())
+
+    def test_gfx94x_dcgpu_other_target_does_not_match(self):
+        os.environ["AMDGPU_TARGETS"] = "gfx942"
+        self._inject_job("exc-950", exclude_family={"linux": ["gfx950"]})
+        self.assertIn("exc-950", self._selected_names())
+
+    def test_gfx110x_all_any_target_matches(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["AMDGPU_TARGETS"] = "gfx1100,gfx1101,gfx1102,gfx1103"
+        self._inject_job("exc-1101", exclude_family={"linux": ["gfx1101"]})
+        self.assertNotIn("exc-1101", self._selected_names())
+
+    def test_gfx110x_all_family_string_matches(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["AMDGPU_TARGETS"] = "gfx1100,gfx1101,gfx1102,gfx1103"
+        self._inject_job("inc-family", include_family={"linux": ["gfx110X-all"]})
+        self.assertIn("inc-family", self._selected_names())
+
+    def test_gfx110x_all_narrowed_targets_skip_other_targets(self):
+        # A caller that overrides the family down to one target no longer matches the others.
+        os.environ["AMDGPU_FAMILIES"] = "gfx110X-all"
+        os.environ["AMDGPU_TARGETS"] = "gfx1100"
+        self._inject_job("exc-1101", exclude_family={"linux": ["gfx1101"]})
+        self.assertIn("exc-1101", self._selected_names())
 
     def test_gfx125x_hipblaslt_and_tensilelite_excluded_for_gfx1250(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
