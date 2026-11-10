@@ -270,6 +270,22 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("test_runner.py", tensilelite["test_script"])
         self.assertEqual(tensilelite["timeout_minutes"], 30)
 
+    def test_tensilelite_runs_installed_wheel_runner(self):
+        """The pytest stage goes through the installed-wheel runner at every tier."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite"
+        for test_type in ("quick", "standard"):
+            with self.subTest(test_type=test_type):
+                os.environ["TEST_TYPE"] = test_type
+                fetch_test_configurations.run()
+                tensilelite = next(
+                    j for j in self._get_components() if j["job_name"] == "tensilelite"
+                )
+                self.assertTrue(
+                    tensilelite["test_script"].startswith(
+                        f"python {fetch_test_configurations._get_script_path('test_tensilelite.py')}"
+                    )
+                )
+
     def test_tensilelite_quick_omits_ctest_stage(self):
         """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
         os.environ["PROJECTS_TO_TEST"] = "tensilelite"
