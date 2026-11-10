@@ -376,11 +376,12 @@ test_matrix = {
         "additional_requirements_files": [
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
-        # Python/pytest suite only (rocisa + TensileLite unit). The C++ gtest
-        # suite (tensilelite/tests) is appended below for TEST_TYPE != quick;
-        # see the "tensilelite" special-case in the component loop
-        # (AIHPBLAS-4410).
-        "test_script": f"python {_get_script_path('pytest_runner.py')}",
+        # Python/pytest suite only (rocisa + TensileLite unit), run against the
+        # installed tensilelite wheel when the artifact ships one (see
+        # test_tensilelite.py). The C++ gtest suite (tensilelite/tests) is
+        # appended below for TEST_TYPE != quick; see the "tensilelite"
+        # special-case in the component loop (AIHPBLAS-4410).
+        "test_script": f"python {_get_script_path('test_tensilelite.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
