@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -97,13 +98,6 @@ SUBMODULE_CONFIG = {
     },
 }
 
-# Maps the short --only-submodule CLI values that aren't SUBMODULE_CONFIG keys
-# (their real paths are nested) to their SUBMODULE_CONFIG key.
-ONLY_SUBMODULE_ALIASES = {
-    "rocgdb": "debug-tools/rocgdb/source",
-    "mesa-fork": "third-party/sysdeps/common/mesa-fork",
-}
-
 
 def _clone_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{repo}.git"
@@ -131,25 +125,55 @@ def submodule_changed(before: str, after: str, path: str) -> bool:
     return bool(diff.strip())
 
 
+_GH_API_RETRYABLE_STATUSES = {502, 503, 504}
+_GH_API_MAX_RETRIES = 4
+_GH_API_RETRY_BACKOFF_BASE = 2  # seconds; doubles each attempt
+
+
 def gh_api(
     token: str, endpoint: str, method: str = "GET", data: dict | None = None
 ) -> Any:
-    """Make a GitHub API request and return the parsed JSON response."""
+    """Make a GitHub API request and return the parsed JSON response.
+
+    GET requests are retried on transient server errors (502/503/504) with
+    exponential backoff.  The run-jobs endpoint on large Multi-Arch CI runs
+    (~900 jobs) frequently returns 502 on individual pages; retrying lets
+    ``_list_run_jobs`` paginate through them reliably.
+    """
     url = f"https://api.github.com/{endpoint}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
 
-    response = requests.request(method, url, headers=headers, json=data)
+    last_response = None
+    attempts = _GH_API_MAX_RETRIES if method == "GET" else 1
+    for attempt in range(attempts):
+        response = requests.request(method, url, headers=headers, json=data)
+        if response.ok:
+            if response.status_code == 204 or not response.text:
+                return None
+            return response.json()
 
-    if not response.ok:
-        raise RuntimeError(f"GitHub API failed: {response.status_code} {response.text}")
+        last_response = response
+        if (
+            response.status_code in _GH_API_RETRYABLE_STATUSES
+            and attempt < attempts - 1
+        ):
+            delay = _GH_API_RETRY_BACKOFF_BASE * (2**attempt)
+            print(
+                f"[WARN] GitHub API returned {response.status_code} for "
+                f"{method} {endpoint}; retrying in {delay}s "
+                f"(attempt {attempt + 1}/{attempts})"
+            )
+            time.sleep(delay)
+            continue
 
-    if response.status_code == 204 or not response.text:
-        return None
+        break
 
-    return response.json()
+    raise RuntimeError(
+        f"GitHub API failed: {last_response.status_code} {last_response.text}"
+    )
 
 
 LIBRARIES_BASELINE_GATE_JOB_NAME = "Libraries Baseline Ready"
@@ -308,8 +332,12 @@ def latest_commit(repo: str, token: str, branch: str | None = None) -> str:
     """Return the SHA of the latest commit on the given branch, or the default branch."""
     url = f"repos/{repo}/commits"
     if branch:
-        url += f"?sha={branch}"
-    data = gh_api(token, url)
+        url += f"?sha={quote(branch, safe='')}"
+    try:
+        data = gh_api(token, url)
+    except (RuntimeError, requests.RequestException) as error:
+        source = f"branch {branch!r}" if branch else "the default branch"
+        raise RuntimeError(f"Could not resolve {source} in {repo}: {error}") from error
     return data[0]["sha"]
 
 
@@ -547,7 +575,10 @@ def close_stale_prs(
     """
     errors: list[str] = []
     old_short = old_sha[:7]
-    prs = gh_api_paginate(token, f"repos/{THEROCK_REPO}/pulls?state=open&per_page=100")
+    prs = gh_api_paginate(
+        token,
+        f"repos/{THEROCK_REPO}/pulls?state=open&base={THEROCK_MAIN_BRANCH}&per_page=100",
+    )
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:
@@ -708,24 +739,31 @@ def _git_commit(title: str) -> None:
     )
 
 
-def create_therock_bump(submodule: str, token: str) -> None:
+def create_therock_bump(
+    submodule: str, token: str, target_branch: str = THEROCK_MAIN_BRANCH
+) -> None:
     """Create a bump PR for the given submodule in TheRock."""
     config = SUBMODULE_CONFIG[submodule]
     repo = config["repo"]
     branch = config.get("branch")
+    if target_branch != THEROCK_MAIN_BRANCH:
+        branch = target_branch
 
     original_cwd = os.getcwd()
     # Get latest SHA from upstream submodule repo
     latest = latest_commit(repo, token, branch)
 
-    # The submodule path may contain slashes (e.g. debug-tools/rocgdb/source);
-    # flatten it so the bump branch name is a single ref component.
+    # Flatten the submodule path in the bump branch name.
     branch_name = f"bump-{submodule.replace('/', '-')}-{latest[:7]}"
+    if target_branch != THEROCK_MAIN_BRANCH:
+        # Preserve target-branch slashes to keep distinct release names distinct.
+        branch_name = f"bump-{submodule.replace('/', '-')}-{target_branch}-{latest[:7]}"
 
     # Skip if a PR for this exact commit is already open.
     open_prs = gh_api(
         token,
-        f"repos/{THEROCK_REPO}/pulls?state=open&head=ROCm:{branch_name}",
+        f"repos/{THEROCK_REPO}/pulls?state=open&head=ROCm:{quote(branch_name, safe='')}"
+        f"&base={quote(target_branch, safe='')}",
     )
     if open_prs:
         print(
@@ -739,7 +777,16 @@ def create_therock_bump(submodule: str, token: str) -> None:
         clone_dir = os.path.join(tmpdir, "TheRock")
         print(f"[INFO] Cloning TheRock into {clone_dir}")
         run(
-            ["git", "clone", "--depth", "1", _clone_url(THEROCK_REPO, token), clone_dir]
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                target_branch,
+                _clone_url(THEROCK_REPO, token),
+                clone_dir,
+            ]
         )
         os.chdir(clone_dir)
 
@@ -782,35 +829,54 @@ def create_therock_bump(submodule: str, token: str) -> None:
             data={
                 "title": title,
                 "head": branch_name,
-                "base": THEROCK_MAIN_BRANCH,
+                "base": target_branch,
                 "body": body,
             },
         )
 
+        labels = list(config["labels"])
+        if target_branch.startswith("release/bkc/"):
+            labels.append("bump-pr:bkc")
+        elif target_branch.startswith("release/"):
+            labels.append("bump-pr:release")
+
         try:
-            # Add CI labels to the PR (run-all-archs + asan for full coverage)
+            # Add CI labels and identify release bumps in the PR overview.
             gh_api(
                 token,
                 f"repos/{THEROCK_REPO}/issues/{pr['number']}/labels",
                 method="POST",
-                data={"labels": config["labels"]},
+                data={"labels": labels},
             )
         except RuntimeError as e:
-            print(f"[WARN] Failed to apply CI labels to PR #{pr['number']}: {e}")
+            print(f"[WARN] Failed to apply labels to PR #{pr['number']}: {e}")
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
 
 
-def handle_schedule(tokens: dict[str, str], submodule: str = "all") -> None:
+def handle_schedule(
+    tokens: dict[str, str],
+    submodule: str = "all",
+    target_branch: str = THEROCK_MAIN_BRANCH,
+) -> None:
     """Create bump PRs for the specified submodule(s)."""
-    if submodule in ("all", "rocm-systems"):
-        create_therock_bump("rocm-systems", tokens["systems"])
-    if submodule in ("all", "rocm-libraries"):
-        create_therock_bump("rocm-libraries", tokens["libraries"])
-    if submodule in ("all", "rocgdb"):
-        create_therock_bump("debug-tools/rocgdb/source", tokens["rocgdb"])
-    if submodule in ("all", "mesa-fork"):
-        create_therock_bump("third-party/sysdeps/common/mesa-fork", tokens["mesa-fork"])
+    paths = {
+        "rocm-systems": "rocm-systems",
+        "rocm-libraries": "rocm-libraries",
+        "rocgdb": "debug-tools/rocgdb/source",
+        "mesa-fork": "third-party/sysdeps/common/mesa-fork",
+    }
+    token_keys = {"rocm-systems": "systems", "rocm-libraries": "libraries"}
+    if submodule != "all":
+        selected = [submodule]
+    elif target_branch != THEROCK_MAIN_BRANCH:
+        selected = ["rocm-systems", "rocm-libraries"]
+    else:
+        selected = list(paths)
+    for name in selected:
+        create_therock_bump(
+            paths[name], tokens[token_keys.get(name, name)], target_branch
+        )
 
 
 def handle_push(
@@ -818,23 +884,13 @@ def handle_push(
     after: str,
     tokens: dict[str, str],
     actions_token: str | None = None,
-    only_submodule: str | None = None,
-    skip_next_bump: bool = False,
 ) -> None:
-    """Push event: update TheRock refs, close stale PRs, create next bump PR.
-
-    `only_submodule` and `skip_next_bump` exist for the manual
-    `workflow_dispatch` replay path in bump_submodules.yml (operator-supplied
-    `pin_before`/`pin_after`), which re-runs the ref/pin-update half of this
-    function for one specific submodule without also opening a new "Bump
-    <submodule>" PR in TheRock. Real push events never set either.
-    """
-    changed = ONLY_SUBMODULE_ALIASES.get(only_submodule, only_submodule)
-    if changed is None:
-        for path in SUBMODULE_CONFIG:
-            if submodule_changed(before, after, path):
-                changed = path
-                break
+    """Push event: update TheRock refs, close stale PRs, create next bump PR."""
+    changed = None
+    for path in SUBMODULE_CONFIG:
+        if submodule_changed(before, after, path):
+            changed = path
+            break
     if not changed:
         print("[INFO] No monitored submodule changed")
         return
@@ -938,10 +994,6 @@ def handle_push(
 
     os.chdir(original_cwd)
 
-    if skip_next_bump:
-        print(f"[INFO] skip_next_bump set, not opening a new Bump {changed} PR")
-        return
-
     # Immediately queue the next bump PR so the cycle continues without
     # waiting for the next scheduled run.
     print(f"[INFO] Creating next bump PR for {changed} after merge")
@@ -953,9 +1005,43 @@ def handle_push(
     _fail_if_cancel_errors(cancel_errors)
 
 
+def parse_target_branch(value: str) -> str:
+    """Accept supported targets that are also valid Git branch names."""
+    if value == THEROCK_MAIN_BRANCH:
+        return value
+    if not (
+        value.startswith("release/therock-") or value.startswith("release/bkc/therock-")
+    ):
+        raise argparse.ArgumentTypeError(
+            "target branch must be main, release/therock-*, or release/bkc/therock-*"
+        )
+    if (
+        value in ("release/therock-", "release/bkc/therock-")
+        or subprocess.run(
+            ["git", "check-ref-format", "--branch", value],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+    ):
+        raise argparse.ArgumentTypeError(f"Invalid target branch: {value!r}")
+    return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--event_type", required=True, choices=["schedule", "push"])
+    parser.add_argument(
+        "--event_type", required=True, choices=["schedule", "workflow_dispatch", "push"]
+    )
+    parser.add_argument(
+        "--target_branch",
+        default=THEROCK_MAIN_BRANCH,
+        type=parse_target_branch,
+        help=(
+            "TheRock PR base: main (default), release/therock-*, or "
+            "release/bkc/therock-*; main keeps its existing upstream branch "
+            "selection, while release targets use the matching upstream branch."
+        ),
+    )
     parser.add_argument(
         "--submodule",
         default="all",
@@ -963,27 +1049,6 @@ def main() -> None:
     )
     parser.add_argument("--before")
     parser.add_argument("--after")
-    parser.add_argument(
-        "--only-submodule",
-        default=None,
-        choices=["rocm-systems", "rocm-libraries", "rocgdb", "mesa-fork"],
-        help=(
-            "Manual workflow_dispatch replay only: treat this submodule as "
-            "the one that changed between --before/--after, instead of "
-            "auto-detecting it. Lets an operator re-run the ref/pin-update "
-            "half of a push event (e.g. to pick up a bump_automation.py fix) "
-            "without a real submodule-bump commit landing on main."
-        ),
-    )
-    parser.add_argument(
-        "--skip-next-bump",
-        action="store_true",
-        help=(
-            "Manual workflow_dispatch replay only: don't open a new "
-            "Bump <submodule> PR in TheRock after updating the downstream "
-            "ref/pins. Real push events always open the next bump PR."
-        ),
-    )
     parser.add_argument("--systems_token", required=True)
     parser.add_argument("--libraries_token", required=True)
     parser.add_argument("--rocgdb_token", required=True)
@@ -994,6 +1059,11 @@ def main() -> None:
         help="TheRock GITHUB_TOKEN used to cancel runs on stale bump PRs.",
     )
     args = parser.parse_args()
+    if args.target_branch != THEROCK_MAIN_BRANCH:
+        if args.event_type != "workflow_dispatch":
+            parser.error("release targets require --event_type workflow_dispatch")
+    if args.event_type == "push" and not args.actions_token:
+        parser.error("--actions_token is required when --event_type is push")
 
     run(["git", "config", "--global", "user.name", BOT_NAME])
     run(["git", "config", "--global", "user.email", BOT_EMAIL])
@@ -1007,17 +1077,10 @@ def main() -> None:
 
     if args.event_type == "schedule":
         handle_schedule(tokens, args.submodule)
+    elif args.event_type == "workflow_dispatch":
+        handle_schedule(tokens, args.submodule, args.target_branch)
     elif args.event_type == "push":
-        if not args.actions_token:
-            parser.error("--actions_token is required when --event_type is push")
-        handle_push(
-            args.before,
-            args.after,
-            tokens,
-            actions_token=args.actions_token,
-            only_submodule=args.only_submodule,
-            skip_next_bump=args.skip_next_bump,
-        )
+        handle_push(args.before, args.after, tokens, actions_token=args.actions_token)
 
 
 if __name__ == "__main__":
