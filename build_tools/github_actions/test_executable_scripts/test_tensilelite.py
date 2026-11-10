@@ -41,12 +41,15 @@ Environment variables are those of pytest_runner.py. TEST_COMPONENT must be
 ``tensilelite`` or ``tensilelite-common``.
 """
 
+import json
 import logging
 import os
+import platform
 import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 import pytest_runner
@@ -247,6 +250,86 @@ def check_package_help(env: dict[str, str], cwd: Path) -> None:
         )
 
 
+def _command_output(command: list[str], env: dict[str, str]) -> str:
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=False, env=env, timeout=60
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"unavailable ({type(exc).__name__})"
+    if result.returncode != 0:
+        return f"unavailable (exit {result.returncode})"
+    return result.stdout.strip() or "unavailable (no output)"
+
+
+def collect_provenance(
+    rocm_path: Path, wheel: Path, installed_version: str, env: dict[str, str]
+) -> dict[str, str]:
+    """Record what was tested, uninterpreted. Missing values are recorded as such."""
+    provenance = {
+        "tensilelite.wheel": wheel.name,
+        "tensilelite.version": installed_version,
+        "python.version": platform.python_version(),
+    }
+
+    client = (
+        rocm_path
+        / "libexec/hipblaslt/tensilelite"
+        / ("tensilelite-client.exe" if os.name == "nt" else "tensilelite-client")
+    )
+    for option, key in (
+        ("--version", "tensilelite_client.version"),
+        ("--source-revision", "tensilelite_client.source_revision"),
+    ):
+        provenance[key] = (
+            _command_output([str(client), option], env)
+            if client.is_file()
+            else "absent"
+        )
+
+    manifest_path = rocm_path / "share/therock/therock_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        manifest = {}
+    for field in ("rocm_package_version", "the_rock_commit"):
+        value = manifest.get(field) if isinstance(manifest, dict) else None
+        provenance[f"therock.{field}"] = str(value) if value else "absent"
+    return provenance
+
+
+def write_provenance(provenance: dict[str, str], junit_xml: str | None) -> None:
+    """Log provenance and add it to the job summary and JUnit properties."""
+    for key, value in provenance.items():
+        logging.info("provenance %s=%s", key, value)
+
+    summary = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary:
+        lines = [
+            "### TensileLite tested artifacts",
+            "",
+            "| Item | Value |",
+            "| --- | --- |",
+        ]
+        lines += [f"| {key} | `{value}` |" for key, value in provenance.items()]
+        with open(summary, "a", encoding="utf-8") as stream:
+            stream.write("\n".join(lines) + "\n\n")
+
+    if not junit_xml or not Path(junit_xml).is_file():
+        return
+    tree = ElementTree.parse(junit_xml)
+    root = tree.getroot()
+    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+    for suite in suites:
+        properties = suite.find("properties")
+        if properties is None:
+            properties = ElementTree.Element("properties")
+            suite.insert(0, properties)
+        for key, value in provenance.items():
+            ElementTree.SubElement(properties, "property", name=key, value=value)
+    tree.write(junit_xml, encoding="utf-8", xml_declaration=True)
+
+
 def run_installed_wheel(
     component_name: str, test_type: str, rocm_path: Path, component_root: Path
 ) -> int:
@@ -261,10 +344,10 @@ def run_installed_wheel(
             pytest_runner.build_environment(rocm_path, component_name), shim_dir
         )
         # Run from the shim so `python -m` cannot pick up the artifact root.
-        check_installed_import(env, shim_dir)
+        installed_version = check_installed_import(env, shim_dir)
         check_package_help(env, shim_dir)
 
-        return pytest_runner.run_phase(
+        status = pytest_runner.run_phase(
             component_name,
             test_type,
             os.getenv("AMDGPU_FAMILIES"),
@@ -272,6 +355,11 @@ def run_installed_wheel(
             rocm_path,
             env,
         )
+        write_provenance(
+            collect_provenance(rocm_path, wheel, installed_version, env),
+            pytest_runner.junit_xml_path(component_name),
+        )
+        return status
 
 
 def main() -> int:
