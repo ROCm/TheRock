@@ -2001,10 +2001,17 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            elif build_variant == "host-asan" and pr_tests_override:
+                # No sandbox pool for this family (or it is blanked outside
+                # rocm-systems PRs): keep the regular runner chosen above.
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
+                    f"using regular runner: {test_runs_on or '(none)'}"
                 )
             else:
                 test_runs_on = ""

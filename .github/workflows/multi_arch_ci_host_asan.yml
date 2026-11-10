@@ -71,6 +71,7 @@ jobs:
     with:
       build_variant: "host-asan"
       pull_request_opt_in_label: "ci:host-asan"
+      pull_request_tests: true
       # gfx90a is the host-asan pull request test target, so it is the default.
       # An empty value would fall back to the presubmit families.
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'gfx90a' }}

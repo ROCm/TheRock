@@ -4702,6 +4702,142 @@ class TestPullRequestTestsInput(unittest.TestCase):
                     applies,
                 )
 
+    def test_host_asan_without_sandbox_uses_regular_runner(self):
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        self.assertNotIn("test-runs-on-sandbox", family["linux"])
+        entry = self._expand(family=family)
+        self.assertEqual(entry["test-runs-on"], "linux-runner")
+
+    def test_host_asan_with_sandbox_keeps_sandbox(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-sandbox": "linux-sandbox"},
+        )
+        self.assertEqual(self._expand(family=family)["test-runs-on"], "linux-sandbox")
+
+    def test_host_asan_blank_sandbox_falls_back_to_regular_runner(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-sandbox": ""},
+        )
+        self.assertEqual(self._expand(family=family)["test-runs-on"], "linux-runner")
+
+    def test_host_asan_regular_runner_still_gated_without_input(self):
+        entry = self._expand(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_without_sandbox_stays_disabled_outside_pull_requests(self):
+        """No sandbox runner and no pull request override: tests stay disabled."""
+        for event_name in ("schedule", "workflow_dispatch"):
+            for pull_request_tests in (False, True):
+                family = self._family("mock", tests_on_trigger=["nightly"])
+                with self.subTest(
+                    event_name=event_name, pull_request_tests=pull_request_tests
+                ):
+                    entry = self._expand(
+                        event_name=event_name,
+                        pull_request_tests=pull_request_tests,
+                        family=family,
+                    )
+                    self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_blank_sandbox_stays_disabled_outside_pull_requests(self):
+        for event_name in ("schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                family = self._family(
+                    "mock",
+                    tests_on_trigger=["nightly"],
+                    **{"test-runs-on-sandbox": ""},
+                )
+                entry = self._expand(event_name=event_name, family=family)
+                self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_with_sandbox_runs_on_schedule_and_dispatch(self):
+        for event_name in ("schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                family = self._family(
+                    "mock",
+                    tests_on_trigger=["nightly"],
+                    **{"test-runs-on-sandbox": "linux-sandbox"},
+                )
+                entry = self._expand(event_name=event_name, family=family)
+                self.assertEqual(entry["test-runs-on"], "linux-sandbox")
+
+    def test_host_asan_regular_runner_respects_build_only_label(self):
+        entry = self._expand(build_only=["mock"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_test_runner_label_with_matching_kernel_runner(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-kernel": {"oem": "linux-oem-runner"}},
+        )
+        entry = self._expand(family=family, pr_labels=["test_runner:oem"])
+        self.assertEqual(entry["test-runs-on"], "linux-oem-runner")
+
+    def test_test_runner_label_without_kernel_runner_keeps_tests_disabled(self):
+        """The regular-runner fallback must not undo a kernel-label disable."""
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        entry = self._expand(family=family, pr_labels=["test_runner:oem"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def _configure_gfx90a(self, *, pull_request_tests, pr_labels=None, opt_in=""):
+        """Run the full pipeline for a gfx90a host-asan pull request."""
+        with patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}):
+            os.environ.pop("CI_CONFIG_PATH", None)
+            inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="host-asan",
+                linux_amdgpu_families=["gfx90a"],
+                pr_labels=pr_labels or [],
+                built_rocm_version="10.2.0.dev0+abcdef",
+                pull_request_tests=pull_request_tests,
+                pull_request_opt_in_label=opt_in,
+            )
+            outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertEqual(outputs.builds.linux.build_variant_label, "host-asan")
+        (entry,) = outputs.builds.linux.per_family_info
+        self.assertEqual(entry["amdgpu_family"], "gfx90a")
+        return entry
+
+    def test_gfx90a_host_asan_pull_request_tests_enabled_on_regular_runner(self):
+        entry = self._configure_gfx90a(pull_request_tests=True)
+        self.assertEqual(entry["test-runs-on"], "linux-gfx90a-1gpu-ossci-rocm")
+
+    def test_gfx90a_host_asan_opt_in_label_builds_only_gfx90a(self):
+        """The workflow's default families give gfx90a only, not the presubmit set."""
+        entry = self._configure_gfx90a(
+            pull_request_tests=True,
+            pr_labels=["ci:host-asan"],
+            opt_in="ci:host-asan",
+        )
+        self.assertEqual(entry["amdgpu_family"], "gfx90a")
+
+    def test_gfx90a_host_asan_pull_request_tests_disabled_without_input(self):
+        entry = self._configure_gfx90a(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_gfx90a_host_asan_kernel_label_without_runner_stays_disabled(self):
+        entry = self._configure_gfx90a(
+            pull_request_tests=True, pr_labels=["test_runner:oem"]
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_debug_without_sandbox_stays_disabled(self):
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        family["linux"]["build_variants"].append("host-asan-debug")
+        entry = self._expand(
+            build_variant="host-asan-debug", event_name="schedule", family=family
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
     def test_from_environ_parses_boolean_input(self):
         """setup_multi_arch.yml passes the boolean input as "true" or "false"."""
         cases = [
