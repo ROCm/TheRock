@@ -71,9 +71,15 @@ LIBHIPCXX_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "libhipcxx"
 # The c2h tests are built with libhipcxx and installed into bin/ with a
 # relocatable CTest file in bin/libhipcxx/.
 LIBHIPCXX_C2H_TEST_DIR = THEROCK_BIN_PATH / "libhipcxx"
-# Only the lit suite is configured here, so skip the c2h tests and their
-# Catch2 download.
-LIBHIPCXX_LIT_CMAKE_OPTIONS = ["-DLIBCUDACXX_ENABLE_C2H_TESTS=OFF"]
+# The lit tests are compiled with libhipcxx too and installed into
+# share/libhipcxx/lit. Configuring with LIBHIPCXX_PREBUILT_LIT_DIR makes the
+# lit CTest entry only run them, for the archs they were built for. Skip the
+# c2h tests and their Catch2 download.
+LIBHIPCXX_PREBUILT_LIT_DIR = OUTPUT_ARTIFACTS_PATH / "share" / "libhipcxx" / "lit"
+LIBHIPCXX_LIT_CMAKE_OPTIONS = [
+    "-DLIBCUDACXX_ENABLE_C2H_TESTS=OFF",
+    f"-DLIBHIPCXX_PREBUILT_LIT_DIR={LIBHIPCXX_PREBUILT_LIT_DIR.as_posix()}",
+]
 # Matches the LIBCUDACXX_TEST_TIMEOUT default in libhipcxx's test CMakeLists.
 LIBHIPCXX_TEST_TIMEOUT = 200
 
