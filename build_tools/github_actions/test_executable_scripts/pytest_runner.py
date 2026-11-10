@@ -148,7 +148,7 @@ def load_test_categories_yaml(yaml_path):
 
 
 def extract_gpu_arch(amdgpu_families):
-    """Extract the first gfx token from AMDGPU_FAMILIES.
+    """Return the first GPU architecture named in AMDGPU_FAMILIES.
 
     Examples:
         "gfx942"          -> "gfx942"
@@ -169,24 +169,25 @@ def extract_gpu_arch(amdgpu_families):
     return None
 
 
-def resolve_skip_arch(gpu_arch, amdgpu_targets):
+def resolve_skip_arch(gpu_arch: str | None, amdgpu_targets: str | None) -> str | None:
     """Pick the arch used in the ``not skip-<arch>`` pytest marker term.
 
     Test configs opt out of a GPU with markers named after a single target,
-    e.g. ``skip-gfx942`` or ``skip-gfx1250``. *gpu_arch* comes from
-    AMDGPU_FAMILIES and is often a family name, which matches no such marker.
+    e.g. ``skip-gfx942`` or ``skip-gfx1250``. *gpu_arch* is
+    ``extract_gpu_arch(AMDGPU_FAMILIES)``, often a family name such as
+    ``gfx94X``, which matches no such marker.
     AMDGPU_TARGETS is the comma-separated target list that
     configure_multi_arch_ci.py builds from the family's "fetch-gfx-targets".
     When it names exactly one target, that target is the GPU under test, so use it.
 
-    Examples (AMDGPU_FAMILIES, AMDGPU_TARGETS -> arch):
-        "gfx94X-dcgpu",  "gfx942"          -> "gfx942"
-        "gfx125X-dcgpu", "gfx1250"         -> "gfx1250"
-        "gfx1250",       "gfx1250-strict"  -> "gfx1250-strict"
-        "gfx120X-all",   "gfx1200,gfx1201" -> "gfx120X" (unchanged: either
-            target may be on the runner, and per-target skips still apply in
-            the test's own conftest, which sees the detected GPU)
-        "gfx942",        ""                -> "gfx942"  (unchanged)
+    Examples (gpu_arch, AMDGPU_TARGETS -> arch):
+        "gfx94X",  "gfx942"          -> "gfx942"
+        "gfx125X", "gfx1250"         -> "gfx1250"
+        "gfx125X", "gfx1250-strict"  -> "gfx1250-strict"
+        "gfx120X", "gfx1200,gfx1201" -> "gfx120X" (unchanged: either target
+            may be on the runner, and per-target skips still apply in the
+            test's own conftest, which sees the detected GPU)
+        "gfx942",  ""                -> "gfx942"  (unchanged)
     """
     if not gpu_arch:
         return gpu_arch
