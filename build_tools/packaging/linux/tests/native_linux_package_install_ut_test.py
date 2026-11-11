@@ -51,6 +51,7 @@ _spec.loader.exec_module(native_linux_package_install_test)
 # sys.path.
 import build_repo_setup_package  # noqa: E402
 import get_url_repo_params  # noqa: E402
+import native_linux_package_test_common  # noqa: E402
 
 
 def _noop_print(*args, **kwargs):
@@ -1172,32 +1173,26 @@ class RunBasicVerificationTest(unittest.TestCase):
 
     def test_fails_when_any_required_directory_is_missing(self):
         """Removing any one directory from INSTALL_LAYOUT_DIRS fails the layout check."""
-        for missing in native_linux_package_install_test.INSTALL_LAYOUT_DIRS:
+        for missing in native_linux_package_test_common.INSTALL_LAYOUT_DIRS:
             with self.subTest(missing=missing):
                 with tempfile.TemporaryDirectory() as d:
                     root = Path(d)
                     _write_install_layout(root)
                     shutil.rmtree(root / missing)
-                    t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-                        repo_url="https://example.com",
-                        os_profile="ubuntu2404",
-                        install_prefix=d,
-                    )
                     with _suppress_script_output():
-                        self.assertFalse(t.verify_install_layout(root))
+                        self.assertFalse(
+                            native_linux_package_test_common.verify_install_layout(root)
+                        )
 
     def test_passes_when_every_required_directory_is_present(self):
         """A prefix with all INSTALL_LAYOUT_DIRS passes the layout check."""
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             _write_install_layout(root)
-            t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
-                repo_url="https://example.com",
-                os_profile="ubuntu2404",
-                install_prefix=d,
-            )
             with _suppress_script_output():
-                self.assertTrue(t.verify_install_layout(root))
+                self.assertTrue(
+                    native_linux_package_test_common.verify_install_layout(root)
+                )
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,

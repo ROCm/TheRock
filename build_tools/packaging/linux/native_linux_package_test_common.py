@@ -21,6 +21,7 @@ Constants:
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 from packaging_utils import normalize_target_list
 
@@ -46,6 +47,36 @@ INSTALL_LAYOUT_DIRS = (
     "share",
     "lib/cmake",
 )
+
+
+def verify_install_layout(install_path: Path) -> bool:
+    """Fail when the installed prefix is missing its basic directories.
+
+    The prefix must contain every entry in ``INSTALL_LAYOUT_DIRS``. These paths
+    are relative to the install prefix, so the check does not depend on host
+    absolute paths and the packaging unit test can run on Windows.
+
+    Args:
+        install_path: Resolved or configured install prefix.
+
+    Returns:
+        True when every required path is present.
+    """
+    missing: list[str] = []
+    for relative in INSTALL_LAYOUT_DIRS:
+        path = install_path / relative
+        if not path.is_dir():
+            missing.append(str(path))
+            print(f" [FAIL] {relative} (not a directory)")
+        else:
+            print(f" [PASS] {relative}")
+
+    if missing:
+        print(f"\n[FAIL] Install layout missing: {', '.join(missing)}")
+        return False
+    print("\n[PASS] Install layout")
+    return True
+
 
 # Metapackages installed and removed together, in this order.
 METAPACKAGE_BASES = ("amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk")

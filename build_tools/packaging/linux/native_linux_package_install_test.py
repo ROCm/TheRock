@@ -151,13 +151,13 @@ if str(_SCRIPT_DIR) not in sys.path:
 from packaging_utils import normalize_target_list
 from native_linux_package_test_common import (
     ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
-    INSTALL_LAYOUT_DIRS,
     VERIFY_KEY_COMPONENTS,
     build_metapackage_names,
     derive_package_type,
     is_sles,
     major_minor_rocm_version_from_input,
     run_streaming as _run_streaming,
+    verify_install_layout,
 )
 
 
@@ -1152,7 +1152,7 @@ gpgcheck=0
 
         print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
 
-        if not self.verify_install_layout(install_path):
+        if not verify_install_layout(install_path):
             print("\n[FAIL] Basic verification FAILED (install layout)")
             return False
 
@@ -1250,34 +1250,6 @@ gpgcheck=0
             )
             return False
         print("\n[PASS] Basic verification PASSED")
-        return True
-
-    def verify_install_layout(self, install_path: Path) -> bool:
-        """Fail when the installed prefix is missing its basic directories.
-
-        The prefix must contain ``bin``, ``lib``, ``include``, ``share``, and
-        ``lib/cmake``. These paths are relative to the install prefix, so the
-        packaging unit test can run on Windows.
-
-        Args:
-            install_path: Resolved or configured install prefix.
-
-        Returns:
-            True when every required path is present.
-        """
-        missing: list[str] = []
-        for relative in INSTALL_LAYOUT_DIRS:
-            path = install_path / relative
-            if not path.is_dir():
-                missing.append(str(path))
-                print(f" [FAIL] {relative} (not a directory)")
-            else:
-                print(f" [PASS] {relative}")
-
-        if missing:
-            print(f"\n[FAIL] Install layout missing: {', '.join(missing)}")
-            return False
-        print("\n[PASS] Install layout")
         return True
 
     @staticmethod
