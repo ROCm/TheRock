@@ -71,6 +71,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from amdgpu_family_matrix import (
     WSL_RUN_LABEL,
     all_build_variants,
+    build_variant_runs_tests,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     get_wsl_test_runner,
@@ -1841,6 +1842,10 @@ def _expand_build_config_for_platform(
 
     per_family_info: list[dict] = []
     wsl_per_family_info: list[dict] = []
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
+    variant_tests_allowed = ci_inputs.is_workflow_dispatch or build_variant_runs_tests(
+        variant_config, current_triggers
+    )
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -1879,43 +1884,30 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
-                )
+        # TODO(#3433): Remove the sandbox requirement once ASAN tests pass
+        # and test_rocm.action is plumbed. tests_on_trigger is the variant
+        # gate for every variant. workflow_dispatch stays an implicit allow.
+        # A blank sandbox label is no runner: the key can still be present
+        # after get_all_families_for_trigger_types clears it.
+        if not variant_tests_allowed:
+            test_runs_on = ""
+            print(
+                f"  {family_name}: {build_variant} does not run tests on "
+                f"{sorted(current_triggers)}, disabling tests"
+            )
         elif "asan" in build_variant:
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
+            sandbox = platform_info.get("test-runs-on-sandbox") or ""
+            if sandbox:
+                test_runs_on = sandbox
                 print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
+                    f"  {family_name}: using {build_variant} sandbox runner: "
+                    f"{test_runs_on}"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
+                    f"  {family_name}: no {build_variant} sandbox runner "
+                    f"available, disabling tests"
                 )
 
         # If run-full-tests-only is set and test_type is "quick", disable testing

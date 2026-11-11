@@ -2826,6 +2826,55 @@ class TestExpandBuildConfigs(unittest.TestCase):
         entry = result.linux.per_family_info[0]
         self.assertEqual(entry["test-runs-on"], "")
 
+    def test_host_asan_pull_request_builds_without_tests(self):
+        """A pull request still builds host-asan and does not run its tests."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="pull_request", build_variant="host-asan"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        self.assertEqual(result.linux.per_family_info[0]["test-runs-on"], "")
+
+    def test_release_pull_request_keeps_the_test_runner(self):
+        """A release presubmit still tests the families it tests today."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(event_name="pull_request", build_variant="release"),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertIsNotNone(result.linux)
+        self.assertTrue(result.linux.per_family_info[0]["test-runs-on"])
+
+    def test_workflow_dispatch_host_asan_is_not_blocked_by_the_variant(self):
+        """Manual dispatch still reaches sandbox selection for host-asan.
+
+        TheRock blanks the sandbox outside a rocm-systems pull request, so
+        the runner stays empty. The variant gate itself does not clear it.
+        """
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch", build_variant="host-asan"
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        self.assertEqual(result.linux.per_family_info[0]["test-runs-on"], "")
+
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
         result = cm.expand_build_configs(
