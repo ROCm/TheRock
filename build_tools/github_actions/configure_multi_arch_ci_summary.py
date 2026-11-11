@@ -48,17 +48,16 @@ def format_summary(
     source = "Source: TheRock"
     if ci_inputs.checkout_commit:
         commit = ci_inputs.checkout_commit
-        source += (
-            f" at [`{commit[:12]}`]"
+        source = (
+            f"Source: [ROCm/TheRock@{commit[:7]}]"
             f"(https://github.com/ROCm/TheRock/commit/{commit})"
         )
     if ci_inputs.external_repo:
         external_repo = json.loads(ci_inputs.external_repo)
         repository = external_repo["repository"]
-        submodule = repository.rsplit("/", 1)[-1]
         commit = external_repo["ref"]
         source += (
-            f" with submodule override {submodule} at [`{commit[:12]}`]"
+            f" with submodule override [{repository}@{commit[:7]}]"
             f"(https://github.com/{repository}/commit/{commit})"
         )
     lines.append(f"{source}.")
