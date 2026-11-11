@@ -106,6 +106,7 @@ _DECLARATION_MULTI_VALUE_ARGS = {
     "DEFAULT_GPU_TARGETS",
     "FPRINT_FILE_GLOBS",
     "INSTALL_OPTIONAL_COMPONENTS",
+    "HARDENING_DEFERRED",
 }
 _DECLARATION_KEYWORDS = (
     _DECLARATION_FLAGS | _DECLARATION_ONE_VALUE_ARGS | _DECLARATION_MULTI_VALUE_ARGS
@@ -934,14 +935,17 @@ class RepositoryAnalyzer:
         return {value for value in expansion.values if value}
 
 
-def _declaration_sections(tokens: list[Token]) -> dict[str, list[Token]]:
-    """Group a declaration's argument tokens by their keyword (BUILD_DEPS, ...)."""
+def _declaration_sections(
+    tokens: list[Token],
+    keywords: frozenset[str] | set[str] = _DECLARATION_KEYWORDS,
+) -> dict[str, list[Token]]:
+    """Group an argument list's tokens by their keyword (BUILD_DEPS, ...)."""
     sections: dict[str, list[Token]] = {}
     current_keyword: str | None = None
     for token in tokens:
         if token.kind == "COMMENT":
             continue
-        if token.value in _DECLARATION_KEYWORDS:
+        if token.value in keywords:
             current_keyword = token.value
             sections.setdefault(current_keyword, [])
         elif current_keyword is not None:

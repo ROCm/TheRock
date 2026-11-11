@@ -6,6 +6,7 @@
 Unit tests for build_topology module.
 """
 
+import json
 import os
 import re
 import sys
