@@ -374,9 +374,19 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertTrue(inputs.is_draft_pr)
 
     def test_non_pull_request_event_is_never_draft(self):
-        """push events have no draft state in the payload."""
-        inputs = _run_from_environ(event_name="push", event_payload={})
-        self.assertFalse(inputs.is_draft_pr)
+        """Draft state is only read for pull_request events.
+
+        The payload carries pull_request.draft even though no real push,
+        schedule or workflow_dispatch webhook would, so this fails if the
+        draft read ever moves out of the pull_request branch.
+        """
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = _run_from_environ(
+                    event_name=event_name,
+                    event_payload={"pull_request": {"draft": True}},
+                )
+                self.assertFalse(inputs.is_draft_pr)
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
         """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
@@ -585,14 +595,6 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(is_draft_pr=False)
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
-
-    def test_draft_flag_ignored_for_non_pr_events(self):
-        """push/schedule/workflow_dispatch never carry a draft state."""
-        for event_name in ("push", "schedule", "workflow_dispatch"):
-            with self.subTest(event_name=event_name):
-                inputs = self._inputs(event_name=event_name)
-                git = cm.GitContext(changed_files=["CMakeLists.txt"])
-                self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
@@ -3103,6 +3105,9 @@ class TestFormatSummary(unittest.TestCase):
         # Just check the header. The output is markdown for humans and asserting
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
+        # The summary should also mention that CI was skipped with some
+        # explanation for why.
+        self.assertIn("skipped", result)
 
     def test_draft_skip_summary_points_at_opt_in_label(self):
         """A draft skip explains itself and names the opt-in label."""
@@ -3111,9 +3116,6 @@ class TestFormatSummary(unittest.TestCase):
 
         self.assertIn("draft", result)
         self.assertIn("ci:run-on-draft", result)
-        # The summary should also mention that CI was skipped with some
-        # explanation for why.
-        self.assertIn("skipped", result)
 
 
 class TestWriteOutputs(unittest.TestCase):
