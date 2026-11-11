@@ -41,7 +41,7 @@ THEROCK_ROOT = Path(
 ).resolve()
 PROJECTS = ("location_source", "location_consumer", "location_control")
 
-HARNESS = r'''
+HARNESS = r"""
     cmake_minimum_required(VERSION 3.25)
     project(location_fingerprints NONE)
     set(THEROCK_SOURCE_DIR "${CMAKE_SOURCE_DIR}")
@@ -81,7 +81,7 @@ HARNESS = r'''
     endforeach()
     _therock_subproject_fprint_source_dir(_identity "${CMAKE_SOURCE_DIR}/shared")
     file(WRITE "${CMAKE_BINARY_DIR}/shared.identity" "${_identity}")
-'''
+"""
 
 
 def write(path, contents):
@@ -94,8 +94,13 @@ class FingerprintLocationTest(unittest.TestCase):
     def setUpClass(cls):
         missing = [tool for tool in ("git", "cmake", "ninja") if not shutil.which(tool)]
         if missing:
-            raise RuntimeError(f"Required tools unavailable: {', '.join(missing)}; tests were not run")
-        for relative in ("cmake/therock_subproject.cmake", "build_tools/fileset_tool.py"):
+            raise RuntimeError(
+                f"Required tools unavailable: {', '.join(missing)}; tests were not run"
+            )
+        for relative in (
+            "cmake/therock_subproject.cmake",
+            "build_tools/fileset_tool.py",
+        ):
             if not (THEROCK_ROOT / relative).is_file():
                 raise RuntimeError(
                     f"Missing {THEROCK_ROOT / relative}. Save this test under cmake/tests/ "
@@ -104,11 +109,14 @@ class FingerprintLocationTest(unittest.TestCase):
         parent = os.environ.get("THEROCK_LOCATION_TEST_OUTPUT")
         if parent:
             Path(parent).mkdir(parents=True, exist_ok=True)
-        cls.reports = Path(tempfile.mkdtemp(prefix="therock-locations-", dir=parent)).resolve()
+        cls.reports = Path(
+            tempfile.mkdtemp(prefix="therock-locations-", dir=parent)
+        ).resolve()
         print(f"\nLocation-test reports and fixtures: {cls.reports}", flush=True)
         cls.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         cls.env.update(
-            GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_CONFIG_NOSYSTEM="1",
+            GIT_CONFIG_GLOBAL=os.devnull,
             GIT_AUTHOR_NAME="Fingerprint location test",
             GIT_AUTHOR_EMAIL="test@example.invalid",
             GIT_COMMITTER_NAME="Fingerprint location test",
@@ -119,7 +127,8 @@ class FingerprintLocationTest(unittest.TestCase):
         cls.template.mkdir()
         for relative in ("cmake", "build_tools"):
             shutil.copytree(
-                THEROCK_ROOT / relative, cls.template / relative,
+                THEROCK_ROOT / relative,
+                cls.template / relative,
                 ignore=shutil.ignore_patterns("__pycache__", ".git", ".pytest_cache"),
             )
         write(cls.template / "CMakeLists.txt", textwrap.dedent(HARNESS).lstrip())
@@ -145,8 +154,14 @@ class FingerprintLocationTest(unittest.TestCase):
     def command(cls, *args, log=None):
         command = [str(arg) for arg in args]
         result = subprocess.run(
-            command, env=cls.env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace", timeout=180,
+            command,
+            env=cls.env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
         )
         if log:
             write(log, json.dumps(command) + "\n" + result.stdout)
@@ -160,8 +175,14 @@ class FingerprintLocationTest(unittest.TestCase):
     @classmethod
     def git(cls, directory, *args):
         return cls.command(
-            "git", "-c", "core.autocrlf=false", "-c", "commit.gpgsign=false",
-            "-C", directory, *args,
+            "git",
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "commit.gpgsign=false",
+            "-C",
+            directory,
+            *args,
         )
 
     def setUp(self):
@@ -170,26 +191,50 @@ class FingerprintLocationTest(unittest.TestCase):
         self.source = self.clone(self.case / "checkout-a")
 
     def clone(self, destination):
-        self.git(self.reports, "clone", "--quiet", "--no-hardlinks", self.template, destination)
-        self.assertEqual(self.git(self.template, "rev-parse", "HEAD^{tree}"),
-                         self.git(destination, "rev-parse", "HEAD^{tree}"))
+        self.git(
+            self.reports,
+            "clone",
+            "--quiet",
+            "--no-hardlinks",
+            self.template,
+            destination,
+        )
+        self.assertEqual(
+            self.git(self.template, "rev-parse", "HEAD^{tree}"),
+            self.git(destination, "rev-parse", "HEAD^{tree}"),
+        )
         return destination
 
     def configure(self, source, build, label, *, value="baseline"):
         report = self.case / label
         report.mkdir()
         self.command(
-            "cmake", "-S", source, "-B", build, "-G", "Ninja",
-            "-DCMAKE_BUILD_TYPE=Release", "-DTHEROCK_VERBOSE=ON",
+            "cmake",
+            "-S",
+            source,
+            "-B",
+            build,
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DTHEROCK_VERBOSE=ON",
             f"-DPython3_EXECUTABLE:FILEPATH={Path(sys.executable).as_posix()}",
             f"-DTEST_VALUE:STRING={value}",
             log=report / "configure.log",
         )
-        snapshot = {"source": str(source), "build": str(build), "identities": {},
-                    "fingerprints": {}, "generated_files": {}, "report": str(report)}
+        snapshot = {
+            "source": str(source),
+            "build": str(build),
+            "identities": {},
+            "fingerprints": {},
+            "generated_files": {},
+            "report": str(report),
+        }
         for name in (*PROJECTS, "shared"):
             identity = (build / f"{name}.identity").read_text(encoding="utf-8").strip()
-            scope = source / "shared" if name == "shared" else source / "projects" / name
+            scope = (
+                source / "shared" if name == "shared" else source / "projects" / name
+            )
             self.assertEqual(identity, self.git(scope, "rev-parse", "HEAD:./"), name)
             self.assertRegex(identity, r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", name)
             snapshot["identities"][name] = identity
@@ -201,27 +246,37 @@ class FingerprintLocationTest(unittest.TestCase):
                 relative = f"{name}/{filename}"
                 generated = build / relative
                 self.assertTrue(generated.is_file(), str(generated))
-                snapshot["generated_files"][relative] = hashlib.sha256(generated.read_bytes()).hexdigest()
+                snapshot["generated_files"][relative] = hashlib.sha256(
+                    generated.read_bytes()
+                ).hexdigest()
                 write(report / relative, generated.read_text(encoding="utf-8"))
-        declared = (build / "location_source.inputs").read_text(encoding="utf-8").strip()
+        declared = (
+            (build / "location_source.inputs").read_text(encoding="utf-8").strip()
+        )
         self.assertEqual(declared, (source / "shared").as_posix())
         write(report / "snapshot.json", json.dumps(snapshot, indent=2) + "\n")
         return snapshot
 
     def assert_same_fingerprints(self, before, after):
         self.assertEqual(before["identities"], after["identities"])
-        changed = [name for name in PROJECTS
-                   if before["fingerprints"][name] != after["fingerprints"][name]]
+        changed = [
+            name
+            for name in PROJECTS
+            if before["fingerprints"][name] != after["fingerprints"][name]
+        ]
         if changed:
             differences = []
             for relative in before["generated_files"]:
                 a = Path(before["report"]) / relative
                 b = Path(after["report"]) / relative
-                differences.extend(difflib.unified_diff(
-                    a.read_text(encoding="utf-8").splitlines(keepends=True),
-                    b.read_text(encoding="utf-8").splitlines(keepends=True),
-                    fromfile=f"before/{relative}", tofile=f"after/{relative}",
-                ))
+                differences.extend(
+                    difflib.unified_diff(
+                        a.read_text(encoding="utf-8").splitlines(keepends=True),
+                        b.read_text(encoding="utf-8").splitlines(keepends=True),
+                        fromfile=f"before/{relative}",
+                        tofile=f"after/{relative}",
+                    )
+                )
             diff_path = self.case / "generated-files.diff"
             write(diff_path, "".join(differences))
             self.fail(
@@ -255,8 +310,11 @@ class FingerprintLocationTest(unittest.TestCase):
         before = self.configure(self.source, build, "before")
         after = self.configure(self.source, build, "changed", value="different")
         self.assertEqual(before["identities"], after["identities"])
-        changed = {name for name in PROJECTS
-                   if before["fingerprints"][name] != after["fingerprints"][name]}
+        changed = {
+            name
+            for name in PROJECTS
+            if before["fingerprints"][name] != after["fingerprints"][name]
+        }
         self.assertEqual(changed, {"location_source", "location_consumer"})
         restored = self.configure(self.source, build, "restored")
         self.assert_same_fingerprints(before, restored)
