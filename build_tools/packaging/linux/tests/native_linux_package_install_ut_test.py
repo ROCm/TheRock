@@ -1881,6 +1881,7 @@ class InstallDebPackagesTest(unittest.TestCase):
         self.assertIn("amdrocm10.3-gfx94x", cmd)
         self.assertIn("amdrocm-core-sdk10.3-gfx94x", cmd)
         self.assertIn("amdrocm10.3-gfx1100", cmd)
+        self.assertIn("amdrocm-core-sdk10.3-gfx1100", cmd)
         self.assertIn("amdrocm-hpc-sdk10.3-gfx94x", cmd)
         self.assertIn("amdrocm-hpc-sdk10.3-gfx1100", cmd)
 
