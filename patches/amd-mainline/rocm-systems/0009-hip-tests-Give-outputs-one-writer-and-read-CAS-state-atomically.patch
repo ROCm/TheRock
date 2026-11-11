@@ -1,0 +1,337 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 09:00:00 -0800
+Subject: [PATCH] hip-tests: Give outputs one writer and read CAS state atomically
+
+The comprehensive CSAN HIP tests report duplicate device writes in test
+kernels and plain initial reads racing with atomicCAS updates. Preserve
+all collective participants, assign each output to one thread, and use
+an atomic initial load at the matching agent or system scope.
+
+Use grid-stride work for callbacks, launch-bound and symbol-copy kernels,
+restrict collective-result stores to their designated leaders, and check
+every bfloat16 lane independently. Preserve every deliberate delay-loop
+store in addCountReverse while correcting its shadowed output index.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43015193286
+Validation: source-derived CPU ownership/value controls reproduce the
+baseline overlaps and pass after these changes. The actual extracted CAS
+helper reproduces a host CSAN race before the fix and passes with four
+threads at agent and system scope for all three integer types afterward.
+The actual artifact compiler accepts all eleven modified full translation
+units and representative consumers of both headers for gfx942 host/device
+compilation; GPU execution remains pending. No instrumentation is disabled.
+Carry temporarily in TheRock pending upstream HIP-test review.
+---
+ projects/hip-tests/catch/include/hip_test_kernels.hh    |  8 +++++---
+ .../hip-tests/catch/unit/atomics/arithmetic_common.hh   |  4 ++--
+ .../hipLaunchCooperativeKernelMultiDevice_old.cc        |  2 +-
+ .../catch/unit/cooperativeGrps/thread_block_tile.cc     | 10 ++++++++--
+ projects/hip-tests/catch/unit/deviceLib/anyAll.cc       | 12 ++++++++----
+ projects/hip-tests/catch/unit/deviceLib/hipBfloat16.cc  | 17 ++++++++++-------
+ .../unit/graph/hipGraphAddMemcpyNodeFromSymbol_old.cc   |  3 ++-
+ .../unit/graph/hipGraphAddMemcpyNodeToSymbol_old.cc     |  3 ++-
+ .../catch/unit/graph/hipGraphAddNodeBeginCapture.cc     |  8 +++++++-
+ .../hipGraphExecMemcpyNodeSetParamsToSymbol_old.cc      |  6 ++++--
+ projects/hip-tests/catch/unit/kernel/hipLaunchBounds.cc |  6 ++++--
+ .../catch/unit/kernel/hipMemFaultStackAllocation.cc     |  6 ++++--
+ projects/hip-tests/catch/unit/warp/hipShflTests.cc      |  5 ++++-
+ 13 files changed, 61 insertions(+), 29 deletions(-)
+
+diff --git a/projects/hip-tests/catch/include/hip_test_kernels.hh b/projects/hip-tests/catch/include/hip_test_kernels.hh
+index 837803a..4c6dfd7 100644
+--- a/projects/hip-tests/catch/include/hip_test_kernels.hh
++++ b/projects/hip-tests/catch/include/hip_test_kernels.hh
+@@ -40,7 +40,7 @@ template <typename T> __global__ void addCount(const T* A_d, T* C_d, size_t NELE
+ 
+   // Deliberately do this in an inefficient way to increase kernel runtime
+   if (i < NELEM) {
+-    for (int i = 0; i < count; i++) {
++    for (int iteration = 0; iteration < count; iteration++) {
+       C_d[i] = A_d[i];
+       atomicAdd(C_d + i, count);
+     }
+@@ -54,8 +54,10 @@ __global__ void addCountReverse(const T* A_d, T* C_d, int64_t NELEM, int count)
+ 
+   // Deliberately do this in an inefficient way to increase kernel runtime
+   if (i < NELEM) {
+-    for (int i = 0; i < count; i++) {
+-      C_d[i] = A_d[i] + (T)count;
++    // Keep every delay-loop store observable without sharing another thread's element.
++    volatile T* output = C_d + i;
++    for (int iteration = 0; iteration < count; iteration++) {
++      *output = A_d[i] + (T)count;
+     }
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/atomics/arithmetic_common.hh b/projects/hip-tests/catch/unit/atomics/arithmetic_common.hh
+index f51fcb5..3fea791 100644
+--- a/projects/hip-tests/catch/unit/atomics/arithmetic_common.hh
++++ b/projects/hip-tests/catch/unit/atomics/arithmetic_common.hh
+@@ -49,7 +49,7 @@ __host__ __device__ TestType GetTestValue() {
+ 
+ // Implements an atomic addition via atomicCAS
+ template <typename TestType> __device__ TestType CASAtomicAdd(TestType* address, TestType val) {
+-  TestType old = *address, assumed;
++  TestType old = __hip_atomic_load(address, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT), assumed;
+ 
+   do {
+     assumed = old;
+@@ -62,7 +62,7 @@ template <typename TestType> __device__ TestType CASAtomicAdd(TestType* address,
+ // Implements an atomic addition via atomicCAS_system
+ template <typename TestType>
+ __device__ TestType CASAtomicAddSystem(TestType* address, TestType val) {
+-  TestType old = *address, assumed;
++  TestType old = __hip_atomic_load(address, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_SYSTEM), assumed;
+ 
+   do {
+     assumed = old;
+diff --git a/projects/hip-tests/catch/unit/cooperativeGrps/hipLaunchCooperativeKernelMultiDevice_old.cc b/projects/hip-tests/catch/unit/cooperativeGrps/hipLaunchCooperativeKernelMultiDevice_old.cc
+index cf9baad..157ecf4 100644
+--- a/projects/hip-tests/catch/unit/cooperativeGrps/hipLaunchCooperativeKernelMultiDevice_old.cc
++++ b/projects/hip-tests/catch/unit/cooperativeGrps/hipLaunchCooperativeKernelMultiDevice_old.cc
+@@ -112,7 +112,7 @@ __global__ void test_gws(uint* buf, uint buf_size, unsigned long long* tmp_buf,
+   }
+   mgg.sync();
+ 
+-  if (gid == 0) {
++  if (gid == 0 && tid == 0) {
+     sum = 0;
+     for (size_t i = 0; i < num_grids; i++) {
+       sum += result[i + 1];
+diff --git a/projects/hip-tests/catch/unit/cooperativeGrps/thread_block_tile.cc b/projects/hip-tests/catch/unit/cooperativeGrps/thread_block_tile.cc
+index 3db68c9..cf390ef 100644
+--- a/projects/hip-tests/catch/unit/cooperativeGrps/thread_block_tile.cc
++++ b/projects/hip-tests/catch/unit/cooperativeGrps/thread_block_tile.cc
+@@ -1095,7 +1095,10 @@ __global__ void applyFunctor(ArrayContainer<NumElems>* result)
+   mytile.sync();
+ 
+   if (threadIdx.x < NumElems) {
+-    *result = cg::reduce(mytile, input, op);
++    const auto reduced = cg::reduce(mytile, input, op);
++    if (mytile.thread_rank() == 0) {
++      *result = reduced;
++    }
+   }
+ }
+ 
+@@ -1314,7 +1317,10 @@ __global__ void sumPoints(Point* result)
+   input.y = threadIdx.x;
+ 
+   __syncwarp();
+-  *result = cg::reduce(mytile, input, cooperative_groups::plus<Point> {});
++  const auto reduced = cg::reduce(mytile, input, cooperative_groups::plus<Point> {});
++  if (mytile.thread_rank() == 0) {
++    *result = reduced;
++  }
+ }
+ 
+ // using a standard functor in the cooperative_groups namespace with a type that is not primitive
+diff --git a/projects/hip-tests/catch/unit/deviceLib/anyAll.cc b/projects/hip-tests/catch/unit/deviceLib/anyAll.cc
+index 85cca33..4011c60 100644
+--- a/projects/hip-tests/catch/unit/deviceLib/anyAll.cc
++++ b/projects/hip-tests/catch/unit/deviceLib/anyAll.cc
+@@ -10,13 +10,17 @@
+ __global__ void warpvote(int* device_any, int* device_all, int pshift) {
+   int tid = threadIdx.x + blockIdx.x * blockDim.x;
+ #if HT_AMD
+-  device_any[threadIdx.x >> pshift] = __any(tid - 77);
+-  device_all[threadIdx.x >> pshift] = __all(tid - 77);
++  const int any_result = __any(tid - 77);
++  const int all_result = __all(tid - 77);
+ #else
+   unsigned mask = 0xFFFFFFFF;
+-  device_any[threadIdx.x >> pshift] = __any_sync(mask, tid - 77);
+-  device_all[threadIdx.x >> pshift] = __all_sync(mask, tid - 77);
++  const int any_result = __any_sync(mask, tid - 77);
++  const int all_result = __all_sync(mask, tid - 77);
+ #endif
++  if ((threadIdx.x & ((1u << pshift) - 1)) == 0) {
++    device_any[threadIdx.x >> pshift] = any_result;
++    device_all[threadIdx.x >> pshift] = all_result;
++  }
+ }
+ 
+ 
+diff --git a/projects/hip-tests/catch/unit/deviceLib/hipBfloat16.cc b/projects/hip-tests/catch/unit/deviceLib/hipBfloat16.cc
+index 5860187..7c360a5 100644
+--- a/projects/hip-tests/catch/unit/deviceLib/hipBfloat16.cc
++++ b/projects/hip-tests/catch/unit/deviceLib/hipBfloat16.cc
+@@ -75,15 +75,15 @@ __host__ __device__ bool testOperations(const float& fa, const float& fb) {
+ }
+ __global__ void testOperationsGPU(float* d_a, float* d_b, bool* testPass) {
+   int id = threadIdx.x;
+-  if (id > SIZE) return;
++  if (id >= SIZE) return;
+   float& a = d_a[id];
+   float& b = d_b[id];
+-  *testPass = testOperations(a, b);
++  testPass[id] = testOperations(a, b);
+ }
+ HIP_TEST_CASE(Unit_hipBfloat16) {
+   float *h_fa, *h_fb;
+   float *d_fa, *d_fb;
+-  bool *d_fc, h_fc = false;
++  bool *d_fc, h_fc[SIZE] = {};
+ 
+   h_fa = new float[SIZE];
+   h_fb = new float[SIZE];
+@@ -98,17 +98,20 @@ HIP_TEST_CASE(Unit_hipBfloat16) {
+ 
+   HIP_CHECK(hipMalloc(&d_fa, sizeof(float) * SIZE));
+   HIP_CHECK(hipMalloc(&d_fb, sizeof(float) * SIZE));
+-  HIP_CHECK(hipMalloc(&d_fc, sizeof(bool)));
++  HIP_CHECK(hipMalloc(&d_fc, sizeof(h_fc)));
+ 
+   HIP_CHECK(hipMemcpy(d_fa, h_fa, sizeof(float) * SIZE, hipMemcpyHostToDevice));
+   HIP_CHECK(hipMemcpy(d_fb, h_fb, sizeof(float) * SIZE, hipMemcpyHostToDevice));
+-  HIP_CHECK(hipMemcpy(d_fc, &h_fc, sizeof(bool), hipMemcpyHostToDevice));
++  HIP_CHECK(hipMemcpy(d_fc, h_fc, sizeof(h_fc), hipMemcpyHostToDevice));
+ 
+   hipLaunchKernelGGL(testOperationsGPU, 1, SIZE, 0, 0, d_fa, d_fb, d_fc);
+   HIP_CHECK(hipDeviceSynchronize());
+-  HIP_CHECK(hipMemcpy(&h_fc, d_fc, sizeof(bool), hipMemcpyDeviceToHost));
++  HIP_CHECK(hipMemcpy(h_fc, d_fc, sizeof(h_fc), hipMemcpyDeviceToHost));
+ 
+-  REQUIRE(h_fc == true);
++  for (int i = 0; i < SIZE; i++) {
++    INFO("GPU bfloat16 result at index " << i);
++    REQUIRE(h_fc[i] == true);
++  }
+ 
+   delete[] h_fa;
+   delete[] h_fb;
+diff --git a/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeFromSymbol_old.cc b/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeFromSymbol_old.cc
+index 19f8305..7201c14 100644
+--- a/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeFromSymbol_old.cc
++++ b/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeFromSymbol_old.cc
+@@ -49,7 +49,8 @@ __device__ int globalOut[SIZE];
+ __device__ __constant__ int globalConst[SIZE];
+ 
+ __global__ void MemcpyFromSymbolKernel(int* B_d) {
+-  for (int i = 0; i < SIZE; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < SIZE;
++       i += blockDim.x * gridDim.x) {
+     globalIn[i] = B_d[i];
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeToSymbol_old.cc b/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeToSymbol_old.cc
+index b193538..48c933d 100644
+--- a/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeToSymbol_old.cc
++++ b/projects/hip-tests/catch/unit/graph/hipGraphAddMemcpyNodeToSymbol_old.cc
+@@ -42,7 +42,8 @@ __device__ int globalIn[SIZE];
+ __device__ __constant__ int globalConst[SIZE];
+ 
+ __global__ void MemcpyToSymbolKernel(int* B_d) {
+-  for (int i = 0; i < SIZE; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < SIZE;
++       i += blockDim.x * gridDim.x) {
+     B_d[i] = globalIn[i];
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/graph/hipGraphAddNodeBeginCapture.cc b/projects/hip-tests/catch/unit/graph/hipGraphAddNodeBeginCapture.cc
+index 181a3a5..6992262 100644
+--- a/projects/hip-tests/catch/unit/graph/hipGraphAddNodeBeginCapture.cc
++++ b/projects/hip-tests/catch/unit/graph/hipGraphAddNodeBeginCapture.cc
+@@ -41,7 +41,13 @@ __device__ __host__ static void callbackFunc(void* A_h) {
+   }
+ }
+ 
+-__global__ static void kCallbackFunc(void* A_h) { callbackFunc(A_h); }
++__global__ static void kCallbackFunc(void* A_h) {
++  int* A = reinterpret_cast<int*>(A_h);
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < SIZE;
++       i += blockDim.x * gridDim.x) {
++    A[i] = i + i % 2;
++  }
++}
+ 
+ static void verifyCallbackFunc(int* A_h) {
+   for (size_t i = 0; i < SIZE; i++) {
+diff --git a/projects/hip-tests/catch/unit/graph/hipGraphExecMemcpyNodeSetParamsToSymbol_old.cc b/projects/hip-tests/catch/unit/graph/hipGraphExecMemcpyNodeSetParamsToSymbol_old.cc
+index 639fc70..0c81200 100644
+--- a/projects/hip-tests/catch/unit/graph/hipGraphExecMemcpyNodeSetParamsToSymbol_old.cc
++++ b/projects/hip-tests/catch/unit/graph/hipGraphExecMemcpyNodeSetParamsToSymbol_old.cc
+@@ -35,13 +35,15 @@ __device__ int globalIn[SIZE], globalOut[SIZE];
+ __device__ __constant__ int globalConst[SIZE];
+ 
+ __global__ void MemcpyToSymbolExecKernel(int* B_d) {
+-  for (int i = 0; i < SIZE; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < SIZE;
++       i += blockDim.x * gridDim.x) {
+     B_d[i] = globalIn[i];
+   }
+ }
+ 
+ __global__ void MemcpyToConstSymbolExecKernel(int* B_d) {
+-  for (int i = 0; i < SIZE; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < SIZE;
++       i += blockDim.x * gridDim.x) {
+     B_d[i] = globalConst[i];
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/kernel/hipLaunchBounds.cc b/projects/hip-tests/catch/unit/kernel/hipLaunchBounds.cc
+index a16390b..cae07fc 100644
+--- a/projects/hip-tests/catch/unit/kernel/hipLaunchBounds.cc
++++ b/projects/hip-tests/catch/unit/kernel/hipLaunchBounds.cc
+@@ -25,13 +25,15 @@ Testcase Scenarios : hipLaunchBounds_With_maxThreadsPerBlock_blocksPerCU
+ #include <hip_test_kernels.hh>
+ 
+ __global__ void __launch_bounds__(128, 2) MyKernel(int N, int* x, int val) {
+-  for (int i = 0; i < N; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N;
++       i += blockDim.x * gridDim.x) {
+     x[i] = val;
+   }
+ }
+ 
+ __global__ void __launch_bounds__(64) MyKernel_2(int N, int* x, int val) {
+-  for (int i = 0; i < N; i++) {
++  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N;
++       i += blockDim.x * gridDim.x) {
+     x[i] = val;
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/kernel/hipMemFaultStackAllocation.cc b/projects/hip-tests/catch/unit/kernel/hipMemFaultStackAllocation.cc
+index c7fd268..51af8f3 100644
+--- a/projects/hip-tests/catch/unit/kernel/hipMemFaultStackAllocation.cc
++++ b/projects/hip-tests/catch/unit/kernel/hipMemFaultStackAllocation.cc
+@@ -23,7 +23,8 @@ __global__ void MyKernelConstSize(int* C_d, const int* A_d) {
+     A1[i] = i;
+   }
+ 
+-  for (size_t i = 0; i < N; ++i) {
++  for (size_t i = blockIdx.x * blockDim.x + threadIdx.x; i < N;
++       i += blockDim.x * gridDim.x) {
+     C_d[i] = A_d[i] + A1[i % A1size];
+   }
+ }
+@@ -36,7 +37,8 @@ __global__ void MyKernelVariableSize(int* C_d, const int* A_d) {
+     A1[i] = i;
+   }
+ 
+-  for (size_t i = 0; i < N; ++i) {
++  for (size_t i = blockIdx.x * blockDim.x + threadIdx.x; i < N;
++       i += blockDim.x * gridDim.x) {
+     C_d[i] = A_d[i] + A1[i % A1size];
+   }
+ }
+diff --git a/projects/hip-tests/catch/unit/warp/hipShflTests.cc b/projects/hip-tests/catch/unit/warp/hipShflTests.cc
+index ffdc73d..b01f021 100644
+--- a/projects/hip-tests/catch/unit/warp/hipShflTests.cc
++++ b/projects/hip-tests/catch/unit/warp/hipShflTests.cc
+@@ -22,7 +22,10 @@ template <typename T> __global__ void matrixTranspose(T* out, T* in, const int w
+   int x = blockDim.x * blockIdx.x + threadIdx.x;
+   T val = in[x];
+   for (int i = 0; i < width; i++) {
+-    for (int j = 0; j < width; j++) out[i * width + j] = __shfl(val, j * width + i);
++    for (int j = 0; j < width; j++) {
++      const T shuffled = __shfl(val, j * width + i);
++      if (x == i * width + j) out[i * width + j] = shuffled;
++    }
+   }
+ }
+ 
+-- 
+2.47.1
