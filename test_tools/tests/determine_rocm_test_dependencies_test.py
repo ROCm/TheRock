@@ -341,7 +341,12 @@ class TestCliInputParsing(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(
                 set(json.loads(proc.stdout.strip())),
-                {"tensilelite", "tensilelite-common", "hipblaslt"},
+                {
+                    "tensilelite",
+                    "tensilelite-common",
+                    "hipblaslt",
+                    "hipblaslt-rocjitsu-race",
+                },
             )
             # Clean stderr is part of the assertion: the regression was a
             # warning plus an empty selection, not a non-zero exit.
@@ -375,6 +380,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "shared/mxdatagenerator": {
                     "hipblas",
                     "hipblaslt",
+                    "hipblaslt-rocjitsu-race",
                     "rocblas",
                     "rocroller",
                     "tensilelite",
@@ -1183,6 +1189,30 @@ class TestExplain(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             selected = set(json.loads(proc.stdout.strip()))
             self.assertEqual(selected, {"miopen", "miopen-dbsync"})
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_cli_selects_hipblaslt_rocjitsu_race_with_hipblaslt(self) -> None:
+        graph = {"hipblaslt": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "hipblaslt",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertEqual(selected, {"hipblaslt", "hipblaslt-rocjitsu-race"})
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
