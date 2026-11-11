@@ -102,6 +102,14 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
   endif()
 
+  # Sources read by LLVM that are outside the amd-llvm checkout.
+  set(_llvm_source_inputs "${CMAKE_CURRENT_SOURCE_DIR}/spirv-llvm-translator")
+  if(THEROCK_CONDITION_IS_NON_WINDOWS)
+    # SANITIZER_AMDGPU uses these headers without building ROCR-Runtime first.
+    list(APPEND _llvm_source_inputs
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc")
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -109,6 +117,7 @@ if(THEROCK_ENABLE_COMPILER)
     # Note that LLVM top level CMakeLists.txt is in the llvm subdir of the
     # monorepo.
     CMAKE_LISTS_RELPATH "llvm"
+    ADDITIONAL_SOURCE_INPUTS ${_llvm_source_inputs}
     INTERFACE_PROGRAM_DIRS
       lib/llvm/bin
     CMAKE_ARGS
