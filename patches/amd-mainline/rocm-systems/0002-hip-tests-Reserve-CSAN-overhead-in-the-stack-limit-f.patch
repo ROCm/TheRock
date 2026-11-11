@@ -1,0 +1,34 @@
+From fabdde6a63f5e5a3fa7bccfe8a89baa7cd93efc0 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:08:21 +0000
+Subject: [PATCH 2/2] hip-tests: Reserve CSAN overhead in the stack-limit
+ fixture
+
+CSAN increased the near-limit kernel frame to 262120 bytes, exceeding the 262112-byte limit. Add a conservative 64-byte call/spill margin only for CSAN, preserving the near-limit allocation and using identical host and device reference sizes.
+
+Validated host/device sanitizer macro agreement, the full runtime-tests build, and all 8 packaging tests in the pinned CI container.
+---
+ projects/hip-tests/catch/unit/kernel/hipKernelStackSize.cc | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/projects/hip-tests/catch/unit/kernel/hipKernelStackSize.cc b/projects/hip-tests/catch/unit/kernel/hipKernelStackSize.cc
+index 42a2c9a2..7032eaa5 100644
+--- a/projects/hip-tests/catch/unit/kernel/hipKernelStackSize.cc
++++ b/projects/hip-tests/catch/unit/kernel/hipKernelStackSize.cc
+@@ -26,7 +26,13 @@ constexpr size_t wave32 = 32;
+ constexpr size_t wave64 = 64;
+ constexpr size_t scratchBits12X = 18;
+ constexpr size_t scratchBits9X = 15;
++#ifdef __SANITIZE_CONCURRENCY__
++// Keep the allocation near the scratch limit while reserving space for CSAN's
++// additional call frames. Use the same margin for the host reference result.
++constexpr size_t compilerRequired = 128;
++#else
+ constexpr size_t compilerRequired = 64;
++#endif
+ constexpr size_t maxStackSize12X = (((1 << scratchBits12X) - 1) * 256 / wave32) - compilerRequired;
+ constexpr size_t maxStackSize11X = (((1 << scratchBits9X) - 1) * 256 / wave32) - compilerRequired;
+ constexpr size_t maxStackSize9X = (((1 << scratchBits9X) - 1) * 256 / wave64) - compilerRequired;
+-- 
+2.56.0
+

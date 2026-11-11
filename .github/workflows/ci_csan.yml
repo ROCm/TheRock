@@ -10,12 +10,28 @@ on:
         type: string
         description: "Comma-separated Linux GPU families (gfx94x, gfx950), or all"
         default: "gfx94x"
+      prebuilt_stages:
+        type: string
+        description: "Comma-separated successful stages to reuse from baseline_run_id (empty = fresh build)"
+        default: ""
+      baseline_run_id:
+        type: string
+        description: "Workflow run supplying prebuilt_stages; both inputs must be set together"
+        default: ""
   workflow_call:
     inputs:
       linux_amdgpu_families:
         type: string
         description: "Comma-separated Linux GPU families (gfx94x, gfx950), or all"
         default: "gfx94x"
+      prebuilt_stages:
+        type: string
+        description: "Comma-separated successful stages to reuse from baseline_run_id (empty = fresh build)"
+        default: ""
+      baseline_run_id:
+        type: string
+        description: "Workflow run supplying prebuilt_stages; both inputs must be set together"
+        default: ""
 
 permissions:
   contents: read
@@ -26,26 +42,90 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate_reuse:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Validate explicit stage reuse inputs
+        env:
+          PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+        run: |
+          if [[ -n "${PREBUILT_STAGES}" && -z "${BASELINE_RUN_ID}" ]] ||
+             [[ -z "${PREBUILT_STAGES}" && -n "${BASELINE_RUN_ID}" ]]; then
+            echo "::error::prebuilt_stages and baseline_run_id must be supplied together"
+            exit 1
+          fi
+
   setup:
+    needs: validate_reuse
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: csan
       release_type: ci
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
       windows_amdgpu_families: "none"
-      # Measure fresh CSAN stages rather than reusing another run's artifacts.
-      stage_reuse_mode: "off"
+      # Fresh builds remain the default; dry-run honors only explicit reuse.
+      stage_reuse_mode: ${{ inputs.prebuilt_stages != '' && 'dry-run' || 'off' }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages }}
+      baseline_run_id: ${{ inputs.baseline_run_id }}
       build_python_packages: false
       build_pytorch: false
       build_jax: false
       build_native_linux: false
       build_native_windows: false
 
-  linux_build:
-    name: Linux CSAN stages
+  copy_prebuilt_stages:
+    name: Copy Prebuilt CSAN Stages
     needs: setup
     if: >-
       ${{
+        needs.setup.outputs.linux_build_config != '' &&
+        fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages != '' &&
+        fromJSON(needs.setup.outputs.linux_build_config).baseline_run_id != ''
+      }}
+    runs-on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_small }}
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          ref: ${{ needs.setup.outputs.ref }}
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3==1.39.15
+
+      - name: Configure AWS credentials for artifact uploads
+        uses: ./.github/actions/configure_aws_artifacts_credentials
+        with:
+          release_type: ci
+
+      - name: Copy prebuilt stage artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TYPE: ci
+          BASELINE_RUN_ID: ${{ fromJSON(needs.setup.outputs.linux_build_config).baseline_run_id }}
+          PREBUILT_STAGES: ${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}
+          DIST_AMDGPU_FAMILIES: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id="${BASELINE_RUN_ID}" \
+            --stage="${PREBUILT_STAGES}" \
+            --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --expand-family-to-targets
+
+  linux_build:
+    name: Linux CSAN stages
+    needs: [setup, copy_prebuilt_stages]
+    if: >-
+      ${{
+        !failure() && !cancelled() &&
+        !contains(needs.*.result, 'cancelled') &&
         needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
@@ -59,6 +139,7 @@ jobs:
       build_variant_label: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_label }}
       build_variant_cmake_preset: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_suffix }}
+      prebuilt_stages: ${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}
       skip_stages: ${{ fromJSON(needs.setup.outputs.linux_build_config).skip_stages }}
       build_runs_on_large: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
       build_runs_on_small: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_small }}
@@ -73,7 +154,7 @@ jobs:
   summary:
     name: CSAN build summary
     if: always()
-    needs: [setup, linux_build]
+    needs: [validate_reuse, setup, copy_prebuilt_stages, linux_build]
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

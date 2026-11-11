@@ -1,0 +1,493 @@
+From 67acbeb1ed14b3eadd54b2010931062dd3838b1b Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:08:20 +0000
+Subject: [PATCH 1/2] hip-tests: Link the CSAN runtime for device-only modules
+
+Device-only HIP commands bypass the linker wrapper that normally supplies the CSAN device runtime. Link it only for device-only commands and propagate explicit code-object versions to runtime LTO generation. Mixed HIP targets and SPIR-V keep their existing flags.
+
+Temporary integration patch until the compiler handles CSAN device-only runtime linkage. Reproduced using CI run https://github.com/ROCm/TheRock/actions/runs/42977786346 and validated the full runtime-tests build plus 8 packaging tests in the pinned CI container.
+---
+ projects/hip-tests/catch/CMakeLists.txt       | 28 ++++++++++
+ .../hip-tests/catch/multiproc/CMakeLists.txt  |  2 +-
+ .../catch/unit/callback/CMakeLists.txt        |  2 +-
+ .../catch/unit/deviceLib/CMakeLists.txt       |  8 +--
+ .../catch/unit/dynamicLoading/CMakeLists.txt  |  2 +-
+ .../hip-tests/catch/unit/graph/CMakeLists.txt |  4 +-
+ .../catch/unit/library/CMakeLists.txt         |  4 +-
+ .../catch/unit/module/CMakeLists.txt          | 54 +++++++++----------
+ .../catch/unit/occupancy/CMakeLists.txt       |  2 +-
+ .../hip-tests/catch/unit/oob/CMakeLists.txt   |  4 +-
+ .../catch/unit/synchronization/CMakeLists.txt |  2 +-
+ .../catch/unit/texture/CMakeLists.txt         |  2 +-
+ 12 files changed, 71 insertions(+), 43 deletions(-)
+
+diff --git a/projects/hip-tests/catch/CMakeLists.txt b/projects/hip-tests/catch/CMakeLists.txt
+index fab85cbf..a0e6c7a4 100644
+--- a/projects/hip-tests/catch/CMakeLists.txt
++++ b/projects/hip-tests/catch/CMakeLists.txt
+@@ -335,6 +335,34 @@ if(ENABLE_SPIRV)
+   set(HIP_DEVICE_BUILD_FLAGS_NO_ARCH ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH_NO_ASAN})
+ endif()
+ 
++set(HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH})
++set(HIP_DEVICE_CODE_OBJECT_V5_FLAGS -mcode-object-version=5)
++set(HIP_DEVICE_CODE_OBJECT_V6_FLAGS -mcode-object-version=6)
++
++# Device-only module commands use the legacy HIP device linker, which does not
++# add CSAN's runtime. Mixed host/device targets already link it automatically,
++# so extend only the custom-command flags and leave SPIR-V flags unchanged.
++if(THEROCK_SANITIZER STREQUAL "CSAN" AND NOT ENABLE_SPIRV)
++  execute_process(COMMAND "${CMAKE_HIP_COMPILER}" --print-resource-dir
++    OUTPUT_VARIABLE _hip_csan_resource_dir
++    OUTPUT_STRIP_TRAILING_WHITESPACE
++    COMMAND_ERROR_IS_FATAL ANY)
++  set(_hip_csan_device_runtime
++    "${_hip_csan_resource_dir}/lib/amdgcn-amd-amdhsa/libclang_rt.csan.a")
++  if(NOT EXISTS "${_hip_csan_device_runtime}")
++    message(FATAL_ERROR "CSAN device runtime not found: ${_hip_csan_device_runtime}")
++  endif()
++  list(APPEND HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH
++    "-Xoffload-linker=amdgcn-amd-amdhsa" "${_hip_csan_device_runtime}")
++  # The runtime is bitcode. Match its LTO code generation to each fixture's
++  # explicit native code object version instead of the linker's default.
++  foreach(_version 5 6)
++    list(APPEND HIP_DEVICE_CODE_OBJECT_V${_version}_FLAGS
++      "-Xoffload-linker=amdgcn-amd-amdhsa"
++      "-mllvm=-amdhsa-code-object-version=${_version}")
++  endforeach()
++endif()
++
+ # get hip-tests commit short hash
+ execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+diff --git a/projects/hip-tests/catch/multiproc/CMakeLists.txt b/projects/hip-tests/catch/multiproc/CMakeLists.txt
+index 135a859b..12c24d10 100644
+--- a/projects/hip-tests/catch/multiproc/CMakeLists.txt
++++ b/projects/hip-tests/catch/multiproc/CMakeLists.txt
+@@ -24,7 +24,7 @@ set(TEST_SRC
+ if(UNIX)
+   if (HIP_PLATFORM MATCHES "amd")
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dummy_kernel.code
+-                      COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH}
++                      COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH}
+                       --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/dummy_kernel.cpp
+                       -o ${CMAKE_CURRENT_BINARY_DIR}/dummy_kernel.code
+                       -I${HIP_INCLUDE_DIR}
+diff --git a/projects/hip-tests/catch/unit/callback/CMakeLists.txt b/projects/hip-tests/catch/unit/callback/CMakeLists.txt
+index ecfcef24..2cd64158 100644
+--- a/projects/hip-tests/catch/unit/callback/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/callback/CMakeLists.txt
+@@ -12,7 +12,7 @@ set(TEST_SRC
+ )
+ 
+ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/SimpleKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/SimpleKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/SimpleKernel.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt b/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
+index dfc13cd1..259df9b7 100644
+--- a/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/deviceLib/CMakeLists.txt
+@@ -111,7 +111,7 @@ set(AMD_OCP_TEST_SRC
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kerDevAllocMultCO.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kerDevAllocMultCO.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/kerDevAllocMultCO.code
+                   -I${HIP_INCLUDE_DIR}
+@@ -120,7 +120,7 @@ if (HIP_PLATFORM MATCHES "amd")
+                   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kerDevAllocMultCO.cc
+                   COMMENT "Compiling kerDevAllocMultCO.code")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kerDevWriteMultCO.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kerDevWriteMultCO.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/kerDevWriteMultCO.code
+                   -I${HIP_INCLUDE_DIR}
+@@ -129,7 +129,7 @@ if (HIP_PLATFORM MATCHES "amd")
+                   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kerDevWriteMultCO.cc
+                   COMMENT "Compiling kerDevWriteMultCO.code")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kerDevFreeMultCO.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kerDevFreeMultCO.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/kerDevFreeMultCO.code
+                   -I${HIP_INCLUDE_DIR}
+@@ -138,7 +138,7 @@ if (HIP_PLATFORM MATCHES "amd")
+                   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kerDevFreeMultCO.cc
+                   COMMENT "Compiling kerDevFreeMultCO.code")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kerDevAllocSingleKer.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kerDevAllocSingleKer.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/kerDevAllocSingleKer.code
+                   -I${HIP_INCLUDE_DIR}
+diff --git a/projects/hip-tests/catch/unit/dynamicLoading/CMakeLists.txt b/projects/hip-tests/catch/unit/dynamicLoading/CMakeLists.txt
+index d91a9865..5ecacc13 100644
+--- a/projects/hip-tests/catch/unit/dynamicLoading/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/dynamicLoading/CMakeLists.txt
+@@ -30,7 +30,7 @@ if(UNIX AND BUILD_SHARED_LIBS)
+       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/lateManagedVariableLibrary.cc
+       COMMENT "Compiling libLateManagedVariable.so")
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/bit_extract_kernel.code
+-      COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++      COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+       -x hip ${CMAKE_CURRENT_SOURCE_DIR}/bit_extract_kernel.cpp ${HIP_PATH_OPT}
+       -o ${CMAKE_CURRENT_BINARY_DIR}/bit_extract_kernel.code
+       -I${CMAKE_CURRENT_SOURCE_DIR}/../../include
+diff --git a/projects/hip-tests/catch/unit/graph/CMakeLists.txt b/projects/hip-tests/catch/unit/graph/CMakeLists.txt
+index a43151fb..a1028fe4 100644
+--- a/projects/hip-tests/catch/unit/graph/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/graph/CMakeLists.txt
+@@ -204,7 +204,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   )
+   set(TEST_SRC ${TEST_SRC} ${AMD_SRC})
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/add_Kernel.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST}
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST}
+     --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/add_Kernel.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/add_Kernel.code
+     -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -212,7 +212,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/add_Kernel.cpp
+     COMMENT "Compiling add_Kernel.code")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/hipMatMul.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST}
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST}
+     --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/hipMatMul.cc
+     -o ${CMAKE_CURRENT_BINARY_DIR}/hipMatMul.code
+diff --git a/projects/hip-tests/catch/unit/library/CMakeLists.txt b/projects/hip-tests/catch/unit/library/CMakeLists.txt
+index 42eea279..97268d16 100644
+--- a/projects/hip-tests/catch/unit/library/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/library/CMakeLists.txt
+@@ -18,14 +18,14 @@ set(TEST_SRC
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/library_code_load.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/library_code_load.cc
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/library_code_load.cc
+             -o ${CMAKE_CURRENT_BINARY_DIR}/library_code_load.code
+             -I${CMAKE_CURRENT_SOURCE_DIR}/../../include
+             -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/library_code_load.cc
+     COMMENT "Compiling library_code_load.code")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/reverse_kernel.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/reverse_kernel.cc
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -x hip ${CMAKE_CURRENT_SOURCE_DIR}/reverse_kernel.cc
+             -o ${CMAKE_CURRENT_BINARY_DIR}/reverse_kernel.code
+             -I${CMAKE_CURRENT_SOURCE_DIR}/../../include
+             -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/module/CMakeLists.txt b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+index d14f446c..de0e97ff 100644
+--- a/projects/hip-tests/catch/unit/module/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/module/CMakeLists.txt
+@@ -26,7 +26,7 @@ set(TEST_SRC
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/get_function_module.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                    -x hip ${CMAKE_CURRENT_SOURCE_DIR}/get_function_module.cc
+                     -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                    -o get_function_module.code
+@@ -47,7 +47,7 @@ add_custom_target(get_function_module DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/get_fu
+ # into its "no compatible code object" path.
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fatbin_mismatch_module.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH}
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH}
+                    --offload-arch=gfx900 --offload-arch=gfx906 --cuda-device-only
+                    -x hip ${CMAKE_CURRENT_SOURCE_DIR}/fatbin_mismatch_module.cc
+                    -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -62,13 +62,13 @@ endif()
+ if (NOT WIN32)
+   if (HIP_PLATFORM MATCHES "amd")
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/launch_kernel_module.code
+-                     COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                     COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                      -x hip ${CMAKE_CURRENT_SOURCE_DIR}/launch_kernel_module.cc
+                      -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                      -o launch_kernel_module.code
+                      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/launch_kernel_module.cc)
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coopKernel.code
+-                    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/coopKernel.cpp
+                     -o ${CMAKE_CURRENT_BINARY_DIR}/coopKernel.code
+                     -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -101,7 +101,7 @@ endif()
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/get_global_test_module.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                    -x hip ${CMAKE_CURRENT_SOURCE_DIR}/get_global_test_module.cc
+                    -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                    -o get_global_test_module.code
+@@ -109,7 +109,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(get_global_test_module DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/get_global_test_module.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/get_tex_ref_module.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                    -x hip ${CMAKE_CURRENT_SOURCE_DIR}/get_tex_ref_module.cc
+                    -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                    -o get_tex_ref_module.code
+@@ -130,7 +130,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(empty_file DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/empty_file.txt)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/empty_module.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/empty_module.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/empty_module.code
+                   -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -202,7 +202,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   endif()
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -221,7 +221,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     list(GET OFFLOAD_ARCH_LIST 0 COPYKERNEL_S_OFFLOAD_ARCH)
+   endif()
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${COPYKERNEL_S_OFFLOAD_ARCH} -mcode-object-version=5 --cuda-device-only -S -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${COPYKERNEL_S_OFFLOAD_ARCH} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --cuda-device-only -S -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                   -I${CMAKE_CURRENT_SOURCE_DIR}/../../include
+@@ -230,7 +230,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   add_custom_target(copyKernel_s DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copyKernel.s)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/addKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only -x hip
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --cuda-device-only -x hip
+                   ${CMAKE_CURRENT_SOURCE_DIR}/addKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/addKernel.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -268,7 +268,7 @@ if(HIP_PLATFORM MATCHES "amd")
+ 
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernelCompressed.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --offload-compress --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --offload-compress --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernelCompressed.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -291,7 +291,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   --offload-arch=gfx12-5-generic
+ )
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTarget.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} -mcode-object-version=6 --cuda-device-only ${OFFLOAD_ARCH_GENERIC_STR}
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${HIP_DEVICE_CODE_OBJECT_V6_FLAGS} --cuda-device-only ${OFFLOAD_ARCH_GENERIC_STR}
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTarget.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -301,7 +301,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   add_custom_target(copyKernelGenericTarget_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTarget.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTargetCompressed.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} -mcode-object-version=6 --offload-compress --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${HIP_DEVICE_CODE_OBJECT_V6_FLAGS} --offload-compress --cuda-device-only
+                   ${OFFLOAD_ARCH_GENERIC_STR}
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTargetCompressed.code
+@@ -312,7 +312,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   add_custom_target(copyKernelGenericTargetCompressed_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copyKernelGenericTargetCompressed.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/anyOrderLaunch.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/anyOrderLaunch.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/anyOrderLaunch.code
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+@@ -337,7 +337,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     hipKerArgOptimization.cc)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel.code
+                   -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -346,7 +346,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel0.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=0
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel0.code
+@@ -356,7 +356,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel0_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel0.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel1.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=1
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel1.code
+@@ -366,7 +366,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel1_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel1.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel2.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=2
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel2.code
+@@ -376,7 +376,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel2_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel2.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel3.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=3
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel3.code
+@@ -386,7 +386,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel3_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel3.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel16.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=16
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel16.code
+@@ -396,7 +396,7 @@ if(HIP_PLATFORM MATCHES "amd")
+     add_custom_target(copiousArgKernel16_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel16.code)
+ 
+     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel17.code
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -mllvm -amdgpu-kernarg-preload-count=17
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copiousArgKernel.cc
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/copiousArgKernel17.code
+@@ -514,7 +514,7 @@ hip_add_exe_to_target(NAME module
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/managed_kernel.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/managed_kernel.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/managed_kernel.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -523,7 +523,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(managed_kernel_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/managed_kernel.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/vcpy_kernel.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/vcpy_kernel.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/vcpy_kernel.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -532,7 +532,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(vcpy_kernel_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/vcpy_kernel.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/matmul.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/matmul.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -541,7 +541,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(matmul_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/matmul.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel_count.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kernel_count.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/kernel_count.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -550,7 +550,7 @@ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_target(kernel_count_code DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel_count.code)
+ 
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/emptyModuleCount.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/emptyModuleCount.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/emptyModuleCount.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+@@ -612,7 +612,7 @@ add_dependencies(ModuleTest emptyModuleCount_code)
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel_composite_test.code
+-    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++    COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+     -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kernel_composite_test.cpp
+     -o ${CMAKE_CURRENT_BINARY_DIR}/kernel_composite_test.code
+     -I${CMAKE_CURRENT_SOURCE_DIR}/../../include ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/occupancy/CMakeLists.txt b/projects/hip-tests/catch/unit/occupancy/CMakeLists.txt
+index c1f3e9e6..3b48a668 100644
+--- a/projects/hip-tests/catch/unit/occupancy/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/occupancy/CMakeLists.txt
+@@ -56,7 +56,7 @@ if(HIP_PLATFORM MATCHES "amd")
+   endif()
+ 
+ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/simple_kernel.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                      -x hip ${CMAKE_CURRENT_SOURCE_DIR}/simple_kernel.cc
+                      -o simple_kernel.code
+                      -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/oob/CMakeLists.txt b/projects/hip-tests/catch/unit/oob/CMakeLists.txt
+index 4057db57..31f841aa 100644
+--- a/projects/hip-tests/catch/unit/oob/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/oob/CMakeLists.txt
+@@ -7,7 +7,7 @@ set(TEST_SRC
+ # fixtures, because installing corrupt ELFs breaks DEB packaging (dh_makeshlibs
+ # runs `objdump -p` on every installed ELF and aborts on a bad header).
+ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/oob_kernel.code
+-                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                 -x hip ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cc
+                 -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                 -o ${CMAKE_CURRENT_BINARY_DIR}/oob_kernel.code
+@@ -23,7 +23,7 @@ add_custom_target(gen_oob_kernel DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/oob_kernel.
+ # All fixtures install flat into one directory (see packaging/CMakeLists.txt), so
+ # the oob-prefixed name avoids colliding with module's copyKernelCompressed.code.
+ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/oob_copyKernelCompressed.code
+-                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} -mcode-object-version=5 --offload-compress --cuda-device-only
++                COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} ${HIP_DEVICE_CODE_OBJECT_V5_FLAGS} --offload-compress --cuda-device-only
+                 -x hip ${CMAKE_CURRENT_SOURCE_DIR}/copyKernel.cc
+                 -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                 -o ${CMAKE_CURRENT_BINARY_DIR}/oob_copyKernelCompressed.code
+diff --git a/projects/hip-tests/catch/unit/synchronization/CMakeLists.txt b/projects/hip-tests/catch/unit/synchronization/CMakeLists.txt
+index 8766cedc..4d4a26c5 100644
+--- a/projects/hip-tests/catch/unit/synchronization/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/synchronization/CMakeLists.txt
+@@ -8,7 +8,7 @@ set(TEST_SRC
+ )
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/memcpyInt.hsaco
+-                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
++                  COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only
+                   -x hip ${CMAKE_CURRENT_SOURCE_DIR}/memcpyIntDevice.cpp
+                   -o ${CMAKE_CURRENT_BINARY_DIR}/memcpyInt.hsaco
+                   -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+diff --git a/projects/hip-tests/catch/unit/texture/CMakeLists.txt b/projects/hip-tests/catch/unit/texture/CMakeLists.txt
+index e538b718..5f72e239 100644
+--- a/projects/hip-tests/catch/unit/texture/CMakeLists.txt
++++ b/projects/hip-tests/catch/unit/texture/CMakeLists.txt
+@@ -108,7 +108,7 @@ endfunction()  # CheckAcceptedArchs
+ 
+ if (HIP_PLATFORM MATCHES "amd")
+   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tex_ref_get_module.code
+-                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -Wno-deprecated-declarations
++                   COMMAND ${CMAKE_HIP_COMPILER} ${HIP_DEVICE_ONLY_BUILD_FLAGS_NO_ARCH} ${OFFLOAD_ARCH_LIST} --cuda-device-only -Wno-deprecated-declarations
+                    -x hip ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref_get_module.cc
+                    -I${HIP_INCLUDE_DIR} ${HIP_PATH_OPT}
+                    -o tex_ref_get_module.code
+-- 
+2.56.0
+
