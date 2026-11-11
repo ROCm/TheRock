@@ -268,6 +268,21 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Upload component failure logs
+        if: ${{ always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'cancelled' || steps.csan_reports.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-logs-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            test-diagnostics/
+            ${{ env.OUTPUT_ARTIFACTS_DIR }}/**/run-test.log
+            ${{ env.OUTPUT_ARTIFACTS_DIR }}/**/Testing/Temporary/LastTest.log
+            ${{ env.OUTPUT_ARTIFACTS_DIR }}/**/Testing/Temporary/LastTestsFailed.log
+            **/gdb.log
+            **/gdb.sum
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Print test reproduction command
         if: ${{ failure() && (steps.test.outcome == 'failure' || steps.csan_reports.outcome == 'failure') }}
         env:

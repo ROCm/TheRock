@@ -1589,6 +1589,10 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            if key == "rocr-debug-agent" and build_variant == "csan":
+                job_config_data["test_script"] = (
+                    "python ./build_tools/github_actions/run_debug_agent_tests.py"
+                )
 
             # A component declares the families it is advisory on via
             # "expect_failure" (see the key reference above). Resolve that

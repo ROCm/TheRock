@@ -74,6 +74,24 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_debug_agent_direct_diagnostics_runner_is_csan_only(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocr-debug-agent"])
+        for variant in ("csan", "release", "asan", "host-asan"):
+            with self.subTest(variant=variant):
+                os.environ["BUILD_VARIANT"] = variant
+                fetch_test_configurations.run()
+                job = next(
+                    c
+                    for c in self._get_components()
+                    if c["job_name"] == "rocr-debug-agent"
+                )
+                expected = (
+                    "python ./build_tools/github_actions/run_debug_agent_tests.py"
+                    if variant == "csan"
+                    else "python ./build/tests/rocm-debug-agent/test_rocr-debug-agent.py"
+                )
+                self.assertEqual(job["test_script"], expected)
+
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         # Use gfx110x for Windows since gfx94x doesn't have a Windows test runner
