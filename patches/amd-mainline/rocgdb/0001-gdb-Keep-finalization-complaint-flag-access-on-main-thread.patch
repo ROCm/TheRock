@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 05:45:00 -0800
+Subject: [PATCH] gdb: Keep finalization complaint flag access on main thread
+
+The index cache writer calls cooked_index::wait from a worker after the
+FINALIZED state has been published. The main thread can concurrently wait
+for that same state and emit cached finalization complaints. Testing the
+non-atomic m_finalize_complaints_emitted flag before is_main_thread reads
+main-thread state from that worker, racing with the main-thread write.
+The worker state mutex is released before either access to this flag.
+
+Check thread identity first, so both the read and write remain confined
+to the main thread, as intended by the existing comment and the matching
+guard in cooked_index_worker::wait. Preserve complaint emission, worker
+state synchronization and index-cache writing.
+
+Reported by ConcurrencySanitizer after the functional CPU suite passed:
+https://github.com/ROCm/TheRock/actions/runs/43021531939
+Source: ROCm/rocgdb b79d66da2acad573ed4536d0ad1f042c48a98c69
+Carry temporarily in TheRock pending upstream debugger review.
+---
+ gdb/dwarf2/cooked-index.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gdb/dwarf2/cooked-index.c b/gdb/dwarf2/cooked-index.c
+index 2242ec8..79fcdb9 100644
+--- a/gdb/dwarf2/cooked-index.c
++++ b/gdb/dwarf2/cooked-index.c
+@@ -65,8 +65,8 @@ cooked_index::wait (cooked_state desired_state, bool allow_quit)
+      here, we might have only asked for MAIN_AVAILABLE, but if the
+      workers are quick then they might be done, in which case we
+      should emit the complaints now.  */
+-  if (!m_finalize_complaints_emitted
+-      && is_main_thread ()
++  if (is_main_thread ()
++      && !m_finalize_complaints_emitted
+       && (desired_state >= cooked_state::FINALIZED || done))
+     {
+       m_finalize_complaints_emitted = true;
+-- 
+2.53.0
