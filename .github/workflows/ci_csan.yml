@@ -22,6 +22,10 @@ on:
         type: boolean
         description: "Rebuild only HIP/OpenCL CLR artifacts after copying a prebuilt compiler-runtime stage"
         default: false
+      comm_repair:
+        type: boolean
+        description: "Repair RCCL/rocSHMEM device artifacts for the selected families, reusing the comm-libs baseline"
+        default: false
   workflow_call:
     inputs:
       linux_amdgpu_families:
@@ -39,6 +43,10 @@ on:
       runtime_repair:
         type: boolean
         description: "Rebuild only HIP/OpenCL CLR artifacts after copying a prebuilt compiler-runtime stage"
+        default: false
+      comm_repair:
+        type: boolean
+        description: "Repair RCCL/rocSHMEM device artifacts for the selected families, reusing the comm-libs baseline"
         default: false
 
 permissions:
@@ -58,17 +66,26 @@ jobs:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           RUNTIME_REPAIR: ${{ inputs.runtime_repair }}
+          COMM_REPAIR: ${{ inputs.comm_repair }}
         run: |
           if [[ -n "${PREBUILT_STAGES}" && -z "${BASELINE_RUN_ID}" ]] ||
              [[ -z "${PREBUILT_STAGES}" && -n "${BASELINE_RUN_ID}" ]]; then
             echo "::error::prebuilt_stages and baseline_run_id must be supplied together"
             exit 1
           fi
+          REUSE_STAGES=",${PREBUILT_STAGES//[[:space:]]/},"
           if [[ "${RUNTIME_REPAIR}" == "true" ]]; then
-            REUSE_STAGES=",${PREBUILT_STAGES//[[:space:]]/},"
             if [[ -z "${BASELINE_RUN_ID}" ]] ||
                [[ "${REUSE_STAGES}" != *,compiler-runtime,* && "${REUSE_STAGES}" != ,all, ]]; then
               echo "::error::runtime_repair requires compiler-runtime in prebuilt_stages and a baseline_run_id"
+              exit 1
+            fi
+          fi
+          if [[ "${COMM_REPAIR}" == "true" ]]; then
+            if [[ -z "${BASELINE_RUN_ID}" ]] ||
+               [[ "${REUSE_STAGES}" != ,all, &&
+                  ( "${REUSE_STAGES}" != *,comm-libs,* || "${REUSE_STAGES}" != *,compiler-runtime,* ) ]]; then
+              echo "::error::comm_repair requires comm-libs and compiler-runtime in prebuilt_stages and a baseline_run_id"
               exit 1
             fi
           fi
@@ -162,6 +179,33 @@ jobs:
       contents: read
       id-token: write
 
+  repair_comm_devices:
+    name: Repair communication device artifacts
+    needs: [setup, copy_prebuilt_stages]
+    if: >-
+      ${{
+        inputs.comm_repair &&
+        needs.setup.outputs.linux_build_config != '' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: comm-libs
+      stage_display_name: "Repair Communication Devices (RCCL and rocSHMEM)"
+      timeout_minutes: 240
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      test_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
+      release_type: ci
+      ref: ${{ needs.setup.outputs.ref }}
+      rebuild_artifacts: rccl,rocshmem
+      reuse_stage_artifacts: true
+    permissions:
+      contents: read
+      id-token: write
+
   linux_build:
     name: Linux CSAN stages
     needs: [setup, copy_prebuilt_stages, repair_clr_runtime]
@@ -197,7 +241,7 @@ jobs:
   summary:
     name: CSAN build summary
     if: always()
-    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, linux_build]
+    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, repair_comm_devices, linux_build]
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

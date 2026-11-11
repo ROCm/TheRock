@@ -40,6 +40,10 @@ on:
         type: string
         required: true
         description: "Semicolon-separated list of all GPU families for dist targets"
+      test_amdgpu_families:
+        type: string
+        default: ""
+        description: "Optional explicit families for target-neutral/test subprojects; empty preserves their default targets"
       rocm_package_version:
         type: string
         required: true
@@ -100,6 +104,7 @@ jobs:
       QUARTZ_REPORTING_WORKFLOW: multi_arch_build_portable_linux_artifacts.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm artifacts"
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
+      TEST_AMDGPU_FAMILIES: ${{ inputs.test_amdgpu_families }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
@@ -222,12 +227,17 @@ jobs:
           if ((SUBPROJECT_TEST_JOBS > 16)); then
             SUBPROJECT_TEST_JOBS=16
           fi
+          TEST_FAMILY_CMAKE_ARGS=()
+          if [[ -n "${TEST_AMDGPU_FAMILIES}" ]]; then
+            TEST_FAMILY_CMAKE_ARGS+=("-DTHEROCK_TEST_AMDGPU_FAMILIES=${TEST_AMDGPU_FAMILIES}")
+          fi
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_ROCJITSU_TEST_JOBS="${SUBPROJECT_TEST_JOBS}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
+            "${TEST_FAMILY_CMAKE_ARGS[@]}" \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && '-DTHEROCK_BUILD_METRICS=ON' || '' }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' && '-DTHEROCK_BACKGROUND_BUILD_JOBS=1' || '' }} \

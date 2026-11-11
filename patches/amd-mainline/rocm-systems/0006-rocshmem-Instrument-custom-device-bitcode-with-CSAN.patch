@@ -1,0 +1,186 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 11:13:40 +0000
+Subject: [PATCH] rocshmem: Instrument custom device bitcode with CSAN
+
+The custom device-bitcode commands invoke clang directly with LLVM passes
+disabled, then run opt explicitly. They bypass the sanitizer flags in
+CMAKE_CXX_FLAGS. Although the CSAN comm stage passed in TheRock run
+https://github.com/ROCm/TheRock/actions/runs/42977786346, its SHA256-verified
+public gfx942 device library has neither sanitize_concurrency attributes
+nor __csan references, and the tester HSACO has zero CSAN symbols. This
+finding concerns the custom bitcode path, not the separately compiled HIP
+library.
+
+For CSAN, mark frontend functions and apply the module/function passes once
+after the library's normal O3 pipeline. Instrument the fresh tester kernel
+separately before merging it with that library; keep the merged optimization
+free of sanitizer passes. Resolve the matching compiler's device runtime at
+the raw HSACO link and reject missing tools/runtime or conflicting ASAN.
+
+Validated the two real gfx942 file targets in isolation using the pinned CI
+container and original compiler artifacts: 3635 device API bodies gain CSAN
+memory callbacks. The fixed HSACO has present, resolved CSAN callbacks, zero
+unresolved symbols, and AMDGPU ABI version 4. OFF and ASAN command graphs are
+byte-identical to the baseline. No GPU execution is claimed by this check.
+
+Carry this temporarily in TheRock while preparing the custom-bitcode fix for
+upstream rocSHMEM review. Based on ROCm/rocm-systems
+bd1130f9f838cfffd24f41fd3052968fb7cae4e0.
+---
+ projects/rocshmem/cmake/DeviceBitcode.cmake        | 19 +++++-
+ .../CMakeDeviceBitcodeTester.cmake                | 59 ++++++++++++++++++--
+ 2 files changed, 69 insertions(+), 9 deletions(-)
+
+diff --git a/projects/rocshmem/cmake/DeviceBitcode.cmake b/projects/rocshmem/cmake/DeviceBitcode.cmake
+index 1f2c245..28b903d 100644
+--- a/projects/rocshmem/cmake/DeviceBitcode.cmake
++++ b/projects/rocshmem/cmake/DeviceBitcode.cmake
+@@ -23,6 +23,9 @@ find_program(LLVM_OPT opt
+              NO_DEFAULT_PATH QUIET)
+ 
+ if(NOT LLVM_CLANG OR NOT LLVM_LINK OR NOT LLVM_OPT)
++  if(THEROCK_SANITIZER STREQUAL "CSAN")
++    message(FATAL_ERROR "CSAN device bitcode requires the matching clang++, llvm-link and opt tools")
++  endif()
+   message(WARNING "ROCm LLVM tools (clang++, llvm-link, opt) not found under "
+                   "${ROCM_PATH}/llvm/bin; skipping device bitcode targets.")
+   return()
+@@ -106,13 +109,23 @@ if(${ROCM_MAJOR_VERSION} LESS 7)
+   list(APPEND BITCODE_COMPILE_FLAGS_BASE -DHIP_ENABLE_WARP_SYNC_BUILTINS=1)
+ endif()
+ 
+-# This path invokes clang directly and so inherits nothing from
+-# CMAKE_CXX_FLAGS. The compile below skips the pass pipeline, so this only
+-# marks functions sanitize_address; the asan pass runs in the opt step.
++# These commands bypass CMAKE_CXX_FLAGS. The library compiles below disable
++# LLVM passes, so sanitizer flags mark functions and opt instruments each
++# linked library module once, after its normal O3 optimizations.
++set(ROCSHMEM_DEVICE_CSAN OFF)
++if(THEROCK_SANITIZER STREQUAL "CSAN")
++  if(ASAN)
++    message(FATAL_ERROR "CSAN and ASAN cannot instrument the same rocSHMEM device bitcode")
++  endif()
++  set(ROCSHMEM_DEVICE_CSAN ON)
++endif()
+ set(_BITCODE_OPT_PASSES -O3)
+ if(ASAN)
+   list(APPEND BITCODE_COMPILE_FLAGS_BASE -fsanitize=address)
+   set(_BITCODE_OPT_PASSES "-passes=default<O3>,asan")
++elseif(ROCSHMEM_DEVICE_CSAN)
++  list(APPEND BITCODE_COMPILE_FLAGS_BASE -fsanitize=concurrency -gline-tables-only)
++  set(_BITCODE_OPT_PASSES "-passes=default<O3>,csan-module,function(csan)")
+ endif()
+ 
+ # Add MPI include directories — rocshmem_config.h defines HAVE_EXTERNAL_MPI
+diff --git a/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake b/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
+index 3f305fe..a89782a 100644
+--- a/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
++++ b/projects/rocshmem/tests/functional_tests/CMakeDeviceBitcodeTester.cmake
+@@ -29,6 +29,9 @@ find_program(LLVM_LLD ld.lld PATHS ${ROCM_PATH}/llvm/bin ${THEROCK_TOOLCHAIN_ROO
+ find_program(LLVM_OPT opt PATHS ${ROCM_PATH}/llvm/bin ${THEROCK_TOOLCHAIN_ROOT}/lib/llvm/bin NO_DEFAULT_PATH QUIET)
+ 
+ if(NOT LLVM_LLD OR NOT LLVM_OPT)
++  if(ROCSHMEM_DEVICE_CSAN)
++    message(FATAL_ERROR "CSAN device bitcode tests require the matching ld.lld and opt tools")
++  endif()
+   message(WARNING "device_bitcode_tester: ld.lld/opt not found (ROCM_PATH=${ROCM_PATH}). "
+     "HSACOs will not be built; test will skip at runtime.")
+   return()
+@@ -36,6 +39,21 @@ endif()
+ 
+ # --- HSACO build steps --------------------------------------------------------
+ 
++# This test links a raw device object, bypassing clang's offload linker wrapper.
++# Resolve its runtime from the same compiler that produced the instrumented IR.
++set(_ROCSHMEM_CSAN_DEVICE_RUNTIME "")
++if(ROCSHMEM_DEVICE_CSAN)
++  execute_process(COMMAND "${LLVM_CLANG}" --print-resource-dir
++    OUTPUT_VARIABLE _rocshmem_csan_resource_dir
++    OUTPUT_STRIP_TRAILING_WHITESPACE
++    COMMAND_ERROR_IS_FATAL ANY)
++  set(_ROCSHMEM_CSAN_DEVICE_RUNTIME
++    "${_rocshmem_csan_resource_dir}/lib/amdgcn-amd-amdhsa/libclang_rt.csan.a")
++  if(NOT EXISTS "${_ROCSHMEM_CSAN_DEVICE_RUNTIME}")
++    message(FATAL_ERROR "CSAN device runtime not found: ${_ROCSHMEM_CSAN_DEVICE_RUNTIME}")
++  endif()
++endif()
++
+ set(ALL_TESTER_HSACOS "")
+ 
+ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+@@ -64,18 +82,39 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+   # librocshmem_device_${GPU_ARCH}.bc that DeviceBitcode.cmake already built
+   # and ships to real users -- instead of independently recompiling
+   # BITCODE_SOURCES a second time.
++  set(_KERNEL_COMPILE_OUTPUT "${KERNEL_BC}")
++  set(_KERNEL_COMPILE_FLAGS ${BITCODE_COMPILE_FLAGS_BASE})
++  if(ROCSHMEM_DEVICE_CSAN)
++    set(_KERNEL_COMPILE_OUTPUT
++      "${CMAKE_CURRENT_BINARY_DIR}/device_bitcode_tester_kernel_${GPU_ARCH}_frontend.bc")
++    # Defer instrumentation, matching the library's explicit post-O3 pipeline.
++    list(APPEND _KERNEL_COMPILE_FLAGS -Xclang -disable-llvm-passes)
++  endif()
+   add_custom_command(
+-    OUTPUT ${KERNEL_BC}
++    OUTPUT ${_KERNEL_COMPILE_OUTPUT}
+     COMMAND ${LLVM_CLANG}
+-      ${BITCODE_COMPILE_FLAGS_BASE}
++      ${_KERNEL_COMPILE_FLAGS}
+       --offload-arch=${_FULL_ARCH}
+       -c ${CMAKE_CURRENT_SOURCE_DIR}/device_bitcode_tester_kernel.hip
+-      -o ${KERNEL_BC}
++      -o ${_KERNEL_COMPILE_OUTPUT}
+     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/device_bitcode_tester_kernel.hip
+     COMMENT "device_bitcode_tester: compiling kernel for ${GPU_ARCH}"
+     VERBATIM
+   )
+ 
++  if(ROCSHMEM_DEVICE_CSAN)
++    add_custom_command(
++      OUTPUT ${KERNEL_BC}
++      COMMAND ${LLVM_OPT}
++        "-passes=default<O3>,csan-module,function(csan)"
++        -mtriple=amdgcn-amd-amdhsa -mcpu=${GPU_ARCH}
++        ${_KERNEL_COMPILE_OUTPUT} -o ${KERNEL_BC}
++      DEPENDS ${_KERNEL_COMPILE_OUTPUT}
++      COMMENT "device_bitcode_tester: instrumenting kernel for ${GPU_ARCH} with CSAN"
++      VERBATIM
++    )
++  endif()
++
+   set(_UNOPT_BC ${CMAKE_CURRENT_BINARY_DIR}/device_bitcode_tester_kernel_${GPU_ARCH}_unopt.bc)
+ 
+   # rocshmem_device_bitcode is listed explicitly (in addition to the file
+@@ -97,7 +136,9 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+     VERBATIM
+   )
+ 
+-  # Optimize the merged BC at -O3 so the final HSACO has efficient code.
++  # Both library and kernel are already instrumented in CSAN mode. Keep this
++  # merge optimization free of sanitizer passes to avoid instrumenting either
++  # a second time; the default and ASAN pipelines remain unchanged.
+   add_custom_command(
+     OUTPUT ${LINKED_BC}
+     COMMAND ${LLVM_OPT}
+@@ -126,10 +167,16 @@ foreach(GPU_ARCH ${BITCODE_GPU_ARCHS})
+     VERBATIM
+   )
+ 
++  set(_CSAN_HSACO_LINK_FLAGS "")
++  if(ROCSHMEM_DEVICE_CSAN)
++    list(APPEND _CSAN_HSACO_LINK_FLAGS
++      --no-undefined "--plugin-opt=mcpu=${GPU_ARCH}"
++      "${_ROCSHMEM_CSAN_DEVICE_RUNTIME}")
++  endif()
+   add_custom_command(
+     OUTPUT ${HSACO_FILE}
+-    COMMAND ${LLVM_LLD} -shared ${OBJ_FILE} -o ${HSACO_FILE}
+-    DEPENDS ${OBJ_FILE}
++    COMMAND ${LLVM_LLD} -shared ${OBJ_FILE} ${_CSAN_HSACO_LINK_FLAGS} -o ${HSACO_FILE}
++    DEPENDS ${OBJ_FILE} ${_ROCSHMEM_CSAN_DEVICE_RUNTIME}
+     COMMENT "device_bitcode_tester: linking HSACO for ${GPU_ARCH}"
+     VERBATIM
+   )
+-- 
+2.51.2.windows.1

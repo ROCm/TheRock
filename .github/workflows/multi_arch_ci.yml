@@ -47,6 +47,10 @@ on:
         type: boolean
         default: false
         description: "CSAN only: rebuild HIP/OpenCL CLR artifacts using the prebuilt compiler-runtime stage"
+      comm_repair:
+        type: boolean
+        default: false
+        description: "CSAN only: repair RCCL/rocSHMEM device artifacts using the prebuilt comm-libs stage"
       build_python_packages:
         type: boolean
         default: true
@@ -180,6 +184,7 @@ jobs:
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       runtime_repair: ${{ inputs.runtime_repair || false }}
+      comm_repair: ${{ inputs.comm_repair || false }}
     permissions:
       contents: read
       actions: read
