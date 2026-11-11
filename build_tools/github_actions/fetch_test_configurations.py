@@ -1622,6 +1622,19 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            if (
+                key == "rpp"
+                and build_variant == "csan"
+                and platform == "linux"
+                and test_type in ("comprehensive", "full")
+            ):
+                # Each actual RPP CTest entry runs independently; performance
+                # entries retain their original 4000-second case timeout.
+                job_config_data["total_shards_dict"] = {
+                    **job_config_data.get("total_shards_dict", {}),
+                    "linux": 8,
+                }
+                job_config_data["timeout_minutes"] = 80
             if key == "rocrtst-max-refcount" and build_variant != "csan":
                 continue
             if (

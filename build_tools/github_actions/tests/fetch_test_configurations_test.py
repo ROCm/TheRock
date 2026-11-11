@@ -105,6 +105,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         self.assertEqual(probe["timeout_minutes"], 30)
                         self.assertFalse(probe.get("expect_failure"))
 
+    def test_rpp_case_shards_are_native_csan_comprehensive_only(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:rpp"])
+        for variant in ("csan", "release", "asan"):
+            for tier in ("quick", "standard", "comprehensive", "full"):
+                with self.subTest(variant=variant, tier=tier):
+                    os.environ["BUILD_VARIANT"] = variant
+                    os.environ["TEST_TYPE"] = tier
+                    fetch_test_configurations.run()
+                    job = next(
+                        j for j in self._get_components() if j["job_name"] == "rpp"
+                    )
+                    split = variant == "csan" and tier in ("comprehensive", "full")
+                    self.assertEqual(job["total_shards"], 8 if split else 1)
+                    self.assertEqual(job["timeout_minutes"], 80 if split else 60)
+                    self.assertEqual(
+                        job["shard_arr"], list(range(1, 9)) if split else [1]
+                    )
+                    self.assertFalse(job.get("expect_failure"))
+
     def test_debug_agent_direct_diagnostics_runner_is_csan_only(self):
         os.environ["TEST_LABELS"] = json.dumps(["test:rocr-debug-agent"])
         for variant in ("csan", "release", "asan", "host-asan"):

@@ -71,6 +71,20 @@ def test_filter_args():
     return []
 
 
+def shard_args():
+    """Partition native CSAN comprehensive cases without reducing their work."""
+    if os.getenv("BUILD_VARIANT") != "csan" or TEST_TYPE not in (
+        "comprehensive",
+        "full",
+    ):
+        return []
+    index = int(os.getenv("SHARD_INDEX", "1"))
+    total = int(os.getenv("TOTAL_SHARDS", "1"))
+    if total < 1 or not 1 <= index <= total:
+        raise ValueError(f"Invalid RPP shard {index}/{total}")
+    return ["--tests-information", f"{index},,{total}"] if total > 1 else []
+
+
 # set env variables required for tests
 def setup_env(env):
     ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
@@ -110,7 +124,7 @@ def execute_tests(env):
     logging.info(f"++ Exec [{RPP_TEST_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=RPP_TEST_DIR, check=True, env=env)
 
-    filter_args = test_filter_args()
+    filter_args = test_filter_args() + shard_args()
     logging.info(f"++ rpp test category TEST_TYPE={TEST_TYPE}")
 
     cmd = [
