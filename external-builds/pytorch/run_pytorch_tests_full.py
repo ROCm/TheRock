@@ -55,12 +55,14 @@ Environment variables (all overridable via CLI flags or workflow YAML):
 """
 
 import argparse
+import importlib.util
 import os
 import platform
 import subprocess
 import sysconfig
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from pytorch_utils import (
@@ -73,24 +75,21 @@ from pytorch_utils import (
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def _import_get_tests():
-    """Load PyTorch skip_tests.get_tests; JAX also ships a skip_tests package."""
-    script_dir = str(THIS_SCRIPT_DIR)
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
+def _load_get_tests() -> Callable[..., str]:
+    """Load PyTorch get_tests by file path.
 
-    expected = THIS_SCRIPT_DIR / "skip_tests"
-    existing = sys.modules.get("skip_tests")
-    if existing is not None:
-        existing_path = Path(getattr(existing, "__file__", "") or "").resolve()
-        if existing_path.parent != expected:
-            for name in list(sys.modules):
-                if name == "skip_tests" or name.startswith("skip_tests."):
-                    del sys.modules[name]
-
-    from skip_tests.create_skip_tests import get_tests
-
-    return get_tests
+    JAX has its own top-level skip_tests package, so a bare import binds
+    whichever copy is already on sys.path.
+    """
+    path = THIS_SCRIPT_DIR / "skip_tests" / "create_skip_tests.py"
+    module_name = "therock_pytorch_create_skip_tests"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load PyTorch skip tests from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module.get_tests
 
 
 # Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT, which run_test.py uses to look up
@@ -598,7 +597,7 @@ def main(argv: list[str]) -> int:
     if args.k:
         tests_to_skip = args.k
     else:
-        get_tests = _import_get_tests()
+        get_tests = _load_get_tests()
         tests_to_skip = get_tests(
             amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
