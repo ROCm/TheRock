@@ -515,58 +515,54 @@ class ComponentScannerTest(TmpDirTestCase):
         )
 
     def testSameRelpathKeptInEachStage(self):
-        # Two stage directories with the same include/fftw3.h. The dev archive
-        # must keep both. A shared library claimed by lib in one stage stays
-        # out of that stage's dev files.
+        # The same relative path in two stage directories is kept in both.
+        # A file claimed by lib stays out of that stage's dev output.
         self.write_indented(
             "descriptor.toml",
+            # Note: in reverse extends order, this ensures that the worklist traverses
+            # properly.
             r"""
-        [components.lib."build_fftw3/stage"]
-        [components.lib."build_fftw3f/stage"]
-        [components.dev."build_fftw3/stage"]
-        [components.dev."build_fftw3f/stage"]
+        [components.dev."a/stage"]
+        [components.dev."b/stage"]
+        [components.lib."a/stage"]
+        [components.lib."b/stage"]
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml", artifact_name="fftw3"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
-        double_header = self.temp_dir / "src" / "build_fftw3" / "stage" / "include" / "fftw3.h"
-        float_header = self.temp_dir / "src" / "build_fftw3f" / "stage" / "include" / "fftw3.h"
-        double_header.parent.mkdir(parents=True)
-        float_header.parent.mkdir(parents=True)
-        double_header.write_text("double")
-        float_header.write_text("float")
-        self.touch("src/build_fftw3/stage/lib/libfftw3.so")
-        self.touch("src/build_fftw3f/stage/lib/libfftw3f.so")
+        self.touch("src/a/stage/include/header.h")
+        self.touch("src/b/stage/include/header.h")
+        (self.temp_dir / "src/a/stage/include/header.h").write_text("a")
+        (self.temp_dir / "src/b/stage/include/header.h").write_text("b")
+        self.touch("src/a/stage/lib/libfoo.so")
+        self.touch("src/b/stage/lib/libbar.so")
 
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         scanner.verify()
 
         lib_comp = scanner.components["lib"]
-        self.assertIn(
-            "lib/libfftw3.so",
-            lib_comp.basedir_contents["build_fftw3/stage"].all.keys(),
-        )
-        self.assertIn(
-            "lib/libfftw3f.so",
-            lib_comp.basedir_contents["build_fftw3f/stage"].all.keys(),
-        )
-        self.assertNotIn(
-            "include/fftw3.h",
-            lib_comp.basedir_contents["build_fftw3/stage"].all.keys(),
-        )
+        pm_a = lib_comp.basedir_contents["a/stage"]
+        pm_b = lib_comp.basedir_contents["b/stage"]
+        self.assertSetEqual(set(pm_a.all.keys()), set(["lib/libfoo.so"]))
+        self.assertSetEqual(set(pm_b.all.keys()), set(["lib/libbar.so"]))
 
         dev_comp = scanner.components["dev"]
+        dev_a = dev_comp.basedir_contents["a/stage"]
+        dev_b = dev_comp.basedir_contents["b/stage"]
+        self.assertSetEqual(set(dev_a.all.keys()), set(["include", "include/header.h"]))
+        self.assertSetEqual(set(dev_b.all.keys()), set(["include", "include/header.h"]))
+
         dev_comp.write_artifact(self.temp_dir / "out")
-        double_out = self.temp_dir / "out" / "build_fftw3" / "stage" / "include" / "fftw3.h"
-        float_out = self.temp_dir / "out" / "build_fftw3f" / "stage" / "include" / "fftw3.h"
-        self.assertEqual(double_out.read_text(), "double")
-        self.assertEqual(float_out.read_text(), "float")
+        out_a = self.temp_dir / "out" / "a" / "stage" / "include" / "header.h"
+        out_b = self.temp_dir / "out" / "b" / "stage" / "include" / "header.h"
+        self.assertEqual(out_a.read_text(), "a")
+        self.assertEqual(out_b.read_text(), "b")
         self.assertFalse(
-            (self.temp_dir / "out" / "build_fftw3" / "stage" / "lib" / "libfftw3.so").exists()
+            (self.temp_dir / "out" / "a" / "stage" / "lib" / "libfoo.so").exists()
         )
         self.assertFalse(
-            (self.temp_dir / "out" / "build_fftw3f" / "stage" / "lib" / "libfftw3f.so").exists()
+            (self.temp_dir / "out" / "b" / "stage" / "lib" / "libbar.so").exists()
         )
 
     def testNonOptionalNotExists(self):
