@@ -53,8 +53,8 @@ therock_get_all_targets(
 )
 therock_apply_hardening_to_targets(${THEROCK_HARDENING_TARGETS})
 
-# Performs post-processing on a dynamically linked target (executables and
-# shared libraries) for rpath settings.
+# Performs post-processing on a dynamically linked target (executables,
+# shared libraries, and sanitizer-dependent modules) for rpath settings.
 # Unless if disabled by the global NO_INSTALL_RPATH on the project or locally
 # via THEROCK_NO_INSTALL_RPATH target property, performs default installation
 # RPATH assignment.
@@ -74,7 +74,7 @@ function(_therock_post_process_rpath_target target)
   if(NOT _origin)
     if(target_type STREQUAL "EXECUTABLE")
       set(_origin "${THEROCK_INSTALL_RPATH_EXECUTABLE_DIR}")
-    elseif(target_type STREQUAL "SHARED_LIBRARY")
+    elseif(target_type STREQUAL "SHARED_LIBRARY" OR target_type STREQUAL "MODULE_LIBRARY")
       set(_origin "${THEROCK_INSTALL_RPATH_LIBRARY_DIR}")
     else()
       message(FATAL_ERROR "Unhandled target type ${target_type}")
@@ -92,11 +92,17 @@ function(_therock_post_process_rpath_target target)
 endfunction()
 
 
-# Iterate over all shared library and executable targets and set default RPATH
-# (unless if globally disabled for the subproject).
+# Iterate over shared library and executable targets and set default RPATH
+# (unless if globally disabled for the subproject). Sanitizer runtimes arrive
+# through linker flags, so CMake cannot infer their RPATH for loadable modules.
+# Ordinary modules retain their own RPATH policy.
 block(SCOPE_FOR VARIABLES)
+  set(_rpath_targets ${THEROCK_EXECUTABLE_TARGETS} ${THEROCK_SHARED_LIBRARY_TARGETS})
+  if(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH)
+    list(APPEND _rpath_targets ${THEROCK_MODULE_TARGETS})
+  endif()
   if(NOT THEROCK_NO_INSTALL_RPATH)
-    foreach(target ${THEROCK_EXECUTABLE_TARGETS} ${THEROCK_SHARED_LIBRARY_TARGETS})
+    foreach(target ${_rpath_targets})
       _therock_post_process_rpath_target(${target})
     endforeach()
   endif()

@@ -194,6 +194,10 @@ jobs:
         run: | # zizmor: ignore[template-injection]
           pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
+      - name: Budget CSAN math build concurrency
+        if: ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' }}
+        run: python build_tools/memory_build_jobs.py --github-env
+
       - name: Configure
         # configure_stage.py emits argument fragments from repository build configuration.
         # Trust that configuration and the caller-provided preset/external repo options
@@ -211,6 +215,7 @@ jobs:
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && '-DTHEROCK_BUILD_METRICS=ON' || '' }} \
+            ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' && '-DTHEROCK_BACKGROUND_BUILD_JOBS=1' || '' }} \
             ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].cmake_options || '' }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
