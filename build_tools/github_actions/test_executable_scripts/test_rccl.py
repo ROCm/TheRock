@@ -84,6 +84,9 @@ class TestRCCL:
     )
     def test_rccl_correctness_tests(self, executable):
         environ_vars = _rccl_test_env()
+        # -g sets the number of GPUs per thread. It defaults to 1, which would
+        # make each collective a single-rank no-op, so pass 2 to match the pair
+        # pinned by HIP_VISIBLE_DEVICES.
         cmd = [f"{THEROCK_BIN_DIR}/{executable}", "-g", "2"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
