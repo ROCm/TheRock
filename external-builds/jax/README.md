@@ -10,6 +10,7 @@ Table of contents:
 
 - [Support status](#support-status)
 - [Build instructions](#build-instructions)
+- [Bazel remote cache](#bazel-remote-cache)
 - [Test instructions](#test-instructions)
 - [Nightly releases](#nightly-releases)
 
@@ -53,6 +54,7 @@ Support for JAX is provided via stable release branches from
 
 | JAX version | Linux                                                                                                   | Windows          |
 | ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.12.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.12.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.12.0) | ❌ Not supported |
 | 0.11.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.2) | ❌ Not supported |
 | 0.11.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.1) | ❌ Not supported |
 | 0.11.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.0) | ❌ Not supported |
@@ -75,7 +77,7 @@ This repository builds the following ROCm-enabled JAX artifacts:
 
 > [!NOTE]
 > jaxlib is **not built** for supported JAX versions (0.10.2+); it is installed
-> from upstream PyPI (e.g. `pip install jaxlib==0.11.2`). Only
+> from upstream PyPI (e.g. `pip install jaxlib==0.12.0`). Only
 > **`jax_rocm<major>_pjrt`** and **`jax_rocm<major>_plugin`** are built.
 
 ### How building with TheRock differs from upstream
@@ -102,13 +104,13 @@ from the TheRock multi-arch Python package index (the manylinux flow).
    git clone https://github.com/ROCm/jax.git
 
    pushd jax
-   git checkout rocm-jaxlib-v0.11.2
+   git checkout rocm-jaxlib-v0.12.0
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, or `0.11.2`
+   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, `0.11.2`, or `0.12.0`
    - **Python version**: e.g. `3.12`
    - **Package index**: the TheRock multi-arch Python package index.
 
@@ -146,6 +148,50 @@ from the TheRock multi-arch Python package index (the manylinux flow).
 
 For more detailed build options, see the `ROCm/jax` repository and the
 `.github/workflows/multi_arch_build_linux_jax_wheels.yml` workflow in TheRock.
+
+## Bazel remote cache
+
+The Linux JAX wheel job compiles with Bazel inside a fresh manylinux container,
+so it cannot use the ccache setup that covers TheRock's CMake stages (see
+[CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)). PyTorch
+wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.md#cache-buckets)).
+
+Only the CI wheel build uses the cache. Release builds stay uncached until they
+have a cache of their own, the way nightly has its own ccache server.
+
+JAX points Bazel at EngFlow (`grpcs://actinolite.cluster.engflow.com`) as a
+**cache only**. The build keeps `--config=rocm_release_wheel` and never enables
+`rocm_rbe`, so it does not pick up `--remote_executor` and every action still
+runs on the runner.
+
+The credential is an EngFlow-issued JWT with the `cache-reader` role, kept on
+the runner as `/data/engflow-cache.jwt`, not as a GitHub Actions secret. Fork
+pull requests see that file, so they can **read** the cache; EngFlow rejects
+writes made with it. `write_jax_bazel_cache_credentials.py` copies it into
+`$RUNNER_TEMP` (the workspace is published as artifacts) and the wheel job
+mounts that copy read-only at `/data`. Set the repository variable
+`JAX_BAZEL_CACHE_CREDENTIALS_DIR` if the runner keeps the token somewhere else.
+
+`configure_jax_bazel_cache.py` runs inside the build container and prints no
+Bazel options when the token is missing or the release type is not `ci`; the
+build command is then unchanged. A token that is present but empty, malformed
+or expired, or a cache that does not answer, fails the job rather than build
+uncached. The token reaches Bazel through the same script acting as a
+credential helper scoped to the cache host, never on the command line, which
+`build.py --verbose` logs.
+
+Only pushes to `main` in ROCm/TheRock upload. Pull requests and manual
+dispatches pass `--remote_upload_local_results=false`, but that gate runs on
+the client; what a run can write is decided by its token's role on EngFlow.
+The `cache-writer` token is never on a runner: those `main` builds assume the
+`therock-jax-cache-writer-main` IAM role through GitHub OIDC, fetch the token
+from AWS Secrets Manager, stage it for the build container like the reader
+token, and delete it after the build. Set `JAX_BAZEL_REMOTE_CACHE_URL`
+to point the build at a different cache.
+
+EngFlow entries from `ROCm/jax` CI do not help TheRock: that CI compiles with
+`--config=rocm_rbe`, so the action keys differ. TheRock has to populate the
+cache itself on postsubmit.
 
 ## Test instructions
 

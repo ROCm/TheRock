@@ -77,7 +77,7 @@ from _therock_utils.hash_util import calculate_hash
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
-ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
+ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "sys", "doc", "test"]
 
 
 def _get_base_arch(target: str) -> str:

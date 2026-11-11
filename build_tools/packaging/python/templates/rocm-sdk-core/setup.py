@@ -94,7 +94,7 @@ setup(
                 "rocpd2pftrace=rocm_sdk_core._cli:rocpd2pftrace",
                 "rocpd2summary=rocm_sdk_core._cli:rocpd2summary",
                 "rocprofv3=rocm_sdk_core._cli:rocprofv3",
-                "rocprofv3-attach=rocm_sdk_core._cli:rocprofv3_attach",
+                "rocprof-attach=rocm_sdk_core._cli:rocprof_attach",
                 "rocprofv3-avail=rocm_sdk_core._cli:rocprofv3_avail",
             ]
             if platform.system() != "Windows"

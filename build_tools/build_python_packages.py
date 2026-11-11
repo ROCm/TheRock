@@ -285,8 +285,9 @@ def run(args: argparse.Namespace):
             # TODO: The base package is shoving CMake redirects into lib.
             excludes=[
                 "**/cmake/**",
-                # profiler binaries
-                "bin/rocprof-*",
+                # profiler binaries (rocprof-attach from rocprofiler-sdk stays in core)
+                "bin/rocprof-compute*",
+                "bin/rocprof-sys-*",
                 # rocprofiler-systems payload
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
@@ -587,6 +588,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     ] and an.component in [
         "lib",
         "run",
+        "sys",
     ]
     hotswap = an.name == "rocjitsu-hotswap" and an.component == "lib"
     # hiprtc needs to be able to find HIP headers in its same tree.
@@ -624,11 +626,12 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
+    # doc carries each tool's share/doc/<name>/LICENSE.md.
     profiler_tools = an.name in [
         "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
-    ] and an.component in ["lib", "run"]
+    ] and an.component in ["lib", "run", "doc"]
     trace_decoder_python = an.name == "rocprofiler-sdk" and an.component == "lib"
     return profiler_tools or trace_decoder_python
 

@@ -15,10 +15,10 @@ on:
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       artifact_group:
-        description: "artifact_group to build (e.g. 'gfx94X-dcgpu' for single family builds, 'multi-arch-release' for multi-arch builds with 'amdgpu_families' set)"
+        description: "Artifact group label for this build (e.g. 'multi-arch-release')"
         type: string
       amdgpu_families:
-        description: "amdgpu_families for multi-arch builds as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all'). Leave empty for single-family builds (those only use artifact_group)"
+        description: "GPU families as a semicolon-separated list (e.g. 'gfx94X-dcgpu;gfx120X-all')"
         type: string
         default: ""
       linux_amdgpu_families:
@@ -29,10 +29,6 @@ on:
         description: "Windows side of the cross-platform family pair. See linux_amdgpu_families."
         type: string
         default: ""
-      multiarch_index:
-        description: "Enable multi-arch indexing (generates per-family indexes)"
-        type: boolean
-        default: false
       package_version:
         description: "package_version to set on packages, e.g. '7.13.0.dev0+dbd7369489260265fc6ddfc9d0de1262a95fe974'"
         type: string
@@ -58,7 +54,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "aws-linux-scale-rocm-medium"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -77,9 +73,6 @@ on:
       windows_amdgpu_families:
         type: string
         default: ""
-      multiarch_index:
-        type: boolean
-        default: false
       package_version:
         type: string
       release_type:
@@ -99,14 +92,11 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "aws-linux-scale-rocm-medium"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
         value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
-      kpack_split:
-        description: "true if this is a kpack-split flat build, false for legacy per-family"
-        value: ${{ jobs.build_rocm_wheels.outputs.kpack_split }}
 
 permissions:
   contents: read
@@ -122,17 +112,15 @@ jobs:
       contents: read
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cf4f6d9909056906e4a1c0bc4c245658a0af4c6a6174082a86adfa2d518b7aeb # 2026-08-18
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce # 2026-10-30
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
-      kpack_split: ${{ steps.upload.outputs.kpack_split }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
       QUARTZ_REPORTING_WORKFLOW: build_portable_linux_python_packages.yml
       QUARTZ_WORKFLOW_POSTFIX: "- build ROCm Python packages"
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
       WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
@@ -146,7 +134,7 @@ jobs:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
@@ -167,28 +155,16 @@ jobs:
 
       - name: Fetch artifacts
         run: |
-          if [ -n "${AMDGPU_FAMILIES}" ]; then
-            # Multi-arch mode: use artifact_manager.py to fetch all families
-            echo "Fetching artifacts for multiple families: ${AMDGPU_FAMILIES}"
-            python ./build_tools/artifact_manager.py fetch \
-              --run-id="${ARTIFACT_RUN_ID}" \
-              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
-              --stage=all \
-              --amdgpu-families="${AMDGPU_FAMILIES}" \
-              --expand-family-to-targets \
-              --output-dir="${OUTPUT_ROOT}"
-              # NOTE: artifact_manager.py appends /artifacts to --output-dir
-              # in non-flatten mode, so pass OUTPUT_ROOT here so that
-              # artifacts land in ARTIFACTS_DIR ($OUTPUT_ROOT/artifacts).
-          else
-            # Single-family mode: use fetch_artifacts.py (backward compatible)
-            echo "Fetching artifacts for single family: ${ARTIFACT_GROUP}"
-            python ./build_tools/fetch_artifacts.py \
-              --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
-              --run-id="${ARTIFACT_RUN_ID}" \
-              --artifact-group="${ARTIFACT_GROUP}" \
-              --output-dir="${ARTIFACTS_DIR}"
-          fi
+          # artifact_manager.py appends /artifacts to --output-dir, so pass
+          # OUTPUT_ROOT so artifacts land in ARTIFACTS_DIR.
+          echo "Fetching artifacts for families: ${AMDGPU_FAMILIES}"
+          python ./build_tools/artifact_manager.py fetch \
+            --run-id="${ARTIFACT_RUN_ID}" \
+            --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
+            --stage=all \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --expand-family-to-targets \
+            --output-dir="${OUTPUT_ROOT}"
 
       - name: Build Python packages
         run: |
@@ -212,9 +188,7 @@ jobs:
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGES_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            ${{ inputs.multiarch_index && '--multiarch' || '' }}
+            --run-id="${{ github.run_id }}"
 
       - name: Capture job summary
         id: summary
@@ -224,7 +198,7 @@ jobs:
       - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
         continue-on-error: true
         if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           run_conclusion: ${{ job.status }}

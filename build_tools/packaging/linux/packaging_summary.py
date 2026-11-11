@@ -45,7 +45,7 @@ def write_build_manifest(config: PackageConfig, pkg_list: PackageList):
             f.write(f"# Built Packages Manifest\n")
             f.write(f"# Package Type: {config.pkg_type.upper()}\n")
             f.write(f"# ROCm Version: {config.rocm_version}\n")
-            f.write(f"# Graphics Architecture: {config.gfx_arch}\n")
+            f.write(f"# Graphics Architectures: {', '.join(config.gfxarch_list)}\n")
             f.write(
                 f"# Build Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
             )
