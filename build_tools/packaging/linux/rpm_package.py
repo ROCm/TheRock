@@ -33,7 +33,8 @@ def list_etc_entries(staging_dir):
     staging_dir : Directory staged by stage_etc_files
 
     Returns: %dir lines for package-specific directories (never
-    SYSTEM_ETC_DIRS) followed by %config(noreplace) lines for the files.
+    SYSTEM_ETC_DIRS) followed by the files. The files are plain package
+    files, not %config: they are generated and not meant to be edited.
     """
     staging_dir = Path(staging_dir)
     dirs, files = set(), []
@@ -43,9 +44,7 @@ def list_etc_entries(staging_dir):
             dirs.add(system_path)
         else:
             files.append(system_path)
-    return [f"%dir {d}" for d in sorted(dirs - SYSTEM_ETC_DIRS)] + [
-        f"%config(noreplace) {f}" for f in sorted(files)
-    ]
+    return [f"%dir {d}" for d in sorted(dirs - SYSTEM_ETC_DIRS)] + sorted(files)
 
 
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig) -> list[str]:
@@ -186,8 +185,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     pkg_name = update_package_name(pkg_name, config)
 
     # etc/ files install at the system /etc rather than the prefix. They are
-    # staged next to the specfile and listed individually, as config files,
-    # so the package never owns OS directories.
+    # staged next to the specfile and listed individually so the package
+    # never owns OS directories.
     etc_staging_dir = Path(specfile).parent / "etc_staging"
     etc_files = []
     if stage_etc_files(sourcedir_list, etc_staging_dir, version, config.version_suffix):
