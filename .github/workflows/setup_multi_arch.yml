@@ -157,6 +157,9 @@ on:
       rocm_msi_package_version:
         description: ROCm MSI package version for native Windows packages.
         value: ${{ jobs.setup.outputs.rocm_msi_package_version }}
+      rocm_build_date:
+        description: Build date (YYYYMMDD) shared by the run's dated package folders.
+        value: ${{ jobs.setup.outputs.rocm_build_date }}
       ref:
         description: >-
           Resolved commit SHA from checkout. Use this instead of the input ref
@@ -185,6 +188,7 @@ jobs:
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
       rocm_msi_package_version: ${{ steps.rocm_package_version.outputs.rocm_msi_package_version }}
+      rocm_build_date: ${{ steps.rocm_package_version.outputs.rocm_build_date }}
       ref: ${{ steps.checkout.outputs.commit }}
       external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
     env:

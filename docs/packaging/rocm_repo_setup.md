@@ -260,11 +260,6 @@ Bump it to re-ship the repository configuration at an unchanged ROCm version —
 without it there would be no higher version for the package manager to accept,
 and installing the corrected package would silently do nothing.
 
-CI builds the nightly package with the workflow run id as `--version-suffix`
-(e.g. `amd-repo-setup_10.0.0~20260716-12345~ubuntu2404_all.deb`). The nightly
-version carries only the date, so without the run id two builds on the same
-day would produce packages with the same name and version.
-
 The deb token is the `--os-profile` name rather than a Debian codename, because
 codenames are not alphabetically ordered: `bullseye` sorts *above* `bookworm`,
 so a Debian 11 → 12 upgrade would see the newer package as a downgrade. On RHEL

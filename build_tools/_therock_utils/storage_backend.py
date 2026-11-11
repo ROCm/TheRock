@@ -141,7 +141,8 @@ class StorageBackend(ABC):
             dest: Destination directory location.
             include: Optional glob patterns to filter filenames.
             skip_existing: Leave files that already exist at the destination
-                in place instead of replacing them. Lists the destination.
+                in place instead of replacing them. Best effort: a file created
+                between the listing and the copy can still be replaced.
 
         Returns:
             Number of files copied.

@@ -7,11 +7,15 @@ r"""Upload a built amd-repo-setup package to the per-run outputs.
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
-The destination is ``WorkflowOutputRoot.repo_setup_package()`` (see that method
-for the layout), under the file name the builder gave the package.
-``publish_rocm_to_release_buckets.py`` then publishes it to
-``v5/amd-repo-setup/`` in the release bucket, separately from the package
-repositories.
+The package keeps the file name the builder gave it and goes to one folder per
+distro, because each amd-repo-setup package is built for one distro (its
+repository file names that distro). The ROCm packages differ: they are built
+once per format and stored under ``deb/`` and ``rpm/``.
+
+    {run_id}-linux/amd-repo-setup/<os_profile>/<file>    (run's artifacts bucket)
+    v5/amd-repo-setup/<os_profile>/<file>                (after publish_rocm_to_release_buckets.py)
+
+e.g. ``12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
@@ -53,10 +57,8 @@ _OS_PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 # staging directory. \Z (not $) so a trailing newline is not accepted.
 _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
-# The built package's file name becomes the last segment of the object key and
-# part of the URL written to $GITHUB_OUTPUT. The builder's names only use these
-# characters; anything else (a newline, a space, a path separator) is refused
-# rather than uploaded. \Z (not $) so a trailing newline is not accepted.
+# The file name goes into the object key and $GITHUB_OUTPUT, so only the
+# characters the builder's names use are allowed (\Z rejects a trailing newline).
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._~+-]*\Z")
 
 

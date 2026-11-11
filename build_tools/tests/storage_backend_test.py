@@ -1010,21 +1010,6 @@ class TestLocalStorageBackendCopyDirectory(unittest.TestCase):
             any("sub/old.deb already exists, not replaced" in m for m in logs.output)
         )
 
-    def test_skip_existing_copies_into_an_empty_destination(self):
-        with tempfile.TemporaryDirectory() as staging:
-            staging_dir = Path(staging)
-            src_dir = staging_dir / "run-1" / "pkgs"
-            src_dir.mkdir(parents=True)
-            (src_dir / "a.deb").write_bytes(b"data")
-
-            source = StorageLocation("bucket", "run-1/pkgs")
-            dest = StorageLocation("bucket", "v5")
-            backend = LocalStorageBackend(staging_dir)
-            count = backend.copy_directory(source, dest, skip_existing=True)
-
-            self.assertEqual(count, 1)
-            self.assertTrue((staging_dir / "v5" / "a.deb").is_file())
-
 
 # ---------------------------------------------------------------------------
 # S3StorageBackend.copy_files

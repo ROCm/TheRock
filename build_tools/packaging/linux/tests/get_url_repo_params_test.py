@@ -608,18 +608,19 @@ _REPO_SETUP_PARAMS_KEYS = {
 class GetRepoSetupParamsTest(unittest.TestCase):
     """Tests for the get-repo-setup-params subcommand."""
 
-    def _run(self, pkg_type, release_type, run_id="12345"):
-        return _run_main_with_output(
-            [
-                "get-repo-setup-params",
-                "--pkg-type",
-                pkg_type,
-                "--release-type",
-                release_type,
-                "--run-id",
-                run_id,
-            ]
-        )
+    def _run(self, pkg_type, release_type, run_id="12345", build_date=None):
+        argv = [
+            "get-repo-setup-params",
+            "--pkg-type",
+            pkg_type,
+            "--release-type",
+            release_type,
+            "--run-id",
+            run_id,
+        ]
+        if build_date is not None:
+            argv += ["--build-date", build_date]
+        return _run_main_with_output(argv)
 
     def test_nightly_is_unsigned_with_a_dated_build_folder(self):
         code, output = self._run("rpm", "nightly")
@@ -674,6 +675,26 @@ class GetRepoSetupParamsTest(unittest.TestCase):
             "version_suffix",
         ):
             self.assertEqual(out[key], "", key)
+
+    def test_build_date_names_the_build_folder(self):
+        # The release passes one build date so the folder matches the one the
+        # repository is published under, whatever the date is now.
+        code, output = self._run("deb", "nightly", build_date="20260101")
+        self.assertEqual(code, 0)
+        self.assertEqual(_outputs(output)["repo_sub_folder"], "20260101-12345")
+
+    def test_empty_build_date_means_today(self):
+        code, output = self._run("deb", "nightly", build_date="")
+        self.assertEqual(code, 0)
+        self.assertRegex(_outputs(output)["repo_sub_folder"], r"^\d{8}-12345$")
+
+    def test_malformed_build_date_writes_nothing(self):
+        for bad in ("2026010", "20261332", "x", "20260101\ninjected=yes"):
+            with self.subTest(build_date=bad):
+                with patch("sys.stderr"):
+                    code, output = self._run("deb", "nightly", build_date=bad)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(output, "")
 
     def test_hostile_run_id_on_a_build_id_stream_writes_nothing(self):
         code, output = self._run("deb", "nightly", run_id="1\nEOF_mag1c\ninjected=yes")

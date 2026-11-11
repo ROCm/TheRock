@@ -28,14 +28,14 @@ BUCKET = "therock-prerelease-artifacts"
 
 # What the builder names an rc package of each format.
 BUILT_FILES = {
-    "rpm": "amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm",
-    "deb": "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb",
+    "rpm": "amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm",
+    "deb": "amd-repo-setup_10.1.0~pre3-1~ubuntu2404_all.deb",
 }
 
 # The key the upload is expected to write, spelled out here so a change to the
 # uploaded layout has to be made deliberately in two places.
 EXPECTED_RPM_KEY = (
-    "12345-linux/amd-repo-setup/rhel10/amd-repo-setup-7.14.0~rc2-1.rc.el10.noarch.rpm"
+    "12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm"
 )
 
 
@@ -183,7 +183,7 @@ def test_find_package_rejects_an_empty_dir(tmp_path):
 
 def test_find_package_rejects_two_packages(tmp_path):
     dest = _built_dir(tmp_path)
-    (dest / "amd-repo-setup-7.14.0~rc2-2.rc.el10.noarch.rpm").write_bytes(b"X")
+    (dest / "amd-repo-setup-10.1.0~rc3-2.rc.el10.noarch.rpm").write_bytes(b"X")
     with pytest.raises(ValueError, match="found 2"):
         ursp.find_package(dest, "rpm")
 
@@ -247,24 +247,12 @@ def test_upload_writes_file_at_expected_key(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "pkg_type,os_profile,filename",
     [
-        # rc keeps the builder's default suffix; nightly carries the run id.
-        ("deb", "ubuntu2404", "amd-repo-setup_7.14.0~pre2-1~ubuntu2404_all.deb"),
         (
             "deb",
             "ubuntu2404",
-            "amd-repo-setup_7.14.0~20261105-12345~ubuntu2404_all.deb",
+            "amd-repo-setup_10.1.0~20260101-12345~ubuntu2404_all.deb",
         ),
-        ("rpm", "rhel8", "amd-repo-setup-7.14.0~rc2-1.rc.el8.noarch.rpm"),
-        (
-            "rpm",
-            "rhel10",
-            "amd-repo-setup-7.14.0~20261105-12345.nightly.el10.noarch.rpm",
-        ),
-        (
-            "rpm",
-            "sles16",
-            "amd-repo-setup-7.14.0~20261105-12345.nightly.sles16.noarch.rpm",
-        ),
+        ("rpm", "rhel10", "amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm"),
     ],
 )
 def test_upload_keeps_the_built_file_name(

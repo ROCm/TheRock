@@ -281,15 +281,8 @@ class WorkflowOutputRoot:
     def repo_setup_package(self, os_profile: str, filename: str) -> StorageLocation:
         """Location for an ``amd-repo-setup`` bootstrap package.
 
-        ``{run_id}-linux/amd-repo-setup/{os_profile}/{filename}`` (e.g.
-        ``12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261013-12345~ubuntu2404_all.deb``).
-
-        The package keeps the file name the builder gave it, which carries its
-        version. On a per-build stream such as nightly the version includes the
-        run id, so each build's package has its own name and publishing one
-        never replaces another. The folder sits outside ``packages/``, so the
-        package is published to its own folder rather than into the package
-        repositories.
+        ``{run_id}-linux/amd-repo-setup/{os_profile}/{filename}``, under the
+        builder's file name (e.g. ``amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``).
 
         Args:
             os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').

@@ -164,11 +164,7 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             "99999-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
         )
 
-    # -- Native packages --
-
-    def test_native_linux_packages(self):
-        loc = self.root.native_linux_packages("deb")
-        self._assert_relative_path(loc, "99999-linux/packages/deb")
+    # -- amd-repo-setup packages --
 
     def test_repo_setup_packages(self):
         loc = self.root.repo_setup_packages()

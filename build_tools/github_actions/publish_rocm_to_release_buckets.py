@@ -208,17 +208,34 @@ def _publish_python_packages_structured(
     logger.info("Copied %d python package files (structured)", len(plans))
 
 
+def _build_date(value: str) -> str:
+    """argparse type for ``--build-date``: ``YYYYMMDD``, or empty for today."""
+    if not value:
+        return datetime.date.today().strftime("%Y%m%d")
+    try:
+        if len(value) != 8 or not (value.isascii() and value.isdigit()):
+            raise ValueError
+        datetime.datetime.strptime(value, "%Y%m%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be YYYYMMDD, got {value!r}") from None
+    return value
+
+
 def publish_native_linux_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
     build_variant: str = "release",
+    build_date: str | None = None,
 ) -> None:
     """Copy native Linux packages from the artifacts bucket to the release packages bucket.
 
     The source packages were uploaded by upload_package_repo.py (called from
     multi_arch_build_native_linux_packages.yml) and already include repodata
     (Packages/Release files for deb, repodata/ for rpm).
+
+    The dated folder uses ``build_date``, the run's build date (the nightly
+    amd-repo-setup package names the same folder), or today if none is given.
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-linux/packages/deb/
@@ -246,7 +263,7 @@ def publish_native_linux_packages(
     the merge logic in upload_package_repo.py (regenerate_repo_metadata_from_s3).
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
-    today = datetime.date.today().strftime("%Y%m%d")
+    today = build_date or datetime.date.today().strftime("%Y%m%d")
     is_asan = _is_asan_variant(build_variant)
 
     for pkg_type in ["deb", "rpm"]:
@@ -277,18 +294,9 @@ def publish_repo_setup_packages(
 ) -> None:
     """Copy the amd-repo-setup packages from the artifacts bucket to the release bucket.
 
-    The packages were uploaded by upload_repo_setup_package.py, one per distro,
-    under the file names the builder gave them. A nightly package's version
-    includes the run id, so each build adds its own file:
-
-        s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
-          -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
-
-    A published package is never replaced: a file that already exists at the
-    destination is left as it is, unless ``overwrite`` is set to re-publish a
-    corrected package by hand.
-
-    Not every build uploads them, so finding none is not an error.
+    Files already published are left in place unless ``overwrite`` is set (for
+    re-publishing a corrected package by hand). Not every build uploads
+    packages, so finding none is not an error.
     """
     source = artifacts_root.repo_setup_packages()
     dest_bucket = get_product_release_bucket_config(release_type, "core")
@@ -387,6 +395,13 @@ def main(argv: list[str]) -> None:
         "package is never replaced",
     )
     parser.add_argument(
+        "--build-date",
+        type=_build_date,
+        default="",
+        help="Build date (YYYYMMDD) of the dated package folders, shared with the "
+        "rest of the run; empty means today",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
     )
     parser.add_argument(
@@ -419,7 +434,11 @@ def main(argv: list[str]) -> None:
         logger.info("Skipping python packages for ASAN build variant")
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(
-            artifacts_root, args.release_type, backend, args.build_variant
+            artifacts_root,
+            args.release_type,
+            backend,
+            args.build_variant,
+            build_date=args.build_date,
         )
         # After the package repositories, which the amd-repo-setup package
         # configures. ASAN builds don't build the package, and their packages

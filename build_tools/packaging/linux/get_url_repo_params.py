@@ -582,6 +582,19 @@ def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
 _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
 
+def parse_build_date(value: str) -> date | None:
+    """Parse a ``YYYYMMDD`` build date; empty means none (use today).
+
+    Raises:
+        ValueError: If ``value`` is not empty and not a real ``YYYYMMDD`` date.
+    """
+    if not value:
+        return None
+    if not re.fullmatch(r"[0-9]{8}", value, re.ASCII):
+        raise ValueError(f"build date must be YYYYMMDD, got {value!r}")
+    return datetime.strptime(value, "%Y%m%d").date()
+
+
 def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
     """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
 
@@ -627,6 +640,11 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
     # packages. Only this subcommand needs the builder.
     from build_repo_setup_package import is_signed, list_profiles, stream_shape
 
+    try:
+        build_date = parse_build_date(args.build_date)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
     profiles = list_profiles(args.pkg_type)
     outputs = {
         "os_profiles": json.dumps(profiles),
@@ -650,17 +668,14 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
         outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
             args.release_type, signed=is_signed(stream)
         )
-        # A build_id stream serves each build from its own dated folder; a flat
-        # one serves one tree at the root, and the builder rejects a sub-folder
-        # there. The run id is only validated where it is used.
-        #
-        # A build_id stream's version carries only the date, so two builds on
-        # the same day would produce the same package file. The run id as the
-        # version suffix keeps each build's package distinct, so publishing one
-        # never replaces another. A flat stream keeps the builder's default.
+        # A build_id stream serves each build from its own dated folder (the
+        # builder rejects one for a flat stream), and its version carries only
+        # the date, so the run id is also the version suffix: one file per build.
         if shape == _SHAPE_BUILD_ID:
             try:
-                outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
+                outputs["repo_sub_folder"] = nightly_sub_folder(
+                    args.run_id, today=build_date
+                )
             except ValueError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
@@ -968,6 +983,11 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         help="Release line (e.g. prerelease, release, nightly)",
+    )
+    p_rp.add_argument(
+        "--build-date",
+        default="",
+        help="Build date (YYYYMMDD) of the dated build folder; empty means today",
     )
     p_rp.add_argument(
         "--run-id",

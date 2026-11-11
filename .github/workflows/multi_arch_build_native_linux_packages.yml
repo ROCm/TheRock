@@ -16,6 +16,11 @@ on:
         description: "ROCm version to append to the package (8.0.0, 8.0.1rc1, ...)"
         required: true
         type: string
+      build_date:
+        description: "Build date (YYYYMMDD) for the run's dated package folders; empty means today"
+        required: false
+        type: string
+        default: ""
       native_package_type:
         description: "Package type (deb or rpm)"
         required: true
@@ -102,6 +107,7 @@ jobs:
       NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_DATE: ${{ inputs.build_date }}
     outputs:
       os_profiles: ${{ steps.derive.outputs.os_profiles }}
       images: ${{ steps.derive.outputs.images }}
@@ -144,7 +150,8 @@ jobs:
           python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-setup-params \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
-            --run-id "${ARTIFACT_RUN_ID}"
+            --run-id "${ARTIFACT_RUN_ID}" \
+            --build-date "${BUILD_DATE}"
 
   build_native_packages:
     permissions:
@@ -363,9 +370,8 @@ jobs:
         run: |
           # The build sub-folder is empty except on a per-build stream, which is
           # the only kind the builder accepts one for. The key URL is empty on an
-          # unsigned stream, where the builder needs none. The version suffix is
-          # the run id on a per-build stream, so each build's package has its own
-          # file name; elsewhere it is empty and the builder keeps its default.
+          # unsigned stream, where the builder needs none. The version suffix (the
+          # run id on a per-build stream) gives each build its own file name.
           $PYTHON_CMD build_tools/packaging/linux/build_repo_setup_package.py \
             --os-profile "${OS_PROFILE}" \
             --stream "${STREAM}" \
