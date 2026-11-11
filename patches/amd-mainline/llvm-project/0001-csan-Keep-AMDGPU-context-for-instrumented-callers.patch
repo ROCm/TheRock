@@ -1,0 +1,332 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 10:00:00 -0800
+Subject: [PATCH] csan: Keep AMDGPU context for instrumented callers
+
+CSAN inserts device access callbacks after AMDGPU has inferred that some
+functions do not need workgroup or workitem IDs. The callbacks consume
+XYZ context for reporting, LDS watchpoint keys and sampling. Retaining
+those exclusions produces native kernels that do not pass that context.
+
+Prepare eligible access functions and their statically resolved callers
+in the existing module pass, then remove the six inferred exclusions
+from a directly instrumented function when the function pass runs alone.
+Keep other-function mutation out of the function pass. Reuse the same
+constructor, naked and disabled-function eligibility checks, preserve
+no-checking functions, and restrict this preparation to AMDGPU.
+
+Follow direct calls through pointer casts and aliases. This change does
+not add indirect or cross-module callee resolution; those remain governed
+by the existing backend ABI rules and require separate auditing.
+
+Source: ROCm/llvm-project 641fded1f5684d68f0f678d84ac46437936b0d42
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43015193286
+Actual repaired RCCL payloads from build43011431315 also contain native
+kernels with real access callbacks but incomplete context descriptors.
+
+Validation: compile the actual modified pass privately against the artifact
+LLVM SDK with renamed pass symbols/options; exercise IR and native gfx942
+descriptor checks. The old pass fails both regressions, the new pass passes.
+Direct, transitive alias, no-access, disabled, naked, no-checking, disabled
+memory-checking and host instrumentation controls pass. GPU execution of
+the original reported addKernel case is still pending; this patch does not
+classify that report as a false positive or change its kernel.
+Carry temporarily in TheRock pending upstream LLVM review.
+---
+ .../Instrumentation/ConcurrencySanitizer.cpp       | 134 ++++++++++++++++++---
+ .../ConcurrencySanitizer/amdgpu-context.ll         | 102 ++++++++++++++++
+ 2 files changed, 222 insertions(+), 14 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Instrumentation/ConcurrencySanitizer.cpp b/llvm/lib/Transforms/Instrumentation/ConcurrencySanitizer.cpp
+index 995dc45..5fa36d5 100644
+--- a/llvm/lib/Transforms/Instrumentation/ConcurrencySanitizer.cpp
++++ b/llvm/lib/Transforms/Instrumentation/ConcurrencySanitizer.cpp
+@@ -15,6 +15,7 @@
+ #include "llvm/Transforms/Instrumentation/ConcurrencySanitizer.h"
+ #include "llvm/ADT/BitmaskEnum.h"
+ #include "llvm/ADT/DenseMap.h"
++#include "llvm/ADT/SmallPtrSet.h"
+ #include "llvm/ADT/SmallVector.h"
+ #include "llvm/ADT/Statistic.h"
+ #include "llvm/ADT/bit.h"
+@@ -185,6 +186,7 @@ static bool addressSpaceMayRace(const Triple &T, unsigned AS) {
+ 
+ struct ConcurrencySanitizer {
+   bool sanitizeFunction(Function &F, const TargetLibraryInfo &TLI);
++  bool mayInstrumentGPUAccess(Function &F);
+ 
+ private:
+   struct MemoryAccessLists {
+@@ -244,6 +246,66 @@ private:
+   FunctionCallee CsanAtomicSignalFence;
+ };
+ 
++
++// Keep the module's context preparation consistent with the function pass.
++static bool mayInstrumentFunction(const Function &F) {
++  // This is required to prevent instrumenting call to __csan_init from within
++  // the module constructor.
++  if (F.getName() == kCsanModuleCtorName)
++    return false;
++  // Naked functions can not have prologue/epilogue
++  // (__csan_func_entry/__csan_func_exit) generated, so don't instrument them at
++  // all.
++  if (F.hasFnAttribute(Attribute::Naked))
++    return false;
++
++  // __attribute__(disable_sanitizer_instrumentation) prevents all kinds of
++  // instrumentation.
++  if (F.hasFnAttribute(Attribute::DisableSanitizerInstrumentation))
++    return false;
++
++  return true;
++}
++
++static void removeAMDGPUContextAttributes(Function &F) {
++  for (StringRef Attr : {"amdgpu-no-workgroup-id-x", "amdgpu-no-workgroup-id-y",
++                        "amdgpu-no-workgroup-id-z", "amdgpu-no-workitem-id-x",
++                        "amdgpu-no-workitem-id-y", "amdgpu-no-workitem-id-z"})
++    F.removeFnAttr(Attr);
++}
++
++// The function sanitizer runs after AMDGPU attribute inference. A probe uses
++// all three workgroup and workitem IDs, including in functions that previously
++// needed none. Clear the inferred exclusions in callers before the function
++// adaptor runs, so no function pass has to mutate another function's IR.
++static void prepareAMDGPUContext(Module &M) {
++  if (!M.getTargetTriple().isAMDGPU())
++    return;
++
++  DenseMap<Function *, SmallVector<Function *, 4>> Callers;
++  SmallVector<Function *, 16> Worklist;
++  ConcurrencySanitizer CSan;
++  for (Function &F : M) {
++    if (CSan.mayInstrumentGPUAccess(F))
++      Worklist.push_back(&F);
++    for (BasicBlock &BB : F)
++      for (Instruction &I : BB)
++        if (auto *CB = dyn_cast<CallBase>(&I))
++          if (auto *Callee = dyn_cast<Function>(
++                  CB->getCalledOperand()->stripPointerCastsAndAliases()))
++            Callers[Callee].push_back(&F);
++  }
++
++  SmallPtrSet<Function *, 32> Visited;
++  while (!Worklist.empty()) {
++    Function *F = Worklist.pop_back_val();
++    if (!Visited.insert(F).second)
++      continue;
++    removeAMDGPUContextAttributes(*F);
++    append_range(Worklist, Callers.lookup(F));
++  }
++}
++
+ void insertModuleCtor(Module &M) {
+   getOrCreateSanitizerCtorAndInitFunctions(
+       M, kCsanModuleCtorName, kCsanInitName, /*InitArgTypes=*/{},
+@@ -256,8 +318,13 @@ void insertModuleCtor(Module &M) {
+ PreservedAnalyses ConcurrencySanitizerPass::run(Function &F,
+                                                 FunctionAnalysisManager &FAM) {
+   ConcurrencySanitizer CSan;
+-  if (CSan.sanitizeFunction(F, FAM.getResult<TargetLibraryAnalysis>(F)))
++  const bool NeedsGPUContext = F.getParent()->getTargetTriple().isAMDGPU() &&
++                               CSan.mayInstrumentGPUAccess(F);
++  if (CSan.sanitizeFunction(F, FAM.getResult<TargetLibraryAnalysis>(F))) {
++    if (NeedsGPUContext)
++      removeAMDGPUContextAttributes(F);
+     return PreservedAnalyses::none();
++  }
+   return PreservedAnalyses::all();
+ }
+ 
+@@ -265,6 +332,7 @@ PreservedAnalyses ModuleConcurrencySanitizerPass::run(Module &M,
+                                                       ModuleAnalysisManager &) {
+   if (checkIfAlreadyInstrumented(M, "nosanitize_concurrency"))
+     return PreservedAnalyses::all();
++  prepareAMDGPUContext(M);
+   insertModuleCtor(M);
+   return PreservedAnalyses::none();
+ }
+@@ -312,21 +380,59 @@ void ConcurrencySanitizer::initialize(Module &M, const TargetLibraryInfo &TLI) {
+       OrdTy);
+ }
+ 
+-bool ConcurrencySanitizer::sanitizeFunction(Function &F,
+-                                            const TargetLibraryInfo &TLI) {
+-  // This is required to prevent instrumenting call to __csan_init from within
+-  // the module constructor.
+-  if (F.getName() == kCsanModuleCtorName)
+-    return false;
+-  // Naked functions can not have prologue/epilogue
+-  // (__csan_func_entry/__csan_func_exit) generated, so don't instrument them at
+-  // all.
+-  if (F.hasFnAttribute(Attribute::Naked))
++
++bool ConcurrencySanitizer::mayInstrumentGPUAccess(Function &F) {
++  if (!mayInstrumentFunction(F) ||
++      !F.hasFnAttribute(Attribute::SanitizeConcurrency) ||
++      F.hasFnAttribute("sanitize_concurrency_no_checking_at_run_time"))
+     return false;
+ 
+-  // __attribute__(disable_sanitizer_instrumentation) prevents all kinds of
+-  // instrumentation.
+-  if (F.hasFnAttribute(Attribute::DisableSanitizerInstrumentation))
++  Mod = F.getParent();
++  // This is deliberately conservative: an earlier read can later be covered
++  // by a write, but clearing an exclusion for either access is still safe.
++  for (BasicBlock &BB : F) {
++    for (Instruction &I : BB) {
++      if (I.hasMetadata(LLVMContext::MD_nosanitize))
++        continue;
++      if (isAtomicMemoryAccess(&I)) {
++        if (!ClInstrumentAtomics)
++          continue;
++        Value *Addr = nullptr;
++        if (auto *LI = dyn_cast<LoadInst>(&I))
++          Addr = LI->getPointerOperand();
++        else if (auto *SI = dyn_cast<StoreInst>(&I))
++          Addr = SI->getPointerOperand();
++        else if (auto *RMW = dyn_cast<AtomicRMWInst>(&I))
++          Addr = RMW->getPointerOperand();
++        else if (auto *CAS = dyn_cast<AtomicCmpXchgInst>(&I))
++          Addr = CAS->getPointerOperand();
++        // Fences are device no-ops and do not consume the GPU context.
++        if (Addr && !Addr->isSwiftError() && shouldInstrumentAddress(Addr))
++          return true;
++      } else if (isa<LoadInst, StoreInst>(&I)) {
++        if (ClInstrumentMemoryAccesses && shouldInstrumentAccess(&I) &&
++            !getLoadStorePointerOperand(&I)->isSwiftError())
++          return true;
++      } else if (ClInstrumentMemIntrinsics) {
++        if (auto *MI = dyn_cast<AnyMemIntrinsic>(&I)) {
++          if (shouldInstrumentAddress(MI->getRawDest()))
++            return true;
++          if (auto *MT = dyn_cast<AnyMemTransferInst>(&I))
++            if (shouldInstrumentAddress(MT->getRawSource()))
++              return true;
++        } else if (auto *MSP = dyn_cast<MemSetPatternInst>(&I)) {
++          if (shouldInstrumentAddress(MSP->getRawDest()))
++            return true;
++        }
++      }
++    }
++  }
++  return false;
++}
++
++bool ConcurrencySanitizer::sanitizeFunction(Function &F,
++                                            const TargetLibraryInfo &TLI) {
++  if (!mayInstrumentFunction(F))
+     return false;
+ 
+   Mod = F.getParent();
+diff --git a/llvm/test/Instrumentation/ConcurrencySanitizer/amdgpu-context.ll b/llvm/test/Instrumentation/ConcurrencySanitizer/amdgpu-context.ll
+new file mode 100644
+index 0000000..124457c
+--- /dev/null
++++ b/llvm/test/Instrumentation/ConcurrencySanitizer/amdgpu-context.ll
+@@ -0,0 +1,102 @@
++; RUN: opt < %s -passes='csan-module,function(csan)' -csan-instrument-func-entry-exit=false -S | FileCheck %s --check-prefix=IR
++; RUN: opt < %s -passes='csan-module,function(csan)' -csan-instrument-func-entry-exit=false -S | llc -O=1 -mtriple=amdgcn-amd-amdhsa -mcpu=gfx942 -o - | FileCheck %s --check-prefix=ASM
++; RUN: opt < %s -passes='csan-module,function(csan)' -csan-instrument-func-entry-exit=false -csan-instrument-memory-accesses=false -S | FileCheck %s --check-prefix=OFF
++; RUN: opt < %s -mtriple=x86_64-unknown-linux-gnu -passes='csan-module,function(csan)' -csan-instrument-func-entry-exit=false -S | FileCheck %s --check-prefixes=OFF,HOST
++; REQUIRES: amdgpu-registered-target
++;
++; CSAN probes are added after AMDGPU infers implicit-argument exclusions.
++; Both the directly instrumented kernel and uninstrumented transitive callers
++; must pass XYZ context to the probe. A function pass cannot invalidate its
++; callers, so this is prepared by csan-module before the function adaptor.
++
++target triple = "amdgcn-amd-amdhsa"
++
++@g = addrspace(1) global i32 0
++@leaf_alias = internal alias void (ptr addrspace(1)), ptr @leaf
++
++define amdgpu_kernel void @direct(ptr addrspace(1) %p) #0 {
++  store i32 1, ptr addrspace(1) %p
++  ret void
++}
++
++define internal void @leaf(ptr addrspace(1) %p) #0 {
++  store i32 1, ptr addrspace(1) %p
++  ret void
++}
++
++define internal void @middle(ptr addrspace(1) %p) #1 {
++  call void @leaf_alias(ptr addrspace(1) %p)
++  ret void
++}
++
++define amdgpu_kernel void @transitive(ptr addrspace(1) %p) #1 {
++  call void @middle(ptr addrspace(1) %p)
++  ret void
++}
++
++define amdgpu_kernel void @unchanged() #0 {
++  ret void
++}
++
++define amdgpu_kernel void @disabled(ptr addrspace(1) %p) #2 {
++  store i32 1, ptr addrspace(1) %p
++  ret void
++}
++
++define amdgpu_kernel void @no_checking(ptr addrspace(1) %p) #3 {
++  store i32 1, ptr addrspace(1) %p
++  ret void
++}
++
++define void @naked_control() #4 {
++  store i32 1, ptr addrspace(1) @g
++  unreachable
++}
++
++define void @host_control(ptr %p) #0 {
++  store i32 1, ptr %p
++  ret void
++}
++
++attributes #0 = { sanitize_concurrency "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++attributes #1 = { "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++attributes #2 = { disable_sanitizer_instrumentation sanitize_concurrency "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++attributes #3 = { sanitize_concurrency "sanitize_concurrency_no_checking_at_run_time" "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++attributes #4 = { naked sanitize_concurrency "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++
++; IR: define amdgpu_kernel void @direct({{.*}}) #[[ACCESS:[0-9]+]]
++; IR: call void @__csan_write4
++; IR: define internal void @leaf({{.*}}) #[[ACCESS]]
++; IR: define internal void @middle({{.*}}) {
++; IR: define amdgpu_kernel void @transitive({{.*}}) {
++; IR: define amdgpu_kernel void @unchanged() #[[UNCHANGED:[0-9]+]]
++; IR: define amdgpu_kernel void @disabled({{.*}}) #[[DISABLED:[0-9]+]]
++; IR: define amdgpu_kernel void @no_checking({{.*}}) #[[SUPPRESSED:[0-9]+]]
++; IR: define void @naked_control({{.*}}) #[[NAKED:[0-9]+]]
++; IR: define void @host_control({{.*}}) #[[ACCESS]]
++; IR: attributes #[[ACCESS]] = { sanitize_concurrency }
++; IR: attributes #[[UNCHANGED]] = { sanitize_concurrency "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
++; IR: attributes #[[DISABLED]] = { disable_sanitizer_instrumentation sanitize_concurrency "amdgpu-no-workgroup-id-x"
++; IR: attributes #[[SUPPRESSED]] = { sanitize_concurrency "amdgpu-no-workgroup-id-x"
++; IR: attributes #[[NAKED]] = { naked sanitize_concurrency "amdgpu-no-workgroup-id-x"
++
++; ASM-LABEL: .amdhsa_kernel direct
++; ASM: .amdhsa_system_sgpr_workgroup_id_x 1
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_y 1
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_z 1
++; ASM: .amdhsa_system_vgpr_workitem_id 2
++; ASM-LABEL: .amdhsa_kernel transitive
++; ASM: .amdhsa_system_sgpr_workgroup_id_x 1
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_y 1
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_z 1
++; ASM: .amdhsa_system_vgpr_workitem_id 2
++; ASM-LABEL: .amdhsa_kernel unchanged
++; ASM: .amdhsa_system_sgpr_workgroup_id_x 1
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_y 0
++; ASM-NEXT: .amdhsa_system_sgpr_workgroup_id_z 0
++; ASM: .amdhsa_system_vgpr_workitem_id 0
++
++; OFF: define amdgpu_kernel void @direct({{.*}}) #[[ACCESS_OFF:[0-9]+]]
++; OFF: define void @host_control({{.*}}) #[[ACCESS_OFF]]
++; HOST: call void @__csan_write4
++; OFF: attributes #[[ACCESS_OFF]] = { sanitize_concurrency "amdgpu-no-workgroup-id-x" "amdgpu-no-workgroup-id-y" "amdgpu-no-workgroup-id-z" "amdgpu-no-workitem-id-x" "amdgpu-no-workitem-id-y" "amdgpu-no-workitem-id-z" }
+-- 
+2.47.1
