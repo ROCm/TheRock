@@ -100,21 +100,9 @@ python build_prod_wheels.py build ^
 # Use ccache:
 python build_prod_wheels.py build --use-ccache --output-dir ...
 
-# Use sccache (caches host + HIP device code via HIP_CLANG_LAUNCHER):
+# Use sccache:
 python build_prod_wheels.py build --use-sccache --output-dir ...
-
-# Use sccache for host C/C++ only (no HIP device code caching):
-python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
 ```
-
-``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
-``--use-sccache`` sets the CMake C/C++ compiler launchers and, on Linux, the
-``HIP_CLANG_LAUNCHER`` environment variable so that ``hipcc`` routes its clang
-invocations — including the ``-x hip --offload-arch`` device passes — through
-sccache. The real clang binary is left in place, so compiler-detection probes
-work normally. ``--sccache-no-wrap`` skips ``HIP_CLANG_LAUNCHER`` (host C/C++
-caching only), for toolchains whose hipcc predates HIP_CLANG_LAUNCHER support
-(ROCm < 7.13). See ``build_tools/setup_sccache_rocm.py``.
 
 ## Building Linux portable wheels
 
@@ -159,6 +147,8 @@ import tarfile
 import tempfile
 import textwrap
 import urllib.request
+
+import setup_pytorch_sanitizer
 
 script_dir = Path(__file__).resolve().parent
 
@@ -228,12 +218,17 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env)
 
 
-def capture(args: list[str | Path], cwd: Path) -> str:
+def capture(
+    args: list[str | Path], cwd: Path, env: dict[str, str] | None = None
+) -> str:
     args = [str(arg) for arg in args]
+    full_env = dict(os.environ)
+    if env:
+        full_env.update(env)
     print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
     try:
         return subprocess.check_output(
-            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True, env=full_env
         ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
@@ -543,6 +538,8 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
+    setup_pytorch_sanitizer.apply_sanitizer_companion_policy(parser, args)
+
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -661,8 +658,15 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
+    use_rocm_clang: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
+    # A sanitizer build needs the ROCm Clang that matches its runtime ahead of
+    # gcc-toolset. Write PATH once here.
+    path_prefix = str(bin_dir)
+    if use_rocm_clang and not is_windows:
+        llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
+        path_prefix = str(llvm_bin) + os.path.pathsep + path_prefix
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
@@ -672,7 +676,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
         # Make ROCm tools discoverable on all platforms and ROCm DLLs
         # discoverable by the Windows loader.
-        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
+        "PATH": path_prefix + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -705,10 +709,11 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    else:
+    elif not use_rocm_clang:
         env.update(
             {
-                # Workaround GCC12 compiler flags.
+                # Workaround GCC12 compiler flags. ROCm Clang rejects these, so
+                # a sanitizer build does not add them.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
                 "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
@@ -843,9 +848,19 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
+        use_rocm_clang=setup_pytorch_sanitizer.selected_sanitizer(args) is not None,
     )
     print(f"  PATH = {env['PATH']}")
+
+    sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+    if sanitizer is not None:
+        setup_pytorch_sanitizer.apply_sanitizer_build_env(env, rocm_dir, sanitizer)
 
     if args.use_ccache:
         if not shutil.which("ccache"):
@@ -856,48 +871,32 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        env["CMAKE_HIP_COMPILER_LAUNCHER"] = "ccache"
         if is_windows:
             # ccache does not support MSVC's /Zi flag. Embedded (/Z7) is needed.
             # See: https://github.com/ccache/ccache/issues/1040
             env["CMAKE_MSVC_DEBUG_INFORMATION_FORMAT"] = "Embedded"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
     elif args.use_sccache:
-        build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
-        sys.path.insert(0, str(build_tools_dir))
-
-        from setup_sccache_rocm import find_sccache, sccache_build_env
-
-        sccache_path = find_sccache()
-        if not sccache_path:
+        if not shutil.which("sccache"):
             raise RuntimeError(
-                "sccache not found but --use-sccache was specified.\n"
-                "Install: https://github.com/mozilla/sccache#installation\n"
-                "For CI, sccache is pre-installed in the manylinux build image:\n"
-                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
+                "sccache not found but --use-sccache was specified. "
+                "Please install sccache before building."
             )
 
+        print("Building with sccache, clearing stats first")
+        env["CMAKE_C_COMPILER_LAUNCHER"] = "sccache"
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "sccache"
+        env["CMAKE_HIP_COMPILER_LAUNCHER"] = "sccache"
+
+        try:
+            run_command(["sccache", "--start-server"], cwd=tempfile.gettempdir())
+        except subprocess.CalledProcessError:
+            pass  # Server may already be running
+
+        run_command(["sccache", "--zero-stats"], cwd=tempfile.gettempdir())
+
     try:
-        if args.use_sccache:
-            # sccache_build_env sets the CMake C/C++ launchers and, unless
-            # disabled, HIP_CLANG_LAUNCHER so hipcc routes its clang calls
-            # (incl. the -x hip --offload-arch device passes) through sccache
-            # without replacing the clang binary. See setup_sccache_rocm.py.
-            hip_launcher = not args.sccache_no_wrap
-            env.update(sccache_build_env(sccache_path, hip_launcher=hip_launcher))
-            if hip_launcher and not is_windows:
-                print(f"Setting up sccache via HIP_CLANG_LAUNCHER={sccache_path}")
-            else:
-                print("Setting up sccache (CMAKE launchers only)...")
-
-            try:
-                run_command(
-                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
-                )
-            except subprocess.CalledProcessError:
-                pass  # Server may already be running
-
-            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
-
         _do_build_wheels_core(
             args,
             env,
@@ -908,17 +907,16 @@ def do_build(args: argparse.Namespace):
             apex_dir,
         )
     finally:
-        if args.use_sccache:
-            sccache_stats = capture(
-                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
-            )
-            print(f"sccache --show-stats output:\n{sccache_stats}")
-
         if args.use_ccache:
             ccache_stats_output = capture(
                 ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
             )
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
+        elif args.use_sccache:
+            sccache_stats = capture(
+                ["sccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats}")
 
 
 def build_triton_windows(args: argparse.Namespace, triton_dir: Path) -> str:
@@ -1307,14 +1305,20 @@ def do_build_pytorch(
     )
 
     print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+    sanity_env = (
+        setup_pytorch_sanitizer.import_sanity_env(env, sanitizer)
+        if sanitizer is not None
+        else None
+    )
     sanity_check_output = capture(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
         cwd=tempfile.gettempdir(),
+        env=sanity_env,
     )
     if not sanity_check_output:
         raise RuntimeError("torch package sanity check failed (see output above)")
-    else:
-        print(f"Sanity check output:\n{sanity_check_output}")
+    print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_audio(
@@ -1500,19 +1504,7 @@ def main(argv: list[str]):
         "--use-sccache",
         action="store_true",
         default=False,
-        help="Use sccache as the compiler launcher. Sets the CMake C/C++ "
-        "launchers and (on Linux) HIP_CLANG_LAUNCHER so hipcc routes its clang "
-        "invocations -- including the HIP device passes -- through sccache, "
-        "caching host and device code. Requires hipcc with HIP_CLANG_LAUNCHER "
-        "support (ROCm 7.13+).",
-    )
-    build_p.add_argument(
-        "--sccache-no-wrap",
-        action="store_true",
-        default=False,
-        help="With --use-sccache: set only the CMake C/C++ launchers and skip "
-        "HIP_CLANG_LAUNCHER (caches host C/C++ but not HIP device code). Use "
-        "when hipcc lacks HIP_CLANG_LAUNCHER support.",
+        help="Use sccache as the compiler launcher",
     )
     build_p.add_argument(
         "--root-checkout-dir",
@@ -1559,6 +1551,15 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="apex source directory",
+    )
+    build_p.add_argument(
+        "--build-variant",
+        default="release",
+        help="Build variant passed by the release workflow. release is a normal "
+        "build. A variant containing asan, such as asan, asan-debug, "
+        "host-asan, or host-asan-debug, builds the torch wheel with "
+        "AddressSanitizer. Any other name is an error. Triton, torchaudio, "
+        "torchvision, and apex are not built.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",
