@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 10:01:00 -0800
+Subject: [PATCH] clang: Use shared CSAN provider for offload DSOs
+
+Default mixed HIP shared linking embeds csan_offload.a while omitting the
+main sanitizer runtime when the host is instrumented. The resulting DSO
+references private sanitizer-common state such as current_verbosity and
+cannot load even when the public shared CSAN runtime is preloaded.
+
+Use the shared CSAN provider for offload DSOs, including DSOs whose host
+code is uninstrumented. That runtime already contains the offload
+transport and its initialization constructor. Do not embed a private
+transport or a second static CSAN provider in the DSO. Keep executable
+preinit/static linkage, explicitly shared runtime selection and ordinary
+host-only DSO behavior unchanged. Do not export sanitizer-private symbols.
+
+Source: ROCm/llvm-project 641fded1f5684d68f0f678d84ac46437936b0d42
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43015193286
+The libLateManagedVariable.so custom command has ordinary -shared HIP
+flags and no explicit device-only archive injection.
+
+Validation: compile the full actual CommonArgs source, link a private
+real driver using the SDK static Clang libraries and that modified object,
+and run all13 updated driver/FileCheck cases. All pass; the old SDK fails
+the three required DSO expectations. All9 original upstream cases pass on
+the old SDK. Eighteen real Driver/SanitizerArgs mode controls preserve
+unrelated selections. CPU loader controls reproduce the baseline private
+symbol error and pass with the shared provider in an uninstrumented
+process with the prepared runtime; dladdr confirms hsa_init and
+__csan_offload_init are owned by libclang_rt.csan.so. GPU work is pending.
+Carry temporarily in TheRock pending upstream Clang review.
+---
+ clang/lib/Driver/ToolChains/CommonArgs.cpp        | 13 ++++--
+ clang/test/Driver/fsanitize-concurrency-offload.c | 57 +++++++++++++++++++----
+ 2 files changed, 56 insertions(+), 14 deletions(-)
+
+diff --git a/clang/lib/Driver/ToolChains/CommonArgs.cpp b/clang/lib/Driver/ToolChains/CommonArgs.cpp
+index 74be727..edf45f8 100644
+--- a/clang/lib/Driver/ToolChains/CommonArgs.cpp
++++ b/clang/lib/Driver/ToolChains/CommonArgs.cpp
+@@ -1883,6 +1883,13 @@ collectSanitizerRuntimes(Compilation &C, const ToolChain &TC,
+       SharedRuntimes.push_back("rtsan");
+   }
+ 
++  // A DSO cannot embed the offload transport without the sanitizer-common
++  // state it uses. The shared CSAN runtime owns both that state and transport
++  // initialization, including when only the device image is instrumented.
++  if (NeedsCsanOffloadRt && Args.hasArg(options::OPT_shared) &&
++      !SanArgs.needsSharedRt())
++    SharedRuntimes.push_back("csan");
++
+   // The stats_client library is also statically linked into DSOs.
+   if (SanArgs.needsStatsRt())
+     StaticRuntimes.push_back("stats_client");
+@@ -1899,7 +1906,8 @@ collectSanitizerRuntimes(Compilation &C, const ToolChain &TC,
+   }
+   if (NeedsUbsanOffloadRt && !Args.hasArg(options::OPT_shared))
+     HelperStaticRuntimes.push_back("ubsan_offload-preinit");
+-  if (NeedsCsanOffloadRt && !SanArgs.needsSharedRt()) {
++  if (NeedsCsanOffloadRt && !SanArgs.needsSharedRt() &&
++      !Args.hasArg(options::OPT_shared)) {
+     NonWholeStaticRuntimes.push_back("csan_offload");
+     RequiredSymbols.push_back("__csan_offload_init");
+   }
+@@ -1912,9 +1920,6 @@ collectSanitizerRuntimes(Compilation &C, const ToolChain &TC,
+     if (NeedsUbsanOffloadRt && !SanArgs.needsSharedRt() &&
+         !SanArgs.needsUbsanRt())
+       StaticRuntimes.push_back("ubsan_standalone");
+-    if (NeedsCsanOffloadRt && !SanArgs.needsSharedRt() &&
+-        !SanArgs.needsCsanRt())
+-      StaticRuntimes.push_back("csan");
+     return;
+   }
+ 
+diff --git a/clang/test/Driver/fsanitize-concurrency-offload.c b/clang/test/Driver/fsanitize-concurrency-offload.c
+index 08d0bb9..df23e43 100644
+--- a/clang/test/Driver/fsanitize-concurrency-offload.c
++++ b/clang/test/Driver/fsanitize-concurrency-offload.c
+@@ -34,21 +34,19 @@
+ // RUN:     -x hip --offload-arch=gfx908 -Xarch_device -fsanitize=concurrency \
+ // RUN:     -fPIC -shared -nogpuinc -nogpulib --rocm-path=%S/Inputs/rocm \
+ // RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK-SHARED-DEV \
+-// RUN:       --implicit-check-not=csan_offload-preinit
+-// CHECK-SHARED-DEV-DAG: "-u" "__csan_offload_init"
+-// CHECK-SHARED-DEV-DAG: "{{[^"]*}}x86_64-unknown-linux-gnu{{/|\\\\}}libclang_rt.csan_offload.a"
+-// CHECK-SHARED-DEV-DAG: "{{[^"]*}}x86_64-unknown-linux-gnu{{/|\\\\}}libclang_rt.csan.a"
++// RUN:   | FileCheck %s --check-prefix=CHECK-DSO \
++// RUN:       --implicit-check-not=csan_offload \
++// RUN:       --implicit-check-not=libclang_rt.csan.a \
++// RUN:       --implicit-check-not=__csan_offload_init
+ 
+ // RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
+ // RUN:     -x hip --offload-arch=gfx908 -fsanitize=concurrency \
+ // RUN:     -fPIC -shared -nogpuinc -nogpulib --rocm-path=%S/Inputs/rocm \
+ // RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK-SHARED \
+-// RUN:       --implicit-check-not=csan_offload-preinit \
+-// RUN:       --implicit-check-not=libclang_rt.csan.a
+-// CHECK-SHARED-DAG: "-u" "__csan_offload_init"
+-// CHECK-SHARED-DAG: "{{[^"]*}}x86_64-unknown-linux-gnu{{/|\\\\}}libclang_rt.csan_offload.a"
++// RUN:   | FileCheck %s --check-prefix=CHECK-DSO \
++// RUN:       --implicit-check-not=csan_offload \
++// RUN:       --implicit-check-not=libclang_rt.csan.a \
++// RUN:       --implicit-check-not=__csan_offload_init
+ 
+ // RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
+ // RUN:     -x hip --offload-arch=gfx908 -fsanitize=concurrency -shared-libsan \
+@@ -83,4 +81,43 @@
+ // CHECK-OMP-CPU-NOT: csan_offload
+ // CHECK-OMP-CPU-NOT: __csan_offload_init
+ 
++
++// An explicit shared-runtime request has the same DSO provider. Neither DSO
++// owns a private offload transport or executable preinit array.
++// RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
++// RUN:     -x hip --offload-arch=gfx908 -fsanitize=concurrency -shared-libsan \
++// RUN:     -fPIC -shared -nogpuinc -nogpulib --rocm-path=%S/Inputs/rocm \
++// RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
++// RUN:   | FileCheck %s --check-prefix=CHECK-DSO \
++// RUN:       --implicit-check-not=csan_offload \
++// RUN:       --implicit-check-not=libclang_rt.csan.a \
++// RUN:       --implicit-check-not=__csan_offload_init
++// RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
++// RUN:     -x hip --offload-arch=gfx908 -Xarch_device -fsanitize=concurrency \
++// RUN:     -shared-libsan -fPIC -shared -nogpuinc -nogpulib --rocm-path=%S/Inputs/rocm \
++// RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
++// RUN:   | FileCheck %s --check-prefix=CHECK-DSO \
++// RUN:       --implicit-check-not=csan_offload \
++// RUN:       --implicit-check-not=libclang_rt.csan.a \
++// RUN:       --implicit-check-not=__csan_offload_init
++// CHECK-DSO: "{{[^"]*}}x86_64-unknown-linux-gnu{{/|\\}}libclang_rt.csan.so"
++
++// OpenMP offload DSOs use the same shared provider.
++// RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
++// RUN:     -fopenmp=libomp --offload-arch=gfx908 -fsanitize=concurrency \
++// RUN:     -fPIC -shared -nogpuinc -nogpulib --rocm-path=%S/Inputs/rocm \
++// RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
++// RUN:   | FileCheck %s --check-prefix=CHECK-DSO \
++// RUN:       --implicit-check-not=csan_offload \
++// RUN:       --implicit-check-not=libclang_rt.csan.a \
++// RUN:       --implicit-check-not=__csan_offload_init
++
++// A host-only instrumented DSO keeps the usual unresolved-runtime policy.
++// RUN: %clang -no-canonical-prefixes -### --target=x86_64-unknown-linux-gnu \
++// RUN:     -fsanitize=concurrency -fPIC -shared \
++// RUN:     -resource-dir=%S/Inputs/resource_dir_with_amdgpu_csan %s 2>&1 \
++// RUN:   | FileCheck %s --check-prefix=CHECK-HOST-DSO \
++// RUN:       --implicit-check-not=libclang_rt.csan
++// CHECK-HOST-DSO: "-shared"
++
+ int main(void) { return 0; }
+-- 
+2.47.1
