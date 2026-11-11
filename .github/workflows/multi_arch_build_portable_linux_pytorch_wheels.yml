@@ -568,7 +568,7 @@ jobs:
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
-            --build-variant="${{ inputs.build_variant }}" \
+            --build-variant="${BUILD_VARIANT}" \
             --structured
 
       - name: Capture job summary
