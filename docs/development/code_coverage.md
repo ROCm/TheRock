@@ -359,9 +359,9 @@ with a build job (currently `rocm_libraries_all`).
 excluded from the default and rejected (not just dropped) when named or reached
 via an alias. See [Adding a stage](#adding-a-stage).
 
-`hipblaslt` and `hiptensor` are excluded from the default and aliases because
-their instrumented builds fail. Naming one still works and prints the reason —
-retesting is how the block gets noticed as fixed. See
+`hiptensor` is excluded from the default and aliases because its instrumented
+build fails. Naming it still works and prints the reason — retesting is how the
+block gets noticed as fixed. See
 [Blocked projects](#blocked-projects).
 
 Aliases resolve to concrete names before the matrix is built; nothing downstream
@@ -394,10 +394,6 @@ broken. The project is dropped from the default and group aliases (including
 `--emit-cmake` output) but can still be named explicitly, printing the reason.
 A stage is built as a unit, so one blocked project takes the whole stage down.
 Drop `blocked_reason` once the upstream fix lands.
-
-`hipblaslt` — its coverage branch links against bare `rocroller` while the rest
-of its CMakeLists uses `roc::rocroller`. Under TheRock rocRoller is a separate
-subproject; the bare name reaches the linker as `-lrocroller` with no `-L`.
 
 `hiptensor` — upstream applies coverage as a blanket `add_compile_options` on a
 composable_kernel-based library. The coverage mapping data exceeds 2GB, failing

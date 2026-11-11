@@ -236,17 +236,6 @@ COVERAGE_PROJECTS: dict[str, CoverageProject] = {
         artifact_names=["blas"],
         artifact_relpaths=["math-libs/BLAS/hipBLASLt/stage"],
         coverage_option="HIPBLASLT_ENABLE_COVERAGE",
-        # The coverage-only branch of clients/CMakeLists.txt links hipblaslt-test
-        # against a bare `rocroller` while its neighbours use the imported
-        # targets. rocRoller exports as roc::rocroller, and under TheRock it is a
-        # separate subproject found via its package config, so the bare name is
-        # not a target here and reaches the linker as -lrocroller with no -L to
-        # resolve it. hipBLASLt's own build gets away with it by having rocRoller
-        # in-tree. Fix belongs upstream in ROCm/rocm-libraries.
-        blocked_reason=(
-            "hipblaslt-test fails to link with 'unable to find library "
-            "-lrocroller'; its coverage build needs roc::rocroller upstream"
-        ),
         stage=STAGE_MATH_LIBS,
         test_component="hipblaslt",
         coverage_config="projects/hipblaslt/test_categories_coverage.yaml",

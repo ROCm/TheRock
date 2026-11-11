@@ -41,9 +41,9 @@ class ParseProjectsTest(unittest.TestCase):
                 configure_coverage_ci.SUPPORTED_PROJECTS
                 - configure_coverage_ci.DEFAULT_PROJECTS
             ),
-            # rccl and rocshmem for want of a comm-libs build job, hipblaslt
-            # and hiptensor because their instrumented builds do not link.
-            ["hipblaslt", "hiptensor", "rccl", "rocshmem"],
+            # rccl and rocshmem for want of a comm-libs build job, hiptensor
+            # because its instrumented build does not link.
+            ["hiptensor", "rccl", "rocshmem"],
         )
 
     def test_blocked_project_is_left_out_of_every_alias(self):
@@ -293,8 +293,8 @@ class BuildCoverageCmakeOptionsTest(unittest.TestCase):
         # It is outside the group lists, so the group flag would not reach it
         # and the explicit ask would silently build uninstrumented.
         self.assertEqual(
-            configure_coverage_ci.build_coverage_cmake_options(["hipblaslt"]),
-            ["-DHIPBLASLT_ENABLE_COVERAGE=ON"],
+            configure_coverage_ci.build_coverage_cmake_options(["hiptensor"]),
+            ["-DHIPTENSOR_ENABLE_COVERAGE=ON"],
         )
 
     def test_partial_selection_names_each_project_in_upper_case(self):
@@ -466,7 +466,7 @@ class EmitCmakeTest(unittest.TestCase):
             # The CMake group lists and the Python group sets decide the same
             # thing in two places, so a blocked project has to leave both or a
             # group build sets the flag the Python side just declined to.
-            self.assertNotIn("hipBLASLt", libraries_line)
+            self.assertNotIn("hipTensor", libraries_line)
 
     def test_blocked_project_keeps_its_option_mapping(self):
         # Excluded from the group lists but still nameable, which needs the
@@ -475,7 +475,7 @@ class EmitCmakeTest(unittest.TestCase):
             out = Path(tmp) / "therock_coverage_projects.cmake"
             self.assertEqual(configure_coverage_ci.main(["--emit-cmake", str(out)]), 0)
             self.assertIn(
-                "set(THEROCK_COVERAGE_OPTION_HIPBLASLT HIPBLASLT_ENABLE_COVERAGE)",
+                "set(THEROCK_COVERAGE_OPTION_HIPTENSOR HIPTENSOR_CODE_COVERAGE)",
                 out.read_text(),
             )
 
