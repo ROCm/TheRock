@@ -242,6 +242,8 @@ class TestROCmSanity:
             "-o",
             hip_check_executable_file,
         ]
+        if os.getenv("BUILD_VARIANT") == "csan":
+            command.append("-fsanitize=concurrency")
         if not is_windows():
             # Windows lld-link does not support rpath.
             command.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
