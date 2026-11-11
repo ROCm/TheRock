@@ -56,7 +56,9 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     # CSAN findings must remain failures even for normally expected-failure suites.
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true && inputs.build_variant != 'csan' }}
-    timeout-minutes: 210
+    # The exhaustive CSAN reference-count case has a 240-minute test budget;
+    # leave another hour for artifact setup, reports, and cleanup.
+    timeout-minutes: ${{ fromJSON(inputs.component).job_name == 'rocrtst-max-refcount' && 300 || 210 }}
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
     container:
