@@ -77,9 +77,12 @@ jobs:
       pr_labels: ${{ inputs.pr_labels || '' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      build_stages: "compiler-runtime,runtime-tests"
+      stage_reuse_mode: "off"
       build_python_packages: false
       build_pytorch: false
       build_jax: false
+      build_native_linux: false
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}

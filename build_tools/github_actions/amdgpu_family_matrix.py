@@ -863,10 +863,16 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     # policy to both setup and component selection, including local fallbacks.
     # TODO(#6624): Move sandbox repository/trigger restrictions into each
     # family's dictionary so the policy is explicit and can vary by family.
+    spirv_asan_validation = (
+        os.environ.get("GITHUB_REPOSITORY") == "ROCm/TheRock"
+        and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and os.environ.get("GITHUB_REF_NAME") == "users/lamb-j/spirv-asan-validation"
+        and os.environ.get("BUILD_VARIANT") == "asan"
+    )
     if (
         os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
         or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
-    ):
+    ) and not spirv_asan_validation:
         for family in ("gfx94x", "gfx950"):
             runners = result.get(family, {}).get("linux", {})
             if "test-runs-on-sandbox" in runners:

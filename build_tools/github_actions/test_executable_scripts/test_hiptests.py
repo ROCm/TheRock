@@ -115,7 +115,6 @@ TEST_TO_IGNORE = {
 # runs many more families than presubmit does.
 GENERIC_TEST_TO_IGNORE = [
     # TODO(#7139): Compiler ww28 SMP 2.5 (TheRock#7052) — re-enable after fix.
-    "Unit_hip_linker_spirv_input",
     "Unit_hipExtModuleLaunchKernel_CheckCodeObjAttr",
 ]
 
@@ -184,6 +183,21 @@ def setup_env(env):
 def execute_tests(env):
     # Allow for more time in ASAN mode to run the tests.
     timeout = 1500 if is_asan() else 600
+    if is_asan() and SHARD_INDEX == 0:
+        spirv_cmd = [
+            "ctest",
+            "--test-dir",
+            CATCH_TESTS_PATH,
+            "--no-tests=error",
+            "--verbose",
+            "--tests-regex",
+            "^Unit_hip_linker_spirv_input$",
+            "--timeout",
+            f"{timeout}",
+        ]
+        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(spirv_cmd)}")
+        subprocess.run(spirv_cmd, cwd=THEROCK_DIR, check=True, env=env)
+
     cmd = [
         "ctest",
         "--tests-information",

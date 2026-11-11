@@ -316,6 +316,37 @@ class TestExternalConfig(unittest.TestCase):
                     label if event == "pull_request" else "",
                 )
 
+    def test_spirv_asan_validation_sandbox_scope(self):
+        env = {
+            "CI_CONFIG_PATH": "",
+            "GITHUB_REPOSITORY": "ROCm/TheRock",
+            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_REF_NAME": "users/lamb-j/spirv-asan-validation",
+            "BUILD_VARIANT": "asan",
+        }
+        cases = [
+            ({}, True),
+            ({"GITHUB_REPOSITORY": "ROCm/rocm-systems"}, False),
+            ({"GITHUB_EVENT_NAME": "pull_request"}, False),
+            ({"GITHUB_EVENT_NAME": "schedule"}, False),
+            ({"GITHUB_REF_NAME": "main"}, False),
+            ({"BUILD_VARIANT": "host-asan"}, False),
+            ({"BUILD_VARIANT": "release"}, False),
+        ]
+        for overrides, enabled in cases:
+            with self.subTest(overrides=overrides), mock.patch.dict(
+                os.environ, env | overrides
+            ):
+                result = get_all_families_for_trigger_types([])
+                for family in ("gfx94x", "gfx950"):
+                    local = amdgpu_family_matrix.amdgpu_family_info_matrix[family][
+                        "linux"
+                    ]["test-runs-on-sandbox"]
+                    self.assertEqual(
+                        result[family]["linux"]["test-runs-on-sandbox"],
+                        local if enabled else "",
+                    )
+
     def test_get_build_runner_labels_uses_external_config_when_available(self):
         """get_build_runner_labels uses external config when available."""
         fake_config = {
