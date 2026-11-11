@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 10:30:00 -0800
+Subject: [PATCH] hip-tests: Match module launch geometry to X-indexed kernels
+
+The module API helpers launch ten or64 threads along Z while addKernel
+and hipKernel index only X. Every thread consequently updates every
+output. CSAN correctly reports intra-wave races with peer lanes9 and63,
+matching those duplicate-writer masks. The separate compiler context
+metadata defect does not make these address conflicts false positives.
+
+Move the same number of threads to X without changing either kernel.
+Preserve all API calls and expected array values. Pass global work-item
+counts to the extended/HCC module launch APIs, which take grid times
+block dimensions rather than grid dimensions alone.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43015193286
+Validation: execute the actual extracted kernel bodies with source-derived
+3D geometry. All three original shapes have ten/ten/64 writers per output;
+the corrected shapes have one writer and preserve expected values. Actual
+CPU CSAN reproduces all three baseline races and passes all three corrected
+shapes clean with halt_on_error=1, skip_watch=0 and udelay=80. Both complete
+modified sources pass host and gfx942 device compiler checks using their
+actual compile database/custom-command flags. GPU retesting is pending.
+No sanitizer instrumentation or test cases are disabled.
+Carry temporarily in TheRock pending upstream HIP-test review.
+---
+ .../hip-tests/catch/unit/module/hipGetFuncBySymbol_exe.cc  |  3 ++-
+ .../catch/unit/module/hipGetProcAddressModuleApis.cc       | 14 ++++++++++----
+ 2 files changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/projects/hip-tests/catch/unit/module/hipGetFuncBySymbol_exe.cc b/projects/hip-tests/catch/unit/module/hipGetFuncBySymbol_exe.cc
+index e39765a..1667da5 100644
+--- a/projects/hip-tests/catch/unit/module/hipGetFuncBySymbol_exe.cc
++++ b/projects/hip-tests/catch/unit/module/hipGetFuncBySymbol_exe.cc
+@@ -65,7 +65,8 @@ int main() {
+   HIP_CHECK(hipMemcpy(d_a, h_a, SIZE, hipMemcpyHostToDevice));
+ 
+   dim3 blocksPerGrid(1, 1, 1);
+-  dim3 threadsPerBlock(1, 1, 64);
++  // hipKernel uses the X dimension for its grid-stride loop.
++  dim3 threadsPerBlock(64, 1, 1);
+ 
+   void* kernelParam[] = {d_a};
+   auto size = sizeof(kernelParam);
+diff --git a/projects/hip-tests/catch/unit/module/hipGetProcAddressModuleApis.cc b/projects/hip-tests/catch/unit/module/hipGetProcAddressModuleApis.cc
+index 40cda17..0ca7c89 100644
+--- a/projects/hip-tests/catch/unit/module/hipGetProcAddressModuleApis.cc
++++ b/projects/hip-tests/catch/unit/module/hipGetProcAddressModuleApis.cc
+@@ -124,7 +124,12 @@ HIP_TEST_CASE(Unit_hipGetProcAddress_ModuleApis) {
+   HIP_CHECK(hipMemcpy(devArr, hostArr, Nbytes, hipMemcpyHostToDevice));
+ 
+   dim3 blocksPerGrid(1, 1, 1);
+-  dim3 threadsPerBlock(1, 1, N);
++  // addKernel uses the X dimension for its grid-stride loop.
++  dim3 threadsPerBlock(N, 1, 1);
++  // Extended module APIs take global work-item counts, not grid dimensions.
++  dim3 globalWorkSize(blocksPerGrid.x * threadsPerBlock.x,
++                      blocksPerGrid.y * threadsPerBlock.y,
++                      blocksPerGrid.z * threadsPerBlock.z);
+ 
+   struct kernelParameters {
+     void* arr;
+@@ -147,7 +152,7 @@ HIP_TEST_CASE(Unit_hipGetProcAddress_ModuleApis) {
+ 
+   // Validating hipExtModuleLaunchKernel API
+   HIP_CHECK(dyn_hipExtModuleLaunchKernel_ptr(
+-      function, blocksPerGrid.x, blocksPerGrid.y, blocksPerGrid.z, threadsPerBlock.x,
++      function, globalWorkSize.x, globalWorkSize.y, globalWorkSize.z, threadsPerBlock.x,
+       threadsPerBlock.y, threadsPerBlock.z, 0, 0, nullptr, kernel_parameter, nullptr, nullptr, 0));
+ 
+   HIP_CHECK(hipMemcpy(hostArr, devArr, Nbytes, hipMemcpyDeviceToHost));
+@@ -155,7 +160,7 @@ HIP_TEST_CASE(Unit_hipGetProcAddress_ModuleApis) {
+ 
+   // Validating hipHccModuleLaunchKernel API
+   HIP_CHECK(dyn_hipHccModuleLaunchKernel_ptr(
+-      function, blocksPerGrid.x, blocksPerGrid.y, blocksPerGrid.z, threadsPerBlock.x,
++      function, globalWorkSize.x, globalWorkSize.y, globalWorkSize.z, threadsPerBlock.x,
+       threadsPerBlock.y, threadsPerBlock.z, 0, 0, nullptr, kernel_parameter, nullptr, nullptr));
+ 
+   HIP_CHECK(hipMemcpy(hostArr, devArr, Nbytes, hipMemcpyDeviceToHost));
+@@ -391,7 +396,8 @@ HIP_TEST_CASE(Unit_hipGetProcAddress_ModuleApisCooperativeKernels) {
+   HIP_CHECK(hipMemcpy(devArr, hostArr, Nbytes, hipMemcpyHostToDevice));
+ 
+   dim3 blocksPerGrid(1, 1, 1);
+-  dim3 threadsPerBlock(1, 1, N);
++  // addKernel uses the X dimension for its grid-stride loop.
++  dim3 threadsPerBlock(N, 1, 1);
+ 
+   struct kernelParameters {
+     void* arr;
+-- 
+2.47.1
