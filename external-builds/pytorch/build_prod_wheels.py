@@ -1111,6 +1111,27 @@ def copy_libuv_to_torch_lib(pytorch_dir: Path):
     shutil.copy2(uv_dll, target_lib)
 
 
+def should_build_ck_sdpa_gfx11(
+    pytorch_version: str,
+    pytorch_rocm_arch: str,
+    *,
+    use_flash_attention: bool,
+    is_windows: bool,
+) -> bool:
+    """Whether to set USE_ROCM_CK_SDPA_GFX11=ON (OFF by default in PyTorch).
+
+    The option exists in PyTorch >= 2.16 (including nightly, 2.16.0a0+...).
+    PyTorch builds CK SDPA only on Linux with flash attention, and the gfx11
+    kernels only for the gfx11 targets in PYTORCH_ROCM_ARCH. Builds without a
+    gfx11 target are left untouched.
+    """
+    if is_windows or not use_flash_attention:
+        return False
+    if not any(arch.startswith("gfx11") for arch in pytorch_rocm_arch.split(";")):
+        return False
+    return parse(pytorch_version).release >= (2, 16)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -1191,6 +1212,19 @@ def do_build_pytorch(
             "USE_MEM_EFF_ATTENTION": ("ON" if use_flash_attention else "OFF"),
         }
     )
+
+    if "USE_ROCM_CK_SDPA_GFX11" in os.environ:
+        print(
+            f"USE_ROCM_CK_SDPA_GFX11 explicitly set to: {os.environ['USE_ROCM_CK_SDPA_GFX11']}"
+        )
+    elif should_build_ck_sdpa_gfx11(
+        pytorch_build_version,
+        env["PYTORCH_ROCM_ARCH"],
+        use_flash_attention=use_flash_attention,
+        is_windows=is_windows,
+    ):
+        print("Enabling CK SDPA for gfx11 (USE_ROCM_CK_SDPA_GFX11=ON)")
+        env["USE_ROCM_CK_SDPA_GFX11"] = "ON"
 
     if is_windows:
         # Apply Windows-specific settings.
