@@ -371,3 +371,21 @@ pip install --index-url https://nightly.repo.amd.com/rocm/jax/whl-next-debug/ \
     "jax_rocm10_plugin==0.12.0+rocm10.3.0a20261109.debug" \
     "jax_rocm10_pjrt==0.12.0+rocm10.3.0a20261109.debug"
 ```
+
+### ASAN wheels
+
+ASAN release runs with `build_jax` build the plugin and PJRT of the CI ref with
+host-only AddressSanitizer (GPU kernels are not instrumented). The ROCm
+toolchain has no `asan` feature, so the build passes `-fsanitize=address`
+itself. They are published untested, with an `.asan` local label, to
+`whl-next-asan`. Run them with ROCm's ASAN runtime and HSA preloaded; without
+HSA in the global scope, the runtime's `hsa_init` interceptor crashes
+`hipInit`. On ASAN ROCm packages, also set `HSA_XNACK=1`, or the first device
+allocation fails:
+
+```bash
+core=$(python -c "import _rocm_sdk_core; print(_rocm_sdk_core.__path__[0])")
+LD_PRELOAD="$(echo "$core"/lib/llvm/lib/clang/*/lib/x86_64-unknown-linux-gnu/libclang_rt.asan.so) $core/lib/libhsa-runtime64.so.1" \
+ASAN_OPTIONS=detect_leaks=0 ASAN_SYMBOLIZER_PATH="$core/lib/llvm/bin/llvm-symbolizer" \
+python my_program.py
+```

@@ -282,6 +282,21 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 # Release builds queue first.
                 self.assertEqual(matrix[len(release) :], debug)
 
+    def test_asan_releases_build_only_untested_asan_rows_of_the_ci_ref(self):
+        for build_variant in m.ASAN_BUILD_VARIANTS:
+            with self.subTest(build_variant=build_variant):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type="nightly",
+                    platform="linux",
+                    build_variant=build_variant,
+                )
+                self.assertTrue(matrix)
+                self.assertEqual({row["variant"] for row in matrix}, {"asan"})
+                self.assertEqual(
+                    {row["jax_ref"] for row in matrix}, set(m.CI_JAX_REFS["linux"])
+                )
+                self.assertFalse(any(row["run_tests"] for row in matrix))
+
     def test_ci_builds_no_debug_rows(self):
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="ci", platform="linux"

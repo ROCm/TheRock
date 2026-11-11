@@ -340,6 +340,7 @@ jobs:
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref || '' }}",
               "python_version": "${{ inputs.python_version }}",
+              "build_variant": "${{ inputs.build_variant }}",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
