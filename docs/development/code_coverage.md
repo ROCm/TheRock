@@ -284,7 +284,11 @@ librocrand) with the `ROCRAND_VERSION` it was compiled against. The backend's
 objects are not in the wrapper's `--object-globs`, so its own code stays out of
 the report, but header templates both instantiate share profile counters.
 Dependencies in other artifacts (fftw3, rocBLAS for hipSOLVER) still come from
-the baseline. The instrumented stack lives under
+the baseline, except host libraries listed in `OTHER_ARTIFACT_HOST_LIBS`:
+hipSPARSELt takes `libtensilelite-host` (hipBLASLt) and `liborigami` from the
+coverage run's `blas_lib_generic`, because it calls their C++ interfaces and
+aborts against the baseline's copies. Only those files are swapped. The
+instrumented stack lives under
 `<run_id>-coverage`, so even a baseline from the same workflow run is never
 overwritten by it.
 

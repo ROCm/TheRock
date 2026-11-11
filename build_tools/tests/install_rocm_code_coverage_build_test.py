@@ -276,5 +276,108 @@ class TestReplacementFolders(unittest.TestCase):
                     self.assertEqual(owner, artifact)
 
 
+class TestHostLibraries(unittest.TestCase):
+    def test_hipsparselt_takes_tensilelite_host_and_origami_from_blas(self):
+        self.assertEqual(
+            mod.host_library_deps(["hipsparselt"]),
+            {
+                "blas": [
+                    ("hipBLASLt", "libtensilelite-host"),
+                    ("origami", "liborigami"),
+                ]
+            },
+        )
+
+    def test_component_without_host_libraries_needs_none(self):
+        self.assertEqual(mod.host_library_deps(["rocblas"]), {})
+
+    def test_downloads_only_the_generic_lib_archive_of_host_artifacts(self):
+        class _Backend:
+            base_uri = "s3://fake-bucket/fake"
+
+            def list_artifacts(self, name_filter=None):
+                return [
+                    "sparse_lib_generic.tar.zst",
+                    "sparse_test_gfx942.tar.zst",
+                    "blas_lib_generic.tar.zst",
+                    "blas_lib_gfx942.tar.zst",
+                    "blas_dev_generic.tar.zst",
+                    "blas_test_generic.tar.zst",
+                ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            opts = mock.Mock(
+                artifact_group="gfx94X-dcgpu", amdgpu_targets="", output_dir=Path(tmp)
+            )
+            with (
+                mock.patch.object(
+                    mod, "create_backend_from_env", return_value=_Backend()
+                ),
+                mock.patch.object(
+                    mod, "download_artifact", return_value=Path(tmp) / "x"
+                ) as download,
+            ):
+                mod.download_replacement_artifacts(
+                    "222", {"sparse"}, opts, "ROCm/TheRock", "ci", {"blas"}
+                )
+            fetched = sorted(c.args[0].artifact_key for c in download.call_args_list)
+        self.assertEqual(
+            fetched,
+            [
+                "blas_lib_generic.tar.zst",
+                "sparse_lib_generic.tar.zst",
+                "sparse_test_gfx942.tar.zst",
+            ],
+        )
+
+    def test_replaces_only_the_named_host_libraries(self):
+        hipblaslt = "math-libs/BLAS/hipBLASLt/stage"
+        origami = "math-libs/BLAS/origami/stage"
+        rocblas = "math-libs/BLAS/rocBLAS/stage"
+        members = {
+            "artifact_manifest.txt": f"{hipblaslt}\n{origami}\n{rocblas}\n".encode(),
+            f"{hipblaslt}/lib/libhipblaslt.so.1.0": b"hipblaslt",
+            f"{hipblaslt}/lib/libtensilelite-host.so.1.0": b"tensilelite-host",
+            f"{origami}/lib/liborigami.so.1.0": b"origami",
+            f"{rocblas}/lib/librocblas.so.5": b"rocblas",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            downloads = tmp / "downloads"
+            downloads.mkdir()
+            _write_archive(downloads / "blas_lib_generic.tar.xz", members)
+            output_dir = tmp / "install"
+            with mock.patch.object(mod, "pin_phdr_table", return_value=False):
+                mod.replace_host_libraries(
+                    mod.host_library_deps(["hipsparselt"]), downloads, output_dir
+                )
+            written = sorted(
+                p.relative_to(output_dir).as_posix()
+                for p in output_dir.rglob("*")
+                if p.is_file()
+            )
+        self.assertEqual(
+            written, ["lib/liborigami.so.1.0", "lib/libtensilelite-host.so.1.0"]
+        )
+
+    def test_missing_host_library_is_an_error(self):
+        prefix = "math-libs/BLAS/hipBLASLt/stage"
+        members = {
+            "artifact_manifest.txt": f"{prefix}\n".encode(),
+            f"{prefix}/lib/libhipblaslt.so.1.0": b"hipblaslt",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            downloads = tmp / "downloads"
+            downloads.mkdir()
+            _write_archive(downloads / "blas_lib_generic.tar.xz", members)
+            with self.assertRaises(IOError):
+                mod.replace_host_libraries(
+                    {"blas": [("hipBLASLt", "libtensilelite-host")]},
+                    downloads,
+                    tmp / "install",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

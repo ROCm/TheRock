@@ -96,6 +96,34 @@ def replacement_folders(components: Iterable[str]) -> dict[str, list[str]]:
     return artifacts
 
 
+# Host libraries a component links that ship in another artifact, as
+# (artifact, library folder, file name prefix under lib/). Only these files are
+# swapped, from the coverage run's generic lib archive: the baseline's copies
+# come from a different source commit, and their C++ interfaces need not match
+# the instrumented component's. hipSPARSELt picks and launches its kernels
+# through hipBLASLt's tensilelite-host and origami; against the baseline's it
+# aborts with heap corruption or "No Tensile solution found".
+OTHER_ARTIFACT_HOST_LIBS = {
+    "hipsparselt": (
+        ("blas", "hipBLASLt", "libtensilelite-host"),
+        ("blas", "origami", "liborigami"),
+    ),
+}
+
+
+def host_library_deps(
+    components: Iterable[str],
+) -> dict[str, list[tuple[str, str]]]:
+    """Map each artifact to the (library folder, file prefix) pairs to take from it."""
+    deps: dict[str, list[tuple[str, str]]] = {}
+    for comp in components:
+        for artifact, folder, lib_prefix in OTHER_ARTIFACT_HOST_LIBS.get(comp, ()):
+            entries = deps.setdefault(artifact, [])
+            if (folder, lib_prefix) not in entries:
+                entries.append((folder, lib_prefix))
+    return deps
+
+
 def _read_passthrough_options(passthrough_argv):
     """Read options shared with install_rocm_from_artifacts without consuming them.
 
@@ -132,10 +160,13 @@ def download_replacement_artifacts(
     opts,
     code_coverage_run_github_repo,
     code_coverage_release_type,
+    host_lib_artifacts=(),
 ):
     """Download instrumented replacement artifacts from the code-coverage run.
 
-    Fetches every component tar matching the requested artifact names and family.
+    Fetches every component tar matching the requested artifact names and family,
+    plus only the generic lib tar of each host_lib_artifacts entry not already
+    fetched whole.
     The coverage run lives in its own repo (--code-coverage-run-github-repo),
     separate from the generic baseline's --run-github-repo. Pass it explicitly:
     the S3 bucket lookup 404s if the run id is queried against the wrong repo.
@@ -158,6 +189,22 @@ def download_replacement_artifacts(
             f"ERROR: No replacement artifacts {sorted(artifact_names)} found in "
             f"{backend.base_uri} for families {target_families}"
         )
+
+    host_lib_names = set(host_lib_artifacts) - set(artifact_names)
+    if host_lib_names:
+        log(f"Matching host library artifacts {sorted(host_lib_names)} (generic lib)")
+        host_matched = find_available_artifacts(
+            host_lib_names,
+            ["generic"],
+            available,
+            excluded_components={"dbg", "dev", "doc", "run", "test"},
+        )
+        if not host_matched:
+            raise IOError(
+                f"ERROR: No host library artifacts {sorted(host_lib_names)} found "
+                f"in {backend.base_uri}"
+            )
+        matched += host_matched
 
     dest_dir = opts.output_dir / "code-coverage-replacements"
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -279,17 +326,7 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
             log(f"Replacing '{folder}' paths from {archive.name} into {output_dir}")
             replaced = 0
             with open_archive_for_read(archive) as tf:
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    raise IOError(
-                        f"Artifact archive {archive} must have artifact_manifest.txt "
-                        "as its first member"
-                    )
-                with tf.extractfile(manifest_member) as mf_file:
-                    relpaths = [r for r in mf_file.read().decode().splitlines() if r]
+                relpaths = _read_manifest(tf, archive)
                 owns_archive = any(_is_own_stage(folder, r) for r in relpaths)
 
                 while member := tf.next():
@@ -312,6 +349,71 @@ def replace_instrumented_libraries(artifacts, dest_dir, output_dir):
                         break
             log(f"  Replaced {replaced} '{folder}' path(s) from {archive.name}")
 
+    _pin_instrumented(written_files)
+
+
+def replace_host_libraries(host_libs, dest_dir, output_dir):
+    """Extract only the named host libraries from other artifacts' lib archives.
+
+    host_libs maps an artifact to (library folder, file prefix) pairs, as built
+    by host_library_deps. A member is taken when it sits in that folder's stage
+    directory under lib/ and its file name starts with the prefix, so
+    libtensilelite-host.so* comes over without the rest of hipBLASLt.
+    """
+    written_files = []
+    for archive in sorted(
+        p for p in dest_dir.iterdir() if p.name.endswith((".tar.zst", ".tar.xz"))
+    ):
+        an = ArtifactName.from_filename(archive.name)
+        if not an or an.name not in host_libs:
+            continue
+        if an.component != "lib" or an.target_family != "generic":
+            continue
+        for folder, lib_prefix in host_libs[an.name]:
+            log(f"Replacing '{folder}' {lib_prefix}* from {archive.name}")
+            replaced = 0
+            with open_archive_for_read(archive) as tf:
+                relpaths = _read_manifest(tf, archive)
+                while member := tf.next():
+                    for prefix in relpaths:
+                        if not _is_own_stage(folder, prefix):
+                            continue
+                        prefix_slash = prefix + "/"
+                        if not member.name.startswith(prefix_slash):
+                            continue
+                        scoped_path = member.name[len(prefix_slash) :]
+                        if not scoped_path.startswith(f"lib/{lib_prefix}"):
+                            break
+                        dest_path = output_dir / PurePosixPath(scoped_path)
+                        _replace_scoped_member(
+                            tf, member, dest_path, output_dir, relpaths
+                        )
+                        if member.isfile():
+                            written_files.append(dest_path)
+                        replaced += 1
+                        break
+            if not replaced:
+                raise IOError(
+                    f"ERROR: No {lib_prefix}* found under '{folder}' in {archive.name}"
+                )
+            log(f"  Replaced {replaced} path(s)")
+
+    _pin_instrumented(written_files)
+
+
+def _read_manifest(tf, archive):
+    """Return the relpath prefixes listed by the archive's leading manifest."""
+    manifest_member = tf.next()
+    if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
+        raise IOError(
+            f"Artifact archive {archive} must have artifact_manifest.txt "
+            "as its first member"
+        )
+    with tf.extractfile(manifest_member) as mf_file:
+        return [r for r in mf_file.read().decode().splitlines() if r]
+
+
+def _pin_instrumented(written_files):
     for path in written_files:
         if pin_phdr_table(path, require_section="__llvm_prf_cnts"):
             log(f"  Pinned the program header table kpack moved in {path}")
@@ -365,9 +467,9 @@ def main(argv):
     install_from_artifacts_main(extra_args)
 
     # collect artifacts details as per the user options
-    artifacts = replacement_folders(
-        comp for comp in COMPONENT_MAP if getattr(args, f"replace_{comp}")
-    )
+    selected = [comp for comp in COMPONENT_MAP if getattr(args, f"replace_{comp}")]
+    artifacts = replacement_folders(selected)
+    host_libs = host_library_deps(selected)
 
     if not artifacts:
         log("No --replace-* components specified; nothing to download.")
@@ -385,10 +487,13 @@ def main(argv):
         opts,
         args.code_coverage_run_github_repo,
         args.code_coverage_release_type,
+        host_lib_artifacts=host_libs.keys(),
     )
 
     # replace selected library folder paths in selected component artifacts
     replace_instrumented_libraries(artifacts, dest_dir, opts.output_dir)
+    # and the host libraries they link from other artifacts
+    replace_host_libraries(host_libs, dest_dir, opts.output_dir)
 
 
 if __name__ == "__main__":
