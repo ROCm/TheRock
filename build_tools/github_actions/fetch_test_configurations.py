@@ -832,6 +832,20 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # Fixed packaged FFM quick suite on gfx1250; only the host emulator is built.
+    # Keep the runner in TheRock so existing MIOpen artifacts can be reused.
+    "miopen-gfx1250-rocjitsu-quick": {
+        "job_name": "miopen-gfx1250-rocjitsu-quick",
+        "base_project": "miopen",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('run_miopen_gfx1250_rocjitsu_quick.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {"linux": ["gfx125X-dcgpu"]},
+        "total_shards_dict": {"linux": 1},
+    },
     # RCCL tests
     "rccl": {
         "job_name": "rccl",
@@ -1523,6 +1537,7 @@ def run():
         if (
             key != "sanity"
             and expanded_test_labels
+            and key not in expanded_test_labels
             and selection_key not in expanded_test_labels
         ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")

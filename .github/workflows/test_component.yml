@@ -9,6 +9,10 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      artifact_repository:
+        description: "Repository owning the build artifacts; empty uses github.repository."
+        type: string
+        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -138,6 +142,7 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          ARTIFACT_REPOSITORY: ${{ inputs.artifact_repository }}
           # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
           ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}

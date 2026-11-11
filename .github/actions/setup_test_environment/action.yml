@@ -21,6 +21,9 @@ inputs:
   ARTIFACT_RUN_ID:
     description: (string) Run ID to download artifacts from (`env.ARTIFACT_RUN_ID` or a value like `19716407405`)
     required: true
+  ARTIFACT_REPOSITORY:
+    description: (string) Repository owning ARTIFACT_RUN_ID (owner/repo); empty uses github.repository
+    default: ""
   FETCH_ARTIFACT_ARGS:
     description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
   RELEASE_TYPE:
@@ -62,6 +65,7 @@ runs:
         ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
         AMDGPU_TARGETS: ${{ inputs.AMDGPU_TARGETS }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
+        ARTIFACT_REPOSITORY: ${{ inputs.ARTIFACT_REPOSITORY || github.repository }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         RELEASE_TYPE: ${{ inputs.RELEASE_TYPE }}
         GITHUB_TOKEN: ${{ github.token }}
@@ -70,6 +74,7 @@ runs:
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
+          --run-github-repo="${ARTIFACT_REPOSITORY}" \
           --artifact-group=${ARTIFACT_GROUP} \
           --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \

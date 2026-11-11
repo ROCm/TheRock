@@ -22,6 +22,10 @@ on:
           only runs tests and has no build artifacts of its own.
         type: string
         required: true
+      artifact_repository:
+        description: "Repository owning artifact_run_id (owner/repo). Empty uses github.repository; repository/ref select test code only."
+        type: string
+        default: ""
       amdgpu_families:
         description: >-
           GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
@@ -119,6 +123,9 @@ on:
       artifact_group:
         type: string
       artifact_run_id:
+        type: string
+        default: ""
+      artifact_repository:
         type: string
         default: ""
       amdgpu_families:
@@ -257,6 +264,7 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_repository: ${{ inputs.artifact_repository }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
@@ -294,6 +302,7 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_repository: ${{ inputs.artifact_repository }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}

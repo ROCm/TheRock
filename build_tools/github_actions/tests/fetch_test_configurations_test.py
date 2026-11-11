@@ -454,6 +454,35 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._inject_job("tt-ungated")
         self.assertIn("tt-ungated", self._selected_names())
 
+    def test_gfx1250_rocjitsu_selection_boundaries(self):
+        component = "miopen-gfx1250-rocjitsu-quick"
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["TEST_RUNS_ON"] = ""
+        os.environ["TEST_RUNS_ON_CPU"] = "cpu-test-pool"
+        os.environ["TEST_TYPE"] = "quick"
+        os.environ["TEST_LABELS"] = json.dumps([f"test:{component}"])
+        self.assertEqual(self._selected_names(), {component})
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        self.assertEqual(self._selected_names(), set())
+        os.environ["BUILD_VARIANT"] = "release"
+
+        # Parent project/label inheritance must not defeat exact-child selection.
+        os.environ["PROJECTS_TO_TEST"] = "miopen"
+        os.environ["TEST_LABELS"] = "[]"
+        self.assertIn(component, self._selected_names())
+        os.environ["TEST_LABELS"] = json.dumps(["test:miopen"])
+        self.assertIn(component, self._selected_names())
+        os.environ["PROJECTS_TO_TEST"] = "rocblas"
+        self.assertNotIn(component, self._selected_names())
+
+        os.environ["PROJECTS_TO_TEST"] = "*"
+        os.environ["TEST_LABELS"] = json.dumps([f"test:{component}"])
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        self.assertEqual(self._selected_names(), set())
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+        self.assertEqual(self._selected_names(), set())
+
     def test_miopen_dbsync_declares_non_quick_tiers(self):
         # miopen-dbsync is a slow specialist check gated to standard/comprehensive/full.
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
