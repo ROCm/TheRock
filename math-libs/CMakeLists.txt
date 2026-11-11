@@ -136,7 +136,6 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     DEFAULT_GPU_TARGETS
       gfx942  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
-      -DLIBHIPCXX_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
@@ -469,7 +468,6 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     # the prebuilt lit tests into bin/libhipcxx/lit-amdclang, and the hiprtc
     # lit tests into bin/libhipcxx/lit-hiprtc with bin/hiprtcc.
     set(_libhipcxx_tests_cmake_args
-      -DLIBHIPCXX_COPY_TO_BUILD=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
@@ -482,6 +480,11 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DLIBHIPCXX_INSTALL_TESTS=ON
       -DLIBHIPCXX_PREBUILD_LIT_TESTS=ON
     )
+    if(WIN32)
+      # Builds the tests from a copy of the sources in which the
+      # include/libhipcxx/hip symlink is replaced by a real directory.
+      list(APPEND _libhipcxx_tests_cmake_args -DLIBHIPCXX_COPY_TO_BUILD=ON)
+    endif()
     therock_cmake_subproject_declare(libhipcxx_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_tests"
