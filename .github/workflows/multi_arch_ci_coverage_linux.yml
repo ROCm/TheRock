@@ -244,16 +244,18 @@ jobs:
         build_compiler_runtime,
         build_instrumented_math_libs,
       ]
-    # Also guard the empty matrix: fromJSON('') would hard-error.
+    # Guard both an empty selection ('[]') and a setup job that emitted no
+    # output (''); fromJSON('') hard-errors.
     if: >-
       ${{
         !failure() && !cancelled() &&
+        needs.setup_coverage_matrix.outputs.coverage_matrix != '' &&
         needs.setup_coverage_matrix.outputs.coverage_matrix != '[]'
       }}
     strategy:
       fail-fast: false
       matrix:
-        coverage: ${{ fromJSON(needs.setup_coverage_matrix.outputs.coverage_matrix) }}
+        coverage: ${{ fromJSON(needs.setup_coverage_matrix.outputs.coverage_matrix || '[]') }}
     uses: ./.github/workflows/multi_arch_ci_coverage_report.yml
     secrets: inherit
     with:
