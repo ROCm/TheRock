@@ -251,6 +251,8 @@ jobs:
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0" # never idle-out; keeps stats accurate on long builds
+      # HIP diagnostics can exceed sccache's default 8 MiB response limit.
+      SCCACHE_MAX_FRAME_LENGTH: "67108864" # 64 MiB
       SCCACHE_LOG: warn
     outputs:
       torch_version: ${{ steps.pytorch-versions.outputs.torch_version }}
