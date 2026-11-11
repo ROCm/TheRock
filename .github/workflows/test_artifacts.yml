@@ -44,6 +44,10 @@ on:
         description: "CPU test runner label (for components that don't need GPU)"
         type: string
         default: ""
+      test_runs_on_multi_gpu:
+        description: "Explicit runner for multi-GPU components; takes priority over the manual GPU runner override"
+        type: string
+        default: ""
       tests_enabled:
         description: "Whether tests should run (true when any runner is available)"
         type: boolean
@@ -98,7 +102,7 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
       build_variant:
-        description: "Build variant (e.g., release, asan)."
+        description: "Build variant (e.g., release, asan, csan)."
         type: choice
         options:
           - release
@@ -106,6 +110,7 @@ on:
           - asan-debug
           - host-asan
           - host-asan-debug
+          - csan
         default: release
       quartz_tracking_id:
         description: >-
@@ -129,6 +134,9 @@ on:
       test_runs_on:
         type: string
       test_runs_on_cpu:
+        type: string
+        default: ""
+      test_runs_on_multi_gpu:
         type: string
         default: ""
       tests_enabled:
@@ -158,7 +166,7 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
       build_variant:
-        description: "Build variant (e.g., release, asan)."
+        description: "Build variant (e.g., release, asan, csan)."
         type: string
         default: "release"
       quartz_tracking_id:
@@ -298,13 +306,17 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
+      #   1. Explicit multi-GPU input applies only to components requiring multiple GPUs.
+      #   2. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
-      #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
-      #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
+      #   3. Multi-GPU components use their configured multi-GPU runner.
+      #   4. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
         ${{
+          (matrix.components.multi_gpu_runner != '' &&
+            inputs.test_runs_on_multi_gpu != '' &&
+            inputs.test_runs_on_multi_gpu) ||
           (github.event_name == 'workflow_dispatch' &&
             !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&

@@ -32,7 +32,7 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
       build_variant:
-        description: "Build variant (e.g., release, asan). Used to skip tests incompatible with certain builds."
+        description: "Build variant (e.g., release, asan, csan). Used to skip tests incompatible with certain builds."
         type: string
         default: "release"
       default_container_image:
@@ -52,9 +52,10 @@ jobs:
       Test ${{ fromJSON(inputs.component).job_name }}
       (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
       (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+      ${{ fromJSON(inputs.component).expect_failure == true && inputs.build_variant != 'csan' && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
-    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
+    # CSAN findings must remain failures even for normally expected-failure suites.
+    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true && inputs.build_variant != 'csan' }}
     timeout-minutes: 210
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -131,10 +132,10 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Run setup test environment workflow
-        timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
+        timeout-minutes: ${{ (inputs.build_variant == 'asan' || inputs.build_variant == 'csan') && 60 || 15 }}
         env:
           RETRY_THIS_STEP: "true"
-          STEP_TIMEOUT_MINUTES: ${{ inputs.build_variant == 'asan' && '60' || '15' }}
+          STEP_TIMEOUT_MINUTES: ${{ (inputs.build_variant == 'asan' || inputs.build_variant == 'csan') && '60' || '15' }}
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -145,6 +146,14 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+
+      - name: Configure CSAN test environment
+        if: ${{ inputs.build_variant == 'csan' }}
+        run: |
+          echo "${OUTPUT_ARTIFACTS_DIR}/llvm/bin" >> "${GITHUB_PATH}"
+          python ./build_tools/github_actions/configure_csan_env.py \
+            --artifacts-dir "${OUTPUT_ARTIFACTS_DIR}" \
+            --reports-dir csan-reports
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
@@ -173,7 +182,7 @@ jobs:
         timeout-minutes: 3
         env:
           # Preload ASAN runtime so Python can load ASAN-instrumented libraries
-          LD_PRELOAD: ${{ env.ASAN_RUNTIME_PATH }}
+          LD_PRELOAD: ${{ inputs.build_variant == 'csan' && env.LD_PRELOAD || env.ASAN_RUNTIME_PATH }}
           # The probes load instrumented ROCm libraries, so LeakSanitizer reports
           # whatever those leak at exit and the probe returns non-zero. This step
           # answers "is the driver and GPU functional", not "is the runtime
@@ -237,15 +246,29 @@ jobs:
             Test ${{ fromJSON(inputs.component).job_name }}
             (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
             (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+            ${{ fromJSON(inputs.component).expect_failure == true && inputs.build_variant != 'csan' && '(xfail)' || '' }}
         # This input is intentionally a shell program from fetch_test_configurations.py,
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
           ${{ fromJSON(inputs.component).test_script }}
 
+      - name: Check CSAN diagnostic reports
+        id: csan_reports
+        if: ${{ always() && inputs.build_variant == 'csan' }}
+        run: python ./build_tools/github_actions/check_csan_reports.py --reports-dir csan-reports
+
+      - name: Upload CSAN diagnostic reports
+        if: ${{ always() && inputs.build_variant == 'csan' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: csan-reports-${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: csan-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Print test reproduction command
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        if: ${{ failure() && (steps.test.outcome == 'failure' || steps.csan_reports.outcome == 'failure') }}
         env:
           MATRIX_SHARD: ${{ matrix.shard }}
           COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
