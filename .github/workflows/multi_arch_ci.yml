@@ -17,6 +17,13 @@ on:
       - release/therock-*
   workflow_dispatch:
     inputs:
+      build_variant:
+        type: choice
+        description: "Build variant (csan runs the build-only ConcurrencySanitizer pipeline)"
+        default: "release"
+        options:
+          - "release"
+          - "csan"
       # --- Build targets ---
       linux_amdgpu_families:
         type: string
@@ -161,7 +168,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  csan:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_variant == 'csan' }}
+    uses: ./.github/workflows/ci_csan.yml
+    with:
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'gfx94x' }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
   setup:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_variant != 'csan' }}
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "release"
@@ -235,6 +253,7 @@ jobs:
     name: CI Summary
     if: always()
     needs:
+      - csan
       - setup
       - linux_build_and_test
       - windows_build_and_test

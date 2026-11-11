@@ -10,13 +10,19 @@ on:
         type: string
         description: "Comma-separated Linux GPU families (gfx94x, gfx950), or all"
         default: "gfx94x"
+  workflow_call:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        description: "Comma-separated Linux GPU families (gfx94x, gfx950), or all"
+        default: "gfx94x"
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
+  group: csan-${{ github.workflow }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
