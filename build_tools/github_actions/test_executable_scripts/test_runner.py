@@ -325,9 +325,10 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
-    # Temporary workaround for a known Linux driver issue. Remove both entries
-    # once the fix is on the runners.
-    # AILIKFD-911, https://github.com/ROCm/rocm-libraries/issues/14873
+    # Temporary workaround for a known Linux driver issue (AILIKFD-911).
+    # Remove both entries once the Linux runners have an amdgpu with the
+    # GEM_VA TLB flush fix (fixed in-tree kernel or DKMS).
+    # https://github.com/ROCm/rocm-libraries/issues/14873
     "rocsparse": {
         "env_linux": {
             "HIP_MEM_POOL_USE_VM": "0",
