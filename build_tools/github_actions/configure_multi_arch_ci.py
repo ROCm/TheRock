@@ -69,7 +69,7 @@ from _therock_utils.build_topology import get_topology
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
-    WSL_RUN_LABEL,
+    CI_LABEL_REQUIRED_ARTIFACTS,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -166,6 +166,27 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
     return [stage for stage in all_stages if stage not in build_stages]
 
 
+def _resolve_effective_build_stages(
+    requested_stages: list[str], labels: list[str]
+) -> list[str]:
+    """Add to the requested build stages the stages the requested tests need.
+
+    Labels can require artifacts beyond the components' own (for example a
+    test platform's runtime pieces). The topology resolves those artifacts to
+    their producing stages and the stages those depend on. A full build
+    (``requested_stages`` empty) already includes every stage.
+    """
+    if not requested_stages:
+        return []
+    required_artifacts = sorted(
+        {a for label in labels for a in CI_LABEL_REQUIRED_ARTIFACTS.get(label, [])}
+    )
+    if not required_artifacts:
+        return list(requested_stages)
+    required_stages = get_topology().get_stages_for_artifacts(required_artifacts)
+    return list(requested_stages) + sorted(required_stages - set(requested_stages))
+
+
 # Maps build stages to the test labels that can run with artifacts from those
 # stages. Used to auto-filter tests when build_stages narrows the build graph.
 # Test labels not listed here require a full build.
@@ -215,9 +236,6 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
         allowed.update(STAGE_TO_TEST_LABELS.get(stage, []))
     return sorted(allowed) if allowed else []
 
-
-# ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
-WSL_REQUIRED_STAGE = "wsl-rocdxg"
 
 # ci:exactly makes the attached arch labels the complete family selection: the
 # families the trigger or the workflow inputs would otherwise select are
@@ -299,8 +317,9 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
-    # Allowlist of build stages to run. Empty means every stage, which is the
-    # default for all existing callers.
+    # Build stages the caller requested. Empty means every stage, which is the
+    # default for all existing callers. decide_jobs() adds the stages that
+    # produce artifacts the requested tests need.
     build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
@@ -321,8 +340,7 @@ class CIInputs:
         """Validate inputs for consistency (fail-fast behavior).
 
         Raises ValueError for conflicting build selections, ci:exactly without an
-        arch label, test labels requiring stages not in build_stages, or
-        ci:run-wsl on a partial build without the wsl-rocdxg stage.
+        arch label, or test labels requiring stages not in build_stages.
         """
         # ci:exactly drops the default families, so the arch labels become the
         # whole selection. Without one, nothing would build and CI would report
@@ -383,15 +401,6 @@ class CIInputs:
             ]:
                 _apply_stage_test_labels(
                     platform, labels, self.build_stages, allowed_labels
-                )
-            if (
-                WSL_RUN_LABEL in self.linux_test_labels
-                and WSL_REQUIRED_STAGE not in self.build_stages
-            ):
-                raise ValueError(
-                    f"{WSL_RUN_LABEL} needs the {WSL_REQUIRED_STAGE} stage (the WSL "
-                    f"libhsakmt), which is not in build_stages {self.build_stages}. "
-                    f"Add {WSL_REQUIRED_STAGE} to build_stages."
                 )
 
     @property
@@ -517,7 +526,7 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
-            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
+            build_stages=build_stages,
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
@@ -1632,14 +1641,21 @@ def decide_jobs(
         if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
             baseline_run_id = auto_stage_reuse.baseline_run_id
 
-    # A build_stages allowlist narrows the build graph: everything outside it
+    # The requested build_stages narrow the build graph to those stages plus
+    # the ones the requested tests need (the effective stages). Everything else
     # is skipped outright, with no artifacts built or copied. This takes
     # precedence over prebuilt/reuse decisions, which only matter for stages
     # that are part of the build in the first place.
-    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    effective_stages = _resolve_effective_build_stages(
+        ci_inputs.build_stages, ci_inputs.pr_labels
+    )
+    skipped_stages = _resolve_skipped_stages(effective_stages)
     if skipped_stages:
-        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
-        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        print(f"  Requested build stages: {ci_inputs.build_stages}")
+        added_stages = [s for s in effective_stages if s not in ci_inputs.build_stages]
+        if added_stages:
+            print(f"  Added for the requested tests: {added_stages}")
+        print(f"  Skipping stages outside the effective stages: {skipped_stages}")
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
