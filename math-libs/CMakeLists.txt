@@ -480,26 +480,47 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DLIBHIPCXX_INSTALL_TESTS=ON
       -DLIBHIPCXX_PREBUILD_LIT_TESTS=ON
     )
-    set(_libhipcxx_tests_variants libhipcxx_tests)
-    set(_libhipcxx_tests_extra_args "")
+    therock_cmake_subproject_declare(libhipcxx_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_tests"
+      BACKGROUND_BUILD
+      DEFAULT_GPU_TARGETS
+        gfx942  # Fixes issue with empty target list for unsupported architectures.
+      CMAKE_ARGS
+        ${_libhipcxx_tests_cmake_args}
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        rocm-cmake
+        libhipcxx
+        ${_libhipcxx_prim_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        hip-clr
+        ${libhipcxx_runtime_deps}
+    )
+    therock_cmake_subproject_glob_c_sources(libhipcxx_tests
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_require_host_program(libhipcxx_tests lit)
+    therock_cmake_subproject_activate(libhipcxx_tests)
+    list(APPEND _libhipcxx_artifact_subproject_deps libhipcxx_tests)
+
     if(NOT WIN32)
       # The hiprtc tests only run on Linux.
-      list(APPEND _libhipcxx_tests_variants libhipcxx_hiprtc_tests)
-      set(_libhipcxx_hiprtc_tests_extra_args
-        -DLIBHIPCXX_TEST_WITH_HIPRTC=ON
-        -DLIBCUDACXX_ENABLE_C2H_TESTS=OFF
-      )
-    endif()
-    foreach(_libhipcxx_tests IN LISTS _libhipcxx_tests_variants)
-      therock_cmake_subproject_declare(${_libhipcxx_tests}
+      therock_cmake_subproject_declare(libhipcxx_hiprtc_tests
         EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
-        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/${_libhipcxx_tests}"
+        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_hiprtc_tests"
         BACKGROUND_BUILD
         DEFAULT_GPU_TARGETS
           gfx942  # Fixes issue with empty target list for unsupported architectures.
         CMAKE_ARGS
           ${_libhipcxx_tests_cmake_args}
-          ${_${_libhipcxx_tests}_extra_args}
+          -DLIBHIPCXX_TEST_WITH_HIPRTC=ON
+          -DLIBCUDACXX_ENABLE_C2H_TESTS=OFF
         CMAKE_INCLUDES
           therock_explicit_finders.cmake
         COMPILER_TOOLCHAIN
@@ -513,14 +534,14 @@ if(THEROCK_ENABLE_LIBHIPCXX)
           hip-clr
           ${libhipcxx_runtime_deps}
       )
-      therock_cmake_subproject_glob_c_sources(${_libhipcxx_tests}
+      therock_cmake_subproject_glob_c_sources(libhipcxx_hiprtc_tests
         SUBDIRS
           .
       )
-      therock_cmake_subproject_require_host_program(${_libhipcxx_tests} lit)
-      therock_cmake_subproject_activate(${_libhipcxx_tests})
-      list(APPEND _libhipcxx_artifact_subproject_deps ${_libhipcxx_tests})
-    endforeach()
+      therock_cmake_subproject_require_host_program(libhipcxx_hiprtc_tests lit)
+      therock_cmake_subproject_activate(libhipcxx_hiprtc_tests)
+      list(APPEND _libhipcxx_artifact_subproject_deps libhipcxx_hiprtc_tests)
+    endif()
   endif()
 
   therock_provide_artifact(libhipcxx
