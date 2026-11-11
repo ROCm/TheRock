@@ -89,6 +89,7 @@ from _therock_utils.python_package_paths import (
     BUILD_VARIANTS,
     DEFAULT_INDEX_TYPE,
     INDEX_TYPES,
+    UnpublishedBuildVariantError,
     build_variant_index_suffix,
     get_python_index,
     plan_key_copies,
@@ -365,6 +366,16 @@ def main(argv: list[str]) -> None:
         "as their non-debug counterpart.",
     )
     args = parser.parse_args(argv)
+    # Resolve the python index before publishing anything. Build variants
+    # without release paths yet (e.g. tsan) are built but not published, so
+    # skip everything rather than mix them into the standard paths.
+    try:
+        python_index = get_python_index(
+            args.index_type, build_variant_index_suffix(args.build_variant)
+        )
+    except UnpublishedBuildVariantError as e:
+        logger.warning("Skipping publishing: %s", e)
+        return
 
     artifacts_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
@@ -385,9 +396,7 @@ def main(argv: list[str]) -> None:
             args.release_type,
             backend,
             structured=args.structured,
-            index=get_python_index(
-                args.index_type, build_variant_index_suffix(args.build_variant)
-            ),
+            index=python_index,
         )
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(

@@ -284,6 +284,29 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                     "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
                 )
 
+        # A variant without release paths yet is skipped: nothing is copied
+        # and main() returns normally so the workflow continues.
+        mock_copy_dir.reset_mock()
+        mock_copy_file.reset_mock()
+        with self.assertLogs(level="WARNING") as logs:
+            main(
+                [
+                    "--run-id",
+                    "123",
+                    "--platform",
+                    "linux",
+                    "--release-type",
+                    "dev",
+                    "--structured",
+                    "--build-variant",
+                    "tsan",
+                    "--dry-run",
+                ]
+            )
+        self.assertIn("Skipping publishing", logs.output[0])
+        mock_copy_dir.assert_not_called()
+        mock_copy_file.assert_not_called()
+
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")

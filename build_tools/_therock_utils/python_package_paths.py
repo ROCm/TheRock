@@ -27,6 +27,7 @@ from pathlib import Path
 from re import sub
 
 from _therock_utils.storage_location import StorageLocation
+from github_actions.amdgpu_family_matrix import all_build_variants
 from packaging.utils import (
     InvalidSdistFilename,
     InvalidWheelFilename,
@@ -82,9 +83,19 @@ INDEX_NAMES = tuple(
 )
 DEFAULT_INDEX = get_python_index()
 
-# Build variants that publish Python packages (see all_build_variants in
-# amdgpu_family_matrix.py).
-BUILD_VARIANTS = ("release", "asan", "asan-debug", "host-asan", "host-asan-debug")
+# Build variants across all platforms, taken from all_build_variants in
+# amdgpu_family_matrix.py so new variants are picked up without changes here.
+BUILD_VARIANTS = tuple(
+    dict.fromkeys(
+        variant
+        for platform_variants in all_build_variants.values()
+        for variant in platform_variants
+    )
+)
+
+
+class UnpublishedBuildVariantError(ValueError):
+    """Known build variant that is not supported for publishing yet."""
 
 
 def build_variant_index_suffix(build_variant: str) -> str | None:
@@ -96,13 +107,21 @@ def build_variant_index_suffix(build_variant: str) -> str | None:
 
     Raises:
         ValueError: if ``build_variant`` is unknown.
+        UnpublishedBuildVariantError: if ``build_variant`` is not supported
+            for publishing yet (e.g. ``tsan``).
     """
     if build_variant not in BUILD_VARIANTS:
         raise ValueError(
             f"build_variant={build_variant!r} is invalid, must be one of "
             f"{BUILD_VARIANTS}"
         )
-    return "asan" if "asan" in build_variant else None
+    if "asan" in build_variant:
+        return "asan"
+    if build_variant == "release":
+        return None
+    raise UnpublishedBuildVariantError(
+        f"build_variant={build_variant!r} is not supported for publishing yet"
+    )
 
 
 # repo.amd.com release streams and the per-product bucket naming scheme:
