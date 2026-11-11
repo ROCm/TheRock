@@ -48,6 +48,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocalution | --no-rocalution]
     [--kfdtest | --no-kfdtest]
     [--rocwmma | --no-rocwmma]
+    [--fortran-bindings {blas,fft,rand,runtime,solver,sparse}]
     [--rpp | --no-rpp]
     [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
@@ -155,6 +156,15 @@ PLATFORM = platform.system().lower()
 NIGHTLY_TARBALL_BUCKET = get_release_bucket_config("nightly", "tarball")
 DEV_TARBALL_BUCKET = get_release_bucket_config("dev", "tarball")
 MULTIARCH_TARBALL_S3_PREFIX = "v4/tarball"
+
+FORTRAN_BINDING_LIBS = {
+    "runtime": [],
+    "blas": ["blas", "solver"],
+    "solver": ["solver", "blas", "sparse"],
+    "sparse": ["sparse", "blas"],
+    "fft": ["fft", "fftw3", "rand"],
+    "rand": ["rand"],
+}
 s3_client = boto3.client(
     "s3",
     region_name=NIGHTLY_TARBALL_BUCKET.region,
@@ -477,6 +487,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocalution,
             args.kfdtest,
             args.rocwmma,
+            args.fortran_bindings,
             args.rpp,
             args.solver,
             args.sparse,
@@ -636,6 +647,11 @@ def retrieve_artifacts_by_run_id(args):
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
             argv.append("rocwmma_dev")
+        if args.fortran_bindings:
+            # Static archives: the tests only load these C libraries.
+            extra_artifacts.append(f"{args.fortran_bindings}-fortran")
+            for lib in FORTRAN_BINDING_LIBS[args.fortran_bindings]:
+                argv.append(f"{lib}_lib")
         if args.solver:
             extra_artifacts.append("solver")
         if args.sparse:
@@ -1107,6 +1123,12 @@ def main(argv):
         default=False,
         help="Include artifacts needed to build and run 'hip-tests'",
         action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--fortran-bindings",
+        choices=sorted(FORTRAN_BINDING_LIBS),
+        help="Include a family of Fortran bindings and the libraries they wrap",
     )
 
     artifacts_group.add_argument(
