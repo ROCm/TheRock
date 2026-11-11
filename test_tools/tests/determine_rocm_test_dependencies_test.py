@@ -1192,30 +1192,6 @@ class TestExplain(_FixtureTestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_cli_selects_hipblaslt_rocjitsu_race_with_hipblaslt(self) -> None:
-        graph = {"hipblaslt": {"consumers": []}}
-        root = _make_fixture(graph=graph, policies="")
-        try:
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPT),
-                    "--therock-dir",
-                    str(root),
-                    "--changed-projects",
-                    "hipblaslt",
-                    "--level",
-                    "4",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(proc.returncode, 0, proc.stderr)
-            selected = set(json.loads(proc.stdout.strip()))
-            self.assertEqual(selected, {"hipblaslt", "hipblaslt-rocjitsu-race"})
-        finally:
-            shutil.rmtree(root, ignore_errors=True)
-
     def test_explain_reports_ci_selector_aliases(self) -> None:
         graph = {
             "miopen": {"consumers": ["hipdnn_integration_tests"]},

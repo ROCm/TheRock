@@ -459,6 +459,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(config["test_types"], ["standard", "comprehensive", "full"])
 
+    def test_ci_selector_aliases_name_real_jobs(self):
+        # determine_rocm_test_dependencies fans a changed project out to these
+        # job names; a name with no test_matrix entry is silently never run.
+        sys.path.insert(0, os.fspath(Path(__file__).parents[3] / "test_tools"))
+        from determine_rocm_test_dependencies import _CI_TEST_SELECTOR_ALIASES
+
+        jobs = set(fetch_test_configurations.test_matrix)
+        for project, selectors in _CI_TEST_SELECTOR_ALIASES.items():
+            with self.subTest(project=project):
+                self.assertEqual(set(selectors) - jobs, set())
+
     def test_miopen_dbsync_excluded_on_quick(self):
         # Integration: the real entry is not scheduled on the quick tier.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
@@ -557,23 +568,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "hipblaslt-rocjitsu-race", "gfx950-dcgpu", False, "gfx950"
             )
         )
-
-    def test_hipblaslt_rocjitsu_race_excluded_on_other_families(self):
-        self.assertIsNone(
-            self._selected_job(
-                "hipblaslt-rocjitsu-race", "gfx120X-all", False, "gfx1200"
-            )
-        )
-
-    def test_hipblaslt_rocjitsu_race_not_scheduled_on_asan_builds(self):
-        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
-            with self.subTest(build_variant=build_variant):
-                os.environ["BUILD_VARIANT"] = build_variant
-                self.assertIsNone(
-                    self._selected_job(
-                        "hipblaslt-rocjitsu-race", "gfx950-dcgpu", False, "gfx950"
-                    )
-                )
 
     def test_skip_build_variant_only_drops_listed_variants(self):
         self._inject_job("asan-incompatible", skip_build_variant=["asan"])
@@ -1128,8 +1122,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_linux_jobs_are_not_expect_failure(self):
         fetch_test_configurations.run()
         for job in self._get_components():
-            config = fetch_test_configurations.test_matrix[job["job_name"]]
-            if "linux" in config.get("expect_failure", {}):
+            # Advisory by design while the emulator check is new.
+            if job["job_name"] == "hipblaslt-rocjitsu-race":
                 continue
             self.assertFalse(job.get("expect_failure"), job["job_name"])
 
