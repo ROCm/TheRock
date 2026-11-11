@@ -1,0 +1,140 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 04:44:04 -0800
+Subject: [PATCH] rocrtst: Keep pool-size configuration local to each query
+
+The concurrent memory-alignment test calls AcquirePoolInfo from multiple
+workers. Each query writes the same global pool_size_limit and then reads
+it, producing a host CSAN data race in common.cc:582-583. Identical values
+do not make those unsynchronized accesses safe.
+
+Read the immutable EnvironmentConfig value into a const local instead.
+The configuration is initialized in main before RUN_ALL_TESTS. Read the
+same configuration directly in MaxSingleAllocationTest, preserving its
+bounded-pool allocation search, negative-test handling and OOM margins.
+Remove the redundant global definition and declaration. Pool queries no
+longer communicate through mutable shared state, and the unlimited case
+still uses each pool's own reported size.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43020772824
+Carry temporarily in TheRock pending upstream ROCR test-suite review.
+---
+ projects/rocr-runtime/rocrtst/common/common.cc          |  4 +---
+ projects/rocr-runtime/rocrtst/common/common.h           |  2 --
+ .../rocrtst/suites/functional/memory_basic.cc           | 17 ++++++++++-------
+ 3 files changed, 11 insertions(+), 12 deletions(-)
+
+diff --git a/projects/rocr-runtime/rocrtst/common/common.cc b/projects/rocr-runtime/rocrtst/common/common.cc
+index 75b2718..208e267 100644
+--- a/projects/rocr-runtime/rocrtst/common/common.cc
++++ b/projects/rocr-runtime/rocrtst/common/common.cc
+@@ -72,8 +72,6 @@ static inline EnvironmentConfig& env_() {
+   } \
+ }
+ 
+-size_t pool_size_limit = 0;
+-
+ bool isEmuModeEnabled() {
+   static bool checked = false;
+   static bool emu_mode = false;
+@@ -579,7 +577,7 @@ hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
+   //   1. Overrides pool_i->size (typically to reduce it; value is applied directly)
+   //   2. Triggers relaxed OOM safety margin (90% vs 70%) for system RAM tests
+   // This significantly reduces test time on large-VRAM GPUs.
+-  pool_size_limit = env_().getPoolSizeLimit();
++  const size_t pool_size_limit = env_().getPoolSizeLimit();
+   if (pool_size_limit > 0) {
+     if (pool_size_limit > pool_i->size) {
+       std::cout << "Warning: Pool size override > than reported size (override:"
+diff --git a/projects/rocr-runtime/rocrtst/common/common.h b/projects/rocr-runtime/rocrtst/common/common.h
+index 124a76b..d4e0ba0 100644
+--- a/projects/rocr-runtime/rocrtst/common/common.h
++++ b/projects/rocr-runtime/rocrtst/common/common.h
+@@ -110,8 +110,6 @@ struct agent_pools_t{
+     std::vector<hsa_amd_memory_pool_t> pools;
+ };
+ 
+-extern size_t pool_size_limit;
+-
+ /// Platform types for test filtering
+ enum class PlatformType {
+   REAL_HARDWARE,
+diff --git a/projects/rocr-runtime/rocrtst/suites/functional/memory_basic.cc b/projects/rocr-runtime/rocrtst/suites/functional/memory_basic.cc
+index 6bdc77a..1e38a75 100644
+--- a/projects/rocr-runtime/rocrtst/suites/functional/memory_basic.cc
++++ b/projects/rocr-runtime/rocrtst/suites/functional/memory_basic.cc
+@@ -52,6 +52,7 @@
+ #include "suites/functional/memory_basic.h"
+ #include "common/base_rocr_utils.h"
+ #include "common/common.h"
++#include "common/env_config.h"
+ #include "common/helper_funcs.h"
+ #include "common/hsatimer.h"
+ #include "gtest/gtest.h"
+@@ -210,6 +211,8 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
+ 
+   err = rocrtst::AcquirePoolInfo(pool, &pool_i);
+   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
++  const size_t pool_size_limit =
++      rocrtst::EnvironmentConfig::getInstance().getPoolSizeLimit();
+ 
+   if (verbosity() > 0) {
+       rocrtst::DumpMemoryPoolInfo(&pool_i, 2);
+@@ -244,12 +247,12 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
+   // is limited to the actual pool size.
+   // Also use pool size when ROCRTST_LIMIT_POOL_SIZE is set to cap the search range.
+   if ((ag_type == HSA_DEVICE_TYPE_AIE && pool_i.alloc_rec_granule == 0) ||
+-      rocrtst::pool_size_limit) {
++      pool_size_limit) {
+     pool_sz = pool_i.size / gran_sz;
+   }
+ 
+   // Skip if ROCRTST_LIMIT_POOL_SIZE is set below one allocation granule.
+-  if (rocrtst::pool_size_limit && pool_sz == 0) {
++  if (pool_size_limit && pool_sz == 0) {
+     if (verbosity() > 0) {
+       std::cout << "  Skipping: ROCRTST_LIMIT_POOL_SIZE < allocation granule" << std::endl;
+       std::cout << kSubTestSeparator << std::endl;
+@@ -268,7 +271,7 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
+     std::cout << "  Skipping over-max negative alloc under ASAN (abort risk)" << std::endl;
+   }
+ #else
+-  if (rocrtst::pool_size_limit) {
++  if (pool_size_limit) {
+     if (verbosity() > 0) {
+       std::cout << "  Skipping over-max negative alloc under pool size limit (false positive)" << std::endl;
+     }
+@@ -286,11 +289,11 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
+ #ifdef ROCRTST_ASAN
+   // Under ASAN, hsa_amd_memory_pool_allocate is intercepted and ASAN aborts
+   // on oversized allocations instead of letting the runtime return an error.
+-  if (is_system_ram && !rocrtst::pool_size_limit && verbosity() > 0) {
++  if (is_system_ram && !pool_size_limit && verbosity() > 0) {
+     std::cout << "  Skipping impossible-size negative alloc under ASAN (abort risk)" << std::endl;
+   }
+ #else
+-  if (is_system_ram && !rocrtst::pool_size_limit) {
++  if (is_system_ram && !pool_size_limit) {
+     uint64_t impossible_size = 2 * info.totalram;
+     err = TestAllocate(pool, impossible_size);
+     EXPECT_TRUE(err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+@@ -307,14 +310,14 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
+   // memory and swap space, and so killing this process.
+   float pool_size_limit_ratio = 1.0;
+   if (is_system_ram) {
+-    pool_size_limit_ratio = rocrtst::pool_size_limit ? 0.9 : 0.7;
++    pool_size_limit_ratio = pool_size_limit ? 0.9 : 0.7;
+   }
+ 
+   uint64_t upper_bound = pool_size_limit_ratio * pool_sz;
+ 
+   // For system RAM, cap the maximum allocation attempt to prevent soft hangs
+   // on large-memory systems. 64GB is a reasonable upper limit for testing.
+-  if (is_system_ram && !rocrtst::pool_size_limit) {
++  if (is_system_ram && !pool_size_limit) {
+     const uint64_t max_system_ram_test = (64ULL * 1024 * 1024 * 1024) / gran_sz;  // 64 GB
+     upper_bound = std::min(upper_bound, max_system_ram_test);
+   }
+-- 
+2.51.2.windows.1
