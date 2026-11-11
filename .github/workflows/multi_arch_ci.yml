@@ -43,6 +43,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      component_repair:
+        type: boolean
+        default: false
+        description: "CSAN only: rebuild the corrected compiler and affected components using baseline artifacts"
       runtime_repair:
         type: boolean
         default: false
@@ -183,6 +187,8 @@ jobs:
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'gfx94x' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      build_stages: ${{ inputs.build_stages || '' }}
+      component_repair: ${{ inputs.component_repair || false }}
       runtime_repair: ${{ inputs.runtime_repair || false }}
       comm_repair: ${{ inputs.comm_repair || false }}
     permissions:

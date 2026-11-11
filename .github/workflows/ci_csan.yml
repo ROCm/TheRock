@@ -18,6 +18,14 @@ on:
         type: string
         description: "Workflow run supplying prebuilt_stages; both inputs must be set together"
         default: ""
+      build_stages:
+        type: string
+        description: "Comma-separated stage allowlist (empty = all stages)"
+        default: ""
+      component_repair:
+        type: boolean
+        description: "Rebuild the validated CSAN compiler and affected components, reusing other baseline artifacts"
+        default: false
       runtime_repair:
         type: boolean
         description: "Rebuild only HIP/OpenCL CLR artifacts after copying a prebuilt compiler-runtime stage"
@@ -40,6 +48,14 @@ on:
         type: string
         description: "Workflow run supplying prebuilt_stages; both inputs must be set together"
         default: ""
+      build_stages:
+        type: string
+        description: "Comma-separated stage allowlist (empty = all stages)"
+        default: ""
+      component_repair:
+        type: boolean
+        description: "Rebuild the validated CSAN compiler and affected components, reusing other baseline artifacts"
+        default: false
       runtime_repair:
         type: boolean
         description: "Rebuild only HIP/OpenCL CLR artifacts after copying a prebuilt compiler-runtime stage"
@@ -61,6 +77,24 @@ jobs:
   validate_reuse:
     runs-on: ubuntu-26.04
     steps:
+      - name: Checkout repair validator
+        timeout-minutes: 5
+        if: ${{ inputs.component_repair }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate component repair inputs
+        if: ${{ inputs.component_repair }}
+        env:
+          PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BUILD_STAGES: ${{ inputs.build_stages }}
+          LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          RUNTIME_REPAIR: ${{ inputs.runtime_repair }}
+          COMM_REPAIR: ${{ inputs.comm_repair }}
+        run: python3 build_tools/github_actions/csan_repair.py inputs
+
       - name: Validate explicit stage reuse inputs
         env:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
@@ -102,6 +136,7 @@ jobs:
       stage_reuse_mode: ${{ inputs.prebuilt_stages != '' && 'dry-run' || 'off' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages }}
       baseline_run_id: ${{ inputs.baseline_run_id }}
+      build_stages: ${{ inputs.build_stages }}
       build_python_packages: false
       build_pytorch: false
       build_jax: false
@@ -147,18 +182,90 @@ jobs:
           PREBUILT_STAGES: ${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}
           DIST_AMDGPU_FAMILIES: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
         run: |
+          if [ "${{ inputs.component_repair }}" = "true" ]; then
+            python build_tools/github_actions/csan_repair.py snapshot
+          fi
           python build_tools/artifact_manager.py copy \
             --source-run-id="${BASELINE_RUN_ID}" \
             --stage="${PREBUILT_STAGES}" \
             --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets
+          if [ "${{ inputs.component_repair }}" = "true" ]; then
+            python build_tools/github_actions/csan_repair.py verify
+          fi
+
+  repair_compiler:
+    name: Repair CSAN compiler and CLR
+    needs: [setup, copy_prebuilt_stages]
+    if: ${{ inputs.component_repair && needs.setup.outputs.enable_build_jobs == 'true' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: compiler-runtime
+      stage_display_name: "Repair LLVM, HIP and OpenCL"
+      timeout_minutes: 720
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
+      release_type: ci
+      ref: ${{ needs.setup.outputs.ref }}
+      rebuild_artifacts: amd-llvm,core-hip,core-ocl
+      reuse_stage_artifacts: true
+    permissions:
+      contents: read
+      id-token: write
+
+  repair_components:
+    name: Repair affected CSAN components
+    needs: [setup, repair_compiler]
+    if: ${{ inputs.component_repair && needs.setup.outputs.enable_build_jobs == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stage: runtime-tests
+            artifacts: rocrtst,core-hiptests
+            timeout: 360
+          - stage: cv-libs
+            artifacts: rpp
+            timeout: 240
+          - stage: debug-tools
+            artifacts: rocgdb
+            timeout: 360
+          - stage: profiler-apps
+            artifacts: rocprofiler-systems,rocprofiler-systems-examples
+            timeout: 360
+          - stage: comm-libs
+            artifacts: rccl
+            timeout: 240
+          - stage: math-libs
+            artifacts: ""
+            timeout: 1440
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: ${{ matrix.stage }}
+      stage_display_name: "CSAN repair - ${{ matrix.stage }}"
+      timeout_minutes: ${{ matrix.timeout }}
+      amdgpu_family: ${{ (matrix.stage == 'math-libs' || matrix.stage == 'comm-libs') && 'gfx94X-dcgpu' || '' }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      test_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
+      release_type: ci
+      ref: ${{ needs.setup.outputs.ref }}
+      rebuild_artifacts: ${{ matrix.artifacts }}
+      reuse_stage_artifacts: ${{ matrix.artifacts != '' }}
+    permissions:
+      contents: read
+      id-token: write
 
   repair_clr_runtime:
     name: Repair CLR runtime artifacts
     needs: [setup, copy_prebuilt_stages]
     if: >-
       ${{
-        inputs.runtime_repair &&
+        inputs.runtime_repair && !inputs.component_repair &&
         needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
@@ -184,7 +291,7 @@ jobs:
     needs: [setup, copy_prebuilt_stages]
     if: >-
       ${{
-        inputs.comm_repair &&
+        inputs.comm_repair && !inputs.component_repair &&
         needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
@@ -211,7 +318,7 @@ jobs:
     needs: [setup, copy_prebuilt_stages, repair_clr_runtime]
     if: >-
       ${{
-        !failure() && !cancelled() &&
+        !inputs.component_repair && !failure() && !cancelled() &&
         !contains(needs.*.result, 'cancelled') &&
         needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
@@ -241,10 +348,11 @@ jobs:
   summary:
     name: CSAN build summary
     if: always()
-    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, repair_comm_devices, linux_build]
+    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, repair_comm_devices, repair_compiler, repair_components, linux_build]
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
           persist-credentials: false
 

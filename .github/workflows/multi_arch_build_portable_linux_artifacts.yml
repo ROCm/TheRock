@@ -238,6 +238,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             "${TEST_FAMILY_CMAKE_ARGS[@]}" \
+            ${{ inputs.reuse_stage_artifacts && '-DTHEROCK_ENABLE_BASE=ON' || '' }} \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && '-DTHEROCK_BUILD_METRICS=ON' || '' }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' && '-DTHEROCK_BACKGROUND_BUILD_JOBS=1' || '' }} \
@@ -255,7 +256,7 @@ jobs:
 
       - name: Run build tests (Comgr, blocking)
         # Imported Comgr has no local build-test target; test it when rebuilt.
-        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' && (!inputs.reuse_stage_artifacts || contains(inputs.rebuild_artifacts, 'amd-comgr')) }}
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' && (!inputs.reuse_stage_artifacts || contains(inputs.rebuild_artifacts, 'amd-comgr') || contains(inputs.rebuild_artifacts, 'amd-llvm')) }}
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
