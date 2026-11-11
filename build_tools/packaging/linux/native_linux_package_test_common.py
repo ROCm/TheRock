@@ -142,7 +142,7 @@ def _metapackage_name(
         arch: GPU architecture, or ``None`` when the name has no arch suffix.
 
     Returns:
-        The package name, for example ``amdrocm-hpc-sdk-asan7.13-gfx94x``.
+        The package name, for example ``amdrocm-hpc-sdk-asan10.3-gfx94x``.
     """
     name = f"{base}{variant_sep}"
     if ver:

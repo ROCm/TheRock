@@ -414,20 +414,20 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         )
 
     def test_gfx_arch_with_rocm_version_uses_versioned_package_names(self):
-        # Version in package name is major.minor only (7.13.1 -> amdrocm7.13-gfx1100).
+        # Version in package name is major.minor only (10.3.0 -> amdrocm10.3-gfx1100).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx1100",
-            rocm_version="7.13.1",
+            rocm_version="10.3.0",
         )
-        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(t.rocm_version_major_minor, "10.3")
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx1100",
-                "amdrocm-hpc-sdk7.13-gfx1100",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
             ],
         )
 
@@ -435,12 +435,12 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
-            rocm_version="7.13.0",
+            rocm_version="10.3.0",
         )
-        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(t.rocm_version_major_minor, "10.3")
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.13", "amdrocm-core-sdk7.13", "amdrocm-hpc-sdk7.13"],
+            ["amdrocm10.3", "amdrocm-core-sdk10.3", "amdrocm-hpc-sdk10.3"],
         )
 
     def test_major_minor_rocm_version_from_input(self):
@@ -481,17 +481,17 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch=["gfx1151", "gfx94x"],
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx1151",
-                "amdrocm-core-sdk7.13-gfx1151",
-                "amdrocm-hpc-sdk7.13-gfx1151",
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm-hpc-sdk7.13-gfx94x",
+                "amdrocm10.3-gfx1151",
+                "amdrocm-core-sdk10.3-gfx1151",
+                "amdrocm-hpc-sdk10.3-gfx1151",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
             ],
         )
 
@@ -542,18 +542,18 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx94x, GFX1100 ",
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm-hpc-sdk7.13-gfx94x",
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx1100",
-                "amdrocm-hpc-sdk7.13-gfx1100",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
             ],
         )
 
@@ -562,18 +562,18 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx94x; GFX1100 ",
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm-hpc-sdk7.13-gfx94x",
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx1100",
-                "amdrocm-hpc-sdk7.13-gfx1100",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
             ],
         )
 
@@ -1881,17 +1881,17 @@ class InstallDebPackagesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch=["gfx94x", "gfx1100"],
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         with _suppress_script_output():
             self.assertTrue(t.install_deb_packages())
         cmd = mock_streaming.call_args[0][0]
         self.assertEqual(cmd[:4], ["sudo", "apt", "install", "-y"])
-        self.assertIn("amdrocm7.13-gfx94x", cmd)
-        self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
-        self.assertIn("amdrocm7.13-gfx1100", cmd)
-        self.assertIn("amdrocm-hpc-sdk7.13-gfx94x", cmd)
-        self.assertIn("amdrocm-hpc-sdk7.13-gfx1100", cmd)
+        self.assertIn("amdrocm10.3-gfx94x", cmd)
+        self.assertIn("amdrocm-core-sdk10.3-gfx94x", cmd)
+        self.assertIn("amdrocm10.3-gfx1100", cmd)
+        self.assertIn("amdrocm-hpc-sdk10.3-gfx94x", cmd)
+        self.assertIn("amdrocm-hpc-sdk10.3-gfx1100", cmd)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
@@ -2140,15 +2140,15 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                     repo_url="https://example.com",
                     os_profile="ubuntu2404",
                     gfx_arch="gfx942",
-                    rocm_version="7.15.0",
+                    rocm_version="10.3.0",
                     build_variant=build_variant,
                 )
                 self.assertEqual(
                     t.package_names,
                     [
-                        "amdrocm-asan7.15-gfx942",
-                        "amdrocm-core-sdk-asan7.15-gfx942",
-                        "amdrocm-hpc-sdk-asan7.15-gfx942",
+                        "amdrocm-asan10.3-gfx942",
+                        "amdrocm-core-sdk-asan10.3-gfx942",
+                        "amdrocm-hpc-sdk-asan10.3-gfx942",
                     ],
                 )
 
@@ -2158,15 +2158,15 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                     repo_url="https://example.com",
                     os_profile="rhel10",
-                    rocm_version="7.15.0",
+                    rocm_version="10.3.0",
                     build_variant=build_variant,
                 )
                 self.assertEqual(
                     t.package_names,
                     [
-                        "amdrocm-asan7.15",
-                        "amdrocm-core-sdk-asan7.15",
-                        "amdrocm-hpc-sdk-asan7.15",
+                        "amdrocm-asan10.3",
+                        "amdrocm-core-sdk-asan10.3",
+                        "amdrocm-hpc-sdk-asan10.3",
                     ],
                 )
 
@@ -2189,14 +2189,14 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx942",
-            rocm_version="7.15.0",
+            rocm_version="10.3.0",
         )
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.15-gfx942",
-                "amdrocm-core-sdk7.15-gfx942",
-                "amdrocm-hpc-sdk7.15-gfx942",
+                "amdrocm10.3-gfx942",
+                "amdrocm-core-sdk10.3-gfx942",
+                "amdrocm-hpc-sdk10.3-gfx942",
             ],
         )
 
@@ -2208,15 +2208,15 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx942",
-            rocm_version="7.15.0",
+            rocm_version="10.3.0",
             build_variant="release",
         )
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.15-gfx942",
-                "amdrocm-core-sdk7.15-gfx942",
-                "amdrocm-hpc-sdk7.15-gfx942",
+                "amdrocm10.3-gfx942",
+                "amdrocm-core-sdk10.3-gfx942",
+                "amdrocm-hpc-sdk10.3-gfx942",
             ],
         )
 

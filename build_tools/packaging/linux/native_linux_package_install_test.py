@@ -14,9 +14,9 @@ Test modes (--test-type):
   Steps (invoked one by one from main):
   1. Repo setup and install: set up package-manager repository and install
      ROCm packages. Arch suffixes in metapackage names are used only when both
-     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
-     With ``--rocm-version`` only: ``amdrocm7.13``, ``amdrocm-core-sdk7.13``,
-     and ``amdrocm-hpc-sdk7.13``.
+     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm10.3-gfx1100``).
+     With ``--rocm-version`` only: ``amdrocm10.3``, ``amdrocm-core-sdk10.3``,
+     and ``amdrocm-hpc-sdk10.3``.
      With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
