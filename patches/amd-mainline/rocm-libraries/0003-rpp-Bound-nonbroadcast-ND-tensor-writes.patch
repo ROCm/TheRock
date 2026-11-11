@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:45:00 -0800
+Subject: [PATCH] rpp: Bound nonbroadcast ND tensor writes
+
+The nonbroadcast N-D arithmetic and bitwise kernels index only x and z,
+but their callers launched sixteen y lanes. Those lanes concurrently
+wrote identical output addresses. Use one y lane for these N-D launches.
+
+Arithmetic also loaded/stored a full eight-element vector at the final
+partial sample boundary. Add a scalar tail using the existing operation
+and coordinate mapping; the bitwise kernel already has such a tail.
+Keep the full-vector paths and operation dispatch unchanged.
+
+Source-derived CPU checks cover 384 baseline/candidate cases using matching
+dense source/destination shapes, full ROIs with zero begins, ranks 4/5,
+float addition and modeled XOR.
+The old kernels generated 121248 duplicate and 5472 out-of-bounds stores;
+the candidates produce unique, bounded, numerically correct writes in
+those cases. This does not repair the pre-existing unscaled ROI-begin or
+mixed source/destination shape mapping in the full-vector paths.
+
+Found by ConcurrencySanitizer in the comprehensive RPP suites:
+https://github.com/ROCm/TheRock/actions/runs/43022969021
+Source: ROCm/rocm-libraries 2d3b6e98e4ef99cf7dccf54068f333c32a441348
+Carry temporarily in TheRock pending upstream RPP review.
+
+Validated in the pinned native build image with source-derived CPU
+ownership/value fixtures and a full CSAN gfx942 RPP component build,
+staging, and all five RPP artifact components. GPU execution is separate.
+---
+
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/tensor_binary_operations.cpp b/projects/rpp/src/modules/tensor/hip/kernel/tensor_binary_operations.cpp
+index 64f6dad..8f37ad0 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/tensor_binary_operations.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/tensor_binary_operations.cpp
+@@ -519,6 +519,30 @@ __global__ void tensor_op_tensor_non_broadcast_nd_hip_tensor(T1* src1Ptr, T1* sr
+     using VectorType2 = typename ArithmeticLoadStoreExecute<T2>::VectorType;
+ 
+     if (id_x >= strides[0]) return;
++    // Keep the final partial vector inside this sample's allocation.
++    if (strides[0] - id_x < 8) {
++        uint* roi1 = roiTensor1 + id_z * numDims * 2;
++        uint* roi2 = roiTensor2 + id_z * numDims * 2;
++        for (uint element = id_x; element < strides[0]; element++) {
++            uint dstIdx = id_z * strides[0];
++            uint srcIdx1 = dstIdx;
++            uint srcIdx2 = dstIdx;
++            bool outsideRoi = false;
++            for (uint dimension = 0; dimension < numDims; dimension++) {
++                uint coord = (element / strides[dimension + 1]) % src1Dims[dimension];
++                if (coord >= roi2[numDims + dimension]) {
++                    outsideRoi = true;
++                    break;
++                }
++                dstIdx += coord * strides[dimension + 1];
++                srcIdx1 += roi1[dimension] + coord * strides[dimension + 1];
++                srcIdx2 += roi2[dimension] + coord * strides[dimension + 1];
++            }
++            if (!outsideRoi)
++                dstPtr[dstIdx] = Operation::op(src1Ptr[srcIdx1], src2Ptr[srcIdx2]);
++        }
++        return;
++    }
+ 
+     uint* roi1 = roiTensor1 + id_z * numDims * 2;
+     uint* begin1 = roi1;
+@@ -836,9 +860,9 @@ RppStatus hip_exec_tensor_non_broadcast_binary_arithmetic_generic_tensor(
+ 
+         hipLaunchKernelGGL(tensor_op_tensor_non_broadcast_nd_hip_tensor,
+                            dim3(ceil((float)globalThreads_x / LOCAL_THREADS_X),
+-                                ceil((float)globalThreads_y / LOCAL_THREADS_Y),
++                                1,
+                                 ceil((float)globalThreads_z / LOCAL_THREADS_Z)),
+-                           dim3(LOCAL_THREADS_X, LOCAL_THREADS_Y, LOCAL_THREADS_Z), 0,
++                           dim3(LOCAL_THREADS_X, 1, LOCAL_THREADS_Z), 0,
+                            handle.GetStream(), srcPtr1, srcPtr2, srcGenericDescPtr1->dims + 1,
+                            srcGenericDescPtr1->numDims - 1, dstPtr, dstGenericDescPtr->strides,
+                            roiTensor1, roiTensor2, op);
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/tensor_bitwise_binary_operations.cpp b/projects/rpp/src/modules/tensor/hip/kernel/tensor_bitwise_binary_operations.cpp
+index 4a87f1e..63727e5 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/tensor_bitwise_binary_operations.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/tensor_bitwise_binary_operations.cpp
+@@ -801,9 +801,9 @@ RppStatus hip_exec_tensor_non_broadcast_binary_bitwise_generic_tensor(
+ 
+         hipLaunchKernelGGL(tensor_or_tensor_non_broadcast_nd_hip_tensor,
+                            dim3(ceil((float)globalThreads_x / LOCAL_THREADS_X),
+-                                ceil((float)globalThreads_y / LOCAL_THREADS_Y),
++                                1,
+                                 ceil((float)globalThreads_z / LOCAL_THREADS_Z)),
+-                           dim3(LOCAL_THREADS_X, LOCAL_THREADS_Y, LOCAL_THREADS_Z), 0,
++                           dim3(LOCAL_THREADS_X, 1, LOCAL_THREADS_Z), 0,
+                            handle.GetStream(), srcPtr1, srcPtr2, srcGenericDescPtr1->dims + 1,
+                            srcGenericDescPtr1->numDims - 1, dstPtr, dstGenericDescPtr->strides,
+                            roiTensor1, roiTensor2, op);
+-- 
+2.53.0

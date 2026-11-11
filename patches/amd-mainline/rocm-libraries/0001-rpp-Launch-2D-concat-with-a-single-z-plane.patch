@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 05:35:00 -0800
+Subject: [PATCH] rpp: Launch 2D concat with a single z plane
+
+The 2D concat kernel indexes only x and y. Its caller already launches a
+separate kernel for each batch element, but retained the batch size in
+globalThreads_z. A batch of three therefore launched three z planes that
+wrote the same destination elements concurrently. Output comparisons can
+pass because those writes contain identical values.
+
+Use a single grid and block z plane for this 2D kernel. Preserve the 3D
+kernel's z indexing, scalar tail bounds, and packed-store instrumentation.
+
+Reported by ConcurrencySanitizer in the comprehensive RPP suite, including
+block (42,0,2), with stores at concat.cpp:137 and :148:
+https://github.com/ROCm/TheRock/actions/runs/43022969021
+
+Source: ROCm/rocm-libraries 2d3b6e98e4ef99cf7dccf54068f333c32a441348
+Carry temporarily in TheRock pending upstream RPP review.
+---
+ projects/rpp/src/modules/tensor/hip/kernel/concat.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/concat.cpp b/projects/rpp/src/modules/tensor/hip/kernel/concat.cpp
+index ba9e928..bd68720 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/concat.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/concat.cpp
+@@ -282,8 +282,8 @@ RppStatus hip_exec_concat_tensor(T* srcPtr1, RpptGenericDescPtr srcPtr1GenericDe
+             hipLaunchKernelGGL(concat_2d_hip_tensor,
+                                dim3(ceil((float)globalThreads_x / LOCAL_THREADS_X),
+                                     ceil((float)globalThreads_y / LOCAL_THREADS_Y),
+-                                    ceil((float)globalThreads_z / LOCAL_THREADS_Z)),
+-                               dim3(LOCAL_THREADS_X, LOCAL_THREADS_Y, LOCAL_THREADS_Z), 0,
++                                    1),
++                               dim3(LOCAL_THREADS_X, LOCAL_THREADS_Y, 1), 0,
+                                handle.GetStream(), srcPtr1 + src1Offsets[batchCount],
+                                srcPtr2 + src2Offsets[batchCount], srcPtr1GenericDescPtr->strides,
+                                srcPtr2GenericDescPtr->strides, dstPtr + dstOffsets[batchCount],
+-- 
+2.53.0

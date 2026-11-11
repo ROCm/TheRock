@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:45:00 -0800
+Subject: [PATCH] rpp: Keep JPEG padding within each LDS lane slice
+
+For an extra eight-pixel group in a sixteen-aligned tile, validPixels is
+negative. Starting the padding loop at that negative value writes the
+preceding lane's LDS slice and races with its valid pixel stores.
+
+Start padding at max(validPixels, 0) and fill only the current eight-pixel
+slice. Preserve the global lastValidIdx calculation so edge pixels are
+replicated correctly even when the whole slice is padding. Apply this to
+both packed-source layout variants. CPU checks passed all widths 1..255;
+the old loops overlapped 448 LDS slots and the candidate owns each once.
+
+Found by ConcurrencySanitizer in the comprehensive RPP suites:
+https://github.com/ROCm/TheRock/actions/runs/43022969021
+Source: ROCm/rocm-libraries 2d3b6e98e4ef99cf7dccf54068f333c32a441348
+Carry temporarily in TheRock pending upstream RPP review.
+
+Validated in the pinned native build image with source-derived CPU
+ownership/value fixtures and a full CSAN gfx942 RPP component build,
+staging, and all five RPP artifact components. GPU execution is separate.
+---
+
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/jpeg_compression_distortion.cpp b/projects/rpp/src/modules/tensor/hip/kernel/jpeg_compression_distortion.cpp
+index f148fdf..3f030fa 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/jpeg_compression_distortion.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/jpeg_compression_distortion.cpp
+@@ -507,7 +507,7 @@ __global__ void jpeg_compression_distortion_pkd3_hip_tensor(T* srcPtr, uint2 src
+         }
+ 
+         int lastValidIdx = srcIdx + ((validPixels - 1) * 3);
+-        for (int i = validPixels; i < min(validPixels + 16, 8); i++) {
++        for (int i = max(validPixels, 0); i < 8; i++) {
+             src_smem[hipThreadIdx_y_channel.x][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx];
+             src_smem[hipThreadIdx_y_channel.y][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx + 1];
+             src_smem[hipThreadIdx_y_channel.z][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx + 2];
+@@ -715,7 +715,7 @@ __global__ void jpeg_compression_distortion_pkd3_pln3_hip_tensor(T* srcPtr, uint
+         }
+         // Pad 16 pixels by duplicating the last valid pixel
+         int lastValidIdx = srcIdx + ((validPixels - 1) * 3);
+-        for (int i = validPixels; i < min(validPixels + 16, 8); i++) {
++        for (int i = max(validPixels, 0); i < 8; i++) {
+             src_smem[hipThreadIdx_y_channel.x][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx];
+             src_smem[hipThreadIdx_y_channel.y][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx + 1];
+             src_smem[hipThreadIdx_y_channel.z][hipThreadIdx_x8 + i] = srcPtr[lastValidIdx + 2];
+-- 
+2.53.0

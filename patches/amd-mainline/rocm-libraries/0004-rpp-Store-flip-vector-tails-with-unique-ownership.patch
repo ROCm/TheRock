@@ -1,0 +1,137 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:45:00 -0800
+Subject: [PATCH] rpp: Store flip vector tails with unique ownership
+
+The final horizontal flip vector could be shifted backward to keep its
+load in range, overlapping the preceding thread's destination stores.
+Other partial vectors also touched output padding.
+
+Use scalar stores for partial vectors in all four layout combinations,
+with the full source ROI controlling mirror coordinates and the smaller
+of ROI/destination widths controlling valid output ownership. Guard rows
+and columns beyond the ROI and retain the existing full-vector paths.
+This also bounds writes when the destination is narrower than the ROI.
+
+CPU checks passed 6192 layout/orientation/width cases, including smaller,
+equal and larger destination widths, with correct values, unique writes
+and untouched padding. The old width-25 shifted-vector overlap is covered.
+
+Found by ConcurrencySanitizer in the comprehensive RPP suites:
+https://github.com/ROCm/TheRock/actions/runs/43022969021
+Source: ROCm/rocm-libraries 2d3b6e98e4ef99cf7dccf54068f333c32a441348
+Carry temporarily in TheRock pending upstream RPP review.
+
+Validated in the pinned native build image with source-derived CPU
+ownership/value fixtures and a full CSAN gfx942 RPP component build,
+staging, and all five RPP artifact components. GPU execution is separate.
+---
+
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/flip.cpp b/projects/rpp/src/modules/tensor/hip/kernel/flip.cpp
+index 3c1d32e..b127be2 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/flip.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/flip.cpp
+@@ -24,6 +24,21 @@ SOFTWARE.
+ 
+ #include "hip_tensor_executors.hpp"
+ 
++template <typename T>
++__device__ void flip_tail_hip_tensor(const T* srcPtr, uint srcRowStride, uint srcPixelStride,
++                                    uint srcChannelStride, T* dstPtr, uint dstRowStride,
++                                    uint dstPixelStride, uint dstChannelStride, int channels,
++                                    int id_x, int id_y, int roiX, int roiY, int roiWidth,
++                                    int roiHeight, int outputWidth, bool horizontal, bool vertical) {
++    int srcY = roiY + (vertical ? roiHeight - 1 - id_y : id_y);
++    for (int x = id_x; x < min(id_x + 8, outputWidth); x++) {
++        int srcX = roiX + (horizontal ? roiWidth - 1 - x : x);
++        for (int c = 0; c < channels; c++)
++            dstPtr[id_y * dstRowStride + x * dstPixelStride + c * dstChannelStride] =
++                srcPtr[srcY * srcRowStride + srcX * srcPixelStride + c * srcChannelStride];
++    }
++}
++
+ template <typename T>
+ __global__ void flip_pkd_hip_tensor(T* srcPtr, uint2 srcStridesNH, T* dstPtr, uint2 dstStridesNH,
+                                     uint2 dstDimsWH, unsigned int* horizontalTensor,
+@@ -35,6 +50,19 @@ __global__ void flip_pkd_hip_tensor(T* srcPtr, uint2 srcStridesNH, T* dstPtr, ui
+     if ((id_y >= dstDimsWH.y) || (id_x >= dstDimsWH.x)) {
+         return;
+     }
++    int roiWidth = roiTensorPtrSrc[id_z].ltrbROI.rb.x - roiTensorPtrSrc[id_z].ltrbROI.lt.x + 1;
++    int roiHeight = roiTensorPtrSrc[id_z].ltrbROI.rb.y - roiTensorPtrSrc[id_z].ltrbROI.lt.y + 1;
++    int outputWidth = min(roiWidth, static_cast<int>(dstDimsWH.x));
++    if ((id_x >= outputWidth) || (id_y >= roiHeight)) return;
++    if (id_x + 8 > outputWidth) {
++        flip_tail_hip_tensor(srcPtr + id_z * srcStridesNH.x, srcStridesNH.y,
++                             3, 1, dstPtr + id_z * dstStridesNH.x,
++                             dstStridesNH.y, 3, 1, 3, id_x, id_y,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.x,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.y, roiWidth, roiHeight, outputWidth,
++                             horizontalTensor[id_z] != 0, verticalTensor[id_z] != 0);
++        return;
++    }
+ 
+     uint dstIdx = (id_z * dstStridesNH.x) + (id_y * dstStridesNH.y) + id_x * 3;
+     d_float24 pix_f24;
+@@ -83,6 +111,19 @@ __global__ void flip_pln_hip_tensor(T* srcPtr, uint3 srcStridesNCH, T* dstPtr, u
+     if ((id_y >= dstDimsWH.y) || (id_x >= dstDimsWH.x)) {
+         return;
+     }
++    int roiWidth = roiTensorPtrSrc[id_z].ltrbROI.rb.x - roiTensorPtrSrc[id_z].ltrbROI.lt.x + 1;
++    int roiHeight = roiTensorPtrSrc[id_z].ltrbROI.rb.y - roiTensorPtrSrc[id_z].ltrbROI.lt.y + 1;
++    int outputWidth = min(roiWidth, static_cast<int>(dstDimsWH.x));
++    if ((id_x >= outputWidth) || (id_y >= roiHeight)) return;
++    if (id_x + 8 > outputWidth) {
++        flip_tail_hip_tensor(srcPtr + id_z * srcStridesNCH.x, srcStridesNCH.z,
++                             1, srcStridesNCH.y, dstPtr + id_z * dstStridesNCH.x,
++                             dstStridesNCH.z, 1, dstStridesNCH.y, channelsDst, id_x, id_y,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.x,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.y, roiWidth, roiHeight, outputWidth,
++                             horizontalTensor[id_z] != 0, verticalTensor[id_z] != 0);
++        return;
++    }
+ 
+     uint dstIdx = (id_z * dstStridesNCH.x) + (id_y * dstStridesNCH.z) + id_x;
+     uint srcIdx = id_z * srcStridesNCH.x;
+@@ -161,6 +202,19 @@ __global__ void flip_pkd3_pln3_hip_tensor(T* srcPtr, uint2 srcStridesNH, T* dstP
+     if ((id_y >= dstDimsWH.y) || (id_x >= dstDimsWH.x)) {
+         return;
+     }
++    int roiWidth = roiTensorPtrSrc[id_z].ltrbROI.rb.x - roiTensorPtrSrc[id_z].ltrbROI.lt.x + 1;
++    int roiHeight = roiTensorPtrSrc[id_z].ltrbROI.rb.y - roiTensorPtrSrc[id_z].ltrbROI.lt.y + 1;
++    int outputWidth = min(roiWidth, static_cast<int>(dstDimsWH.x));
++    if ((id_x >= outputWidth) || (id_y >= roiHeight)) return;
++    if (id_x + 8 > outputWidth) {
++        flip_tail_hip_tensor(srcPtr + id_z * srcStridesNH.x, srcStridesNH.y,
++                             3, 1, dstPtr + id_z * dstStridesNCH.x,
++                             dstStridesNCH.z, 1, dstStridesNCH.y, 3, id_x, id_y,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.x,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.y, roiWidth, roiHeight, outputWidth,
++                             horizontalTensor[id_z] != 0, verticalTensor[id_z] != 0);
++        return;
++    }
+ 
+     d_float24 pix_f24;
+     uint srcIdx = id_z * srcStridesNH.x;
+@@ -209,6 +263,19 @@ __global__ void flip_pln3_pkd3_hip_tensor(T* srcPtr, uint3 srcStridesNCH, T* dst
+     if ((id_y >= dstDimsWH.y) || (id_x >= dstDimsWH.x)) {
+         return;
+     }
++    int roiWidth = roiTensorPtrSrc[id_z].ltrbROI.rb.x - roiTensorPtrSrc[id_z].ltrbROI.lt.x + 1;
++    int roiHeight = roiTensorPtrSrc[id_z].ltrbROI.rb.y - roiTensorPtrSrc[id_z].ltrbROI.lt.y + 1;
++    int outputWidth = min(roiWidth, static_cast<int>(dstDimsWH.x));
++    if ((id_x >= outputWidth) || (id_y >= roiHeight)) return;
++    if (id_x + 8 > outputWidth) {
++        flip_tail_hip_tensor(srcPtr + id_z * srcStridesNCH.x, srcStridesNCH.z,
++                             1, srcStridesNCH.y, dstPtr + id_z * dstStridesNH.x,
++                             dstStridesNH.y, 3, 1, 3, id_x, id_y,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.x,
++                             roiTensorPtrSrc[id_z].ltrbROI.lt.y, roiWidth, roiHeight, outputWidth,
++                             horizontalTensor[id_z] != 0, verticalTensor[id_z] != 0);
++        return;
++    }
+ 
+     d_float24 pix_f24;
+     uint srcIdx = id_z * srcStridesNCH.x;
+-- 
+2.53.0

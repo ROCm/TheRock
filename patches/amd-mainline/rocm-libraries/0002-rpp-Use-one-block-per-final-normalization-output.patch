@@ -1,0 +1,77 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 08:45:00 -0800
+Subject: [PATCH] rpp: Use one block per final normalization output
+
+The final reduction kernel already loops over every partial sum using its
+sixteen threads. Its five callers instead launched ceil(partial_count/16)
+x blocks, each writing the same output while computing a different
+suffix of the sum. Besides racing, this can produce incorrect statistics.
+
+Launch one x block per output, preserving the independent y/z outputs,
+mean/stddev scaling and the strided accumulation. The actual kernel and
+reduction helper passed 480 CPU cases: the old launch duplicated 840
+stores and produced 120 incorrect multi-block results; the candidate has
+one writer and the complete reduction in each case.
+
+Found by ConcurrencySanitizer in the comprehensive RPP suites:
+https://github.com/ROCm/TheRock/actions/runs/43022969021
+Source: ROCm/rocm-libraries 2d3b6e98e4ef99cf7dccf54068f333c32a441348
+Carry temporarily in TheRock pending upstream RPP review.
+
+Validated in the pinned native build image with source-derived CPU
+ownership/value fixtures and a full CSAN gfx942 RPP component build,
+staging, and all five RPP artifact components. GPU execution is separate.
+---
+
+diff --git a/projects/rpp/src/modules/tensor/hip/kernel/normalize.cpp b/projects/rpp/src/modules/tensor/hip/kernel/normalize.cpp
+index 85ac5c1..905d826 100644
+--- a/projects/rpp/src/modules/tensor/hip/kernel/normalize.cpp
++++ b/projects/rpp/src/modules/tensor/hip/kernel/normalize.cpp
+@@ -1429,7 +1429,7 @@ RppStatus hip_exec_compute_mean_stddev_tensor(T* srcPtr, RpptGenericDescPtr srcG
+         if (axisMask == 2) {
+             partialSumBlocksPerSample = globalThreads_x;
+             hipLaunchKernelGGL(reduce_final_result_hip,
+-                               dim3(ceil((float)partialSumBlocksPerSample / 16),
++                               dim3(1,
+                                     ceil((float)globalThreads_y), ceil((float)globalThreads_z)),
+                                dim3(16, 1, 1), 0, handle.GetStream(), partialSumArr,
+                                partialSumBlocksPerSample, meanTensor, stdDevTensor, isMean,
+@@ -1439,7 +1439,7 @@ RppStatus hip_exec_compute_mean_stddev_tensor(T* srcPtr, RpptGenericDescPtr srcG
+             partialSumBlocksPerSample = globalThreads_x * globalThreads_y;
+             hipLaunchKernelGGL(
+                 reduce_final_result_hip,
+-                dim3(ceil((float)partialSumBlocksPerSample / 16), 1, globalThreads_z),
++                dim3(1, 1, globalThreads_z),
+                 dim3(16, 1, 1), 0, handle.GetStream(), partialSumArr, partialSumBlocksPerSample,
+                 meanTensor, stdDevTensor, isMean, roiTensor, axisMask, tensorDims);
+             HIP_CHECK_LAUNCH_RETURN();
+@@ -1476,7 +1476,7 @@ RppStatus hip_exec_compute_mean_stddev_tensor(T* srcPtr, RpptGenericDescPtr srcG
+         if (axisMask == 3) {
+             partialSumBlocksPerSample = globalThreads_x * globalThreads_y;
+             hipLaunchKernelGGL(reduce_final_result_hip,
+-                               dim3(ceil((float)partialSumBlocksPerSample / 16),
++                               dim3(1,
+                                     srcGenericDescPtr->dims[3], srcGenericDescPtr->dims[0]),
+                                dim3(16, 1, 1), 0, handle.GetStream(), partialSumArr,
+                                partialSumBlocksPerSample, meanTensor, stdDevTensor, isMean,
+@@ -1487,7 +1487,7 @@ RppStatus hip_exec_compute_mean_stddev_tensor(T* srcPtr, RpptGenericDescPtr srcG
+         if (axisMask == 6) {
+             partialSumBlocksPerSample = globalThreads_x;
+             hipLaunchKernelGGL(reduce_final_result_hip,
+-                               dim3(ceil((float)partialSumBlocksPerSample / 16),
++                               dim3(1,
+                                     srcGenericDescPtr->dims[1], srcGenericDescPtr->dims[0]),
+                                dim3(16, 1, 1), 0, handle.GetStream(), partialSumArr,
+                                partialSumBlocksPerSample, meanTensor, stdDevTensor, isMean,
+@@ -1499,7 +1499,7 @@ RppStatus hip_exec_compute_mean_stddev_tensor(T* srcPtr, RpptGenericDescPtr srcG
+             partialSumBlocksPerSample = globalThreads_x * globalThreads_y;
+             hipLaunchKernelGGL(
+                 reduce_final_result_hip,
+-                dim3(ceil((float)partialSumBlocksPerSample / 16), 1, srcGenericDescPtr->dims[0]),
++                dim3(1, 1, srcGenericDescPtr->dims[0]),
+                 dim3(16, 1, 1), 0, handle.GetStream(), partialSumArr, partialSumBlocksPerSample,
+                 meanTensor, stdDevTensor, isMean, roiTensor, axisMask, tensorDims);
+             HIP_CHECK_LAUNCH_RETURN();
+-- 
+2.53.0
