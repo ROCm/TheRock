@@ -73,6 +73,10 @@ on:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
         type: string
         default: ""
+      reuse_stage_artifacts:
+        description: "Bootstrap existing artifacts from this run, excluding rebuild_artifacts; requires a nonempty explicit subset"
+        type: boolean
+        default: false
       quartz_tracking_id:
         type: string
         default: ""
@@ -100,6 +104,8 @@ jobs:
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
+      REUSE_STAGE_ARTIFACTS: ${{ inputs.reuse_stage_artifacts }}
+      REPAIR_ARTIFACTS: ${{ inputs.reuse_stage_artifacts && inputs.rebuild_artifacts || '' }}
       STAGE_NAME: ${{ inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
@@ -160,10 +166,19 @@ jobs:
       # all currently have public read access.
       - name: Fetch inbound artifacts
         run: |
+          FETCH_STAGE="${STAGE_NAME}"
+          if [[ "${REUSE_STAGE_ARTIFACTS}" == "true" ]]; then
+            if [[ -z "${REBUILD_ARTIFACTS//[[:space:],;]/}" ]]; then
+              echo "::error::reuse_stage_artifacts requires explicit rebuild_artifacts"
+              exit 1
+            fi
+            FETCH_STAGE=all
+          fi
           python build_tools/artifact_manager.py fetch \
             --run-id=${{ github.run_id }} \
-            --stage="${STAGE_NAME}" \
+            --stage="${FETCH_STAGE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --exclude-artifacts="${REPAIR_ARTIFACTS}" \
             --output-dir="${BUILD_DIR}" \
             --bootstrap
 
@@ -229,7 +244,8 @@ jobs:
           python3 build_tools/github_actions/detect_failed_logs.py
 
       - name: Run build tests (Comgr, blocking)
-        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
+        # Imported Comgr has no local build-test target; test it when rebuilt.
+        if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' && (!inputs.reuse_stage_artifacts || contains(inputs.rebuild_artifacts, 'amd-comgr')) }}
         env:
           TEATIME_FORCE_INTERACTIVE: 1
         run: |
@@ -311,6 +327,7 @@ jobs:
           python build_tools/artifact_manager.py push \
             --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
+            --artifacts="${REPAIR_ARTIFACTS}" \
             --build-dir="${BUILD_DIR}"
 
       - name: Upload stage logs

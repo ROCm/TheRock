@@ -236,11 +236,11 @@ def parse_excluded_components(raw_components: str) -> set[str]:
     return components
 
 
-def parse_excluded_artifacts(
+def parse_artifact_names(
     raw_artifacts: str,
     valid_artifacts: set[str],
 ) -> set[str]:
-    """Parse and validate artifact names passed to --exclude-artifacts."""
+    """Parse and validate a comma- or semicolon-separated artifact filter."""
     artifacts = {
         artifact.strip()
         for artifact in raw_artifacts.replace(";", ",").split(",")
@@ -254,6 +254,14 @@ def parse_excluded_artifacts(
             f"Valid artifacts are: {', '.join(sorted(valid_artifacts))}"
         )
     return artifacts
+
+
+def parse_excluded_artifacts(
+    raw_artifacts: str,
+    valid_artifacts: set[str],
+) -> set[str]:
+    """Parse and validate artifact names passed to --exclude-artifacts."""
+    return parse_artifact_names(raw_artifacts, valid_artifacts)
 
 
 # =============================================================================
@@ -820,6 +828,19 @@ def do_push(args: argparse.Namespace):
             f"Stage '{args.stage}' produces {len(produced)} artifacts: {', '.join(sorted(produced))}"
         )
 
+    # An explicit subset must never overwrite other imported artifacts from
+    # this stage. Validate against the topology before any backend writes.
+    raw_selected = getattr(args, "artifacts", "")
+    selected = parse_artifact_names(raw_selected, set(topology.artifacts))
+    if raw_selected and not selected:
+        raise ValueError("--artifacts must name at least one artifact")
+    if selected:
+        produced &= selected
+        if not produced:
+            log(f"No selected artifacts are produced by stage '{args.stage}'")
+            return
+        log(f"Limiting uploads to artifacts: {', '.join(sorted(produced))}")
+
     # Create backend
     backend = create_backend_from_env(
         run_id=args.run_id,
@@ -1356,6 +1377,12 @@ def main(argv: Optional[List[str]] = None):
     _add_backend_args(push_parser)
     push_parser.add_argument(
         "--stage", type=str, required=True, help="Build stage name"
+    )
+    push_parser.add_argument(
+        "--artifacts",
+        type=str,
+        default="",
+        help="Only push these comma- or semicolon-separated artifacts from the stage",
     )
     push_parser.add_argument(
         "--build-dir",

@@ -43,6 +43,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      runtime_repair:
+        type: boolean
+        default: false
+        description: "CSAN only: rebuild HIP/OpenCL CLR artifacts using the prebuilt compiler-runtime stage"
       build_python_packages:
         type: boolean
         default: true
@@ -175,6 +179,7 @@ jobs:
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'gfx94x' }}
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      runtime_repair: ${{ inputs.runtime_repair || false }}
     permissions:
       contents: read
       actions: read

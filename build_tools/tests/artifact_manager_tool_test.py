@@ -481,6 +481,86 @@ class TestPushStageAll(ArtifactManagerTestBase):
             )
 
 
+class TestPushArtifactSubset(ArtifactManagerTestBase):
+    """Repair uploads preserve copied artifacts, including compiler artifacts."""
+
+    def test_selected_upload_leaves_other_published_artifacts_unchanged(self):
+        selected = self._create_fake_precompressed_artifact(
+            "test-artifact", "lib", "generic"
+        )
+        imported = self._create_fake_precompressed_artifact(
+            "second-artifact", "lib", "generic"
+        )
+        self._create_staged_artifact("second-artifact", "lib", "generic")
+        root = WorkflowOutputRoot.for_local(run_id="local", platform=TEST_PLATFORM)
+        backend = LocalDirectoryBackend(staging_dir=self.staging_dir, output_root=root)
+        before = self.output_dir / imported.name
+        backend.download_artifact(imported.name, before)
+        # If the filter regresses, the published compiler/dependency changes.
+        imported.write_bytes(b"must not replace the published dependency")
+        artifact_manager.main(
+            [
+                "push",
+                "--stage",
+                "all",
+                "--artifacts",
+                "test-artifact",
+                "--build-dir",
+                str(self.build_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+            ]
+        )
+        after = self.output_dir / "after.tar.zst"
+        backend.download_artifact(imported.name, after)
+        self.assertEqual(after.read_bytes(), before.read_bytes())
+        self.assertTrue(backend.artifact_exists(selected.name))
+
+    @mock.patch("artifact_manager.create_backend_from_env")
+    def test_unknown_or_empty_explicit_filter_fails_before_backend_access(
+        self, backend
+    ):
+        for selection in ("typo-artifact", " , ; "):
+            with self.subTest(selection=selection), self.assertRaises(ValueError):
+                artifact_manager.main(
+                    [
+                        "push",
+                        "--stage",
+                        "all",
+                        "--artifacts",
+                        selection,
+                        "--build-dir",
+                        str(self.build_dir),
+                        "--topology",
+                        str(self.topology_path),
+                    ]
+                )
+        backend.assert_not_called()
+
+    @mock.patch("artifact_manager.create_backend_from_env")
+    def test_global_selection_is_intersected_with_the_stage(self, backend):
+        artifact_manager.main(
+            [
+                "push",
+                "--stage",
+                "upstream-stage",
+                "--artifacts",
+                "second-artifact",
+                "--build-dir",
+                str(self.build_dir),
+                "--topology",
+                str(self.topology_path),
+            ]
+        )
+        backend.assert_not_called()
+
+
 class TestFetchFailures(ArtifactManagerTestBase):
     """Tests that fetch fails when required artifacts cannot be retrieved."""
 

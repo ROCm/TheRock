@@ -1,0 +1,45 @@
+From 52e6f015315911b8ab1ea12b733afd8ed845a63f Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 01:55:17 -0800
+Subject: [PATCH] clr: Make the hostcall shutdown state atomic
+
+CSAN reports the runtime destructor reading kHostThreadActive.state while
+HostcallListener::consumePackets writes its exit state. Volatile preserves
+loads but does not synchronize these accesses between threads.
+
+Use an atomic enum for the existing handshake. The current comparisons and
+assignments become sequentially consistent loads and stores in both hostcall
+implementations and terminate(), preserving the shutdown protocol without
+disabling instrumentation or changing public interfaces.
+
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/42998551196
+Carry this fix temporarily in TheRock while preparing it for upstream CLR review.
+---
+ projects/clr/rocclr/device/devhostcall.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/device/devhostcall.cpp b/projects/clr/rocclr/device/devhostcall.cpp
+index cd9b40f..87c8f64 100644
+--- a/projects/clr/rocclr/device/devhostcall.cpp
++++ b/projects/clr/rocclr/device/devhostcall.cpp
+@@ -21,6 +21,7 @@
+ #include <assert.h>
+ #include <string.h>
+ #include <algorithm>
++#include <atomic>
+ #include <new>
+ #include <set>
+ 
+@@ -382,7 +383,8 @@ constexpr static uint64_t kTimeoutCeil = K * K * 16;
+ #endif  // USE_NEW_HOSTCALL_IMPL
+ static struct Init {
+   enum class State { kDefault = 0, kInit, kDestroy, kExit };
+-  volatile State state = State::kDefault;
++  // Runtime teardown and the listener thread share this shutdown handshake.
++  std::atomic<State> state{State::kDefault};
+   ~Init() {
+     if (state == State::kInit) {
+       state = State::kDestroy;
+-- 
+2.51.2.windows.1
+
