@@ -55,7 +55,8 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="therock-source-deps-")
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Use the long path when Windows provides an 8.3 temporary path.
+        self.root = Path(temporary.name).resolve()
         self.source = self.root / "harness"
         self.sources = self.root / "sources with spaces"
         self.build = self.root / "build"
@@ -236,9 +237,11 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             for p in (self.spirv, self.hsa)
         )
         self.assertEqual(baseline, self.configure(relative))
+        # CMake may expand Windows short paths; compare resolved paths.
+        recorded = (self.build / "source-deps.txt").read_text().split(";")
         self.assertEqual(
-            (self.build / "source-deps.txt").read_text().split(";"),
-            [self.spirv.as_posix(), self.hsa.as_posix()],
+            [Path(path).resolve() for path in recorded],
+            [self.spirv.resolve(), self.hsa.resolve()],
         )
 
     def test_source_changes_and_restoration_for_all_seven_projects(self):
@@ -312,7 +315,10 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
 
     def test_missing_directory_is_invalid_even_with_a_stale_marker(self):
         self.configure()
-        shutil.rmtree(self.spirv)
+        # Make the declared path absent without deleting read-only Git objects
+        # on Windows. TemporaryDirectory cleanup owns the moved repository.
+        self.spirv.rename(self.root / "removed-spirv-llvm-translator")
+        self.assertFalse(self.spirv.exists())
         write(self.spirv.with_name(".spirv-llvm-translator.smrev"), "stale\n")
         self.assert_valid(self.configure(), invalid=LLVM_USERS)
 
