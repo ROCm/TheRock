@@ -185,9 +185,9 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > [!TIP]
 > For CI-style testing with the same directory layout used by workflows, use
 > [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
-> with `--output-dir` instead of directly calling the indexer. This generates
-> the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
-> structure used by CI uploads.
+> with `--output-dir`. This stages packages locally under
+> `{run_id}-{platform}/python/` but does not generate an index. To create
+> `index.html`, run the indexer command above against the staged directory.
 
 ## Mirroring Third-Party Python Dependencies
 
@@ -234,14 +234,13 @@ core index without implicitly changing that routing. If a mirrored dependency
 should also be available through the aggregate index used by pip, add its core
 ownership mapping and redeploy the aggregate index.
 
-The `Mirror Python Dependencies` workflow will live with the other
-[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
-It will resolve one snapshot every Monday and sequentially publish it to `dev`,
-`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
-resolve-only and allow targeting one stream for diagnostics. Retained streams
-will refresh only the current snapshot's existing objects; stable-staging will
-skip existing objects because it has no lifecycle expiration. If a stream
-fails, rerun the complete workflow. Each run is idempotent, and older versions
+The rockrel
+[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
+workflow runs weekly and can also be run manually. It resolves one snapshot and
+publishes it with `--refresh-existing` to the core bucket of each selected
+release stream. Both scheduled and manual runs currently publish to `dev` only;
+other release streams are enabled in the workflow one at a time. If
+a run fails, rerun the workflow. Each run is idempotent, and older versions
 remain subject to their normal retention policy.
 
 ## rocm-profiler
