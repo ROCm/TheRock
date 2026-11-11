@@ -172,6 +172,19 @@ if environ_vars.get("THEROCK_CI_DEBUG") == "1":
 # Set ROCM_PATH for tests that rely on it
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+# Profiler suites shard complete CTest entries, including native GTest binaries.
+# Sharding those binaries again would silently omit their remaining test cases.
+if test_component_job_name in {"rocprofiler-compute", "rocprofiler-systems"}:
+    environ_vars["GTEST_SHARD_INDEX"] = "0"
+    environ_vars["GTEST_TOTAL_SHARDS"] = "1"
+    if (
+        test_component_job_name == "rocprofiler-systems"
+        and environ_vars.get("CSAN_RUNTIME_PATH")
+        and TEST_TYPE in {"comprehensive", "full"}
+    ):
+        # The real full instrumenter simulation takes over twelve minutes under
+        # CSAN. Its pytest framework and generated CTest use this same budget.
+        environ_vars.setdefault("ROCPROFSYS_CI_TIMEOUT", "1800")
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
