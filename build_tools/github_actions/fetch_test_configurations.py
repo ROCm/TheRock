@@ -715,6 +715,7 @@ test_matrix = {
             "timeout_minutes": 15,
             "test_script": f"python {_get_script_path('test_fortran_bindings.py')}",
             "platform": ["linux"],
+            "skip_stages": ["fortran-bindings"],
             "total_shards_dict": {
                 "linux": 1,
             },

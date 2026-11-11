@@ -100,6 +100,8 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+      # Fortran bindings: built and tested in CI only until they are enabled for releases.
+      skip_stages: fortran-bindings
     permissions:
       contents: read
       id-token: write
@@ -252,6 +254,7 @@ jobs:
               "repository": "${{ inputs.repository }}",
               "ref": "${{ inputs.ref }}",
               "build_variant": "${{ inputs.build_variant }}",
+              "skip_stages": "fortran-bindings",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 

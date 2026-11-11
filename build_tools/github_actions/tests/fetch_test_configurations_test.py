@@ -579,6 +579,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 self.assertNotIn("roctx-fortran", names)
                 self.assertNotIn("rocblas-fortran", names)
 
+    def test_fortran_binding_jobs_not_scheduled_without_their_stage(self):
+        os.environ["PROJECTS_TO_TEST"] = "roctx-fortran,rocblas-fortran"
+        os.environ["SKIP_STAGES"] = "fortran-bindings"
+        names = self._selected_names()
+        self.assertNotIn("roctx-fortran", names)
+        self.assertNotIn("rocblas-fortran", names)
+
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
