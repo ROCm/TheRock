@@ -87,10 +87,15 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertIn("prim_test", argv)
         self.assertIn("libhipcxx_test", argv)
 
-    def test_libhipcxx_without_prim_omits_prim_dev(self):
+    def test_libhipcxx_tests_without_prim_includes_prim_dev(self):
         argv = self._run_main(["--libhipcxx", "--tests"])
-        self.assertNotIn("prim_dev", argv)
+        self.assertIn("prim_dev", argv)
+        self.assertNotIn("prim_test", argv)
         self.assertIn("libhipcxx_test", argv)
+
+    def test_libhipcxx_without_tests_omits_prim_dev(self):
+        argv = self._run_main(["--libhipcxx"])
+        self.assertNotIn("prim_dev", argv)
 
     def test_clinfo_is_only_added_for_sanity(self):
         base_argv = self._run_main(["--base-only"])

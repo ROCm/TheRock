@@ -658,11 +658,11 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_dev")
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
-            if args.prim:
-                # The amdclang c2h suite find_package()s rocthrust and hipcub.
+            if args.tests:
+                # The amdclang c2h suite find_package()s rocthrust and hipcub,
+                # and the c2h helpers include Thrust headers unconditionally.
                 # Those headers and CMake package configs live in prim's _dev
-                # component (the extra_artifacts expansion below only pulls
-                # _lib/_test).
+                # component (prim has no _lib, and its _test is not needed).
                 argv.append("prim_dev")
         if args.hipthreads:
             extra_artifacts.append("hipthreads")
