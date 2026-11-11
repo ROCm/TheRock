@@ -473,7 +473,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      # The lit prebuild runs hiprtcc from the build tree, so it needs the
+      # build RPATH to the HIP libraries.
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=OFF
       -DCMAKE_CXX_STANDARD=17
       -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl
       -Dlibhipcxx_ENABLE_INSTALL_RULES=OFF
