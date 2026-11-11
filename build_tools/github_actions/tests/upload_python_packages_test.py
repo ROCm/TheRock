@@ -6,6 +6,8 @@ StorageBackend, producing the expected file layout. Uses LocalStorageBackend
 with a temp directory so no mocking of subprocess or boto3 is needed.
 """
 
+import argparse
+import hashlib
 import os
 import sys
 import tempfile
@@ -21,6 +23,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import LocalStorageBackend
 import upload_python_packages
+import mirror_python_dependencies as mirror
 
 
 def _make_output_root(
@@ -112,6 +115,100 @@ class TestUploadPackages(unittest.TestCase):
                     / "rocm-1.0.whl"
                 ).is_file()
             )
+
+
+class TestDependencySnapshot(unittest.TestCase):
+    def _snapshot(self, root: Path) -> tuple[Path, str, bytes]:
+        snapshot_dir = root / "snapshot"
+        filename = "pandas-2.3.3-py3-none-any.whl"
+        content = b"mirrored dependency wheel"
+        wheel = mirror.SnapshotWheel(
+            package="pandas",
+            project="rocm",
+            requested_version="2.3.3",
+            selected_version="2.3.3",
+            filename=filename,
+            source_url=f"https://files.pythonhosted.org/{filename}",
+            size=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+            relative_path=f"wheels/pandas/{filename}",
+            destination_key=mirror.dependency_destination_key("pandas", filename),
+        )
+        wheel_path = snapshot_dir / wheel.relative_path
+        wheel_path.parent.mkdir(parents=True)
+        wheel_path.write_bytes(content)
+        snapshot = mirror.DependencySnapshot(
+            schema_version=1,
+            created_at="2026-11-12T00:00:00+00:00",
+            source_revision="test",
+            wheels=(wheel,),
+        )
+        mirror.write_snapshot_manifest(snapshot, snapshot_dir / "manifest.json")
+        return snapshot_dir, filename, content
+
+    def test_verified_dependency_is_uploaded_with_rocm_packages(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_dir, filename, content = self._snapshot(root)
+            dist_dir = root / "dist"
+            dist_dir.mkdir()
+            (dist_dir / "rocm-1.0.whl").write_bytes(b"rocm")
+
+            staging = root / "published"
+            args = argparse.Namespace(
+                input_packages_dir=root,
+                run_id="12345",
+                output_dir=staging,
+                bucket=None,
+                dry_run=False,
+                dependency_snapshot=snapshot_dir,
+            )
+            with unittest.mock.patch.object(
+                upload_python_packages,
+                "_make_output_root",
+                return_value=_make_output_root(),
+            ):
+                upload_python_packages.run(args)
+                upload_python_packages.run(args)
+            self.assertFalse(any(path.is_dir() for path in dist_dir.iterdir()))
+            self.assertEqual(
+                (staging / "12345-linux/python" / filename).read_bytes(), content
+            )
+            self.assertFalse((staging / "12345-linux/python/manifest.json").exists())
+
+    def test_corrupt_snapshot_is_rejected_before_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_dir, filename, _ = self._snapshot(root)
+            (snapshot_dir / "wheels/pandas" / filename).write_bytes(b"corrupt")
+            dist_dir = root / "dist"
+            dist_dir.mkdir()
+            with self.assertRaisesRegex(ValueError, "SHA256|size"):
+                upload_python_packages.stage_dependency_snapshot(snapshot_dir, dist_dir)
+            self.assertEqual(list(dist_dir.iterdir()), [])
+
+    def test_conflicting_package_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_dir, filename, _ = self._snapshot(root)
+            dist_dir = root / "dist"
+            dist_dir.mkdir()
+            original = b"existing package"
+            (dist_dir / filename).write_bytes(original)
+            with self.assertRaisesRegex(ValueError, "Conflicting"):
+                upload_python_packages.stage_dependency_snapshot(snapshot_dir, dist_dir)
+            self.assertEqual((dist_dir / filename).read_bytes(), original)
+
+    def test_dry_run_does_not_stage_dependencies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot_dir, _, _ = self._snapshot(root)
+            dist_dir = root / "dist"
+            dist_dir.mkdir()
+            upload_python_packages.stage_dependency_snapshot(
+                snapshot_dir, dist_dir, dry_run=True
+            )
+            self.assertEqual(list(dist_dir.iterdir()), [])
 
 
 class TestWriteGhaUploadSummary(unittest.TestCase):

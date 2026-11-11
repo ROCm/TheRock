@@ -14,6 +14,7 @@ Usage:
     --run-id RUN_ID
     [--output-dir OUTPUT_DIR]  # Local output instead of S3
     [--bucket BUCKET]          # Override bucket selection (defaults to auto-select)
+    [--dependency-snapshot SNAPSHOT_DIR]
     [--dry-run]                # Print what would happen without taking action
 
 Modes:
@@ -32,15 +33,19 @@ Installation:
 """
 
 import argparse
+import hashlib
 from pathlib import Path
 import platform
+import shutil
 import sys
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+from mirror_python_dependencies import load_snapshot
 from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
@@ -72,6 +77,32 @@ def find_package_files(dist_dir: Path) -> list[Path]:
         files.extend(dist_dir.glob(pattern))
 
     return sorted(files)
+
+
+def stage_dependency_snapshot(
+    snapshot_dir: Path, dist_dir: Path, *, dry_run: bool = False
+) -> None:
+    """Stage verified mirror wheels beside the ROCm packages for CI publication."""
+    snapshot = load_snapshot(snapshot_dir)
+    pending = []
+    for wheel in snapshot.wheels:
+        destination = dist_dir / wheel.filename
+        if destination.is_symlink() or destination.exists():
+            if (
+                destination.is_symlink()
+                or not destination.is_file()
+                or hashlib.sha256(destination.read_bytes()).hexdigest() != wheel.sha256
+            ):
+                raise ValueError(f"Conflicting package file: {destination}")
+        else:
+            pending.append((snapshot_dir / wheel.relative_path, destination))
+
+    if dry_run:
+        log(f"[DRY RUN] Would stage {len(pending)} mirrored dependency wheels")
+        return
+    for source, destination in pending:
+        log(f"Staging mirrored dependency: {destination.name}")
+        shutil.copy2(source, destination)
 
 
 def upload_packages(
@@ -133,6 +164,11 @@ def run(args: argparse.Namespace):
     else:
         log(f"[INFO] Mode              : S3 upload")
 
+    if args.dependency_snapshot is not None:
+        stage_dependency_snapshot(
+            args.dependency_snapshot, dist_dir, dry_run=args.dry_run
+        )
+
     output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
     # ROCm, PyTorch, and JAX jobs upload packages to the same run's python/
     # directory. The server generates a combined index; uploading an index
@@ -188,6 +224,11 @@ def main():
         type=str,
         default=None,
         help="Override S3 bucket (default: auto-select from workflow run)",
+    )
+    parser.add_argument(
+        "--dependency-snapshot",
+        type=Path,
+        help="Verified mirror snapshot whose wheels should be included with CI packages",
     )
     parser.add_argument(
         "--dry-run",

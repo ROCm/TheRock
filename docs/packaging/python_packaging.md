@@ -277,6 +277,13 @@ releases for Python 3.10; numpy's existing 2.2.6 retention is reused. These are
 mirror-retention policies, not runtime version pins. Updating source metadata
 alone does not deploy the dependencies or repair previously published wheels.
 
+Linux package builds with `release_type: ci` resolve a dependency snapshot and
+include its verified wheels in the run's CI artifact directory. The publisher's
+`--dependency-snapshot` option stages these wheels alongside the ROCm packages,
+so `--find-links` tests do not depend on shared-index deployment or a PyPI
+fallback. This does not publish dependencies to the shared release indexes;
+release installations still require the mirror and routing deployment above.
+
 The SDK's installed requirements file combines analysis and optional exporters,
 including the obsolete `dataclasses` backport. The core wheel declares the
 feature groups separately so that requesting CSV or PDF does not require OTF2.

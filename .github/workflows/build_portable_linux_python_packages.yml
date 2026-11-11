@@ -129,6 +129,7 @@ jobs:
       OUTPUT_ROOT: "${{ github.workspace }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
+      DEPENDENCY_SNAPSHOT_DIR: "${{ github.workspace }}/python-dependency-snapshot"
 
     steps:
       - name: "Quartz - started ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
@@ -175,6 +176,27 @@ jobs:
             --linux-amdgpu-families="${LINUX_AMDGPU_FAMILIES}" \
             --windows-amdgpu-families="${WINDOWS_AMDGPU_FAMILIES}"
 
+      - name: Resolve CI wheel dependencies
+        if: ${{ inputs.release_type == 'ci' }}
+        run: |
+          python build_tools/packaging/python/mirror_python_dependencies.py resolve \
+            --output-dir="${DEPENDENCY_SNAPSHOT_DIR}" \
+            --source-revision="$(git rev-parse HEAD)" \
+            --dependency-package=pandas \
+            --dependency-package=numpy \
+            --dependency-package=python-dateutil \
+            --dependency-package=pytz \
+            --dependency-package=tzdata \
+            --dependency-package=six \
+            --dependency-package=jinja2 \
+            --dependency-package=markupsafe \
+            --dependency-package=pillow \
+            --dependency-package=reportlab \
+            --dependency-package=charset-normalizer \
+            --dependency-package=otf2 \
+            --dependency-package=pyelftools \
+            --dependency-package=setuptools
+
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
@@ -186,9 +208,14 @@ jobs:
       - name: Upload Python packages
         id: upload
         run: |
+          dependency_args=()
+          if [[ "${RELEASE_TYPE}" == "ci" ]]; then
+            dependency_args+=(--dependency-snapshot="${DEPENDENCY_SNAPSHOT_DIR}")
+          fi
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGES_DIR}" \
-            --run-id="${{ github.run_id }}"
+            --run-id="${{ github.run_id }}" \
+            "${dependency_args[@]}"
 
       - name: Capture job summary
         id: summary
