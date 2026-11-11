@@ -226,8 +226,7 @@ WSL_REQUIRED_STAGE = "wsl-rocdxg"
 EXACTLY_LABEL = "ci:exactly"
 
 # Draft pull requests skip builds and tests by default: a draft is usually not
-# ready for review, and every push to one would otherwise cost a full CI run.
-# This label opts a draft back in to the normal CI behavior.
+# ready for review. This label opts a draft back in to the normal CI behavior.
 RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
 
 
