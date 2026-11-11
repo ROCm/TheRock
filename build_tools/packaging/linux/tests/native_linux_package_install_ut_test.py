@@ -715,6 +715,46 @@ class ArgvFromCiEnvTest(unittest.TestCase):
         )
         self.assertEqual(len(t.package_names), 6)
 
+    def test_builds_argv_for_install_test_type(self):
+        env = {
+            "TEST_TYPE": "install",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--test-type", argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
+        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
+        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
+
+    def test_ci_env_passes_shared_test_type_to_parser(self):
+        env = {
+            "TEST_TYPE": "comprehensive",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv,
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
+
+    def test_returns_none_when_required_env_missing(self):
+        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
+
 
 class RunSimulateInstallTestTest(unittest.TestCase):
     """Tests for run_simulate_install_test()."""
@@ -950,50 +990,6 @@ class MainValidationTest(unittest.TestCase):
                 raise_instead_of_exit=True,
             )
         self.assertIn("Unsupported test_type", str(ctx.exception))
-
-
-class ArgvFromCiEnvTest(unittest.TestCase):
-    """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
-
-    def test_builds_argv_for_install_test_type(self):
-        env = {
-            "TEST_TYPE": "install",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertIn("--test-type", argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
-        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
-        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
-
-    def test_ci_env_passes_shared_test_type_to_parser(self):
-        env = {
-            "TEST_TYPE": "comprehensive",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
-        args = native_linux_package_install_test.parse_cli_arguments(
-            argv,
-            raise_instead_of_exit=True,
-        )
-        self.assertEqual(args.test_type, "full")
-
-    def test_returns_none_when_required_env_missing(self):
-        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
-            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
 
 
 class RunTestsTestTypeTest(unittest.TestCase):
