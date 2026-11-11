@@ -225,6 +225,12 @@ WSL_REQUIRED_STAGE = "wsl-rocdxg"
 # unaffected.
 EXACTLY_LABEL = "ci:exactly"
 
+# Draft pull requests skip builds and tests by default: a draft is usually not
+# ready for review, and every push to one would otherwise cost a full CI run.
+# This label opts a draft back in to the normal CI behavior. 'ci:skip' still
+# wins over it.
+RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
+
 
 def _apply_stage_test_labels(
     platform: str,
@@ -287,6 +293,7 @@ class CIInputs:
     pr_labels: list[str] = field(default_factory=list)
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
+    is_draft_pr: bool = False  # pull_request.draft from the event payload
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
@@ -444,6 +451,7 @@ class CIInputs:
 
         pr_labels: list[str] = []
         pr_base_ref = ""
+        is_draft_pr = False
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
@@ -452,6 +460,7 @@ class CIInputs:
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
             pr_base_ref = pr_obj.get("base", {}).get("ref", "")
+            is_draft_pr = bool(pr_obj.get("draft", False))
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -506,6 +515,7 @@ class CIInputs:
             pr_labels=pr_labels,
             pr_base_ref=pr_base_ref,
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
+            is_draft_pr=is_draft_pr,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -921,6 +931,7 @@ def should_skip_ci(
 
     Returns True for:
     - 'ci:skip' PR label
+    - Draft PRs without the 'ci:run-on-draft' label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     - ASAN builds on PRs without ci:asan or ci:host-asan labels
@@ -932,6 +943,17 @@ def should_skip_ci(
     # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
+        return True
+
+    # 1b. Draft PRs are usually not ready for review, so builds and tests are
+    #     skipped by default. Marking the PR ready for review re-triggers CI,
+    #     and the opt-in label runs CI on the draft as-is. 'ci:skip' is checked
+    #     first so it wins when both labels are present.
+    if ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+        print(
+            f"  Skipping: pull request is a draft (add '{RUN_ON_DRAFT_LABEL}' or mark "
+            "the pull request ready for review to run CI)"
+        )
         return True
 
     # 2. Path filter skipping - check before ASAN label logic so we don't print

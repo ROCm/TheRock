@@ -143,6 +143,9 @@ on:
       - labeled
       - opened
       - synchronize
+      # Draft pull requests skip builds and tests, so run CI as soon as one is
+      # marked ready for review instead of waiting for the next push.
+      - ready_for_review
 
 permissions:
   contents: read

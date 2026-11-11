@@ -363,6 +363,20 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
+        self.assertFalse(inputs.is_draft_pr)
+
+    def test_pull_request_extracts_draft_state(self):
+        """event.pull_request.draft is carried into is_draft_pr."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={"pull_request": {"draft": True}},
+        )
+        self.assertTrue(inputs.is_draft_pr)
+
+    def test_non_pull_request_event_is_never_draft(self):
+        """push events have no draft state in the payload."""
+        inputs = _run_from_environ(event_name="push", event_payload={})
+        self.assertFalse(inputs.is_draft_pr)
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
         """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
@@ -545,6 +559,40 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(pr_labels=[])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_skips(self):
+        """Draft PR without ci:run-on-draft skips CI."""
+        inputs = self._inputs(is_draft_pr=True)
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_with_run_on_draft_label_runs(self):
+        """Draft PR with ci:run-on-draft runs CI."""
+        inputs = self._inputs(is_draft_pr=True, pr_labels=["ci:run-on-draft"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_ci_skip_wins_over_run_on_draft(self):
+        """ci:skip takes priority when combined with ci:run-on-draft."""
+        inputs = self._inputs(
+            is_draft_pr=True, pr_labels=["ci:skip", "ci:run-on-draft"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_non_draft_pr_runs(self):
+        """Ready-for-review PR runs CI without the opt-in label."""
+        inputs = self._inputs(is_draft_pr=False)
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_draft_flag_ignored_for_non_pr_events(self):
+        """push/schedule/workflow_dispatch never carry a draft state."""
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = self._inputs(event_name=event_name)
+                git = cm.GitContext(changed_files=["CMakeLists.txt"])
+                self.assertFalse(cm.should_skip_ci(inputs, git))
 
     @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
     def test_path_filter_says_skip(self, mock_filter):
@@ -3055,6 +3103,14 @@ class TestFormatSummary(unittest.TestCase):
         # Just check the header. The output is markdown for humans and asserting
         # on more exact formatting would create a change detector test.
         self.assertTrue(result.startswith("## Multi-Arch CI Configuration"))
+
+    def test_draft_skip_summary_points_at_opt_in_label(self):
+        """A draft skip explains itself and names the opt-in label."""
+        inputs = self._inputs(event_name="pull_request", is_draft_pr=True)
+        result = format_summary(inputs, cm.CIOutputs.skipped())
+
+        self.assertIn("draft", result)
+        self.assertIn("ci:run-on-draft", result)
         # The summary should also mention that CI was skipped with some
         # explanation for why.
         self.assertIn("skipped", result)
