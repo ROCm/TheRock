@@ -601,6 +601,9 @@ def apply_external_repo_override(config: dict) -> str:
         )
     name = matches[0]
     path = config["submodule_path"]
+    log("=== External source override (EXTERNAL_REPO_CONFIG) ===")
+    log(f"Submodule path: {path}")
+    log(f"Requested commit: {config['ref']}")
     run_command(
         ["git", "update-index", "--no-skip-worktree", "--", path], cwd=THEROCK_DIR
     )
@@ -621,6 +624,8 @@ def run(args):
                 "External source overrides require pinned submodule updates"
             )
         external_name = apply_external_repo_override(external_config)
+        if external_name not in projects:
+            log(f"Not fetching {external_name}: not selected for this invocation")
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
         get_submodule_path(project) for project in projects
     ]
@@ -661,6 +666,7 @@ def run(args):
             ).strip()
             if actual.lower() != external_config["ref"].lower():
                 raise RuntimeError(f"External source checkout mismatch: {actual}")
+            log(f"Verified external source checkout: {source_dir} at {actual}")
     dvc_projects = get_dvc_projects(
         projects, args.dvc_projects, is_windows=is_windows()
     )
