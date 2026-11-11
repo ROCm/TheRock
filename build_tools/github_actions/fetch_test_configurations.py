@@ -556,6 +556,15 @@ test_matrix = {
             ],
         },
     },
+    "rocgdb-gpu-diagnostic": {
+        **_rocgdb_common,
+        "job_name": "rocgdb-gpu-diagnostic",
+        "test_script": (
+            "python ./build/tests/rocgdb/test_rocgdb.py --one-by-one "
+            "--one-by-one-test-timeout 300 --max-failed-retries 0 --no-xfail "
+            "--toolchain llvm --tests gdb.rocm/simple.exp"
+        ),
+    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
@@ -1469,6 +1478,12 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+        # This bounded probe supplements failure diagnosis; never include it in
+        # a default comprehensive run or expand the ordinary rocgdb label to it.
+        if key == "rocgdb-gpu-diagnostic" and (
+            build_variant != "csan" or "test:rocgdb-gpu-diagnostic" not in test_labels
+        ):
+            continue
 
         excluded_stages = set(skip_stages).intersection(
             test_matrix[key].get("skip_stages", [])

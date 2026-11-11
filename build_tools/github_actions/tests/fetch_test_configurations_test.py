@@ -74,6 +74,37 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_gpu_debugger_diagnostic_requires_explicit_label_and_csan(self):
+        for variant in ("csan", "release", "asan"):
+            for labels in (
+                [],
+                ["test:rocgdb"],
+                ["test:rocgdb-gpu"],
+                ["test:rocgdb-gpu-diagnostic"],
+            ):
+                with self.subTest(variant=variant, labels=labels):
+                    os.environ["BUILD_VARIANT"] = variant
+                    os.environ["TEST_LABELS"] = json.dumps(labels)
+                    os.environ["TEST_TYPE"] = "comprehensive"
+                    fetch_test_configurations.run()
+                    jobs = {j["job_name"]: j for j in self._get_components()}
+                    expected = variant == "csan" and labels == [
+                        "test:rocgdb-gpu-diagnostic"
+                    ]
+                    self.assertEqual("rocgdb-gpu-diagnostic" in jobs, expected)
+                    if expected:
+                        probe = jobs["rocgdb-gpu-diagnostic"]
+                        self.assertIn(
+                            "--tests gdb.rocm/simple.exp", probe["test_script"]
+                        )
+                        self.assertIn(
+                            "--one-by-one-test-timeout 300", probe["test_script"]
+                        )
+                        self.assertIn("--max-failed-retries 0", probe["test_script"])
+                        self.assertNotIn("--parallel", probe["test_script"])
+                        self.assertEqual(probe["timeout_minutes"], 30)
+                        self.assertFalse(probe.get("expect_failure"))
+
     def test_debug_agent_direct_diagnostics_runner_is_csan_only(self):
         os.environ["TEST_LABELS"] = json.dumps(["test:rocr-debug-agent"])
         for variant in ("csan", "release", "asan", "host-asan"):
