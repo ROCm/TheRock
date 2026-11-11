@@ -539,6 +539,11 @@ test_matrix = {
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
         "linux_cpu_runner": True,
+        # DWARF fixtures retain addresses across restarts; allow disabling ASLR.
+        "container_options": [
+            *_rocgdb_common["container_options"],
+            "--security-opt seccomp=unconfined",
+        ],
     },
     "rocgdb-gpu": {
         **_rocgdb_common,

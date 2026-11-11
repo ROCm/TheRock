@@ -1080,6 +1080,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
+    def test_cpu_rocgdb_can_disable_aslr_without_broadening_other_jobs(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb", "test:hipfile"])
+        for variant in ("csan", "release", "asan", "host-asan"):
+            with self.subTest(variant=variant):
+                os.environ["BUILD_VARIANT"] = variant
+                fetch_test_configurations.run()
+                jobs = {job["job_name"]: job for job in self._get_components()}
+                cpu = jobs["rocgdb-cpu"]
+                self.assertTrue(cpu["linux_cpu_runner"])
+                self.assertEqual(
+                    cpu["container_options"].count("--security-opt seccomp=unconfined"),
+                    1,
+                )
+                self.assertIn("--cap-add=SYS_PTRACE", cpu["container_options"])
+                self.assertNotIn("--device", cpu["container_options"])
+                self.assertEqual(
+                    jobs["rocgdb-gpu"]["container_options"].count(
+                        "--security-opt seccomp=unconfined"
+                    ),
+                    1,
+                )
+                self.assertNotIn("--security-opt", jobs["hipfile"]["container_options"])
+
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
     # -----------------------
