@@ -59,12 +59,11 @@ TYPICAL USAGE (Command Line):
     --execute \
     --use-release-buckets
 
-  # Upload promoted flat local artifacts to whl-next-asan with ASAN tarballs
+  # Upload promoted flat local artifacts with ASAN tarballs
   python ./build_tools/packaging/upload_release_packages.py \
     --input-dir=./downloads \
     --structured \
     --upload-tarballs \
-    --build-variant=asan \
     --tarball-variant=asan \
     --execute \
     --use-release-buckets
@@ -124,17 +123,13 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.python_package_paths import (
     ACCEPTED_FILE_EXTENSIONS,
-    BUILD_VARIANTS,
     CORE_TARBALL_PREFIXES,
     DEFAULT_INDEX,
-    DEFAULT_INDEX_TYPE,
-    INDEX_TYPES,
+    INDEX_NAMES,
     REPO_BUCKET_PRODUCT_NAMES,
     REPO_STREAMS,
     core_tarball_dir_name,
-    build_variant_index_suffix,
     core_tarball_prefix,
-    get_python_index,
     infer_structured_product,
     repo_product_bucket,
     structured_key,
@@ -151,8 +146,9 @@ except ImportError:
     sys.exit(1)
 
 
-# Thin alias so existing STRUCTURED_DEFAULT_INDEX call sites don't need to
-# change now that the underlying name lives in _therock_utils.
+# Thin aliases so existing choices=STRUCTURED_INDEXES call sites don't need to
+# change now that the underlying names live in _therock_utils.
+STRUCTURED_INDEXES = INDEX_NAMES
 STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
 
 
@@ -434,8 +430,7 @@ Safety Features:
             "flat testing/release bucket: routes each core/pytorch/jax wheel from "
             "<input-dir>/wheels to its own product bucket at "
             "v5/rocm/<product>/<index>/<package>/. Forces --multi-arch on, even if "
-            "--no-multi-arch was also passed. See --repo-stream, --index-type, "
-            "and --build-variant."
+            "--no-multi-arch was also passed. See --repo-stream and --python-index."
         ),
     )
 
@@ -452,26 +447,13 @@ Safety Features:
     )
 
     parser.add_argument(
-        "--index-type",
-        default=DEFAULT_INDEX_TYPE,
-        choices=INDEX_TYPES,
+        "--python-index",
+        default=STRUCTURED_DEFAULT_INDEX,
+        choices=STRUCTURED_INDEXES,
         help=(
-            "Python index type to publish into with --structured: whl is the flat "
-            "pip-installable index, whl-next is the device-extra index used for "
-            f"gfx-specific builds (default: {DEFAULT_INDEX_TYPE}). Combined "
-            "with --build-variant to select the <index> path segment."
-        ),
-    )
-
-    parser.add_argument(
-        "--build-variant",
-        default="release",
-        choices=BUILD_VARIANTS,
-        help=(
-            "Build variant of the Python packages with --structured, as in CI: "
-            "release uses <index-type>, ASAN variants (asan, asan-debug, "
-            "host-asan, host-asan-debug) use <index-type>-asan "
-            "(default: release)"
+            "Product-local aggregate index to publish into with --structured: "
+            "whl is the flat pip-installable index, whl-next is the device-extra "
+            f"index used for gfx-specific builds (default: {STRUCTURED_DEFAULT_INDEX})"
         ),
     )
 
@@ -554,9 +536,6 @@ Safety Features:
     )
 
     args = parser.parse_args(argv)
-    args.python_index = get_python_index(
-        args.index_type, build_variant_index_suffix(args.build_variant)
-    )
 
     if args.structured:
         args.multi_arch = True

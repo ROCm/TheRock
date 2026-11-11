@@ -51,7 +51,7 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
 ASAN build variant:
 
     For ASAN builds (--build-variant asan), all artifacts are published to
-    separate ASAN-specific paths:
+    separate ASAN-specific paths (python packages only with --structured):
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
@@ -85,14 +85,13 @@ from _therock_utils.s3_buckets import (
 )
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.python_package_paths import (
+from _therock_utils.python_package_paths import plan_key_copies
+from _therock_utils.python_package_publishing import (
     BUILD_VARIANTS,
     DEFAULT_INDEX_TYPE,
     INDEX_TYPES,
-    UnpublishedBuildVariantError,
     build_variant_index_suffix,
     get_python_index,
-    plan_key_copies,
 )
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
@@ -103,8 +102,9 @@ def _is_asan_variant(build_variant: str) -> bool:
     """True if build_variant is any ASAN-family variant: "asan", "host-asan",
     "asan-debug" (RelWithDebInfo + line-number debug info, see
     amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
+    Uses the same rule as the python index (build_variant_index_suffix).
     """
-    return "asan" in build_variant
+    return build_variant_index_suffix(build_variant) == "asan"
 
 
 def publish_tarballs(
@@ -360,22 +360,21 @@ def main(argv: list[str]) -> None:
         default="release",
         choices=BUILD_VARIANTS,
         help="Build variant (default: release). ASAN builds publish python packages "
-        "to the <index-type>-asan index and native packages to separate paths. "
+        "to the whl-next-asan index and native packages to separate paths. "
         "The '-debug' variants "
         "(RelWithDebInfo + line-number debug info) publish to the same paths "
         "as their non-debug counterpart.",
     )
     args = parser.parse_args(argv)
-    # Resolve the python index before publishing anything. Build variants
-    # without release paths yet (e.g. tsan) are built but not published, so
-    # skip everything rather than mix them into the standard paths.
+    # Resolve the python index before publishing anything, so an unsupported
+    # combination (e.g. a build variant without release paths yet, such as
+    # tsan) fails without copying anything.
     try:
         python_index = get_python_index(
             args.index_type, build_variant_index_suffix(args.build_variant)
         )
-    except UnpublishedBuildVariantError as e:
-        logger.warning("Skipping publishing: %s", e)
-        return
+    except ValueError as e:
+        parser.error(str(e))
 
     artifacts_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=args.platform, release_type=args.release_type

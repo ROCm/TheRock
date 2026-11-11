@@ -8,12 +8,12 @@ product-local package directories:
 
     <product>/<index>/<normalized-package>/<filename>
 
-where <index> is ``whl`` or ``whl-next``, optionally with a build variant
-suffix (e.g. ``whl-next-asan``). Release stream (dev/nightly/
-prerelease) is selected by the target bucket, never encoded in the path. This
-module computes the per-file destination keys the release publishers use when
-run with ``--structured``; the generator in ``manage_structured.py`` later
-discovers and indexes those directories.
+where <index> is ``whl``, ``whl-next``, or ``whl-next-asan`` (shared by all
+ASAN build variants). Release stream (dev/nightly/prerelease) is selected by
+the target bucket, never encoded in the path. This module computes the per-file
+destination keys the release publishers use when run with ``--structured``; the
+generator in ``manage_structured.py`` later discovers and indexes those
+directories.
 
 pep503_normalize + package-name extraction here intentionally mirror
 manage_structured.py so producer output round-trips through its
@@ -24,10 +24,9 @@ shared import would drag this module into that deployment.
 
 import dataclasses
 from pathlib import Path
-from re import sub
+from re import fullmatch, sub
 
 from _therock_utils.storage_location import StorageLocation
-from github_actions.amdgpu_family_matrix import all_build_variants
 from packaging.utils import (
     InvalidSdistFilename,
     InvalidWheelFilename,
@@ -39,89 +38,26 @@ from packaging.utils import (
 # Distribution artifacts placed into package directories.
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
-# Aggregate index types:
-# whl: flat pip-installable index (explicit dependency on device-all)
-# whl-next: index for gfx-specific builds (explicit device selection)
-INDEX_TYPES = ("whl", "whl-next")
-DEFAULT_INDEX_TYPE = "whl-next"
+# Aggregate index names the release promotion tools accept (the second path
+# segment). Publishers resolve their index via python_package_publishing.py.
+INDEX_NAMES = ("whl", "whl-next")
+DEFAULT_INDEX = "whl-next"
 
-# Build variant suffixes with their own index, as ``<index-type>-<suffix>``
-# (e.g. ``whl-next-asan``).
-INDEX_BUILD_VARIANT_SUFFIXES = ("asan", "tsan", "debug")
+# Index segments are single lowercase path segments (e.g. ``whl-next-asan``).
+_INDEX_SEGMENT_PATTERN = r"[a-z0-9][a-z0-9._-]*"
 
 
-def get_python_index(
-    index_type: str = DEFAULT_INDEX_TYPE, build_variant_suffix: str | None = None
-) -> str:
-    """Return the aggregate index name for an index type and build variant.
-
-    ``get_python_index("whl-next")`` -> ``whl-next``;
-    ``get_python_index("whl", "asan")`` -> ``whl-asan``.
+def validate_index(index: str) -> str:
+    """Return ``index`` if it is a safe index path segment.
 
     Raises:
-        ValueError: if ``index_type`` or ``build_variant_suffix`` is unknown.
+        ValueError: if ``index`` is not a single lowercase path segment.
     """
-    if index_type not in INDEX_TYPES:
+    if not fullmatch(_INDEX_SEGMENT_PATTERN, index):
         raise ValueError(
-            f"index_type={index_type!r} is invalid, must be one of {INDEX_TYPES}"
+            f"index={index!r} is invalid, must match {_INDEX_SEGMENT_PATTERN!r}"
         )
-    if build_variant_suffix is None:
-        return index_type
-    if build_variant_suffix not in INDEX_BUILD_VARIANT_SUFFIXES:
-        raise ValueError(
-            f"build_variant_suffix={build_variant_suffix!r} is invalid, must be "
-            f"one of {INDEX_BUILD_VARIANT_SUFFIXES}"
-        )
-    return f"{index_type}-{build_variant_suffix}"
-
-
-# Valid aggregate index names (the second path segment).
-INDEX_NAMES = tuple(
-    get_python_index(index_type, suffix)
-    for suffix in (None, *INDEX_BUILD_VARIANT_SUFFIXES)
-    for index_type in INDEX_TYPES
-)
-DEFAULT_INDEX = get_python_index()
-
-# Build variants across all platforms, taken from all_build_variants in
-# amdgpu_family_matrix.py so new variants are picked up without changes here.
-BUILD_VARIANTS = tuple(
-    dict.fromkeys(
-        variant
-        for platform_variants in all_build_variants.values()
-        for variant in platform_variants
-    )
-)
-
-
-class UnpublishedBuildVariantError(ValueError):
-    """Known build variant that is not supported for publishing yet."""
-
-
-def build_variant_index_suffix(build_variant: str) -> str | None:
-    """Return the index suffix for a build variant, for ``get_python_index``.
-
-    Host ASAN and ``-debug`` (RelWithDebInfo) variants share the ASAN index,
-    matching tarball-asan: ``build_variant_index_suffix("asan-debug")`` ->
-    ``asan``; ``build_variant_index_suffix("release")`` -> ``None``.
-
-    Raises:
-        ValueError: if ``build_variant`` is unknown.
-        UnpublishedBuildVariantError: if ``build_variant`` is not supported
-            for publishing yet (e.g. ``tsan``).
-    """
-    if build_variant not in BUILD_VARIANTS:
-        raise ValueError(
-            f"build_variant={build_variant!r} is invalid, must be one of "
-            f"{BUILD_VARIANTS}"
-        )
-    if "asan" in build_variant:
-        return "asan"
-    if build_variant == "release":
-        return None
-    raise UnpublishedBuildVariantError(
-        f"build_variant={build_variant!r} is not supported for publishing yet"
-    )
+    return index
 
 
 # repo.amd.com release streams and the per-product bucket naming scheme:
@@ -202,10 +138,9 @@ def structured_key(product: str, index: str, filename: str) -> str:
     ``<stream>.repo.amd.com/rocm/<product>/<index>/...`` with no rewrite.
 
     Raises:
-        ValueError: if ``index`` is not a valid aggregate index name.
+        ValueError: if ``index`` is not a safe index path segment.
     """
-    if index not in INDEX_NAMES:
-        raise ValueError(f"index={index!r} is invalid, must be one of {INDEX_NAMES}")
+    validate_index(index)
     package = package_name_from_filename(filename)
     return f"v5/rocm/{product}/{index}/{package}/{filename}"
 
@@ -274,7 +209,7 @@ def plan_key_copies(
         source_bucket: Bucket the source keys live in.
         dest_bucket: Destination bucket name.
         product: Product segment (e.g. ``core``).
-        index: Index segment (one of ``INDEX_NAMES``, e.g. ``whl-next``).
+        index: Index segment (e.g. ``whl-next``).
 
     Returns:
         Planned copies for accepted artifacts, sorted by source key. Only the

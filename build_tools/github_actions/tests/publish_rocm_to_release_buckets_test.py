@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for publish_rocm_to_release_buckets.py."""
 
+import io
 import os
 import sys
 import unittest
@@ -246,8 +247,9 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         # Index is computed from --index-type and --build-variant.
         test_cases = [
             ("release", None, "whl-next"),
+            ("release", "whl", "whl"),
             ("asan-debug", None, "whl-next-asan"),
-            ("host-asan", "whl", "whl-asan"),
+            ("host-asan", None, "whl-next-asan"),
         ]
         for build_variant, index_type, expected_index in test_cases:
             with self.subTest(build_variant=build_variant, index_type=index_type):
@@ -284,28 +286,41 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                     "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
                 )
 
-        # A variant without release paths yet is skipped: nothing is copied
-        # and main() returns normally so the workflow continues.
-        mock_copy_dir.reset_mock()
-        mock_copy_file.reset_mock()
-        with self.assertLogs(level="WARNING") as logs:
-            main(
-                [
-                    "--run-id",
-                    "123",
-                    "--platform",
-                    "linux",
-                    "--release-type",
-                    "dev",
-                    "--structured",
-                    "--build-variant",
-                    "tsan",
-                    "--dry-run",
-                ]
-            )
-        self.assertIn("Skipping publishing", logs.output[0])
-        mock_copy_dir.assert_not_called()
-        mock_copy_file.assert_not_called()
+        # Unsupported combinations fail before anything is copied, so the job
+        # does not report success: ASAN is only published to whl-next-asan, and
+        # variants without release paths yet (e.g. tsan) are not published.
+        rejected_cases = [
+            (
+                ["--build-variant", "asan", "--index-type", "whl"],
+                "only published to whl-next",
+            ),
+            (["--build-variant", "tsan"], "not supported for publishing yet"),
+        ]
+        for extra_args, message in rejected_cases:
+            with self.subTest(extra_args=extra_args):
+                mock_copy_dir.reset_mock()
+                mock_copy_file.reset_mock()
+                with (
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+                    self.assertRaises(SystemExit) as exit_ctx,
+                ):
+                    main(
+                        [
+                            "--run-id",
+                            "123",
+                            "--platform",
+                            "linux",
+                            "--release-type",
+                            "dev",
+                            "--structured",
+                            "--dry-run",
+                            *extra_args,
+                        ]
+                    )
+                self.assertEqual(exit_ctx.exception.code, 2)
+                self.assertIn(message, stderr.getvalue())
+                mock_copy_dir.assert_not_called()
+                mock_copy_file.assert_not_called()
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
