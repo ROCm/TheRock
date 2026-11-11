@@ -2,8 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Configure-only ADDITIONAL_SOURCE_INPUTS tests for seven Git sub-projects.
-"""
+"""Configure-only ADDITIONAL_SOURCE_INPUTS tests for seven Git sub-projects."""
 
 import os
 import shutil
@@ -23,10 +22,19 @@ SCOPES = {
     "hipify": "compiler/hipify",
 }
 ROOTS = (
-    "base/rocm-cmake", "base/half", "compiler/amd-llvm", "compiler/hipify",
-    "compiler/spirv-llvm-translator", "rocm-systems",
+    "base/rocm-cmake",
+    "base/half",
+    "compiler/amd-llvm",
+    "compiler/hipify",
+    "compiler/spirv-llvm-translator",
+    "rocm-systems",
 )
-LLVM_USERS = {"amd-llvm", "amd-comgr", "hipcc", "hipify",}
+LLVM_USERS = {
+    "amd-llvm",
+    "amd-comgr",
+    "hipcc",
+    "hipify",
+}
 PROJECTS = (*SCOPES, "control")
 
 
@@ -40,7 +48,9 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
     def setUpClass(cls):
         missing = [name for name in ("git", "cmake", "ninja") if not shutil.which(name)]
         if missing:
-            raise RuntimeError(f"Required tools unavailable: {', '.join(missing)}; tests were not run")
+            raise RuntimeError(
+                f"Required tools unavailable: {', '.join(missing)}; tests were not run"
+            )
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="therock-source-deps-")
@@ -54,7 +64,8 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         self.hsa = self.systems / "projects/rocr-runtime/runtime/hsa-runtime/inc"
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         self.env.update(
-            GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_CONFIG_NOSYSTEM="1",
+            GIT_CONFIG_GLOBAL=os.devnull,
             GIT_AUTHOR_NAME="Source dependency test",
             GIT_AUTHOR_EMAIL="test@example.invalid",
             GIT_COMMITTER_NAME="Source dependency test",
@@ -67,21 +78,32 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         for name, relative in SCOPES.items():
             directory = self.sources / relative
             entry = directory / "llvm" if name == "amd-llvm" else directory
-            write(entry / "CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\nproject(fixture NONE)\n")
+            write(
+                entry / "CMakeLists.txt",
+                "cmake_minimum_required(VERSION 3.25)\nproject(fixture NONE)\n",
+            )
             write(directory / "input.txt", name + "\n")
         for directory in (self.spirv, self.hsa):
             write(directory / "input.txt", directory.name + "\n")
         write(self.sources / "compiler/amd-llvm/clang/input.txt", "clang\n")
         write(self.systems / "unrelated/input.txt", "unrelated\n")
-        write(self.source / "control/CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\nproject(control NONE)\n")
+        write(
+            self.source / "control/CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.25)\nproject(control NONE)\n",
+        )
         for relative in ROOTS:
             self.commit(self.sources / relative, "initial")
         self.write_harness()
 
     def run_command(self, *args):
         result = subprocess.run(
-            [str(arg) for arg in args], env=self.env, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=180,
+            [str(arg) for arg in args],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout.strip()
@@ -94,10 +116,16 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         self.git(repository, "commit", "-qm", message)
 
     def write_harness(self):
-        includes = "\n".join(f"include({name})" for name in (
-            "therock_globals", "therock_sanitizers", "therock_flag_utils",
-            "therock_default_targets", "therock_subproject",
-        ))
+        includes = "\n".join(
+            f"include({name})"
+            for name in (
+                "therock_globals",
+                "therock_sanitizers",
+                "therock_flag_utils",
+                "therock_default_targets",
+                "therock_subproject",
+            )
+        )
         declarations = []
         for name, relative in SCOPES.items():
             directory = (self.sources / relative).as_posix()
@@ -107,8 +135,15 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             if name in LLVM_USERS - {"amd-llvm"}:
                 args.append("RUNTIME_DEPS amd-llvm")
             if name == "amd-llvm":
-                args.extend(("CMAKE_LISTS_RELPATH llvm", "ADDITIONAL_SOURCE_INPUTS ${TEST_LLVM_SOURCE_INPUTS}", "${_main_hash_option}"))
-            declarations.append(f"""
+                args.extend(
+                    (
+                        "CMAKE_LISTS_RELPATH llvm",
+                        "ADDITIONAL_SOURCE_INPUTS ${TEST_LLVM_SOURCE_INPUTS}",
+                        "${_main_hash_option}",
+                    )
+                )
+            declarations.append(
+                f"""
                 therock_cmake_subproject_declare({name}
                   EXTERNAL_SOURCE_DIR "{directory}"
                   BINARY_DIR "${{CMAKE_BINARY_DIR}}/{name}"
@@ -122,8 +157,11 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
                   file(REMOVE "${{_stage}}.prebuilt")
                 endif()
                 therock_cmake_subproject_activate({name})
-            """)
-        write(self.source / "CMakeLists.txt", f"""
+            """
+            )
+        write(
+            self.source / "CMakeLists.txt",
+            f"""
             cmake_minimum_required(VERSION 3.25)
             project(source_dependencies NONE)
             set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
@@ -150,19 +188,30 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
               get_target_property(_fprint ${{_name}} THEROCK_FPRINT)
               file(WRITE "${{CMAKE_BINARY_DIR}}/${{_name}}.fprint" "${{_fprint}}")
             endforeach()
-        """)
+        """,
+        )
 
     def configure(self, deps=None, *, prebuilt=False, hash_primary=False):
         if deps is None:
             deps = (self.spirv.as_posix(), self.hsa.as_posix())
         self.run_command(
-            "cmake", "-S", self.source, "-B", self.build, "-G", "Ninja",
-            "-DCMAKE_BUILD_TYPE=Release", "-DTHEROCK_VERBOSE=ON",
+            "cmake",
+            "-S",
+            self.source,
+            "-B",
+            self.build,
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DTHEROCK_VERBOSE=ON",
             "-DTEST_LLVM_SOURCE_INPUTS:STRING=" + ";".join(deps),
             "-DIMPORT_STAGE:BOOL=" + ("ON" if prebuilt else "OFF"),
             "-DHASH_PRIMARY_SOURCE:BOOL=" + ("ON" if hash_primary else "OFF"),
         )
-        return {name: (self.build / f"{name}.fprint").read_text().strip() for name in PROJECTS}
+        return {
+            name: (self.build / f"{name}.fprint").read_text().strip()
+            for name in PROJECTS
+        }
 
     def assert_valid(self, values, invalid=()):
         for name, value in values.items():
@@ -174,15 +223,23 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
     def assert_changed(self, before, after, expected):
         self.assert_valid(before)
         self.assert_valid(after)
-        self.assertEqual({name for name in PROJECTS if before[name] != after[name]}, set(expected))
+        self.assertEqual(
+            {name for name in PROJECTS if before[name] != after[name]}, set(expected)
+        )
 
     def test_repeat_and_relative_source_dependencies(self):
         baseline = self.configure()
         self.assert_valid(baseline)
         self.assertEqual(baseline, self.configure())
-        relative = tuple(Path(os.path.relpath(p, self.source)).as_posix() for p in (self.spirv, self.hsa))
+        relative = tuple(
+            Path(os.path.relpath(p, self.source)).as_posix()
+            for p in (self.spirv, self.hsa)
+        )
         self.assertEqual(baseline, self.configure(relative))
-        self.assertEqual((self.build / "source-deps.txt").read_text().split(";"), [self.spirv.as_posix(), self.hsa.as_posix()])
+        self.assertEqual(
+            (self.build / "source-deps.txt").read_text().split(";"),
+            [self.spirv.as_posix(), self.hsa.as_posix()],
+        )
 
     def test_source_changes_and_restoration_for_all_seven_projects(self):
         baseline = self.configure()
@@ -243,7 +300,14 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         self.assert_valid(self.configure(), invalid=LLVM_USERS)
         self.git(self.spirv, "add", "input.txt")
         self.assert_valid(self.configure(), invalid=LLVM_USERS)
-        self.git(self.spirv, "restore", "--source=HEAD", "--staged", "--worktree", "input.txt")
+        self.git(
+            self.spirv,
+            "restore",
+            "--source=HEAD",
+            "--staged",
+            "--worktree",
+            "input.txt",
+        )
         self.assertEqual(baseline, self.configure())
 
     def test_missing_directory_is_invalid_even_with_a_stale_marker(self):
@@ -260,10 +324,14 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         write(marker, "source;recipe\nfirst\n")
         baseline = self.configure((directory.as_posix(),))
         write(marker, "source;recipe\nsecond\n")
-        self.assert_changed(baseline, self.configure((directory.as_posix(),)), LLVM_USERS)
+        self.assert_changed(
+            baseline, self.configure((directory.as_posix(),)), LLVM_USERS
+        )
 
     def test_file_dependency_is_rejected_as_not_a_directory(self):
-        self.assert_valid(self.configure(((self.spirv / "input.txt").as_posix(),)), invalid=LLVM_USERS)
+        self.assert_valid(
+            self.configure(((self.spirv / "input.txt").as_posix(),)), invalid=LLVM_USERS
+        )
 
     def test_empty_marker_uses_git_and_dirty_source_invalidates_marker(self):
         baseline = self.configure()

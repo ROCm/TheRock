@@ -2,8 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Test the source-directory helper with disposable Git repositories.
-"""
+"""Test the source-directory helper with disposable Git repositories."""
 
 import os
 import re
@@ -27,7 +26,8 @@ class SourceIdentityTest(unittest.TestCase):
         )
         match = re.search(
             r"(?ms)^function\(_therock_subproject_fprint_source_dir\b.*?"
-            r"^endfunction\(\)", module
+            r"^endfunction\(\)",
+            module,
         )
         if not match:
             raise RuntimeError("Cannot find the source-directory helper")
@@ -42,14 +42,23 @@ class SourceIdentityTest(unittest.TestCase):
         # Keep tests independent of the user's Git settings and credentials.
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         self.env.update(
-            GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_CONFIG_NOSYSTEM="1",
+            GIT_CONFIG_GLOBAL=os.devnull,
             GIT_AUTHOR_NAME="Source identity test",
             GIT_AUTHOR_EMAIL="test@example.invalid",
             GIT_COMMITTER_NAME="Source identity test",
             GIT_COMMITTER_EMAIL="test@example.invalid",
         )
         self.git("init", "-q")
-        for directory in ("llvm", "clang", "lld", "compiler-rt", "cmake", "amd/comgr", "amd/hipcc"):
+        for directory in (
+            "llvm",
+            "clang",
+            "lld",
+            "compiler-rt",
+            "cmake",
+            "amd/comgr",
+            "amd/hipcc",
+        ):
             self.write(directory + "/input.txt", directory + "\n")
         self.write("outside.txt", "outside\n")
         self.commit("initial")
@@ -57,13 +66,19 @@ class SourceIdentityTest(unittest.TestCase):
         self.script.write_text(
             "cmake_minimum_required(VERSION 3.20)\n" + self.helper + "\n"
             '_therock_subproject_fprint_source_dir(identity "${SOURCE}")\n'
-            'file(WRITE "${RESULT}" "${identity}")\n', encoding="utf-8"
+            'file(WRITE "${RESULT}" "${identity}")\n',
+            encoding="utf-8",
         )
 
     def run_command(self, *args, check=True):
         result = subprocess.run(
-            [str(arg) for arg in args], env=self.env, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=60,
+            [str(arg) for arg in args],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
         )
         if check and result.returncode:
             self.fail(f"Command failed: {args}\n{result.stdout}\n{result.stderr}")
@@ -85,8 +100,11 @@ class SourceIdentityTest(unittest.TestCase):
         result = self.root / "result.txt"
         result.unlink(missing_ok=True)
         self.run_command(
-            "cmake", f"-DSOURCE={(directory or self.repo).as_posix()}",
-            f"-DRESULT={result.as_posix()}", "-P", self.script,
+            "cmake",
+            f"-DSOURCE={(directory or self.repo).as_posix()}",
+            f"-DRESULT={result.as_posix()}",
+            "-P",
+            self.script,
         )
         return result.read_text(encoding="utf-8")
 
@@ -105,7 +123,15 @@ class SourceIdentityTest(unittest.TestCase):
         self.assertEqual(before, self.identity())
 
     def test_llvm_root_includes_sibling_source_directories(self):
-        for directory in ("llvm", "clang", "lld", "compiler-rt", "cmake", "amd/comgr", "amd/hipcc"):
+        for directory in (
+            "llvm",
+            "clang",
+            "lld",
+            "compiler-rt",
+            "cmake",
+            "amd/comgr",
+            "amd/hipcc",
+        ):
             with self.subTest(directory=directory):
                 before = self.identity()
                 self.write(directory + "/input.txt", "changed\n")
@@ -164,7 +190,9 @@ class SourceIdentityTest(unittest.TestCase):
     def test_non_git_source_uses_marker(self):
         source = self.root / "fetched"
         source.mkdir()
-        (self.root / ".fetched.smrev").write_text("archive-and-recipe", encoding="utf-8")
+        (self.root / ".fetched.smrev").write_text(
+            "archive-and-recipe", encoding="utf-8"
+        )
         self.assertEqual("archive-and-recipe", self.identity(source))
 
     def test_non_git_source_without_marker_is_invalid(self):

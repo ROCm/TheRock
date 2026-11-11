@@ -2,8 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Exercise argument fingerprints using real sub-project activation/configuration.
-"""
+"""Exercise argument fingerprints using real sub-project activation/configuration."""
 
 import shutil
 import subprocess
@@ -116,7 +115,13 @@ class CMakeArgumentFingerprintTest(unittest.TestCase):
 
     def configure(self, declared=(), overrides=(), *, prebuilt=False):
         self.run_command(
-            "cmake", "-S", self.source, "-B", self.build, "-G", "Ninja",
+            "cmake",
+            "-S",
+            self.source,
+            "-B",
+            self.build,
+            "-G",
+            "Ninja",
             "-DCMAKE_BUILD_TYPE=Release",
             "-DDECLARED_ARGS:STRING=" + ";".join(declared),
             "-Dargs_source_CMAKE_ARGS:STRING=" + ";".join(overrides),
@@ -131,7 +136,9 @@ class CMakeArgumentFingerprintTest(unittest.TestCase):
         return values
 
     def configured_output(self):
-        self.run_command("cmake", "--build", self.build, "--target", "args_source+configure")
+        self.run_command(
+            "cmake", "--build", self.build, "--target", "args_source+configure"
+        )
         inner = Path((self.build / "args_source.inner").read_text(encoding="utf-8"))
         return (inner / "probe.txt").read_text(encoding="utf-8")
 
