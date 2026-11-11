@@ -5,8 +5,11 @@ with TheRock ROCm-specific skip-test integration and sharding support.
 For the "default" and "distributed" configs, mirrors how PyTorch CI's
 test.sh invokes test_python_shard():
     python test/run_test.py \\
-        --exclude-jit-executor --exclude-distributed-tests \\
+        --exclude-distributed-tests \\
         --exclude-quantization-tests --shard N M --verbose
+
+Older PyTorch sources also get ``--exclude-jit-executor``; see
+``run_test_supports_exclude_jit_executor()``.
 
 For the "inductor" config, mirrors test_inductor_shard() from test.sh
 with two separate run_test.py invocations:
@@ -284,7 +287,8 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Pass --exclude-jit-executor to run_test.py (default: enabled). "
-        "Use --no-exclude-jit-executor to include JIT executor tests.",
+        "Use --no-exclude-jit-executor to include JIT executor tests. "
+        "Ignored for PyTorch sources whose run_test.py no longer has the flag.",
     )
     parser.add_argument(
         "--exclude-distributed",
@@ -387,6 +391,17 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     return args, passthrough_args
 
 
+def run_test_supports_exclude_jit_executor(pytorch_dir: Path) -> bool:
+    """Whether this PyTorch source's run_test.py accepts --exclude-jit-executor.
+
+    pytorch/pytorch#203621 removed the flag together with the test_jit_profiling,
+    test_jit_legacy and test_jit_fuser_legacy files it excluded. Nightlies on
+    either side of that change share version 2.16.0a0, so check the source.
+    """
+    run_test_path = pytorch_dir / "test" / "run_test.py"
+    return "--exclude-jit-executor" in run_test_path.read_text(encoding="utf-8")
+
+
 def build_run_test_cmd(
     args: argparse.Namespace,
     tests_to_skip: str,
@@ -401,7 +416,13 @@ def build_run_test_cmd(
     cmd = [sys.executable, run_test_path]
 
     if args.exclude_jit_executor:
-        cmd.append("--exclude-jit-executor")
+        if run_test_supports_exclude_jit_executor(args.pytorch_dir):
+            cmd.append("--exclude-jit-executor")
+        else:
+            print(
+                "run_test.py has no --exclude-jit-executor (removed upstream "
+                "with the JIT executor tests); not passing it."
+            )
     if args.exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
     if args.test_config == "distributed":
