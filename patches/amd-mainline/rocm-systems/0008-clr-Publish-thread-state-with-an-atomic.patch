@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 05:00:00 -0800
+Subject: [PATCH] clr: Publish thread state with an atomic
+
+HostcallListener termination polls Thread::state while its worker calls
+setState. The volatile enum does not synchronize these accesses, and the
+instrumented HIP tests report a host data race between the two methods.
+
+Use an atomic enum. Keep the existing state transitions and the default
+sequentially consistent loads/stores so state publication also orders the
+associated thread data. All state writes already go through setState.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43015193286
+Carry temporarily in TheRock pending upstream CLR review.
+---
+ projects/clr/rocclr/thread/thread.hpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/thread/thread.hpp b/projects/clr/rocclr/thread/thread.hpp
+--- a/projects/clr/rocclr/thread/thread.hpp
++++ b/projects/clr/rocclr/thread/thread.hpp
+@@ -10,6 +10,7 @@
+ #include "top.hpp"
+ #include "os/os.hpp"
+ 
++#include <atomic>
+ #include <string>
+ 
+ #if defined(_WIN32)
+@@ -41,7 +42,7 @@ class Thread {
+   //! The thread's name.
+   const std::string name_;
+   //! Current running state.
+-  volatile ThreadState state_;
++  std::atomic<ThreadState> state_;
+   //! The argument passed to run()
+   void* data_;
+ 
+-- 
+2.51.2.windows.1
