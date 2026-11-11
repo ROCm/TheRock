@@ -10,7 +10,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
+# Prefer the PyTorch tree so importing the runner does not bind JAX's
+# identically named skip_tests package from other collected tests.
+PYTORCH_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.fspath(PYTORCH_DIR))
+for _name in list(sys.modules):
+    if _name == "skip_tests" or _name.startswith("skip_tests."):
+        del sys.modules[_name]
 
 from run_pytorch_tests_full import build_run_test_cmd
 

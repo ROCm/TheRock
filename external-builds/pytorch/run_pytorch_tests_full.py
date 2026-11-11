@@ -63,8 +63,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-from skip_tests.create_skip_tests import get_tests
-
 from pytorch_utils import (
     check_pytorch_source_version,
     configure_gpu_visibility,
@@ -73,6 +71,26 @@ from pytorch_utils import (
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def _import_get_tests():
+    """Load PyTorch skip_tests.get_tests; JAX also ships a skip_tests package."""
+    script_dir = str(THIS_SCRIPT_DIR)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+
+    expected = THIS_SCRIPT_DIR / "skip_tests"
+    existing = sys.modules.get("skip_tests")
+    if existing is not None:
+        existing_path = Path(getattr(existing, "__file__", "") or "").resolve()
+        if existing_path.parent != expected:
+            for name in list(sys.modules):
+                if name == "skip_tests" or name.startswith("skip_tests."):
+                    del sys.modules[name]
+
+    from skip_tests.create_skip_tests import get_tests
+
+    return get_tests
 
 # Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT, which run_test.py uses to look up
 # historical test durations in test-times.json for balanced shard splitting.
@@ -579,6 +597,7 @@ def main(argv: list[str]) -> int:
     if args.k:
         tests_to_skip = args.k
     else:
+        get_tests = _import_get_tests()
         tests_to_skip = get_tests(
             amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
