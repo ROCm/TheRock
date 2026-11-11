@@ -291,6 +291,7 @@ class CIInputs:
     pr_labels: list[str] = field(default_factory=list)
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
+    checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
     is_draft_pr: bool = False  # pull_request.draft from the event payload
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
@@ -513,6 +514,7 @@ class CIInputs:
             pr_labels=pr_labels,
             pr_base_ref=pr_base_ref,
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
+            checkout_commit=os.environ.get("THEROCK_CHECKOUT_COMMIT", ""),
             is_draft_pr=is_draft_pr,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")

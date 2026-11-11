@@ -320,6 +320,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BUILD_JAX": "true",
                 "PYTHON_VERSION": "3.12",
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
+                "THEROCK_CHECKOUT_REF": "main",
+                "THEROCK_CHECKOUT_COMMIT": "a" * 40,
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -346,6 +348,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
+        self.assertEqual(inputs.checkout_ref, "main")
+        self.assertEqual(inputs.checkout_commit, "a" * 40)
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""

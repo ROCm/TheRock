@@ -8,6 +8,7 @@ from configure_multi_arch_ci import (
     CIOutputs,
     RUN_ON_DRAFT_LABEL,
 )
+import json
 from pathlib import Path
 import sys
 
@@ -40,11 +41,27 @@ def format_summary(
     if not outputs.jobs:
         return "\n".join(lines)
 
-    # One-liner: trigger, branch, variant
     lines.append(
         f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.commit_ref}`, "
         f"`{ci_inputs.build_variant}` variant."
     )
+    lines.append("")
+    source = "Source: TheRock"
+    if ci_inputs.checkout_commit:
+        commit = ci_inputs.checkout_commit
+        source = (
+            f"Source: [ROCm/TheRock@{commit[:7]}]"
+            f"(https://github.com/ROCm/TheRock/commit/{commit})"
+        )
+    if ci_inputs.external_repo:
+        external_repo = json.loads(ci_inputs.external_repo)
+        repository = external_repo["repository"]
+        commit = external_repo["ref"]
+        source += (
+            f" with submodule override [{repository}@{commit[:7]}]"
+            f"(https://github.com/{repository}/commit/{commit})"
+        )
+    lines.append(f"{source}.")
     lines.append("")
 
     # Nothing to build (e.g. workflow_dispatch with no families selected)
