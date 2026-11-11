@@ -3,8 +3,7 @@
 
 if(THEROCK_ENABLE_COMPILER)
   if(NOT DEFINED THEROCK_BUILD_COMGR_TESTS)
-    # Driver builds only need the comgr DLL and PDB; the DLLs are tested
-    # downstream before they reach the driver package.
+    # Driver builds only need the comgr DLL and PDB
     if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
       set(THEROCK_BUILD_COMGR_TESTS OFF)
     else()
@@ -52,9 +51,7 @@ if(THEROCK_ENABLE_COMPILER)
   # frontend.
   ##############################################################################
 
-  # Driver builds link the MSVC runtime statically so comgr does not use
-  # whatever msvcp140.dll the host app loaded. LLVM is statically linked into
-  # comgr, so both must use the same runtime. CMP0091 lets comgr honor it.
+  # Driver builds link the MSVC runtime statically, independent of the app's msvcp140.dll.
   set(_driver_msvc_runtime_cmake_args)
   if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
     list(APPEND _driver_msvc_runtime_cmake_args
