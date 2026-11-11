@@ -1,0 +1,81 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: CI ConcurrencySanitizer
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        description: "Comma-separated Linux GPU families (gfx94x, gfx950), or all"
+        default: "gfx94x"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup_multi_arch.yml
+    with:
+      build_variant: csan
+      release_type: ci
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
+      windows_amdgpu_families: "none"
+      # Measure fresh CSAN stages rather than reusing another run's artifacts.
+      stage_reuse_mode: "off"
+      build_python_packages: false
+      build_pytorch: false
+      build_jax: false
+      build_native_linux: false
+      build_native_windows: false
+
+  linux_build:
+    name: Linux CSAN stages
+    needs: setup
+    if: >-
+      ${{
+        needs.setup.outputs.linux_build_config != '' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
+      }}
+    # Use the same stage DAG, per-family matrices and artifact handoffs as ASAN.
+    # GPU execution tests are separate from this build workflow.
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    with:
+      matrix_per_family_json: ${{ toJSON(fromJSON(needs.setup.outputs.linux_build_config).per_family_info) }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
+      artifact_group: ${{ fromJSON(needs.setup.outputs.linux_build_config).artifact_group }}
+      build_variant_label: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_variant_suffix }}
+      skip_stages: ${{ fromJSON(needs.setup.outputs.linux_build_config).skip_stages }}
+      build_runs_on_large: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
+      build_runs_on_small: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_small }}
+      build_runs_on_medium: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_medium }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      release_type: ci
+      ref: ${{ needs.setup.outputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  summary:
+    name: CSAN build summary
+    if: always()
+    needs: [setup, linux_build]
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python build_tools/github_actions/workflow_summary.py --needs-json "${NEEDS_JSON}"

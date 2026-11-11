@@ -12,6 +12,11 @@ include(ExternalProject)
 include(therock_compiler_hardening)
 therock_initialize_hardening_policy()
 
+option(THEROCK_BUILD_METRICS "Measure per-component build CPU, RAM and wall time" OFF)
+if(THEROCK_BUILD_METRICS AND NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "THEROCK_BUILD_METRICS requires Linux")
+endif()
+
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
 # List of CMake variables that will be injected by default into the
@@ -110,7 +115,7 @@ function(therock_subproject_log_command out_var)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     ""
-    "LOG_FILE;LABEL;OUTPUT_ON_FAILURE"
+    "LOG_FILE;LABEL;OUTPUT_ON_FAILURE;METRICS_COMPONENT;METRICS_STAGE"
     ""
   )
 
@@ -132,6 +137,14 @@ function(therock_subproject_log_command out_var)
     list(APPEND command "${ARG_LOG_FILE}")
   endif()
   list(APPEND command "--")
+
+  if(THEROCK_BUILD_METRICS AND ARG_METRICS_COMPONENT)
+    list(APPEND command
+      "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/build_metrics.py" run
+      --output-dir "${THEROCK_BINARY_DIR}/logs/metrics"
+      --component "${ARG_METRICS_COMPONENT}" --stage "${ARG_METRICS_STAGE}" --
+    )
+  endif()
 
   set("${out_var}" "${command}" PARENT_SCOPE)
 endfunction()
@@ -977,6 +990,15 @@ function(therock_cmake_subproject_activate target_name)
     endif()
   endif()
 
+  set(_dist_metrics_prefix)
+  if(THEROCK_BUILD_METRICS)
+    set(_dist_metrics_prefix
+      "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/build_metrics.py" run
+      --output-dir "${THEROCK_BINARY_DIR}/logs/metrics"
+      --component "${target_name}" --stage dist --
+    )
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
@@ -999,7 +1021,7 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND ${_dist_metrics_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"
@@ -1037,6 +1059,8 @@ function(therock_cmake_subproject_activate target_name)
     set(_compile_commands_file "${PROJECT_BINARY_DIR}/compile_commands_fragment_${target_name}.json")
     therock_subproject_log_command(_configure_log_prefix
       LOG_FILE "${target_name}_configure.log"
+      METRICS_COMPONENT "${target_name}"
+      METRICS_STAGE "configure"
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
@@ -1113,6 +1137,8 @@ function(therock_cmake_subproject_activate target_name)
     # build target.
     therock_subproject_log_command(_build_log_prefix
       LOG_FILE "${target_name}_build.log"
+      METRICS_COMPONENT "${target_name}"
+      METRICS_STAGE "build"
       LABEL "${target_name}"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
@@ -1159,6 +1185,8 @@ function(therock_cmake_subproject_activate target_name)
       foreach(_comp IN LISTS _optional_install_components)
         therock_subproject_log_command(_install_log_prefix
           LOG_FILE "${target_name}_${_comp}_install.log"
+          METRICS_COMPONENT "${target_name}"
+          METRICS_STAGE "install-${_comp}"
           LABEL "${target_name} ${_comp} install"
           # While useful for debugging, stage install logs are almost pure noise
           # for interactive use.
@@ -1173,6 +1201,8 @@ function(therock_cmake_subproject_activate target_name)
     # Setup prefix for default component.
     therock_subproject_log_command(_install_log_prefix
       LOG_FILE "${target_name}_install.log"
+      METRICS_COMPONENT "${target_name}"
+      METRICS_STAGE "install"
       LABEL "${target_name} install"
       # While useful for debugging, stage install logs are almost pure noise
       # for interactive use.
@@ -1185,7 +1215,7 @@ function(therock_cmake_subproject_activate target_name)
       # Expand optional components _install command(s).
       ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND ${_dist_metrics_prefix} "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"

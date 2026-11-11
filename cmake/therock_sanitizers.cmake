@@ -33,18 +33,27 @@ function(therock_sanitizer_configure
     return()
   endif()
 
-  # Our own toolchains get ASAN enabled consistently.
+  if(_sanitizer STREQUAL "CSAN" AND
+      (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+       NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$"))
+    message(FATAL_ERROR "CSAN requires a Linux x86-64 host")
+  endif()
+
+  # Our own toolchains get sanitizers enabled consistently.
   # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx942, gfx950)
   # HOST_ASAN: Host-only address sanitizer (no device-side instrumentation)
   # TSAN: Thread sanitizer.
+  # CSAN: Host+device concurrency sanitizer (does not require xnack).
   set(_stanza)
-  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN")
+  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN" OR _sanitizer STREQUAL "CSAN")
     string(APPEND _stanza "set(THEROCK_SANITIZER \"${_sanitizer}\")\n")
 
     # Set the compiler sanitizer string for the command line.
     set(_sanitizer_string "address")
     if(_sanitizer STREQUAL "TSAN")
       set(_sanitizer_string "thread")
+    elseif(_sanitizer STREQUAL "CSAN")
+      set(_sanitizer_string "concurrency")
     endif()
 
     if(_sanitizer STREQUAL "HOST_ASAN")
@@ -103,7 +112,7 @@ function(therock_sanitizer_configure
     # they pass CMAKE_*_LINKER_FLAGS directly to their configure script. Those subprojects
     # are expected to handle sanitizer linker flags in their own pre_hook.
 
-    # Device-side instrumentation: applied for full ASAN and TSAN, not HOST_ASAN.
+    # CSAN's device watchpoints do not require xnack, unlike ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "TSAN")
       string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx90a|gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
@@ -111,8 +120,7 @@ function(therock_sanitizer_configure
       string(APPEND _stanza "set(CMAKE_HIP_ARCHITECTURES \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
-      # HOST_ASAN.
-      string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
+      string(APPEND _stanza "message(STATUS \"${_sanitizer} enabled - GPU_TARGETS unchanged\")\n")
     endif()
 
     # Action at a distance: Signal that the sub-project should extend its build and install

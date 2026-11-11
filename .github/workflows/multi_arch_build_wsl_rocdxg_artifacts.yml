@@ -298,6 +298,7 @@ jobs:
                 -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
                 -DTHEROCK_WSL_WIN_SDK="'"${THEROCK_WSL_WIN_SDK_MOUNT}"'" \
                 ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
+                ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && '-DTHEROCK_BUILD_METRICS=ON' || '' }} \
                 ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).stages[inputs.stage_name].cmake_options || '' }} \
                 ${{ steps.stage_config.outputs.cmake_args }}
             '
@@ -317,10 +318,15 @@ jobs:
             --mount "type=bind,src=${THEROCK_WIN_SDK_SHARED},dst=${THEROCK_WSL_WIN_SDK_MOUNT},readonly" \
             -w "${wsl_src_dir}" \
             -e "STAGE_NAME=${stage_name}" \
+            -e "THEROCK_CSAN_METRICS=${{ inputs.build_variant_cmake_preset == 'linux-release-csan' }}" \
             -e "WSL_BUILD_DIR=${wsl_build_dir}" \
             "${MANYLINUX_IMAGE}" \
             bash -c '
               set -euo pipefail
+              if [[ "${THEROCK_CSAN_METRICS}" == "true" ]]; then
+                # Configure runs in a separate disposable container.
+                pip install psutil==7.1.3
+              fi
               cmake --build "${WSL_BUILD_DIR}" --target "stage-${STAGE_NAME}" -- -k 0
             '
 
@@ -331,6 +337,54 @@ jobs:
           wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
           echo "Artifacts:"
           ls -lh "${wsl_build_dir}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Collect CSAN stage metrics
+        if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
+        shell: wsl-bash {0}
+        run: |
+          wsl_work_dir="${HOME}/therock-wsl-rocdxg"
+          wsl_build_dir="${wsl_work_dir}/build"
+          "${wsl_work_dir}/.venv/bin/python" "${THEROCK_HOST_WORKSPACE}/build_tools/build_metrics.py" report \
+            --build-dir "${wsl_build_dir}" --output-dir "${wsl_build_dir}/metrics"
+          git -C "${wsl_work_dir}/src" submodule status --recursive > "${wsl_build_dir}/metrics/source-revisions.txt"
+          rsync -a --ignore-missing-args "${wsl_build_dir}/logs" "${wsl_build_dir}/CMakeCache.txt" "${wsl_build_dir}/metrics/"
+          if [[ -f "${wsl_build_dir}/CMakeFiles/CMakeConfigureLog.yaml" ]]; then
+            cp "${wsl_build_dir}/CMakeFiles/CMakeConfigureLog.yaml" "${wsl_build_dir}/metrics/"
+          fi
+          mkdir -p "${THEROCK_HOST_WORKSPACE}/build"
+          tar -czf "${THEROCK_HOST_WORKSPACE}/build/csan-stage-metrics.tar.gz" -C "${wsl_build_dir}" metrics
+
+      # Keep the archive on the Windows side for actions/upload-artifact.
+      # A failed stage can leave partial component artifacts useful for diagnosis.
+      - name: Archive CSAN stage artifacts for download
+        if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
+        shell: wsl-bash {0}
+        run: |
+          wsl_build_dir="${HOME}/therock-wsl-rocdxg/build"
+          mkdir -p "${THEROCK_HOST_WORKSPACE}/build"
+          if [[ -d "${wsl_build_dir}/artifacts" ]]; then
+            tar -czf "${THEROCK_HOST_WORKSPACE}/build/csan-stage-artifacts.tar.gz" -C "${wsl_build_dir}" artifacts
+          fi
+
+      - name: Upload CSAN stage artifacts
+        if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: csan-artifacts-${{ inputs.stage_name }}-generic-${{ github.run_attempt }}
+          path: build/csan-stage-artifacts.tar.gz
+          compression-level: 0
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload CSAN stage metrics and logs
+        if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: csan-metrics-${{ inputs.stage_name }}-generic-${{ github.run_attempt }}
+          path: build/csan-stage-metrics.tar.gz
+          compression-level: 0
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Configure AWS credentials for artifact uploads
         if: ${{ always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}

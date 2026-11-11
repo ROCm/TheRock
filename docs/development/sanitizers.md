@@ -10,6 +10,7 @@ Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be exten
   - You want faster builds (no xnack+ kernel variants)
   - You only need to catch host-side memory errors
 - `OFF` : Explicitly disable sanitizers.
+- `CSAN` : Enables host and AMDGPU ConcurrencySanitizer (`-fsanitize=concurrency`) on Linux x86-64. GPU instrumentation uses the HSA runtime and does not require xnack.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
 
@@ -21,7 +22,78 @@ In order to simplify use, the following presets are available for setting up spe
 
 - `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
 - `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
+- `--preset linux-release-csan`: ConcurrencySanitizer with optimized code and debug locations. Uses the built ROCm compiler and shared sanitizer runtime; bootstrap compiler tools and the same unsupported system components remain uninstrumented.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
+
+## ConcurrencySanitizer
+
+Configure a separate build tree using the pinned compiler submodules:
+
+```bash
+cmake --preset linux-release-csan -B build-csan -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+cmake --build build-csan
+```
+
+The development branch pins LLVM to `641fded1f5684d68f0f678d84ac46437936b0d42`,
+SPIRV-LLVM-Translator to `88b7c5b2c6f14a54f307cc620cea236524965fc9`, and hipify
+to `d364ef407b2c3e20c6ceb3575bd852f0c7cebb8c`. The LLVM AMDGPU runtime cache at
+this revision includes `csan`. Keep the LLVM monorepo's `libc` sources available:
+the GPU runtime and host HSA interceptors use its common utility headers.
+The existing compiler artifact includes the Clang resource directory containing
+the host shared runtime, GPU runtime, and offload initialization archives.
+
+Compile and link consuming applications with `-fsanitize=concurrency -shared-libsan`
+and `-g -O1` or higher optimization using the same compiler. CSan cannot be combined
+with ASan or TSan. It samples accesses, so a clean run does not prove freedom from
+races. See [Clang's ConcurrencySanitizer documentation](https://clang.llvm.org/docs/ConcurrencySanitizer.html)
+for `CSAN_OPTIONS`, detection behavior, and supported platforms.
+
+### CI artifacts and build measurements
+
+The manual [ConcurrencySanitizer workflow](../../.github/workflows/ci_csan.yml)
+uses the same setup, stage dependency graph, per-family build matrices, and S3
+artifact handoffs as the ASAN portable Linux build. Each stage uses
+`linux-release-csan` and enables build metrics. The `linux_amdgpu_families` input
+accepts comma-separated family keys (`gfx94x,gfx950`); its default is `gfx94x`,
+and `all` selects all CSAN-enabled CI families. This CI allowlist follows ASAN;
+local CSAN builds do not require xnack-capable GPUs.
+
+Stage reuse is disabled so measurements come from this run's builds. The workflow
+runs stage build checks and packaging validation; GPU execution tests, framework
+builds, native packages, and release publication are separate from this workflow.
+The WSL ROCDXG stage keeps its existing Windows/WSL runner and manylinux container.
+The initial sanity checks cover the Linux CI container and workflow configuration;
+a complete CSAN build and execution of the Windows/WSL stage remain to be validated.
+
+Download each stage's outputs from the GitHub Actions run's **Artifacts** section:
+
+- `csan-artifacts-<stage>-<family>-<attempt>` contains a tar archive of component
+  artifacts and manifests, preserving permissions and symlinks.
+- `csan-metrics-<stage>-<family>-<attempt>` contains metrics, Ninja logs, component
+  logs, source revisions, and configure diagnostics. The WSL stage bundles these
+  files in `csan-stage-metrics.tar.gz` for transfer to the Windows upload action.
+
+Generic stages use `generic` in place of the family. Uploads also run on failure
+to retain any partial results available; these downloads do not replace the S3
+artifacts used by dependent stages.
+
+To collect the same measurements locally, configure with
+`-DTHEROCK_BUILD_METRICS=ON`, build, then run:
+
+```bash
+python build_tools/build_metrics.py report --build-dir build-csan --output-dir build-csan/metrics
+```
+
+The report combines component stage measurements with Ninja logs and binary
+sizes. Ninja command durations measure elapsed time, not CPU consumption;
+resource measurements are collected while each component stage runs. CPU percent
+uses one core as 100% and can exceed 100%. RAM is sampled aggregate process-tree
+RSS: shared pages can be counted more than once and short-lived peaks can be
+missed. The separate maximum-child RSS field is not an aggregate peak. Binary
+sizes are staged ELF/archive file sizes, excluding symlinks and merged dist
+copies; per-component totals are in `binary_totals.csv`. Records from incremental
+builds are retained, so use fresh build directories for comparisons. A full
+build is required to obtain representative measurements.
 
 ## Sanitizer Aware Project Development
 
@@ -38,7 +110,7 @@ Some sub-projects have strict gfx target checks that do not allow these extends 
 
 When a project is configured for sanitizers, it will have certain variables injected into it. While it is often possible to not require projects to have any special knowledge of what sanitizer they were compiled for, some do need to know. For these cases, it can be necessary to use these special variables so injected.
 
-- `THEROCK_SANITIZER={ASAN|HOST_ASAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN.
+- `THEROCK_SANITIZER={ASAN|HOST_ASAN|TSAN|CSAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN; `CSAN` enables host and device concurrency instrumentation.
 - `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for both `ASAN` and `HOST_ASAN` modes.
 
 You are recommended to code defensively with patterns like:

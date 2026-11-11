@@ -3179,6 +3179,51 @@ class TestConfigurePipeline(unittest.TestCase):
         cm._get_published_rocm_version.cache_clear()
         self.addCleanup(cm._get_published_rocm_version.cache_clear)
 
+    @patch.dict(os.environ, {"STAGE_REUSE_MODE": "off"})
+    def test_csan_dispatch_builds_eligible_stages(self):
+        """CSAN dispatch supplies the existing staged build DAG's configuration."""
+        for families, expected_families in (
+            (["gfx94x"], {"gfx94X-dcgpu"}),
+            (["all"], {"gfx94X-dcgpu", "gfx950-dcgpu"}),
+        ):
+            with self.subTest(families=families):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="workflow_dispatch",
+                    commit_ref="dev/concurrency-sanitizer",
+                    base_ref="HEAD^1",
+                    build_variant="csan",
+                    linux_amdgpu_families=families,
+                    windows_amdgpu_families=["none"],
+                    build_python_packages=False,
+                    build_pytorch=False,
+                    build_jax=False,
+                    build_native_linux=False,
+                    build_native_windows=False,
+                    built_rocm_version="10.2.0.dev0+abcdef.csan",
+                )
+                outputs = cm.configure(inputs, cm.GitContext())
+                self.assertTrue(outputs.is_ci_enabled)
+                self.assertIsNone(outputs.builds.windows)
+                config = outputs.builds.linux
+                self.assertIsNotNone(config)
+                self.assertTrue(config.build_rocm)
+                self.assertEqual(config.build_variant_label, "csan")
+                self.assertEqual(config.build_variant_suffix, "csan")
+                self.assertEqual(
+                    config.build_variant_cmake_preset, "linux-release-csan"
+                )
+                self.assertEqual(
+                    {family["amdgpu_family"] for family in config.per_family_info},
+                    expected_families,
+                )
+                self.assertEqual(config.prebuilt_stages, [])
+                self.assertEqual(config.skip_stages, [])
+                self.assertFalse(config.build_python_packages)
+                self.assertFalse(config.build_pytorch)
+                self.assertFalse(config.build_jax)
+                self.assertFalse(config.build_native_linux)
+
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
         outputs = cm.CIOutputs.skipped()

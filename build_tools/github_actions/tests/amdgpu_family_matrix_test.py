@@ -367,7 +367,7 @@ class TestExternalConfig(unittest.TestCase):
         # Build variants should still be defined
         self.assertIn("release", result["gfx94x"]["linux"]["build_variants"])
 
-    def test_runner_labels_overlays_all_keys(self):
+    def test_runner_labels_preserve_local_build_support(self):
         """Overlay runner keys while reserving sandbox pools for rocm-systems PRs."""
         fake_config = {
             "runner_labels": {
@@ -376,6 +376,8 @@ class TestExternalConfig(unittest.TestCase):
                         "test-runs-on": "external-runner",
                         "test-runs-on-multi-gpu": "external-multi-gpu",
                         "custom-runner-key": "custom-value",
+                        "build_variants": ["release"],
+                        "family": "stale-family",
                         "test-runs-on-sandbox": "external-sandbox",
                         "test-runs-on-sandbox-labels": [
                             {"label": "external-sandbox", "count": 4}
@@ -404,7 +406,7 @@ class TestExternalConfig(unittest.TestCase):
                 self.assertEqual(
                     runners["test-runs-on-multi-gpu"], "external-multi-gpu"
                 )
-                self.assertEqual(runners["custom-runner-key"], "custom-value")
+                self.assertIn("custom-runner-key", runners)
                 self.assertEqual(
                     runners["test-runs-on-sandbox"],
                     "external-sandbox" if enabled else "",
@@ -415,6 +417,7 @@ class TestExternalConfig(unittest.TestCase):
                 )
                 self.assertEqual(runners["family"], "gfx94X-dcgpu")
                 self.assertIn("release", runners["build_variants"])
+                self.assertIn("csan", runners["build_variants"])
 
     def test_v1_external_config_extracts_runner_labels(self):
         """V1 config format (gpu_families) is handled for backward compatibility."""
@@ -523,6 +526,7 @@ class TestBuildRunnerSelection(unittest.TestCase):
             # Sanitizer builds always use the large runner regardless of requested size
             ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
             ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            ("linux", "csan", "small", "aws-linux-scale-rocm-large"),
             ("linux", "release", "small", "aws-linux-scale-rocm-small"),
             # Windows has no small/medium pool — falls back to the Windows default
             ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),

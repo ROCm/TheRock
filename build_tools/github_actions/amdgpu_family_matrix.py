@@ -222,6 +222,11 @@ all_build_variants = {
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
         },
+        "csan": {
+            "build_variant_label": "csan",
+            "build_variant_suffix": "csan",
+            "build_variant_cmake_preset": "linux-release-csan",
+        },
     },
     "windows": {
         "release": {
@@ -295,6 +300,7 @@ amdgpu_family_info_matrix = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "csan",
             ],
             "builds_on_trigger": [
                 "presubmit",
@@ -487,6 +493,7 @@ amdgpu_family_info_matrix = {
                 "host-asan",
                 "host-asan-debug",
                 "tsan",
+                "csan",
             ],
             "builds_on_trigger": [
                 "postsubmit",
@@ -761,6 +768,18 @@ def _get_local_families_for_trigger_types(trigger_types: list[str]) -> dict:
     return result
 
 
+_RUNNER_LABEL_KEYS = {
+    "test-runs-on",
+    "test-runs-on-labels",
+    "test-runs-on-sandbox",
+    "test-runs-on-sandbox-labels",
+    "test-runs-on-multi-gpu",
+    "test-runs-on-multi-gpu-labels",
+    "test-runs-on-kernel",
+    "test-runs-on-wsl",
+}
+
+
 def _extract_runner_labels_from_v1(external_config: dict) -> dict:
     """Extract runner labels from V1 gpu_families format for backward compatibility."""
     runner_labels: dict = {}
@@ -768,16 +787,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
 
     # V1 gpu_families mixes build config (family, build_variants, etc.) with runner
     # config. We must filter to only extract runner keys, otherwise we'd overwrite
-    # local build definitions. This filter is only needed for V1 backward compat.
-    runner_keys = {
-        "test-runs-on",
-        "test-runs-on-labels",
-        "test-runs-on-sandbox",
-        "test-runs-on-multi-gpu",
-        "test-runs-on-multi-gpu-labels",
-        "test-runs-on-kernel",
-        "test-runs-on-wsl",
-    }
+    # local build definitions.
 
     for _trigger, families in gpu_families.items():
         for family_name, family_config in families.items():
@@ -787,7 +797,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
                 if platform not in runner_labels[family_name]:
                     runner_labels[family_name][platform] = {}
                 for key, value in platform_config.items():
-                    if key in runner_keys and value:
+                    if key in _RUNNER_LABEL_KEYS and value:
                         runner_labels[family_name][platform][key] = value
 
     return runner_labels
@@ -829,9 +839,12 @@ def _overlay_runner_config(families: dict, external_config: dict) -> dict:
             if platform not in external_family:
                 continue
 
-            # Overlay all keys from runner_labels onto local definitions
+            # Build support stays local even if external config contains stale
+            # build_variants (for example, before a new sanitizer is added).
             external_platform = external_family[platform]
             for key, value in external_platform.items():
+                if key in family_config[platform] and key not in _RUNNER_LABEL_KEYS:
+                    continue
                 old_value = family_config[platform].get(key)
                 family_config[platform][key] = value
                 if old_value != value:
