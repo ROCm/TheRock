@@ -657,6 +657,14 @@ def main():
     # TEST_TYPE was normalized + validated at module load.
     category = TEST_TYPE
 
+    if test_component_job_name == "rocprofiler-compute" and environ_vars.get(
+        "CSAN_REPORT_PREFIX"
+    ):
+        from relocate_csan_ctest import relocate_csan_compute_launchers
+
+        count = relocate_csan_compute_launchers(Path(TEST_DIR), environ_vars)
+        print(f"# Relocated {count} rocprofiler-compute CSAN CTest launcher(s)")
+
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = ""
     if AMDGPU_FAMILIES:
