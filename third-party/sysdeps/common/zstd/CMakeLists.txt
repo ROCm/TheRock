@@ -85,6 +85,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     -DZSTD_BUILD_STATIC=ON
     -DZSTD_BUILD_SHARED=OFF
   )
+  # Driver builds link zstd into comgr, which uses the static MSVC runtime.
+  if(THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND CONFIGURE_ARGS
+      -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+      -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+    )
+  endif()
   set(POST_INSTALL_COMMANDS)
 else()
   message(FATAL_ERROR "System not recognized")
