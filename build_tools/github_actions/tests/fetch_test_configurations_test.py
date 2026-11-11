@@ -92,6 +92,32 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 )
                 self.assertEqual(job["test_script"], expected)
 
+    def test_rocrtst_exhaustive_partition_is_csan_comprehensive_and_full_only(self):
+        os.environ["TEST_LABELS"] = json.dumps(["test:rocrtst"])
+        for variant in ("csan", "release", "asan"):
+            for tier in ("quick", "standard", "comprehensive", "full"):
+                with self.subTest(variant=variant, tier=tier):
+                    os.environ["BUILD_VARIANT"] = variant
+                    os.environ["TEST_TYPE"] = tier
+                    fetch_test_configurations.run()
+                    jobs = {j["job_name"]: j for j in self._get_components()}
+                    split = variant == "csan" and tier in ("comprehensive", "full")
+                    self.assertEqual("rocrtst-max-refcount" in jobs, split)
+                    self.assertEqual(
+                        "--mode regular" in jobs["rocrtst"]["test_script"], split
+                    )
+                    if split:
+                        self.assertEqual(
+                            jobs["rocrtst-max-refcount"]["fetch_artifact_args"],
+                            jobs["rocrtst"]["fetch_artifact_args"],
+                        )
+                        self.assertEqual(
+                            jobs["rocrtst-max-refcount"]["total_shards"], 1
+                        )
+                        self.assertFalse(
+                            jobs["rocrtst-max-refcount"].get("expect_failure")
+                        )
+
     def test_windows_jobs_selected(self):
         sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
         # Use gfx110x for Windows since gfx94x doesn't have a Windows test runner

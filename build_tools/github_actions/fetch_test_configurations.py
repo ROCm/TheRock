@@ -1307,6 +1307,19 @@ test_matrix = {
             "wsl": 1,
         },
     },
+    # Keep the exhaustive CSAN reference-count case independent of the rest of rocrtst.
+    "rocrtst-max-refcount": {
+        "job_name": "rocrtst-max-refcount",
+        "base_project": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        # The original full category allows four hours. Measure actual preloaded
+        # HSA reference throughput first, then retain the exhaustive case.
+        "timeout_minutes": 240,
+        "test_script": "python ./build_tools/github_actions/run_rocrtst_csan.py --mode max",
+        "test_types": ["comprehensive", "full"],
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 1},
+    },
     # hipTensor tests
     "hiptensor": {
         "job_name": "hiptensor",
@@ -1589,6 +1602,16 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            if key == "rocrtst-max-refcount" and build_variant != "csan":
+                continue
+            if (
+                key == "rocrtst"
+                and build_variant == "csan"
+                and test_type in ("comprehensive", "full")
+            ):
+                job_config_data["test_script"] = (
+                    "python ./build_tools/github_actions/run_rocrtst_csan.py --mode regular"
+                )
             if key == "rocr-debug-agent" and build_variant == "csan":
                 job_config_data["test_script"] = (
                     "python ./build_tools/github_actions/run_debug_agent_tests.py"
