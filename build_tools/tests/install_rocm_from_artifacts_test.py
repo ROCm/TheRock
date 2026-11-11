@@ -107,6 +107,32 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
             argv = self._run_main(["--base-only"])
         self.assertNotIn("wsl-rocdxg_lib", argv)
 
+    def test_dev_flag_adds_dev_pattern_for_selected_artifact(self):
+        argv = self._run_main(["--blas", "--dev"])
+        self.assertIn("blas_lib", argv)
+        self.assertIn("blas_dev", argv)
+        self.assertNotIn("blas_test", argv)
+
+    def test_dev_flag_adds_base_dev_patterns(self):
+        # Before --dev existed, a narrowed selection could only reach the base
+        # _dev components by naming an unrelated flag (--debug-tools, --rpp,
+        # ...) or by overlaying them by hand. See issue #9013.
+        plain_argv = self._run_main(["--blas"])
+        dev_argv = self._run_main(["--blas", "--dev"])
+        for pattern in ("amd-llvm_dev", "base_dev", "core-amdsmi_dev"):
+            self.assertNotIn(pattern, plain_argv)
+            self.assertIn(pattern, dev_argv)
+
+    def test_dev_flag_alone_selects_base_artifacts(self):
+        argv = self._run_main(["--dev"])
+        self.assertIn("core-runtime_lib", argv)
+        self.assertIn("amd-llvm_dev", argv)
+
+    def test_base_only_with_dev_adds_base_dev_patterns(self):
+        argv = self._run_main(["--base-only", "--dev"])
+        self.assertIn("core-runtime_lib", argv)
+        self.assertIn("amd-llvm_dev", argv)
+
     def test_hipdnn_integration_tests_includes_rocrand(self):
         # The hipdnn_gpu_ref_tests binary links librocrand for GPU tensor data
         # generation, so the test runners must fetch the rand artifact even
@@ -114,6 +140,19 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--hipdnn-integration-tests"])
         self.assertIn("hipdnn-integration-tests_run", argv)
         self.assertIn("rand_lib", argv)
+
+
+class TestDevComponentPatterns(unittest.TestCase):
+    def test_collapses_components_of_one_artifact_into_single_dev_pattern(self):
+        self.assertEqual(
+            mod._dev_component_patterns(["amd-llvm_run", "amd-llvm_lib", "base_lib"]),
+            ["amd-llvm_dev", "base_dev"],
+        )
+
+    def test_skips_artifacts_whose_dev_component_is_already_requested(self):
+        self.assertEqual(
+            mod._dev_component_patterns(["core-hip_lib", "core-hip_dev"]), []
+        )
 
 
 def _tarball_name(platform: str, artifact_group: str, version: str) -> str:
@@ -443,6 +482,7 @@ def _make_run_id_args(**overrides) -> argparse.Namespace:
         sparse=False,
         libhipcxx=False,
         hipthreads=False,
+        dev=False,
         tests=False,
     )
     defaults.update(overrides)

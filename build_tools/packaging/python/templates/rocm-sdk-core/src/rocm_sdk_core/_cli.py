@@ -220,8 +220,8 @@ def rocprofv3():
     _exec("bin/rocprofv3")
 
 
-def rocprofv3_attach():
-    _exec("bin/rocprofv3-attach")
+def rocprof_attach():
+    _exec("bin/rocprof-attach")
 
 
 def rocprofv3_avail():

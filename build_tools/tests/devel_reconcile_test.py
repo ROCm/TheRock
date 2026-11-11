@@ -14,10 +14,12 @@ discovers them via `distributions(path=[site])`, alongside a libraries overlay
 holding the real device files and the manifests.
 """
 
+import errno
 import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 from pathlib import Path, PurePosixPath
@@ -283,6 +285,176 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         paths = self._record_paths(record)
         self.assertIn(rec_name, paths)
         self.assertEqual(len(paths), len(set(paths)), "duplicate RECORD entries")
+
+    def test_record_update_is_atomically_published(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        original_record = record_path.read_text(encoding="utf-8")
+        new_entry = "_rocm_sdk_devel_test/bin/new-link.dll"
+
+        publication_ready = threading.Event()
+        allow_publication = threading.Event()
+        worker_errors: list[BaseException] = []
+        real_open = Path.open
+        real_replace = Path.replace
+
+        def paused_open(path: Path, *args, **kwargs):
+            mode = args[0] if args else kwargs.get("mode", "r")
+            opened_file = real_open(path, *args, **kwargs)
+            if path == record_path and "w" in mode:
+                # Opening the destination for writing has already truncated it.
+                publication_ready.set()
+                if not allow_publication.wait(timeout=5):
+                    raise TimeoutError("Timed out waiting to write the RECORD")
+            return opened_file
+
+        def paused_replace(path: Path, target: Path) -> Path:
+            if Path(target) == record_path:
+                publication_ready.set()
+                if not allow_publication.wait(timeout=5):
+                    raise TimeoutError("Timed out waiting to publish the RECORD")
+            return real_replace(path, target)
+
+        def update_record() -> None:
+            try:
+                _devel._ensure_record_entries(record_path, [new_entry])
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with (
+            unittest.mock.patch.object(Path, "open", new=paused_open),
+            unittest.mock.patch.object(Path, "replace", new=paused_replace),
+        ):
+            worker = threading.Thread(target=update_record)
+            worker.start()
+            try:
+                self.assertTrue(
+                    publication_ready.wait(timeout=5),
+                    "RECORD update did not reach its publication step",
+                )
+                self.assertEqual(
+                    record_path.read_text(encoding="utf-8"), original_record
+                )
+            finally:
+                allow_publication.set()
+                worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "RECORD update did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        updated_record = record_path.read_text(encoding="utf-8")
+        self.assertIn("lib/a.dll", updated_record)
+        self.assertIn(new_entry, updated_record)
+
+    def test_record_update_retries_transient_replace_failure(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        real_replace = Path.replace
+        replace_attempts = 0
+
+        def flaky_replace(path: Path, target: Path) -> Path:
+            nonlocal replace_attempts
+            replace_attempts += 1
+            if replace_attempts == 1:
+                raise PermissionError("destination is temporarily busy")
+            return real_replace(path, target)
+
+        with (
+            unittest.mock.patch.object(Path, "replace", new=flaky_replace),
+            unittest.mock.patch.object(_devel.time, "sleep") as sleep,
+        ):
+            _devel._ensure_record_entries(record_path, ["new-link"])
+
+        self.assertEqual(replace_attempts, 2)
+        sleep.assert_called_once_with(_devel._REPLACE_RETRY_DELAY_SECONDS)
+        self.assertIn("new-link", record_path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows file replacement behavior")
+    def test_record_update_retries_while_reader_has_file_open(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        original_record = record_path.read_text(encoding="utf-8")
+        retry_started = threading.Event()
+        allow_retry = threading.Event()
+        worker_errors: list[BaseException] = []
+
+        def paused_sleep(_seconds: float) -> None:
+            retry_started.set()
+            if not allow_retry.wait(timeout=5):
+                raise TimeoutError("Timed out waiting to retry RECORD replacement")
+
+        def update_record() -> None:
+            try:
+                _devel._ensure_record_entries(record_path, ["new-link"])
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with (
+            record_path.open(encoding="utf-8") as reader,
+            unittest.mock.patch.object(_devel.time, "sleep", new=paused_sleep),
+        ):
+            worker = threading.Thread(target=update_record)
+            worker.start()
+            try:
+                self.assertTrue(
+                    retry_started.wait(timeout=5),
+                    "RECORD replacement did not encounter the open reader",
+                )
+                self.assertEqual(reader.read(), original_record)
+            finally:
+                reader.close()
+                allow_retry.set()
+                worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "RECORD update did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        self.assertIn("new-link", record_path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows file locking behavior")
+    def test_file_lock_waits_for_contender(self):
+        lock_path = self.site / "test.lock"
+        acquired = threading.Event()
+        contender_started = threading.Event()
+        worker_errors: list[BaseException] = []
+
+        def contend_for_lock() -> None:
+            try:
+                with lock_path.open("a") as lock_file:
+                    contender_started.set()
+                    lock = _devel.FileLock(lock_file)
+                    acquired.set()
+                    lock.unlock()
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with lock_path.open("a") as first_lock_file:
+            first_lock = _devel.FileLock(first_lock_file)
+            worker = threading.Thread(target=contend_for_lock)
+            worker.start()
+            self.assertTrue(contender_started.wait(timeout=5))
+            self.assertFalse(acquired.wait(timeout=0.1))
+            first_lock.unlock()
+            worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "Contending lock did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        self.assertTrue(acquired.is_set())
+
+    @unittest.skipUnless(os.name == "nt", "Windows file locking behavior")
+    def test_file_lock_retries_beyond_native_limit(self):
+        import msvcrt
+
+        native_timeout = OSError(errno.EDEADLOCK, "file is locked")
+        with (
+            (self.site / "test.lock").open("a") as lock_file,
+            unittest.mock.patch.object(
+                msvcrt,
+                "locking",
+                side_effect=[native_timeout, native_timeout, None],
+            ) as locking,
+        ):
+            _devel.FileLock(lock_file)
+
+        self.assertEqual(locking.call_count, 3)
 
     def test_existing_duplicate_record_entry_is_removed(self):
         # A duplicate RECORD row (e.g. from a botched prior write) must be
