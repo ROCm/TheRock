@@ -1,0 +1,358 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 09:30:00 -0800
+Subject: [PATCH] rocprofiler-systems: Synchronize parser caches and LU handshakes
+
+CSAN reports a shared block ID increment and aggregate symbol cache reads
+racing with parallel Dyninst parser updates. Use an atomic relaxed counter
+for unique IDs and the aggregate's existing mutex for cached state reads.
+Apply the pinned nested dependency patch during configure, accepting an
+already patched tree and rejecting an unknown source version.
+
+Replace LU's shared plain flags with release/acquire atomic handshakes so
+its work publication and consumption have real synchronization. Preserve
+the prepared CSAN, HSA and report initializer preload chain when the test
+framework launches a child with its own profiler preload.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+Nested source: ROCm/dyninst f6adfaf155ab0de83f912efb5b8b3a44b14d20c7
+Reproduction: https://github.com/ROCm/TheRock/actions/runs/43014650567
+Validation: actual artifact Clang/CSAN builds the patched Dyninst. The exact
+native Ubuntu CPU simulate-ls command reproduces the counter race before
+this fix and passes after it with all twelve fresh diagnostic files, parsed
+JSON/XML and no CSAN reports. It takes about 972 seconds; the earlier
+300/900-second timeout results are retained. Actual LU reproduces the flag
+race before the fix; fixed NAS class S passes numerical verification with
+four threads and no CSAN reports. Both added pytest cases pass, and an
+actual published-runtime child retains the profiler DSO and CSAN report
+prefix. Nested patch apply/idempotence/unknown-base controls pass.
+No instrumentation or test assertions are disabled.
+Carry temporarily in TheRock pending upstream profiler/Dyninst review.
+---
+diff --git a/projects/rocprofiler-systems/cmake/Packages.cmake b/projects/rocprofiler-systems/cmake/Packages.cmake
+index c22667c..cf030a6 100644
+--- a/projects/rocprofiler-systems/cmake/Packages.cmake
++++ b/projects/rocprofiler-systems/cmake/Packages.cmake
+@@ -458,6 +458,39 @@ if(ROCPROFSYS_BUILD_DYNINST)
+         REPO_BRANCH dyninst_13
+     )
+ 
++    # Keep the nested dependency's concurrent parser caches race-free. Accept
++    # an already-patched source tree, but never silently build an unknown base.
++    find_package(Git REQUIRED)
++    set(_dyninst_thread_patch "${CMAKE_CURRENT_LIST_DIR}/dyninst-thread-safety.patch")
++    # An unpacked dependency may live inside another repository's ignored
++    # directory. Stop discovery before that outer repository to prevent Git
++    # from silently skipping all patch paths relative to its worktree prefix.
++    set(_dyninst_patch_git "${CMAKE_COMMAND}" -E env
++        "GIT_CEILING_DIRECTORIES=${PROJECT_SOURCE_DIR}/external" "${GIT_EXECUTABLE}")
++    execute_process(
++        COMMAND ${_dyninst_patch_git} apply --check -- "${_dyninst_thread_patch}"
++        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/external/dyninst"
++        RESULT_VARIABLE _dyninst_patch_check ERROR_VARIABLE _dyninst_patch_error
++    )
++    if(_dyninst_patch_check EQUAL 0)
++        execute_process(
++            COMMAND ${_dyninst_patch_git} apply -- "${_dyninst_thread_patch}"
++            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/external/dyninst"
++            RESULT_VARIABLE _dyninst_patch_result
++        )
++        if(NOT _dyninst_patch_result EQUAL 0)
++            message(FATAL_ERROR "Cannot apply Dyninst thread-safety patch")
++        endif()
++    endif()
++    execute_process(
++        COMMAND ${_dyninst_patch_git} apply --reverse --check -- "${_dyninst_thread_patch}"
++        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/external/dyninst"
++        RESULT_VARIABLE _dyninst_reverse_check ERROR_QUIET
++    )
++    if(NOT _dyninst_reverse_check EQUAL 0)
++        message(FATAL_ERROR "Unexpected Dyninst source for thread-safety patch: ${_dyninst_patch_error}")
++    endif()
++
+     set(DYNINST_OPTION_PREFIX ON)
+     set(DYNINST_BUILD_DOCS OFF)
+     set(DYNINST_BUILD_RTLIB OFF)
+diff --git a/projects/rocprofiler-systems/cmake/dyninst-thread-safety.patch b/projects/rocprofiler-systems/cmake/dyninst-thread-safety.patch
+new file mode 100644
+index 0000000..7dca8d0
+--- /dev/null
++++ b/projects/rocprofiler-systems/cmake/dyninst-thread-safety.patch
+@@ -0,0 +1,98 @@
++diff --git a/dyninstAPI/src/image.h b/dyninstAPI/src/image.h
++index fb235f0..79dd24a 100644
++--- a/dyninstAPI/src/image.h
+++++ b/dyninstAPI/src/image.h
++@@ -34,6 +34,7 @@
++ #define SYMTAB_HDR
++ #define REGEX_CHARSET "^*|?"
++ 
+++#include <atomic>
++ #include <map>
++ #include <utility>
++ #include <vector>
++@@ -387,7 +388,7 @@ class image : public codeRange {
++ 
++    bool getModules(vector<pdmodule *> &mods);
++ 
++-    int getNextBlockID() { return nextBlockID_++; }
+++    int getNextBlockID() { return nextBlockID_.fetch_add(1, std::memory_order_relaxed); }
++ 
++    Address get_main_call_addr() const { return main_call_addr_; }
++ 
++@@ -485,7 +486,7 @@ class image : public codeRange {
++    std::vector<image_parRegion *> parallelRegions;
++ 
++    // unique (by image) numbering of basic blocks
++-   int nextBlockID_;
+++   std::atomic<int> nextBlockID_;
++ 
++    dyn_hash_map <string, pdmodule *> modsByFileName;
++ 
++diff --git a/symtabAPI/src/Aggregate.C b/symtabAPI/src/Aggregate.C
++index c0dbdb5..18dc3ec 100644
++--- a/symtabAPI/src/Aggregate.C
+++++ b/symtabAPI/src/Aggregate.C
++@@ -74,7 +74,8 @@ Aggregate::Aggregate(Module *mod) :
++ }
++ 
++ Offset Aggregate::getOffset() const 
++-{ 
+++{
+++    dyncompat::unique_lock<dyn_mutex> l(lock_);
++ 	if (!firstSymbol)
++ 	{
++ 		return (Offset) 0L;
++@@ -83,7 +84,8 @@ Offset Aggregate::getOffset() const
++ }
++ 
++ unsigned Aggregate::getSize() const 
++-{ 
+++{
+++    dyncompat::unique_lock<dyn_mutex> l(lock_);
++ 	if (!firstSymbol)
++ 	{
++ 		return (unsigned) 0;
++@@ -103,14 +105,13 @@ Region * Aggregate::getRegion() const
++ }
++ 
++ bool Aggregate::addSymbol(Symbol *sym) {
+++    dyncompat::unique_lock<dyn_mutex> l(lock_);
++ 
++     // We keep a "primary" module.
++     if (module_ == NULL) {
++         module_ = sym->getModule();
++     }
++ 
++-    dyncompat::unique_lock<dyn_mutex> l(lock_);
++-
++     // No need to re-add symbols.
++     for (unsigned i = 0; i < symbols_.size(); ++i)
++         if (sym == symbols_[i]) return true;
++@@ -142,12 +143,14 @@ bool Aggregate::removeSymbolInt(Symbol *sym) {
++ 
++ bool Aggregate::getSymbols(std::vector<Symbol *> &syms) const 
++ {
+++    dyncompat::unique_lock<dyn_mutex> l(lock_);
++     syms = symbols_;
++     return true;
++ }
++ 
++ Symbol * Aggregate::getFirstSymbol() const
++ {
+++    dyncompat::unique_lock<dyn_mutex> l(lock_);
++     return firstSymbol;
++ }
++ 
++diff --git a/symtabAPI/h/Aggregate.h b/symtabAPI/h/Aggregate.h
++index da078ae..9c0a2f5 100644
++--- a/symtabAPI/h/Aggregate.h
+++++ b/symtabAPI/h/Aggregate.h
++@@ -74,7 +74,7 @@ class SYMTAB_EXPORT Aggregate
++ 
++       virtual Offset   getOffset() const;
++       virtual unsigned getSize() const;
++-      Module * getModule() const { return module_; }
+++      Module * getModule() const { dyncompat::unique_lock<dyn_mutex> l(lock_); return module_; }
++       Region * getRegion() const;
++ 
++       /***** Symbol Collection Management *****/
+diff --git a/projects/rocprofiler-systems/examples/openmp/lu/lu.cpp b/projects/rocprofiler-systems/examples/openmp/lu/lu.cpp
+index d905767..8773954 100644
+--- a/projects/rocprofiler-systems/examples/openmp/lu/lu.cpp
++++ b/projects/rocprofiler-systems/examples/openmp/lu/lu.cpp
+@@ -57,6 +57,8 @@ Authors of the OpenMP code:
+ 
+ */
+ 
++#include <atomic>
++
+ #include "../common/npb-CPP.hpp"
+ #include "npbparams.hpp"
+ 
+@@ -217,8 +219,8 @@ ssor(int niter);
+ void
+ verify(double xcr[], double xce[], double xci, char* class_npb, boolean* verified);
+ 
+-static boolean flag[ISIZ1 / 2 * 2 + 1];
+-static boolean flag2[ISIZ1 / 2 * 2 + 1];
++static std::atomic<boolean> flag[ISIZ1 / 2 * 2 + 1]{};
++static std::atomic<boolean> flag2[ISIZ1 / 2 * 2 + 1]{};
+ 
+ /* lu */
+ int
+@@ -433,7 +435,7 @@ blts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+     {
+         if(j != jst)
+         {
+-            while(flag[j - 1] == 0)
++            while(flag[j - 1].load(std::memory_order_acquire) == 0)
+             {
+ #pragma omp flush
+                 ;
+@@ -441,7 +443,7 @@ blts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+         }
+         if(j != jend - 1)
+         {
+-            while(flag[j] == 1)
++            while(flag[j].load(std::memory_order_acquire) == 1)
+             {
+ #pragma omp flush
+                 ;
+@@ -560,8 +562,8 @@ blts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+             v[k][j][i][0] = tv[0] / tmat[0][0];
+         }
+ 
+-        if(j != jend - 1) flag[j] = 1;
+-        if(j != jst) flag[j - 1] = 0;
++        if(j != jend - 1) flag[j].store(1, std::memory_order_release);
++        if(j != jst) flag[j - 1].store(0, std::memory_order_release);
+     }
+ }
+ 
+@@ -612,7 +614,7 @@ buts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+     {
+         if(j != jend - 1)
+         {
+-            while(flag2[j + 1] == 0)
++            while(flag2[j + 1].load(std::memory_order_acquire) == 0)
+             {
+ #pragma omp flush
+                 ;
+@@ -620,7 +622,7 @@ buts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+         }
+         if(j != jst)
+         {
+-            while(flag2[j] == 1)
++            while(flag2[j].load(std::memory_order_acquire) == 1)
+             {
+ #pragma omp flush
+                 ;
+@@ -744,8 +746,8 @@ buts(int /*nx*/, int /*ny*/, int /*nz*/, int k, double omega,
+             v[k][j][i][4] = v[k][j][i][4] - tv[j][i][4];
+         }
+ 
+-        if(j != jend - 1) flag2[j + 1] = 0;
+-        if(j != jst) flag2[j] = 1;
++        if(j != jend - 1) flag2[j + 1].store(0, std::memory_order_release);
++        if(j != jst) flag2[j].store(1, std::memory_order_release);
+     }
+ }
+ 
+diff --git a/projects/rocprofiler-systems/tests/pytest/rocprofsys/environment.py b/projects/rocprofiler-systems/tests/pytest/rocprofsys/environment.py
+index fea670a..59bf00a 100644
+--- a/projects/rocprofiler-systems/tests/pytest/rocprofsys/environment.py
++++ b/projects/rocprofiler-systems/tests/pytest/rocprofsys/environment.py
+@@ -33,6 +33,7 @@ The following environment variables are excluded from the user layer overrides:
+ from __future__ import annotations
+ 
+ import os
++import re
+ from dataclasses import dataclass, field
+ from enum import Enum
+ from typing import TYPE_CHECKING
+@@ -131,6 +132,21 @@ class TestEnvironment:
+         merged = self.merge()[0]
+         for key, value in derived_defaults(config).items():
+             merged.setdefault(key, value)
++        if os.environ.get("CSAN_REPORT_PREFIX"):
++            prepared = re.split(r"[:\s]+", os.environ.get("LD_PRELOAD", ""))
++            required = [
++                os.environ.get("CSAN_RUNTIME_PATH", ""),
++                os.environ.get("CSAN_HSA_RUNTIME_PATH", ""),
++                os.environ.get("CSAN_REPORT_PRELOAD_PATH", ""),
++            ]
++            if not all(required) or prepared[:3] != required:
++                raise ValueError("Missing prepared CSAN runtime:HSA:report preload chain")
++            # Keep sanitizer interception/reporting ahead of the profiler's own
++            # loader, including tests that explicitly override LD_PRELOAD.
++            additional = re.split(r"[:\s]+", merged.get("LD_PRELOAD", ""))
++            merged["LD_PRELOAD"] = ":".join(
++                dict.fromkeys(filter(None, prepared + additional))
++            )
+         return merged
+ 
+     def format_layers(self) -> list[str]:
+diff --git a/projects/rocprofiler-systems/tests/pytest/test_pytest_impl.py b/projects/rocprofiler-systems/tests/pytest/test_pytest_impl.py
+index bb95533..55dd43c 100644
+--- a/projects/rocprofiler-systems/tests/pytest/test_pytest_impl.py
++++ b/projects/rocprofiler-systems/tests/pytest/test_pytest_impl.py
+@@ -36,6 +36,56 @@ from rocprofsys.runners import (
+ pytestmark = [pytest.mark.pytest_impl]
+ 
+ 
++def test_csan_child_retains_runtime_hsa_report_and_test_preload(monkeypatch):
++    import subprocess
++    import sys
++    from rocprofsys.environment import TestEnvironment
++
++    chain = "/missing/csan.so:/missing/hsa.so:/missing/report.so:/missing/caller.so"
++    for key, value in {
++        "CSAN_REPORT_PREFIX": "/tmp/csan-report",
++        "CSAN_RUNTIME_PATH": "/missing/csan.so",
++        "CSAN_HSA_RUNTIME_PATH": "/missing/hsa.so",
++        "CSAN_REPORT_PRELOAD_PATH": "/missing/report.so",
++        "LD_PRELOAD": chain,
++    }.items():
++        monkeypatch.setenv(key, value)
++    environment = TestEnvironment()
++    environment.set_user_environment()
++    environment.set_test_environment(
++        {"LD_PRELOAD": "/missing/profiler.so:/missing/csan.so"}
++    )
++    config = MagicMock()
++    config.rocm_path = None
++    merged = environment.get_merged_environment(config)
++    expected = chain + ":/missing/profiler.so"
++    assert merged["LD_PRELOAD"] == expected
++    merged["EXPECTED_PRELOAD"] = expected
++    subprocess.run(
++        [
++            sys.executable,
++            "-c",
++            "import os; assert os.environ['LD_PRELOAD'] == os.environ['EXPECTED_PRELOAD']",
++        ],
++        env=merged,
++        check=True,
++    )
++    monkeypatch.setenv("LD_PRELOAD", "/missing/csan.so")
++    with pytest.raises(ValueError, match="prepared CSAN"):
++        environment.get_merged_environment(config)
++
++
++def test_ordinary_preload_override_is_unchanged(monkeypatch):
++    from rocprofsys.environment import TestEnvironment
++
++    monkeypatch.delenv("CSAN_REPORT_PREFIX", raising=False)
++    environment = TestEnvironment()
++    environment.set_test_environment({"LD_PRELOAD": "test-owned.so"})
++    config = MagicMock()
++    config.rocm_path = None
++    assert environment.get_merged_environment(config)["LD_PRELOAD"] == "test-owned.so"
++
++
+ # ---------------------------------------------------------------------------
+ # Helpers / fixtures for the persistent-cache tests
+ # ---------------------------------------------------------------------------
+-- 
+2.51.0

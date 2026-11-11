@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 12:45:00 -0800
+Subject: [PATCH] rocprofiler-systems: Exclude the loaded CSAN runtime from instrumentation
+
+Register the CSAN shared runtime with the existing internal-library
+resolver. The resolved loaded object must be excluded from instrumentation
+just like the profiler and other runtime libraries; otherwise simulate
+--all-functions selects sanitizer implementation functions itself.
+
+Extend the existing complete simulate-ls output test to reject selected
+CSAN and sanitizer implementation functions when using a CSAN runtime.
+Keep application source paths, ordinary variants and all existing format
+assertions unchanged.
+
+Source: ROCm/rocm-systems bd1130f9f838cfffd24f41fd3052968fb7cae4e0
+diff --git a/projects/rocprofiler-systems/source/bin/rocprof-sys-instrument/internal_libs.cpp b/projects/rocprofiler-systems/source/bin/rocprof-sys-instrument/internal_libs.cpp
+index 7f4c64b..c6c8540 100644
+--- a/projects/rocprofiler-systems/source/bin/rocprof-sys-instrument/internal_libs.cpp
++++ b/projects/rocprofiler-systems/source/bin/rocprof-sys-instrument/internal_libs.cpp
+@@ -268,6 +268,7 @@ get_internal_basic_libs_impl()
+ 
+     // shared libraries used by rocprof-sys
+     const auto _rocprof_sys_libs = strview_init_t{ "libstdc++.so.6",
++                                                   "libclang_rt.csan.so",
+                                                    "libgotcha.so",
+                                                    "libunwind-coredump.so",
+                                                    "libunwind-generic.so",
+diff --git a/projects/rocprofiler-systems/tests/pytest/test_binaries.py b/projects/rocprofiler-systems/tests/pytest/test_binaries.py
+index c4b1d2e..e7d4efc 100644
+--- a/projects/rocprofiler-systems/tests/pytest/test_binaries.py
++++ b/projects/rocprofiler-systems/tests/pytest/test_binaries.py
+@@ -8,6 +8,7 @@ Tests rocprof-sys binaries
+ from __future__ import annotations
+ 
+ import json
++import os
+ import re
+ import shutil
+ 
+@@ -250,6 +251,25 @@ class TestRocprofilerSystemsInstrument(RocprofsysTest):
+         ]
+         self.assert_file_exists(expected_files_paths)
+ 
++        if os.environ.get("CSAN_RUNTIME_PATH"):
++            data = json.loads(
++                (result.output_dir / "instrumentation" / "instrumented.json").read_text()
++            )
++            functions = data["rocprofsys"]["instrumented_module_functions"][
++                "module_functions"
++            ]
++            runtime_functions = [
++                entry["function"]
++                for entry in functions
++                if entry["function"].startswith(
++                    ("__csan_", "__sanitizer::", "__sanitizer_")
++                )
++            ]
++            assert not runtime_functions, (
++                "Sanitizer runtime functions must not be instrumented: "
++                f"{runtime_functions}"
++            )
++
+     @pytest.mark.timeout(120)
+     def test_simulate_lib(self, rocprof_config):
+         causal_api_lib = (
