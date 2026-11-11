@@ -559,11 +559,7 @@ test_matrix = {
     "rocgdb-gpu-diagnostic": {
         **_rocgdb_common,
         "job_name": "rocgdb-gpu-diagnostic",
-        "test_script": (
-            "python ./build/tests/rocgdb/test_rocgdb.py --one-by-one "
-            "--one-by-one-test-timeout 300 --max-failed-retries 0 --no-xfail "
-            "--toolchain llvm --tests gdb.rocm/simple.exp"
-        ),
+        "test_script": "python ./build_tools/github_actions/run_rocgdb_startup_diagnostic.py",
     },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
@@ -1622,6 +1618,19 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+            if (
+                key in {"rocprofiler-compute", "rocprofiler-systems"}
+                and build_variant == "csan"
+                and platform == "linux"
+                and test_type in ("comprehensive", "full")
+            ):
+                # Preserve every CTest entry while budgeting for instrumented
+                # profiler workloads; cases remain serial within each GPU job.
+                job_config_data["total_shards_dict"] = {
+                    **job_config_data.get("total_shards_dict", {}),
+                    "linux": 8,
+                }
+                job_config_data["timeout_minutes"] = 120
             if (
                 key == "rpp"
                 and build_variant == "csan"

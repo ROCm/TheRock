@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import fetch_test_configurations
+from run_rocgdb_startup_diagnostic import gpu_test_command
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -74,6 +75,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for job in components:
             self.assertIn("linux", job["platform"])
 
+    def test_csan_profiler_shards_preserve_ordinary_tiers(self):
+        for variant in ("csan", "release", "asan"):
+            for tier in ("quick", "standard", "comprehensive", "full"):
+                with self.subTest(variant=variant, tier=tier):
+                    os.environ["BUILD_VARIANT"] = variant
+                    os.environ["TEST_TYPE"] = tier
+                    os.environ["TEST_LABELS"] = (
+                        "test:rocprofiler-compute,test:rocprofiler-systems"
+                    )
+                    fetch_test_configurations.run()
+                    jobs = {job["job_name"]: job for job in self._get_components()}
+                    for name in ("rocprofiler-compute", "rocprofiler-systems"):
+                        job = jobs[name]
+                        expanded = variant == "csan" and tier in (
+                            "comprehensive",
+                            "full",
+                        )
+                        self.assertEqual(job["total_shards"], 8 if expanded else 1)
+                        self.assertEqual(
+                            job["timeout_minutes"], 120 if expanded else 60
+                        )
+                        self.assertEqual(job["test_type"], tier)
+
     def test_gpu_debugger_diagnostic_requires_explicit_label_and_csan(self):
         for variant in ("csan", "release", "asan"):
             for labels in (
@@ -94,14 +118,23 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     self.assertEqual("rocgdb-gpu-diagnostic" in jobs, expected)
                     if expected:
                         probe = jobs["rocgdb-gpu-diagnostic"]
-                        self.assertIn(
-                            "--tests gdb.rocm/simple.exp", probe["test_script"]
+                        self.assertEqual(
+                            probe["test_script"],
+                            "python ./build_tools/github_actions/run_rocgdb_startup_diagnostic.py",
                         )
-                        self.assertIn(
-                            "--one-by-one-test-timeout 300", probe["test_script"]
+                        command = gpu_test_command(Path("build"))
+                        self.assertEqual(
+                            command[-2:], ["--tests", "gdb.rocm/simple.exp"]
                         )
-                        self.assertIn("--max-failed-retries 0", probe["test_script"])
-                        self.assertNotIn("--parallel", probe["test_script"])
+                        self.assertEqual(
+                            command[command.index("--one-by-one-test-timeout") + 1],
+                            "300",
+                        )
+                        self.assertEqual(
+                            command[command.index("--max-failed-retries") + 1], "0"
+                        )
+                        self.assertIn("--one-by-one", command)
+                        self.assertNotIn("--parallel", command)
                         self.assertEqual(probe["timeout_minutes"], 30)
                         self.assertFalse(probe.get("expect_failure"))
 
