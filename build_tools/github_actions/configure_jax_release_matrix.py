@@ -113,6 +113,11 @@ CI_JAX_REFS = {
     ],
 }
 
+# TheRock build variants of a ROCm release (amdgpu_family_matrix.py). An ASAN
+# release builds ASAN JAX wheels against its own ASAN ROCm packages.
+ASAN_BUILD_VARIANTS = ("asan", "asan-debug", "host-asan", "host-asan-debug")
+BUILD_VARIANTS = ("release", *ASAN_BUILD_VARIANTS)
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -204,18 +209,24 @@ def generate_jax_matrix_for_release_type(
     platform: str,
     python_versions: list[str] | None = None,
     jax_refs: list[str] | None = None,
+    build_variant: str = "release",
 ) -> list[dict[str, str | bool]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
     if platform not in ["linux"]:
         raise ValueError(f"Unknown platform: {platform!r}")
+    if build_variant not in BUILD_VARIANTS:
+        raise ValueError(f"Unknown build_variant: {build_variant!r}")
+    asan = build_variant in ASAN_BUILD_VARIANTS
+    # ASAN wheels are over 1 GB per row, so ASAN releases build the CI ref only.
+    defaults_type = "ci" if asan else release_type
 
     versions = python_versions or _default_python_versions(
-        release_type=release_type,
+        release_type=defaults_type,
         platform=platform,
     )
     refs = jax_refs or _default_jax_refs(
-        release_type=release_type,
+        release_type=defaults_type,
         platform=platform,
     )
 
@@ -223,11 +234,22 @@ def generate_jax_matrix_for_release_type(
     if unknown_refs:
         raise ValueError(f"Unknown JAX refs: {unknown_refs!r}")
 
-    return generate_jax_matrix(
+    matrix = generate_jax_matrix(
         jax_refs=refs,
         python_versions=versions,
-        debug=release_type != "ci",
+        debug=defaults_type != "ci",
     )
+    if asan:
+        return [
+            {
+                **row,
+                "jax_label": f"{row['jax_label']} asan",
+                "variant": "asan",
+                "run_tests": False,
+            }
+            for row in matrix
+        ]
+    return matrix
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -264,6 +286,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=RELEASE_TYPES,
         help="Release type selecting default JAX/Python matrix (default: dev)",
     )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=BUILD_VARIANTS,
+        help="TheRock build variant of the ROCm release; ASAN ones build ASAN wheels",
+    )
     args = parser.parse_args(argv)
 
     python_versions = _split_values(args.python_versions) or None
@@ -274,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         platform=args.platform,
         python_versions=python_versions,
         jax_refs=jax_refs,
+        build_variant=args.build_variant,
     )
     gha_set_output({"jax_matrix": json.dumps(matrix)})
     return 0

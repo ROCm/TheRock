@@ -37,9 +37,9 @@ from packaging.utils import (
 # Distribution artifacts placed into package directories.
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
-# Valid aggregate index names (the second path segment). whl-next-debug keeps
-# debug-symbol builds apart: a pin without a local label prefers `+...debug`.
-INDEX_NAMES = ("whl", "whl-next", "whl-next-debug")
+# Valid aggregate index names (the second path segment). Debug and ASAN builds
+# get their own: a pin without a local label prefers `+...debug` or `+...asan`.
+INDEX_NAMES = ("whl", "whl-next", "whl-next-debug", "whl-next-asan")
 DEFAULT_INDEX = "whl-next"
 
 # repo.amd.com release streams and the per-product bucket naming scheme:

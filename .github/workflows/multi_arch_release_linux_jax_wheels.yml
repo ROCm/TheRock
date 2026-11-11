@@ -43,6 +43,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_variant:
+        description: "Build variant of the ROCm release. ASAN variants build ASAN JAX wheels only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -82,6 +86,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_variant:
+        description: "Build variant of the ROCm release. ASAN variants build ASAN JAX wheels only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -101,6 +109,7 @@ jobs:
       jax_matrix: ${{ steps.matrix.outputs.jax_matrix }}
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       RELEASE_TYPE: ${{ inputs.release_type }}
 
     steps:
@@ -128,7 +137,8 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_jax_release_matrix.py \
             --release-type="${RELEASE_TYPE}" \
-            --python-versions="${PYTHON_VERSION}"
+            --python-versions="${PYTHON_VERSION}" \
+            --build-variant="${BUILD_VARIANT}"
 
   build_jax_wheels:
     needs: setup_matrix

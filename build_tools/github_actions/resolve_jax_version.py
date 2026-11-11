@@ -65,6 +65,16 @@ VARIANTS = {
         "marker": ".debug",
         "python_index": "whl-next-debug",
     },
+    # The ROCm toolchain has no asan feature, so --config=asan_shared alone
+    # does not instrument. Host code only; GPU kernels stay uninstrumented.
+    "asan": {
+        "bazel_options": "--bazel_options=--config=asan_shared"
+        " --bazel_options=--copt=-fsanitize=address"
+        " --bazel_options=--copt=-fno-gpu-sanitize"
+        " --bazel_options=--linkopt=-fsanitize=address",
+        "marker": ".asan",
+        "python_index": "whl-next-asan",
+    },
 }
 
 

@@ -141,6 +141,22 @@ class ResolveJaxVersionTest(unittest.TestCase):
                 ],
             )
 
+    def test_asan_instruments_host_code_only_and_publishes_apart(self):
+        self.assertEqual(
+            m.ml_wheel_version_suffix("release", ROCM_VERSION, self.checkout, "asan"),
+            "+rocm7.14.0a20261002.asan",
+        )
+        self.assertEqual(
+            m.VARIANTS["asan"]["bazel_options"].split(),
+            [
+                "--bazel_options=--config=asan_shared",
+                "--bazel_options=--copt=-fsanitize=address",
+                "--bazel_options=--copt=-fno-gpu-sanitize",
+                "--bazel_options=--linkopt=-fsanitize=address",
+            ],
+        )
+        self.assertEqual(m.VARIANTS["asan"]["python_index"], "whl-next-asan")
+
     def test_tip_debug_keeps_the_dev_date(self):
         debug = m.ml_wheel_version_suffix(
             "nightly", ROCM_VERSION, self.checkout, "debug"
