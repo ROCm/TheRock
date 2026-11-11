@@ -669,6 +669,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     # lit tests into bin/libhipcxx/lit-hiprtc with bin/hiprtcc.
     set(_libhipcxx_tests_cmake_args
       ${_libhipcxx_cmake_args}
+      # The lit prebuild runs hiprtcc from the build tree, so it needs the
+      # build RPATH to the HIP libraries.
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=OFF
       -Dlibhipcxx_ENABLE_INSTALL_RULES=OFF
       -DLIBHIPCXX_INSTALL_TESTS=ON
       -DLIBHIPCXX_PREBUILD_LIT_TESTS=ON
