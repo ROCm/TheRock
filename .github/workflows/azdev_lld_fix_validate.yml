@@ -1,0 +1,253 @@
+# NO-MERGE: validate the lld COFF fix (llvm#230249, TheRock#9901, ROCM-33918) on the Azure DEV Turin pool.
+# Commit = TheRock#9901 CI merge ref 0207e39f2c. amd-llvm (with the fix) is fetched from that PR's
+# CI run 43038211530. Builds math-libs for gfx120X-all and runs repro_link.ps1 against the live build.
+# Link CPU pinning (THEROCK_WINDOWS_LINK_CPU_AFFINITY) is NOT enabled, so drops are not masked.
+name: azdev lld fix validation (NO-MERGE)
+
+on:
+  push:
+    branches:
+      - users/justchen/azdev-lld-fix-validate
+
+concurrency:
+  group: azdev-lld-fix-validate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REF_RUN_ID: "43038211530"
+  STAGE_NAME: math-libs
+  AMDGPU_FAMILIES: gfx120X-all
+  DIST_AMDGPU_FAMILIES: gfx110X-all;gfx1151;gfx120X-all
+  ROCM_PACKAGE_VERSION: 10.3.0.dev0+0207e39f2c78ae542541a239060ac1cf439541a5
+  CMAKE_PRESET: windows-release
+  HOLD_MINUTES: "0"
+
+jobs:
+  build_repro_hold:
+    name: math-libs gfx120X build + lld-link repro (az dev Turin, fixed lld, rep ${{ matrix.rep }})
+    strategy:
+      fail-fast: false
+      matrix:
+        rep: [1, 2]
+    runs-on: az-windows-scale-rocm-default-dev
+    timeout-minutes: 720
+    defaults:
+      run:
+        shell: bash
+    env:
+      ROOT: B:\lr
+      BUILD_DIR: B:\build
+      SRC_DIR: B:\lr\s
+      REPRO_DIR: B:\lr\r
+      TOOLS_DIR: B:\lr\t
+      STOP_FILE: B:\lr\stop
+      WATCH_LOG: B:\lr\repro_watch.log
+      RELEASE_FILE: B:\lr\release
+      TEATIME_FORCE_INTERACTIVE: 0
+    steps:
+      - name: Prepare build root
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force $env:BUILD_DIR, $env:REPRO_DIR, $env:TOOLS_DIR | Out-Null
+          "runner/pod: $env:RUNNER_NAME"
+          Get-PSDrive B | Format-Table -AutoSize
+
+      - name: Enable long paths for git
+        run: git config --global core.longpaths true
+
+      # Workspace checkout only provides the .github/lld_repro scripts. The runner
+      # workspace path (C:\runner-controller\workspaces\<runner>\runner\_work\...) is
+      # ~50 chars longer than CI's, which pushes rocm-libraries sources past MAX_PATH
+      # for ninja, so the build uses a second clone at a short path.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Clone sources to short path
+        run: |
+          git init -q "${SRC_DIR}"
+          cd "${SRC_DIR}"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch -q --depth 1 origin "${GITHUB_SHA}"
+          git checkout -q FETCH_HEAD
+          git log --oneline -1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python deps
+        working-directory: ${{ env.SRC_DIR }}
+        run: pip install -r requirements.txt
+
+      - name: Install tools (public chocolatey, same versions as CI)
+        shell: powershell
+        run: |
+          choco install --no-progress -y --allow-downgrade ninja --version 1.13.2
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path 'C:\Strawberry\perl\bin\perl.exe')) { choco install --no-progress -y strawberryperl; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          # Prepend chocolatey's ninja; append Strawberry (as CI does) so its bundled
+          # cmake/ninja (C:\Strawberry\c\bin) never shadow the real ones.
+          Add-Content $env:GITHUB_PATH 'C:\ProgramData\chocolatey\bin'
+          "PATH=$env:PATH;C:\Strawberry\c\bin;C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: iterative/setup-dvc@6c05772f52d19792ed73aedb6c2bf65ec92adebb # v3.0.0
+        with:
+          version: '3.62.0'
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Tool versions
+        run: |
+          which python cmake ninja perl git || true
+          cmake --version | head -1; ninja --version; python --version
+          case "$(ninja --version)" in 1.13.*) ;; *) echo "::error::ninja must be 1.13.x (long-path aware)"; exit 1;; esac
+          if which cmake ninja | grep -qi strawberry; then echo "::error::Strawberry cmake/ninja shadow the real ones"; exit 1; fi
+
+      # CI buckets have public read access; artifact_backend falls back to unsigned reads.
+      - name: Fetch inbound artifacts (from main run ${{ env.REF_RUN_ID }})
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${REF_RUN_ID}" \
+            --stage="${STAGE_NAME}" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --output-dir="${BUILD_DIR}" \
+            --bootstrap
+
+      - name: Fetch sources
+        working-directory: ${{ env.SRC_DIR }}
+        timeout-minutes: 45
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if command -v gh >/dev/null; then gh auth setup-git --hostname github.com; fi
+          python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+
+      - name: Get stage configuration
+        working-directory: ${{ env.SRC_DIR }}
+        id: stage_config
+        run: |
+          python build_tools/configure_stage.py \
+            --stage=${STAGE_NAME} \
+            --artifacts="" \
+            --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
+            --gha-output
+
+      - name: Install stage python deps
+        working-directory: ${{ env.SRC_DIR }}
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: | # zizmor: ignore[template-injection]
+          pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+
+      - name: Configure (no ccache)
+        working-directory: ${{ env.SRC_DIR }}
+        run: | # zizmor: ignore[template-injection]
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            --preset=${CMAKE_PRESET} \
+            -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+            ${{ steps.stage_config.outputs.cmake_args }}
+
+      - name: Build xproc_probe
+        shell: powershell
+        run: |
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /optimize `
+            /out:"$env:TOOLS_DIR\xproc_probe2.exe" .github\lld_repro\xproc_probe.cs
+          if (-not (Test-Path "$env:TOOLS_DIR\xproc_probe2.exe")) { exit 1 }
+
+      - name: Start background lld-link reproducer
+        shell: powershell
+        run: |
+          $wargs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$env:GITHUB_WORKSPACE\.github\lld_repro\watch.ps1",
+                    '-BuildRoot', $env:BUILD_DIR, '-ReproRoot', $env:REPRO_DIR, '-StopFile', $env:STOP_FILE,
+                    '-Probe', "$env:TOOLS_DIR\xproc_probe2.exe", '-Log', $env:WATCH_LOG, '-MinObjs', '80')
+          $p = Start-Process powershell -ArgumentList $wargs -WindowStyle Hidden -PassThru
+          "watcher pid=$($p.Id)"
+          Set-Content "$env:ROOT\watch.pid" $p.Id
+
+      - name: Build math-libs stage
+        working-directory: ${{ env.SRC_DIR }}
+        id: build
+        continue-on-error: true
+        run: |
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} -- -k 0
+
+      - name: Hold pod for live debugging (kubectl exec)
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          $minutes = [int]$env:HOLD_MINUTES
+          Write-Host "=========================================================="
+          Write-Host " POD HELD FOR DEBUGGING - up to $minutes minute(s)"
+          Write-Host " pod       : $env:RUNNER_NAME"
+          Write-Host " namespace : az-windows-scale-rocm-default-dev"
+          Write-Host " exec      : kubectl exec -it $env:RUNNER_NAME -- powershell"
+          Write-Host " in shell  : subst B: C:\scratch-b   (drive letters are per session)"
+          Write-Host " build     : $env:BUILD_DIR   repro: $env:REPRO_DIR   log: $env:WATCH_LOG"
+          Write-Host " release   : New-Item -ItemType File $env:RELEASE_FILE"
+          Write-Host "=========================================================="
+          "pod=$env:RUNNER_NAME" | Add-Content $env:GITHUB_STEP_SUMMARY
+          $deadline = (Get-Date).AddMinutes($minutes)
+          while ((Get-Date) -lt $deadline) {
+            if (Test-Path $env:RELEASE_FILE) { Write-Host "release file seen; ending hold"; break }
+            $left = [int]($deadline - (Get-Date)).TotalMinutes
+            $undef = if (Test-Path $env:WATCH_LOG) { @(Select-String -Path $env:WATCH_LOG -Pattern ' UNDEF iter=').Count } else { 0 }
+            Write-Host "[hold] $left min left - $env:RUNNER_NAME - repro drops so far: $undef"
+            Start-Sleep -Seconds 120
+          }
+
+      - name: Stop reproducer and summarize
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          New-Item -ItemType File -Force $env:STOP_FILE | Out-Null
+          $deadline = (Get-Date).AddMinutes(15)
+          while ((Get-Date) -lt $deadline) {
+            if ((Test-Path $env:WATCH_LOG) -and (Select-String -Quiet -Path $env:WATCH_LOG -Pattern 'WATCH stop')) { break }
+            Start-Sleep 10
+          }
+          $lines = if (Test-Path $env:WATCH_LOG) { Get-Content $env:WATCH_LOG } else { @('(no watcher log)') }
+          $key = $lines | Select-String -Pattern 'WATCH|ENV |PICK|REPRO |BASELINE|UNDEF|SIZEDIFF|MISSING_FROM_MAP|NO_CANDIDATE|RESULT|ROUND|STOPFILE|undefined symbol'
+          $prog = $lines | Select-String -Pattern 'PROGRESS' | Select-Object -Last 3
+          "==== reproducer key lines"; $key | ForEach-Object { $_.Line }
+          "==== last progress"; $prog | ForEach-Object { $_.Line }
+          $nat = Get-ChildItem "$env:BUILD_DIR\logs" -Recurse -File -EA SilentlyContinue | Select-String -Pattern 'lld-link: error: undefined symbol' -List
+          "==== natural build lld-link undefined-symbol logs: $(@($nat).Count)"; $nat | ForEach-Object { $_.Path }
+          $nat | ForEach-Object { $_.Path } | Set-Content "$env:ROOT\natural_undef_logs.txt"
+          @("### az dev (Turin) lld fix validation", "", "Build outcome: ${{ steps.build.outcome }}", "",
+            "Natural lld-link undefined-symbol logs: $(@($nat).Count)", "", '```') + ($key | Select-Object -Last 40 | ForEach-Object { $_.Line }) +
+            ($prog | ForEach-Object { $_.Line }) + '```' | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Collect logs
+        if: ${{ always() }}
+        shell: powershell
+        run: |
+          $out = "$env:ROOT\upload"; New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item $env:WATCH_LOG, "$env:ROOT\natural_undef_logs.txt" $out -EA SilentlyContinue
+          if (Test-Path "$env:ROOT\natural_undef_logs.txt") {
+            Get-Content "$env:ROOT\natural_undef_logs.txt" | ForEach-Object { Copy-Item $_ (Join-Path $out ((Split-Path $_ -Leaf) + '.natural.log')) -EA SilentlyContinue }
+          }
+          Get-ChildItem $env:REPRO_DIR -Recurse -Filter '_*.log' -EA SilentlyContinue | Copy-Item -Destination $out -EA SilentlyContinue
+          "UPLOAD_DIR=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() }}
+        with:
+          name: azdev-lld-fix-validate-logs-${{ matrix.rep }}
+          path: ${{ env.UPLOAD_DIR }}
+          if-no-files-found: warn
+
+      - name: Fail if the build failed
+        if: ${{ steps.build.outcome == 'failure' }}
+        run: exit 1
