@@ -310,6 +310,18 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # HRR CPU-only unit tests (hrr-playback is needed on the install tree).
+    "hrr": {
+        "job_name": "hrr",
+        "fetch_artifact_args": "--hrr --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hrr.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
