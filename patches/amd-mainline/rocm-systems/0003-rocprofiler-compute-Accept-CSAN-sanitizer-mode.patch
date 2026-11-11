@@ -1,0 +1,95 @@
+From fedc359449963756d8061d207941eea0bcea91cf Mon Sep 17 00:00:00 2001
+From: Sahil Faizal <sahil.faizal@amd.com>
+Date: Wed, 11 Nov 2026 09:30:01 +0000
+Subject: [PATCH] rocprofiler-compute: Accept CSAN sanitizer mode
+
+Accept the CSAN mode supplied by TheRock and map it to concurrency instrumentation. Keep GPU targets unchanged and preserve the inherited CSAN_OPTIONS and existing Python runtime launcher. Document the compiler and preload requirements.
+
+Reproduced the configure rejection from https://github.com/ROCm/TheRock/actions/runs/42977786346 in the pinned CI container. Validated the full compute component build/stage, libclang_rt.csan.so dependency and instrumented symbols, and both native compression/CSV tests.
+---
+ projects/rocprofiler-compute/cmake/sanitizers.cmake    |  9 ++++++---
+ .../docs/install/source-install.rst                    | 10 +++++++++-
+ 2 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rocprofiler-compute/cmake/sanitizers.cmake b/projects/rocprofiler-compute/cmake/sanitizers.cmake
+index aadce0dd..b900965b 100644
+--- a/projects/rocprofiler-compute/cmake/sanitizers.cmake
++++ b/projects/rocprofiler-compute/cmake/sanitizers.cmake
+@@ -13,6 +13,7 @@ function(resolve_sanitizer)
+         "ASAN"
+         "HOST_ASAN"
+         "TSAN"
++        "CSAN"
+     )
+     # Empty string is omitted by variable expansion, so add it explicitly.
+     set(sanitizer_valid "" ${therock_sanitizer_valid} "UBSAN")
+@@ -65,7 +66,7 @@ function(resolve_sanitizer)
+         set(ENABLE_SANITIZER
+             ""
+             CACHE STRING
+-            "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, or UBSAN"
++            "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, CSAN, or UBSAN"
+             FORCE
+         )
+     endif()
+@@ -99,6 +100,8 @@ function(enable_sanitizer)
+         set(_flag "address")
+     elseif(ENABLE_SANITIZER STREQUAL "TSAN")
+         set(_flag "thread")
++    elseif(ENABLE_SANITIZER STREQUAL "CSAN")
++        set(_flag "concurrency")
+     elseif(ENABLE_SANITIZER STREQUAL "UBSAN")
+         set(_flag "undefined")
+         set(_is_ubsan_mode ON)
+@@ -180,11 +183,11 @@ endfunction()
+ set(ENABLE_SANITIZER
+     "OFF"
+     CACHE STRING
+-    "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, or UBSAN"
++    "Sanitizer for the native tool library: OFF, ASAN, HOST_ASAN, TSAN, CSAN, or UBSAN"
+ )
+ set_property(
+     CACHE ENABLE_SANITIZER
+-    PROPERTY STRINGS OFF ASAN HOST_ASAN TSAN UBSAN
++    PROPERTY STRINGS OFF ASAN HOST_ASAN TSAN CSAN UBSAN
+ )
+ 
+ # Drive all three side effects at include time: resolve the selection, rewrite GPU
+diff --git a/projects/rocprofiler-compute/docs/install/source-install.rst b/projects/rocprofiler-compute/docs/install/source-install.rst
+index 3b2337b3..476ca1cf 100644
+--- a/projects/rocprofiler-compute/docs/install/source-install.rst
++++ b/projects/rocprofiler-compute/docs/install/source-install.rst
+@@ -78,7 +78,7 @@ follows.
+ 
+     * - ``ENABLE_SANITIZER``
+       - Builds with sanitizer instrumentation for development.
+-        One of ``OFF`` (default), ``ASAN``, ``HOST_ASAN``, ``TSAN``, or ``UBSAN``. See
++        One of ``OFF`` (default), ``ASAN``, ``HOST_ASAN``, ``TSAN``, ``CSAN``, or ``UBSAN``. See
+         :ref:`sanitizer builds <source-install-sanitizers>`.
+ 
+ .. _core-install-steps:
+@@ -169,6 +169,9 @@ off by default; set ``ENABLE_SANITIZER`` at configure time to one of the followi
+     * - ``TSAN``
+       - ThreadSanitizer for data-race detection.
+ 
++    * - ``CSAN``
++      - ConcurrencySanitizer using a CSAN-capable ROCm Clang; GPU targets are left unchanged.
++
+     * - ``UBSAN``
+       - UndefinedBehaviorSanitizer on host code only.
+ 
+@@ -191,6 +194,11 @@ AddressSanitizer.
+    ``:xnack+``. If ``GPU_TARGETS`` is unset, device-side instrumentation is
+    skipped.
+ 
++``CSAN`` does not require the ``:xnack+`` target rewrite. TheRock supplies its
++matching runtime launcher for Python tests. Standalone Python processes that
++load instrumented libraries must preload the matching shared CSAN runtime
++before HSA initialization.
++
+ .. _core-install-modulefiles:
+ 
+ Execution using modulefiles
+-- 
+2.56.0
+
