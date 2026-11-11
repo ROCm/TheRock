@@ -300,4 +300,4 @@ jobs:
         if: ${{ !cancelled() && steps.install_compute_analyze.outcome == 'success' }}
         timeout-minutes: 5
         run: |
-          rocprof-compute analyze --verify-deps
+          rocprof-compute analyze --debug-verify-deps
