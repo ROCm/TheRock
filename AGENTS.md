@@ -193,6 +193,10 @@ overlay when the change touches the build:
   add this for PRs touching the superbuild, submodules/patches, `artifact-*.toml` /
   `BUILD_TOPOLOGY.toml`, or reusable CI workflows. It extends the base and defers to the canonical
   `docs/development/style_guides/`.
+- **TheRock review overlay — [skills/therock-pr-review/SKILL.md](skills/therock-pr-review/SKILL.md)**:
+  add this when reviewing someone else's TheRock PR. It extends the TheRock overlay with a
+  non-destructive review setup, de-duplication against existing review threads, verification
+  discipline, and a whole-PR design pass.
 
 Component repositories add their own thin overlays on top (e.g. `hipblaslt-pr-quality` in
 `rocm-libraries`). Overlays may tighten but never weaken the base MUST rules. The skills are

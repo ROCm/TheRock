@@ -10,6 +10,9 @@ Table of Contents
     - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
+    - [No single-use module-level constants](#no-single-use-module-level-constants)
+    - [No backticks in comments or docstrings](#no-backticks-in-comments-or-docstrings)
+    - [No contractions in comments or docstrings](#no-contractions-in-comments-or-docstrings)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -273,7 +276,7 @@ Benefits:
 ✅ **Preferred:**
 
 ```python
-# Either track the real size or don't log it
+# Either track the real size or do not log it
 new_size = binary_path.stat().st_size
 print(f"Device code stripped, new size: {new_size} bytes")
 ```
@@ -283,6 +286,120 @@ print(f"Device code stripped, new size: {new_size} bytes")
 ```python
 original_size = binary_path.stat().st_size + 8000000  # Estimate original size
 print(f"Stripped {original_size - new_size} bytes")
+```
+
+#### No single-use module-level constants
+
+**Don't hoist a literal into a module-level constant when it is used only once.**
+
+Name a value at the narrowest scope that covers all of its uses:
+
+- Used once: inline the literal.
+- Used two or more times within one function: a local variable in that function.
+- Used across functions, or a genuine configuration knob someone might tune: a
+  module-level constant.
+
+Extracting a literal that is referenced exactly once adds indirection: the
+reader has to jump to the definition to see the value. A local variable keeps a
+repeated value consistent without moving it away from the code that uses it.
+
+This is distinct from hoisting for performance. Compiling a regex once at module
+level (see [Performance best practices](#performance-best-practices)) is correct
+because it avoids recompilation. Extract on the second use or for a real
+performance win, not on the first.
+
+✅ **Preferred:**
+
+```python
+# Used once: inline.
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / "job_summary.md"
+
+
+# Used twice in one function: local variable.
+def publish_job_summary(content: str, output_dir: Path, mirror_dir: Path) -> None:
+    summary_file_name = "job_summary.md"
+    (output_dir / summary_file_name).write_text(content)
+    (mirror_dir / summary_file_name).write_text(content)
+```
+
+❌ **Avoid:**
+
+```python
+JOB_SUMMARY_FILE_NAME = "job_summary.md"  # Only used once, below
+
+
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / JOB_SUMMARY_FILE_NAME
+```
+
+#### No backticks in comments or docstrings
+
+**Refer to code symbols, flags, and values in plain text.**
+
+Backticks are Markdown syntax. Python comments and docstrings are read as plain
+text in editors, terminals, and `help()` output, where backticks render
+literally and add visual noise.
+
+This applies to new and modified code. Do not churn existing comments solely to
+remove backticks.
+
+✅ **Preferred:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under $RUNNER_TEMP.
+
+    Returns None when the env var is unset. Pass mirror=False to skip.
+    """
+```
+
+❌ **Avoid:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under `$RUNNER_TEMP`.
+
+    Returns `None` when the env var is unset. Pass `mirror=False` to skip.
+    """
+```
+
+#### No contractions in comments or docstrings
+
+**Write the words out: cannot, do not, it is, does not, will not.**
+
+Spelled-out forms read more clearly, especially for non-native English readers,
+and avoid apostrophe ambiguity (its vs it's) in technical prose.
+
+This applies to new and modified code. Do not churn existing comments solely to
+expand contractions.
+
+✅ **Preferred:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under $RUNNER_TEMP.
+
+    Returns None when the env var is not set; callers should not fail, they
+    should skip mirroring. It is emptied between jobs so it will not leak.
+    """
+```
+
+❌ **Avoid:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under $RUNNER_TEMP.
+
+    Returns None when the env var isn't set; callers shouldn't fail, they
+    should skip mirroring. It's emptied between jobs so it won't leak.
+    """
 ```
 
 ### Script structure and organization
@@ -757,7 +874,7 @@ if not path.exists():
         f"This indicates a corrupted or incomplete artifact"
     )
 
-# Let exceptions propagate - if we can't process, we must fail
+# Let exceptions propagate - if we cannot process, we must fail
 process_file(path)
 ```
 
@@ -1020,6 +1137,8 @@ Before submitting code, verify:
 - [ ] No `from __future__ import annotations`
 - [ ] Complex type signatures extracted to NamedTuple/dataclass
 - [ ] No magic numbers or fake estimates
+- [ ] Named values scoped to their uses (inline once, local within one function, module constant across functions)
+- [ ] No backticks or contractions in comments and docstrings
 - [ ] Tuples only for simple pairs, dataclasses for structured data
 - [ ] All imports at top of file (except documented circular dependencies)
 - [ ] No timeouts on binutils operations
