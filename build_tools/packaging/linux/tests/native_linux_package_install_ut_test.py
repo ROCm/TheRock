@@ -3218,5 +3218,29 @@ class ArgvFromCiEnvRepoSetupPackageTest(unittest.TestCase):
         self.assertNotIn("--repo-config-only", argv)
 
 
+class HpcSdkHintTest(unittest.TestCase):
+    """The HPC SDK hint names the requested packages and stays silent otherwise."""
+
+    def _hint(self, package_names: list[str]) -> str:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            native_linux_package_test_common.print_hpc_sdk_hint(package_names)
+        return buf.getvalue()
+
+    def test_hint_when_hpc_sdk_in_list(self):
+        text = self._hint(
+            ["amdrocm10.3", "amdrocm-core-sdk10.3", "amdrocm-hpc-sdk10.3-gfx942"]
+        )
+        self.assertEqual(
+            text,
+            "[HINT] amdrocm-hpc-sdk failed. Check that the repo publishes this "
+            "package for this ROCm version and GPU arch "
+            "(--rocm-version, --gfx-arch, --repo-url).\n",
+        )
+
+    def test_silent_when_hpc_sdk_is_absent(self):
+        self.assertEqual(self._hint(["amdrocm10.3", "amdrocm-core-sdk10.3"]), "")
+
+
 if __name__ == "__main__":
     unittest.main()

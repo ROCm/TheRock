@@ -237,6 +237,24 @@ def build_metapackage_names(
     ]
 
 
+HPC_SDK_HINT_PACKAGE = "amdrocm-hpc-sdk"
+
+
+def print_hpc_sdk_hint(package_names: list[str]) -> None:
+    """Print a hint after a failed install or remove when HPC SDK was requested.
+
+    Args:
+        package_names: The names passed to the failed command.
+    """
+    if not any(HPC_SDK_HINT_PACKAGE in name for name in package_names):
+        return
+    print(
+        f"[HINT] {HPC_SDK_HINT_PACKAGE} failed. Check that the repo publishes "
+        "this package for this ROCm version and GPU arch "
+        "(--rocm-version, --gfx-arch, --repo-url)."
+    )
+
+
 def is_sles(os_profile: str) -> bool:
     """Return True when ``os_profile`` denotes SUSE Linux Enterprise Server.
 

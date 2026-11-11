@@ -157,6 +157,7 @@ from native_linux_package_test_common import (
     derive_package_type,
     is_sles,
     major_minor_rocm_version_from_input,
+    print_hpc_sdk_hint,
     run_streaming as _run_streaming,
     verify_install_layout,
 )
@@ -809,6 +810,7 @@ gpgcheck=0
                 return True
             print("\n" + "=" * 80)
             print(f"[FAIL] Failed to install DEB packages (exit code: {return_code})")
+            print_hpc_sdk_hint(self.package_names)
             return False
         except subprocess.TimeoutExpired:
             print("\n" + "=" * 80)
@@ -865,6 +867,7 @@ gpgcheck=0
                 return True
             print("\n" + "=" * 80)
             print(f"[FAIL] Failed to install RPM packages (exit code: {return_code})")
+            print_hpc_sdk_hint(self.package_names)
             return False
         except subprocess.TimeoutExpired:
             print("\n" + "=" * 80)
