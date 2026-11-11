@@ -34,7 +34,16 @@ from _therock_utils.s3_buckets import (
     get_release_bucket_config,
     get_release_package_index_url,
 )
-from _therock_utils.python_package_paths import is_asan_variant, plan_local_uploads
+from _therock_utils.python_package_paths import (
+    BUILD_VARIANTS,
+    DEFAULT_INDEX_TYPE,
+    INDEX_TYPES,
+    UnpublishedBuildVariantError,
+    build_variant_index_suffix,
+    get_python_index,
+    is_asan_variant,
+    plan_local_uploads,
+)
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from github_actions.github_actions_api import gha_set_output
@@ -90,19 +99,19 @@ def main(argv: list[str]) -> None:
         "prefix.",
     )
     parser.add_argument(
-        "--python-index",
-        default=None,
-        choices=["whl", "whl-next", "whl-next-asan"],
-        help="Product-local index name for structured publishing. Selects the "
-        "v5/rocm/pytorch/<index>/ path segment. Defaults to whl-next, or "
-        "whl-next-asan for ASAN builds.",
+        "--index-type",
+        default=DEFAULT_INDEX_TYPE,
+        choices=INDEX_TYPES,
+        help=f"Python index type for structured publishing (default: "
+        f"{DEFAULT_INDEX_TYPE}). Combined with --build-variant to select the "
+        "v5/rocm/pytorch/<index>/ path segment, e.g. whl-next or whl-next-asan.",
     )
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
-        help="Build variant (default: release). ASAN variants publish to "
-        "whl-next-asan index by default.",
+        choices=BUILD_VARIANTS,
+        help="Build variant (default: release). ASAN builds publish to the "
+        "<index-type>-asan index.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without uploading"
@@ -112,14 +121,22 @@ def main(argv: list[str]) -> None:
     if not args.source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
-    # Determine python index: explicit --python-index takes precedence,
-    # then ASAN default, then whl-next
-    if args.python_index is not None:
-        python_index = args.python_index
-    elif is_asan_variant(args.build_variant):
-        python_index = "whl-next-asan"
-    else:
-        python_index = "whl-next"
+    # Resolve the python index before uploading anything. Build variants
+    # without release paths yet (e.g. tsan) are built but not published.
+    try:
+        python_index = get_python_index(
+            args.index_type, build_variant_index_suffix(args.build_variant)
+        )
+    except UnpublishedBuildVariantError as e:
+        logger.warning("Skipping publishing: %s", e)
+        return
+    # ASAN wheels require --structured for their own index. In legacy mode,
+    # skip to avoid mixing them with standard wheels in v4/whl.
+    if is_asan_variant(args.build_variant) and not args.structured:
+        logger.info(
+            "Skipping PyTorch wheels for ASAN build (use --structured for ASAN wheels)"
+        )
+        return
 
     backend = create_storage_backend(dry_run=args.dry_run)
 
