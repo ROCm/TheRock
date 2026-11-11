@@ -73,8 +73,8 @@ def clinfo_output() -> str:
             # Keep Comgr beside the vendor so CLR cannot pick up an older
             # driver-installed DLL from System32 before searching PATH.
             shutil.copy2(
-                THEROCK_BIN_DIR / "amd_comgr.dll",
-                Path(directory) / "amd_comgr.dll",
+                THEROCK_BIN_DIR / "amd_comgr_3.dll",
+                Path(directory) / "amd_comgr_3.dll",
             )
             process = run_command([str(clinfo)], cwd=directory, env=env)
             # clinfo can exit successfully even when device initialization fails.
