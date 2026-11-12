@@ -9,223 +9,187 @@ status: draft
 
 ## Related RFCs
 
-- **RFC0009** — native packaging conventions (source of the
-  `amdrocm<major>-<project>` naming family that HPC SDK component
-  packages follow).
-- **RFC0012** — ROCm software ecosystem package repository structure
-  (defines the stream subdomains, the `rocm/` tree layout, and the
-  `amdrocm-repo` package family that this RFC builds on). The Vision
-  SDK is hosted as a top-level peer to `core/`, `pytorch/`, `jax/`,
-  and `onnx-runtime/` under each stream subdomain's `rocm/` tree.
-- **RFC00XX** - ROCm SDK archive packaging requirements. The Vision
-  SDK should follow the same structure and the Vision SDK packaging
-  should follow a similar naming convention and directory layout.
-- **RFC00XX** - HPC SDK dependent on the ROCm Core SDK (similar
-  ticket for the HPC SDK - the computer vision SDK should follow
-  the same structure and requirements)
+- **RFC0009** — OS packaging requirements: `amdrocm-<package>` naming,
+  the `standard`/`asan` package types, and supported distros.
+- **RFC0012** — repository structure: stream subdomains, the per-stream
+  `rocm/` tree, and the artifact set each expansion publishes. Names
+  `computer-vision-sdk/` as a top-level peer of `core/`.
+- **RFC00XX (Repository Package)** — the `amdrocm-repo-*` tier packages
+  and the repo configuration they install.
+- **RFC00XX (ROCm SDK archive packaging)** — not yet landed. CV tarball
+  names follow the currently published Core tarball names and will be
+  realigned if that RFC lands with a different scheme.
+- **RFC00XX (HPC SDK)** — also built on the ROCm Core SDK; the CV SDK
+  follows the same structure.
 
 ## Overview
 
-The AMD Computer Vision SDK is a ROCm expansion that is built **against
-a released ROCm Core SDK** from its own repository (`rocm-vision`). It
-does not build the Core SDK itself: it consumes an already-published
-Core SDK (as a tarball or installed packages), builds the CV components
-on top of it, carries the same version as that Core SDK, ships on the
-same streams, and installs to the same locations as any other Core SDK
-component.
+The AMD Computer Vision (CV) SDK is a ROCm expansion built **against a
+released ROCm Core SDK** from its own repository, `rocm-vision`. It
+consumes a published Core SDK (tarball, packages, or wheels) and never
+rebuilds or re-publishes Core content. It is opt-in: the default
+`amdrocm` meta-package does not pull it in.
 
-The only thing that sets the CV SDK apart from the rest of Core is
-packaging: its components are grouped into a separate **`amdrocm-vision`
-meta-package** that is **not** pulled in by the default `amdrocm`
-meta-package. Users who want the CV SDK opt in by installing
-`amdrocm-vision`; a default ROCm install does not include it.
+Anything not specified here (stream definitions, install prefixes,
+package naming, repo layout) is inherited from the Core SDK via RFC0009
+and RFC0012.
 
-Repository hierarchy, stream subdomains, `amdrocm-repo` packaging,
-install locations, and versioning are all inherited from the Core SDK
-(RFC0009 / RFC0012 / RFC0013) and are not redefined here.
+## 1. Release policy
 
-## Versioning and cadence
+- **Cadence.** CV releases for every Core `<major.minor>` release, built
+  against that Core release. `dev` and `nightly` CV builds track the
+  matching Core builds. CV does not share Core's schedule, promotion
+  flow, or GA date.
+- **Streams.** Same streams as Core (`dev`, `nightly`, `weekly`, `rc`,
+  `stable`) with Core's retention rules. No CV-specific streams.
+- **Versioning.** CV packages carry the version of the Core release they
+  are built against (`<X.Y>.<N>`, e.g. `10.2.0`). There is no separate
+  CV version. Component API/ABI versions stay independent and are
+  tracked in library SONAMEs.
+- **Compatible Core versions.**
+  - `rc`/`stable`: a CV release built against Core `X.Y.M` is valid for
+    any Core `X.Y.N` with `N >= M`, so a Core patch release does not
+    require a CV release. This relies on Core keeping ABI compatibility
+    across patch releases within a `<major.minor>` line; without that
+    commitment, CV re-releases for every Core patch.
+  - `dev`/`nightly`/`weekly`: CV is valid only against the exact Core
+    build it was built against, and its package and wheel dependencies
+    pin that build.
+  - A new Core `<major.minor>` requires a new CV release.
+  - CV-only fixes are rebuilt against the latest Core patch in the line
+    and take that version. If CV has already published that version,
+    the fix bumps the package revision (native `<pkgrel>`, wheel
+    `.postN`).
 
-- **Cadence:** the CV SDK ships for every ROCm Core SDK release — it is
-  rebuilt against each Core SDK from its own `rocm-vision` repository and
-  nightly. The CV SDK is not bound to the Core SDK cadence, schedule, or
-  promotion flow, but tracks it.
-- **Versioning:** the CV SDK and its components carry the **same
-  version as the ROCm Core SDK release they are built in** (`<X.Y>`,
-  e.g. `10.1`; patch releases `<X.Y>.N`, e.g. `10.1.1`). There is no
-  separate CV version number. This applies to packages only. The
-  individual components still version their APIs and ABIs independently
-  from the package version that follows the ROCm Core SDK.
-- **Streams:** the CV SDK is published to the same streams as Core
-  (`dev`, `nightly`, `weekly`, `rc`, `stable`), building against the Core
-  SDK on each stream. It does not define its own streams or retention
-  rules.
+## 2. Deliverables
 
-## Repo placement
+Linux only, for the same targets, distros, and streams as the Core SDK.
+There is no CV-specific matrix. Only the `standard` package type
+(RFC0009) is produced.
 
-The CV SDK has an independent repository from `TheRock` under the
-`rocm` GitHub organization, namely `rocm-vision`. Per RFC0012, both its
-component packages and its tarball are published under a **top-level
-`computer-vision-sdk/` subtree**, a peer of `core/` (not nested under
-`core/` and not in `extras/`) within each stream subdomain's `rocm/`
-tree. Repository access follows RFC0012: the `amdrocm-repo-*` tier
-packages (`-stable`, `-stablerc`, `-nightly`, `-dev`) configure the
-stream subdomains that serve this subtree. Whether the CV components are
-exposed through those existing tier packages or a dedicated repo stanza
-is an RFC0012 implementation detail and is not fixed here.
+| Format                     | First release           |
+| -------------------------- | ----------------------- |
+| Native packages (deb, rpm) | Required                |
+| Overlay tarball            | Required (sections 4–6) |
+| Python wheels              | Required                |
+| Windows zip / installers   | Deferred (section 6)    |
+| Linux installers           | Deferred (section 6)    |
+| ASAN variant               | Deferred (section 6)    |
 
-## Install location
+## 3. Contents and dependencies
 
-No special install location. CV SDK components install to the **same
-locations as every other ROCm Core SDK component** (the standard Core
-SDK install prefix, e.g. the `core-<major.minor>` tree). There is no
-`vision-` prefix or separate directory tree.
+**Components** (first release, ROCm 10.2): MiVisionX, rocAL, rocCV,
+rocPyDecode. The CV SDK team owns this list and reviews it each release.
 
-One detail follows from the CV libraries' dependencies rather than from
-a CV-specific layout: **bundled runtime deps** that the CV libraries
-need but Core does not ship (e.g. protobuf, libjpeg-turbo, lmdb,
-libsndfile, libtar) install into the **existing** `lib/rocm_sysdeps/lib/`
-tree — the same directory Core already uses for zlib/bzip2/etc. — with
-private SONAMEs so they do not collide with host copies. They ship in a
-dedicated `amdrocm-vision-sysdeps` package, not a new directory tree.
+**Meta-packages.** Mirroring Core's runtime/devel/test split (as
+`amdrocm-hpc`, `amdrocm-hpc-sdk`, `amdrocm-hpc-tests` do):
 
-## Meta-package
+- `amdrocm-vision<X.Y>` — all CV runtime components.
+- `amdrocm-vision-sdk<X.Y>` — development content (headers, CMake
+  config).
+- `amdrocm-vision-tests<X.Y>` — test content.
 
-The CV SDK ships a **runtime meta-package, `amdrocm-vision`**, built and
-versioned with the Core SDK release, depending on every CV SDK runtime
-component at the matching Core release. The component dependency is a
-**compatible-version constraint**, not an exact pin, so a component
-post-release (`<version>.postN`) — permitted by
-`docs/packaging/versioning.md` without republishing the package set —
-still satisfies the meta-package. Mirroring
-Core's runtime/devel/test split, it is accompanied by two sibling
-meta-packages — **`amdrocm-vision-sdk`** (development: headers and CMake
-config) and **`amdrocm-vision-tests`** (test content). Like Core's
-component packages, each meta-package name carries the ROCm
-`<major.minor>` suffix (e.g. `amdrocm-vision10.2`,
-`amdrocm-vision-sdk10.2`) so two Core releases can be installed
-side-by-side.
+Each has an unversioned alias (e.g. `amdrocm-vision`) that depends on
+the newest versioned package, following Core's convention
+(`amdrocm-blas` → `amdrocm-blas8.2`). None is a dependency of the
+default `amdrocm` meta-package.
 
-- They are **standalone, opt-in** meta-packages — the default `amdrocm`
-  meta-package does **not** depend on `amdrocm-vision`, so a default
-  ROCm install does not pull in the CV SDK.
-
-- Installing `amdrocm-vision` adds the CV SDK components on top of
-  the matching Core SDK install. Because each meta-package name carries
-  the ROCm `<major.minor>` suffix, use the **version-qualified selector**
-  to target a specific Core release rather than the unqualified name,
-  which resolves to the latest available and cannot distinguish
-  side-by-side releases:
-
-  ```
-  yum install amdrocm-vision10.2
-  apt install amdrocm-vision10.2
-  ```
-
-- CV component packages declare **explicit versioned dependencies on the
-  Core SDK packages** they build against — e.g. `amdrocm-runtime10.2`,
-  `amdrocm-rpp10.2`, `amdrocm-rocdecode10.2` with a `>= <version>`
-  lower bound tied to that release — so the resolver pulls (or requires)
-  the matching Core version already on the system, not merely whatever
-  Core happens to be latest.
-
-- Delivered today as Linux **deb, rpm, and tgz** packages plus Python
-  **wheels**. RFC0012 expects expansions to also publish Windows
-  zip/installer artifacts; the first CV release takes a **documented
-  exception** to that requirement because the CV build is Linux-only.
-  Windows **zip/exe/msi** and their target matrix are deferred until
-  Windows support lands and will be specified then.
-
-- Component list is owned by the CV SDK team and reviewed each
-  release so new components are added to the meta-package
-  automatically.
-
-## Tarball
-
-The CV SDK is also published as a **tarball**, in the
-**`computer-vision-sdk/tarball/`** location (the peer-of-`core/` subtree
-from the Repo placement section).
-
-**Definition.** The CV SDK tarball is a **Vision-only overlay** on top
-of the matching ROCm Core SDK tarball. It contains the CV SDK components
-(the components covered by `amdrocm-vision`) laid out in the same
-directory structure as the Core SDK, so it extracts cleanly into a Core
-SDK prefix. It does **not** duplicate the Core SDK contents; the CV
-build consumes the Core SDK rather than repackaging it.
-
-This matches the package path, where `amdrocm-vision` is a thin opt-in
-meta-package on top of an existing Core SDK install. The tarball is the
-same relationship without a dependency resolver: the user extracts the
-matching Core SDK tarball first, then extracts the CV overlay into the
-same prefix.
-
-> **Note.** An alternative design is a *self-contained superset* tarball
-> that bundles the full Core SDK plus CV components, so a single archive
-> is a complete install. This is producible without rebuilding Core — the
-> `rocm-vision` release can unpack the matching Core SDK tarball, overlay
-> the CV components, and repack. The trade-off is that the superset then
-> carries and re-publishes a full copy of Core for every target and
-> stream, duplicating storage the overlay avoids and coupling the CV
-> release to re-emitting Core content it did not produce. This RFC
-> specifies the overlay as the deliverable for that reason and leaves the
-> superset as a possible future addition should a single-archive install
-> be required.
-
-**Consequences:**
-
-- The CV overlay tarball **requires** the matching Core SDK tarball — it
-  is a companion, not an alternative. Extracting the overlay without
-  Core present yields CV libraries with unresolved Core dependencies.
-
-- The CV overlay targets a Core SDK `<major.minor>` line and carries the
-  matching version. Mirroring the package model — a compatible-version
-  constraint (`>=` lower bound), not an exact pin — the overlay stays
-  valid against **later Core patch releases** (`<X.Y>.N`) of the same
-  `<major.minor>` line, so a Core patch does not by itself force a CV
-  overlay re-release. A new `<major.minor>` Core line requires a matching
-  CV overlay.
-
-- The CV overlay tarball is produced for the **same targets, OSes, and
-  streams** as the Core SDK tarball, with no CV-specific matrix.
-
-- Naming follows the Core SDK tarball convention with a **`vision`**
-  discriminator, naming the archive after what it actually contains:
-
-  ```
-  therock-dist-vision-linux-<target>-<version>.tar.gz   # Vision overlay (extract onto Core)
-  therock-dist-linux-<target>-<version>.tar.gz          # Core SDK
-  ```
-
-## Component versioning
-
-CV SDK component packages follow the **same versioning and naming as
-all other Core SDK components** — there is no CV-specific scheme. The
-name suffix is the **ROCm `<major.minor>` release**, exactly as Core
-names `amdrocm-runtime<major.minor>` — not the component's own API/ABI
-version:
+**Component packages** use Core's naming. The suffix is the ROCm
+`<major.minor>`, not the component's API version:
 
 ```
 amdrocm-<component><major.minor>-<version>-<pkgrel>.<arch>.<ext>
 e.g. amdrocm-rocal10.2-10.2.0-1.x86_64.rpm
 ```
 
-`<version>` matches the Core SDK, and by extension the CV SDK, release.
-The component's independent API/ABI version is tracked in the library
-SONAME, not the package name.
+They are architecture-agnostic fat binaries carrying code objects for
+every supported gfx target, with no per-target package split. If Core
+makes its kpack host/device split
+(`docs/packaging/nativepackage_dependency_tree.md`) the default for
+component packages, CV adopts it.
 
-**Architecture coverage.** CV component packages are **architecture-
-agnostic fat binaries** — a single package per component carries code
-objects for every supported gfx target (the HIP compiler bundles them),
-so there is **no per-target (`-gfx<target>`) package split**. If the
-Core SDK moves to per-target component packages, the CV SDK follows that
-convention; until then the CV packages ship one `.so` per component
-covering all targets.
+**Core dependencies (native).** CV packages declare versioned
+dependencies on the Core packages they use, e.g. `amdrocm-runtime10.2`,
+`amdrocm-rpp10.2`, `amdrocm-decode10.2`, with a `>= X.Y.M` lower bound
+for the Core release they were built against. The `<major.minor>` name
+suffix keeps resolution within the line.
 
-## Components
+**Core dependencies (wheels).** The CV wheels (rocAL, rocCV,
+rocPyDecode) take their native dependencies from Core's `rocm-sdk-*`
+wheels (e.g. `rocm-sdk-core`, `rocm-sdk-libraries`), not from a system
+ROCm install. They require `>= X.Y.M, < X.(Y+1)`, which also admits the
+`.postN` releases permitted by `docs/packaging/versioning.md`.
 
-First release (pinned to ROCm 10.2):
+**Bundled system dependencies.** Runtime deps the CV libraries need but
+Core does not ship (e.g. protobuf, libjpeg-turbo, lmdb, libsndfile,
+libtar) ship in a dedicated `amdrocm-vision-sysdeps` package and install
+into Core's existing `lib/rocm_sysdeps/lib/` with private SONAMEs, so
+they do not collide with host copies.
 
-- MiVisionX
-- rocAL
-- rocCV
-- rocPyDecode
+## 4. Installation
+
+- **Native packages.** CV installs into the standard Core prefix (e.g.
+  the `core-<major.minor>` tree), with no `vision-` prefix or separate
+  tree. Use the version-qualified name to match the installed Core:
+
+  ```
+  apt install amdrocm-vision10.2
+  dnf install amdrocm-vision10.2
+  ```
+
+- **Overlay tarball.** Contains only CV content, laid out like the Core
+  SDK. Extract the Core SDK tarball first, then extract the CV overlay
+  into the same prefix; without Core, the CV libraries have unresolved
+  dependencies. Use the newest CV overlay whose version is `<=` the Core
+  version within the same `<major.minor>`.
+
+- **Python.** `pip install` the CV wheels from the stream's central
+  `whl/` or `whl-next/` index; pip resolves the Core `rocm-sdk-*` wheels
+  from the same index. Wheels are the supported Python import path;
+  native packages do not add CV modules to the host interpreter.
+
+## 5. Publication
+
+- **Location.** Packages, the overlay tarball
+  (`computer-vision-sdk/tarball/`), and wheels are published under the
+  top-level `computer-vision-sdk/` folder of each stream subdomain's
+  `rocm/` tree (RFC0012), a peer of `core/` and not under `core/` or
+  `extras/`. The stream's central `whl/` and `whl-next/` indices
+  reference the CV wheels.
+
+- **Repo access.** Installing the standard `amdrocm-repo-<tier>` package
+  must be enough to install `amdrocm-vision<X.Y>` and its Core
+  dependencies. How the tier packages expose `computer-vision-sdk/` is
+  defined by the Repository Package RFC.
+
+- **Tarball naming.** The Core tarball name plus a `vision`
+  discriminator:
+
+  ```
+  therock-dist-vision-linux-<target>-<version>.tar.gz   # CV overlay
+  therock-dist-linux-<target>-<version>.tar.gz          # Core SDK
+  ```
+
+## 6. Exceptions and deferred support
+
+Explicit departures from RFC0012, and deliverables deferred from the
+first release:
+
+- **Overlay instead of a self-contained tarball.** RFC0012 gives each
+  expansion the same artifact set as `core/`, whose tarball is a
+  complete install. The CV tarball is an overlay instead. A
+  self-contained Core+CV tarball could be produced without rebuilding
+  Core (unpack Core, add CV, repack), but it would pin one exact Core
+  patch: it would need re-publishing for every Core patch and would
+  duplicate Core's storage for every target and stream. The overlay
+  avoids both and is what lets one CV release cover later Core patches
+  (section 1). A self-contained tarball can be added later if a
+  single-archive install is needed.
+- **Windows.** RFC0012 expects Windows zip and installer artifacts. CV
+  is Linux-only today; Windows artifacts and their target matrix will be
+  specified when Windows support lands.
+- **Linux installers.** No `.run` installer in the first release; users
+  install via native packages, the overlay tarball, or wheels.
+- **ASAN.** Not produced in the first release. When added, ASAN builds
+  are built against Core's ASAN SDK and kept separate from standard
+  builds as RFC0012 requires.
