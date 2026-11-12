@@ -286,11 +286,15 @@ class DebRepositoryChecksumTest(unittest.TestCase):
             root = Path(temp_dir)
             _write_deb_repo(root)
             release = root / "dists" / "stable" / "Release"
-            text = release.read_bytes().decode("utf-8")
-            if "MD5Sum:\n" not in text:
+            # splitlines() drops both LF and CRLF. Windows text mode writes
+            # CRLF, so a search for the two characters "MD5Sum:\\n" misses.
+            lines = release.read_bytes().decode("utf-8").splitlines()
+            try:
+                md5_index = lines.index("MD5Sum:")
+            except ValueError:
                 self.fail("Release fixture has no MD5Sum section")
-            updated = text.replace("MD5Sum:\n", "MD5Sum:\n not-a-checksum-line\n", 1)
-            release.write_bytes(updated.encode("utf-8"))
+            lines.insert(md5_index + 1, " not-a-checksum-line")
+            release.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
             with self.assertRaises(checksums.PackageChecksumError) as caught:
                 checksums.verify_package_repository(root, "deb")
         self.assertIn("malformed checksum entry", str(caught.exception))
