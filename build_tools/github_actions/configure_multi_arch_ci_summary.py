@@ -6,6 +6,7 @@ Produces human-readable markdown explaining what CI will do and why.
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
+    RUN_ON_DRAFT_LABEL,
 )
 import json
 from pathlib import Path
@@ -100,6 +101,12 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
+    elif ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+        reason = (
+            "this pull request is a draft. Add the "
+            f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
+            "review to run builds and tests"
+        )
     else:
         reason = "no CI-relevant files changed"
 
