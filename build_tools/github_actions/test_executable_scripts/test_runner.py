@@ -325,11 +325,20 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
-    # Temporary workaround for a known Linux driver issue (AILIKFD-911).
-    # Remove both entries once the Linux runners have an amdgpu with the
+    # Temporary workaround for a known Linux in-tree amdgpu bug. HIP's
+    # stream-ordered pool remaps a virtual address and the GPU keeps the old
+    # pages. env_linux is applied for every Linux test tier, including the
+    # comprehensive suite the nightly runs. Windows is unchanged.
+    # Remove these entries once the Linux runners have an amdgpu with the
     # GEM_VA TLB flush fix (fixed in-tree kernel or DKMS).
     # https://github.com/ROCm/rocm-libraries/issues/14873
+    # https://github.com/ROCm/rocm-libraries/issues/15600
     "rocsparse": {
+        "env_linux": {
+            "HIP_MEM_POOL_USE_VM": "0",
+        },
+    },
+    "hipsparse": {
         "env_linux": {
             "HIP_MEM_POOL_USE_VM": "0",
         },

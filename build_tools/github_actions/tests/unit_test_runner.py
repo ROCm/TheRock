@@ -290,7 +290,7 @@ class ApplyComponentOverridesTest(unittest.TestCase):
         return env
 
     def test_sparse_solver_pool_workaround_is_linux_only(self):
-        for job_name in ("rocsparse", "rocalution"):
+        for job_name in ("rocsparse", "hipsparse", "rocalution"):
             self.assertEqual(
                 self._apply_env(job_name, "Linux")["HIP_MEM_POOL_USE_VM"], "0"
             )
