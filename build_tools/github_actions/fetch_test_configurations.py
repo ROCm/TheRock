@@ -95,7 +95,7 @@ def _parse_test_labels(raw: str) -> list[str]:
 # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
 # --ulimit nofile=1048576:1048576 - Increase open file limit for RCCL
 _BASE_CONTAINER_OPTIONS = [
-    "--user 0:0",
+    # "--user 0:0",
     "--ulimit memlock=-1:-1",
     "--ulimit nofile=1048576:1048576",
 ]
@@ -279,7 +279,7 @@ test_matrix = {
         "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
-        "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
+        "container_options": ["-v /lib/modules:/lib/modules"],
     },
     # hip-tests
     "hip-tests": {
