@@ -45,6 +45,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 from urllib.parse import urljoin, urlsplit
 
 _READ_CHUNK_BYTES = 1024 * 1024
@@ -378,7 +379,7 @@ def _verify_release_checksums(
     failures: "_Failures",
 ) -> None:
     """Require MD5Sum and SHA256 entries in a Debian ``Release`` file."""
-    sections = _parse_release_sections(release_text)
+    sections = _parse_release_sections(release_text, failures)
     for algorithm in ("md5", "sha256"):
         section_name = "MD5Sum" if algorithm == "md5" else "SHA256"
         entries = sections.get(section_name)
@@ -459,7 +460,8 @@ def _verify_deb_stanzas(
         _size, digests = _hash_file(archive, algorithms)
         if _size != size:
             failures.add(
-                f"{label}: size mismatch for {filename}: expected {size}, actual {_size}"
+                f"{label}: size mismatch for {filename}: "
+                f"expected {size}, actual {_size}"
             )
         if digests["md5"].lower() != md5.lower():
             failures.add(
@@ -518,7 +520,7 @@ def _verify_rpm_packages(
 ) -> set[Path]:
     """Hash each indexed RPM and return the archives that were checked."""
     try:
-        packages = _rpm_package_elements(primary_xml)
+        packages = _rpm_package_elements(primary_xml, failures)
     except ET.ParseError as error:
         failures.add(f"primary metadata is malformed: {error}")
         return set()
@@ -562,7 +564,7 @@ def _verify_rpm_packages(
 def _require_rpm_digest_fields(primary_xml: bytes, failures: "_Failures") -> None:
     """Require a SHA256-or-stronger digest, location, and size on every package."""
     try:
-        packages = _rpm_package_elements(primary_xml)
+        packages = _rpm_package_elements(primary_xml, failures)
     except ET.ParseError as error:
         failures.add(f"primary metadata is malformed: {error}")
         return
@@ -609,7 +611,15 @@ def _rpm_primary_metadata(repomd_bytes: bytes) -> PrimaryMetadata:
     )
 
 
-def _rpm_package_elements(primary_xml: bytes) -> list[IndexedRpm]:
+def _rpm_package_elements(
+    primary_xml: bytes, failures: "_Failures"
+) -> list[IndexedRpm]:
+    """Parse each RPM package entry from primary metadata.
+
+    A weak or malformed checksum is recorded in ``failures`` and parsing
+    continues. One bad digest must not hide the other failures from the same
+    repository.
+    """
     root = ET.fromstring(primary_xml)
     packages = [child for child in list(root) if _local_name(child.tag) == "package"]
     parsed: list[IndexedRpm] = []
@@ -629,13 +639,7 @@ def _rpm_package_elements(primary_xml: bytes) -> list[IndexedRpm]:
         digest: ContentDigest | None = None
         size = None
         if checksum is not None and (checksum.text or "").strip():
-            algorithm = _strong_sha(checksum.get("type", ""), label)
-            expected = checksum.text.strip()
-            if not _is_hex(expected, _digest_octets(algorithm)):
-                raise PackageChecksumError(
-                    [f"{label}: checksum is malformed: {expected}"]
-                )
-            digest = ContentDigest(algorithm=algorithm, hex_digest=expected)
+            digest = _rpm_content_digest(checksum, label, failures)
         package_size = (
             size_node.get("package", "").strip() if size_node is not None else ""
         )
@@ -650,6 +654,23 @@ def _rpm_package_elements(primary_xml: bytes) -> list[IndexedRpm]:
             )
         )
     return parsed
+
+
+def _rpm_content_digest(
+    checksum: ET.Element, label: str, failures: "_Failures"
+) -> ContentDigest | None:
+    """Return a SHA256-or-stronger digest, or record why it cannot be used."""
+    try:
+        algorithm = _strong_sha(checksum.get("type", ""), label)
+    except PackageChecksumError as error:
+        for message in error.errors:
+            failures.add(message)
+        return None
+    expected = (checksum.text or "").strip()
+    if not _is_hex(expected, _digest_octets(algorithm)):
+        failures.add(f"{label}: checksum is malformed: {expected}")
+        return None
+    return ContentDigest(algorithm=algorithm, hex_digest=expected)
 
 
 def _parse_deb_packages(text: str, failures: "_Failures") -> list[dict[str, str]]:
@@ -680,18 +701,26 @@ def _parse_deb_packages(text: str, failures: "_Failures") -> list[dict[str, str]
     return stanzas
 
 
-def _parse_release_sections(text: str) -> dict[str, dict[str, tuple[str, int]]]:
+def _parse_release_sections(
+    text: str, failures: "_Failures"
+) -> dict[str, dict[str, tuple[str, int]]]:
+    """Parse checksum sections from a Debian ``Release`` file.
+
+    A checksum line is ``hash size path`` inside a named section. A malformed
+    line is recorded in ``failures`` and parsing continues.
+    """
     sections: dict[str, dict[str, tuple[str, int]]] = {}
     current_name = ""
-    for raw_line in text.splitlines():
-        if not raw_line:
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        if not raw_line.strip():
             current_name = ""
             continue
         if raw_line[0].isspace():
-            if not current_name:
-                continue
             parts = raw_line.split(None, 2)
-            if len(parts) != 3 or not parts[1].isdecimal():
+            if not current_name or len(parts) != 3 or not parts[1].isdecimal():
+                failures.add(
+                    f"Release line {line_number} is a malformed checksum entry"
+                )
                 continue
             sections.setdefault(current_name, {})[parts[2]] = (parts[0], int(parts[1]))
             continue
@@ -829,7 +858,15 @@ def _hash_bytes(payload: bytes, algorithm: str) -> str:
     return hasher.hexdigest()
 
 
-def _hasher(algorithm: str):
+class _Hasher(Protocol):
+    """Incremental hash used to checksum one file or metadata blob."""
+
+    def update(self, data: bytes) -> None: ...
+
+    def hexdigest(self) -> str: ...
+
+
+def _hasher(algorithm: str) -> _Hasher:
     if algorithm in ("md5", "sha1"):
         return getattr(hashlib, algorithm)(usedforsecurity=False)
     if algorithm in _SHA_BITS:
