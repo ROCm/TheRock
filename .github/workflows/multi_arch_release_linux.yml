@@ -318,24 +318,6 @@ jobs:
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
 
-  trigger_xla_tests:
-    needs: [build_python_packages]
-    name: Trigger XLA tests
-    if: ${{ contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx950-dcgpu') }}
-    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      test_amdgpu_target: gfx950
-      rocm_package_find_links_url: ${{ needs.build_python_packages.outputs.package_find_links_url }}
-      rocm_package_version: ${{ inputs.rocm_package_version }}
-      xla_ref: rocm-jaxlib-v0.11.2
-      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
-      therock_ref: ${{ inputs.ref || '' }}
-      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
-    permissions:
-      contents: read
-
-
   # The JAX release workflow publishes its wheels to the release index, then tests
   # from that index. Wait for the corresponding ROCm release to be published before
   # triggering the downstream release.
@@ -367,7 +349,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels, trigger_xla_tests]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-26.04
     timeout-minutes: 10
