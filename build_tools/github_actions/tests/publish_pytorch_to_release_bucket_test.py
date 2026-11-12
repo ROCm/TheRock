@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for publish_pytorch_to_release_bucket.py."""
 
+import io
 import os
 import sys
 import tempfile
@@ -178,8 +179,9 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
         # Index is computed from --index-type and --build-variant.
         test_cases = [
             ("release", None, "whl-next"),
+            ("release", "whl", "whl"),
             ("asan-debug", None, "whl-next-asan"),
-            ("host-asan", "whl", "whl-asan"),
+            ("host-asan", None, "whl-next-asan"),
         ]
         for build_variant, index_type, expected_index in test_cases:
             with self.subTest(build_variant=build_variant, index_type=index_type):
@@ -215,27 +217,44 @@ class TestPublishPytorchToReleaseBucket(unittest.TestCase):
                     }
                 )
 
-        # Skipped without uploading: a variant without release paths yet, and
-        # ASAN in legacy mode (would mix with standard wheels in v4/whl).
-        for extra_args in (
-            ["--structured", "--build-variant", "tsan"],
-            ["--build-variant", "asan"],
-        ):
-            with self.subTest(extra_args=extra_args), mock.patch(
-                "_therock_utils.storage_backend.S3StorageBackend.upload_directory"
-            ) as mock_upload_dir:
+        # Unsupported combinations fail before anything is uploaded, so the job
+        # does not report success: ASAN is only published to whl-next-asan (so
+        # not to whl, nor to v4/whl without --structured), and variants without
+        # release paths yet (e.g. tsan) are not published.
+        rejected_cases = [
+            (
+                ["--structured", "--build-variant", "asan", "--index-type", "whl"],
+                "only published to whl-next",
+            ),
+            (["--build-variant", "asan"], "requires --structured"),
+            (
+                ["--structured", "--build-variant", "tsan"],
+                "not supported for publishing yet",
+            ),
+        ]
+        for extra_args, message in rejected_cases:
+            with self.subTest(extra_args=extra_args):
                 mock_upload_files.reset_mock()
                 mock_set_output.reset_mock()
-                main(
-                    [
-                        "--source-dir",
-                        os.fspath(self.source_dir),
-                        "--release-type",
-                        "dev",
-                        *extra_args,
-                        "--dry-run",
-                    ]
-                )
+                with (
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+                    mock.patch(
+                        "_therock_utils.storage_backend.S3StorageBackend.upload_directory"
+                    ) as mock_upload_dir,
+                    self.assertRaises(SystemExit) as exit_ctx,
+                ):
+                    main(
+                        [
+                            "--source-dir",
+                            os.fspath(self.source_dir),
+                            "--release-type",
+                            "dev",
+                            *extra_args,
+                            "--dry-run",
+                        ]
+                    )
+                self.assertEqual(exit_ctx.exception.code, 2)
+                self.assertIn(message, stderr.getvalue())
                 mock_upload_files.assert_not_called()
                 mock_upload_dir.assert_not_called()
                 mock_set_output.assert_not_called()
