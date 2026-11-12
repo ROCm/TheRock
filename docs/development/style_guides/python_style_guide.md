@@ -11,8 +11,7 @@ Table of Contents
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
     - [No single-use module-level constants](#no-single-use-module-level-constants)
-    - [No backticks in comments or docstrings](#no-backticks-in-comments-or-docstrings)
-    - [No contractions in comments or docstrings](#no-contractions-in-comments-or-docstrings)
+    - [Use single backticks for code in comments and docstrings](#use-single-backticks-for-code-in-comments-and-docstrings)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -276,7 +275,7 @@ Benefits:
 ✅ **Preferred:**
 
 ```python
-# Either track the real size or do not log it
+# Either track the real size or don't log it
 new_size = binary_path.stat().st_size
 print(f"Device code stripped, new size: {new_size} bytes")
 ```
@@ -339,28 +338,20 @@ def job_summary_mirror_path() -> Path | None:
     return Path(runner_temp) / JOB_SUMMARY_FILE_NAME
 ```
 
-#### No backticks in comments or docstrings
+#### Use single backticks for code in comments and docstrings
 
-**Refer to code symbols, flags, and values in plain text.**
+**Mark code symbols, flags, and values with single backticks, not double.**
 
-Backticks are Markdown syntax. Python comments and docstrings are read as plain
-text in editors, terminals, and `help()` output, where backticks render
-literally and add visual noise.
+Single backticks match the Markdown used everywhere else in the repo (docs, PR
+descriptions, review comments). Double backticks are reStructuredText literal
+syntax, which only matters when a documentation generator such as Sphinx
+processes the docstrings. TheRock does not run one, so the extra backticks are
+only noise.
 
 This applies to new and modified code. Do not churn existing comments solely to
-remove backticks.
+convert double backticks.
 
 ✅ **Preferred:**
-
-```python
-def mirror_path() -> Path | None:
-    """Resolve the mirror under $RUNNER_TEMP.
-
-    Returns None when the env var is unset. Pass mirror=False to skip.
-    """
-```
-
-❌ **Avoid:**
 
 ```python
 def mirror_path() -> Path | None:
@@ -370,35 +361,13 @@ def mirror_path() -> Path | None:
     """
 ```
 
-#### No contractions in comments or docstrings
-
-**Write the words out: cannot, do not, it is, does not, will not.**
-
-Spelled-out forms read more clearly, especially for non-native English readers,
-and avoid apostrophe ambiguity (its vs it's) in technical prose.
-
-This applies to new and modified code. Do not churn existing comments solely to
-expand contractions.
-
-✅ **Preferred:**
-
-```python
-def mirror_path() -> Path | None:
-    """Resolve the mirror under $RUNNER_TEMP.
-
-    Returns None when the env var is not set; callers should not fail, they
-    should skip mirroring. It is emptied between jobs so it will not leak.
-    """
-```
-
 ❌ **Avoid:**
 
 ```python
 def mirror_path() -> Path | None:
-    """Resolve the mirror under $RUNNER_TEMP.
+    """Resolve the mirror under ``$RUNNER_TEMP``.
 
-    Returns None when the env var isn't set; callers shouldn't fail, they
-    should skip mirroring. It's emptied between jobs so it won't leak.
+    Returns ``None`` when the env var is unset. Pass ``mirror=False`` to skip.
     """
 ```
 
@@ -874,7 +843,7 @@ if not path.exists():
         f"This indicates a corrupted or incomplete artifact"
     )
 
-# Let exceptions propagate - if we cannot process, we must fail
+# Let exceptions propagate - if we can't process, we must fail
 process_file(path)
 ```
 
@@ -1138,7 +1107,7 @@ Before submitting code, verify:
 - [ ] Complex type signatures extracted to NamedTuple/dataclass
 - [ ] No magic numbers or fake estimates
 - [ ] Named values scoped to their uses (inline once, local within one function, module constant across functions)
-- [ ] No backticks or contractions in comments and docstrings
+- [ ] Single backticks, not double, for code in comments and docstrings
 - [ ] Tuples only for simple pairs, dataclasses for structured data
 - [ ] All imports at top of file (except documented circular dependencies)
 - [ ] No timeouts on binutils operations

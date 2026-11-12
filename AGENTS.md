@@ -194,7 +194,7 @@ overlay when the change touches the build:
   `BUILD_TOPOLOGY.toml`, or reusable CI workflows. It extends the base and defers to the canonical
   `docs/development/style_guides/`.
 - **TheRock review overlay — [skills/therock-pr-review/SKILL.md](skills/therock-pr-review/SKILL.md)**:
-  add this when reviewing someone else's TheRock PR. It extends the TheRock overlay with a
+  add this when reviewing a TheRock PR, your own or someone else's. It extends the TheRock overlay with a
   non-destructive review setup, de-duplication against existing review threads, verification
   discipline, and a whole-PR design pass.
 

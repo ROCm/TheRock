@@ -1,6 +1,6 @@
 ---
 name: therock-pr-review
-description: Review a TheRock pull request authored by someone else. Extends therock-pr-quality (and through it rocm-pr-quality) with a non-destructive review setup, de-duplication against existing review threads, verification discipline, a file-ordered findings layout, and a whole-PR design pass. Use when asked to "review PR", "review this PR", "code review PR #N", or given a TheRock PR URL or number to review.
+description: Review a TheRock pull request, your own (self-review before requesting review) or someone else's. Extends therock-pr-quality (and through it rocm-pr-quality) with a non-destructive review setup, de-duplication against existing review threads, verification discipline, a file-ordered findings layout, and a whole-PR design pass. Use when asked to "review PR", "review this PR", "code review PR #N", or given a TheRock PR URL or number to review.
 argument-hint: '[PR URL | owner/repo#N | #N | N]'
 extends: therock-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
@@ -15,8 +15,7 @@ Read and apply, in order:
 1. `skills/rocm-pr-quality/SKILL.md` and `skills/rocm-pr-quality/reference.md` (base).
 1. `skills/therock-pr-quality/SKILL.md` (TheRock build-repo overlay).
 
-This overlay specializes the base's **Action 2 (Review assist)** for reviewing someone else's PR. It
-only adds steps and tightens how the review is gathered and presented. It never relaxes a base MUST,
+This overlay specializes the base's **Action 2 (Review assist)** for reviewing a TheRock PR. It only adds steps and tightens how the review is gathered and presented. It never relaxes a base MUST,
 the finding tiers, or the "never post without approval" principle. On any conflict, the base wins.
 
 ______________________________________________________________________
@@ -51,77 +50,31 @@ Run these in addition to the base Action 2 workflow and the TheRock overlay chec
 gh pr view <ref> --json number,title,body,headRefName,headRefOid,baseRefName,author,files,url,statusCheckRollup
 ```
 
-Compare the author with the invoking user (`gh api user --jq .login`). If they match, stop and
-suggest base Action 1 (Author assist) instead; this skill is for reviewing other people's work.
+If the author is the invoking user, this is a self-review. Run the same review, phrase findings as
+changes to make rather than comments to relay, and in "Already raised" mark each existing thread as
+addressed by the current code or still open.
 
 ### 2. Read all prior discussion
 
-Collect every channel; each one holds findings the others do not:
+Collect every channel; each one holds findings the others do not: the top-level conversation,
+review summaries, and inline review comments. Two gaps cause silently missing discussion:
 
-```bash
-# Top-level PR conversation
-gh pr view <ref> --comments
-# Review summaries (approve / request changes bodies)
-gh api --paginate repos/{owner}/{repo}/pulls/<n>/reviews
-# Inline review comments
-gh api --paginate repos/{owner}/{repo}/pulls/<n>/comments
-```
-
-`gh api` fills in `{owner}` and `{repo}` from the current checkout; replace them when the PR lives in
-another repo. Keep `--paginate`: these endpoints return 30 items per page, so a busy PR is otherwise
-silently truncated.
-
-If the invoking user already has a `PENDING` review (an unsubmitted draft), the review itself is in
-the reviews list, but its inline comments are only visible to them and do not appear in the inline
-comments endpoint. Fetch them through the review:
-
-```bash
-gh api --paginate repos/{owner}/{repo}/pulls/<n>/reviews \
-  --jq '.[] | select(.state == "PENDING") | .id'
-gh api --paginate repos/{owner}/{repo}/pulls/<n>/reviews/<review_id>/comments
-```
+- The GitHub list endpoints return 30 items per page. Paginate, or a busy PR is truncated.
+- Inline comments of the invoking user's `PENDING` (unsubmitted) review do not appear in the PR's
+  inline comments list. Fetch them through that review's own comments endpoint.
 
 Do not repeat a point that is already raised; list it under "Already raised" instead. Note author
 replies that explain a non-obvious choice, so the review does not re-ask a settled question.
 
 ### 3. Get the diff; pull source only when needed
 
-Save the diff to a temp file rather than pasting it into the conversation:
-
-```bash
-gh pr diff <ref> > /tmp/pr-<n>.diff
-```
-
-For small, self-contained changes the diff is enough. Pull source only when the diff cannot answer a
+Start from `gh pr diff`. For small, self-contained changes the diff is enough. Pull source only when the diff cannot answer a
 question, for example a function the diff calls but does not define. When the review relied on the
 diff alone, say so in the Summary; the base rates a diff-only review as lower confidence.
 
-Never switch branches in the user's checkout on your own; they may have work in progress. Options,
-lightest first:
-
-1. Read single files at the PR head. This does not touch the working tree:
-
-   ```bash
-   git fetch origin +pull/<n>/head:refs/remotes/pr/<n>
-   git show refs/remotes/pr/<n>:path/to/file
-   ```
-
-   `origin` must point at the PR's base repository (for example `ROCm/TheRock`), not a fork, because
-   `pull/<n>/head` only exists there. The leading `+` lets a later review round pick up a
-   force-pushed branch. Clean up with `git update-ref -d refs/remotes/pr/<n>`.
-
-1. A detached worktree, when many files are needed. Ask the user first; skip it for large
-   repositories where a second checkout is expensive.
-
-   ```bash
-   git worktree add --detach /tmp/pr-<n>-src refs/remotes/pr/<n>
-   ```
-
-   On a later round, refresh it with `git -C /tmp/pr-<n>-src checkout --detach refs/remotes/pr/<n>`.
-   Clean up with `git worktree remove /tmp/pr-<n>-src`.
-
-1. Check out the PR in place (`gh pr checkout <ref>`) only if the user explicitly asks, and only after
-   `git status` shows a clean tree. Remind them to switch back when done.
+Never switch branches or otherwise modify the user's working tree without asking; they may have
+work in progress. Prefer reading files at the PR head without touching the tree (for example
+`git show` on a fetched PR ref).
 
 ### 4. Apply the style guides for touched languages only
 
