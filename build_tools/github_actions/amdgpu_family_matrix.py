@@ -152,8 +152,9 @@ def select_build_runner(
         platform: "linux" or "windows"
         build_variant: build variant string (e.g. "release", "asan", "tsan")
         size: runner pool size — "small", "medium", or "large" (default).
-              Sanitizer variants always use the sanitizer (large) pool regardless
-              of size. Platforms without a size-specific pool fall back to default.
+              Sanitizer variants use the sanitizer pool for large stages; small
+              and medium stages fall through to their normal pools. Platforms
+              without a size-specific pool fall back to default.
         triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
                   When "submodule_bump" is present, uses the "bump" runner pool if
                   configured, to isolate bump PRs from the weighted Azure/AWS split.
@@ -165,8 +166,10 @@ def select_build_runner(
 
     platform_config = build_runner_labels[platform]
 
-    # Sanitizer builds are memory-intensive; keep them on dedicated runners
-    if "san" in build_variant:
+    # Sanitizer builds are memory-intensive; large stages use a dedicated
+    # sanitizer runner pool. Small/medium stages use their normal pools since
+    # they don't require the extra memory headroom.
+    if "san" in build_variant and size not in ("small", "medium"):
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
     elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
