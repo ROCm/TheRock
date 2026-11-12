@@ -4812,7 +4812,7 @@ class TestPullRequestTestsInput(unittest.TestCase):
         self.assertEqual(entry["test-runs-on"], "linux-gfx90a-1gpu-ossci-rocm")
 
     def test_gfx90a_host_asan_opt_in_label_builds_only_gfx90a(self):
-        """The workflow's default families give gfx90a only, not the presubmit set."""
+        """A caller passing gfx90a gets gfx90a only, not the presubmit set."""
         entry = self._configure_gfx90a(
             pull_request_tests=True,
             pr_labels=["ci:host-asan"],
