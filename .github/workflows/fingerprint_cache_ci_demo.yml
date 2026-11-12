@@ -1,0 +1,60 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Demonstrates the fingerprint artifact cache end to end inside GitHub Actions
+# against the shared ClickHouse index. Manually dispatched; no GPU build needed.
+#
+# One run shows the whole loop: a "cold" plan reports what the shared cache
+# already covers, this run publishes its units, then a "warm" plan shows those
+# stages are now skippable. Re-dispatching WITHOUT reset proves cross-run reuse:
+# the cold plan of the second run already hits what the first run published.
+#
+# Requires three repository secrets (Settings -> Secrets and variables ->
+# Actions): CLICKHOUSE_URL (https://<host>:8443), CLICKHOUSE_USER,
+# CLICKHOUSE_PASSWORD.
+
+name: Fingerprint Cache CI Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: "Truncate the shared cache before running (show a cold start)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  fingerprint-cache-demo:
+    runs-on: ubuntu-latest
+    env:
+      CLICKHOUSE_URL: ${{ secrets.CLICKHOUSE_URL }}
+      CLICKHOUSE_USER: ${{ secrets.CLICKHOUSE_USER }}
+      CLICKHOUSE_PASSWORD: ${{ secrets.CLICKHOUSE_PASSWORD }}
+    defaults:
+      run:
+        working-directory: build_tools/github_actions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Preflight - ClickHouse connectivity
+        run: python -m artifact_cache.ci_cache ping
+
+      - name: Reset shared cache (optional)
+        if: ${{ inputs.reset }}
+        run: python -m artifact_cache.ci_cache reset
+
+      - name: Plan (cold) - what the shared cache already covers
+        run: python -m artifact_cache.ci_cache plan --synthetic
+
+      - name: Publish this build's fingerprints
+        run: python -m artifact_cache.ci_cache publish --synthetic
+
+      - name: Plan (warm) - stages now served from the cache
+        run: python -m artifact_cache.ci_cache plan --synthetic
