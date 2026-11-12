@@ -269,7 +269,8 @@ jobs:
       rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
       rocm_package_version: ${{ inputs.rocm_version }}
       therock_ref: ${{ inputs.ref || '' }}
-      xla_ref: inputs.jax_ref # we use the same branch name for xla release branches as in jax
+      # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
+      xla_ref: ${{ inputs.jax_ref }}
       test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:

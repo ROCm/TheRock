@@ -46,6 +46,35 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             },
         )
 
+    def test_exactly_one_row_triggers_xla_tests(self):
+        # test_xla rides along on exactly one representative cell
+        # (XLA_TEST_PYTHON_VERSION, XLA_TEST_JAX_REF) per release type, so a
+        # release run pays for the XLA bazel suite once rather than once per
+        # (python_version, jax_ref) combination.
+        for release_type in set(m.RELEASE_TYPES) - {"ci"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type,
+                    platform="linux",
+                )
+                flagged = [row for row in matrix if row["trigger_xla_tests"]]
+                self.assertEqual(len(flagged), 1)
+                self.assertEqual(
+                    (flagged[0]["python_version"], flagged[0]["jax_ref"]),
+                    (m.XLA_TEST_PYTHON_VERSION, m.XLA_TEST_JAX_REF),
+                )
+
+    def test_trigger_xla_tests_false_when_representative_cell_is_excluded(self):
+        # A caller that narrows the matrix away from the representative cell
+        # gets no XLA signal at all, rather than a KeyError or a wrong row.
+        matrix = m.generate_jax_matrix(
+            jax_refs=["rocm-jaxlib-v0.11.2"],
+            python_versions=["3.12"],
+        )
+
+        self.assertGreater(len(matrix), 0)
+        self.assertFalse(any(row["trigger_xla_tests"] for row in matrix))
+
     def test_explicit_python_version_narrows_matrix(self):
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="dev",
