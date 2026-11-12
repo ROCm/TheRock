@@ -72,6 +72,12 @@ To get CI signal on a draft:
 If a pull request has both `ci:skip` and `ci:run-on-draft`, `ci:skip` wins and
 nothing runs.
 
+Converting a pull request back to draft also triggers the workflows, so any
+in-flight build and test is cancelled instead of finishing a run nobody is
+waiting on. With `ci:run-on-draft` present the new run builds and tests again
+rather than skipping, so remove that label first if you only want to stop the
+run.
+
 `push`, `schedule`, and `workflow_dispatch` runs are unaffected.
 
 #### Build/Test-specific architecture labels
