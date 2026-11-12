@@ -57,9 +57,16 @@ JAX_REF_CONFIGS = {
         # JAX dropped Python 3.11 support in 0.11.0.
         "exclude_python_versions": ["3.11"],
     },
+    "rocm-jaxlib-v0.12.0": {
+        "jax_ref": "rocm-jaxlib-v0.12.0",
+        "jax_repository": "ROCm/jax",
+        "gfx_arch": "device-all",
+        # JAX dropped Python 3.11 support in 0.11.0.
+        "exclude_python_versions": ["3.11"],
+    },
     # Upstream JAX at its moving tip, built against the ROCm of the same run
     # (tip vs tip), the way PyTorch's "nightly" ref is a row of its release
-    # matrix. Release types other than prerelease include it (RELEASE_JAX_REFS).
+    # matrix.
     # The manylinux Dockerfile comes from rocm-jax's default branch, since
     # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
     # coupling.
@@ -88,10 +95,11 @@ RELEASE_STABLE_JAX_REFS = {
         "rocm-jaxlib-v0.11.0",
         "rocm-jaxlib-v0.11.1",
         "rocm-jaxlib-v0.11.2",
+        "rocm-jaxlib-v0.12.0",
     ],
 }
 
-# Refs for the other release types: stable refs + upstream tip.
+# Refs for "dev" and "nightly" releases: stable refs + upstream tip.
 RELEASE_JAX_REFS = {
     platform: [*refs, "jax-main"] for platform, refs in RELEASE_STABLE_JAX_REFS.items()
 }
@@ -101,7 +109,7 @@ RELEASE_JAX_REFS = {
 # rather than every release version. Additional refs can be opted in as needed.
 CI_JAX_REFS = {
     "linux": [
-        "rocm-jaxlib-v0.11.2",
+        "rocm-jaxlib-v0.12.0",
     ],
 }
 
@@ -186,6 +194,11 @@ def generate_jax_matrix_for_release_type(
         raise ValueError(f"Unknown release_type: {release_type!r}")
     if platform not in ["linux"]:
         raise ValueError(f"Unknown platform: {platform!r}")
+
+    # JAX is not supported for BKC releases today, so return an empty matrix.
+    # See https://github.com/ROCm/rockrel/issues/88 for context.
+    if release_type in ("dev-bkc", "nightly-bkc"):
+        return []
 
     versions = python_versions or _default_python_versions(
         release_type=release_type,

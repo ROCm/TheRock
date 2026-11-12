@@ -6,6 +6,9 @@ distribution as Debian and RPM packages.
 This process involves both the reorganization of artifacts and the
 execution of package management tools
 
+To configure a system package manager to install ROCm from a public repository,
+see [rocm_repo_setup.md](rocm_repo_setup.md).
+
 ## General Design
 
 The required packages and their details are stored in a JSON file
@@ -33,8 +36,8 @@ The generated packages are moved to the destination directory.
 
 ## Versioned and Non-Versioned Packages
 
-For each entry in the JSON file, a non-versioned package,
-a versioned package( and an associated debuginfo/dbgsym package) will be created.
+For each entry in the JSON file, a non-versioned package and
+a versioned package will be created.
 Each non-versioned package is associated with the corresponding versioned
 package. A non-versioned package acts as a meta-package and does not
 contain any contents. It always has a dependency on the versioned package.
@@ -83,9 +86,7 @@ Optional Fields
 - the package is created using the packages listed in Includes. If no Includes
   field is specified, the Components field will be used instead.
 - DisablePackaging: Disables the creation of the package.
-- Disable_Debug_Package: Disables the generation of the debug symbol package.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
-- Disable_DH_STRIP: Disables dh_strip. Applies to Debian packages.
 - Provides: Indicates that a package provides the functionality of another package.
 - Replaces: Indicates that a package replaces another package.
 
@@ -161,8 +162,11 @@ unchanged by the final `repo.amd.com` product layout.
 
 ## Building Packages
 
-The `--target` argument specifies the GFX architecture(s) for which packages should be built.
+The `--target` argument specifies the GFX architecture(s) for which device packages should be built.
 If not provided, the script will automatically detect available architectures from the artifact directory.
+Architecture-specific packages are split into a host package, one device package per architecture,
+and a versioned meta package, alongside the usual non-versioned package; see
+[nativepackage_dependency_tree.md](nativepackage_dependency_tree.md).
 
 ### Auto-detection (Recommended)
 
@@ -183,7 +187,7 @@ from directory names matching the pattern `{name}_{component}_{target_family}`
 ```bash
 ./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
+   --target gfx942 gfx1100 \
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
    --pkg-type rpm
@@ -230,12 +234,12 @@ RPM package with auto-detected architectures:<br>
    --pkg-type rpm
 ```
 
-RPM package with explicit target:<br>
+RPM package with explicit targets:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
+   --target gfx942 gfx1100 \
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
    --version-suffix build_type \
@@ -253,12 +257,12 @@ Debian package with auto-detected architectures:<br>
    --pkg-type deb
 ```
 
-Debian package with explicit target:<br>
+Debian package with explicit targets:<br>
 
 ```bash
 ./build_tools/packaging/linux/build_package.py \
    --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
+   --target gfx942 gfx1100 \
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
    --version-suffix build_type \
