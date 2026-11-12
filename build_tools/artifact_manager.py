@@ -776,34 +776,7 @@ def upload_artifact(request: UploadRequest) -> bool:
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
 
-            # Upload the matching fingerprint after the archive and checksum.
-            artifact_name = ArtifactName.from_filename(request.artifact_key)
-            if artifact_name is None:
-                raise ValueError(
-                    f"Invalid artifact archive name: {request.artifact_key}"
-                )
-
-            fingerprint_name = (
-                f"{artifact_name.name}_"
-                f"{artifact_name.component}_"
-                f"{artifact_name.target_family}.fprint"
-            )
-
-            # Archives come from build/artifacts or build/.upload_cache.
-            # Fingerprints remain in build/artifacts in both cases.
-            fingerprint_path = (
-                request.source_path.parent.parent / "artifacts" / fingerprint_name
-            )
-            if fingerprint_path.is_file():
-                log(f"  ++ Uploading {fingerprint_name}")
-                request.backend.upload_artifact(
-                    fingerprint_path,
-                    fingerprint_name,
-                )
-            else:
-                log(f"  == Skipping missing fingerprint: {fingerprint_path}")
-
-            return True
+            break
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 delay = BASE_DELAY_SECONDS * (2**attempt)
@@ -814,7 +787,62 @@ def upload_artifact(request: UploadRequest) -> bool:
             else:
                 log(f"  !! Failed to upload {request.artifact_key}: {e}")
                 return False
-    return False
+    else:
+        return False
+
+    # Fingerprints are optional metadata. Their failures must not retry the
+    # archive or fail an otherwise successful artifact publication.
+    try:
+        artifact_name = ArtifactName.from_filename(request.artifact_key)
+        if artifact_name is None:
+            log(
+                f"  !! WARNING: Cannot determine fingerprint for "
+                f"{request.artifact_key}"
+            )
+            return True
+
+        fingerprint_name = (
+            f"{artifact_name.name}_"
+            f"{artifact_name.component}_"
+            f"{artifact_name.target_family}.fprint"
+        )
+        # Archives come from build/artifacts or build/.upload_cache.
+        # Fingerprints remain in build/artifacts in both cases.
+        fingerprint_path = (
+            request.source_path.parent.parent / "artifacts" / fingerprint_name
+        )
+        if not fingerprint_path.is_file():
+            log(f"  == Skipping missing fingerprint: {fingerprint_path}")
+            return True
+    except Exception as e:
+        log(
+            f"  !! WARNING: Cannot locate fingerprint for "
+            f"{request.artifact_key}: {e}"
+        )
+        return True
+
+    # Retry only the fingerprint, after the archive/checksum have succeeded.
+    for attempt in range(MAX_RETRIES):
+        try:
+            log(f"  ++ Uploading {fingerprint_name}")
+            request.backend.upload_artifact(fingerprint_path, fingerprint_name)
+            break
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY_SECONDS * (2**attempt)
+                log(
+                    f"  ++ Retry {attempt + 1}/{MAX_RETRIES} "
+                    f"for {fingerprint_name}: {e}"
+                )
+                _delay_for_retry(delay)
+            else:
+                log(
+                    f"  !! WARNING: Failed to upload {fingerprint_name} "
+                    f"after {MAX_RETRIES} attempts: {e}. "
+                    f"Artifact upload succeeded."
+                )
+
+    return True
 
 
 def do_push(args: argparse.Namespace):

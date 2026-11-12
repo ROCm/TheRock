@@ -392,17 +392,20 @@ class TestUploadArtifactFingerprints(ArtifactManagerTestBase):
             None,
             OSError("Fingerprint upload failed"),
             None,
-            None,
-            None,
         ]
-        self.assertTrue(artifact_manager.upload_artifact(request))
+        with mock.patch(
+            "artifact_manager.calculate_hash", wraps=artifact_manager.calculate_hash
+        ) as calculate_hash:
+            self.assertTrue(artifact_manager.upload_artifact(request))
+        calculate_hash.assert_called_once_with(request.source_path, "sha256")
+        expected = self._expected_calls(request, fingerprint)
         self.assertEqual(
             self.backend.upload_artifact.call_args_list,
-            self._expected_calls(request, fingerprint) * 2,
+            expected + [expected[-1]],
         )
-        self.delay.assert_called_once()
+        self.delay.assert_called_once_with(2)
 
-    def test_persistent_fingerprint_failure_returns_false(self):
+    def test_persistent_fingerprint_failure_warns_and_succeeds(self):
         request, fingerprint = self._make_request()
 
         def upload(source_path, artifact_key):
@@ -410,12 +413,25 @@ class TestUploadArtifactFingerprints(ArtifactManagerTestBase):
                 raise OSError("Fingerprint upload failed")
 
         self.backend.upload_artifact.side_effect = upload
-        self.assertFalse(artifact_manager.upload_artifact(request))
+        with (
+            mock.patch("artifact_manager.log") as log,
+            mock.patch(
+                "artifact_manager.calculate_hash", wraps=artifact_manager.calculate_hash
+            ) as calculate_hash,
+        ):
+            self.assertTrue(artifact_manager.upload_artifact(request))
+        calculate_hash.assert_called_once_with(request.source_path, "sha256")
+        expected = self._expected_calls(request, fingerprint)
         self.assertEqual(
             self.backend.upload_artifact.call_args_list,
-            self._expected_calls(request, fingerprint) * 3,
+            expected[:-1] + [expected[-1]] * 3,
         )
-        self.assertEqual(self.delay.call_count, 2)
+        self.assertEqual(self.delay.call_args_list, [mock.call(2), mock.call(4)])
+        log.assert_any_call(
+            f"  !! WARNING: Failed to upload {fingerprint.name} "
+            "after 3 attempts: Fingerprint upload failed. "
+            "Artifact upload succeeded."
+        )
 
 
 class TestPushFailureExitCode(ArtifactManagerTestBase):
