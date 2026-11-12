@@ -39,9 +39,8 @@ supplements.
 
 ### 1. Resolve the PR
 
-```bash
-gh pr view <ref> --json number,title,body,headRefName,headRefOid,baseRefName,author,files,url,statusCheckRollup
-```
+Look up the PR with `gh pr view`: title, body, author, head and base branches, changed files, and
+check status.
 
 If the author is the invoking user, this is a self-review. Run the same review, phrase findings as
 changes to make rather than comments to relay, and in "Already raised" mark each existing thread as

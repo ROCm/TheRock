@@ -33,7 +33,8 @@ Apply this overlay (in addition to the base) when a PR touches any of:
 - Reusable CI: `.github/workflows/**` (especially reusable `workflow_call` workflows and their
   callers) and `build_tools/github_actions/**`.
 
-Changes outside these areas follow the base bar only.
+Changes outside these areas follow the base bar only. Review mode (below) is the exception: it
+applies to every TheRock PR.
 
 ______________________________________________________________________
 
@@ -49,7 +50,7 @@ ______________________________________________________________________
 
 ## Canonical TheRock references
 
-Consult and cite these when reviewing build-repo PRs:
+Consult and cite these when reviewing TheRock PRs:
 
 - Build system overview: `docs/development/build_system.md`.
 - Testing strategy: [`TESTING.md`](../../TESTING.md), the repo-root `TESTING.md` the base skill

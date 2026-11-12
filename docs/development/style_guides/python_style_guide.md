@@ -293,7 +293,9 @@ print(f"Stripped {original_size - new_size} bytes")
 
 Name a value at the narrowest scope that covers all of its uses:
 
-- Used once: inline the literal.
+- Used once: inline the literal. If the value is not self-explanatory, add a
+  comment or name it with a local variable (see
+  [No magic numbers](#no-magic-numbers)).
 - Used two or more times within one function: a local variable in that function.
 - Used across functions, or a genuine configuration knob someone might tune: a
   module-level constant.
@@ -342,11 +344,12 @@ def job_summary_mirror_path() -> Path | None:
 
 **Mark code symbols, flags, and values with single backticks, not double.**
 
-Single backticks match the Markdown used everywhere else in the repo (docs, PR
-descriptions, review comments). Double backticks are reStructuredText literal
-syntax, which only matters when a documentation generator such as Sphinx
-processes the docstrings. TheRock does not run one, so the extra backticks are
-only noise.
+Both forms appear in existing Python code today. This guide standardizes on
+single backticks because they match the Markdown used everywhere else in the
+repo (docs, PR descriptions, review comments). Double backticks are
+reStructuredText literal syntax, which only matters when a documentation
+generator such as Sphinx processes the docstrings. TheRock does not run one, so
+the extra backticks are only noise.
 
 This applies to new and modified code. Do not churn existing comments solely to
 convert double backticks.
