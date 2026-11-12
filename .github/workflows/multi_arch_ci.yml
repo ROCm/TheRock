@@ -176,6 +176,44 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # Producing real .fprint needs fetch_sources.py + a cmake configure
+      # (~5-10 min cold). build/ holds the .fprint, so cache it on the commit
+      # SHA (which pins every submodule revision): an exact hit -- a re-run of
+      # the same commit -- restores the fingerprints and skips fetch+configure.
+      # Exact key only (no restore-keys): fingerprints from another commit must
+      # never be reused.
+      - name: Restore configured build (.fprint)
+        id: buildcache
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: therock-fprint-build-${{ runner.os }}-${{ github.sha }}
+
+      # Delta-fetch speedup for the cold path only; cannot affect correctness
+      # because configure regenerates the .fprint from the restored sources.
+      - name: Restore fetched sources
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache && steps.buildcache.outputs.cache-hit != 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: .git/modules
+          key: therock-sources-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            therock-sources-${{ runner.os }}-
+
+      # Heavy path runs only on a build-cache miss (first run / sources changed).
+      - name: Fetch sources and configure (produces .fprint)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache && steps.buildcache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        env:
+          THEROCK_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families || 'gfx110X-all' }}
+        run: |
+          pip install -r requirements.txt
+          python ./build_tools/fetch_sources.py --depth 1 --jobs 12
+          # Configure only (no compile): .fprint are written at configure time.
+          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES="$THEROCK_AMDGPU_FAMILIES"
+
       - name: Fingerprint stage-reuse decision
         id: decide
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
@@ -186,7 +224,7 @@ jobs:
           CLICKHOUSE_PASSWORD: ${{ secrets.CLICKHOUSE_PASSWORD }}
           CLICKHOUSE_TIMING_JSON: ${{ runner.temp }}/clickhouse_timing.json
           STAGE_REUSE_FPRINT_BUILD_DIR: ${{ github.workspace }}/build
-        run: python -m artifact_cache.stage_reuse_fingerprint --build "$STAGE_REUSE_FPRINT_BUILD_DIR"
+        run: python -m artifact_cache.stage_reuse_fingerprint --build "$STAGE_REUSE_FPRINT_BUILD_DIR" --publish
       - name: Upload ClickHouse timing
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
         uses: actions/upload-artifact@v4
