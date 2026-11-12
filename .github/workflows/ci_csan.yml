@@ -22,6 +22,10 @@ on:
         type: string
         description: "Comma-separated stage allowlist (empty = all stages)"
         default: ""
+      math_parallel:
+        type: boolean
+        description: "Build only math in dependency-ordered CPU runner jobs using prebuilt non-math stages"
+        default: false
       component_repair:
         type: boolean
         description: "Rebuild the validated CSAN compiler and affected components, reusing other baseline artifacts"
@@ -52,6 +56,10 @@ on:
         type: string
         description: "Comma-separated stage allowlist (empty = all stages)"
         default: ""
+      math_parallel:
+        type: boolean
+        description: "Build only math in dependency-ordered CPU runner jobs using prebuilt non-math stages"
+        default: false
       component_repair:
         type: boolean
         description: "Rebuild the validated CSAN compiler and affected components, reusing other baseline artifacts"
@@ -79,13 +87,13 @@ jobs:
     steps:
       - name: Checkout repair validator
         timeout-minutes: 5
-        if: ${{ inputs.component_repair }}
+        if: ${{ inputs.component_repair || inputs.math_parallel }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Validate component repair inputs
-        if: ${{ inputs.component_repair }}
+        if: ${{ inputs.component_repair || inputs.math_parallel }}
         env:
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
@@ -93,6 +101,8 @@ jobs:
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           RUNTIME_REPAIR: ${{ inputs.runtime_repair }}
           COMM_REPAIR: ${{ inputs.comm_repair }}
+          COMPONENT_REPAIR: ${{ inputs.component_repair }}
+          MATH_PARALLEL: ${{ inputs.math_parallel }}
         run: python3 build_tools/github_actions/csan_repair.py inputs
 
       - name: Validate explicit stage reuse inputs
@@ -182,7 +192,7 @@ jobs:
           PREBUILT_STAGES: ${{ fromJSON(needs.setup.outputs.linux_build_config).prebuilt_stages }}
           DIST_AMDGPU_FAMILIES: ${{ fromJSON(needs.setup.outputs.linux_build_config).dist_amdgpu_families }}
         run: |
-          if [ "${{ inputs.component_repair }}" = "true" ]; then
+          if [ "${{ inputs.component_repair || inputs.math_parallel }}" = "true" ]; then
             python build_tools/github_actions/csan_repair.py snapshot
           fi
           python build_tools/artifact_manager.py copy \
@@ -190,9 +200,22 @@ jobs:
             --stage="${PREBUILT_STAGES}" \
             --amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --expand-family-to-targets
-          if [ "${{ inputs.component_repair }}" = "true" ]; then
+          if [ "${{ inputs.component_repair || inputs.math_parallel }}" = "true" ]; then
             python build_tools/github_actions/csan_repair.py verify
           fi
+
+  parallel_math:
+    name: Parallel CSAN math groups
+    needs: [setup, copy_prebuilt_stages]
+    if: ${{ inputs.math_parallel && needs.setup.outputs.enable_build_jobs == 'true' }}
+    uses: ./.github/workflows/ci_csan_math.yml
+    with:
+      ref: ${{ needs.setup.outputs.ref }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      build_runs_on: ${{ fromJSON(needs.setup.outputs.linux_build_config).build_runs_on_large }}
+    permissions:
+      contents: read
+      id-token: write
 
   repair_compiler:
     name: Repair CSAN compiler and CLR
@@ -318,7 +341,7 @@ jobs:
     needs: [setup, copy_prebuilt_stages, repair_clr_runtime]
     if: >-
       ${{
-        !inputs.component_repair && !failure() && !cancelled() &&
+        !inputs.component_repair && !inputs.math_parallel && !failure() && !cancelled() &&
         !contains(needs.*.result, 'cancelled') &&
         needs.setup.outputs.linux_build_config != '' &&
         needs.setup.outputs.enable_build_jobs == 'true'
@@ -348,7 +371,7 @@ jobs:
   summary:
     name: CSAN build summary
     if: always()
-    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, repair_comm_devices, repair_compiler, repair_components, linux_build]
+    needs: [validate_reuse, setup, copy_prebuilt_stages, repair_clr_runtime, repair_comm_devices, repair_compiler, repair_components, parallel_math, linux_build]
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

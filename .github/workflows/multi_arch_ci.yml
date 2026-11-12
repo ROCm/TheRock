@@ -43,6 +43,10 @@ on:
         type: string
         default: ""
         description: "Comma-separated allowlist of build stages (empty = build all). Stages outside this list are skipped entirely."
+      math_parallel:
+        type: boolean
+        description: "Build only math in dependency-ordered CPU runner jobs using prebuilt non-math stages"
+        default: false
       component_repair:
         type: boolean
         default: false
@@ -189,6 +193,7 @@ jobs:
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       build_stages: ${{ inputs.build_stages || '' }}
       component_repair: ${{ inputs.component_repair || false }}
+      math_parallel: ${{ inputs.math_parallel || false }}
       runtime_repair: ${{ inputs.runtime_repair || false }}
       comm_repair: ${{ inputs.comm_repair || false }}
     permissions:

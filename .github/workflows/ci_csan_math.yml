@@ -1,0 +1,140 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Parallel CSAN Math
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      rocm_package_version:
+        type: string
+        required: true
+      build_runs_on:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Math - seed
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: math-libs
+      stage_display_name: "CSAN math - seed"
+      timeout_minutes: 240
+      amdgpu_family: gfx94X-dcgpu
+      dist_amdgpu_families: gfx94X-dcgpu
+      test_amdgpu_families: gfx94X-dcgpu
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ci
+      ref: ${{ inputs.ref }}
+      rebuild_artifacts: rand
+      configure_artifacts: rand,core-amdsmi,rocprofiler-sdk
+      reuse_stage_artifacts: true
+      artifact_suffix: seed
+    permissions:
+      contents: read
+      id-token: write
+
+  ck:
+    name: Math - ck
+    needs: [seed]
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: math-libs
+      stage_display_name: "CSAN math - ck"
+      timeout_minutes: 1440
+      amdgpu_family: gfx94X-dcgpu
+      dist_amdgpu_families: gfx94X-dcgpu
+      test_amdgpu_families: gfx94X-dcgpu
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ci
+      ref: ${{ inputs.ref }}
+      rebuild_artifacts: composable-kernel
+      configure_artifacts: composable-kernel,rand,core-amdsmi,rocprofiler-sdk
+      reuse_stage_artifacts: true
+      artifact_suffix: ck
+    permissions:
+      contents: read
+      id-token: write
+
+  foundations:
+    name: Math - foundations
+    needs: [seed]
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: math-libs
+      stage_display_name: "CSAN math - foundations"
+      timeout_minutes: 480
+      amdgpu_family: gfx94X-dcgpu
+      dist_amdgpu_families: gfx94X-dcgpu
+      test_amdgpu_families: gfx94X-dcgpu
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ci
+      ref: ${{ inputs.ref }}
+      rebuild_artifacts: fft,prim,libhipcxx,hipthreads,hipdnn,hipdnn-integration-tests,hipkernelprovider
+      configure_artifacts: fft,prim,libhipcxx,hipthreads,hipdnn,hipdnn-integration-tests,hipkernelprovider,rand,core-amdsmi,rocprofiler-sdk
+      reuse_stage_artifacts: true
+      artifact_suffix: foundations
+    permissions:
+      contents: read
+      id-token: write
+
+  algebra:
+    name: Math - algebra
+    needs: [foundations]
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: math-libs
+      stage_display_name: "CSAN math - algebra"
+      timeout_minutes: 1440
+      amdgpu_family: gfx94X-dcgpu
+      dist_amdgpu_families: gfx94X-dcgpu
+      test_amdgpu_families: gfx94X-dcgpu
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ci
+      ref: ${{ inputs.ref }}
+      rebuild_artifacts: blas,support,sparse,solver,rocalution,rocwmma,hipblasltprovider
+      configure_artifacts: blas,support,sparse,solver,rocalution,rocwmma,hipblasltprovider,fft,prim,libhipcxx,hipthreads,hipdnn,hipdnn-integration-tests,hipkernelprovider,rand,core-amdsmi,rocprofiler-sdk
+      reuse_stage_artifacts: true
+      artifact_suffix: algebra
+    permissions:
+      contents: read
+      id-token: write
+
+  ml:
+    name: Math - ml
+    needs: [ck, algebra, foundations]
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    with:
+      stage_name: math-libs
+      stage_display_name: "CSAN math - ml"
+      timeout_minutes: 720
+      amdgpu_family: gfx94X-dcgpu
+      dist_amdgpu_families: gfx94X-dcgpu
+      test_amdgpu_families: gfx94X-dcgpu
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: linux-release-csan
+      build_runs_on: ${{ inputs.build_runs_on }}
+      release_type: ci
+      ref: ${{ inputs.ref }}
+      rebuild_artifacts: hiptensor,miopen,miopenprovider,hipdnn-samples
+      configure_artifacts: hiptensor,miopen,miopenprovider,hipdnn-samples,composable-kernel,blas,support,sparse,solver,rocalution,rocwmma,hipblasltprovider,fft,prim,libhipcxx,hipthreads,hipdnn,hipdnn-integration-tests,hipkernelprovider,rand,core-amdsmi,rocprofiler-sdk
+      reuse_stage_artifacts: true
+      artifact_suffix: ml
+    permissions:
+      contents: read
+      id-token: write

@@ -97,6 +97,13 @@ def main():
     parser.add_argument("--manifest", type=Path, default=Path("repair-baseline.json"))
     args = parser.parse_args()
     if args.mode == "inputs":
+        if (
+            os.environ.get("MATH_PARALLEL") == "true"
+            and os.environ.get("COMPONENT_REPAIR") == "true"
+        ):
+            raise ValueError(
+                "math_parallel and component_repair are mutually exclusive"
+            )
         validate_inputs(
             os.environ.get("PREBUILT_STAGES", ""),
             os.environ.get("BASELINE_RUN_ID", ""),

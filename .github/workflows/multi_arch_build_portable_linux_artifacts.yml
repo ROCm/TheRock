@@ -77,10 +77,18 @@ on:
         description: "Comma-separated artifact names to build (granular reuse). Empty = build all artifacts in stage."
         type: string
         default: ""
+      configure_artifacts:
+        description: "Optional feature/dependency closure to configure; rebuild_artifacts still controls imports and publication"
+        type: string
+        default: ""
       reuse_stage_artifacts:
         description: "Bootstrap existing artifacts from this run, excluding rebuild_artifacts; requires a nonempty explicit subset"
         type: boolean
         default: false
+      artifact_suffix:
+        description: "Optional unique artifact/log namespace for parallel jobs in the same stage"
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -109,9 +117,12 @@ jobs:
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       REBUILD_ARTIFACTS: ${{ inputs.rebuild_artifacts }}
+      CONFIGURE_ARTIFACTS: ${{ inputs.configure_artifacts }}
       REUSE_STAGE_ARTIFACTS: ${{ inputs.reuse_stage_artifacts }}
       REPAIR_ARTIFACTS: ${{ inputs.reuse_stage_artifacts && inputs.rebuild_artifacts || '' }}
       STAGE_NAME: ${{ inputs.stage_name }}
+      ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
+      LOG_STAGE_NAME: ${{ inputs.artifact_suffix != '' && format('{0}-{1}', inputs.stage_name, inputs.artifact_suffix) || inputs.stage_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
       EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
@@ -151,6 +162,14 @@ jobs:
       - name: Install python deps
         run: pip install -r requirements.txt
 
+      - name: Validate parallel artifact namespace
+        if: ${{ inputs.artifact_suffix != '' }}
+        run: |
+          if [[ ! "${ARTIFACT_SUFFIX}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]; then
+            echo "::error::artifact_suffix must contain only letters, digits, underscores or hyphens"
+            exit 1
+          fi
+
       - name: Adjust git config
         run: |
           git config --global --add safe.directory $PWD
@@ -172,6 +191,11 @@ jobs:
       - name: Fetch inbound artifacts
         run: |
           FETCH_STAGE="${STAGE_NAME}"
+          TARGET_FETCH_ARGS=()
+          if [[ "${STAGE_NAME}" == "math-libs" && -n "${ARTIFACT_SUFFIX}" &&
+                "${{ inputs.build_variant_cmake_preset }}" == "linux-release-csan" ]]; then
+            TARGET_FETCH_ARGS+=(--expand-family-to-targets)
+          fi
           if [[ "${REUSE_STAGE_ARTIFACTS}" == "true" ]]; then
             if [[ -z "${REBUILD_ARTIFACTS//[[:space:],;]/}" ]]; then
               echo "::error::reuse_stage_artifacts requires explicit rebuild_artifacts"
@@ -183,6 +207,7 @@ jobs:
             --run-id=${{ github.run_id }} \
             --stage="${FETCH_STAGE}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
+            "${TARGET_FETCH_ARGS[@]}" \
             --exclude-artifacts="${REPAIR_ARTIFACTS}" \
             --output-dir="${BUILD_DIR}" \
             --bootstrap
@@ -201,7 +226,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage="${STAGE_NAME}" \
-            --artifacts="${REBUILD_ARTIFACTS}" \
+            --artifacts="${CONFIGURE_ARTIFACTS:-${REBUILD_ARTIFACTS}}" \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
             --dist-amdgpu-families="${DIST_AMDGPU_FAMILIES}" \
             --manylinux \
@@ -239,6 +264,7 @@ jobs:
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
             "${TEST_FAMILY_CMAKE_ARGS[@]}" \
             ${{ inputs.reuse_stage_artifacts && '-DTHEROCK_ENABLE_BASE=ON' || '' }} \
+            ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' && inputs.artifact_suffix != '' && '-DTHEROCK_ENABLE_CORE_AMDSMI=ON' || '' }} \
             ${{ inputs.build_variant_cmake_preset && format('--preset={0}', inputs.build_variant_cmake_preset) }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && '-DTHEROCK_BUILD_METRICS=ON' || '' }} \
             ${{ inputs.build_variant_cmake_preset == 'linux-release-csan' && inputs.stage_name == 'math-libs' && '-DTHEROCK_BACKGROUND_BUILD_JOBS=1' || '' }} \
@@ -322,7 +348,7 @@ jobs:
         if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: csan-artifacts-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          name: csan-artifacts-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}${{ inputs.artifact_suffix != '' && format('-{0}', inputs.artifact_suffix) || '' }}-${{ github.run_attempt }}
           path: build/csan-stage-artifacts.tar.gz
           compression-level: 0
           if-no-files-found: warn
@@ -332,7 +358,7 @@ jobs:
         if: ${{ always() && inputs.build_variant_cmake_preset == 'linux-release-csan' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: csan-metrics-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}-${{ github.run_attempt }}
+          name: csan-metrics-${{ inputs.stage_name }}-${{ inputs.amdgpu_family || 'generic' }}${{ inputs.artifact_suffix != '' && format('-{0}', inputs.artifact_suffix) || '' }}-${{ github.run_attempt }}
           path: |
             build/metrics/
             build/logs/
@@ -346,7 +372,7 @@ jobs:
         run: |
           python build_tools/github_actions/post_stage_upload.py \
             --run-id=${{ github.run_id }} \
-            --stage="${STAGE_NAME}" \
+            --stage="${LOG_STAGE_NAME}" \
             --build-dir="${BUILD_DIR}" \
             --amdgpu-family="${AMDGPU_FAMILIES}"
 
