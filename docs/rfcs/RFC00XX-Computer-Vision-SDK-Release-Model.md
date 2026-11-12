@@ -1,7 +1,7 @@
 ---
 author: Marco Grond (marco-grond)
 created: 2026-06-04
-modified: 2026-10-30
+modified: 2026-11-12
 status: draft
 ---
 
@@ -19,11 +19,10 @@ status: draft
   and `onnx-runtime/` under each stream subdomain's `rocm/` tree.
 - **RFC00XX** - ROCm SDK archive packaging requirements. The Vision
   SDK should follow the same structure and the Vision SDK packaging
-  should follow a similar naming convention and directory layout. 
+  should follow a similar naming convention and directory layout.
 - **RFC00XX** - HPC SDK dependent on the ROCm Core SDK (similar
   ticket for the HPC SDK - the computer vision SDK should follow
   the same structure and requirements)
-
 
 ## Overview
 
@@ -69,8 +68,11 @@ The CV SDK has an independent repository from `TheRock` under the
 component packages and its tarball are published under a **top-level
 `computer-vision-sdk/` subtree**, a peer of `core/` (not nested under
 `core/` and not in `extras/`) within each stream subdomain's `rocm/`
-tree. The `amdrocm-repo-<stream>` packages that already configure Core
-also surface the CV SDK components — no additional repo wiring is needed.
+tree. Repository access follows RFC0012: the `amdrocm-repo-*` tier
+packages (`-stable`, `-stablerc`, `-nightly`, `-dev`) configure the
+stream subdomains that serve this subtree. Whether the CV components are
+exposed through those existing tier packages or a dedicated repo stanza
+is an RFC0012 implementation detail and is not fixed here.
 
 ## Install location
 
@@ -159,14 +161,15 @@ same prefix.
 
 > **Note.** An alternative design is a *self-contained superset* tarball
 > that bundles the full Core SDK plus CV components, so a single archive
-> is a complete install. That removes the "extract Core first" step but
-> requires the CV release to repackage and re-publish bit-identical Core
-> content for every target/stream — which the current `rocm-vision`
-> build does not do (it consumes Core, it does not rebuild or
-> re-emit it). If AMD wants the superset form, producing it belongs to
-> the Core/TheRock release train, not the `rocm-vision` repo. This RFC
-> specifies the overlay as the deliverable and leaves the superset as a
-> possible future addition.
+> is a complete install. This is producible without rebuilding Core — the
+> `rocm-vision` release can unpack the matching Core SDK tarball, overlay
+> the CV components, and repack. The trade-off is that the superset then
+> carries and re-publishes a full copy of Core for every target and
+> stream, duplicating storage the overlay avoids and coupling the CV
+> release to re-emitting Core content it did not produce. This RFC
+> specifies the overlay as the deliverable for that reason and leaves the
+> superset as a possible future addition should a single-archive install
+> be required.
 
 **Consequences:**
 
@@ -174,8 +177,13 @@ same prefix.
   is a companion, not an alternative. Extracting the overlay without
   Core present yields CV libraries with unresolved Core dependencies.
 
-- The CV overlay and the Core SDK tarball carry the **same version**;
-  the overlay is only valid against the Core SDK of that exact version.
+- The CV overlay targets a Core SDK `<major.minor>` line and carries the
+  matching version. Mirroring the package model — a compatible-version
+  constraint (`>=` lower bound), not an exact pin — the overlay stays
+  valid against **later Core patch releases** (`<X.Y>.N`) of the same
+  `<major.minor>` line, so a Core patch does not by itself force a CV
+  overlay re-release. A new `<major.minor>` Core line requires a matching
+  CV overlay.
 
 - The CV overlay tarball is produced for the **same targets, OSes, and
   streams** as the Core SDK tarball, with no CV-specific matrix.
