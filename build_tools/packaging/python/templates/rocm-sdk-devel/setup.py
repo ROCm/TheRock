@@ -8,6 +8,7 @@ import os
 from setuptools import setup, find_packages
 import sys
 import sysconfig
+import tomllib
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -34,6 +35,14 @@ print(f"Loaded dist_info package: {my_package}")
 packages = find_packages(where="./src")
 print("Found packages:", packages)
 
+install_requires = []
+python_requires = None
+rocjitsu_metadata = THIS_DIR / "rocjitsu-pyproject.toml"
+if rocjitsu_metadata.is_file():
+    project = tomllib.loads(rocjitsu_metadata.read_text())["project"]
+    install_requires = project["dependencies"]
+    python_requires = project["requires-python"]
+
 setup(
     name=f"rocm-sdk-devel",
     version=dist_info.__version__,
@@ -43,6 +52,8 @@ setup(
     },
     zip_safe=False,
     include_package_data=True,
+    install_requires=install_requires,
+    python_requires=python_requires,
     options={
         "bdist_wheel": {
             "plat_name": os.getenv(

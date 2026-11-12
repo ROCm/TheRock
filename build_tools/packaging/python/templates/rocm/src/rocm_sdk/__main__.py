@@ -73,6 +73,8 @@ def _do_test(args: argparse.Namespace):
     # so check that the pure package exists.
     if importlib.util.find_spec("rocm_sdk_devel") is not None:
         ALL_TEST_MODULES.append("rocm_sdk.tests.devel_test")
+        if sys.platform == "linux" and importlib.util.find_spec("rocjitsu") is not None:
+            ALL_TEST_MODULES.append("rocm_sdk.tests.rocjitsu_test")
 
     # The profiler package (rocm[profiler]) is optional and not built on Windows.
     if di.ALL_PACKAGES["profiler"].has_py_package():

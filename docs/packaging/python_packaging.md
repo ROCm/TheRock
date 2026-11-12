@@ -68,6 +68,47 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 
 ## Building Packages
 
+### Rocjitsu Python bindings
+
+The full Linux SDK includes Rocjitsu's Python bindings in `rocm-sdk-devel`,
+alongside its native emulation tools and Mirage. Installing `rocm[devel]` makes
+`import rocjitsu` available without another extra or wheel. The bindings use the
+SDK's matching launcher, libraries, memory helper, and JSON presets; the SDK is
+expanded automatically on first use. The package builder reads the Python
+requirements from Rocjitsu's installed `pyproject.toml`, including `cloudpickle`.
+Builds without the Python artifacts do not add the bindings or their dependency.
+
+The bindings run Python callables in an isolated worker and can be used from
+scripts, tests, or notebooks. For Jupyter or Colab, install the full SDK from
+your ROCm package index into the kernel's environment using `%pip`, then select
+a preset by its existing JSON filename stem:
+
+```python
+%pip install "rocm[devel]" --index-url <rocm-package-index>
+```
+
+```python
+import rocjitsu
+
+
+def add_one():
+    import torch
+
+    return (torch.arange(8, device="cuda") + 1).cpu()
+
+
+with rocjitsu.Session(rocjitsu.config.gfx1250_mi455x) as sim:
+    result = sim.run(add_one)
+```
+
+The worker needs ROCm-enabled PyTorch with support for the simulated target.
+For an existing CUDA notebook, install the ROCm stack and full SDK in a
+separate environment with the exact same Python version, and pass its interpreter
+as `python=`. Install the full SDK in the notebook environment too. Simulation runs
+in a fresh worker, so an already running notebook does not need preloading.
+
+### Packaging command
+
 ROCm Python packages are built using the
 [`build_tools/build_python_packages.py`](/build_tools/build_python_packages.py)
 script.

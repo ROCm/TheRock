@@ -14,10 +14,14 @@ import importlib.util
 import json
 import os
 import stat
+import shutil
+import tarfile
+import io
 import subprocess
 import tempfile
 import unittest
 import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 from unittest import mock
 
@@ -26,12 +30,15 @@ import sys
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
+from _therock_utils.artifact_builder import ArtifactDescriptor, ComponentScanner
 from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
 from build_python_packages import (
     _artifact_catalog_has_matches,
     _run_kpack_split,
     PROFILER_WHEEL_INCLUDES,
     profiler_artifact_filter,
+    populate_devel_package,
+    populate_rocjitsu_bindings,
     validate_kpack_split_target_completeness,
 )
 
@@ -336,6 +343,264 @@ class MultiArchPackagingTest(TmpDirTestCase):
             )
             metadata = zf.read(metadata_name).decode()
             self.assertIn("Requires-Dist: pyelftools", metadata)
+
+    @unittest.skipUnless(sys.platform == "linux", "Rocjitsu requires Linux")
+    def test_rocjitsu_bindings_in_devel_wheel(self):
+        """The full SDK owns the API and one native payload, expanded on demand."""
+        root = self.temp_dir / "build"
+        stage = root / "emulation/rocjitsu/stage"
+        files = {
+            "bin/rocjitsu": "native launcher fixture",
+            "libexec/rocjitsu/rocjitsu-memory": "native memory helper fixture",
+            "lib/librocjitsu.so": "native library fixture",
+            "lib/librocjitsu_hooks.so": "hooks fixture",
+            "lib/python3/site-packages/rocjitsu/__init__.py": "VALUE = 42\n",
+            "share/rocjitsu/configs/gfx1250_mi455x.json": "{}",
+            "share/rocjitsu/python/README.md": "Python execution API",
+            "share/rocjitsu/python/pyproject.toml": """[project]
+name = "rocjitsu"
+version = "0.3.0"
+description = "Python execution API"
+readme = "README.md"
+license = "MIT"
+classifiers = []
+requires-python = ">=3.10"
+dependencies = ["cloudpickle>=3.0,<4"]
+""",
+        }
+        for relpath, content in files.items():
+            path = stage / relpath
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        (stage / "bin/rocjitsu").chmod(0o755)
+        (stage / "libexec/rocjitsu/rocjitsu-memory").chmod(0o755)
+        descriptor = ArtifactDescriptor.load_toml_file(
+            Path(__file__).resolve().parents[2] / "emulation/artifact-rocjitsu.toml",
+            artifact_name="rocjitsu",
+        )
+        scanner = ComponentScanner(root, descriptor)
+        artifacts = self.temp_dir / "artifacts"
+        for component in ("lib", "run", "dev"):
+            dest = artifacts / f"rocjitsu_{component}_generic"
+            dest.mkdir(parents=True)
+            scanner.components[component].write_artifact(dest)
+        # A suffix changes the staging prefix, but must not change import paths.
+        params = Parameters(
+            dest_dir=self.temp_dir / "packages",
+            version="0.0.1.dev0",
+            version_suffix="_test",
+            artifacts=ArtifactCatalog(artifacts),
+        )
+        self._add_artifact(
+            artifacts, "mirage", "run", "generic", {"bin/mirage": "mirage fixture"}
+        )
+        params.artifacts = ArtifactCatalog(artifacts)
+        for compressed in (False, True):
+            with self.subTest(compressed=compressed):
+                package = PopulatedDistPackage(params, logical_name="devel")
+                populate_devel_package(
+                    package,
+                    addl_artifact_names=["mirage"],
+                    tarball_compression=compressed,
+                )
+                wheel_dir = self.temp_dir / f"wheels-{compressed}"
+                subprocess.run(
+                    [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
+                    cwd=package.path,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                wheel = next(wheel_dir.glob("rocm_sdk_devel-*.whl"))
+                with zipfile.ZipFile(wheel) as archive:
+                    names = set(archive.namelist())
+                    self.assertIn("rocjitsu/__init__.py", names)
+                    self.assertIn("rocjitsu/_dist_info.py", names)
+                    self.assertFalse(
+                        any(name.startswith("_rocjitsu") for name in names)
+                    )
+                    metadata = BytesParser().parsebytes(
+                        archive.read(next(p for p in names if p.endswith("/METADATA")))
+                    )
+                    self.assertEqual(
+                        metadata.get_all("Requires-Dist"), ["cloudpickle<4,>=3.0"]
+                    )
+                    self.assertEqual(metadata["Requires-Python"], ">=3.10")
+                    tar_name = "rocm_sdk_devel/_devel.tar" + (
+                        ".xz" if compressed else ""
+                    )
+                    with tarfile.open(fileobj=io.BytesIO(archive.read(tar_name))) as tf:
+                        for native in (
+                            "bin/rocjitsu",
+                            "bin/mirage",
+                            "libexec/rocjitsu/rocjitsu-memory",
+                            "lib/librocjitsu.so",
+                            "lib/librocjitsu_hooks.so",
+                            "share/rocjitsu/configs/gfx1250_mi455x.json",
+                        ):
+                            self.assertTrue(
+                                tf.getmember(f"_rocm_sdk_devel_test/{native}").isfile()
+                            )
+                        for executable in (
+                            "bin/rocjitsu",
+                            "libexec/rocjitsu/rocjitsu-memory",
+                        ):
+                            self.assertTrue(
+                                tf.getmember(f"_rocm_sdk_devel_test/{executable}").mode
+                                & stat.S_IXUSR
+                            )
+                installed = self.temp_dir / f"installed-{compressed}"
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "--no-index",
+                        "--no-deps",
+                        "--target",
+                        str(installed),
+                        str(wheel),
+                    ],
+                    check=True,
+                )
+                meta = PopulatedDistPackage(params, logical_name="meta")
+                shutil.copytree(meta.pure_dir, installed / "rocm_sdk")
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-c",
+                        f"""
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(installed)!r})
+import rocjitsu
+assert rocjitsu.VALUE == 42
+prefix = Path({str(installed)!r}) / "_rocm_sdk_devel_test"
+assert not prefix.exists()
+from rocjitsu._dist_info import THIS_PACKAGE_ENTRY
+assert Path(THIS_PACKAGE_ENTRY.get_py_package().origin).parent == prefix
+assert (prefix / "bin/rocjitsu").is_file()
+assert not Path({str(installed / tar_name)!r}).exists()
+""",
+                    ],
+                    check=True,
+                )
+        # Partial artifact downloads must fail before emitting unusable bindings.
+        for required in ("bin/rocjitsu", "libexec/rocjitsu/rocjitsu-memory"):
+            with self.subTest(required=required):
+                path = (
+                    artifacts
+                    / "rocjitsu_run_generic/emulation/rocjitsu/stage"
+                    / required
+                )
+                content = path.read_text()
+                path.unlink()
+                package = PopulatedDistPackage(
+                    self._make_params(artifacts), logical_name="devel"
+                )
+                with self.assertRaisesRegex(RuntimeError, f"missing {required}"):
+                    populate_rocjitsu_bindings(package)
+                path.write_text(content)
+                path.chmod(0o755)
+
+    def test_windows_devel_wheel_omits_rocjitsu(self):
+        # Supply Linux inputs to verify the Windows wheel excludes them even
+        # when the artifact directory has been reused.
+        artifacts = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifacts,
+            "rocjitsu",
+            "lib",
+            "generic",
+            {
+                "lib/python3/site-packages/rocjitsu/__init__.py": "",
+                "lib/librocjitsu.so": "native",
+            },
+        )
+        self._add_artifact(
+            artifacts,
+            "rocjitsu",
+            "run",
+            "generic",
+            {
+                "bin/rocjitsu": "launcher",
+                "share/rocjitsu/python/pyproject.toml": '[project]\ndependencies = ["cloudpickle"]',
+            },
+        )
+        params = Parameters(
+            dest_dir=self.temp_dir / "packages",
+            version="0.0.1.dev0",
+            version_suffix="_test",
+            artifacts=ArtifactCatalog(artifacts),
+        )
+        package = PopulatedDistPackage(params, logical_name="devel")
+        with mock.patch.object(sys, "platform", "win32"):
+            populate_devel_package(
+                package, addl_artifact_names=[], tarball_compression=False
+            )
+
+        wheel_dir = self.temp_dir / "wheels"
+        subprocess.run(
+            [
+                sys.executable,
+                "setup.py",
+                "bdist_wheel",
+                "--plat-name",
+                "win_amd64",
+                "-d",
+                str(wheel_dir),
+            ],
+            cwd=package.path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        with zipfile.ZipFile(next(wheel_dir.glob("*-win_amd64.whl"))) as wheel:
+            self.assertFalse(
+                any(name.startswith("rocjitsu/") for name in wheel.namelist())
+            )
+            metadata = wheel.read(
+                next(name for name in wheel.namelist() if name.endswith("/METADATA"))
+            )
+            self.assertNotIn(b"cloudpickle", metadata)
+            with tarfile.open(
+                fileobj=io.BytesIO(wheel.read("rocm_sdk_devel/_devel.tar"))
+            ) as tf:
+                self.assertFalse(any("rocjitsu" in name for name in tf.getnames()))
+
+    def test_devel_without_rocjitsu_api_has_no_python_dependency(self):
+        artifacts = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifacts, "rocjitsu", "lib", "generic", {"lib/librocjitsu.so": "native"}
+        )
+        params = Parameters(
+            dest_dir=self.temp_dir / "packages",
+            version="0.0.1.dev0",
+            version_suffix="_test",
+            artifacts=ArtifactCatalog(artifacts),
+        )
+        # Reusing the output directory must remove bindings from a previous build.
+        previous = PopulatedDistPackage(params, logical_name="devel")
+        stale = previous.path / "src/rocjitsu"
+        stale.mkdir()
+        (stale / "__init__.py").write_text("# stale API")
+        (previous.path / "rocjitsu-pyproject.toml").write_text("# stale metadata")
+        package = PopulatedDistPackage(params, logical_name="devel")
+        populate_rocjitsu_bindings(package)
+        self.assertFalse(stale.exists())
+        subprocess.run(
+            [sys.executable, "setup.py", "egg_info"],
+            cwd=package.path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        metadata = (package.path / "src/rocm_sdk_devel.egg-info/PKG-INFO").read_text()
+        self.assertNotIn("Requires-Dist:", metadata)
+        self.assertNotIn("Requires-Python:", metadata)
+        self.assertNotIn("rocjitsu", params.dist_info.ALL_PACKAGES)
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
