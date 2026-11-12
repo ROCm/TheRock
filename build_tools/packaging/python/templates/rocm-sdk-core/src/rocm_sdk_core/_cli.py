@@ -184,6 +184,10 @@ def rocm_info():
     _exec("bin/rocminfo", expand_devel=False)
 
 
+def rocm_smi():
+    _exec("bin/rocm-smi", expand_devel=False)
+
+
 def roccoremerge():
     _exec("bin/roccoremerge")
 
@@ -216,8 +220,8 @@ def rocprofv3():
     _exec("bin/rocprofv3")
 
 
-def rocprofv3_attach():
-    _exec("bin/rocprofv3-attach")
+def rocprof_attach():
+    _exec("bin/rocprof-attach")
 
 
 def rocprofv3_avail():
