@@ -329,9 +329,7 @@ jobs:
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
       - name: Installed cpp-sdk-user test
-        # Runs examples/cpp-sdk-user against the installed prefix. The launcher
-        # sets THEROCK_ENABLE_* from configs under the prefix. hip and hipblaslt
-        # stay required; a component with no config (for example hipTensor) is OFF.
+        # Runs examples/cpp-sdk-user against the installed prefix
         if: ${{ inputs.install_prefix != '' }}
         run: |
           echo "CPP SDK USER - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
