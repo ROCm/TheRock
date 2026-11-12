@@ -776,6 +776,33 @@ def upload_artifact(request: UploadRequest) -> bool:
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
 
+            # Upload the matching fingerprint after the archive and checksum.
+            artifact_name = ArtifactName.from_filename(request.artifact_key)
+            if artifact_name is None:
+                raise ValueError(
+                    f"Invalid artifact archive name: {request.artifact_key}"
+                )
+
+            fingerprint_name = (
+                f"{artifact_name.name}_"
+                f"{artifact_name.component}_"
+                f"{artifact_name.target_family}.fprint"
+            )
+
+            # Archives come from build/artifacts or build/.upload_cache.
+            # Fingerprints remain in build/artifacts in both cases.
+            fingerprint_path = (
+                request.source_path.parent.parent / "artifacts" / fingerprint_name
+            )
+            if fingerprint_path.is_file():
+                log(f"  ++ Uploading {fingerprint_name}")
+                request.backend.upload_artifact(
+                    fingerprint_path,
+                    fingerprint_name,
+                )
+            else:
+                log(f"  == Skipping missing fingerprint: {fingerprint_path}")
+
             return True
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
