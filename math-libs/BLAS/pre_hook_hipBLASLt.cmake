@@ -7,6 +7,21 @@
 # tools. This kind of reacharound is not great but the project is old, so
 # c'est la vie.
 
+# Tensile launches a separate worker pool, so Ninja's job limit does not bound
+# it. Forward the measured CSAN CI budget through TensileLite's supported cache
+# option, which emits --jobs for TensileCreateLibrary. Keep an explicit smaller
+# positive Tensile limit when one was requested.
+if(THEROCK_SANITIZER STREQUAL "CSAN" AND DEFINED ENV{CMAKE_BUILD_PARALLEL_LEVEL})
+  if(NOT "$ENV{CMAKE_BUILD_PARALLEL_LEVEL}" MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "CSAN requires a positive CMAKE_BUILD_PARALLEL_LEVEL when set")
+  endif()
+  if(NOT TENSILELITE_BUILD_PARALLEL_LEVEL MATCHES "^[1-9][0-9]*$" OR
+      TENSILELITE_BUILD_PARALLEL_LEVEL GREATER "$ENV{CMAKE_BUILD_PARALLEL_LEVEL}")
+    set(TENSILELITE_BUILD_PARALLEL_LEVEL "$ENV{CMAKE_BUILD_PARALLEL_LEVEL}" CACHE STRING
+      "CPU workers for Tensile device-library generation" FORCE)
+  endif()
+endif()
+
 block(SCOPE_FOR VARIABLES)
   if(NOT THEROCK_TOOLCHAIN_ROOT)
     message(FATAL_ERROR "As a sub-project, THEROCK_TOOLCHAIN_ROOT should have been defined and was not")
