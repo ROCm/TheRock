@@ -37,10 +37,7 @@ else()
   # Now that the CIR build is default on, mlir objects get installed and exported in clang config.
   # TheRock explictly excludes llvm objects in artifact-amd-llvm.toml, which causes a failure
   # when the clang config is used as those files are not present. Disable their install.
-  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF CACHE BOOL
-    "Disable installation of MLIR aggregate object libraries"
-    FORCE
-  )
+  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF CACHE BOOL "Disable installation of MLIR aggregate object libraries" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
