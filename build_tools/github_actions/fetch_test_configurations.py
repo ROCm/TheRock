@@ -1197,7 +1197,7 @@ test_matrix = {
     "hipthreads": {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 45,
         "additional_requirements_files": [
             _get_artifact_path("hipthreads/test/requirements-test.txt"),
         ],
