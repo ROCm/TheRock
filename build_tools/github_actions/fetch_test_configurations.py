@@ -190,10 +190,6 @@ def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) ->
     `pools` holds the family's multi-GPU runner pools keyed by config key (see
     MULTI_GPU_RUNNER_KEYS). `pool` is the component's "multi_gpu_pool" (e.g.
     "2gpu"), or None for the default 8-GPU pool.
-
-    There is deliberately no fallback between pools: a component that asks for
-    "2gpu" is skipped on families that have no 2-GPU pool rather than silently
-    occupying an 8-GPU node, which is the capacity this split exists to protect.
     """
     key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
     if key not in MULTI_GPU_RUNNER_KEYS:
@@ -249,14 +245,9 @@ _rocgdb_common = {
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
 #
-# A multi-GPU component ("multi_gpu" in its entry) draws from the family's default
-# 8-GPU pool. One that needs fewer GPUs can name a smaller pool with
-# "multi_gpu_pool", which selects the family's "test-runs-on-<pool>" runners --
-# e.g. rccl caps itself at 2 GPUs, so it sets "2gpu" rather than occupying an 8-GPU
-# node. Pools never fall back to one another: a family with no matching pool skips
-# the component, so asking for a smaller pool can never consume a larger one. Omit
-# "multi_gpu_pool" for components that need all 8 GPUs (rocshmem, hipfft-multi-gpu,
-# rocfft-multi-gpu).
+# A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
+# pool by default. Add "multi_gpu_pool": "2gpu" to use the family's 2-GPU pool
+# instead; families without that pool skip the component rather than falling back.
 #
 # A component may also restrict which GPU families it runs on via "include_family"
 # (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
@@ -887,9 +878,6 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
-        # test_rccl.py pins UT_MIN_GPUS/UT_MAX_GPUS to 2, so this runs on the
-        # 2-GPU pool instead of consuming a whole 8-GPU node. Families without a
-        # 2-GPU pool skip rccl entirely.
         "multi_gpu_pool": "2gpu",
         # RCCL collective ops use cross-process shared memory via /dev/shm
         "container_options": ["--ipc host"],
