@@ -1,0 +1,6 @@
+{
+  "gfx1250": {
+    "family": "gfx125X-dcgpu",
+    "config": "gfx1250_mi455x_kmd_4gpu.json"
+  }
+}

@@ -13,6 +13,7 @@ exclude = [
 [components.run."ml-libs/MIOpen/stage"]
 exclude = [
   "bin/miopen_gtest*",
+  "bin/addkernels*",
   # Same folder as in lib. This entry has no include, so it would take whatever
   # lib skips.
   "bin/miopen_wrapper_tests/**",
@@ -23,5 +24,6 @@ exclude = [
 [components.test."ml-libs/MIOpen/stage"]
 include = [
   "bin/miopen_gtest*",
+  "bin/addkernels*",
   "bin/miopen_wrapper_tests/**",
 ]

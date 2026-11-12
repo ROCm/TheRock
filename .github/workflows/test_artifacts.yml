@@ -307,7 +307,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
+      #   1. For GPU components on user-triggered workflow_dispatch, honor test_runs_on.
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
@@ -315,6 +315,7 @@ jobs:
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
+            !matrix.components.linux_cpu_runner &&
             !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||

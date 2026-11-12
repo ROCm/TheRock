@@ -7,12 +7,14 @@ import os
 import sys
 import json
 import unittest
+import tempfile
 from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import fetch_test_configurations
+from miopen_rocjitsu_targets import TEST_LABEL_GROUP, load_targets
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -454,34 +456,99 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._inject_job("tt-ungated")
         self.assertIn("tt-ungated", self._selected_names())
 
-    def test_gfx1250_rocjitsu_selection_boundaries(self):
-        component = "miopen-gfx1250-rocjitsu-quick"
-        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+    def test_rocjitsu_one_registry_entry_adds_selectable_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Path(directory) / "targets.json"
+            targets = load_targets()
+            targets["gfx950"] = {
+                "family": "gfx950-dcgpu",
+                "config": "gfx950_mi355x_kmd.json",
+            }
+            registry.write_text(json.dumps(targets), encoding="utf-8")
+            matrix = fetch_test_configurations._miopen_rocjitsu_matrix(
+                load_targets(registry)
+            )
+            os.environ["PROJECTS_TO_TEST"] = "miopen"
+            os.environ["TEST_RUNS_ON"] = ""
+            os.environ["TEST_TYPE"] = "quick"
+            with patch.dict(fetch_test_configurations.test_matrix, matrix, clear=True):
+                os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+                self.assertEqual(self._selected_names(), {"miopen-rocjitsu-gfx950"})
+                os.environ["AMDGPU_FAMILIES"] = "gfx90a"
+                self.assertEqual(self._selected_names(), set())
+
+    def test_rocjitsu_registered_target_selection(self):
+        os.environ["TEST_RUNS_ON"] = ""
+        os.environ["TEST_RUNS_ON_CPU"] = "small-cpu-pool"
+        os.environ["TEST_TYPE"] = "quick"
+        for arch, target in load_targets().items():
+            component = f"miopen-rocjitsu-{arch}"
+            for family in (target["family"], arch):
+                os.environ["AMDGPU_FAMILIES"] = family
+                for projects, labels in (
+                    ("miopen", []),
+                    ("miopen", ["test:miopen"]),
+                    ("miopen", [f"test:{TEST_LABEL_GROUP}"]),
+                    ("*", [f"test:{component}"]),
+                    (component, []),
+                ):
+                    with self.subTest(
+                        arch=arch, family=family, projects=projects, labels=labels
+                    ):
+                        os.environ["PROJECTS_TO_TEST"] = projects
+                        os.environ["TEST_LABELS"] = json.dumps(labels)
+                        self.assertEqual(self._selected_names(), {component})
+                        job = self._get_components()[0]
+                        self.assertNotEqual(job["test_runner"], "small-cpu-pool")
+                        self.assertNotIn("/dev/kfd", job["container_options"])
+                        self.assertNotIn("/dev/dri", job["container_options"])
+
+    def test_rocjitsu_unsupported_configuration_excluded(self):
         os.environ["TEST_RUNS_ON"] = ""
         os.environ["TEST_RUNS_ON_CPU"] = "cpu-test-pool"
         os.environ["TEST_TYPE"] = "quick"
-        os.environ["TEST_LABELS"] = json.dumps([f"test:{component}"])
-        self.assertEqual(self._selected_names(), {component})
-        os.environ["BUILD_VARIANT"] = "host-asan"
-        self.assertEqual(self._selected_names(), set())
-        os.environ["BUILD_VARIANT"] = "release"
-
-        # Parent project/label inheritance must not defeat exact-child selection.
         os.environ["PROJECTS_TO_TEST"] = "miopen"
-        os.environ["TEST_LABELS"] = "[]"
-        self.assertIn(component, self._selected_names())
-        os.environ["TEST_LABELS"] = json.dumps(["test:miopen"])
-        self.assertIn(component, self._selected_names())
-        os.environ["PROJECTS_TO_TEST"] = "rocblas"
-        self.assertNotIn(component, self._selected_names())
+        os.environ["TEST_LABELS"] = json.dumps([f"test:{TEST_LABEL_GROUP}"])
+        for family in ("gfx94X-dcgpu", "gfx1250-strict", "gfx9999", ""):
+            with self.subTest(family=family):
+                os.environ["AMDGPU_FAMILIES"] = family
+                self.assertEqual(self._selected_names(), set())
+        for target in load_targets().values():
+            os.environ["AMDGPU_FAMILIES"] = target["family"]
+            for variant in (
+                "asan",
+                "host-asan",
+                "asan-debug",
+                "host-asan-debug",
+                "tsan",
+            ):
+                with self.subTest(family=target["family"], variant=variant):
+                    os.environ["BUILD_VARIANT"] = variant
+                    self.assertEqual(self._selected_names(), set())
+            os.environ["BUILD_VARIANT"] = "release"
+            for platform in ("windows", "wsl"):
+                with self.subTest(family=target["family"], platform=platform):
+                    sys.argv = [
+                        "fetch_test_configurations.py",
+                        f"--platform={platform}",
+                    ]
+                    self.assertEqual(self._selected_names(), set())
+            sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
+            os.environ["PROJECTS_TO_TEST"] = "rocblas"
+            self.assertEqual(self._selected_names(), set())
+            os.environ["PROJECTS_TO_TEST"] = "miopen"
 
-        os.environ["PROJECTS_TO_TEST"] = "*"
-        os.environ["TEST_LABELS"] = json.dumps([f"test:{component}"])
-        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
-        self.assertEqual(self._selected_names(), set())
-        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
-        sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
-        self.assertEqual(self._selected_names(), set())
+    def test_rocjitsu_individual_label_does_not_select_another_target(self):
+        os.environ["TEST_RUNS_ON"] = ""
+        os.environ["TEST_TYPE"] = "quick"
+        targets = load_targets()
+        for arch in targets:
+            os.environ["TEST_LABELS"] = json.dumps([f"test:miopen-rocjitsu-{arch}"])
+            for other_arch, target in targets.items():
+                if arch != other_arch:
+                    with self.subTest(arch=arch, family=target["family"]):
+                        os.environ["AMDGPU_FAMILIES"] = target["family"]
+                        self.assertEqual(self._selected_names(), set())
 
     def test_miopen_dbsync_declares_non_quick_tiers(self):
         # miopen-dbsync is a slow specialist check gated to standard/comprehensive/full.

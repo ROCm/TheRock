@@ -44,6 +44,7 @@ from determine_rocm_test_dependencies import (  # noqa: E402
     list_subprojects,
     validate_policies,
 )
+from miopen_rocjitsu_targets import component_names
 
 # ---------------------------------------------------------------------------
 # Fixture graph (reverse / consumer edges only, all lowercase). The
@@ -1162,10 +1163,34 @@ class TestExplain(_FixtureTestCase):
         selection = get_subprojects_to_test(["amdsmi"], self.root)
         self.assertEqual(final_set, selection)
 
-    def test_cli_selects_miopen_dbsync_with_miopen(self) -> None:
-        graph = {"miopen": {"consumers": []}}
+    def test_cli_selects_miopen_children_directly_and_downstream(self) -> None:
+        graph = {
+            "composable_kernel": {"consumers": ["miopen"]},
+            "miopen": {"consumers": []},
+        }
         root = _make_fixture(graph=graph, policies="")
         try:
+            for changed in ("projects/miopen", "projects/composablekernel"):
+                with self.subTest(changed=changed):
+                    proc = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--therock-dir",
+                            str(root),
+                            "--changed-projects",
+                            changed,
+                            "--level",
+                            "4",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    selected = set(json.loads(proc.stdout.strip()))
+                    self.assertTrue(
+                        {"miopen", "miopen-dbsync", *component_names()} <= selected
+                    )
             proc = subprocess.run(
                 [
                     sys.executable,
@@ -1173,16 +1198,15 @@ class TestExplain(_FixtureTestCase):
                     "--therock-dir",
                     str(root),
                     "--changed-projects",
-                    "miopen",
+                    "projects/composablekernel",
                     "--level",
-                    "4",
+                    "5",
                 ],
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            selected = set(json.loads(proc.stdout.strip()))
-            self.assertEqual(selected, {"miopen", "miopen-dbsync"})
+            self.assertTrue(set(component_names()).isdisjoint(json.loads(proc.stdout)))
         finally:
             shutil.rmtree(root, ignore_errors=True)
 

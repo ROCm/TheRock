@@ -210,6 +210,14 @@ jobs:
             echo "KUBE_CPU_REQUEST not set, thread limits not configured"
           fi
 
+      - name: Prepare test
+        if: ${{ fromJSON(inputs.component).prepare_script }}
+        timeout-minutes: ${{ fromJSON(inputs.component).prepare_timeout_minutes || 30 }}
+        env:
+          COMPONENT_PREPARE_SCRIPT: ${{ fromJSON(inputs.component).prepare_script }}
+        # Like test_script, this is a trusted repository-selected shell program.
+        run: bash -e -o pipefail -c "${COMPONENT_PREPARE_SCRIPT}"
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
@@ -254,6 +262,7 @@ jobs:
         env:
           MATRIX_SHARD: ${{ matrix.shard }}
           COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
+          COMPONENT_PREPARE_SCRIPT: ${{ fromJSON(inputs.component).prepare_script }}
           COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
@@ -265,12 +274,21 @@ jobs:
             --amdgpu-family "${AMDGPU_FAMILIES}" \
             --amdgpu-targets "${AMDGPU_TARGETS}" \
             --test-script "${COMPONENT_TEST_SCRIPT}" \
+            --prepare-script "${COMPONENT_PREPARE_SCRIPT}" \
             --shard-index "${MATRIX_SHARD}" \
             --total-shards "${COMPONENT_TOTAL_SHARDS}" \
             --test-type "${COMPONENT_TEST_TYPE}" \
             --print-cmd \
             --fetch-artifact-args="${COMPONENT_FETCH_ARTIFACT_ARGS}" \
             --additional-requirements-files="${REQUIREMENTS_FILES}"
+
+      - name: Upload supplemental test reports
+        if: ${{ always() && fromJSON(inputs.component).report_artifact_paths }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ fromJSON(inputs.component).job_name }}-${{ inputs.amdgpu_families }}-${{ inputs.build_variant }}-shard${{ matrix.shard }}
+          path: ${{ fromJSON(inputs.component).report_artifact_paths }}
+          if-no-files-found: warn
 
       - name: Post-job cleanup GPU processes on Linux
         if: ${{ always() && runner.os == 'Linux' }}
