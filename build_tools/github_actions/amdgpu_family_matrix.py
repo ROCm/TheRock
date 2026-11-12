@@ -256,10 +256,10 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
 - test-runs-on-<N>gpu / test-runs-on-<N>gpu-labels: (optional) pool for multi-GPU components that
-    only need N GPUs, e.g. "test-runs-on-2gpu" for rccl. A component opts into a tier with
-    "gpu_count" in fetch_test_configurations.py; when the family has no pool for that tier, it
-    falls back to test-runs-on-multi-gpu. Keeps 2-GPU-capable jobs off the scarce 8-GPU nodes
-    without putting jobs that genuinely need 8 GPUs at risk of landing on a 2-GPU node.
+    only need N GPUs, e.g. "test-runs-on-2gpu" for rccl. A component opts in with
+    "multi_gpu_pool" in fetch_test_configurations.py. Pools never fall back to one another: a
+    family without the named pool skips those components, so 2-GPU-capable jobs stay off the
+    scarce 8-GPU nodes and jobs needing 8 GPUs never land on a 2-GPU node.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
     ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
@@ -502,8 +502,8 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
-            # 2-GPU pool for components that only need a pair of GPUs (rccl).
-            "test-runs-on-2gpu": "linux-gfx950-2gpu-ccs-ossci-rocm",
+            # No 2-GPU pool yet, so components asking for one (rccl) are skipped
+            # on this family rather than taking an 8-GPU node.
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": [

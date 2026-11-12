@@ -633,7 +633,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_multi_gpu_job_included_when_supported(self):
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -643,7 +650,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         rccl = next(j for j in components if j["job_name"] == "rccl")
-        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu")
+        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-mgpu")
 
     def test_multi_gpu_job_uses_count_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
@@ -687,25 +696,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fetch_test_configurations.run()
             components = self._get_components()
 
-            rccl = next(j for j in components if j["job_name"] == "rccl")
-            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called for the multi-gpu jobs.
-            # With rocshmem added there is more than one multi-GPU job (rccl and
-            # rocshmem), each using a "<job_name>-multi-gpu" context.
+            rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+            self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-mgpu-a")
+            # Verify select_weighted_label was called for the default-pool jobs,
+            # each using a "<job_name>-multi-gpu" context.
             multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
             multi_gpu_contexts = {c[1] for c in multi_gpu_calls}
-            self.assertIn("rccl-multi-gpu", multi_gpu_contexts)
             self.assertIn("rocshmem-multi-gpu", multi_gpu_contexts)
+            # rccl asks for the 2gpu pool, which this family does not have.
+            self.assertNotIn("rccl", {j["job_name"] for j in components})
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
             )
 
-    def test_gpu_count_tier_routes_to_matching_pool(self):
-        """A component with "gpu_count": N draws from the test-runs-on-<N>gpu pool.
+    def test_multi_gpu_pool_routes_to_matching_pool(self):
+        """A component with "multi_gpu_pool" draws from that pool's runners.
 
-        rccl declares gpu_count 2, so it must land on the 2-GPU pool while jobs
-        that need all 8 GPUs (rocshmem) stay on the default multi-GPU pool.
+        rccl declares the "2gpu" pool, so it must land on the 2-GPU runners while
+        jobs that need all 8 GPUs (rocshmem) stay on the default multi-GPU pool.
         """
 
         def fake_get_all_families(_):
@@ -731,11 +740,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
         self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
 
-    def test_gpu_count_tier_falls_back_to_default_multi_gpu_pool(self):
-        """Without a test-runs-on-<N>gpu pool, gpu_count components use the 8-GPU pool.
+    def test_multi_gpu_pool_excluded_when_family_lacks_that_pool(self):
+        """A family with no matching pool skips the component, never falling back.
 
-        This keeps the TheRock and therock-ci-config changes independently
-        landable: declaring gpu_count before a family has a 2-GPU pool is a no-op.
+        gfx950 has 8-GPU runners but no 2-GPU pool, so rccl must be dropped
+        rather than scheduled onto a whole 8-GPU node. Components that want the
+        default pool (rocshmem) are unaffected.
         """
 
         def fake_get_all_families(_):
@@ -755,11 +765,23 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         components = self._get_components()
 
-        rccl = next(j for j in components if j["job_name"] == "rccl")
-        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-8gpu")
+        job_names = {j["job_name"] for j in components}
+        self.assertNotIn("rccl", job_names)
+        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
 
-    def test_gpu_count_tier_prefers_weighted_labels(self):
-        """test-runs-on-<N>gpu-labels wins over the tier's plain default label."""
+    def test_unknown_multi_gpu_pool_raises(self):
+        """A typo'd pool fails loudly instead of silently dropping the component."""
+        with self.assertRaises(ValueError) as ctx:
+            fetch_test_configurations._select_multi_gpu_runner(
+                job_name="rccl",
+                pool="2-gpu",
+                pools={"test-runs-on-2gpu": "linux-mi300-2gpu"},
+            )
+        self.assertIn("unknown multi_gpu_pool", str(ctx.exception))
+
+    def test_multi_gpu_pool_prefers_weighted_labels(self):
+        """test-runs-on-<pool>-labels wins over the pool's plain default label."""
 
         def fake_get_all_families(_):
             return {
@@ -822,7 +844,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for the full tier when the family supports it."""
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -844,7 +873,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -916,7 +952,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -935,7 +978,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "standard"
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -959,7 +1009,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -981,7 +1038,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         def fake_get_all_families(_):
             # Only gfx1150 has runner config, but rccl only lists gfx94X/gfx950 in multi_gpu
             return {
-                "gfx1150": {"linux": {"test-runs-on-multi-gpu": "linux-gfx1150-mgpu"}}
+                "gfx1150": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-gfx1150-mgpu",
+                        "test-runs-on-2gpu": "linux-gfx1150-2gpu",
+                    }
+                }
             }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
@@ -1023,7 +1085,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu", "test:rccl"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families

@@ -184,32 +184,35 @@ def _family_matches(
     )
 
 
-def _select_multi_gpu_runner(
-    *, job_name: str, gpu_count: int | None, pools: dict
-) -> str:
+def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) -> str:
     """Pick the runner label for a multi-GPU component, or "" if none is configured.
 
     `pools` holds the family's multi-GPU runner pools keyed by config key (see
-    MULTI_GPU_RUNNER_KEYS). A component that only needs `gpu_count` GPUs is
-    placed on the matching "test-runs-on-<N>gpu" pool, keeping it off the scarce
-    8-GPU nodes. Families without that tier fall back to the default
-    "test-runs-on-multi-gpu" pool, so a component can declare `gpu_count` before
-    every family has a dedicated pool.
-    """
-    keys = ["test-runs-on-multi-gpu"]
-    if gpu_count:
-        keys.insert(0, f"test-runs-on-{gpu_count}gpu")
+    MULTI_GPU_RUNNER_KEYS). `pool` is the component's "multi_gpu_pool" (e.g.
+    "2gpu"), or None for the default 8-GPU pool.
 
-    for key in keys:
-        # e.g. "rccl-2gpu", "rocshmem-multi-gpu"
-        context_name = f"{job_name}-{key.removeprefix('test-runs-on-')}"
-        labels = pools.get(f"{key}-labels")
-        if labels:
-            return select_weighted_label(labels, context_name)
-        default = pools.get(key)
-        if default:
-            print(f"  {context_name}: selected runner: {default}")
-            return default
+    There is deliberately no fallback between pools: a component that asks for
+    "2gpu" is skipped on families that have no 2-GPU pool rather than silently
+    occupying an 8-GPU node, which is the capacity this split exists to protect.
+    """
+    key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
+    if key not in MULTI_GPU_RUNNER_KEYS:
+        # Catch typos here: an unknown pool would otherwise match nothing and
+        # silently drop the component from every family.
+        raise ValueError(
+            f"{job_name}: unknown multi_gpu_pool {pool!r}. "
+            f"Known pools: {sorted(MULTI_GPU_RUNNER_KEYS)}"
+        )
+
+    # e.g. "rccl-2gpu", "rocshmem-multi-gpu"
+    context_name = f"{job_name}-{pool or 'multi-gpu'}"
+    labels = pools.get(f"{key}-labels")
+    if labels:
+        return select_weighted_label(labels, context_name)
+    default = pools.get(key)
+    if default:
+        print(f"  {context_name}: selected runner: {default}")
+        return default
     return ""
 
 
@@ -247,11 +250,13 @@ _rocgdb_common = {
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
 #
 # A multi-GPU component ("multi_gpu" in its entry) draws from the family's default
-# 8-GPU pool. One that needs fewer GPUs can declare "gpu_count": N to draw from the
-# family's "test-runs-on-<N>gpu" pool instead -- e.g. rccl caps itself at 2 GPUs, so
-# it uses the 2-GPU pool rather than occupying an 8-GPU node. Families with no pool
-# for that tier fall back to the 8-GPU pool. Omit "gpu_count" for components that
-# genuinely need all 8 GPUs (rocshmem, hipfft-multi-gpu, rocfft-multi-gpu).
+# 8-GPU pool. One that needs fewer GPUs can name a smaller pool with
+# "multi_gpu_pool", which selects the family's "test-runs-on-<pool>" runners --
+# e.g. rccl caps itself at 2 GPUs, so it sets "2gpu" rather than occupying an 8-GPU
+# node. Pools never fall back to one another: a family with no matching pool skips
+# the component, so asking for a smaller pool can never consume a larger one. Omit
+# "multi_gpu_pool" for components that need all 8 GPUs (rocshmem, hipfft-multi-gpu,
+# rocfft-multi-gpu).
 #
 # A component may also restrict which GPU families it runs on via "include_family"
 # (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
@@ -883,8 +888,9 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
         # test_rccl.py pins UT_MIN_GPUS/UT_MAX_GPUS to 2, so this runs on the
-        # 2-GPU pool instead of consuming a whole 8-GPU node.
-        "gpu_count": 2,
+        # 2-GPU pool instead of consuming a whole 8-GPU node. Families without a
+        # 2-GPU pool skip rccl entirely.
+        "multi_gpu_pool": "2gpu",
         # RCCL collective ops use cross-process shared memory via /dev/shm
         "container_options": ["--ipc host"],
     },
@@ -1718,15 +1724,18 @@ def run():
         if "multi_gpu_runner" in component:
             # Multi-GPU components use multi-GPU runner labels, from the tier
             # matching their "gpu_count" when the family configures one.
+            pool = component.get("multi_gpu_pool")
             runner = _select_multi_gpu_runner(
                 job_name=job_name,
-                gpu_count=component.get("gpu_count"),
+                pool=pool,
                 pools=multi_gpu_pools,
             )
             if not runner:
-                # No multi-GPU runner configured for this family; skip the component
+                # No matching runner for this family; skip the component rather
+                # than moving it onto a pool with a different GPU count.
                 logging.info(
-                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no "
+                    f"{pool or 'multi-gpu'} runner configured"
                 )
                 continue
             component["multi_gpu_runner"] = runner
