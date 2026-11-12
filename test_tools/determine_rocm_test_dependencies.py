@@ -49,6 +49,8 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "build_tools" / "github_actions")
 )
+# For _therock_utils.cmake_consumer_graph, imported lazily by get_repo_owners().
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "build_tools"))
 from github_actions_api import gha_get_pr_labels, gha_set_output
 
 # Level -> BFS walk depth over `consumers` edges:
@@ -69,6 +71,11 @@ _DEPTH_DESCRIPTION: dict[int | None, tuple[str, str]] = {
 
 _CONSUMER_GRAPH_NAME = "therock_consumer_graph.json"
 _TEST_POLICIES_NAME = "test_policies.toml"
+
+# Repository key for components built from TheRock's own tree rather than from one
+# of its submodules. Mirrors cmake_consumer_graph.THEROCK_REPO; defined here too so
+# callers can name it without importing the parser (and its cmake-parser dep).
+THEROCK_REPO = "therock"
 
 # The committed graph and policy live next to this tool in test_tools/. Reading
 # them script-relative lets selection work from a clean checkout with no build/.
@@ -304,6 +311,72 @@ def _load_synthetic_subprojects(
             )
         result[name.lower()] = [c.lower() for c in consumers]
     return result
+
+
+def get_repo_owners(therock_dir: Path | None = None) -> dict[str, str]:
+    """Return { consumer-graph key -> owning repository } for every graph node.
+
+    The repository is a submodule path (``rocm-libraries``, ``rocm-systems``,
+    ``debug-tools/rocgdb/source``, ...) or ``THEROCK_REPO`` for components built
+    from TheRock's own tree. Ownership is derived by statically parsing the
+    super-project CMake -- no configure, no submodule checkout, nothing committed
+    to keep in sync.
+
+    Synthetic subprojects have no CMake declaration to read, so they inherit the
+    repository of their declared consumers (TensileLite is vendored inside
+    hipblaslt / hipsparselt, so it belongs wherever those do). A synthetic node
+    whose consumers span repositories has no single owner and is an error.
+
+    The parser is a conservative superset of the committed graph, so it may know
+    components the graph does not; those are dropped. Every graph key must come
+    out owned -- a gap means the parser lost a declaration and is raised, not
+    silently defaulted, so ownership can never quietly fall back to TheRock.
+    """
+    # Imported lazily: this pulls in the third-party cmake-parser, which the test
+    # selection path proper does not need.
+    from _therock_utils.cmake_consumer_graph import (
+        RepositoryAnalyzer,
+        list_submodule_paths,
+    )
+
+    repository_root = Path(therock_dir) if therock_dir else _TEST_TOOLS_DIR.parent
+    analysis = RepositoryAnalyzer(repository_root).analyze()
+    parsed = analysis.build_repo_map(list_submodule_paths(repository_root))
+
+    graph = _load_consumer_graph(therock_dir)
+    owners = {key: repo for key, repo in parsed.items() if key in graph}
+
+    for name, consumers in _load_synthetic_subprojects(therock_dir).items():
+        if name in owners:
+            continue
+        consumer_repos = {parsed[c] for c in consumers if c in parsed}
+        if len(consumer_repos) != 1:
+            raise ValueError(
+                f"test_policies.toml: synthetic subproject '{name}' has no single "
+                f"owning repository; its consumers {sorted(consumers)} resolve to "
+                f"{sorted(consumer_repos) or 'nothing'}. Synthetic nodes inherit "
+                "their consumers' repository, so these must agree."
+            )
+        owners[name] = consumer_repos.pop()
+
+    unowned = sorted(set(graph) - set(owners))
+    if unowned:
+        raise ValueError(
+            f"no owning repository for consumer-graph node(s) {unowned}. Every "
+            "node must resolve to a repository; this means the CMake parser did "
+            "not see their declaration."
+        )
+    return owners
+
+
+def get_components_for_repo(repo: str, therock_dir: Path | None = None) -> set[str]:
+    """Return every consumer-graph key owned by `repo`.
+
+    `repo` is a submodule path as reported by `get_repo_owners` (e.g.
+    ``rocm-libraries``). An unknown repository yields an empty set; callers treat
+    that as "no repository-scoped narrowing" rather than "test nothing".
+    """
+    return {key for key, owner in get_repo_owners(therock_dir).items() if owner == repo}
 
 
 def _level_for(policies: dict[str, dict], proj: str) -> int:
@@ -625,6 +698,12 @@ def main():
         "--list-subprojects", action="store_true", help="List all known subprojects"
     )
     parser.add_argument(
+        "--list-repos",
+        action="store_true",
+        help="List each owning repository and the consumer-graph components built "
+        "from it, derived by parsing the super-project CMake.",
+    )
+    parser.add_argument(
         "--show-deps",
         action="store_true",
         help="With --list-subprojects, show consumers (or 'empty' if none)",
@@ -659,6 +738,13 @@ def main():
     if args.list_subprojects:
         result = list_subprojects(therock_dir, show_deps=args.show_deps)
         print(json.dumps(result, indent=2))
+        return
+
+    if args.list_repos:
+        by_repo: dict[str, list[str]] = {}
+        for component, repo in get_repo_owners(therock_dir).items():
+            by_repo.setdefault(repo, []).append(component)
+        print(json.dumps({k: sorted(v) for k, v in sorted(by_repo.items())}, indent=2))
         return
 
     # Parse and normalize changed_projects

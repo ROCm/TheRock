@@ -38,8 +38,11 @@ SCRIPT = Path(__file__).parent.parent / "determine_rocm_test_dependencies.py"
 sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
 
 from determine_rocm_test_dependencies import (  # noqa: E402
+    THEROCK_REPO,
     _normalize_changed_project,
     explain_component,
+    get_components_for_repo,
+    get_repo_owners,
     get_subprojects_to_test,
     list_subprojects,
     validate_policies,
@@ -1012,6 +1015,84 @@ class TestRealCommittedPolicies(unittest.TestCase):
         self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
         self.assertNotIn("rocgdb", selected)
         self.assertNotIn("rocr-debug-agent-tests", selected)
+
+
+# ---------------------------------------------------------------------------
+# Repository ownership. Derived by parsing the super-project CMake, so these run
+# only in a real checkout with the parser's dependency available.
+# ---------------------------------------------------------------------------
+def _repo_ownership_available() -> bool:
+    if not (THEROCK_DIR / ".git").exists():
+        return False
+    try:
+        import cmake_parser  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@unittest.skipUnless(
+    _repo_ownership_available(), "needs a git checkout and the cmake-parser dependency"
+)
+class TestRepoOwnership(unittest.TestCase):
+    def test_every_graph_node_is_owned(self) -> None:
+        # get_repo_owners raises on a gap, so this also pins that no node can
+        # quietly fall back to TheRock when a declaration stops resolving.
+        owners = get_repo_owners(THEROCK_DIR)
+        graph = set(list_subprojects(THEROCK_DIR))
+        self.assertEqual(graph - set(owners), set())
+
+    def test_components_map_to_their_upstream_repo(self) -> None:
+        owners = get_repo_owners(THEROCK_DIR)
+        self.assertEqual(owners["rocblas"], "rocm-libraries")
+        self.assertEqual(owners["rocsparse"], "rocm-libraries")
+        # Library-shaped but maintained in rocm-systems.
+        self.assertEqual(owners["rccl"], "rocm-systems")
+        self.assertEqual(owners["hipfile"], "rocm-systems")
+        self.assertEqual(owners["hip-clr"], "rocm-systems")
+        self.assertEqual(owners["rocgdb"], "debug-tools/rocgdb/source")
+
+    def test_synthetic_node_inherits_consumers_repo(self) -> None:
+        # TensileLite has no CMake declaration; it is vendored inside hipblaslt.
+        self.assertEqual(get_repo_owners(THEROCK_DIR)["tensilelite"], "rocm-libraries")
+
+    def test_get_components_for_repo_partitions_the_graph(self) -> None:
+        owners = get_repo_owners(THEROCK_DIR)
+        libraries = get_components_for_repo("rocm-libraries", THEROCK_DIR)
+        systems = get_components_for_repo("rocm-systems", THEROCK_DIR)
+
+        self.assertIn("rocblas", libraries)
+        self.assertIn("rccl", systems)
+        self.assertEqual(libraries & systems, set())
+        self.assertEqual(
+            libraries | systems,
+            {k for k, v in owners.items() if v in ("rocm-libraries", "rocm-systems")},
+        )
+
+    def test_unknown_repo_selects_nothing(self) -> None:
+        self.assertEqual(get_components_for_repo("not-a-repo", THEROCK_DIR), set())
+
+    def test_rocm_libraries_never_selects_rocm_systems_tests(self) -> None:
+        # The property the whole effort rests on: rocm-systems is upstream of
+        # rocm-libraries, so walking downstream from every rocm-libraries
+        # component must never reach one owned by rocm-systems.
+        owners = get_repo_owners(THEROCK_DIR)
+        libraries = sorted(get_components_for_repo("rocm-libraries", THEROCK_DIR))
+
+        selected = get_subprojects_to_test(libraries, THEROCK_DIR)
+
+        leaked = sorted(c for c in selected if owners.get(c) == "rocm-systems")
+        self.assertEqual(leaked, [], f"rocm-systems components selected: {leaked}")
+
+    def test_rocm_systems_does_select_rocm_libraries_tests(self) -> None:
+        # The converse must still hold, or a rocm-systems change would stop
+        # testing its downstream consumers.
+        systems = sorted(get_components_for_repo("rocm-systems", THEROCK_DIR))
+
+        selected = get_subprojects_to_test(systems, THEROCK_DIR)
+
+        self.assertIn("rocblas", selected)
+        self.assertIn("rocsparse", selected)
 
 
 # ---------------------------------------------------------------------------

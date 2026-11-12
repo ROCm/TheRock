@@ -44,8 +44,11 @@ reverse-edge ``dependency -> {consumers}`` schema).
   an undefined ``IN LISTS`` variable is simply an empty list.
 - ``set(... PARENT_SCOPE)`` is modeled add-only: the assignment is unioned into the
   enclosing scope rather than replacing it.
-- Sources wired through ``therock_enable_external_source()`` do not resolve
-  statically.
+- ``therock_enable_external_source()`` binds its *default* source dir; a build that
+  opts into ``THEROCK_USE_EXTERNAL_<NAME>`` points at a tree outside the repository
+  and is unknowable statically.
+- ``CMAKE_CURRENT_BINARY_DIR`` is bound to a stand-in build tree, so subprojects
+  whose sources are generated there resolve but belong to no submodule.
 - Subtree mapping assumes the default ``rocm-libraries`` / ``rocm-systems``
   layout and ignores a ``THEROCK_ROCM_*_SOURCE_DIR`` cache override.
 """
@@ -54,6 +57,7 @@ import copy
 import json
 import re
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -62,7 +66,6 @@ from cmake_parser import CMakeParseError
 from cmake_parser import ast as cmake_ast
 from cmake_parser.lexer import Token
 from cmake_parser.parser import parse_tree
-
 
 _VARIABLE_REFERENCE_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
@@ -117,6 +120,14 @@ _TOOLCHAIN_SUBPROJECTS = {
     "amd-hip": "hip-clr",
     "amd-llvm": "amd-llvm",
 }
+
+# Stand-in build-tree directory name used to bind CMAKE_CURRENT_BINARY_DIR.
+_BINARY_DIR_NAME = "build"
+
+# Repository key for sources that belong to TheRock itself rather than to one of
+# its submodules (in-tree subprojects and third-party deps built from the build
+# tree). Not a submodule path, so it can never collide with one.
+THEROCK_REPO = "therock"
 
 
 class AnalysisError(RuntimeError):
@@ -242,6 +253,77 @@ class AnalysisResult:
         return {
             subtree: sorted(keys) for subtree, keys in sorted(subtree_to_keys.items())
         }
+
+    def build_repo_map(self, submodule_paths: Iterable[str]) -> dict[str, str]:
+        """Map each graph key to the repository whose sources it is built from.
+
+        The value is a submodule path (e.g. ``rocm-libraries``,
+        ``debug-tools/rocgdb/source``) or ``THEROCK_REPO`` for subprojects built
+        from TheRock's own tree. Attribution uses each declaration's
+        EXTERNAL_SOURCE_DIR, resolved against the directory of the file that
+        declared it, and falls into one of:
+
+        * inside a submodule -> that submodule (longest path wins, so a submodule
+          nested inside another is attributed to the inner one);
+        * a directory containing exactly one submodule -> that submodule. This is
+          the TheRock-wrapper case (``debug-tools/rocgdb`` wraps the
+          ``debug-tools/rocgdb/source`` submodule). The repository root is not a
+          wrapper by this rule, since every submodule is under it;
+        * anything else, including a subproject that declares no external source
+          -> ``THEROCK_REPO``.
+
+        Raises AnalysisError if one subproject's declarations resolve to different
+        repositories, which would make its ownership ambiguous.
+        """
+        # Longest first so an inner submodule wins over one that contains it.
+        ordered_submodules = sorted(submodule_paths, key=len, reverse=True)
+
+        def attribute(source_dir: str, declaring_directory: Path) -> str:
+            path = Path(source_dir)
+            if not path.is_absolute():
+                path = declaring_directory / path
+            try:
+                relative = path.resolve().relative_to(self.repository_root).as_posix()
+            except ValueError:
+                # Outside the repository (e.g. a build-tree source): TheRock's.
+                return THEROCK_REPO
+            for submodule in ordered_submodules:
+                if relative == submodule or relative.startswith(f"{submodule}/"):
+                    return submodule
+            if relative == ".":
+                # The repository root holds every submodule; it is TheRock's own
+                # tree, never a wrapper around one of them.
+                return THEROCK_REPO
+            contained = [s for s in ordered_submodules if s.startswith(f"{relative}/")]
+            if len(contained) == 1:
+                return contained[0]
+            return THEROCK_REPO
+
+        repo_map: dict[str, str] = {}
+        for subproject in self.subprojects.values():
+            key = subproject.name.lower()
+            if not subproject.external_source_dirs:
+                repo_map[key] = THEROCK_REPO
+                continue
+            declaring_directories = {
+                (self.repository_root / location.path).parent
+                for location in subproject.locations
+            }
+            owners = {
+                attribute(source_dir, declaring_directory)
+                for source_dir in subproject.external_source_dirs
+                for declaring_directory in declaring_directories
+            }
+            if len(owners) > 1:
+                locations = ", ".join(
+                    sorted(location.format() for location in subproject.locations)
+                )
+                raise AnalysisError(
+                    f"subproject {key!r} resolves to multiple repositories "
+                    f"({', '.join(sorted(owners))}); declared at {locations}"
+                )
+            repo_map[key] = owners.pop()
+        return repo_map
 
     def dangling_dependencies(self) -> dict[str, list[str]]:
         """Return dependencies that do not name any discovered subproject."""
@@ -373,6 +455,43 @@ def list_tracked_cmake_files(repository_root: Path) -> set[Path]:
         for path in tracked_paths
         if path.name == "CMakeLists.txt" or path.suffix == ".cmake"
     }
+
+
+def list_submodule_paths(repository_root: Path) -> set[str]:
+    """List the super-project's submodule paths (POSIX, repository-root relative).
+
+    Reads gitlink entries (mode 160000) from the index, so it works in a checkout
+    whose submodules were never initialized -- which is the normal CI state.
+    """
+    command = [
+        "git",
+        "-c",
+        f"safe.directory={repository_root.as_posix()}",
+        "-C",
+        str(repository_root),
+        "ls-files",
+        "--stage",
+        "-z",
+    ]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True)
+    except FileNotFoundError as error:
+        raise AnalysisError("git executable not found on PATH") from error
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr.decode("utf-8", errors="replace").strip()
+        raise AnalysisError(
+            f"git ls-files --stage failed in {repository_root}: {stderr}"
+        ) from error
+    paths: set[str] = set()
+    for raw_entry in result.stdout.split(b"\0"):
+        if not raw_entry:
+            continue
+        entry = raw_entry.decode("utf-8")
+        # "<mode> <sha> <stage>\t<path>"; gitlinks (submodules) are mode 160000.
+        metadata, _, path = entry.partition("\t")
+        if path and metadata.startswith("160000 "):
+            paths.add(path)
+    return paths
 
 
 def compare_graphs(
@@ -543,6 +662,20 @@ class RepositoryAnalyzer:
                 environment = inherited_environment.copy()
                 environment.assign("CMAKE_CURRENT_SOURCE_DIR", {str(source_directory)})
                 environment.assign("CMAKE_CURRENT_LIST_DIR", {str(source_directory)})
+                # A stand-in for the build tree of an in-source-root build. Only
+                # its location matters: subprojects whose source is generated into
+                # the build tree (fetched third-party deps) belong to no submodule,
+                # which is exactly how build_repo_map() attributes them.
+                environment.assign(
+                    "CMAKE_CURRENT_BINARY_DIR",
+                    {
+                        str(
+                            self.repository_root
+                            / _BINARY_DIR_NAME
+                            / relative_path.parent
+                        )
+                    },
+                )
                 self._execute_nodes(
                     nodes=self._parse_file(relative_path),
                     environment=environment,
@@ -728,6 +861,31 @@ class RepositoryAnalyzer:
             self._execute_add_subdirectory(node, environment, relative_path)
         elif identifier == "therock_cmake_subproject_declare":
             self._record_declaration(node, environment, relative_path)
+        elif identifier == "therock_enable_external_source":
+            self._execute_enable_external_source(node, environment)
+
+    def _execute_enable_external_source(
+        self, node: cmake_ast.Command, environment: Environment
+    ) -> None:
+        """Model ``therock_enable_external_source(<name> <default_dir> <option>)``.
+
+        See cmake/therock_external_source.cmake: the command defines the cache
+        variable ``THEROCK_<NAME>_SOURCE_DIR`` (uppercased, ``-`` -> ``_``). We bind
+        the *default* source dir, which is what a build that does not opt into
+        ``THEROCK_USE_EXTERNAL_<NAME>`` uses; the opt-in path points at a
+        user-supplied tree outside the repository and is unknowable statically.
+        Without this, the declarations sourced from these variables (amd-dbgapi,
+        rocr-debug-agent, rocgdb) would not resolve.
+        """
+        if len(node.args) < 2:
+            return
+        name_expansion = _expand_token(node.args[0], environment)
+        default_expansion = _expand_token(node.args[1], environment)
+        if name_expansion.unresolved or default_expansion.unresolved:
+            return
+        for name in name_expansion.values:
+            variable = f"THEROCK_{name.upper().replace('-', '_')}_SOURCE_DIR"
+            environment.assign(variable, set(default_expansion.values))
 
     def _execute_list(self, node: cmake_ast.Command, environment: Environment) -> None:
         """Model ``list(APPEND|PREPEND|REMOVE_ITEM VAR ...)``."""
@@ -893,7 +1051,10 @@ class RepositoryAnalyzer:
             node.line,
         )
         source_dirs = self._resolve_source_dir_section(
-            sections.get("EXTERNAL_SOURCE_DIR", []), environment
+            sections.get("EXTERNAL_SOURCE_DIR", []),
+            environment,
+            relative_path,
+            node.line,
         )
         key = name.lower()
         subproject = self._subprojects.setdefault(key, Subproject(name=name))
@@ -921,16 +1082,27 @@ class RepositoryAnalyzer:
         return {value for value in expansion.values if value}
 
     def _resolve_source_dir_section(
-        self, tokens: list[Token], environment: Environment
+        self,
+        tokens: list[Token],
+        environment: Environment,
+        relative_path: Path,
+        declaration_line: int,
     ) -> set[str]:
-        """Resolve an EXTERNAL_SOURCE_DIR value; unresolved -> {} (skipped silently).
+        """Resolve an EXTERNAL_SOURCE_DIR value; an unresolved variable is fatal.
 
-        Sources wired through therock_enable_external_source() do not resolve
-        statically and get no subtree_map entry (handled as reader-side overrides).
+        Fail-loud rather than dropping the value, because a missing source dir
+        silently makes the subproject look in-tree to build_repo_map() and would
+        mis-attribute its tests to TheRock instead of its real owning repository.
+        Sources wired through therock_enable_external_source() are modeled (see
+        _execute_enable_external_source), so they resolve to their default tree.
         """
         expansion = _expand_tokens(tokens, environment)
         if expansion.unresolved:
-            return set()
+            raise AnalysisError(
+                f"{relative_path.as_posix()}:{declaration_line}: unresolved "
+                f"EXTERNAL_SOURCE_DIR variables: "
+                f"{', '.join(sorted(expansion.unresolved))}"
+            )
         return {value for value in expansion.values if value}
 
 

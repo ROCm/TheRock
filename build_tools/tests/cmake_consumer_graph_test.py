@@ -9,9 +9,11 @@ from pathlib import Path
 import pytest
 
 from _therock_utils.cmake_consumer_graph import (
+    THEROCK_REPO,
     AnalysisError,
     RepositoryAnalyzer,
     compare_graphs,
+    list_submodule_paths,
     list_tracked_cmake_files,
     load_consumer_graph,
 )
@@ -316,8 +318,6 @@ therock_cmake_subproject_declare(ocl-clr
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
 therock_cmake_subproject_declare(rocroller
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller)
-therock_cmake_subproject_declare(variable-sourced
-  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
 """,
     )
     tracked = {Path("CMakeLists.txt")}
@@ -329,9 +329,155 @@ therock_cmake_subproject_declare(variable-sourced
         "projects/clr": ["hip-clr", "ocl-clr"],
         "shared/rocroller": ["rocroller"],
     }
-    # The declaration whose EXTERNAL_SOURCE_DIR did not resolve is still a
-    # subproject, but is silently absent from the subtree map.
-    assert "variable-sourced" in result.subprojects
+
+
+def test_unresolved_source_dir_raises(tmp_path: Path) -> None:
+    # An EXTERNAL_SOURCE_DIR that does not resolve is fatal rather than dropped:
+    # silently losing it would make the subproject look in-tree to build_repo_map()
+    # and mis-attribute its tests to TheRock instead of its owning repository.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(variable-sourced
+  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    with pytest.raises(AnalysisError, match="THEROCK_UNMODELED_SOURCE_DIR"):
+        RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+
+def test_repo_map_attributes_sources(tmp_path: Path) -> None:
+    # The four attribution paths: inside a submodule, inside a nested submodule
+    # (the longer path wins), a wrapper directory holding exactly one submodule,
+    # and an in-tree source.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-libraries")
+therock_cmake_subproject_declare(rocblas
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas)
+therock_cmake_subproject_declare(vendored
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas/vendor)
+therock_cmake_subproject_declare(in-tree
+  EXTERNAL_SOURCE_DIR ${THEROCK_SOURCE_DIR}/base/aux-overlay)
+add_subdirectory(debug-tools)
+""",
+    )
+    # Declared relative to its own directory, and wrapping a submodule rather than
+    # being one: debug-tools/rocgdb holds the debug-tools/rocgdb/source submodule.
+    _write(
+        tmp_path / "debug-tools" / "CMakeLists.txt",
+        'therock_cmake_subproject_declare(rocgdb EXTERNAL_SOURCE_DIR "rocgdb")\n',
+    )
+    tracked = {Path("CMakeLists.txt"), Path("debug-tools/CMakeLists.txt")}
+    submodules = {
+        "rocm-libraries",
+        "rocm-libraries/projects/rocblas/vendor",
+        "debug-tools/rocgdb/source",
+    }
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+
+    assert result.build_repo_map(submodules) == {
+        "rocblas": "rocm-libraries",
+        "vendored": "rocm-libraries/projects/rocblas/vendor",
+        "rocgdb": "debug-tools/rocgdb/source",
+        "in-tree": THEROCK_REPO,
+    }
+
+
+def test_repo_map_declaring_no_source_is_therock(tmp_path: Path) -> None:
+    # A subproject with no EXTERNAL_SOURCE_DIR is built from TheRock's own tree.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        "therock_cmake_subproject_declare(therock-googletest)\n",
+    )
+
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+
+    assert result.build_repo_map({"rocm-libraries"}) == {
+        "therock-googletest": THEROCK_REPO
+    }
+
+
+def test_repo_map_root_is_not_a_wrapper(tmp_path: Path) -> None:
+    # The repository root contains every submodule, so the "wrapper directory"
+    # rule must not fire for it even when only one submodule exists.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        'therock_cmake_subproject_declare(root-sourced EXTERNAL_SOURCE_DIR ".")\n',
+    )
+
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+
+    assert result.build_repo_map({"rocm-libraries"}) == {"root-sourced": THEROCK_REPO}
+
+
+def test_repo_map_ambiguous_ownership_raises(tmp_path: Path) -> None:
+    # Conditional declarations are unioned, so a subproject sourced from two
+    # repositories has no single owner; that must fail rather than pick one.
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+if(WIN32)
+  therock_cmake_subproject_declare(split
+    EXTERNAL_SOURCE_DIR ${THEROCK_SOURCE_DIR}/rocm-libraries/projects/x)
+else()
+  therock_cmake_subproject_declare(split
+    EXTERNAL_SOURCE_DIR ${THEROCK_SOURCE_DIR}/rocm-systems/projects/x)
+endif()
+""",
+    )
+
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+
+    with pytest.raises(AnalysisError, match="multiple repositories"):
+        result.build_repo_map({"rocm-libraries", "rocm-systems"})
+
+
+def test_repo_map_on_real_tree() -> None:
+    # Every committed graph node must resolve to a real repository. A node that
+    # silently fell back to TheRock would have its tests attributed to the wrong
+    # repository, so the anchors below cover each submodule-shaped case.
+    repo_root = Path(__file__).resolve().parents[2]
+    committed = repo_root / "test_tools" / "therock_consumer_graph.json"
+    if not (
+        (repo_root / ".git").exists()
+        and committed.exists()
+        and (repo_root / "CMakeLists.txt").exists()
+    ):
+        pytest.skip("not a TheRock git checkout with a committed consumer graph")
+
+    submodules = list_submodule_paths(repo_root)
+    repo_map = RepositoryAnalyzer(repo_root).analyze().build_repo_map(submodules)
+
+    missing = sorted(k for k in load_consumer_graph(committed) if k not in repo_map)
+    assert missing == [], f"graph nodes with no owning repository: {missing}"
+    assert set(repo_map.values()) <= submodules | {THEROCK_REPO}
+
+    assert repo_map["rocblas"] == "rocm-libraries"
+    assert repo_map["hipblaslt"] == "rocm-libraries"
+    # RCCL and hipFile live in rocm-systems despite being library-shaped.
+    assert repo_map["rccl"] == "rocm-systems"
+    assert repo_map["hipfile"] == "rocm-systems"
+    assert repo_map["hip-clr"] == "rocm-systems"
+    # Sourced through therock_enable_external_source() rather than a literal path.
+    assert repo_map["amd-dbgapi"] == "rocm-systems"
+    assert repo_map["rocr-debug-agent"] == "rocm-systems"
+    # Declared against TheRock's autotools wrapper, which holds the submodule.
+    assert repo_map["rocgdb"] == "debug-tools/rocgdb/source"
+    assert repo_map["libhipcxx"] == "math-libs/libhipcxx"
+    assert repo_map["amd-llvm"] == "compiler/amd-llvm"
+    # Fetched into the build tree, so owned by no submodule.
+    assert repo_map["therock-googletest"] == THEROCK_REPO
 
 
 def test_static_graph_superset_of_committed() -> None:
@@ -367,9 +513,8 @@ def test_static_graph_superset_of_committed() -> None:
 
 
 def test_subtree_map_on_real_tree() -> None:
-    # Real-tree anchors: fan-out, name skew, and a non-projects/ prefix all resolve;
-    # a variable-sourced (therock_enable_external_source) subtree is skipped. Skips
-    # outside a git checkout.
+    # Real-tree anchors: fan-out, name skew, and a non-projects/ prefix all resolve.
+    # Skips outside a git checkout.
     repo_root = Path(__file__).resolve().parents[2]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
@@ -379,7 +524,10 @@ def test_subtree_map_on_real_tree() -> None:
     assert subtree_map.get("projects/clr") == ["hip-clr", "ocl-clr"]
     assert subtree_map.get("projects/composablekernel") == ["composable_kernel"]
     assert "shared/rocroller" in subtree_map
-    assert "projects/rocdbgapi" not in subtree_map
+    # Sourced via therock_enable_external_source() rather than a direct
+    # ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/... literal; modeling that command is
+    # what brings it into the map.
+    assert subtree_map.get("projects/rocdbgapi") == ["amd-dbgapi"]
 
 
 def test_subtree_map_covers_direct_source_dirs() -> None:
