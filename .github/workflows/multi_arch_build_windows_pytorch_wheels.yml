@@ -96,6 +96,10 @@ on:
         description: "Compiler cache type ('none', 'sccache', or 'ccache')"
         type: string
         default: "sccache"
+      pytorch_hip_offload_jobs:
+        description: "Concurrent GPU targets per HIP compilation (1 disables inner parallelism)."
+        type: string
+        default: "1"
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
@@ -111,11 +115,26 @@ on:
     inputs:
       amdgpu_families:
         description: >-
-          Semicolon-separated list of AMD GPU families to build PyTorch for
-          (e.g. 'gfx110X-all;gfx120X-all'). Expanded to gfx targets at
-          build time via cmake/therock_amdgpu_targets.cmake.
-        type: string
+          GPU presets: 1, 4, 8, or 16 explicit targets, in that order.
+          The last option restores the full family-based build.
+        type: choice
         required: true
+        default: gfx1100
+        options:
+          - gfx1100
+          - gfx1100;gfx1101;gfx1102;gfx1103
+          - gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;gfx90a
+          - gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;gfx90a;gfx900;gfx90c;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030
+          - gfx110X-all;gfx1151;gfx120X-all;gfx90a;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx117X-all
+      pytorch_hip_offload_jobs:
+        description: "Concurrent GPU targets per HIP compilation. Sweep 1, 2, 4, and 8."
+        type: choice
+        default: "1"
+        options:
+          - "1"
+          - "2"
+          - "4"
+          - "8"
       exclude_implicit_targets:
         description: >-
           Semicolon-separated gfx targets to exclude when introduced only by
@@ -129,14 +148,14 @@ on:
           'gfx120X-all'). Use 'auto' to test built families, or 'none' to skip
           tests.
         type: string
-        default: "auto"
+        default: "none"
       test_level:
         description: PyTorch test coverage level.
         type: choice
         options:
           - none
           - standard
-        default: standard
+        default: none
       python_version:
         description: Python version to build wheels for (for example, "3.12").
         type: string
@@ -144,31 +163,29 @@ on:
       pytorch_git_ref:
         description: PyTorch ref to checkout (for example, "release/2.13").
         type: string
-        default: "release/2.13"
+        default: "users/scotttodd/hip-offload-jobs-sccache-1"
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
           pre-merge testing). Defaults to ROCm/pytorch for stable refs.
         type: string
-        default: ""
+        default: "https://github.com/ROCm/pytorch.git"
       rocm_version:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
+        default: "10.3.0a20261111"
       rocm_package_find_links_url:
         description: >-
-          URL for pip --find-links to install ROCm packages (flat page). Use
-          this OR rocm_package_index_url, not both. One of the two must be set
-          (there is no default): point it at the ROCm channel/build to build
-          against.
+          Pinned ROCm package listing for the experiment. Keep
+          rocm_package_index_url empty when using this find-links URL.
         type: string
-        default: ""
+        default: "https://therock-nightly-artifacts.s3.amazonaws.com/42927985179-windows/python/index.html"
       rocm_package_index_url:
         description: >-
           URL for pip --index-url to install ROCm packages (PEP 503 index). Use
-          this OR rocm_package_find_links_url, not both. One of the two must be
-          set (there is no default): point it at the ROCm channel/build to build
-          against.
+          this OR rocm_package_find_links_url, not both. Leave empty for the
+          experiment's pinned find-links listing.
         type: string
         default: ""
       release_type:
@@ -214,14 +231,15 @@ on:
 run-name: >-
   Build Multi-Arch Windows PyTorch Wheels
   (${{ inputs.release_type }}, py ${{ inputs.python_version }},
-  torch ${{ inputs.pytorch_git_ref }}, tests ${{ inputs.test_level }})
+  torch ${{ inputs.pytorch_git_ref }}, offload jobs ${{ inputs.pytorch_hip_offload_jobs }},
+  GPU set ${{ inputs.amdgpu_families }}, tests ${{ inputs.test_level }})
 
 permissions:
   contents: read
 
 jobs:
   build_pytorch_wheels:
-    name: Build | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
+    name: Build | py ${{ inputs.python_version }} | offload ${{ inputs.pytorch_hip_offload_jobs }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'windows-2022' }}
     permissions:
       id-token: write
@@ -230,6 +248,8 @@ jobs:
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GITREPO_ORIGIN: ${{ inputs.pytorch_gitrepo_origin }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
+      PYTORCH_HIP_OFFLOAD_JOBS: ${{ inputs.pytorch_hip_offload_jobs }}
+      NINJA_STATUS: "[%f/%t, %r running, %e sec] "
       ROCM_VERSION: ${{ inputs.rocm_version }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
@@ -424,15 +444,14 @@ jobs:
             --exclude-implicit-targets "${exclude_implicit_targets}")
           echo "Expanded families '${AMDGPU_FAMILIES}' -> '${targets}'"
           echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+          printf 'Offload jobs per HIP compilation: %s\nGPU targets: %s\n' \
+            "${PYTORCH_HIP_OFFLOAD_JOBS}" "${targets}" >> "$GITHUB_STEP_SUMMARY"
 
       # Using 'cmd' here is load bearing! There are configuration issues when
       # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
       - name: Build PyTorch wheels
-        # Default to the nightly repo.amd.com aggregate ROCm index when neither source is
-        # provided so a bare manual dispatch works; setting either input
-        # overrides it. The default is applied here rather than on the input
-        # because GitHub reverts an emptied input back to its declared default,
-        # which would make the two inputs impossible to use exclusively.
+        # Manual experiments default to a pinned find-links listing. Reusable
+        # callers without either package source retain the nightly index fallback.
         shell: cmd # zizmor: ignore[misfeature]
         env:
           # Use the index if given; else the find-links page; else default to
