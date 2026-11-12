@@ -400,6 +400,13 @@ def main():
             external_repo_config,
         )
 
+    github_server_url = os.getenv("GITHUB_SERVER_URL")
+    github_repository = os.getenv("GITHUB_REPOSITORY")
+    if github_run_id and github_server_url and github_repository:
+        manifest["github_run_url"] = (
+            f"{github_server_url.rstrip('/')}/{github_repository}/actions/runs/{github_run_id}"
+        )
+
     # Merge flag settings into the manifest if provided.
     if args.flag_settings:
         flag_settings_path = Path(args.flag_settings)
