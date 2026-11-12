@@ -139,6 +139,11 @@ Each rule below exists because skipping it produced a wrong or missed finding in
 - **Evidence over assertion** (base principle): every finding cites `file:line`, a diff hunk, or a
   CI run/step link.
 
+Keep the verification effort in proportion to the risk. Deep checks (tracing callers and consumers,
+querying real data) are for findings about code behavior. For a style or wording point, such as the
+backtick convention in a docstring, check the touched file and at most its neighbors in the same
+directory, then stop. Do not sweep the whole repository or its submodules for a style point.
+
 ______________________________________________________________________
 
 ## Output
