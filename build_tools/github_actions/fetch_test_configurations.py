@@ -26,7 +26,7 @@ from pathlib import Path
 
 from github_actions_api import *
 from amdgpu_family_matrix import (
-    MULTI_GPU_RUNNER_KEY_RE,
+    MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     select_weighted_label,
@@ -190,7 +190,7 @@ def _select_multi_gpu_runner(
     """Pick the runner label for a multi-GPU component, or "" if none is configured.
 
     `pools` holds the family's multi-GPU runner pools keyed by config key (see
-    MULTI_GPU_RUNNER_KEY_RE). A component that only needs `gpu_count` GPUs is
+    MULTI_GPU_RUNNER_KEYS). A component that only needs `gpu_count` GPUs is
     placed on the matching "test-runs-on-<N>gpu" pool, keeping it off the scarce
     8-GPU nodes. Families without that tier fall back to the default
     "test-runs-on-multi-gpu" pool, so a component can declare `gpu_count` before
@@ -1459,9 +1459,9 @@ def run():
                     # Fallback to static matrix (backward compatibility)
                     test_runs_on_default = platform_info.get("test-runs-on", "")
                 multi_gpu_pools = {
-                    key: value
-                    for key, value in platform_info.items()
-                    if MULTI_GPU_RUNNER_KEY_RE.match(key)
+                    key: platform_info[key]
+                    for key in MULTI_GPU_RUNNER_KEYS
+                    if key in platform_info
                 }
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 

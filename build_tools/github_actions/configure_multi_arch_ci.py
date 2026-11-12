@@ -70,7 +70,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
     CI_LABEL_REQUIRED_ARTIFACTS,
-    MULTI_GPU_RUNNER_KEY_RE,
+    MULTI_GPU_RUNNER_KEYS,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -2038,8 +2038,8 @@ def _expand_build_config_for_platform(
         # Covers both the default pool ("test-runs-on-multi-gpu") and per-GPU-count
         # tiers ("test-runs-on-2gpu"); see amdgpu_family_matrix.py for the keys.
         if test_runs_on:
-            for key in platform_info:
-                if MULTI_GPU_RUNNER_KEY_RE.match(key):
+            for key in MULTI_GPU_RUNNER_KEYS:
+                if key in platform_info:
                     family_info[key] = platform_info[key]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:

@@ -27,7 +27,6 @@ TODO(#2200): clarify AMD GPU family selection
 import copy
 import os
 import random
-import re
 import sys
 from pathlib import Path
 
@@ -39,8 +38,14 @@ VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightl
 # Family keys holding a multi-GPU runner pool: the default pool
 # ("test-runs-on-multi-gpu") and per-GPU-count tiers ("test-runs-on-2gpu"),
 # each with an optional "-labels" weighted list variant.
-MULTI_GPU_RUNNER_KEY_RE = re.compile(
-    r"^test-runs-on-(?:multi-gpu|[0-9]+gpu)(?:-labels)?$"
+# When adding a tier, list both its key and its "-labels" variant here, or the
+# key will not be forwarded to the test matrix and components requesting that
+# gpu_count will quietly fall back to the default 8-GPU pool.
+MULTI_GPU_RUNNER_KEYS = (
+    "test-runs-on-multi-gpu",
+    "test-runs-on-multi-gpu-labels",
+    "test-runs-on-2gpu",
+    "test-runs-on-2gpu-labels",
 )
 
 
@@ -794,10 +799,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on",
         "test-runs-on-labels",
         "test-runs-on-sandbox",
-        "test-runs-on-multi-gpu",
-        "test-runs-on-multi-gpu-labels",
-        "test-runs-on-2gpu",
-        "test-runs-on-2gpu-labels",
+        *MULTI_GPU_RUNNER_KEYS,
         "test-runs-on-kernel",
         "test-runs-on-wsl",
     }
