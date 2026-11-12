@@ -113,6 +113,14 @@ CI_JAX_REFS = {
     ],
 }
 
+# The one (python_version, jax_ref) matrix cell that also carries the XLA
+# bazel suite (test_multi_arch_linux_jax_wheels.yml's test_xla job), so a
+# release run pays for it once rather than once per cell. Any valid
+# combination works here: XLA's own version is pinned independently of
+# whichever JAX wheel build it rides along with.
+XLA_TEST_PYTHON_VERSION = "3.12"
+XLA_TEST_JAX_REF = "rocm-jaxlib-v0.12.0"
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -177,6 +185,12 @@ def generate_jax_matrix(
                     # Whether the release build uploads and then tests the
                     # wheels; CI uploads to run-scoped artifacts either way.
                     "publish": ref_cfg.get("publish", True),
+                    # True for exactly one (python_version, jax_ref) cell, so
+                    # the XLA bazel suite rides along with one representative
+                    # build rather than firing once per cell.
+                    "trigger_xla_tests": (
+                        py == XLA_TEST_PYTHON_VERSION and ref == XLA_TEST_JAX_REF
+                    ),
                 }
             )
 

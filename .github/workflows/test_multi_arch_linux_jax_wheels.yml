@@ -108,6 +108,13 @@ on:
         required: false
         type: string
         default: ""
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite (test_xla job) alongside this cell's
+          JAX tests. Set by the caller for exactly one representative cell.
+        required: false
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -225,6 +232,12 @@ on:
           it.
         type: string
         default: ""
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite (test_xla job) alongside this cell's
+          JAX tests.
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -242,16 +255,12 @@ jobs:
     # dispatch_pytorch_wheels_full_test: pick a single representative build
     # cell to carry an extra, independent test suite, with its own hardcoded
     # runner/target rather than reusing whatever this cell's regular test
-    # matrix picked. XLA doesn't depend on which JAX python wheel is being
-    # tested and only runs on gfx950 hardware, so it rides along on one
-    # (python 3.11, gfx950-dcgpu) cell only. Also skipped on the multi-GPU
-    # cell: XLA's single_gpu/cpu configs are single-GPU only.
-    if: >-
-      ${{
-        inputs.python_version == '3.11' &&
-        contains(inputs.test_amdgpu_family, 'gfx950') &&
-        inputs.test_subset != 'multi'
-      }}
+    # matrix picked. Which cell that is lives in configure_jax_release_matrix.py
+    # (XLA_TEST_PYTHON_VERSION / XLA_TEST_JAX_REF), threaded down to
+    # trigger_xla_tests here, rather than inferred from python_version/family.
+    # Also skipped on the multi-GPU cell: XLA's single_gpu/cpu configs are
+    # single-GPU only.
+    if: ${{ inputs.trigger_xla_tests && inputs.test_subset != 'multi' }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:

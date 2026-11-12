@@ -42,6 +42,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "gfx_arch",
                 "wheel_type",
                 "publish",
+                "trigger_xla_tests",
             },
         )
 

@@ -80,6 +80,12 @@ on:
           time, with the whole end-to-end set.
         type: string
         default: "small"
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
+          the caller for exactly one representative matrix cell.
+        type: boolean
+        default: false
     outputs:
       package_find_links_url:
         description: "pip --find-links URL for CI-uploaded JAX wheels."
@@ -157,6 +163,11 @@ on:
           - medium
           - large
         default: small
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests.
+        type: boolean
+        default: false
 run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
 permissions:
   contents: read
@@ -389,3 +400,4 @@ jobs:
       test_subset: ${{ matrix.test_subset }}
       test_timeout_minutes: ${{ matrix.test_timeout_minutes }}
       test_list: ${{ matrix.test_list }}
+      trigger_xla_tests: ${{ inputs.trigger_xla_tests }}

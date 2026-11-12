@@ -153,6 +153,7 @@ jobs:
       wheel_type: ${{ matrix.wheel_type }}
       publish: ${{ matrix.publish }}
       gfx_arch: ${{ matrix.gfx_arch }}
+      trigger_xla_tests: ${{ matrix.trigger_xla_tests }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       release_type: ${{ inputs.release_type }}

@@ -74,6 +74,12 @@ on:
           time, with the whole end-to-end set.
         type: string
         default: "medium"
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
+          the caller for exactly one representative matrix cell.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -163,6 +169,11 @@ on:
           - medium
           - large
         default: medium
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -432,6 +443,7 @@ jobs:
       test_subset: ${{ matrix.test_subset }}
       test_timeout_minutes: ${{ matrix.test_timeout_minutes }}
       test_list: ${{ matrix.test_list }}
+      trigger_xla_tests: ${{ inputs.trigger_xla_tests }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
