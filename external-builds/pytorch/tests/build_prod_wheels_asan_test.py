@@ -83,11 +83,13 @@ class AsanBuildSelectionTest(unittest.TestCase):
             build_triton=None,
             build_pytorch_audio=None,
             build_pytorch_vision=None,
+            build_pytorch_torchcodec=None,
             build_apex=None,
             triton_dir=source,
             pytorch_dir=source,
             pytorch_audio_dir=source,
             pytorch_vision_dir=source,
+            pytorch_torchcodec_dir=source,
             apex_dir=source,
             enable_pytorch_flash_attention=None,
         )
@@ -115,6 +117,7 @@ class AsanBuildSelectionTest(unittest.TestCase):
         self.assertFalse(args.build_triton)
         self.assertFalse(args.build_pytorch_audio)
         self.assertFalse(args.build_pytorch_vision)
+        self.assertFalse(args.build_pytorch_torchcodec)
         self.assertFalse(args.build_apex)
 
     def test_asan_rejects_an_explicit_companion_build(self):
