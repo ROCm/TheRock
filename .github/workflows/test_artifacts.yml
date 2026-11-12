@@ -80,6 +80,18 @@ on:
           filters.
         type: string
         default: ""
+      test_repo_scope:
+        description: >-
+          Submodule path of the upstream repository that triggered this run
+          (e.g. "rocm-libraries"), used only when changed_projects is empty. It
+          stands in for "everything in that repository changed", so tests run
+          for that repository and its downstream consumers instead of for the
+          whole tree. An upstream repository's change can affect a downstream
+          one, but never the reverse, so this drops only tests the trigger
+          cannot reach. Affects test selection ONLY; builds and artifact reuse
+          are untouched. Leave empty to run all.
+        type: string
+        default: ""
       skip_stages:
         description: "Build stages excluded from the build and artifact reuse (comma-separated)"
         type: string
@@ -142,6 +154,9 @@ on:
       test_labels:
         type: string
       changed_projects:
+        type: string
+        default: ""
+      test_repo_scope:
         type: string
         default: ""
       skip_stages:
@@ -218,6 +233,15 @@ jobs:
         with:
           python-version: 3.12
 
+      # Only test_repo_scope needs the CMake parser (to resolve which components
+      # a repository owns); plain changed_projects selection reads the committed
+      # graph alone. Installed from the pin in requirements-test.txt so the
+      # version is not duplicated here.
+      - name: "Install repository-scope dependency"
+        if: ${{ inputs.test_repo_scope != '' }}
+        shell: bash
+        run: pip install "$(grep -m1 '^cmake-parser==' requirements-test.txt)"
+
       - name: "Determine test dependencies"
         id: test_deps
         # Reads the committed consumer graph directly (no fetch/configure); kept
@@ -225,9 +249,11 @@ jobs:
         shell: bash
         env:
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          TEST_REPO_SCOPE: ${{ inputs.test_repo_scope }}
         run: |
           python ./test_tools/determine_rocm_test_dependencies.py \
             --changed-projects "$CHANGED_PROJECTS" \
+            --repo-scope "$TEST_REPO_SCOPE" \
             --gha-output
 
       - name: "Configuring CI options"

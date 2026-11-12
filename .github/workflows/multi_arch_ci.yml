@@ -203,6 +203,7 @@ jobs:
       rocm_rpm_package_version: ${{ needs.setup.outputs.rocm_rpm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      test_repo_scope: ${{ needs.setup.outputs.test_repo_scope }}
     permissions:
       contents: read
       id-token: write
@@ -223,6 +224,7 @@ jobs:
       rocm_msi_package_version: ${{ needs.setup.outputs.rocm_msi_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       changed_projects: ${{ inputs.changed_projects || '' }}
+      test_repo_scope: ${{ needs.setup.outputs.test_repo_scope }}
     permissions:
       contents: read
       id-token: write

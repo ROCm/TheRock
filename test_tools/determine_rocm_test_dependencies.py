@@ -681,6 +681,17 @@ def main():
         "paths such as 'shared/rocroller'.",
     )
     parser.add_argument(
+        "--repo-scope",
+        type=str,
+        default=None,
+        metavar="SUBMODULE_PATH",
+        help="Owning repository (a submodule path such as 'rocm-libraries') that "
+        "triggered this run. Used only when --changed-projects is empty, where it "
+        "stands in for 'everything in that repository changed' instead of "
+        "selecting every test. An unknown repository falls back to all tests. "
+        "This narrows tests only; it has no effect on what gets built.",
+    )
+    parser.add_argument(
         "--level",
         type=int,
         choices=sorted(_LEVEL_TO_DEPTH),
@@ -771,6 +782,25 @@ def main():
             except ValueError as e:
                 raise SystemExit(str(e)) from e
         changed = normalized
+
+    # No individual projects, but a repository scope: stand in the whole
+    # repository for them. The walk then yields that repository's components plus
+    # everything downstream, which for an upstream repository is most of the tree
+    # and for a leaf one is just its own corner.
+    if not changed and args.repo_scope:
+        changed = sorted(get_components_for_repo(args.repo_scope, therock_dir))
+        if not changed:
+            print(
+                f"--repo-scope {args.repo_scope!r} owns no components; "
+                "falling back to all tests",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"--repo-scope {args.repo_scope!r} expanded to {len(changed)} "
+                "component(s)",
+                file=sys.stderr,
+            )
 
     # No projects specified → all tests
     if not changed:

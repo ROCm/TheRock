@@ -920,6 +920,9 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Submodule path of the repository whose bump triggered this run, used to
+    # narrow TESTS only (see get_submodule_bump_scope). Empty means no narrowing.
+    test_repo_scope: str = ""
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -1776,6 +1779,33 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     return triggers
 
 
+def get_submodule_bump_scope(ci_inputs: CIInputs, git_context: GitContext) -> str:
+    """Return the submodule path of a pure single-submodule bump, else "".
+
+    bump_submodules.yml raises one PR per submodule, so a bump changes exactly one
+    gitlink and nothing else. That identifies the repository the new commits came
+    from, which narrows which TESTS can be affected: an upstream repository's
+    change reaches its downstream consumers, but a downstream one cannot reach
+    back up. Builds are unaffected -- they still build everything.
+
+    Returns "" (no narrowing, test everything) unless the change is unambiguous:
+
+    * external-repo runs carry their identity in external_repo_config instead;
+    * a non-submodule file alongside the bump could affect anything;
+    * several submodules at once have no single owning repository.
+    """
+    if ci_inputs.external_repo:
+        return ""
+    if git_context.changed_files is None or git_context.submodule_paths is None:
+        return ""
+    submodules = set(git_context.submodule_paths)
+    changed = set(git_context.changed_files)
+    bumped = changed & submodules
+    if len(bumped) != 1 or changed != bumped:
+        return ""
+    return bumped.pop()
+
+
 def _should_run_tests_for_family(
     platform_info: dict,
     ci_inputs: CIInputs,
@@ -2426,6 +2456,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "test_repo_scope": outputs.test_repo_scope,
     }
     gha_set_output(output_vars)
 
@@ -2492,6 +2523,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        test_repo_scope=get_submodule_bump_scope(ci_inputs, git_context),
     )
 
 

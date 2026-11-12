@@ -37,6 +37,13 @@ on:
         description: 'Comma-separated list of projects to test (e.g., "rocblas,hipblas" or "projects/rocblas"). Empty = run all tests.'
         type: string
         default: ""
+      test_repo_scope:
+        description: >-
+          Submodule path of the repository that triggered this run (e.g.
+          "rocm-libraries"). Narrows test selection only; builds are unaffected.
+          Falls back to the external_repo_config identity when unset.
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -186,6 +193,8 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}
+      # Test-only narrowing from the triggering repository; see test_artifacts.yml.
+      test_repo_scope: ${{ inputs.test_repo_scope != '' && inputs.test_repo_scope || (inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).submodule_path || '') }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

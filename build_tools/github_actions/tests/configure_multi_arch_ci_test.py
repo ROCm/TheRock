@@ -543,6 +543,74 @@ class TestGitContext(unittest.TestCase):
         self.assertEqual(git.submodule_paths, [""])
 
 
+class TestSubmoduleBumpScope(unittest.TestCase):
+    """get_submodule_bump_scope narrows TESTS for a clean single-submodule bump.
+
+    Every negative case must yield "" (no narrowing, test everything): failing
+    open costs CI time, failing closed silently skips tests.
+    """
+
+    _SUBMODULES = ["rocm-libraries", "rocm-systems", "debug-tools/rocgdb/source"]
+
+    def _inputs(self, **kwargs):
+        defaults = dict(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def _scope(self, changed, *, external_repo="", submodules=None):
+        git = cm.GitContext(
+            changed_files=changed,
+            submodule_paths=self._SUBMODULES if submodules is None else submodules,
+        )
+        return cm.get_submodule_bump_scope(
+            self._inputs(external_repo=external_repo), git
+        )
+
+    def test_single_submodule_bump_returns_its_path(self):
+        self.assertEqual(self._scope(["rocm-libraries"]), "rocm-libraries")
+
+    def test_nested_submodule_path_returned_verbatim(self):
+        self.assertEqual(
+            self._scope(["debug-tools/rocgdb/source"]), "debug-tools/rocgdb/source"
+        )
+
+    def test_several_submodules_have_no_single_owner(self):
+        self.assertEqual(self._scope(["rocm-libraries", "rocm-systems"]), "")
+
+    def test_other_files_alongside_the_bump_widen_to_everything(self):
+        # A workflow or CMake edit riding along can affect anything, so the
+        # bump no longer bounds the blast radius.
+        self.assertEqual(self._scope(["rocm-libraries", "CMakeLists.txt"]), "")
+
+    def test_non_submodule_changes_only(self):
+        self.assertEqual(self._scope(["CMakeLists.txt"]), "")
+
+    def test_external_repo_runs_use_their_own_identity(self):
+        # External repo CI carries the repository in external_repo_config; its
+        # GitContext fakes a submodule change, which must not be read as a bump.
+        self.assertEqual(
+            self._scope(
+                ["rocm-libraries"],
+                external_repo='{"repository": "ROCm/rocm-libraries"}',
+            ),
+            "",
+        )
+
+    def test_missing_git_context_is_not_narrowed(self):
+        self.assertEqual(
+            cm.get_submodule_bump_scope(self._inputs(), cm.GitContext()), ""
+        )
+
+    def test_no_changes_at_all(self):
+        self.assertEqual(self._scope([]), "")
+
+
 # ---------------------------------------------------------------------------
 # Step 2: Check Skip CI
 # ---------------------------------------------------------------------------
@@ -3171,6 +3239,33 @@ class TestWriteOutputs(unittest.TestCase):
         self.assertIn("enable_build_jobs=true", github_output)
         self.assertIn("test_type=full", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_repo_scope_is_emitted_without_touching_build_config(self):
+        # test_repo_scope narrows tests only. Setting it must not change the
+        # build configuration the workflow acts on, or a bump would silently
+        # stop building something it still needs.
+        jobs = _jobs(test_type="full")
+        without = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
+        with_scope = cm.CIOutputs(
+            is_ci_enabled=True, jobs=jobs, test_repo_scope="rocm-libraries"
+        )
+
+        baseline, _ = self._write_outputs(without)
+        scoped, _ = self._write_outputs(with_scope)
+
+        self.assertIn("test_repo_scope=rocm-libraries", scoped)
+        self.assertIn("test_repo_scope=", baseline)
+
+        def build_lines(output: str) -> list[str]:
+            return [
+                line
+                for line in output.splitlines()
+                if line.startswith(
+                    ("linux_build_config=", "windows_build_config=", "test_type=")
+                )
+            ]
+
+        self.assertEqual(build_lines(baseline), build_lines(scoped))
 
     def test_skipped_ci(self):
         outputs = cm.CIOutputs.skipped()

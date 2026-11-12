@@ -1095,6 +1095,55 @@ class TestRepoOwnership(unittest.TestCase):
         self.assertIn("rocsparse", selected)
 
 
+@unittest.skipUnless(
+    _repo_ownership_available(), "needs a git checkout and the cmake-parser dependency"
+)
+class TestRepoScopeCli(unittest.TestCase):
+    """--repo-scope stands in for 'everything in this repository changed'."""
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "--therock-dir", str(THEROCK_DIR), *args],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return proc
+
+    def test_repo_scope_narrows_to_that_repo_and_downstream(self) -> None:
+        selected = set(json.loads(self._run("--repo-scope", "rocm-libraries").stdout))
+
+        self.assertIn("rocblas", selected)
+        self.assertIn("rocsparse", selected)
+        # rocm-systems is upstream, so none of its tests can be affected.
+        self.assertNotIn("rccl", selected)
+        self.assertNotIn("hip-tests", selected)
+        self.assertNotIn("rocrtst", selected)
+
+    def test_unknown_repo_scope_falls_back_to_all_tests(self) -> None:
+        # Safer to over-test than to silently select nothing for a repository
+        # the map does not know (e.g. a newly added submodule).
+        proc = self._run("--repo-scope", "not-a-repository")
+
+        self.assertEqual(proc.stdout.strip(), "*")
+
+    def test_changed_projects_takes_precedence_over_repo_scope(self) -> None:
+        # --repo-scope only stands in when there is nothing more specific.
+        selected = set(
+            json.loads(
+                self._run(
+                    "--repo-scope", "rocm-libraries", "--changed-projects", "rocSPARSE"
+                ).stdout
+            )
+        )
+
+        self.assertIn("rocsparse", selected)
+        self.assertNotIn("rocfft", selected)
+
+    def test_no_repo_scope_still_selects_all_tests(self) -> None:
+        self.assertEqual(self._run().stdout.strip(), "*")
+
+
 # ---------------------------------------------------------------------------
 # Identifier-space contract: function inputs must be consumer-graph keys. The
 # CLI accepts external-repo subtree identifiers and normalizes known forms before
