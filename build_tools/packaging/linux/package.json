@@ -645,7 +645,8 @@
           {
             "Name": "hipblasltprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -1982,6 +1983,7 @@
             "Components": [
               "lib",
               "run",
+              "sys",
               "doc"
             ]
           }
@@ -2648,7 +2650,8 @@
           {
             "Name": "miopenprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -3039,6 +3042,17 @@
         "Artifact_Subdir": [
           {
             "Name": "rocgdb",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-dbgapi",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-dbgapi",
             "Components": [
               "test"
             ]

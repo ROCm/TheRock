@@ -68,6 +68,11 @@ Workarounds:
 
 - Shipping CMake is too old (3.22): see above advice for CMake
 
+### Ubuntu 26.04
+
+Tested on Ubuntu 26.04.1 (GCC 15.2, CMake 4.2.3), both bare metal and the
+`ubuntu:26.04` container image.
+
 ### Arch Linux / EndeavourOS
 
 Arch-based distributions ship the latest toolchain versions, which occasionally

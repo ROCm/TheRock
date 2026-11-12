@@ -187,6 +187,7 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
+          allow-prereleases: true
 
       # Multi-arch packages use pip extras (e.g. torch[device-gfx942]) to
       # select GPU-specific device packages. Expand the family to get the
@@ -300,6 +301,25 @@ jobs:
               test_binary_ufuncs \
               test_autograd \
             -- \
+            --continue-on-collection-errors
+
+      # Keep this separate from the core invocation because bypassing upstream's
+      # Windows blocklist would also re-enable blocklisted core modules.
+      - name: Run PyTorch transformer tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 60
+        env:
+          # Opt Navi into AOTriton kernels that are disabled by default so the
+          # transformer suite exercises them instead of only fallback paths.
+          TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: "1"
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
+            --include test_transformers \
+            -- \
+            --ignore-win-blocklist \
             --continue-on-collection-errors
 
       - name: Upload test reports

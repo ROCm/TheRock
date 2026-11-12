@@ -218,29 +218,34 @@ class TestCIInputs(unittest.TestCase):
             ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
         )
 
-    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
-        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
-        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
-            _run_from_environ(
-                event_name="workflow_dispatch",
-                event_payload={},
-                extra_env={
-                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
-                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
-                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
-                },
-            )
-
-    def test_run_wsl_full_build_needs_no_stage_check(self):
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
-        )
-        inputs.validate()
+    def test_run_wsl_adds_wsl_rocdxg_to_partial_build(self):
+        """A narrowed build (e.g. an external repo PR) still builds wsl-rocdxg,
+        the WSL libhsakmt that ci:run-wsl tests need, on top of the requested
+        stages, which stay unchanged."""
+        for labels, expect_wsl in (("ci:run-wsl,ci:gfx110X-all", True), ("", False)):
+            with self.subTest(labels=labels):
+                inputs = _run_from_environ(
+                    event_name="pull_request",
+                    event_payload={
+                        "pull_request": {
+                            "labels": [
+                                {"name": name} for name in labels.split(",") if name
+                            ],
+                            "base": {"ref": "develop"},
+                        }
+                    },
+                    extra_env={"BUILD_STAGES": "compiler-runtime,dctools-core"},
+                )
+                self.assertEqual(
+                    inputs.build_stages, ["compiler-runtime", "dctools-core"]
+                )
+                skipped = cm.decide_jobs(
+                    inputs, cm.GitContext(), cm.TargetSelection()
+                ).build_rocm.skipped_stages
+                self.assertEqual("wsl-rocdxg" not in skipped, expect_wsl)
+                self.assertNotIn("compiler-runtime", skipped)
+                self.assertNotIn("dctools-core", skipped)
+                self.assertIn("math-libs", skipped)
 
     def test_skip_rocm_rejects_conflicting_inputs(self):
         inputs = cm.CIInputs(
@@ -320,6 +325,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BUILD_JAX": "true",
                 "PYTHON_VERSION": "3.12",
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
+                "THEROCK_CHECKOUT_REF": "main",
+                "THEROCK_CHECKOUT_COMMIT": "a" * 40,
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -346,6 +353,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
+        self.assertEqual(inputs.checkout_ref, "main")
+        self.assertEqual(inputs.checkout_commit, "a" * 40)
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -363,6 +372,30 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
+        self.assertFalse(inputs.is_draft_pr)
+
+    def test_pull_request_extracts_draft_state(self):
+        """event.pull_request.draft is carried into is_draft_pr."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={"pull_request": {"draft": True}},
+        )
+        self.assertTrue(inputs.is_draft_pr)
+
+    def test_non_pull_request_event_is_never_draft(self):
+        """Draft state is only read for pull_request events.
+
+        The payload carries pull_request.draft even though no real push,
+        schedule or workflow_dispatch webhook would, so this fails if the
+        draft read ever moves out of the pull_request branch.
+        """
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = _run_from_environ(
+                    event_name=event_name,
+                    event_payload={"pull_request": {"draft": True}},
+                )
+                self.assertFalse(inputs.is_draft_pr)
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
         """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
@@ -543,6 +576,32 @@ class TestShouldSkipCI(unittest.TestCase):
     def test_pr_without_skip_label_proceeds(self):
         """PR without ci:skip label proceeds to path filtering."""
         inputs = self._inputs(pr_labels=[])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_skips(self):
+        """Draft PR without ci:run-on-draft skips CI."""
+        inputs = self._inputs(is_draft_pr=True)
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_with_run_on_draft_label_runs(self):
+        """Draft PR with ci:run-on-draft runs CI."""
+        inputs = self._inputs(is_draft_pr=True, pr_labels=["ci:run-on-draft"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_ci_skip_wins_over_run_on_draft(self):
+        """ci:skip takes priority when combined with ci:run-on-draft."""
+        inputs = self._inputs(
+            is_draft_pr=True, pr_labels=["ci:skip", "ci:run-on-draft"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_non_draft_pr_runs(self):
+        """Ready-for-review PR runs CI without the opt-in label."""
+        inputs = self._inputs(is_draft_pr=False)
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
@@ -1195,6 +1254,15 @@ class TestDecideJobs(unittest.TestCase):
                 actual = getattr(result, field).action
                 self.assertEqual(actual, expected)
 
+    def test_exactly_label_leaves_packaging_alone(self):
+        """ci:exactly scopes the arch selection, not the packaging jobs."""
+        result = cm.decide_jobs(
+            self._inputs(build_pytorch=True, pr_labels=["ci:exactly"]),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
+
 
 # ---------------------------------------------------------------------------
 # Step 4: Select Targets
@@ -1425,6 +1493,177 @@ class TestSelectTargets(unittest.TestCase):
             sorted(result_gfx_first.linux_test_only_families),
             sorted(result_all_first.linux_test_only_families),
         )
+
+    def test_exactly_label_drops_default_families(self):
+        """ci:exactly limits the run to the labeled family only."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        without = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:gfx906"]))
+        with_exactly = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx906"])
+        )
+        # Without ci:exactly the label adds to the presubmit defaults.
+        self.assertGreater(len(without.linux_families), 1)
+        # With ci:exactly only the labeled family survives.
+        self.assertEqual(with_exactly.linux_families, ["gfx906"])
+        self.assertEqual(with_exactly.linux_test_only_families, ["gfx906"])
+
+    def test_exactly_label_honors_build_only_label(self):
+        """ci:exactly + ci:build:gfx* builds that family without testing it."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:build:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx950"])
+        self.assertEqual(result.linux_build_only_families, ["gfx950"])
+        self.assertEqual(result.linux_test_only_families, [])
+
+    def test_exactly_label_keeps_every_labeled_family(self):
+        """ci:exactly selects all labeled families, not just the first one."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:gfx950", "ci:gfx94x"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(sorted(result.linux_families), ["gfx94x", "gfx950"])
+
+    def test_exactly_label_honors_test_only_label(self):
+        """ci:exactly + ci:build:gfx* + ci:test:gfx* builds and tests that family."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:build:gfx950", "ci:test:gfx950"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx950"])
+        self.assertEqual(result.linux_test_only_families, ["gfx950"])
+
+    def test_exactly_label_composes_with_platform_label(self):
+        """ci:exactly narrows archs while ci:platform:* still narrows platform."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:gfx110X-all", "ci:platform:linux"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertEqual(result.linux_families, ["gfx110x"])
+        self.assertEqual(result.windows_families, [])
+
+    def test_exactly_label_with_platform_mismatch_raises(self):
+        """ci:exactly fails when no labeled family survives the platform filter."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            # gfx94x has no Windows entry, so restricting to Windows leaves
+            # nothing to build.
+            pr_labels=["ci:exactly", "ci:gfx94x", "ci:platform:windows"],
+        )
+        # The arch label is present, so the input-level check passes.
+        inputs.validate()
+        with self.assertRaisesRegex(ValueError, "selected no architectures"):
+            cm.select_targets(inputs)
+
+    def test_exactly_label_with_only_test_label_raises(self):
+        """ci:exactly + ci:test:gfx* has no build label, so it fails fast."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly", "ci:test:gfx950"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
+            inputs.validate()
+
+    def test_exactly_label_applies_to_workflow_dispatch(self):
+        """ci:exactly drops caller-supplied families on workflow_dispatch too."""
+        base = dict(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            linux_amdgpu_families=["gfx110x"],
+            windows_amdgpu_families=["gfx110x"],
+        )
+        without = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:gfx906"]))
+        with_exactly = cm.select_targets(
+            cm.CIInputs(**base, pr_labels=["ci:exactly", "ci:gfx906"])
+        )
+        self.assertEqual(sorted(without.linux_families), ["gfx110x", "gfx906"])
+        self.assertEqual(with_exactly.linux_families, ["gfx906"])
+
+    def test_exactly_label_without_arch_label_raises(self):
+        """ci:exactly with no arch label would build nothing, so it fails fast."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+            pr_labels=["ci:exactly"],
+        )
+        with self.assertRaisesRegex(ValueError, "requires at least one arch label"):
+            inputs.validate()
+
+    def test_exactly_label_with_run_all_archs_runs_every_family(self):
+        """ci:run-all-archs is equivalent to labeling every arch by hand."""
+        base = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        run_all = cm.select_targets(cm.CIInputs(**base, pr_labels=["ci:run-all-archs"]))
+        for labels in (
+            ["ci:exactly", "ci:run-all-archs"],
+            ["ci:run-all-archs", "ci:exactly"],
+        ):
+            with self.subTest(labels=labels):
+                inputs = cm.CIInputs(**base, pr_labels=labels)
+                # ci:run-all-archs satisfies the ci:exactly arch-label contract.
+                inputs.validate()
+                result = cm.select_targets(inputs)
+                self.assertEqual(result.linux_families, run_all.linux_families)
+                self.assertEqual(result.windows_families, run_all.windows_families)
+
+    def test_exactly_label_ignored_for_push(self):
+        """Push carries no labels, so ci:exactly cannot narrow the defaults."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            pr_labels=["ci:exactly"],
+        )
+        result = cm.select_targets(inputs)
+        self.assertIn("gfx950", result.linux_families)
 
     def test_pull_request_unknown_gfx_label_raises(self):
         """PR with an unknown ci:gfx label fails fast."""
@@ -2287,7 +2526,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
-                    "exclude_implicit_targets": "gfx1250-strict",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -2306,6 +2545,24 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 }
             ],
         )
+
+    def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
+        targets = cm.TargetSelection(
+            linux_families=["gfx94x"],
+            windows_families=[],
+        )
+        result = cm.expand_build_configs(
+            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(),
+        )
+
+        exclusions = {
+            row["pytorch_git_ref"]: row["exclude_implicit_targets"]
+            for row in result.linux.pytorch_build_matrix
+        }
+        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
@@ -2860,6 +3117,14 @@ class TestFormatSummary(unittest.TestCase):
         # The summary should also mention that CI was skipped with some
         # explanation for why.
         self.assertIn("skipped", result)
+
+    def test_draft_skip_summary_points_at_opt_in_label(self):
+        """A draft skip explains itself and names the opt-in label."""
+        inputs = self._inputs(event_name="pull_request", is_draft_pr=True)
+        result = format_summary(inputs, cm.CIOutputs.skipped())
+
+        self.assertIn("draft", result)
+        self.assertIn("ci:run-on-draft", result)
 
 
 class TestWriteOutputs(unittest.TestCase):
