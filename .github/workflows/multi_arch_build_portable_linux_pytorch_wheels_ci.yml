@@ -67,6 +67,12 @@ on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
         default: "aws-linux-scale-rocm-prod"
+      build_variant:
+        description: >-
+          Build variant (release, asan, asan-debug, host-asan, host-asan-debug).
+          A variant containing asan builds the torch wheel with AddressSanitizer.
+        type: string
+        default: "release"
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -123,6 +129,12 @@ on:
           cannot complete a full PyTorch build.
         type: string
         default: "aws-linux-scale-rocm-prod"
+      build_variant:
+        description: >-
+          Build variant (release, asan, asan-debug, host-asan, host-asan-debug).
+          A variant containing asan builds the torch wheel with AddressSanitizer.
+        type: string
+        default: "release"
 
 permissions:
   contents: read
@@ -143,6 +155,7 @@ jobs:
       EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PYTHON_VERSION: ${{ inputs.python_version }}
       PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
       CACHE_TYPE: ${{ inputs.cache_type }}
@@ -287,6 +300,7 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
+            --build-variant "${BUILD_VARIANT}" \
             --index-url="${ROCM_PACKAGE_INDEX_URL}" \
             --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --clean \

@@ -2722,6 +2722,44 @@ class TestExpandBuildConfigs(unittest.TestCase):
         # Windows has no asan variant config at all.
         self.assertIsNone(result.windows)
 
+    def test_asan_pytorch_builds_python_packages(self):
+        """ASan skips Python packages unless PyTorch needs them from this run."""
+        targets = cm.TargetSelection(linux_families=["gfx94x"])
+        enabled = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="asan",
+                build_python_packages=False,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=True),
+        )
+        self.assertTrue(enabled.linux.build_pytorch)
+        self.assertTrue(enabled.linux.build_python_packages)
+        self.assertEqual(
+            {
+                (row["python_version"], row["pytorch_git_ref"])
+                for row in enabled.linux.pytorch_build_matrix
+            },
+            {("3.12", "release/2.13")},
+        )
+
+        skipped = cm.expand_build_configs(
+            ci_inputs=self._inputs(
+                event_name="workflow_dispatch",
+                build_variant="asan",
+                build_python_packages=False,
+                build_pytorch=False,
+            ),
+            git_context=cm.GitContext(),
+            targets=targets,
+            jobs=_jobs(build_pytorch=False),
+        )
+        self.assertFalse(skipped.linux.build_pytorch)
+        self.assertFalse(skipped.linux.build_python_packages)
+        self.assertEqual(skipped.linux.pytorch_build_matrix, [])
+
     def test_variant_filters_by_trigger(self):
         """ASAN: based on event type, we run an expected ASAN build variant"""
         targets = cm.TargetSelection(

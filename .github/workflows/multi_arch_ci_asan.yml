@@ -84,7 +84,7 @@ jobs:
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       build_python_packages: false
-      build_pytorch: false
+      build_pytorch: true
       build_jax: false
 
   linux_build_and_test:
