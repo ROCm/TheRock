@@ -701,6 +701,106 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 original_select_weighted_label
             )
 
+    def test_gpu_count_tier_routes_to_matching_pool(self):
+        """A component with "gpu_count": N draws from the test-runs-on-<N>gpu pool.
+
+        rccl declares gpu_count 2, so it must land on the 2-GPU pool while jobs
+        that need all 8 GPUs (rocshmem) stay on the default multi-GPU pool.
+        """
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rccl = next(j for j in components if j["job_name"] == "rccl")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu")
+        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
+
+    def test_gpu_count_tier_falls_back_to_default_multi_gpu_pool(self):
+        """Without a test-runs-on-<N>gpu pool, gpu_count components use the 8-GPU pool.
+
+        This keeps the TheRock and therock-ci-config changes independently
+        landable: declaring gpu_count before a family has a 2-GPU pool is a no-op.
+        """
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        rccl = next(j for j in components if j["job_name"] == "rccl")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-8gpu")
+
+    def test_gpu_count_tier_prefers_weighted_labels(self):
+        """test-runs-on-<N>gpu-labels wins over the tier's plain default label."""
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
+                        "test-runs-on-2gpu": "linux-mi300-2gpu-default",
+                        "test-runs-on-2gpu-labels": [
+                            {"label": "linux-mi300-2gpu-a", "count": 5},
+                            {"label": "linux-mi300-2gpu-b", "count": 5},
+                        ],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        original_select_weighted_label = fetch_test_configurations.select_weighted_label
+        contexts = []
+
+        def fake_select_weighted_label(labels_config, context_name):
+            contexts.append(context_name)
+            return labels_config[0]["label"]
+
+        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
+
+        try:
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+            rccl = next(j for j in components if j["job_name"] == "rccl")
+            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu-a")
+            self.assertIn("rccl-2gpu", contexts)
+        finally:
+            fetch_test_configurations.select_weighted_label = (
+                original_select_weighted_label
+            )
+
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
 
