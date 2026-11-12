@@ -469,6 +469,20 @@ def remove_dir_if_exists(dir: Path):
         shutil.rmtree(dir)
 
 
+# Shared libraries whose direct DT_NEEDED entries live outside torch/lib.
+# Versioned files (libfoo.so.1) match the same prefix. Symlinks are skipped.
+TORCH_LIB_RPATH_SONAMES = (
+    "libtorch_cpu.so",
+    "libtorch_hip.so",
+    "libtorch_python.so",
+    "libtorch_rocshmem.so",
+    "libaotriton_v2.so",
+    "libc10_hip.so",
+    "libc10d_hip_test.so",
+    "libcaffe2_nvrtc.so",
+)
+
+
 def _installed_py_package_dir(logical_name: str) -> str:
     """Import directory of an installed ROCm package, including any nonce suffix.
 
@@ -504,8 +518,41 @@ def _torch_lib_rocm_rpath_entries() -> list[str]:
     return list(dict.fromkeys(entries))
 
 
+def _torch_lib_rpath_install_lines(rpath: str, patchelf: str) -> list[str]:
+    """CMake lines that patchelf only the libraries which need a ROCm RUNPATH."""
+    sonames = " ".join(TORCH_LIB_RPATH_SONAMES)
+    return [
+        "function(therock_register_torch_lib_rpath_patch)",
+        "  install(CODE [[",
+        f"set(_rpath_sonames {sonames})",
+        'file(GLOB sos "${CMAKE_INSTALL_PREFIX}/lib/*.so*")',
+        "foreach(so ${sos})",
+        '  if(IS_SYMLINK "${so}")',
+        "    continue()",
+        "  endif()",
+        '  get_filename_component(so_name "${so}" NAME)',
+        "  set(_patch OFF)",
+        "  foreach(soname ${_rpath_sonames})",
+        '    string(FIND "${so_name}" "${soname}" _pos)',
+        "    if(_pos EQUAL 0)",
+        "      set(_patch ON)",
+        "    endif()",
+        "  endforeach()",
+        "  if(_patch)",
+        "    execute_process(",
+        f'      COMMAND "{patchelf}" --set-rpath "{rpath}" "${{so}}"',
+        "      COMMAND_ERROR_IS_FATAL ANY)",
+        "  endif()",
+        "endforeach()",
+        "]])",
+        "endfunction()",
+        "cmake_language(DEFER CALL therock_register_torch_lib_rpath_patch)",
+        "",
+    ]
+
+
 def _enable_torch_lib_rpath_install(env: dict[str, str]) -> None:
-    """patchelf --set-rpath on torch/lib at install time, before the wheel is packed."""
+    """patchelf --set-rpath on selected torch/lib libraries before the wheel is packed."""
     cmake_file = (
         Path(tempfile.mkdtemp(prefix="torch-rpath-")) / "patch_torch_lib_rpath.cmake"
     )
@@ -513,24 +560,7 @@ def _enable_torch_lib_rpath_install(env: dict[str, str]) -> None:
     rpath = ":".join(["$ORIGIN", *_torch_lib_rocm_rpath_entries()])
     patchelf = os.environ.get("PATCHELF", "patchelf")
     cmake_file.write_text(
-        "\n".join(
-            [
-                "function(therock_register_torch_lib_rpath_patch)",
-                "  install(CODE [[",
-                'file(GLOB sos "${CMAKE_INSTALL_PREFIX}/lib/*.so*")',
-                "foreach(so ${sos})",
-                '  if(NOT IS_SYMLINK "${so}")',
-                "    execute_process(",
-                f'      COMMAND "{patchelf}" --set-rpath "{rpath}" "${{so}}"',
-                "      COMMAND_ERROR_IS_FATAL ANY)",
-                "  endif()",
-                "endforeach()",
-                "]])",
-                "endfunction()",
-                "cmake_language(DEFER CALL therock_register_torch_lib_rpath_patch)",
-                "",
-            ]
-        )
+        "\n".join(_torch_lib_rpath_install_lines(rpath, patchelf))
     )
     arg = f"-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={shlex.quote(str(cmake_file))}"
     env["CMAKE_ARGS"] = f"{env.get('CMAKE_ARGS', '')} {arg}".strip()

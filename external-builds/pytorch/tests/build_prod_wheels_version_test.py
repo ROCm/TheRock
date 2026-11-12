@@ -16,7 +16,9 @@ from packaging.version import Version
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
 from build_prod_wheels import (
+    TORCH_LIB_RPATH_SONAMES,
     _torch_lib_rocm_rpath_entries,
+    _torch_lib_rpath_install_lines,
     compute_build_version,
 )
 
@@ -197,6 +199,16 @@ class TorchLibRpathTest(unittest.TestCase):
                 "$ORIGIN/../../_rocm_sdk_libraries_nonce/lib",
             ],
         )
+
+    def test_install_script_patches_only_selected_sonames(self):
+        lines = "\n".join(_torch_lib_rpath_install_lines("$ORIGIN", "patchelf"))
+        for soname in TORCH_LIB_RPATH_SONAMES:
+            self.assertIn(soname, lines)
+        self.assertNotIn("libc10.so ", lines)
+        self.assertNotIn("libtorch.so ", lines)
+        self.assertNotIn("libshm.so", lines)
+        self.assertIn('if(IS_SYMLINK "${so}")', lines)
+        self.assertIn("if(_pos EQUAL 0)", lines)
 
 
 if __name__ == "__main__":
