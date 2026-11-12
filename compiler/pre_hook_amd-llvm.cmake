@@ -34,6 +34,10 @@ else()
   #    a different header path is taken.
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang;mlir" CACHE STRING "Enable LLVM projects" FORCE)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  # Now that the CIR build is default on, mlir objects get installed and exported in clang config.
+  # TheRock explictly excludes llvm objects in artifact-amd-llvm.toml, which causes a failure
+  # when the clang config is used as those files are not present. Disable their install.
+  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
