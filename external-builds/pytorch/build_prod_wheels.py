@@ -469,15 +469,38 @@ def remove_dir_if_exists(dir: Path):
         shutil.rmtree(dir)
 
 
-def _torch_lib_rocm_rpath_entries() -> list[str]:
-    """$ORIGIN paths of the installed core package and its OpenBLAS library."""
-    from rocm_sdk._dist_info import ALL_LIBRARIES, ALL_PACKAGES
+def _installed_py_package_dir(logical_name: str) -> str:
+    """Import directory of an installed ROCm package, including any nonce suffix.
 
-    core_pkg = ALL_PACKAGES["core"].get_py_package_name()
-    core_lib = ALL_LIBRARIES["rocprofiler-sdk"].posix_relpath
-    openblas_lib = ALL_LIBRARIES["rocm-openblas"].posix_relpath
-    prefix = f"$ORIGIN/../../{core_pkg}"
-    entries = [f"{prefix}/{core_lib}", f"{prefix}/{openblas_lib}"]
+    Target-specific dist names are not the on-disk directory for kpack-split
+    packages. Those install under the arch-neutral pure Python name.
+    """
+    from rocm_sdk._dist_info import ALL_PACKAGES, PY_PACKAGE_SUFFIX_NONCE
+
+    package = ALL_PACKAGES[logical_name]
+    if package.is_target_specific:
+        return f"_{package.pure_py_package_name}{PY_PACKAGE_SUFFIX_NONCE}"
+    return package.get_py_package_name()
+
+
+def _torch_lib_rocm_rpath_entries() -> list[str]:
+    """$ORIGIN paths for ROCm libraries a non-Python process must load.
+
+    ``import torch`` preloads these through ``rocm_sdk.initialize_process``.
+    A standalone binary never runs that hook, so ``torch/lib`` has to name
+    the directories itself. Paths come from the SDK metadata so a package
+    nonce does not leave a dead entry.
+    """
+    from rocm_sdk._dist_info import ALL_LIBRARIES
+
+    core = f"$ORIGIN/../../{_installed_py_package_dir('core')}"
+    libraries = f"$ORIGIN/../../{_installed_py_package_dir('libraries')}"
+    entries = [
+        f"{core}/{ALL_LIBRARIES['rocprofiler-sdk'].posix_relpath}",
+        f"{core}/{ALL_LIBRARIES['rocm-openblas'].posix_relpath}",
+        f"{core}/{ALL_LIBRARIES['rocm_sysdeps_liblzma'].posix_relpath}",
+        f"{libraries}/{ALL_LIBRARIES['hipblas'].posix_relpath}",
+    ]
     return list(dict.fromkeys(entries))
 
 
