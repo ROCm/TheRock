@@ -1180,7 +1180,9 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_cli_hipdnn_selects_cudnn_corpus(self) -> None:
+    def test_cli_hipdnn_selects_its_alias_group(self) -> None:
+        # hipDNN fans out to jobs with no graph key of their own: the cuDNN
+        # compatibility corpus and the install/consumption test.
         graph = {"hipdnn": {"consumers": []}}
         root = _make_fixture(graph=graph, policies="")
         try:
@@ -1200,7 +1202,9 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
             )
             self.assertEqual(proc.returncode, 0, proc.stderr)
             selected = set(json.loads(proc.stdout.strip()))
-            self.assertEqual(selected, {"hipdnn", "hipdnn-cudnn-samples"})
+            self.assertEqual(
+                selected, {"hipdnn", "hipdnn-cudnn-samples", "hipdnn_install"}
+            )
         finally:
             shutil.rmtree(root, ignore_errors=True)
 

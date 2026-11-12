@@ -145,9 +145,17 @@ _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 _CI_TEST_SELECTOR_ALIASES = {
     # The cuDNN sample corpus is the only CI for hipDNN's cuDNN compatibility
     # layer, so every hipDNN change selects it alongside hipDNN's own tests.
-    "hipdnn": ["hipdnn", "hipdnn-cudnn-samples"],
+    # hipdnn_install consumes the installed artifact and has no graph key of its
+    # own, so it rides along here too.
+    "hipdnn": ["hipdnn", "hipdnn-cudnn-samples", "hipdnn_install"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    # The example apps build against the hipthreads artifact; they are a second
+    # job rather than a graph node, so a hipthreads change must select both.
+    "hipthreads": ["hipthreads", "hipthreads_examples"],
+    # libhipcxx is a header-only library with no test job of its own: its CI is
+    # these two compilation suites.
+    "libhipcxx": ["libhipcxx_amdclang", "libhipcxx_hiprtc"],
     "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
