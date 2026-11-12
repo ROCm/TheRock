@@ -1,31 +1,23 @@
----
-name: therock-pr-review
-description: Review a TheRock pull request, your own (self-review before requesting review) or someone else's. Extends therock-pr-quality (and through it rocm-pr-quality) with a non-destructive review setup, de-duplication against existing review threads, verification discipline, a file-ordered findings layout, and a whole-PR design pass. Use when asked to "review PR", "review this PR", "code review PR #N", or given a TheRock PR URL or number to review.
-argument-hint: '[PR URL | owner/repo#N | #N | N]'
-extends: therock-pr-quality
-allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
----
+# TheRock PR Quality: review mode
 
-# TheRock PR Review (overlay)
+Part of the `therock-pr-quality` skill. Read this file for `review` (base **Action 2, Review
+assist**), after the base skill (`skills/rocm-pr-quality/SKILL.md` and `reference.md`) and this
+skill's `SKILL.md`. It applies to every TheRock PR, not only those in the `SKILL.md` Scope, and works
+for self-review before requesting review as well as for reviewing someone else's PR.
 
-## Dependency (mandatory, do this first)
-
-Read and apply, in order:
-
-1. `skills/rocm-pr-quality/SKILL.md` and `skills/rocm-pr-quality/reference.md` (base).
-1. `skills/therock-pr-quality/SKILL.md` (TheRock build-repo overlay).
-
-This overlay specializes the base's **Action 2 (Review assist)** for reviewing a TheRock PR. It only adds steps and tightens how the review is gathered and presented. It never relaxes a base MUST,
-the finding tiers, or the "never post without approval" principle. On any conflict, the base wins.
+Review mode only adds steps and tightens how the review is gathered and presented. It never relaxes a
+base MUST, the finding tiers, or the "never post without approval" principle. On any conflict, the
+base wins.
 
 ______________________________________________________________________
 
-## What this overlay adds
+## What review mode adds
 
 - A diff-first review setup that pulls source only when needed and never switches the user's branch
   on its own.
 - De-duplication against everything reviewers have already said, including the invoking user's own
   unsubmitted drafts.
+- A title and description accuracy check, since TheRock squash-merges.
 - Verification rules that prevent the most common false-positive findings.
 - A findings layout ordered by file and line, so the author can walk the diff top to bottom. The
   base's severity-first lead is kept as a separate `BLOCKING` list at the top of the review.
@@ -42,7 +34,8 @@ ______________________________________________________________________
 
 ## Workflow
 
-Run these in addition to the base Action 2 workflow and the TheRock overlay checks.
+Run these in addition to the base Action 2 workflow and, where the Scope applies, the `SKILL.md`
+supplements.
 
 ### 1. Resolve the PR
 
@@ -68,9 +61,10 @@ replies that explain a non-obvious choice, so the review does not re-ask a settl
 
 ### 3. Get the diff; pull source only when needed
 
-Start from `gh pr diff`. For small, self-contained changes the diff is enough. Pull source only when the diff cannot answer a
-question, for example a function the diff calls but does not define. When the review relied on the
-diff alone, say so in the Summary; the base rates a diff-only review as lower confidence.
+Start from `gh pr diff`. For small, self-contained changes the diff is enough. Pull source only when
+the diff cannot answer a question, for example a function the diff calls but does not define. When
+the review relied on the diff alone, say so in the Summary; the base rates a diff-only review as
+lower confidence.
 
 Never switch branches or otherwise modify the user's working tree without asking; they may have
 work in progress. Prefer reading files at the PR head without touching the tree (for example
@@ -78,12 +72,8 @@ work in progress. Prefer reading files at the PR head without touching the tree 
 
 ### 4. Apply the style guides for touched languages only
 
-Read only the guides for languages present in the diff:
-
-- Python: `docs/development/style_guides/python_style_guide.md`. Run its "Code review checklist".
-- CMake: `docs/development/style_guides/cmake_style_guide.md`
-- GitHub Actions: `docs/development/style_guides/github_actions_style_guide.md`
-- Bash: `docs/development/style_guides/bash_style_guide.md`
+Of the style guides listed under "Canonical TheRock references" in `SKILL.md`, read only those for
+languages present in the diff. For Python, run the guide's "Code review checklist".
 
 Cite the specific guide section in each style finding. Do not invent rules the guides do not contain;
 a personal preference is at most a `SUGGESTION` and must be labelled as preference.

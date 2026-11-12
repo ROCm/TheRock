@@ -1,6 +1,6 @@
 ---
 name: therock-pr-quality
-description: TheRock build-repo supplements to the ROCm PR quality base skill. Use for TheRock PR author, review, or pre-merge gating where the change touches the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows. Adds and tightens base rules; never relaxes a base MUST.
+description: TheRock supplements to the ROCm PR quality base skill. Use for TheRock PR author, review, or pre-merge gating. Build-repo rules apply where the change touches the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows. Review mode (review.md) applies to every TheRock PR, including self-review before requesting review; use it when asked to "review PR", "review this PR", "code review PR #N", or given a TheRock PR URL or number to review. Adds and tightens base rules; never relaxes a base MUST.
 argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local]'
 extends: rocm-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
@@ -34,6 +34,16 @@ Apply this overlay (in addition to the base) when a PR touches any of:
   callers) and `build_tools/github_actions/**`.
 
 Changes outside these areas follow the base bar only.
+
+______________________________________________________________________
+
+## Review mode
+
+For `review` (base Action 2), also read and apply [`review.md`](review.md). Unlike the supplements
+below, it applies to every TheRock PR, and it works for self-review before requesting review as well
+as for reviewing someone else's PR. It adds a non-destructive review setup, de-duplication against
+existing review threads, a title and description accuracy check, verification discipline, a
+file-ordered findings layout, and a whole-PR design pass.
 
 ______________________________________________________________________
 
