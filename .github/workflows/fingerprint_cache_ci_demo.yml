@@ -1,17 +1,18 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Demonstrates the fingerprint artifact cache end to end inside GitHub Actions
-# against the shared ClickHouse index. Manually dispatched; no GPU build needed.
+# Dispatch-only test harness for the fingerprint artifact cache against the
+# shared ClickHouse index. No GPU build, non-gating: it shows the loop so you
+# can watch uploads, cache hits/misses, and per-stage skip decisions.
 #
-# One run shows the whole loop: a "cold" plan reports what the shared cache
-# already covers, this run publishes its units, then a "warm" plan shows those
-# stages are now skippable. Re-dispatching WITHOUT reset proves cross-run reuse:
-# the cold plan of the second run already hits what the first run published.
+# One run: a "cold" plan reports what the shared cache already covers, this run
+# publishes its units, a "warm" plan shows those stages now skip, and a final
+# plan simulates one subproject changing so you can see a partial miss.
+# Re-dispatch WITHOUT reset to prove cross-run reuse (the cold plan already hits
+# what a prior run published).
 #
-# Requires three repository secrets (Settings -> Secrets and variables ->
-# Actions): CLICKHOUSE_URL (https://<host>:8443), CLICKHOUSE_USER,
-# CLICKHOUSE_PASSWORD.
+# Requires repository secrets: CLICKHOUSE_URL (https://<host>:8443),
+# CLICKHOUSE_USER, CLICKHOUSE_PASSWORD.
 
 name: Fingerprint Cache CI Demo
 
@@ -19,9 +20,13 @@ on:
   workflow_dispatch:
     inputs:
       reset:
-        description: "Truncate the shared cache before running (show a cold start)"
+        description: "Truncate the shared cache first (show a cold start)"
         type: boolean
         default: false
+      changed:
+        description: "Artifact identity to mark 'changed' in the last plan (see a miss)"
+        type: string
+        default: "blas_lib_gfx94X-dcgpu"
 
 permissions:
   contents: read
@@ -58,3 +63,6 @@ jobs:
 
       - name: Plan (warm) - stages now served from the cache
         run: python -m artifact_cache.ci_cache plan --synthetic
+
+      - name: Plan (changed) - one subproject changed, watch it miss
+        run: python -m artifact_cache.ci_cache plan --synthetic --changed "${{ inputs.changed }}"

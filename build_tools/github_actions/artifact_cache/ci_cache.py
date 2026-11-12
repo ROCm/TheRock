@@ -87,8 +87,25 @@ def _load_units(args):
         units = _build_units(args.build)
         if not units:
             print(f"no valid .fprint files under {args.build}", file=sys.stderr)
-        return units
-    return _synthetic_units(args.commit)
+    else:
+        units = _synthetic_units(args.commit)
+    # Simulate a source change: give the named units a fresh fingerprint that was
+    # never published, so they become cache misses (for dispatch-time testing).
+    changed = set(getattr(args, "changed", None) or [])
+    if changed:
+        units = [
+            (
+                stage,
+                identity,
+                (
+                    hashlib.sha256((fp + ":changed").encode()).hexdigest()
+                    if identity in changed
+                    else fp
+                ),
+            )
+            for stage, identity, fp in units
+        ]
+    return units
 
 
 def _db():
@@ -183,6 +200,12 @@ def cmd_plan(args):
         verb = "SKIP" if can_skip else "BUILD"
         print(f"  [{verb:<5}] {sp.stage:<12} {hits}/{total} cached")
         summary.append(f"| {sp.stage} | {hits}/{total} | {verb} |")
+        for e in sp.entries:
+            mark = "HIT " if e.status == "candidate" else "MISS"
+            print(f"         {mark}  {e.unit.artifact_identity}  ({e.reason})")
+            summary.append(
+                f"| &nbsp;&nbsp;{mark} | {e.unit.artifact_identity} | {e.reason} |"
+            )
     n_units = len(units)
     print(
         f"  -> {skipped} stage(s) skippable, {built} to build; {total_hits}/{n_units} units cached"
@@ -221,6 +244,12 @@ def main(argv=None):
                 "--synthetic",
                 action="store_true",
                 help="use a fixed demo stage graph (no build required)",
+            )
+            p.add_argument(
+                "--changed",
+                action="append",
+                default=[],
+                help="artifact identity whose source 'changed' (fresh fingerprint -> miss); repeatable",
             )
             p.add_argument("--commit", default=os.environ.get("GITHUB_SHA", "local"))
             p.add_argument(
