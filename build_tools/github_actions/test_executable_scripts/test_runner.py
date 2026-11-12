@@ -131,6 +131,7 @@ GTEST_ONLY_SHARDING_COMPONENTS = {
     "hipsparse",
     "hipkernelprovider",
     "miopenprovider",
+    "miopen",
     "hipdnn-integration-tests",
 }
 
