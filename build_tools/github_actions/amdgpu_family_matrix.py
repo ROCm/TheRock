@@ -46,6 +46,8 @@ MULTI_GPU_RUNNER_KEYS = (
     "test-runs-on-multi-gpu-labels",
     "test-runs-on-2gpu",
     "test-runs-on-2gpu-labels",
+    "test-runs-on-4gpu",
+    "test-runs-on-4gpu-labels",
 )
 
 
@@ -303,10 +305,14 @@ amdgpu_family_info_matrix = {
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
             ],
-            # 2-GPU pool for components that only need a pair of GPUs (rccl).
+            # 2-GPU and 4-GPU slices of the 8-GPU hosts (ROCm/TheRock#5623).
             "test-runs-on-2gpu": "linux-gfx942-2gpu-ossci-rocm",
             "test-runs-on-2gpu-labels": [
                 {"label": "linux-gfx942-2gpu-ossci-rocm", "count": 2},
+            ],
+            "test-runs-on-4gpu": "linux-gfx942-4gpu-ossci-rocm",
+            "test-runs-on-4gpu-labels": [
+                {"label": "linux-gfx942-4gpu-ossci-rocm", "count": 2},
             ],
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.

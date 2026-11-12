@@ -20,7 +20,10 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import (
+    MULTI_GPU_RUNNER_KEYS,
+    get_all_families_for_trigger_types,
+)
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
@@ -2387,10 +2390,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
         }
         optional_keys = {
             "test-runs-on-labels",
-            "test-runs-on-multi-gpu",
-            "test-runs-on-multi-gpu-labels",
-            "test-runs-on-2gpu",
-            "test-runs-on-2gpu-labels",
+            *MULTI_GPU_RUNNER_KEYS,
             "test_type",
         }
         for config in [result.linux, result.windows]:

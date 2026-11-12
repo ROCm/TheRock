@@ -770,6 +770,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
         self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
 
+    def test_4gpu_pool_is_selectable(self):
+        """The 4gpu pool resolves like any other named pool."""
+        runner = fetch_test_configurations._select_multi_gpu_runner(
+            job_name="some-job",
+            pool="4gpu",
+            pools={
+                "test-runs-on-multi-gpu": "linux-mi300-8gpu",
+                "test-runs-on-4gpu": "linux-mi300-4gpu",
+            },
+        )
+        self.assertEqual(runner, "linux-mi300-4gpu")
+
     def test_unknown_multi_gpu_pool_raises(self):
         """A typo'd pool fails loudly instead of silently dropping the component."""
         with self.assertRaises(ValueError) as ctx:
