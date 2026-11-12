@@ -255,6 +255,7 @@ jobs:
     outputs:
       torch_version: ${{ steps.pytorch-versions.outputs.torch_version }}
       torchaudio_version: ${{ steps.pytorch-versions.outputs.torchaudio_version }}
+      torchcodec_version: ${{ steps.pytorch-versions.outputs.torchcodec_version }}
       torchvision_version: ${{ steps.pytorch-versions.outputs.torchvision_version }}
       package_index_url: ${{ steps.publish-pytorch-wheels.outputs.package_index_url }}
       summary: ${{ steps.summary.outputs.summary }}
@@ -377,6 +378,12 @@ jobs:
             --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch  \
             --require-related-commit \
             --no-commit-hipify
+          # torchcodec has no related commit, its release is selected from the
+          # torch version in pytorch_torchcodec_repo.py.
+          python ./external-builds/pytorch/pytorch_torchcodec_repo.py checkout \
+            --checkout-dir ${{ env.CHECKOUT_ROOT }}/pytorch_torchcodec \
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/pytorch \
+            --no-commit-hipify
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -471,6 +478,46 @@ jobs:
             --pytorch-rocm-arch "!AMDGPU_TARGETS!" ^
             ${{ env.optional_build_prod_arguments }}
 
+      # The torchcodec nightly branch can break against the torch nightly, so it
+      # is built after the other wheels in a step that is allowed to fail. It is
+      # checked out outside of the CHECKOUT_ROOT directories that the build above
+      # uses, so that the build above does not pick it up. The torch wheel built
+      # above is installed in the Python environment, and the MSVC environment
+      # of the "Configure MSVC" step is still active. Stable builds build
+      # torchcodec in the step above.
+      # Using 'cmd' for the build is load bearing, see the build step above. In
+      # a batch file a failing command does not stop the script, so each command
+      # is checked.
+      - name: Build torchcodec wheel (nightly, allowed to fail)
+        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        continue-on-error: true
+        timeout-minutes: 60
+        shell: cmd # zizmor: ignore[misfeature]
+        env:
+          AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
+        # optional_build_prod_arguments is the same trusted shell fragment as in
+        # the step above.
+        run: | # zizmor: ignore[template-injection]
+          setlocal EnableDelayedExpansion
+          set "TORCHCODEC_ROOT=${{ env.CHECKOUT_ROOT }}/torchcodec_nightly"
+
+          python ./external-builds/pytorch/pytorch_torchcodec_repo.py checkout ^
+            --repo-hashtag nightly ^
+            --checkout-dir "!TORCHCODEC_ROOT!/pytorch_torchcodec" ^
+            --no-commit-hipify
+          if errorlevel 1 exit /b 1
+
+          python ./external-builds/pytorch/build_prod_wheels.py ^
+            build ^
+            --root-checkout-dir "!TORCHCODEC_ROOT!" ^
+            --clean ^
+            --output-dir "!PACKAGE_DIST_DIR!" ^
+            --release-type="!BUILD_RELEASE_TYPE!" ^
+            --pytorch-git-ref="!PYTORCH_GIT_REF!" ^
+            --pytorch-rocm-arch "!AMDGPU_TARGETS!" ^
+            ${{ env.optional_build_prod_arguments }}
+          if errorlevel 1 exit /b 1
+
       - name: Report cache stats
         if: ${{ !cancelled() && inputs.cache_type != 'none' }}
         run: |
@@ -538,7 +585,7 @@ jobs:
 
           # The splitter writes the host wheel under the same filename as the
           # input, so relocate each fat wheel out of PACKAGE_DIST_DIR before
-          # invoking the splitter. torchaudio ships as-is.
+          # invoking the splitter. torchaudio and torchcodec ship as-is.
           FAT_STAGE="$(cygpath -u "${RUNNER_TEMP}")/pytorch-fat"
           mkdir -p "${FAT_STAGE}"
 

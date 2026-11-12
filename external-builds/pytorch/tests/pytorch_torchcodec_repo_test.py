@@ -78,23 +78,27 @@ class BuildArgsTest(unittest.TestCase):
                 build_prod_wheels.validate_build_args(argparse.ArgumentParser(), args)
             self.assertTrue(args.build_pytorch_torchcodec)
 
-    def test_checkout_dir_is_ignored_on_windows(self):
+    def test_enabled_by_checkout_dir_on_windows(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(pytorch_torchcodec_dir=Path(temp_dir))
             with mock.patch.object(build_prod_wheels, "is_windows", True):
                 build_prod_wheels.validate_build_args(argparse.ArgumentParser(), args)
-            self.assertFalse(args.build_pytorch_torchcodec)
+            self.assertTrue(args.build_pytorch_torchcodec)
 
-    def test_explicit_build_on_windows_is_an_error(self):
+    def test_explicit_build_on_windows_is_accepted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(
                 pytorch_torchcodec_dir=Path(temp_dir), build_pytorch_torchcodec=True
             )
             with mock.patch.object(build_prod_wheels, "is_windows", True):
-                with self.assertRaises(SystemExit):
-                    build_prod_wheels.validate_build_args(
-                        argparse.ArgumentParser(), args
-                    )
+                build_prod_wheels.validate_build_args(argparse.ArgumentParser(), args)
+            self.assertTrue(args.build_pytorch_torchcodec)
+
+    def test_no_checkout_dir_does_not_enable_the_build(self):
+        args = self.make_args()
+        with mock.patch.object(build_prod_wheels, "is_windows", True):
+            build_prod_wheels.validate_build_args(argparse.ArgumentParser(), args)
+        self.assertFalse(args.build_pytorch_torchcodec)
 
     def test_build_requires_source_dir(self):
         args = self.make_args(build_pytorch_torchcodec=True)
@@ -132,6 +136,87 @@ class BuildStepTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "0.9.0"):
                 build_prod_wheels.check_torchcodec_build_requirements()
+
+    def test_windows_toolchain_is_set_up_only_on_windows(self):
+        args = argparse.Namespace(
+            version_suffix="",
+            release_type="dev",
+            pytorch_git_ref="nightly",
+            clean=False,
+        )
+        for is_windows in (True, False):
+            with self.subTest(is_windows=is_windows):
+                with mock.patch.multiple(
+                    build_prod_wheels,
+                    is_windows=is_windows,
+                    check_torchcodec_build_requirements=mock.DEFAULT,
+                    setup_torchcodec_windows_toolchain=mock.DEFAULT,
+                    compute_build_version=mock.DEFAULT,
+                    remove_dir_if_exists=mock.DEFAULT,
+                    run_command=mock.DEFAULT,
+                    find_built_wheel=mock.DEFAULT,
+                    copy_to_output=mock.DEFAULT,
+                ) as mocks:
+                    mocks["compute_build_version"].return_value = "0.17.0"
+                    build_prod_wheels.do_build_pytorch_torchcodec(
+                        args, Path("unused"), {}
+                    )
+                setup = mocks["setup_torchcodec_windows_toolchain"]
+                self.assertEqual(setup.call_count, 1 if is_windows else 0)
+
+
+class WindowsToolchainTest(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.bin_dir = self.temp_dir.name
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def make_env(self) -> dict[str, str]:
+        return {
+            "PATH": os.pathsep.join([self.bin_dir, "unrelated"]),
+            "CC": "clang-cl.exe",
+            "CXX": "clang-cl.exe",
+        }
+
+    def add_cl(self):
+        cl = Path(self.bin_dir) / ("cl.exe" if os.name == "nt" else "cl")
+        cl.write_text("")
+        cl.chmod(0o755)
+
+    def test_missing_msvc_environment_is_an_error(self):
+        with self.assertRaisesRegex(RuntimeError, "MSVC environment"):
+            build_prod_wheels.setup_torchcodec_windows_toolchain(self.make_env())
+
+    def test_clang_cl_is_the_default_compiler(self):
+        self.add_cl()
+        env = self.make_env()
+        with mock.patch.dict(os.environ):
+            os.environ.pop(build_prod_wheels.TORCHCODEC_WINDOWS_COMPILER_VAR, None)
+            build_prod_wheels.setup_torchcodec_windows_toolchain(env)
+        self.assertEqual(env["CC"], "clang-cl.exe")
+        self.assertEqual(env["CXX"], "clang-cl.exe")
+        self.assertEqual(env["DISTUTILS_USE_SDK"], "1")
+
+    def test_msvc_removes_the_common_compiler(self):
+        self.add_cl()
+        env = self.make_env()
+        with mock.patch.dict(
+            os.environ, {build_prod_wheels.TORCHCODEC_WINDOWS_COMPILER_VAR: "msvc"}
+        ):
+            build_prod_wheels.setup_torchcodec_windows_toolchain(env)
+        self.assertNotIn("CC", env)
+        self.assertNotIn("CXX", env)
+        self.assertEqual(env["DISTUTILS_USE_SDK"], "1")
+
+    def test_unknown_compiler_is_an_error(self):
+        self.add_cl()
+        with mock.patch.dict(
+            os.environ, {build_prod_wheels.TORCHCODEC_WINDOWS_COMPILER_VAR: "gcc"}
+        ):
+            with self.assertRaisesRegex(RuntimeError, "gcc"):
+                build_prod_wheels.setup_torchcodec_windows_toolchain(self.make_env())
 
 
 if __name__ == "__main__":

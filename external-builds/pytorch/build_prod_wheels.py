@@ -173,6 +173,15 @@ is_windows = platform.system() == "Windows"
 # see the compatibility table in its README).
 TORCHCODEC_MAX_PYTHON = (3, 14)
 
+# Environment variable that selects the Windows compiler for torchcodec. Like the
+# other wheels here, torchcodec is built with the clang-cl from the ROCm SDK by
+# default. Upstream builds torchcodec on Windows with MSVC (cl.exe), but with the
+# ROCm torch the CMake configuration fails on mixing Clang and MSVC compilers.
+# "msvc" removes CC and CXX so that CMake uses cl.exe.
+TORCHCODEC_WINDOWS_COMPILER_VAR = "TORCHCODEC_WINDOWS_COMPILER"
+TORCHCODEC_WINDOWS_COMPILERS = ("clang-cl", "msvc")
+TORCHCODEC_WINDOWS_DEFAULT_COMPILER = "clang-cl"
+
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
@@ -571,11 +580,7 @@ def validate_build_args(
     if args.build_pytorch_vision is None:
         args.build_pytorch_vision = args.pytorch_vision_dir is not None
     if args.build_pytorch_torchcodec is None:
-        # Only the Linux build is supported for now, so on Windows an existing
-        # checkout is ignored unless --build-pytorch-torchcodec is given.
-        args.build_pytorch_torchcodec = (
-            args.pytorch_torchcodec_dir is not None and not is_windows
-        )
+        args.build_pytorch_torchcodec = args.pytorch_torchcodec_dir is not None
     if args.build_apex is None:
         args.build_apex = args.apex_dir is not None
 
@@ -601,10 +606,6 @@ def validate_build_args(
         build_option="--build-pytorch-vision",
         dir_option="--pytorch-vision-dir",
     )
-    if args.build_pytorch_torchcodec and is_windows:
-        parser.error(
-            "--build-pytorch-torchcodec is not supported on Windows yet, only Linux"
-        )
     validate_project_dir(
         parser,
         build_enabled=args.build_pytorch_torchcodec,
@@ -1513,6 +1514,37 @@ def check_torchcodec_build_requirements() -> None:
         )
 
 
+def setup_torchcodec_windows_toolchain(env: dict[str, str]) -> None:
+    """Selects the Windows compiler for torchcodec and checks the MSVC environment.
+
+    The common build environment sets CC and CXX to the clang-cl of the ROCm SDK,
+    which is kept by default. With TORCHCODEC_WINDOWS_COMPILER=msvc these are
+    removed and CMake uses the cl.exe of the active Visual Studio environment
+    instead. The MSVC environment (vcvarsall.bat, or ilammy/msvc-dev-cmd in the
+    workflows) is needed in both cases, clang-cl takes its compiler search paths
+    from it.
+    """
+    compiler = os.environ.get(
+        TORCHCODEC_WINDOWS_COMPILER_VAR, TORCHCODEC_WINDOWS_DEFAULT_COMPILER
+    )
+    if compiler not in TORCHCODEC_WINDOWS_COMPILERS:
+        raise RuntimeError(
+            f"{TORCHCODEC_WINDOWS_COMPILER_VAR}={compiler} is not supported, use one "
+            f"of: {', '.join(TORCHCODEC_WINDOWS_COMPILERS)}"
+        )
+    if shutil.which("cl", path=env.get("PATH")) is None:
+        raise RuntimeError(
+            "torchcodec build on Windows requires the MSVC environment (cl.exe not "
+            "found in PATH). Run from a Visual Studio developer command prompt or "
+            "run vcvarsall.bat x64 first"
+        )
+    env["DISTUTILS_USE_SDK"] = "1"
+    if compiler == "msvc":
+        env.pop("CC", None)
+        env.pop("CXX", None)
+    print(f"  torchcodec Windows compiler: {compiler}")
+
+
 def do_build_pytorch_torchcodec(
     args: argparse.Namespace, pytorch_torchcodec_dir: Path, env: dict[str, str]
 ):
@@ -1527,6 +1559,8 @@ def do_build_pytorch_torchcodec(
         return
 
     check_torchcodec_build_requirements()
+    if is_windows:
+        setup_torchcodec_windows_toolchain(env)
 
     # Compute version (dev builds are tagged with the torchcodec source commit).
     # torchcodec's version provider honors BUILD_VERSION.

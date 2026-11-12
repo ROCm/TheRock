@@ -47,7 +47,7 @@ The following projects are not currently packaged and released by TheRock, funct
 | ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter)                                                      |
 | torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)                                                       |
-| torchcodec    | 🚧 In progress       | ❌ Not supported | CPU-only build, see [Building torchcodec](#building-torchcodec) and Issue [#1490](https://github.com/ROCm/TheRock/issues/1490) |
+| torchcodec    | 🚧 In progress       | 🚧 In progress   | CPU-only build, see [Building torchcodec](#building-torchcodec) and Issue [#1490](https://github.com/ROCm/TheRock/issues/1490) |
 
 ### Supported PyTorch versions
 
@@ -212,7 +212,13 @@ checkout exists in `pytorch_torchcodec` (or `--pytorch-torchcodec-dir` is set),
 or with `--build-pytorch-torchcodec`. Pass `--no-build-pytorch-torchcodec` to
 skip it.
 
-- Linux only for now, the option is an error on Windows.
+- On Windows the build needs the MSVC environment (`cl.exe` in `PATH`, for
+  example a Visual Studio developer command prompt, or `vcvarsall.bat x64`
+  first). Like the other wheels, torchcodec is built with the `clang-cl` of the
+  ROCm SDK. Upstream builds it with MSVC, but with the ROCm torch the CMake
+  configuration fails on mixing Clang and MSVC compilers. Set
+  `TORCHCODEC_WINDOWS_COMPILER=msvc` to build with `cl.exe` instead. The build
+  has been checked on a Windows machine, but not in CI yet.
 - The build is CPU-only: upstream torchcodec has no ROCm/HIP support. It links
   against the pre-built non-GPL FFmpeg that upstream downloads at build time
   (`BUILD_AGAINST_ALL_FFMPEG_FROM_S3`). Image decoders are not built (set
@@ -227,7 +233,8 @@ skip it.
   pybind11).
 - torchcodec loads the FFmpeg shared libraries from the system at runtime,
   they are not part of the wheel. Install FFmpeg (for example
-  `apt install ffmpeg`) to decode.
+  `apt install ffmpeg`) to decode. On Windows install a shared FFmpeg build and
+  make its `bin` directory with the DLLs available in `PATH`.
 
 ## Running/testing PyTorch
 

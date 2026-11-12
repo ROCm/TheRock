@@ -8,10 +8,10 @@ Fails if any wheels that were expected for the platform were not set.
 Currently,
 * Windows expects torch, torchaudio, and torchvision
 * Linux expects torch, torchaudio, torchvision, triton, and apex
-* torchcodec is optional on all platforms: it is only built on Linux, it is
-  skipped for Python versions that upstream does not support, and the torch
-  nightly build is allowed to fail. torchcodec_version is only written if the
-  wheel exists.
+* torchcodec is optional on all platforms: it is only built for release and
+  nightly builds, it is skipped for Python versions that upstream does not
+  support, and the torch nightly build is allowed to fail. torchcodec_version is
+  only written if the wheel exists.
 """
 
 import argparse
