@@ -236,8 +236,44 @@ permissions:
   contents: read
 
 jobs:
+  test_xla:
+    name: Test XLA
+    # Mirrors multi_arch_build_portable_linux_pytorch_wheels.yml's
+    # dispatch_pytorch_wheels_full_test: pick a single representative build
+    # cell to carry an extra, independent test suite, with its own hardcoded
+    # runner/target rather than reusing whatever this cell's regular test
+    # matrix picked. XLA doesn't depend on which JAX python wheel is being
+    # tested and only runs on gfx950 hardware, so it rides along on one
+    # (python 3.11, gfx950-dcgpu) cell only. Also skipped on the multi-GPU
+    # cell: XLA's single_gpu/cpu configs are single-GPU only.
+    if: >-
+      ${{
+        inputs.python_version == '3.11' &&
+        contains(inputs.test_amdgpu_family, 'gfx950') &&
+        inputs.test_subset != 'multi'
+      }}
+    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      test_amdgpu_target: gfx950
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      rocm_package_index_url: ${{ inputs.rocm_package_index_url }}
+      rocm_package_version: ${{ inputs.rocm_version }}
+      therock_ref: ${{ inputs.ref || '' }}
+      xla_ref: rocm-jaxlib-v0.11.2
+      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+
   test_jax_wheels:
     name: Test JAX | ${{ inputs.test_size }} | ${{ inputs.test_subset }} | ${{ inputs.test_amdgpu_family }}
+    needs: [test_xla]
+    # test_xla runs first (its own job, so GitHub schedules it ahead of this
+    # one via needs:), and !cancelled() instead of the implicit success()
+    # default so this still runs when test_xla is skipped (not a
+    # python-3.11/gfx950 cell) or fails (independent signal).
+    if: ${{ !cancelled() }}
     runs-on: ${{ inputs.test_runs_on }}
     # Room for the longest subset plus its setup, where installing the ROCm
     # packages alone has taken over an hour; the test step below holds each
