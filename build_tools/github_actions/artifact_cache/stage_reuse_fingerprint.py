@@ -22,6 +22,7 @@ run also produces database timing/API-call data, which is a goal of the POC.
 import argparse
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
@@ -291,10 +292,21 @@ def main(argv=None) -> int:
 
     from .clickhouse_cache_db import ClickHouseCacheDB
 
-    db = ClickHouseCacheDB()
-    result = compute_fingerprint_reuse(
-        build_dir=args.build, stage_for=_load_stage_for(args.topology), db=db
-    )
+    # Non-gating: if the cache is unreachable or a lookup fails, emit empty
+    # outputs so CI falls back to baseline selection rather than failing. The
+    # broad except is deliberate for that reason.
+    try:
+        db = ClickHouseCacheDB()
+        result = compute_fingerprint_reuse(
+            build_dir=args.build, stage_for=_load_stage_for(args.topology), db=db
+        )
+    except Exception as exc:
+        print(
+            f"[fingerprint-stage] cache unavailable ({exc}); no reuse", file=sys.stderr
+        )
+        _write_output("prebuilt_stages", "")
+        _write_output("baseline_run_id", "")
+        return 0
     emit_timing_artifact(result)
     _append_summary("\n".join(result.report_lines))
     prebuilt = ",".join(result.reusable_stages)

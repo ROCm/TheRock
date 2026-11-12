@@ -163,55 +163,39 @@ jobs:
   # consumes through the existing reuse inputs -- no changes to the build logic.
   # Runs on any runner; all steps are gated on the use_fingerprint_cache input,
   # so it is a no-op (empty outputs -> baseline fallback) otherwise.
+  # Separate POC stage: decides stage reuse from THEROCK_FPRINT via the shared
+  # ClickHouse cache and emits prebuilt_stages/baseline_run_id, which `setup`
+  # consumes through the existing reuse inputs -- no changes to the build logic.
+  # Gated on use_fingerprint_cache (no-op otherwise: empty outputs -> baseline).
+  #
+  # Runs on a self-hosted runner (set the FPRINT_RUNS_ON repo variable) that keeps
+  # a persistent checkout / git mirror for fast configure and holds the ClickHouse
+  # credentials in its own environment -- the same direct-auth model used for S3,
+  # so no GitHub secrets are injected here. CLICKHOUSE_URL/_USER/_PASSWORD are read
+  # from the runner environment by the stage.
   fingerprint_cache:
     name: Fingerprint Cache (stage reuse)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.FPRINT_RUNS_ON || 'ubuntu-26.04' }}
     outputs:
       prebuilt_stages: ${{ steps.decide.outputs.prebuilt_stages }}
       baseline_run_id: ${{ steps.decide.outputs.baseline_run_id }}
     steps:
       - if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
-        uses: actions/checkout@v4
-      - if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Producing real .fprint needs fetch_sources.py + a cmake configure
-      # (~5-10 min cold). build/ holds the .fprint, so cache it on the commit
-      # SHA (which pins every submodule revision): an exact hit -- a re-run of
-      # the same commit -- restores the fingerprints and skips fetch+configure.
-      # Exact key only (no restore-keys): fingerprints from another commit must
-      # never be reused.
-      - name: Restore configured build (.fprint)
-        id: buildcache
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
-        uses: actions/cache@v4
-        with:
-          path: build
-          key: therock-fprint-build-${{ runner.os }}-${{ github.sha }}
-
-      # Delta-fetch speedup for the cold path only; cannot affect correctness
-      # because configure regenerates the .fprint from the restored sources.
-      - name: Restore fetched sources
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache && steps.buildcache.outputs.cache-hit != 'true' }}
-        uses: actions/cache@v4
-        with:
-          path: .git/modules
-          key: therock-sources-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            therock-sources-${{ runner.os }}-
-
-      # Heavy path runs only on a build-cache miss (first run / sources changed).
+      # Produce real .fprint. On a self-hosted runner with a persistent checkout
+      # and git mirror this is fast; a cold machine pays the full fetch+configure
+      # (~5-10 min). Configure only, no compile -- .fprint are written at
+      # configure time. continue-on-error so a runner that cannot configure
+      # degrades to a no-op (baseline fallback) instead of failing CI.
       - name: Fetch sources and configure (produces .fprint)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache && steps.buildcache.outputs.cache-hit != 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
         continue-on-error: true
         env:
           THEROCK_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families || 'gfx110X-all' }}
         run: |
-          pip install -r requirements.txt
-          python ./build_tools/fetch_sources.py --depth 1 --jobs 12
-          # Configure only (no compile): .fprint are written at configure time.
+          python3 -m pip install -r requirements.txt
+          python3 ./build_tools/fetch_sources.py --depth 1 --jobs 12
           cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES="$THEROCK_AMDGPU_FAMILIES"
 
       - name: Fingerprint stage-reuse decision
@@ -219,19 +203,11 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
         working-directory: build_tools/github_actions
         env:
-          CLICKHOUSE_URL: ${{ secrets.CLICKHOUSE_URL }}
-          CLICKHOUSE_USER: ${{ secrets.CLICKHOUSE_USER }}
-          CLICKHOUSE_PASSWORD: ${{ secrets.CLICKHOUSE_PASSWORD }}
-          CLICKHOUSE_TIMING_JSON: ${{ runner.temp }}/clickhouse_timing.json
+          # ClickHouse credentials come from the runner environment (self-hosted
+          # direct auth), not GitHub secrets. If the cache is unreachable the
+          # stage emits empty outputs and CI falls back to baseline.
           STAGE_REUSE_FPRINT_BUILD_DIR: ${{ github.workspace }}/build
-        run: python -m artifact_cache.stage_reuse_fingerprint --build "$STAGE_REUSE_FPRINT_BUILD_DIR" --publish
-      - name: Upload ClickHouse timing
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.use_fingerprint_cache }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: clickhouse-timing
-          path: ${{ runner.temp }}/clickhouse_timing.json
-          if-no-files-found: ignore
+        run: python3 -m artifact_cache.stage_reuse_fingerprint --build "$STAGE_REUSE_FPRINT_BUILD_DIR" --publish
 
   setup:
     needs: [fingerprint_cache]
