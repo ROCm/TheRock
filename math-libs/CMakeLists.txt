@@ -189,6 +189,7 @@ if(THEROCK_ENABLE_PRIM)
       list(APPEND _prim_subproject_deps hipCCL_tests)
     endif()
     set(_prim_build_dep hipCCL)
+    set(_libhipcxx_prim_build_deps hipCCL)
     set(_prim_artifact_descriptor artifact-prim.toml)
   else()
     ##############################################################################
@@ -340,6 +341,7 @@ if(THEROCK_ENABLE_PRIM)
       list(APPEND _prim_subproject_deps rocPRIM_tests)
     endif()
     set(_prim_build_dep rocPRIM)
+    set(_libhipcxx_prim_build_deps rocPRIM hipCUB rocThrust)
     set(_prim_artifact_descriptor artifact-prim-legacy.toml)
   endif()
 
@@ -639,6 +641,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      ${_libhipcxx_prim_build_deps}
     RUNTIME_DEPS
       amd-llvm
       hip-clr
