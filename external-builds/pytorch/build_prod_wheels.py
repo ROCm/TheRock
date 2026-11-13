@@ -169,7 +169,6 @@ is_windows = platform.system() == "Windows"
 # LLVM download URL for triton-windows
 LLVM_BASE_URL = "https://oaitriton.blob.core.windows.net/public/llvm-builds"
 
-
 # List of library preloads for Linux to generate into _rocm_init.py.
 # These are loaded with RTLD_GLOBAL on `import torch` via _rocm_init.py so
 # that their symbols are available via dlsym(RTLD_DEFAULT, ...) without
