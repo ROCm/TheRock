@@ -6,8 +6,8 @@
 # Built shape:
 #   - One fat build_prod_wheels.py invocation for one python_version and
 #     pytorch_git_ref, covering all gfx targets expanded from the
-#     inputs.amdgpu_families set. Builds torch, torchaudio, torchvision,
-#     triton, and apex in a single invocation.
+#     inputs.amdgpu_families set. Builds torch and, unless
+#     inputs.build_pytorch_only is set, its companion projects.
 #   - kpack-split the fat torch and torchvision wheels into host wheels
 #     plus per-gfx amd-torch-device-* / amd-torchvision-device-* wheels.
 #     other packages ship as-is (nothing to split).
@@ -59,9 +59,17 @@ on:
         type: string
         required: true
       pytorch_git_ref:
-        description: PyTorch ref to checkout. Typically "nightly" or "release/X.Y".
+        description: >-
+          PyTorch ref to checkout. Companion builds for release refs require
+          related_commits; custom branches and SHAs use nightly companions.
         type: string
         required: true
+      build_pytorch_only:
+        description: >-
+          Build only the torch wheel, without companion projects. Dev builds
+          force this on when the PyTorch checkout has no related_commits file.
+        type: boolean
+        default: false
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
@@ -148,9 +156,17 @@ on:
         type: string
         default: "3.12"
       pytorch_git_ref:
-        description: PyTorch ref to checkout (for example, "release/2.13").
+        description: >-
+          PyTorch ref to checkout. Companion builds for release refs require
+          related_commits; custom branches and SHAs use nightly companions.
         type: string
         default: "release/2.13"
+      build_pytorch_only:
+        description: >-
+          Build only the torch wheel, without companion projects. Dev builds
+          force this on when the PyTorch checkout has no related_commits file.
+        type: boolean
+        default: false
       pytorch_gitrepo_origin:
         description: >-
           Optional PyTorch git origin override (for example, a fork URL for
@@ -313,13 +329,39 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
-      - name: Checkout PyTorch source repos (nightly)
-        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+      - name: Checkout PyTorch source
         timeout-minutes: 30
         run: |
+          pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
+          if [ -z "${pytorch_origin}" ]; then
+            if [ "${PYTORCH_GIT_REF}" = "nightly" ]; then
+              pytorch_origin="https://github.com/pytorch/pytorch.git"
+            else
+              pytorch_origin="https://github.com/ROCm/pytorch.git"
+            fi
+          fi
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo-hashtag nightly \
+            --gitrepo-origin "${pytorch_origin}" \
+            --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
+
+      - name: Resolve PyTorch-only build mode
+        id: build-mode
+        env:
+          REQUESTED_PYTORCH_ONLY: ${{ inputs.build_pytorch_only }}
+        run: |
+          build_pytorch_only="${REQUESTED_PYTORCH_ONLY}"
+          if [[ "${BUILD_RELEASE_TYPE}" == "dev" && \
+                ! -f external-builds/pytorch/pytorch/related_commits ]]; then
+            echo "Dev PyTorch checkout has no related_commits; building torch only."
+            build_pytorch_only=true
+          fi
+          echo "build_pytorch_only=${build_pytorch_only}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout PyTorch companion sources (non-release)
+        if: ${{ steps.build-mode.outputs.build_pytorch_only != 'true' && !startsWith(inputs.pytorch_git_ref, 'release/') }}
+        timeout-minutes: 30
+        run: |
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
@@ -332,18 +374,10 @@ jobs:
             --repo-hashtag master \
             --no-commit-hipify
 
-      - name: Checkout PyTorch source repos (stable)
-        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+      - name: Checkout PyTorch companion sources (release)
+        if: ${{ steps.build-mode.outputs.build_pytorch_only != 'true' && startsWith(inputs.pytorch_git_ref, 'release/') }}
         timeout-minutes: 30
         run: |
-          pytorch_origin="${PYTORCH_GITREPO_ORIGIN}"
-          if [ -z "${pytorch_origin}" ]; then
-            pytorch_origin="https://github.com/ROCm/pytorch.git"
-          fi
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin "${pytorch_origin}" \
-            --repo-hashtag "${PYTORCH_GIT_REF}" \
-            --no-commit-hipify
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --require-related-commit \
             --no-commit-hipify
@@ -413,6 +447,7 @@ jobs:
           ROCM_INDEX_URL: ${{ inputs.rocm_package_index_url || (inputs.rocm_package_find_links_url == '' && 'https://nightly.repo.amd.com/rocm/whl-next' || '') }}
           ROCM_FIND_LINKS: ${{ inputs.rocm_package_find_links_url }}
           AMDGPU_TARGETS: ${{ steps.expand.outputs.targets }}
+          BUILD_PYTORCH_ONLY: ${{ steps.build-mode.outputs.build_pytorch_only }}
         # determine_version.py emits multiple arguments from a parsed ROCm version.
         # Trust that repository script to produce this intentional shell fragment.
         run: | # zizmor: ignore[template-injection]
@@ -421,6 +456,10 @@ jobs:
             cache_flag="--use-sccache"
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
+          fi
+          companion_flags=""
+          if [ "${BUILD_PYTORCH_ONLY}" = "true" ]; then
+            companion_flags="--no-build-triton --no-build-pytorch-audio --no-build-pytorch-vision --no-build-apex"
           fi
 
           # build_prod_wheels.py forwards --index-url and --find-links to pip
@@ -442,6 +481,7 @@ jobs:
             --clean \
             --output-dir "${PACKAGE_DIST_DIR}" \
             ${cache_flag} \
+            ${companion_flags} \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
@@ -484,7 +524,9 @@ jobs:
       # TODO(https://github.com/ROCm/TheRock/issues/5656): Integrate this
       # rocm_kpack.tools.split_python_wheels flow into build_prod_wheels.py and
       # document the standalone developer workflow.
-      - name: Split fat wheels (torch + torchvision)
+      - name: Split fat wheels
+        env:
+          BUILD_PYTORCH_ONLY: ${{ steps.build-mode.outputs.build_pytorch_only }}
         run: |
           # The splitter writes the host wheel under the same filename as
           # the input, so relocate each fat wheel out of PACKAGE_DIST_DIR
@@ -509,15 +551,17 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
-          python -m rocm_kpack.tools.split_python_wheels \
-            --input "${FAT_STAGE}"/torchvision-*.whl \
-            --output-dir "${PACKAGE_DIST_DIR}" \
-            --device-package-prefix amd-torchvision-device \
-            --overlay-root torchvision/ \
-            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
-            --compression zstd \
-            -j "$(nproc)"
+          if [ "${BUILD_PYTORCH_ONLY}" != "true" ]; then
+            mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
+            python -m rocm_kpack.tools.split_python_wheels \
+              --input "${FAT_STAGE}"/torchvision-*.whl \
+              --output-dir "${PACKAGE_DIST_DIR}" \
+              --device-package-prefix amd-torchvision-device \
+              --overlay-root torchvision/ \
+              --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+              --compression zstd \
+              -j "$(nproc)"
+          fi
 
           rm -rf "${FAT_STAGE}"
           echo "Post-split contents of ${PACKAGE_DIST_DIR}:"
@@ -528,9 +572,16 @@ jobs:
       # produced the requested package versions.
       - name: Write PyTorch package version outputs
         id: pytorch-versions
+        env:
+          BUILD_PYTORCH_ONLY: ${{ steps.build-mode.outputs.build_pytorch_only }}
         run: |
+          pytorch_only_flag=""
+          if [ "${BUILD_PYTORCH_ONLY}" = "true" ]; then
+            pytorch_only_flag="--pytorch-only"
+          fi
           python build_tools/github_actions/write_pytorch_versions.py \
-            --dist-dir "${PACKAGE_DIST_DIR}"
+            --dist-dir "${PACKAGE_DIST_DIR}" \
+            ${pytorch_only_flag}
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
