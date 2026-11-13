@@ -9,9 +9,7 @@ include = [
   "share/rocdecode/utils/**",
 ]
 [components.doc."media-libs/rocdecode/stage"]
-
-# Test package: the CTest project, test scripts and media. dev is processed
-# earlier in the extends chain, so samples/ and utils/ are already claimed here.
+# Test package: the CTest project, test scripts and media.
 [components.test."media-libs/rocdecode/stage"]
 include = [
   "share/rocdecode/**",
