@@ -15,6 +15,19 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import fetch_test_configurations
 
 
+def _families(family="gfx94x", prefix="linux-mi300", **pools):
+    """One family with an 8-GPU pool and a 2-GPU pool, for get_all_families fakes."""
+    return {
+        family: {
+            "linux": {
+                "test-runs-on-multi-gpu": f"{prefix}-mgpu",
+                "test-runs-on-2gpu": f"{prefix}-2gpu",
+                **pools,
+            }
+        }
+    }
+
+
 class FetchTestConfigurationsTest(unittest.TestCase):
     def setUp(self):
         # Save environment so tests don't leak state
@@ -633,14 +646,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_multi_gpu_job_included_when_supported(self):
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -710,36 +716,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 original_select_weighted_label
             )
 
-    def test_multi_gpu_pool_routes_to_matching_pool(self):
-        """A component with "multi_gpu_pool" draws from that pool's runners.
-
-        rccl declares the "2gpu" pool, so it must land on the 2-GPU runners while
-        jobs that need all 8 GPUs (rocshmem) stay on the default multi-GPU pool.
-        """
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-default",
-                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        fetch_test_configurations.run()
-        components = self._get_components()
-
-        rccl = next(j for j in components if j["job_name"] == "rccl")
-        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu")
-        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
-        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
-
     def test_multi_gpu_pool_excluded_when_family_lacks_that_pool(self):
         """A family with no matching pool skips the component, never falling back.
 
@@ -770,80 +746,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
         self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
 
-    def test_4gpu_pool_end_to_end(self):
-        """A component declaring the 4gpu pool is scheduled on those runners.
-
-        No shipping component uses "4gpu" yet (PyTorch distributed is routed by
-        a workflow input, not this table), so inject one to cover the path.
-        """
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-default",
-                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
-                        "test-runs-on-4gpu": "linux-mi300-4gpu",
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-        self._inject_job(
-            "needs-4gpu",
-            multi_gpu={"linux": ["gfx94X-dcgpu"]},
-            multi_gpu_pool="4gpu",
-        )
-
-        fetch_test_configurations.run()
-        job = next(j for j in self._get_components() if j["job_name"] == "needs-4gpu")
-        self.assertEqual(job["multi_gpu_runner"], "linux-mi300-4gpu")
-
-    def test_multi_gpu_pool_prefers_weighted_labels(self):
-        """test-runs-on-<pool>-labels wins over the pool's plain default label."""
-
-        def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on": "linux-gfx942-default",
-                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu-default",
-                        "test-runs-on-2gpu-labels": [
-                            {"label": "linux-mi300-2gpu-a", "count": 5},
-                            {"label": "linux-mi300-2gpu-b", "count": 5},
-                        ],
-                    }
-                }
-            }
-
-        fetch_test_configurations.get_all_families_for_trigger_types = (
-            fake_get_all_families
-        )
-
-        original_select_weighted_label = fetch_test_configurations.select_weighted_label
-        contexts = []
-
-        def fake_select_weighted_label(labels_config, context_name):
-            contexts.append(context_name)
-            return labels_config[0]["label"]
-
-        fetch_test_configurations.select_weighted_label = fake_select_weighted_label
-
-        try:
-            fetch_test_configurations.run()
-            components = self._get_components()
-
-            rccl = next(j for j in components if j["job_name"] == "rccl")
-            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu-a")
-            self.assertIn("rccl-2gpu", contexts)
-        finally:
-            fetch_test_configurations.select_weighted_label = (
-                original_select_weighted_label
-            )
-
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
 
@@ -865,14 +767,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for the full tier when the family supports it."""
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -894,14 +789,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -973,14 +861,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -999,14 +880,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "standard"
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1030,14 +904,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1058,14 +925,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         def fake_get_all_families(_):
             # Only gfx1150 has runner config, but rccl only lists gfx94X/gfx950 in multi_gpu
-            return {
-                "gfx1150": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-gfx1150-mgpu",
-                        "test-runs-on-2gpu": "linux-gfx1150-2gpu",
-                    }
-                }
-            }
+            return _families(family="gfx1150", prefix="linux-gfx1150")
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1106,14 +966,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu", "test:rccl"])
 
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu",
-                        "test-runs-on-2gpu": "linux-mi300-2gpu",
-                    }
-                }
-            }
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1660,10 +1513,10 @@ class ParseTestLabelsTest(unittest.TestCase):
 class SelectMultiGpuRunnerTest(unittest.TestCase):
     """Edge cases for _select_multi_gpu_runner, the pool -> runner-label resolver.
 
-    Getting this wrong is expensive in both directions: resolving to the default
-    pool when a smaller one was asked for silently eats scarce 8-GPU capacity,
-    and resolving to a smaller pool for a job that needs 8 GPUs makes it fail or
-    silently skip tests. So the no-fallback rule is pinned from both sides.
+    Mistakes here are expensive in both directions: resolving to the default pool
+    when a smaller one was asked for silently eats scarce 8-GPU capacity, and
+    resolving to a smaller pool for a job that needs 8 GPUs makes it fail or skip
+    tests. The no-fallback rule is therefore pinned from both sides.
     """
 
     DEFAULT = "test-runs-on-multi-gpu"
@@ -1673,127 +1526,69 @@ class SelectMultiGpuRunnerTest(unittest.TestCase):
             job_name=job_name, pool=pool, pools=pools
         )
 
-    # --- resolution ---
-
-    def test_default_pool_used_when_no_pool_requested(self):
-        self.assertEqual(self._select(None, {self.DEFAULT: "lbl-8gpu"}), "lbl-8gpu")
-
-    def test_named_pool_used_when_requested(self):
-        pools = {self.DEFAULT: "lbl-8gpu", "test-runs-on-2gpu": "lbl-2gpu"}
-        self.assertEqual(self._select("2gpu", pools), "lbl-2gpu")
-        pools["test-runs-on-4gpu"] = "lbl-4gpu"
-        self.assertEqual(self._select("4gpu", pools), "lbl-4gpu")
-
-    def test_every_known_pool_name_is_resolvable(self):
-        """Guards MULTI_GPU_POOL_NAMES drifting from MULTI_GPU_RUNNER_KEYS."""
+    def test_resolves_requested_pool(self):
+        pools = {self.DEFAULT: "lbl-8gpu"}
         for name in fetch_test_configurations.MULTI_GPU_POOL_NAMES:
-            with self.subTest(pool=name):
-                label = f"lbl-{name}"
-                got = self._select(name, {f"test-runs-on-{name}": label})
-                self.assertEqual(got, label)
+            pools[f"test-runs-on-{name}"] = f"lbl-{name}"
+        # None means the default pool; every named pool must also resolve, which
+        # guards MULTI_GPU_POOL_NAMES drifting from MULTI_GPU_RUNNER_KEYS.
+        for pool in (None, *fetch_test_configurations.MULTI_GPU_POOL_NAMES):
+            with self.subTest(pool=pool):
+                expected = "lbl-8gpu" if pool is None else f"lbl-{pool}"
+                self.assertEqual(self._select(pool, pools), expected)
 
-    # --- the no-fallback rule, pinned from both directions ---
+    def test_pools_never_fall_back_to_each_other(self):
+        """A missing pool yields "", so the caller skips the job."""
+        cases = [
+            # (pool, pools, why)
+            ("2gpu", {self.DEFAULT: "lbl-8gpu"}, "named -> default would eat 8-GPU"),
+            (None, {"test-runs-on-2gpu": "x"}, "default -> named would starve a job"),
+            ("4gpu", {"test-runs-on-2gpu": "x"}, "named -> other named"),
+            (None, {}, "nothing configured"),
+            ("2gpu", {}, "nothing configured"),
+        ]
+        for pool, pools, why in cases:
+            with self.subTest(pool=pool, why=why):
+                self.assertEqual(self._select(pool, pools), "")
 
-    def test_named_pool_does_not_fall_back_to_default(self):
-        """Asking for 2gpu on a family that only has 8-GPU runners yields "".
-
-        A fallback here would put rccl back on the 8-GPU nodes this split exists
-        to protect, and it would do so silently.
-        """
-        self.assertEqual(self._select("2gpu", {self.DEFAULT: "lbl-8gpu"}), "")
-
-    def test_default_does_not_fall_back_to_named_pool(self):
-        """A job needing 8 GPUs is never diverted onto a 2-GPU slice."""
-        self.assertEqual(self._select(None, {"test-runs-on-2gpu": "lbl-2gpu"}), "")
-
-    def test_named_pools_do_not_cross_resolve(self):
-        self.assertEqual(self._select("4gpu", {"test-runs-on-2gpu": "lbl-2gpu"}), "")
-
-    def test_no_pools_configured_returns_empty(self):
-        self.assertEqual(self._select(None, {}), "")
-        self.assertEqual(self._select("2gpu", {}), "")
-
-    # --- labels vs plain key, within one pool ---
-
-    def test_labels_variant_preferred_over_plain_key(self):
-        captured = {}
+    def test_labels_variant_preferred_and_context_named_per_pool(self):
+        seen = {}
 
         def fake_select(labels_config, context_name):
-            captured["labels"] = labels_config
-            captured["context"] = context_name
+            seen[context_name] = labels_config
             return labels_config[0]["label"]
 
+        labels = [{"label": "lbl-weighted", "count": 1}]
         with patch.object(
             fetch_test_configurations, "select_weighted_label", fake_select
         ):
             got = self._select(
                 "2gpu",
-                {
-                    "test-runs-on-2gpu": "lbl-plain",
-                    "test-runs-on-2gpu-labels": [{"label": "lbl-weighted", "count": 1}],
-                },
+                {"test-runs-on-2gpu": "lbl-plain", "test-runs-on-2gpu-labels": labels},
                 job_name="rccl",
             )
-        self.assertEqual(got, "lbl-weighted")
-        self.assertEqual(captured["context"], "rccl-2gpu")
+            self._select(None, {f"{self.DEFAULT}-labels": labels}, job_name="rocshmem")
+        self.assertEqual(got, "lbl-weighted")  # beats the plain key
+        self.assertEqual(sorted(seen), ["rccl-2gpu", "rocshmem-multi-gpu"])
 
     def test_empty_labels_list_falls_through_to_plain_key(self):
         """An empty list is not a usable pool, so the plain label still applies."""
-        got = self._select(
-            "2gpu",
-            {"test-runs-on-2gpu": "lbl-plain", "test-runs-on-2gpu-labels": []},
-        )
-        self.assertEqual(got, "lbl-plain")
-
-    def test_empty_labels_list_with_no_plain_key_returns_empty(self):
-        self.assertEqual(self._select("2gpu", {"test-runs-on-2gpu-labels": []}), "")
-
-    def test_default_pool_context_name(self):
-        captured = {}
-
-        def fake_select(labels_config, context_name):
-            captured["context"] = context_name
-            return labels_config[0]["label"]
-
-        with patch.object(
-            fetch_test_configurations, "select_weighted_label", fake_select
-        ):
-            self._select(
-                None,
-                {f"{self.DEFAULT}-labels": [{"label": "lbl", "count": 1}]},
-                job_name="rocshmem",
-            )
-        self.assertEqual(captured["context"], "rocshmem-multi-gpu")
-
-    # --- validation ---
+        empty = {"test-runs-on-2gpu-labels": []}
+        self.assertEqual(self._select("2gpu", {**empty, "test-runs-on-2gpu": "p"}), "p")
+        self.assertEqual(self._select("2gpu", empty), "")
 
     def test_unknown_pool_raises(self):
-        """A typo fails loudly instead of silently dropping the component."""
-        for bad in ("2-gpu", "8gpu", "2GPU", "multi-gpu", ""):
+        """Typos fail loudly instead of silently dropping the component.
+
+        "2gpu-labels" is the regression case: it is a real config key, so
+        validating against the key list let it through and returned the weighted
+        list itself instead of a label string.
+        """
+        for bad in ("2-gpu", "8gpu", "2GPU", "multi-gpu", "", "2gpu-labels"):
             with self.subTest(pool=bad):
                 with self.assertRaises(ValueError) as ctx:
-                    self._select(bad, {"test-runs-on-2gpu": "lbl-2gpu"})
+                    self._select(bad, {"test-runs-on-2gpu-labels": [{"label": "l"}]})
                 self.assertIn("unknown multi_gpu_pool", str(ctx.exception))
-
-    def test_labels_key_is_not_a_valid_pool_name(self):
-        """ "2gpu-labels" must not resolve; it would return a list, not a label."""
-        with self.assertRaises(ValueError):
-            self._select(
-                "2gpu-labels",
-                {"test-runs-on-2gpu-labels": [{"label": "lbl", "count": 1}]},
-            )
-
-    def test_always_returns_a_string(self):
-        cases = [
-            (None, {self.DEFAULT: "lbl-8gpu"}),
-            (None, {}),
-            ("2gpu", {"test-runs-on-2gpu": "lbl-2gpu"}),
-            ("2gpu", {}),
-            ("2gpu", {"test-runs-on-2gpu-labels": [{"label": "lbl", "count": 1}]}),
-        ]
-        for pool, pools in cases:
-            with self.subTest(pool=pool, pools=sorted(pools)):
-                self.assertIsInstance(self._select(pool, pools), str)
 
 
 if __name__ == "__main__":
