@@ -106,6 +106,40 @@ class ROCmLibrariesTest(unittest.TestCase):
 
                 subprocess.check_call([sys.executable, "-c", command, str(so_path)])
 
+    def testSystemGpuHasDeviceCode(self):
+        """At least one GPU on this system must have device code installed.
+
+        Catches installs for the wrong GPU (e.g. `device-gfx1100` on a gfx1151
+        system), which otherwise pass every other test and only fail once a
+        kernel is launched. See https://github.com/ROCm/TheRock/issues/1079.
+        """
+        system_targets = di.discover_system_gpu_targets()
+        if not system_targets:
+            self.skipTest("No GPU reported by offload-arch")
+
+        installed_targets = di.get_installed_gpu_targets()
+        installed_owners = {di.package_owner(t) for t in installed_targets}
+        covered = [t for t in system_targets if di.package_owner(t) in installed_owners]
+        uncovered = [t for t in system_targets if t not in covered]
+        if covered and uncovered:
+            # Systems may have GPUs the user does not intend to use with ROCm
+            # (e.g. an iGPU next to a dGPU), so only note them.
+            print(f"NOTE: No device code installed for GPU(s) {', '.join(uncovered)}")
+        hint = ""
+        if di.is_multi_arch_distribution():
+            hint = (
+                f" Install the matching device package, e.g. "
+                f"`pip install rocm[libraries,device-{di.package_owner(system_targets[0])}]`."
+            )
+        self.assertTrue(
+            covered,
+            msg=(
+                f"None of the GPUs on this system ({', '.join(system_targets)}) "
+                f"have device code installed (installed: "
+                f"{', '.join(installed_targets) or 'none'}).{hint}"
+            ),
+        )
+
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
             script_path = utils.find_console_script(script_name)
