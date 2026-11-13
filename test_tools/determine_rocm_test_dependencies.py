@@ -50,7 +50,6 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "build_tools" / "github_actions")
 )
 from github_actions_api import gha_get_pr_labels, gha_set_output
-from miopen_rocjitsu_targets import component_names
 
 # Level -> BFS walk depth over `consumers` edges:
 #   depth 0    = self only
@@ -142,7 +141,7 @@ _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn": ["hipdnn", "hipdnn-cudnn-samples"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
-    "miopen": ["miopen", "miopen-dbsync", *component_names()],
+    "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
     # The common GEMM suite is its own CI job. Aliasing here, rather than a

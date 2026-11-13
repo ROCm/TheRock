@@ -67,7 +67,6 @@ sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.build_topology import get_topology
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from miopen_rocjitsu_targets import TEST_LABEL_GROUP, component_names
 
 from amdgpu_family_matrix import (
     CI_LABEL_REQUIRED_ARTIFACTS,
@@ -214,14 +213,7 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
         "hiptensor",
         "composable-kernel",
     ],
-    "ml-libs": [
-        "miopen",
-        "hipdnn",
-        "miopenprovider",
-        "hipblasltprovider",
-        TEST_LABEL_GROUP,
-        *component_names(),
-    ],
+    "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
     "comm-libs": ["rccl", "rocshmem"],
     "storage-libs": ["hipfile"],
     "profiler-apps": ["rocprofiler-systems", "rocprofiler-compute"],

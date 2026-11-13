@@ -25,8 +25,6 @@ import json
 import sys
 from dataclasses import dataclass
 
-from miopen_rocjitsu_targets import TEST_LABEL_GROUP, component_names
-
 
 @dataclass
 class Label:
@@ -188,10 +186,6 @@ CI_LABELS: list[Label] = [
     Label("ci:skip-native-linux", COLOR_CI_PACKAGING, "Skip native Linux package builds"),
     Label("ci:skip-native-windows", COLOR_CI_PACKAGING, "Skip native Windows package builds"),
 ]
-CI_LABELS.extend(
-    Label(f"test:{name}", COLOR_TEST, f"Run MIOpen rocjitsu tests: {name}")
-    for name in [TEST_LABEL_GROUP, *component_names()]
-)
 # fmt: on
 
 

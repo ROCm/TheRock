@@ -86,8 +86,6 @@ In [`fetch_test_configurations.py`](/build_tools/github_actions/fetch_test_confi
 | additional_requirements_files | array  | Any      | Repository-relative or absolute paths to Python requirements files; use `_get_artifact_path()` for fetched artifacts          |
 | timeout_minutes               | int    | Any      | The timeout (in minutes) for the test step                                                                                    |
 | test_script                   | string | Any      | The path to the test script                                                                                                   |
-| prepare_script                | string | Linux    | Optional trusted shell command run in a separate Prepare step before Test; currently used only by the gfx1250 rocjitsu lane   |
-| prepare_timeout_minutes       | int    | Linux    | Timeout for the optional Prepare step (default: 30 minutes), separate from the test timeout                                   |
 | platform                      | array  | Any      | An array of platforms that the test can execute on, options are `linux` and `windows`                                         |
 | container_image               | string | Linux    | The name of a container image to use for this component                                                                       |
 | container_options             | string | Linux    | Additional options to be passed when launching the container                                                                  |

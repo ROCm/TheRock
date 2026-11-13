@@ -78,8 +78,6 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--amdgpu-family {args.amdgpu_family} "
         f'--test-script "{args.test_script}"'
     )
-    if args.prepare_script:
-        cmd += f' --prepare-script "{args.prepare_script}"'
     if args.amdgpu_targets:
         cmd += f" --amdgpu-targets {args.amdgpu_targets}"
     if args.output_dir != "build":
@@ -159,8 +157,6 @@ def run_linux(args: argparse.Namespace) -> int:
     ]
 
     append_additional_requirements_step(steps, args.additional_requirements_files)
-    if args.prepare_script:
-        steps.append(("Preparing test", args.prepare_script))
 
     if args.setup_only:
         steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
@@ -325,8 +321,6 @@ def run_windows(args: argparse.Namespace) -> int:
     )
 
     append_additional_requirements_step(steps, args.additional_requirements_files)
-    if args.prepare_script:
-        steps.append(("Preparing test", args.prepare_script))
 
     if args.setup_only:
         steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
@@ -384,11 +378,6 @@ def main() -> int:
         "per-target kpack-split shards; optional for monolithic runs.",
     )
     parser.add_argument("--test-script", required=True, help="Test script to run")
-    parser.add_argument(
-        "--prepare-script",
-        default="",
-        help="Optional component preparation command, also run with --setup-only",
-    )
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
     parser.add_argument("--test-type", default="full", help="Test type")

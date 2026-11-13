@@ -22,10 +22,6 @@ on:
           only runs tests and has no build artifacts of its own.
         type: string
         required: true
-      artifact_repository:
-        description: "Repository owning artifact_run_id (owner/repo). Empty uses github.repository; repository/ref select test code only."
-        type: string
-        default: ""
       amdgpu_families:
         description: >-
           GPU family group to test (e.g., "gfx94X-dcgpu", "gfx110X-all",
@@ -123,9 +119,6 @@ on:
       artifact_group:
         type: string
       artifact_run_id:
-        type: string
-        default: ""
-      artifact_repository:
         type: string
         default: ""
       amdgpu_families:
@@ -264,7 +257,6 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      artifact_repository: ${{ inputs.artifact_repository }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
@@ -302,12 +294,11 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      artifact_repository: ${{ inputs.artifact_repository }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
-      #   1. For GPU components on user-triggered workflow_dispatch, honor test_runs_on.
+      #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
@@ -315,7 +306,6 @@ jobs:
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
-            !matrix.components.linux_cpu_runner &&
             !contains(github.actor, 'github-actions') &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||

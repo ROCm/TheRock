@@ -30,7 +30,6 @@ from amdgpu_family_matrix import (
     get_cpu_test_runner,
     select_weighted_label,
 )
-from miopen_rocjitsu_targets import TEST_LABEL_GROUP, component_names, load_targets
 
 logging.basicConfig(level=logging.INFO)
 
@@ -58,7 +57,6 @@ def _get_artifact_path(artifact_path: str) -> str:
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "tensilelite": ["tensilelite", "tensilelite-common"],
-    TEST_LABEL_GROUP: component_names(),
 }
 
 
@@ -834,6 +832,29 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # Installed MIOpen emulator suite; policy and profile selection live in MIOpen.
+    "miopen-rocjitsu": {
+        "job_name": "miopen-rocjitsu",
+        "base_project": "miopen",
+        "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu",
+        "timeout_minutes": 55,
+        "test_script": f"python {_get_artifact_path('share/miopen/rocjitsu/run_rocjitsu.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        # Preserved coverage takes ~38min with 32 allowed CPUs; use the
+        # validated medium CPU pool rather than the 2-vCPU small pool.
+        "test_runner": "aws-linux-scale-rocm-medium",
+        "skip_stages": ["compiler-runtime", "math-libs", "ml-libs", "emulation"],
+        "skip_build_variant": [
+            "asan",
+            "host-asan",
+            "asan-debug",
+            "host-asan-debug",
+            "tsan",
+        ],
+        "include_family": {"linux": ["gfx1250"]},
+        "total_shards_dict": {"linux": 1},
+    },
     # RCCL tests
     "rccl": {
         "job_name": "rccl",
@@ -1350,46 +1371,6 @@ test_matrix = {
 }
 
 
-def _miopen_rocjitsu_matrix(targets: dict[str, dict[str, str]]) -> dict[str, dict]:
-    """Register emulator components consuming this build's installed MIOpen suite."""
-    matrix = {}
-    for arch, target in targets.items():
-        component = f"miopen-rocjitsu-{arch}"
-        matrix[component] = {
-            "job_name": component,
-            "base_project": "miopen",
-            "fetch_artifact_args": "--blas --miopen --rand --tests",
-            "timeout_minutes": 55,
-            "prepare_script": (
-                f"python {_get_script_path('prepare_miopen_rocjitsu.py')} --arch {arch}"
-            ),
-            "prepare_timeout_minutes": 30,
-            "test_script": (
-                f"python {_get_artifact_path('share/miopen/rocjitsu/run_rocjitsu.py')} --arch {arch}"
-            ),
-            "platform": ["linux"],
-            "linux_cpu_runner": True,
-            # Preserved coverage takes ~38min with 32 allowed CPUs; dispatch1
-            # applicability checks take 44-87s/case. Use the validated CPU-only
-            # medium pool rather than the 2-vCPU small pool.
-            "test_runner": "aws-linux-scale-rocm-medium",
-            "report_artifact_paths": "rocjitsu-work/**/reports/**",
-            "skip_build_variant": [
-                "asan",
-                "host-asan",
-                "asan-debug",
-                "host-asan-debug",
-                "tsan",
-            ],
-            "include_family": {"linux": [target["family"], arch]},
-            "total_shards_dict": {"linux": 1},
-        }
-    return matrix
-
-
-test_matrix.update(_miopen_rocjitsu_matrix(load_targets()))
-
-
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1565,7 +1546,6 @@ def run():
         if (
             key != "sanity"
             and expanded_test_labels
-            and key not in expanded_test_labels
             and selection_key not in expanded_test_labels
         ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
@@ -1589,10 +1569,7 @@ def run():
         # Split jobs match via selection_key (base_project) so PROJECTS_TO_TEST=hipfft
         # also selects hipfft-multi-gpu.
         if platform in test_matrix[key]["platform"] and (
-            key == "sanity"
-            or key in project_array
-            or selection_key in project_array
-            or "*" in project_array
+            key == "sanity" or selection_key in project_array or "*" in project_array
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
 

@@ -211,80 +211,40 @@ When both `test_labels` and `changed_projects` are set, the effective test set
 is the **intersection** of both filters — only components that match both a
 `test_labels` entry and a `changed_projects` dependency are run.
 
-MIOpen's Linux CPU-only rocjitsu jobs consume the installed
-`miopen_gtest_rocjitsu-quick_suite` and `share/miopen/rocjitsu/run_rocjitsu.py`
-from the build under test. The category, static exclusions and adaptive policy are
-owned by rocm-libraries `projects/miopen/test/gtest/test_categories.yaml`; TheRock
-does not reconstruct a filter from a fixed POC artifact or its ordinary quick suite.
-PR builds therefore test the current MIOpen/CK changes and their packaged test policy.
+The Linux CPU-only `miopen-rocjitsu` entry is a thin invocation of the build's
+installed `share/miopen/rocjitsu/run_rocjitsu.py`. MIOpen owns its `rocjitsu-quick`
+category, adaptive selection, target/profile map and execution logic.
+Existing `miopen` project and `test:miopen` selection, including CK downstream
+consumers, select this child via `base_project=miopen`. No dedicated per-architecture
+labels or MIOpen registry imports are added to generic CI configuration.
 
-`build_tools/github_actions/miopen_rocjitsu_targets.json` is the single supported-target
-registry. Each entry declares a family and a pinned rocjitsu profile basename.
-It generates `miopen-rocjitsu-ARCH` components, family restrictions, preparation/test
-commands and labels. Only gfx1250 is currently registered for PR execution.
-Adding another qualified target requires one registry entry referencing a profile
-at the validated emulator pin, a selected build family, and matching MIOpen/CK
-artifacts. No architecture-specific workflow or runner script is needed.
-gfx950 remains deferred after numerical failures and a runtime-budget overrun during
-initial qualification; the generic code remains usable for future target experiments.
+The component fetches `--rocjitsu` alongside its MIOpen/CK dependencies. The normal
+emulation build supplies the launcher/library/profile artifacts before testing;
+the test job does not fetch or compile simulator sources. Excluding any of
+`compiler-runtime`, `math-libs`, `ml-libs` or `emulation` omits the component;
+reusing those stages does not. Only gfx1250 is currently allowed, on the validated
+medium CPU pool and non-sanitizer configurations.
+Further qualified targets need a MIOpen YAML map entry and an allowlist update,
+not a new workflow or script.
 
-The jobs inherit MIOpen project and `test:miopen` selection, including CK downstream
-consumers. `test:miopen-rocjitsu` selects the emulator group;
-`test:miopen-rocjitsu-gfx1250` selects the active target. Label and project selection still
-intersect, and unsupported families/platforms/sanitizer variants are excluded.
-The validated medium CPU pool is pre-pinned for the substantial emulation workload;
-GPU-runner overrides do not reroute CPU-only components.
-
-For test-only execution against a build that contains these installed assets:
-
-```bash
-gh workflow run test_artifacts.yml --repo ROCm/TheRock \
-  --ref "${THEROCK_BRANCH:?set a branch containing the registry}" \
-  -f artifact_repository=ROCm/rocm-libraries \
-  -f artifact_run_id="${ARTIFACT_RUN_ID:?set the completed PR build run}" \
-  -f amdgpu_families=gfx125X-dcgpu -f amdgpu_targets=gfx1250 \
-  -f test_runs_on= -f test_type=quick \
-  -f test_labels=test:miopen-rocjitsu-gfx1250
-```
-
-The workflow's `repository`/`ref` inputs select **TheRock test code**;
-`artifact_repository`/`artifact_run_id` select **artifact origin**.
-Use a TheRock revision with this registry and a library build with the installed
-category/runner; old artifacts are not silently widened or given a quick fallback.
-No MIOpen/CK build is performed by a test-only dispatch.
-
-The separate **Prepare test** step invokes the generic pinned-emulator preparer
-(Ninja, at most eight workers, 30-minute bound). **Test** only runs prepared resources:
+From the installed build prefix:
 
 ```bash
 export OUTPUT_ARTIFACTS_DIR=/path/to/dist
 export THEROCK_BIN_DIR="${OUTPUT_ARTIFACTS_DIR}/bin"
-python build_tools/github_actions/test_executable_scripts/prepare_miopen_rocjitsu.py --arch gfx1250
-python "${OUTPUT_ARTIFACTS_DIR}/share/miopen/rocjitsu/run_rocjitsu.py" --arch gfx1250
+export AMDGPU_FAMILIES=gfx125X-dcgpu
+export AMDGPU_TARGETS=gfx1250
+python "${OUTPUT_ARTIFACTS_DIR}/share/miopen/rocjitsu/run_rocjitsu.py"
 ```
 
-Prepared resources are `rocjitsu-work/ARCH/build/tools/rocjitsu/rocjitsu` and
-`rocjitsu-work/ARCH/prepared-config.json`. The requested target is checked against the
-profile and real HSA runtime. One emulated GPU is exposed, with the profile's SKU CU
-topology preserved. A real prebuilt launcher/config pair can replace preparation via
-`--rocjitsu-bin` and `--rocjitsu-config`; no architecture override fakes validation.
-Printed reproduction commands include preparation, and `--setup-only` executes it.
-
-CPU checks run in up to eight isolated shards (up to four simulator dispatch workers
-each); GPU execution uses up to sixteen dispatch workers. Defaults are a 10-minute
-CPU-shard bound and 40-minute GPU-phase bound, inside a 55-minute workflow Test step.
-The MIOpen runner uses native GTest flag files for large adaptive filters.
-It preserves all selected identities and real failure/skip/disabled states.
-Listings cannot masquerade as verdict XML; missing/duplicate executions fail.
-The report directory `rocjitsu-work/ARCH/reports/` is uploaded on failure as well as
-success, including exact filters, selections, logs and merged GTest XML.
-
-The YAML policy retains the FFM baseline and CPU checks, reducing expensive parameter
-stress without altering ordinary hardware categories. GPU HipConv suites have a
-temporary rocjitsu-only ignore for the reproduced gfx1250 image-loading issue;
-remove it after the fix lands. Emulator diagnostics are not suppressed.
-Optional dbsync remains a separate `test:miopen-dbsync` selection with its existing
-supported families and standard/full-tier behavior.
+CPU checks run in isolated parallel shards, followed by GPU execution under
+rocjitsu. MIOpen validates exact target/category/plugin matches and complete
+execution identities; failed tests and missing/duplicate verdicts fail the job.
+Its local `rocjitsu-work/ARCH/reports/` tree includes filters, logs, selections
+and merged XML, with a step summary. Expanded generic S3 publishing of this report
+tree is separate infrastructure work; no GitHub artifact upload is introduced here.
+See the MIOpen test README and YAML policy for budgets, coverage tradeoffs and the
+temporary GPU HipConv ignore. Existing dbsync behavior is unchanged.
 
 ## Prebuilt stages
 
