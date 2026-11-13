@@ -270,7 +270,10 @@ def build_cherry_pick_commits(
             check=False,
         )
         if merge.returncode == 1:
-            raise CherryPickConflictError(source.sha, merge.stdout)
+            # The first line is the merge result tree OID, not a commit.
+            # Strip it because the tree exists only in the temporary clone.
+            _, _, diagnostics = merge.stdout.partition("\n")
+            raise CherryPickConflictError(source.sha, diagnostics.lstrip("\n"))
         if merge.returncode != 0:
             raise CherryPickError(
                 f"git merge-tree failed for commit {source.sha} with status "

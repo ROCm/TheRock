@@ -874,7 +874,9 @@ class CherryPickIntegrationTest(unittest.TestCase):
             self.target.remote_ref("shared/cherry-pick/therock-10.2-airdel-1234")
         )
         self.assertEqual(self.api.pull_requests, [])
-        self.assertIn("feature-one.txt", self.summaries[0])
+        self.assertIn(
+            "## Git diagnostics\n\n```text\nfeature-one.txt", self.summaries[0]
+        )
         self.assertIn("ROCm/rocm-systems", self.summaries[0])
         self.assertIn("release/therock-10.2", self.summaries[0])
         self.assertIn("`AIRDEL-1234`", self.summaries[0])
