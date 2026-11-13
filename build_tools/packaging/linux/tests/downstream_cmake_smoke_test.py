@@ -4,6 +4,8 @@
 
 """Unit tests for downstream_cmake_smoke.py. No ROCm prefix or cmake required."""
 
+import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -93,6 +95,7 @@ class CommandTests(unittest.TestCase):
             driver.write_text("# driver\n")
             cmake = root / "cmake"
             cmake.write_text("#!/bin/sh\n")
+            os.chmod(cmake, 0o755)
             binary = root / "build"
             with patch.object(sdk.subprocess, "run") as run:
                 run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
@@ -114,6 +117,61 @@ class CommandTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertFalse(any(arg.startswith("-DTHEROCK_ENABLE_") for arg in command))
         self.assertTrue(command[-1].endswith("clean_configure_test_project.cmake"))
+
+
+class ArgumentAndRunTests(unittest.TestCase):
+    def test_non_executable_cmake_is_rejected(self) -> None:
+        """A file that is not executable is not a usable cmake."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cmake = Path(tmp) / "cmake"
+            cmake.write_text("#!/bin/sh\n")
+            os.chmod(cmake, 0o600)
+            with patch.dict(os.environ, {"PATH": ""}):
+                with self.assertRaisesRegex(ValueError, "cmake executable not found"):
+                    sdk.resolve_cmake(str(cmake))
+
+    def test_empty_prefix_is_rejected(self) -> None:
+        """A blank ``--prefix`` must not resolve to the working directory."""
+        with patch("sys.stderr", new=io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                sdk.parse_args(["--prefix", ""])
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_main_returns_one_when_cmake_cannot_start(self) -> None:
+        """An OSError from subprocess is reported, not raised as a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prefix = root / "prefix"
+            prefix.mkdir()
+            source = root / "cpp-sdk-user"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text("project(cpp_sdk_user)\n")
+            driver = root / "clean_configure_test_project.cmake"
+            driver.write_text("# driver\n")
+            cmake = root / "cmake"
+            cmake.write_text("#!/bin/sh\n")
+            os.chmod(cmake, 0o755)
+            argv = [
+                "--prefix",
+                str(prefix),
+                "--source-dir",
+                str(source),
+                "--driver",
+                str(driver),
+                "--cmake",
+                str(cmake),
+                "--binary-dir",
+                str(root / "build"),
+            ]
+            with (
+                patch.object(
+                    sdk.subprocess, "run", side_effect=PermissionError("denied")
+                ),
+                patch("sys.stderr", new=io.StringIO()) as err,
+            ):
+                code = sdk.main(argv)
+        self.assertEqual(code, 1)
+        self.assertIn("could not run cmake", err.getvalue())
 
 
 if __name__ == "__main__":

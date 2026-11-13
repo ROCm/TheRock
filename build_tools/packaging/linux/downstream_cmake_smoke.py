@@ -15,6 +15,7 @@ the prefix Clang unless ``--cxx-compiler`` is set.
 """
 
 import argparse
+import os
 import shlex
 import shutil
 import subprocess
@@ -174,15 +175,23 @@ def resolve_cmake(cmake: str) -> str:
         The executable path.
 
     Raises:
-        ValueError: No such file exists and ``PATH`` has no match.
+        ValueError: No executable exists at that path and ``PATH`` has no match.
     """
     candidate = Path(cmake)
-    if candidate.is_file():
+    if candidate.is_file() and os.access(candidate, os.X_OK):
         return str(candidate)
     found = shutil.which(cmake)
     if not found:
         raise ValueError(f"cmake executable not found: {cmake}")
     return found
+
+
+def _nonempty_path(value: str) -> Path:
+    """Convert a CLI path argument, rejecting a blank value."""
+    stripped = value.strip()
+    if not stripped:
+        raise argparse.ArgumentTypeError("path must not be empty")
+    return Path(stripped)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -198,7 +207,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Run examples/cpp-sdk-user against an installed ROCm prefix."
     )
     parser.add_argument(
-        "--prefix", required=True, type=Path, help="Installed ROCm prefix."
+        "--prefix",
+        required=True,
+        type=_nonempty_path,
+        help="Installed ROCm prefix.",
     )
     parser.add_argument(
         "--binary-dir",
@@ -241,7 +253,8 @@ def main(argv: list[str] | None = None) -> int:
 
     Returns:
         Zero when the existing CMake driver passes. One when the prefix or the
-        project path is unusable. The driver's own exit code when CMake fails.
+        project path is unusable, or when cmake cannot be started. The driver's
+        own exit code when CMake runs and fails.
     """
     args = parse_args(argv)
     binary_dir = args.binary_dir
@@ -272,7 +285,11 @@ def main(argv: list[str] | None = None) -> int:
         cxx_compiler=cxx_compiler,
     )
     print("Running:", shlex.join(command), flush=True)
-    completed = subprocess.run(command)
+    try:
+        completed = subprocess.run(command)
+    except OSError as exc:
+        print(f"error: could not run cmake: {exc}", file=sys.stderr)
+        return 1
     return completed.returncode
 
 
