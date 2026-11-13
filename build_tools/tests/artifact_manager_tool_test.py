@@ -405,32 +405,39 @@ class TestUploadArtifactFingerprints(ArtifactManagerTestBase):
         )
         self.delay.assert_called_once_with(2)
 
-    def test_persistent_fingerprint_failure_warns_and_succeeds(self):
+    def test_persistent_fingerprint_failure_raises(self):
         request, fingerprint = self._make_request()
+        upload_error = OSError("Fingerprint upload failed")
 
         def upload(source_path, artifact_key):
             if artifact_key.endswith(".fprint"):
-                raise OSError("Fingerprint upload failed")
+                raise upload_error
 
         self.backend.upload_artifact.side_effect = upload
-        with (
-            mock.patch("artifact_manager.log") as log,
-            mock.patch(
-                "artifact_manager.calculate_hash", wraps=artifact_manager.calculate_hash
-            ) as calculate_hash,
-        ):
-            self.assertTrue(artifact_manager.upload_artifact(request))
+
+        with mock.patch(
+            "artifact_manager.calculate_hash",
+            wraps=artifact_manager.calculate_hash,
+        ) as calculate_hash:
+            with self.assertRaises(RuntimeError) as ctx:
+                artifact_manager.upload_artifact(request)
+
+        self.assertEqual(
+            str(ctx.exception),
+            f"Failed to upload {fingerprint.name} after 3 attempts",
+        )
+        self.assertIs(ctx.exception.__cause__, upload_error)
+
         calculate_hash.assert_called_once_with(request.source_path, "sha256")
+
         expected = self._expected_calls(request, fingerprint)
         self.assertEqual(
             self.backend.upload_artifact.call_args_list,
             expected[:-1] + [expected[-1]] * 3,
         )
-        self.assertEqual(self.delay.call_args_list, [mock.call(2), mock.call(4)])
-        log.assert_any_call(
-            f"  !! WARNING: Failed to upload {fingerprint.name} "
-            "after 3 attempts: Fingerprint upload failed. "
-            "Artifact upload succeeded."
+        self.assertEqual(
+            self.delay.call_args_list,
+            [mock.call(2), mock.call(4)],
         )
 
 

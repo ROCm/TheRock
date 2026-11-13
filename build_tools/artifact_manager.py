@@ -792,7 +792,7 @@ def upload_artifact(request: UploadRequest) -> bool:
         return False
 
     # Missing fingerprints are skipped; unexpected local filesystem errors
-    # propagate. Fingerprint upload failures use separate, non-blocking retries.
+    # and exhausted fingerprint upload retries propagate.
     fingerprint_name = (
         request.source_path.name.removesuffix(".tar.zst").removesuffix(".tar.xz")
         + ".fprint"
@@ -814,7 +814,8 @@ def upload_artifact(request: UploadRequest) -> bool:
     with fingerprint_path.open("rb"):
         pass
 
-    # Retry only the fingerprint, after the archive/checksum have succeeded.
+    # Missing fingerprints are skipped. Existing fingerprints upload with
+    # independent retries; exhausted retries propagate as an error.
     for attempt in range(MAX_RETRIES):
         try:
             log(f"  ++ Uploading {fingerprint_name}")
@@ -829,11 +830,10 @@ def upload_artifact(request: UploadRequest) -> bool:
                 )
                 _delay_for_retry(delay)
             else:
-                log(
-                    f"  !! WARNING: Failed to upload {fingerprint_name} "
-                    f"after {MAX_RETRIES} attempts: {e}. "
-                    f"Artifact upload succeeded."
-                )
+                raise RuntimeError(
+                    f"Failed to upload {fingerprint_name} "
+                    f"after {MAX_RETRIES} attempts"
+                ) from e
 
     return True
 
