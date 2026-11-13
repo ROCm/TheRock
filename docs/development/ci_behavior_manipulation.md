@@ -196,19 +196,55 @@ runs tests against pre-built artifacts. Find a recent successful
 run on `main`, note its run ID, then go to **Actions** > **Test Artifacts** >
 **Run workflow**:
 
-| Input              | Example                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `artifact_run_id`  | `35193881163` (from the Multi-Arch CI run URL). **Required** — this workflow only runs tests and needs artifacts from a previous build run. |
-| `artifact_group`   | `multi-arch-release`                                                                                                                        |
-| `amdgpu_families`  | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu`                                                                                |
-| `test_runs_on`     | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`                                                                                       |
-| `test_type`        | `quick` / `standard` / `comprehensive` / `full`                                                                                             |
-| `test_labels`      | `test:rocblas,test:hipblas` (comma-separated, empty = all). Directly selects which test components to run by name.                          |
-| `changed_projects` | `rocblas,hipblas` (comma-separated, empty = all). Selects projects and their downstream consumers via the dependency graph.                 |
+| Input                 | Example                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `artifact_run_id`     | `35193881163` (from the Multi-Arch CI run URL). **Required** — this workflow only runs tests and needs artifacts from a previous build run. |
+| `artifact_repository` | `ROCm/rocm-libraries` when the build run belongs to that repository; empty uses the caller's `github.repository`.                           |
+| `artifact_group`      | `multi-arch-release`                                                                                                                        |
+| `amdgpu_families`     | `gfx94X-dcgpu`, `gfx110X-all`, `gfx120X-all`, `gfx950-dcgpu`                                                                                |
+| `test_runs_on`        | Runner label, e.g. `linux-gfx942-1gpu-ccs-ossci-rocm`                                                                                       |
+| `test_type`           | `quick` / `standard` / `comprehensive` / `full`                                                                                             |
+| `test_labels`         | `test:rocblas,test:hipblas` (comma-separated, empty = all). Directly selects which test components to run by name.                          |
+| `changed_projects`    | `rocblas,hipblas` (comma-separated, empty = all). Selects projects and their downstream consumers via the dependency graph.                 |
 
 When both `test_labels` and `changed_projects` are set, the effective test set
 is the **intersection** of both filters — only components that match both a
 `test_labels` entry and a `changed_projects` dependency are run.
+
+The Linux CPU-only `miopen-rocjitsu` entry is a thin invocation of the build's
+installed `share/miopen/rocjitsu/run_rocjitsu.py`. MIOpen owns its `rocjitsu-quick`
+category, adaptive selection, target/profile map and execution logic.
+Existing `miopen` project and `test:miopen` selection, including CK downstream
+consumers, select this child via `base_project=miopen`. No dedicated per-architecture
+labels or MIOpen registry imports are added to generic CI configuration.
+
+The component fetches `--rocjitsu` alongside its MIOpen/CK dependencies. The normal
+emulation build supplies the launcher/library/profile artifacts before testing;
+the test job does not fetch or compile simulator sources. Excluding any of
+`compiler-runtime`, `math-libs`, `ml-libs` or `emulation` omits the component;
+reusing those stages does not. Only gfx1250 is currently allowed, on the validated
+medium CPU pool and non-sanitizer configurations.
+Further qualified targets need a MIOpen YAML map entry and an allowlist update,
+not a new workflow or script.
+
+From the installed build prefix:
+
+```bash
+export OUTPUT_ARTIFACTS_DIR=/path/to/dist
+export THEROCK_BIN_DIR="${OUTPUT_ARTIFACTS_DIR}/bin"
+export AMDGPU_FAMILIES=gfx125X-dcgpu
+export AMDGPU_TARGETS=gfx1250
+python "${OUTPUT_ARTIFACTS_DIR}/share/miopen/rocjitsu/run_rocjitsu.py"
+```
+
+CPU checks run in isolated parallel shards, followed by GPU execution under
+rocjitsu. MIOpen validates exact target/category/plugin matches and complete
+execution identities; failed tests and missing/duplicate verdicts fail the job.
+Its local `rocjitsu-work/ARCH/reports/` tree includes filters, logs, selections
+and merged XML, with a step summary. Expanded generic S3 publishing of this report
+tree is separate infrastructure work; no GitHub artifact upload is introduced here.
+See the MIOpen test README and YAML policy for budgets, coverage tradeoffs and the
+temporary GPU HipConv ignore. Existing dbsync behavior is unchanged.
 
 ## Prebuilt stages
 

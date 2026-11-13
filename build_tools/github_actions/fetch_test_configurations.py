@@ -835,6 +835,29 @@ test_matrix = {
             "linux": 1,
         },
     },
+    # Installed MIOpen emulator suite; policy and profile selection live in MIOpen.
+    "miopen-rocjitsu": {
+        "job_name": "miopen-rocjitsu",
+        "base_project": "miopen",
+        "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu",
+        "timeout_minutes": 55,
+        "test_script": f"python {_get_artifact_path('share/miopen/rocjitsu/run_rocjitsu.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        # Preserved coverage takes ~38min with 32 allowed CPUs; use the
+        # validated medium CPU pool rather than the 2-vCPU small pool.
+        "test_runner": "aws-linux-scale-rocm-medium",
+        "skip_stages": ["compiler-runtime", "math-libs", "ml-libs", "emulation"],
+        "skip_build_variant": [
+            "asan",
+            "host-asan",
+            "asan-debug",
+            "host-asan-debug",
+            "tsan",
+        ],
+        "include_family": {"linux": ["gfx1250"]},
+        "total_shards_dict": {"linux": 1},
+    },
     # RCCL tests
     "rccl": {
         "job_name": "rccl",
