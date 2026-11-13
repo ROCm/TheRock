@@ -168,6 +168,34 @@ jobs:
             python ./build_tools/github_actions/configure_asan_env.py \
               --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
+      # TEMPORARY -- remove once the Apptainer runner migration is done.
+      #
+      # print_driver_gpu_info.py runs its probes with check=True and does not
+      # echo their stderr, so an amd-smi failure arrives as a Python traceback
+      # ending in "returned non-zero exit status 196" and nothing else. This
+      # step runs the same probe with the message attached, next to the device
+      # nodes and the caller's groups, because the open-ended question is
+      # whether amd-smi needs a node our unprivileged runner cannot open.
+      #
+      # Under Docker, `--group-add video` in container.options is granted by
+      # the daemon. Apptainer keeps the caller's real groups and cannot, so a
+      # primary DRM node at the usual root:video 0660 would be unopenable --
+      # which rocm-smi (sysfs only) and rocminfo (/dev/kfd and renderD*, both
+      # 0666) would not notice.
+      - name: Device node debug
+        if: ${{ !fromJSON(inputs.component).linux_cpu_runner && runner.os == 'Linux' }}
+        timeout-minutes: 3
+        continue-on-error: true
+        run: |
+          echo "=== who we are ==="
+          id
+          echo "=== device nodes ==="
+          ls -l /dev/dri /dev/kfd || true
+          echo "=== amd-smi static ==="
+          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static || echo "exit=$?"
+          echo "=== amd-smi list ==="
+          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi list || echo "exit=$?"
+
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
         timeout-minutes: 3
