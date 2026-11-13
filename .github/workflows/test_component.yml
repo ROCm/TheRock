@@ -172,16 +172,20 @@ jobs:
       #
       # print_driver_gpu_info.py runs its probes with check=True and does not
       # echo their stderr, so an amd-smi failure arrives as a Python traceback
-      # ending in "returned non-zero exit status 196" and nothing else. This
-      # step runs the same probe with the message attached, next to the device
-      # nodes and the caller's groups, because the open-ended question is
-      # whether amd-smi needs a node our unprivileged runner cannot open.
+      # ending in "returned non-zero exit status 196" and nothing else.
       #
-      # Under Docker, `--group-add video` in container.options is granted by
-      # the daemon. Apptainer keeps the caller's real groups and cannot, so a
-      # primary DRM node at the usual root:video 0660 would be unopenable --
-      # which rocm-smi (sysfs only) and rocminfo (/dev/kfd and renderD*, both
-      # 0666) would not notice.
+      # The DRM half of this is now answered: card0 was root:video 0660, which
+      # Docker reached via `--group-add video` and Apptainer structurally
+      # cannot, and the cluster has since relaxed it to 0666. All three nodes
+      # open. What is left is the CPU half -- `amd-smi static` still exits 196
+      # having printed no GPU section at all, only "ESMI not initialized".
+      # Under Docker the same binary printed "Note: hsmp_acpi driver not
+      # loaded" and carried on to list four BDFs, so ESMI initialised there and
+      # not here, and root is the only difference left.
+      #
+      # So this asks two things the previous run could not distinguish:
+      # whether the GPU half is now healthy (`-g all` skips CPU discovery), and
+      # which root-only CPU interface ESMI is being refused.
       - name: Device node debug
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner && runner.os == 'Linux' }}
         timeout-minutes: 3
@@ -191,22 +195,36 @@ jobs:
           id
           echo "=== device nodes ==="
           ls -l /dev/dri /dev/kfd || true
-          echo "=== what sysfs offers ==="
-          # If this lists every card on the node rather than our allocation,
-          # amd-smi may be failing to match an enumerated card to a device
-          # node, which is a different bug from being denied card0.
-          ls /sys/class/drm/ || true
+          echo "=== CPU telemetry interfaces ==="
+          # ESMI wants these; both are conventionally root-only, which is why
+          # Docker's --user 0:0 hid the problem.
+          ls -l /dev/hsmp /dev/cpu/0/msr 2>&1 || true
+          ls -ld /sys/devices/platform/*hsmp* /sys/bus/platform/devices/AMDI* 2>&1 || true
           echo "=== which nodes we can actually open ==="
           python - <<'PY' || true
           import os
 
-          for path in ("/dev/kfd", "/dev/dri/card0", "/dev/dri/renderD128"):
+          paths = (
+              "/dev/kfd",
+              "/dev/dri/card0",
+              "/dev/dri/renderD128",
+              "/dev/hsmp",
+              "/dev/cpu/0/msr",
+          )
+          for path in paths:
               try:
                   os.close(os.open(path, os.O_RDWR))
                   print(f"{path}: ok")
               except OSError as err:
                   print(f"{path}: {err}")
           PY
+          echo "=== amd-smi static -g all (GPU only, no CPU discovery) ==="
+          # The decisive one. If this succeeds, nothing is wrong with our GPU
+          # access and the 196 is entirely the CPU path -- which makes the fix
+          # a narrower invocation here, not a cluster change.
+          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static -g all || echo "exit=$?"
+          echo "=== amd-smi list -g all ==="
+          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi list -g all || echo "exit=$?"
           echo "=== amd-smi static ==="
           "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static || echo "exit=$?"
           echo "=== amd-smi list ==="
