@@ -125,7 +125,7 @@ on:
           - gfx1100;gfx1101;gfx1102;gfx1103
           - gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;gfx90a
           - gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;gfx90a;gfx900;gfx90c;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030
-          - gfx110X-all;gfx1151;gfx120X-all;gfx90a;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153;gfx117X-all
+          - gfx110X-all;gfx1151;gfx120X-all;gfx90a;gfx900;gfx90c;gfx906;gfx908;gfx101X-dgpu;gfx103X-all;gfx1150;gfx1152;gfx1153
       pytorch_hip_offload_jobs:
         description: "Concurrent GPU targets per HIP compilation. Sweep 1, 2, 4, and 8."
         type: choice
