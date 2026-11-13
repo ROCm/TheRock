@@ -1226,6 +1226,15 @@ function(therock_cmake_subproject_activate target_name)
                 "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
                 ${_dist_install_cmd}
       )
+      # install(CODE) in post_hook_amd-llvm is skipped by distribution installs.
+      if("${target_name}" STREQUAL "amd-llvm" AND THEROCK_LLVM_HOST_TRIPLE)
+        list(APPEND _stage_install_commands
+          COMMAND "${CMAKE_COMMAND}"
+                  "-DPREFIX=${_stage_destination_dir}"
+                  "-DHOST_TRIPLE=${THEROCK_LLVM_HOST_TRIPLE}"
+                  -P "${THEROCK_SOURCE_DIR}/cmake/therock_amd_llvm_per_target_compat_symlinks.cmake"
+        )
+      endif()
     else()
       list(APPEND _stage_install_commands
         COMMAND ${_install_log_prefix}
