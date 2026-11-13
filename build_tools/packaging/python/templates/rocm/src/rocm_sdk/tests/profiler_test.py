@@ -8,16 +8,12 @@ installed profiler package, verify the profiler-hub runtime dependency is
 bundled, and execute a profiler console script end-to-end.
 """
 
-import csv
 import importlib
 import locale
-import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
-import sys
-import tempfile
 from typing import NamedTuple
 import unittest
 
@@ -69,40 +65,6 @@ CONSOLE_SCRIPT_TESTS = [
     ),
     ConsoleScriptTest("rocsys", ["--version"], "rocsys", True),
 ]
-
-ROCPD_FIXTURE_SCRIPT = """
-import sqlite3
-import sys
-from rocpd.schema import RocpdSchema
-
-connection = sqlite3.connect(sys.argv[1])
-RocpdSchema(
-    uuid="_wheel_smoke", guid="00000000-0000-0000-0000-000000009535"
-).write_schema(connection)
-
-def insert(table, columns, values):
-    placeholders = ", ".join(["?"] * len(values))
-    connection.execute(
-        f"INSERT INTO {table}_wheel_smoke ({columns}) VALUES ({placeholders})",
-        values,
-    )
-
-insert("rocpd_info_node", "id, hash, machine_id, system_name, hostname, release, "
-       "version, hardware_name, domain_name",
-       (1, 1, "machine", "Linux", "host", "r", "v", "x86_64", "domain"))
-insert("rocpd_info_process", "id, nid, ppid, pid, init, fini, start, end, command",
-       (1, 1, 1, 1, 1000, 4000, 1000, 4000, "wheel_smoke"))
-insert("rocpd_info_thread", "id, nid, ppid, pid, tid", (1, 1, 1, 1, 1))
-insert("rocpd_string", "id, string", (1, "wheel_smoke"))
-insert("rocpd_string", "id, string", (2, "HIP_API"))
-for identifier, start, end in ((1, 1000, 2000), (2, 2000, 4000)):
-    insert("rocpd_event", "id, category_id, correlation_id",
-           (identifier, 2, identifier))
-    insert("rocpd_region", "id, nid, pid, tid, start, end, name_id, event_id",
-           (identifier, 1, 1, 1, start, end, 1, identifier))
-connection.commit()
-connection.close()
-"""
 
 
 @unittest.skipIf(is_windows, "rocm-profiler is not supported on Windows")
@@ -255,83 +217,6 @@ class ROCmProfilerTest(unittest.TestCase):
                         f"Expected '{test.expected_text}' in console-script "
                         f"{test.script_name} output:\n{output_text}"
                     )
-
-    def test_rocpd_csv_and_summary(self):
-        """Convert non-empty data using the installed wheel and its interpreter."""
-        core_name = di.ALL_PACKAGES["core"].get_py_package_name()
-        core_module = importlib.import_module(core_name)
-        utils.assert_is_physical_package(core_module)
-        core_path = Path(core_module.__file__).parent
-        python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
-        environment = dict(os.environ)
-        environment.pop("PYTHONHOME", None)
-        environment["PYTHONNOUSERSITE"] = "1"
-        environment["PYTHONPATH"] = str(
-            core_path / "lib" / python_version / "site-packages"
-        )
-        environment["PATH"] = (
-            str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", "")
-        )
-        rocpd = utils.find_console_script("rocpd")
-        self.assertIsNotNone(rocpd, "rocpd console script is missing")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            database = root / "input.db"
-            commands = [
-                [sys.executable, "-c", ROCPD_FIXTURE_SCRIPT, str(database)],
-                [
-                    rocpd,
-                    "convert",
-                    "-i",
-                    str(database),
-                    "-f",
-                    "csv",
-                    "-d",
-                    str(root / "csv"),
-                ],
-                [
-                    rocpd,
-                    "summary",
-                    "-i",
-                    str(database),
-                    "-f",
-                    "csv",
-                    "-d",
-                    str(root / "summary"),
-                ],
-            ]
-            for command in commands:
-                result = subprocess.run(
-                    command,
-                    env=environment,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    timeout=SUBPROCESS_TIMEOUT_SECONDS,
-                )
-                self.assertEqual(result.returncode, 0, result.stdout)
-
-            rows_by_output = {}
-            for output in ("csv", "summary"):
-                files = sorted((root / output).glob("*.csv"))
-                self.assertTrue(files, f"No {output} files were generated")
-                rows = []
-                for path in files:
-                    with path.open(newline="", encoding="utf-8") as stream:
-                        rows.extend(
-                            row
-                            for row in csv.DictReader(stream)
-                            if "wheel_smoke" in row.values()
-                        )
-                rows_by_output[output] = rows
-            self.assertEqual(len(rows_by_output["csv"]), 2)
-            self.assertEqual(len(rows_by_output["summary"]), 1)
-            summary = {
-                name.casefold(): value
-                for name, value in rows_by_output["summary"][0].items()
-            }
-            self.assertEqual(int(summary["calls"]), 2)
 
     def test_rocprof_trace_decoder_python_api(self):
         """The packaged rocprof_trace_decoder API must be importable.
