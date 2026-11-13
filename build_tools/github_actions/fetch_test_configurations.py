@@ -26,6 +26,7 @@ from pathlib import Path
 
 from github_actions_api import *
 from amdgpu_family_matrix import (
+    MULTI_GPU_POOL_NAMES,
     MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -191,14 +192,14 @@ def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) ->
     MULTI_GPU_RUNNER_KEYS). `pool` is the component's "multi_gpu_pool" (e.g.
     "2gpu"), or None for the default 8-GPU pool.
     """
-    key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
-    if key not in MULTI_GPU_RUNNER_KEYS:
+    if pool is not None and pool not in MULTI_GPU_POOL_NAMES:
         # Catch typos here: an unknown pool would otherwise match nothing and
         # silently drop the component from every family.
         raise ValueError(
             f"{job_name}: unknown multi_gpu_pool {pool!r}. "
-            f"Known pools: {sorted(MULTI_GPU_RUNNER_KEYS)}"
+            f"Known pools: {sorted(MULTI_GPU_POOL_NAMES)}"
         )
+    key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
 
     # e.g. "rccl-2gpu", "rocshmem-multi-gpu"
     context_name = f"{job_name}-{pool or 'multi-gpu'}"

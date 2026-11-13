@@ -35,19 +35,23 @@ from pathlib import Path
 # when manually triggered, so it's not included in the explicit trigger lists.
 VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
+# Pool names a component may request via "multi_gpu_pool" in
+# fetch_test_configurations.py. Omitting the field requests the default 8-GPU
+# pool, which has no name here because it is not opt-in.
+MULTI_GPU_POOL_NAMES = ("2gpu", "4gpu")
+
 # Family keys holding a multi-GPU runner pool: the default pool
-# ("test-runs-on-multi-gpu") and per-GPU-count tiers ("test-runs-on-2gpu"),
-# each with an optional "-labels" weighted list variant.
-# When adding a tier, list both its key and its "-labels" variant here, or the
-# key will not be forwarded to the test matrix and components requesting that
-# gpu_count will quietly fall back to the default 8-GPU pool.
+# ("test-runs-on-multi-gpu") and each named pool above, with an optional
+# "-labels" weighted list variant. When adding a pool, add it to both tuples or
+# its key will not be forwarded to the test matrix.
 MULTI_GPU_RUNNER_KEYS = (
     "test-runs-on-multi-gpu",
     "test-runs-on-multi-gpu-labels",
-    "test-runs-on-2gpu",
-    "test-runs-on-2gpu-labels",
-    "test-runs-on-4gpu",
-    "test-runs-on-4gpu-labels",
+    *(
+        key
+        for name in MULTI_GPU_POOL_NAMES
+        for key in (f"test-runs-on-{name}", f"test-runs-on-{name}-labels")
+    ),
 )
 
 

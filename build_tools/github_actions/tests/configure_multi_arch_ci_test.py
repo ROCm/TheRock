@@ -4345,16 +4345,24 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         self.assertEqual(entry["test-runs-on"], "")
 
     def test_label_disables_multi_gpu(self):
-        """Label also disables multi-GPU tests."""
+        """Label disables every multi-GPU pool, not just the default one."""
         entry = self._expand(pr_labels=["ci:cpu-test-only"])
-        self.assertNotIn("test-runs-on-multi-gpu", entry)
-        self.assertNotIn("test-runs-on-multi-gpu-labels", entry)
+        for key in MULTI_GPU_RUNNER_KEYS:
+            self.assertNotIn(key, entry)
 
     def test_without_label_multi_gpu_present(self):
-        """Without label, multi-GPU info is present (when platform supports it)."""
+        """Each pool reaches the test matrix with the label the family declares.
+
+        Forwarding the wrong key would send a job to another pool's hardware, so
+        assert the values rather than just that the keys exist.
+        """
         entry = self._expand()
-        # gfx94x has multi-GPU support
-        self.assertIn("test-runs-on-multi-gpu-labels", entry)
+        declared = get_all_families_for_trigger_types([])["gfx94x"]["linux"]
+        for key in MULTI_GPU_RUNNER_KEYS:
+            self.assertEqual(entry[key], declared[key], f"{key} forwarded wrong")
+        # The pools must be distinct, otherwise the split buys nothing.
+        self.assertNotEqual(entry["test-runs-on-2gpu"], entry["test-runs-on-multi-gpu"])
+        self.assertNotEqual(entry["test-runs-on-4gpu"], entry["test-runs-on-multi-gpu"])
 
 
 if __name__ == "__main__":
