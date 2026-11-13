@@ -218,29 +218,34 @@ class TestCIInputs(unittest.TestCase):
             ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
         )
 
-    def test_run_wsl_partial_build_requires_wsl_rocdxg_stage(self):
-        """WSL tests need the wsl-rocdxg artifact (the WSL libhsakmt)."""
-        with self.assertRaisesRegex(ValueError, "wsl-rocdxg"):
-            _run_from_environ(
-                event_name="workflow_dispatch",
-                event_payload={},
-                extra_env={
-                    "LINUX_AMDGPU_FAMILIES": "gfx110X",
-                    "PR_LABELS": "ci:run-wsl,test:hip-tests",
-                    "BUILD_STAGES": "compiler-runtime,runtime-tests",
-                },
-            )
-
-    def test_run_wsl_full_build_needs_no_stage_check(self):
-        inputs = cm.CIInputs(
-            run_id="12345",
-            event_name="pull_request",
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant="release",
-            linux_test_labels=["test:hip-tests", "ci:run-wsl"],
-        )
-        inputs.validate()
+    def test_run_wsl_adds_wsl_rocdxg_to_partial_build(self):
+        """A narrowed build (e.g. an external repo PR) still builds wsl-rocdxg,
+        the WSL libhsakmt that ci:run-wsl tests need, on top of the requested
+        stages, which stay unchanged."""
+        for labels, expect_wsl in (("ci:run-wsl,ci:gfx110X-all", True), ("", False)):
+            with self.subTest(labels=labels):
+                inputs = _run_from_environ(
+                    event_name="pull_request",
+                    event_payload={
+                        "pull_request": {
+                            "labels": [
+                                {"name": name} for name in labels.split(",") if name
+                            ],
+                            "base": {"ref": "develop"},
+                        }
+                    },
+                    extra_env={"BUILD_STAGES": "compiler-runtime,dctools-core"},
+                )
+                self.assertEqual(
+                    inputs.build_stages, ["compiler-runtime", "dctools-core"]
+                )
+                skipped = cm.decide_jobs(
+                    inputs, cm.GitContext(), cm.TargetSelection()
+                ).build_rocm.skipped_stages
+                self.assertEqual("wsl-rocdxg" not in skipped, expect_wsl)
+                self.assertNotIn("compiler-runtime", skipped)
+                self.assertNotIn("dctools-core", skipped)
+                self.assertIn("math-libs", skipped)
 
     def test_skip_rocm_rejects_conflicting_inputs(self):
         inputs = cm.CIInputs(
@@ -320,6 +325,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BUILD_JAX": "true",
                 "PYTHON_VERSION": "3.12",
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
+                "THEROCK_CHECKOUT_REF": "main",
+                "THEROCK_CHECKOUT_COMMIT": "a" * 40,
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -346,6 +353,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertTrue(inputs.build_jax)
         self.assertEqual(inputs.python_versions, ["3.12"])
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
+        self.assertEqual(inputs.checkout_ref, "main")
+        self.assertEqual(inputs.checkout_commit, "a" * 40)
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -363,6 +372,30 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertEqual(inputs.pr_labels, ["ci:gfx950", "test:rocprim"])
         self.assertEqual(inputs.base_ref, "HEAD^")
+        self.assertFalse(inputs.is_draft_pr)
+
+    def test_pull_request_extracts_draft_state(self):
+        """event.pull_request.draft is carried into is_draft_pr."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={"pull_request": {"draft": True}},
+        )
+        self.assertTrue(inputs.is_draft_pr)
+
+    def test_non_pull_request_event_is_never_draft(self):
+        """Draft state is only read for pull_request events.
+
+        The payload carries pull_request.draft even though no real push,
+        schedule or workflow_dispatch webhook would, so this fails if the
+        draft read ever moves out of the pull_request branch.
+        """
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = _run_from_environ(
+                    event_name=event_name,
+                    event_payload={"pull_request": {"draft": True}},
+                )
+                self.assertFalse(inputs.is_draft_pr)
 
     def test_pull_request_test_labels_extracted_to_test_labels(self):
         """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
@@ -543,6 +576,32 @@ class TestShouldSkipCI(unittest.TestCase):
     def test_pr_without_skip_label_proceeds(self):
         """PR without ci:skip label proceeds to path filtering."""
         inputs = self._inputs(pr_labels=[])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_skips(self):
+        """Draft PR without ci:run-on-draft skips CI."""
+        inputs = self._inputs(is_draft_pr=True)
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_draft_pr_with_run_on_draft_label_runs(self):
+        """Draft PR with ci:run-on-draft runs CI."""
+        inputs = self._inputs(is_draft_pr=True, pr_labels=["ci:run-on-draft"])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_ci_skip_wins_over_run_on_draft(self):
+        """ci:skip takes priority when combined with ci:run-on-draft."""
+        inputs = self._inputs(
+            is_draft_pr=True, pr_labels=["ci:skip", "ci:run-on-draft"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_non_draft_pr_runs(self):
+        """Ready-for-review PR runs CI without the opt-in label."""
+        inputs = self._inputs(is_draft_pr=False)
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
@@ -3058,6 +3117,14 @@ class TestFormatSummary(unittest.TestCase):
         # The summary should also mention that CI was skipped with some
         # explanation for why.
         self.assertIn("skipped", result)
+
+    def test_draft_skip_summary_points_at_opt_in_label(self):
+        """A draft skip explains itself and names the opt-in label."""
+        inputs = self._inputs(event_name="pull_request", is_draft_pr=True)
+        result = format_summary(inputs, cm.CIOutputs.skipped())
+
+        self.assertIn("draft", result)
+        self.assertIn("ci:run-on-draft", result)
 
 
 class TestWriteOutputs(unittest.TestCase):

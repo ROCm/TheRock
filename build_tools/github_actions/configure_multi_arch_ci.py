@@ -69,7 +69,7 @@ from _therock_utils.build_topology import get_topology
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
-    WSL_RUN_LABEL,
+    CI_LABEL_REQUIRED_ARTIFACTS,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -166,6 +166,27 @@ def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
     return [stage for stage in all_stages if stage not in build_stages]
 
 
+def _resolve_effective_build_stages(
+    requested_stages: list[str], labels: list[str]
+) -> list[str]:
+    """Add to the requested build stages the stages the requested tests need.
+
+    Labels can require artifacts beyond the components' own (for example a
+    test platform's runtime pieces). The topology resolves those artifacts to
+    their producing stages and the stages those depend on. A full build
+    (``requested_stages`` empty) already includes every stage.
+    """
+    if not requested_stages:
+        return []
+    required_artifacts = sorted(
+        {a for label in labels for a in CI_LABEL_REQUIRED_ARTIFACTS.get(label, [])}
+    )
+    if not required_artifacts:
+        return list(requested_stages)
+    required_stages = get_topology().get_stages_for_artifacts(required_artifacts)
+    return list(requested_stages) + sorted(required_stages - set(requested_stages))
+
+
 # Maps build stages to the test labels that can run with artifacts from those
 # stages. Used to auto-filter tests when build_stages narrows the build graph.
 # Test labels not listed here require a full build.
@@ -216,14 +237,15 @@ def _get_allowed_test_labels_for_stages(build_stages: list[str]) -> list[str] | 
     return sorted(allowed) if allowed else []
 
 
-# ci:run-wsl tests also need the wsl-rocdxg stage's artifact (the WSL libhsakmt).
-WSL_REQUIRED_STAGE = "wsl-rocdxg"
-
 # ci:exactly makes the attached arch labels the complete family selection: the
 # families the trigger or the workflow inputs would otherwise select are
 # dropped so that only the labeled archs build and test. Packaging jobs are
 # unaffected.
 EXACTLY_LABEL = "ci:exactly"
+
+# Draft pull requests skip builds and tests by default: a draft is usually not
+# ready for review. This label opts a draft back in to the normal CI behavior.
+RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
 
 
 def _apply_stage_test_labels(
@@ -287,6 +309,8 @@ class CIInputs:
     pr_labels: list[str] = field(default_factory=list)
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
+    checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
+    is_draft_pr: bool = False  # pull_request.draft from the event payload
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
@@ -298,8 +322,9 @@ class CIInputs:
     prebuilt_stages: str = ""
     baseline_run_id: str = ""
 
-    # Allowlist of build stages to run. Empty means every stage, which is the
-    # default for all existing callers.
+    # Build stages the caller requested. Empty means every stage, which is the
+    # default for all existing callers. decide_jobs() adds the stages that
+    # produce artifacts the requested tests need.
     build_stages: list[str] = field(default_factory=list)
     # Repository to query for baseline runs (for cross-repo artifact reuse)
     baseline_repository: str = ""
@@ -320,8 +345,7 @@ class CIInputs:
         """Validate inputs for consistency (fail-fast behavior).
 
         Raises ValueError for conflicting build selections, ci:exactly without an
-        arch label, test labels requiring stages not in build_stages, or
-        ci:run-wsl on a partial build without the wsl-rocdxg stage.
+        arch label, or test labels requiring stages not in build_stages.
         """
         # ci:exactly drops the default families, so the arch labels become the
         # whole selection. Without one, nothing would build and CI would report
@@ -383,15 +407,6 @@ class CIInputs:
                 _apply_stage_test_labels(
                     platform, labels, self.build_stages, allowed_labels
                 )
-            if (
-                WSL_RUN_LABEL in self.linux_test_labels
-                and WSL_REQUIRED_STAGE not in self.build_stages
-            ):
-                raise ValueError(
-                    f"{WSL_RUN_LABEL} needs the {WSL_REQUIRED_STAGE} stage (the WSL "
-                    f"libhsakmt), which is not in build_stages {self.build_stages}. "
-                    f"Add {WSL_REQUIRED_STAGE} to build_stages."
-                )
 
     @property
     def is_pull_request(self) -> bool:
@@ -444,6 +459,7 @@ class CIInputs:
 
         pr_labels: list[str] = []
         pr_base_ref = ""
+        is_draft_pr = False
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
@@ -452,6 +468,7 @@ class CIInputs:
             pr_obj = event.get("pull_request", {})
             pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
             pr_base_ref = pr_obj.get("base", {}).get("ref", "")
+            is_draft_pr = bool(pr_obj.get("draft", False))
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -506,6 +523,8 @@ class CIInputs:
             pr_labels=pr_labels,
             pr_base_ref=pr_base_ref,
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
+            checkout_commit=os.environ.get("THEROCK_CHECKOUT_COMMIT", ""),
+            is_draft_pr=is_draft_pr,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -515,7 +534,7 @@ class CIInputs:
             linux_test_labels=linux_test_labels,
             windows_test_labels=windows_test_labels,
             prebuilt_stages=os.environ.get("PREBUILT_STAGES", ""),
-            build_stages=_parse_comma_list(os.environ.get("BUILD_STAGES", "")),
+            build_stages=build_stages,
             baseline_run_id=os.environ.get("BASELINE_RUN_ID", ""),
             # Which repo to query for baseline_run_id. Defaults to THEROCK_REPOSITORY.
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
@@ -921,6 +940,7 @@ def should_skip_ci(
 
     Returns True for:
     - 'ci:skip' PR label
+    - Draft PRs without the 'ci:run-on-draft' label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     - ASAN builds on PRs without ci:asan or ci:host-asan labels
@@ -932,6 +952,17 @@ def should_skip_ci(
     # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
+        return True
+
+    # 1b. Draft PRs are usually not ready for review, so builds and tests are
+    #     skipped by default. Marking the PR ready for review re-triggers CI,
+    #     and the opt-in label runs CI on the draft as-is. 'ci:skip' is checked
+    #     first so it wins when both labels are present.
+    if ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+        print(
+            f"  Skipping: pull request is a draft (add '{RUN_ON_DRAFT_LABEL}' or mark "
+            "the pull request ready for review to run CI)"
+        )
         return True
 
     # 2. Path filter skipping - check before ASAN label logic so we don't print
@@ -1630,14 +1661,21 @@ def decide_jobs(
         if auto_stage_reuse.applied_reuse_stages and auto_stage_reuse.baseline_run_id:
             baseline_run_id = auto_stage_reuse.baseline_run_id
 
-    # A build_stages allowlist narrows the build graph: everything outside it
+    # The requested build_stages narrow the build graph to those stages plus
+    # the ones the requested tests need (the effective stages). Everything else
     # is skipped outright, with no artifacts built or copied. This takes
     # precedence over prebuilt/reuse decisions, which only matter for stages
     # that are part of the build in the first place.
-    skipped_stages = _resolve_skipped_stages(ci_inputs.build_stages)
+    effective_stages = _resolve_effective_build_stages(
+        ci_inputs.build_stages, ci_inputs.pr_labels
+    )
+    skipped_stages = _resolve_skipped_stages(effective_stages)
     if skipped_stages:
-        print(f"  build_stages allowlist: {ci_inputs.build_stages}")
-        print(f"  Skipping stages outside the allowlist: {skipped_stages}")
+        print(f"  Requested build stages: {ci_inputs.build_stages}")
+        added_stages = [s for s in effective_stages if s not in ci_inputs.build_stages]
+        if added_stages:
+            print(f"  Added for the requested tests: {added_stages}")
+        print(f"  Skipping stages outside the effective stages: {skipped_stages}")
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
