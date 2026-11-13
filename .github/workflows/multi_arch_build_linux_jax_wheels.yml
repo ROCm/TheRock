@@ -435,7 +435,7 @@ jobs:
     # !cancelled() so a skipped/failed test_xla (this build's own cell may
     # not be the one with trigger_xla_tests) doesn't suppress JAX testing.
     if: ${{ !cancelled() && needs.configure_jax_tests.outputs.enabled == 'true' }}
-    needs: [build_jax_wheels, configure_jax_tests, test_xla]
+    needs: [build_jax_wheels, configure_jax_tests]
     name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
     strategy:
       fail-fast: false
