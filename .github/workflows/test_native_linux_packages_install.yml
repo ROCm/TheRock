@@ -151,7 +151,7 @@ run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 jobs:
   prepare_install_context:
     name: Prepare install context (package type, GPU arch, container image, container_gpu_options)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       pkg_type: ${{ steps.derive.outputs.pkg_type }}
       gfx_arch: ${{ steps.derive.outputs.gfx_arch }}
@@ -178,7 +178,7 @@ jobs:
       - name: "Quartz - started - test rpm/deb install"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: test_native_linux_packages_install.yml
@@ -221,7 +221,7 @@ jobs:
     needs: [prepare_install_context]
     strategy:
       fail-fast: false
-    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && (inputs.test_runs_on || 'linux-gfx942-1gpu-ccs-csp-ossci-rocm') || 'ubuntu-26.04' }}
     container:
       # get_url_repo_params.py manages image references for each OS profile.
       # zizmor cannot inspect the dynamically selected image.
@@ -243,6 +243,11 @@ jobs:
       - name: Install System Prerequisites
         run: |
           echo "Installing prerequisites for ${PKG_TYPE} on container"
+          # cmake, make, and a C++ compiler are for the downstream find_package
+          # smoke test, including sanity. hip-config calls find_dependency(Threads),
+          # which fails unless C or CXX is enabled. The default Unix Makefiles
+          # generator still requires make when CXX is enabled, even though this
+          # step does not build. g++ / gcc-c++ is the compiler.
 
           if [ "${PKG_TYPE}" = "deb" ]; then
             sudo apt update
@@ -252,7 +257,10 @@ jobs:
               ca-certificates \
               gpg \
               lsb-release \
-              binutils
+              binutils \
+              cmake \
+              make \
+              g++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod, apt-utils"
               sudo apt install -y pciutils kmod apt-utils
@@ -267,7 +275,10 @@ jobs:
               gpg2 \
               lsb-release \
               update-alternatives \
-              binutils
+              binutils \
+              cmake \
+              make \
+              gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive on SLES (e.g. rdhc): pciutils, kmod"
               zypper install -y pciutils kmod
@@ -280,7 +291,10 @@ jobs:
               ca-certificates \
               gnupg2 \
               dnf-plugins-core \
-              binutils
+              binutils \
+              cmake \
+              make \
+              gcc-c++
             if [ "$TEST_TYPE" = "full" ] || [ "$TEST_TYPE" = "comprehensive" ]; then
               echo "Extra OS packages for --test-type full/comprehensive (e.g. rdhc): pciutils, kmod"
               dnf install -y --allowerasing pciutils kmod
@@ -314,6 +328,14 @@ jobs:
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
+      - name: Downstream CMake smoke test
+        # Confirms find_package(hip) and find_package(hipblaslt) succeed against the installed prefix.
+        if: ${{ inputs.install_prefix != '' }}
+        run: |
+          echo "CMAKE SMOKE - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
+          $PYTHON_CMD build_tools/packaging/linux/downstream_cmake_smoke.py \
+            --install-prefix "${INSTALL_PREFIX}"
+
       - name: Package Uninstall Test
         # Gated by workflow input only; no RUN_UNINSTALL env (reuses job env from install step).
         if: ${{ inputs.run_uninstall && inputs.test_type != 'install' }}
@@ -325,12 +347,12 @@ jobs:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     needs: [prepare_install_context, test_native_linux_packages_install]
     name: "Quartz - completed - test rpm/deb install"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     steps:
       - name: "Quartz - completed - test rpm/deb install"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: test_native_linux_packages_install.yml

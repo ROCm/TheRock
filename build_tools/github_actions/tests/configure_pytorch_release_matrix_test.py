@@ -4,6 +4,8 @@
 import os
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -35,6 +37,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -59,6 +62,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "release/2.13",
                     "amdgpu_families": "gfx110X-all",
+                    "exclude_implicit_targets": "",
                     "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 },
@@ -90,6 +94,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.13",
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "gfx94X-dcgpu",
+                    "exclude_implicit_targets": "gfx1250-strict",
                     "test_level": "none",
                     "test_amdgpu_families": "auto",
                 }
@@ -98,7 +103,12 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
     def test_filters_exact_unsupported_family(self):
         # Unsupported families are filtered while supported ones are kept.
-        for pytorch_git_ref in ("release/2.13", "release/2.14"):
+        cases = (
+            ("release/2.13", ""),
+            ("release/2.14", ""),
+            ("release/2.15", "gfx1250-strict"),
+        )
+        for pytorch_git_ref, excluded_targets in cases:
             with self.subTest(pytorch_git_ref=pytorch_git_ref):
                 matrix = m.generate_pytorch_matrix_for_release_type(
                     release_type="dev",
@@ -115,6 +125,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                             "python_version": "3.12",
                             "pytorch_git_ref": pytorch_git_ref,
                             "amdgpu_families": "gfx125X-dcgpu",
+                            "exclude_implicit_targets": excluded_targets,
                             "test_level": "none",
                             "test_amdgpu_families": "auto",
                         }
@@ -137,16 +148,39 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "python_version": "3.12",
                     "pytorch_git_ref": "users/alice/gfx125x-bringup",
                     "amdgpu_families": "gfx125X-dcgpu",
+                    "exclude_implicit_targets": "",
                     "test_level": "none",
                     "test_amdgpu_families": "auto",
                 }
             ],
         )
 
+    def test_resolve_excluded_implicit_targets_cli(self):
+        cases = (
+            ("linux", "release/2.13", ""),
+            ("linux", "release/2.14", ""),
+            ("linux", "release/2.15", "gfx1250-strict"),
+            ("linux", "users/alice/gfx125x-bringup", ""),
+            ("windows", "release/2.13", ""),
+        )
+        for platform, pytorch_git_ref, expected in cases:
+            with self.subTest(platform=platform, pytorch_git_ref=pytorch_git_ref):
+                output = StringIO()
+                with redirect_stdout(output):
+                    rc = m.main(
+                        [
+                            "--platform",
+                            platform,
+                            "--resolve-excluded-implicit-targets",
+                            pytorch_git_ref,
+                        ]
+                    )
+                self.assertEqual(rc, 0)
+                self.assertEqual(output.getvalue().strip(), expected)
+
     def test_release_uses_primary_python_version_for_standard_tests(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="nightly",
-            python_versions=["3.11", "3.12", "3.13"],
             pytorch_git_refs=["release/2.13"],
             amdgpu_families="gfx94X-dcgpu",
             platform="linux",
@@ -154,7 +188,13 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
         self.assertEqual(
             [(row["python_version"], row["test_level"]) for row in matrix],
-            [("3.11", "standard"), ("3.12", "none"), ("3.13", "none")],
+            [
+                ("3.11", "standard"),
+                ("3.12", "none"),
+                ("3.13", "none"),
+                ("3.14", "none"),
+                ("3.15", "none"),
+            ],
         )
 
     def test_summary_explains_an_all_none_matrix(self):

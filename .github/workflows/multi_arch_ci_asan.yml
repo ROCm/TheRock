@@ -51,6 +51,12 @@ on:
       - labeled
       - opened
       - synchronize
+      # Draft pull requests skip builds and tests, so run CI as soon as one is
+      # marked ready for review instead of waiting for the next push.
+      - ready_for_review
+      # Converting back to draft starts a run that skips the build and test
+      # jobs, which cancels any in-flight run through the concurrency group.
+      - converted_to_draft
 
 permissions:
   contents: read
@@ -107,7 +113,7 @@ jobs:
     needs:
       - setup
       - linux_build_and_test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5

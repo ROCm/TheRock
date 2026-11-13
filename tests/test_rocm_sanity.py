@@ -105,6 +105,10 @@ class TestROCmSanity:
         is_asan(),
         reason="runtime GPU enumeration is flaky under ASAN, see TheRock#3312",
     )
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
+        reason="clinfo test is disabled for gfx125X-dcgpu due to hangs",
+    )
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -227,22 +231,21 @@ class TestROCmSanity:
             )
         else:
             amdclangxx_path = f"{THEROCK_BIN_DIR}/amdclang++"
-        run_command(
-            [
-                amdclangxx_path,
-                f"--hip-path={rocm_path}",
-                f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
-                "-x",
-                "hip",
-                str(THIS_DIR / "hip_check.cpp"),
-                "-Xlinker",
-                f"-rpath={THEROCK_BIN_DIR}/../lib/",
-                f"--offload-arch={offload_arch}",
-                "-o",
-                hip_check_executable_file,
-            ],
-            cwd=str(THEROCK_BIN_DIR),
-        )
+        command = [
+            amdclangxx_path,
+            f"--hip-path={rocm_path}",
+            f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
+            "-x",
+            "hip",
+            str(THIS_DIR / "hip_check.cpp"),
+            f"--offload-arch={offload_arch}",
+            "-o",
+            hip_check_executable_file,
+        ]
+        if not is_windows():
+            # Windows lld-link does not support rpath.
+            command.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
+        run_command(command, cwd=str(THEROCK_BIN_DIR))
 
         # Running and checking the executable
         hip_check_executable = str(THEROCK_BIN_DIR / hip_check_executable_file)

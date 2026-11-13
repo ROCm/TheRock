@@ -81,6 +81,35 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
                 link.symlink_to(target.name)
 
 
+AMDSMI_ROCM_SDK_CORE_FLAG = "_AMDSMI_ROCM_SDK_CORE = False"
+
+
+def mark_amdsmi_rocm_sdk_core(core_dir: Path) -> None:
+    """Mark the amdsmi Python module shipped in rocm-sdk-core as rocm-sdk-core's.
+
+    The marked module loads libamd_smi from the _rocm_sdk_core package, also
+    when it is installed or copied out of share/amd_smi, and never a system
+    libamd_smi from another ROCm release. Native packages share the same
+    artifact and keep the unmarked module. A module without the flag, from
+    before amdsmi added it, is left as is.
+    """
+    wrapper = core_dir / "share" / "amd_smi" / "amdsmi" / "amdsmi_wrapper.py"
+    if not wrapper.exists():
+        return
+    text = wrapper.read_text(encoding="utf-8")
+    if "_AMDSMI_ROCM_SDK_CORE" not in text:
+        return
+    count = text.count(AMDSMI_ROCM_SDK_CORE_FLAG)
+    if count != 1:
+        raise RuntimeError(
+            f"{wrapper}: expected one '{AMDSMI_ROCM_SDK_CORE_FLAG}', found {count}"
+        )
+    wrapper.write_text(
+        text.replace(AMDSMI_ROCM_SDK_CORE_FLAG, "_AMDSMI_ROCM_SDK_CORE = True"),
+        encoding="utf-8",
+    )
+
+
 def discover_llvm_host_triple(artifacts: ArtifactCatalog) -> str | None:
     """Discover the LLVM host triple for libomp's per-target runtime dir.
 
@@ -285,8 +314,9 @@ def run(args: argparse.Namespace):
             # TODO: The base package is shoving CMake redirects into lib.
             excludes=[
                 "**/cmake/**",
-                # profiler binaries
-                "bin/rocprof-*",
+                # profiler binaries (rocprof-attach from rocprofiler-sdk stays in core)
+                "bin/rocprof-compute*",
+                "bin/rocprof-sys-*",
                 # rocprofiler-systems payload
                 "include/rocprofiler-systems/**",
                 "lib/librocprof-sys*",
@@ -298,6 +328,7 @@ def run(args: argparse.Namespace):
             ],
         ),
     )
+    mark_amdsmi_rocm_sdk_core(core.platform_dir)
 
     profiler_artifacts = params.filter_artifacts(
         profiler_artifact_filter,
@@ -446,7 +477,6 @@ def _run_kpack_split(
             "mirage",
         ],
         exclude_components=["test"],
-        tarball_compression=args.devel_tarball_compression,
     )
     if args.build_packages:
         build_packages(
@@ -519,12 +549,12 @@ def _run_legacy(
             )
 
     # One rocm-sdk-devel wheel per target family. Each wheel is NOT generic:
-    # shared libraries already materialized by the libraries runtime package
-    # are embedded in the devel tarball as symlinks into that package's
-    # arch-specific platform directory (e.g. _rocm_sdk_libraries_gfx120x_all),
-    # so the tarball is only valid when the matching family's library wheel
-    # is co-installed. In a multi-arch build each wheel goes to
-    # dist/{target_family}/; in a single-arch build directly to dist/.
+    # Shared libraries already materialized by the libraries runtime package
+    # are represented by links into that package's arch-specific platform
+    # directory (e.g. _rocm_sdk_libraries_gfx120x_all), so the devel wheel is
+    # only valid when the matching family's library wheel is co-installed. In a
+    # multi-arch build each wheel goes to dist/{target_family}/; in a
+    # single-arch build directly to dist/.
     for target_family in all_target_families:
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
@@ -542,7 +572,6 @@ def _run_legacy(
                 "rocjitsu",
                 "mirage",
             ],
-            tarball_compression=args.devel_tarball_compression,
         )
         if args.build_packages:
             build_packages(
@@ -587,6 +616,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     ] and an.component in [
         "lib",
         "run",
+        "sys",
     ]
     hotswap = an.name == "rocjitsu-hotswap" and an.component == "lib"
     # hiprtc needs to be able to find HIP headers in its same tree.
@@ -624,11 +654,12 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
 
 
 def profiler_artifact_filter(an: ArtifactName) -> bool:
+    # doc carries each tool's share/doc/<name>/LICENSE.md.
     profiler_tools = an.name in [
         "profiler-hub",
         "rocprofiler-compute",
         "rocprofiler-systems",
-    ] and an.component in ["lib", "run"]
+    ] and an.component in ["lib", "run", "doc"]
     trace_decoder_python = an.name == "rocprofiler-sdk" and an.component == "lib"
     return profiler_tools or trace_decoder_python
 
@@ -712,12 +743,6 @@ def main(argv: list[str]):
         "--version-suffix",
         default="",
         help="Version suffix to append to package names on disk",
-    )
-    p.add_argument(
-        "--devel-tarball-compression",
-        default=False,
-        action=argparse.BooleanOptionalAction,
-        help="Enable compression of the devel tarball (slows build time but more efficient)",
     )
     p.add_argument(
         "--wheel-compression",
