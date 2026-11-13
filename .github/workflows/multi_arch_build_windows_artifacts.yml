@@ -255,6 +255,29 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: python build_tools/hack/validate_driver_comgr_cache.py --build-dir "${BUILD_DIR}"
 
+      - name: Prepare Comgr regression bundle
+        if: ${{ inputs.stage_name == 'compiler-runtime' }}
+        run: |
+          python - <<'PYTHON'
+          import os
+          import shutil
+          from pathlib import Path
+          build = Path(os.environ["BUILD_DIR"])
+          bundle = build / "comgr-regression"
+          bundle.mkdir()
+          for name in ("amd_comgr_3.dll", "amd_comgr_3.pdb"):
+              shutil.copy2(build / "compiler/amd-comgr/stage/bin" / name, bundle)
+          shutil.copy2(build / "base/aux-overlay/build/therock_manifest.json", bundle)
+          PYTHON
+
+      - name: Upload Comgr regression bundle
+        if: ${{ inputs.stage_name == 'compiler-runtime' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: comgr-windows-x64-lsr-revert
+          path: ${{ env.BUILD_DIR }}/comgr-regression/
+          if-no-files-found: error
+
       - name: Report
         if: ${{ !cancelled() }}
         run: |
