@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory include -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_i" Directory="amdrocm_blas_dev_i">
+    <Component Id="c_amdrocm_blas_dev_i_he.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_i_he.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-export.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_i_hv.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_i_hv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-version.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_ih" Directory="amdrocm_blas_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipblaslt -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_inhi" Directory="amdrocm_blas_dev_inhi">
+    <Component Id="c_amdrocm_blas_dev_inhi_he.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_he.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-export.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_heo.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_heo.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-ext-op.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_he.hpp" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_he.hpp" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-ext.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_ht.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_ht.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt-types.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hv.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hv.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt-version.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_h.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_h.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hb.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hb.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_bfloat6.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hie5.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hie5.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_e5m3.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hie8.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hie8.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_e8.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hf.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hf.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float4.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hifl.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hifl.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float6.h" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_blas_dev_inhi_hipflo.h" Guid="*">
+      <File Id="f_amdrocm_blas_dev_inhi_hipflo.h" Source="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/hipblaslt/hipblaslt_float8.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_ir" Directory="amdrocm_blas_dev_ir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/include/rocblas/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_lch" Directory="amdrocm_blas_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblas/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipblaslt -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_licmhi" Directory="amdrocm_blas_dev_licmhi">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/hipblaslt/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocblas -->
+  <ComponentGroup Id="cg_amdrocm_blas_dev_lcr" Directory="amdrocm_blas_dev_lcr">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipBLAS/dist/lib/cmake/rocblas/*.*" />
+  </ComponentGroup>
+
+</Include>

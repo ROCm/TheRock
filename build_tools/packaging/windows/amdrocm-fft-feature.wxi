@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_fft_b" />
+  <ComponentGroupRef Id="cg_amdrocm_fft_sdh" />
+  <ComponentGroupRef Id="cg_amdrocm_fft_sdr" />
+</Include>

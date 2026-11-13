@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_dnn_b" Directory="amdrocm_dnn_b">
+    <Component Id="c_amdrocm_dnn_b_f.exe" Guid="*">
+      <File Id="f_amdrocm_dnn_b_f.exe" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/bin/flatc.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_b_hb.dll" Guid="*">
+      <File Id="f_amdrocm_dnn_b_hb.dll" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/bin/hipdnn_backend.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_b_M.dll" Guid="*">
+      <File Id="f_amdrocm_dnn_b_M.dll" Source="$(var.BuildRoot)/ml-libs/MIOpen/dist/bin/MIOpen.dll" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+</Include>

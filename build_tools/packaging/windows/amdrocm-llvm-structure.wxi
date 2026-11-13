@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_llvm_l" Name="lib">
+      <Directory Id="amdrocm_llvm_ll" Name="llvm">
+        <Directory Id="amdrocm_llvm_lla" Name="amdgcn">
+          <Directory Id="amdrocm_llvm_llab" Name="bitcode" />
+        </Directory>
+        <Directory Id="amdrocm_llvm_llb" Name="bin" />
+        <Directory Id="amdrocm_llvm_lll" Name="lib">
+          <Directory Id="amdrocm_llvm_lllc" Name="clang">
+            <Directory Id="amdrocm_llvm_lllc2" Name="23">
+              <Directory Id="amdrocm_llvm_lllc2i" Name="include">
+                <Directory Id="amdrocm_llvm_lllc2icw" Name="cuda_wrappers">
+                  <Directory Id="amdrocm_llvm_lllc2icwu" Name="__utility" />
+                  <Directory Id="amdrocm_llvm_lllc2icwb" Name="bits" />
+                </Directory>
+                <Directory Id="amdrocm_llvm_lllc2if" Name="fuzzer" />
+                <Directory Id="amdrocm_llvm_lllc2illw" Name="llvm_libc_wrappers" />
+                <Directory Id="amdrocm_llvm_lllc2ilow" Name="llvm_offload_wrappers" />
+                <Directory Id="amdrocm_llvm_lllc2iow" Name="openmp_wrappers" />
+                <Directory Id="amdrocm_llvm_lllc2io" Name="orc" />
+                <Directory Id="amdrocm_llvm_lllc2ipw" Name="ppc_wrappers" />
+                <Directory Id="amdrocm_llvm_lllc2ip" Name="profile" />
+                <Directory Id="amdrocm_llvm_lllc2is" Name="sanitizer" />
+                <Directory Id="amdrocm_llvm_lllc2ix" Name="xray" />
+                <Directory Id="amdrocm_llvm_lllc2izw" Name="zos_wrappers" />
+              </Directory>
+              <Directory Id="amdrocm_llvm_lllc2s" Name="share" />
+            </Directory>
+          </Directory>
+          <Directory Id="amdrocm_llvm_lilllicm" Name="cmake">
+            <Directory Id="amdrocm_llvm_lllcA" Name="AMDDeviceLibs" />
+            <Directory Id="amdrocm_llvm_lllcc" Name="clang" />
+            <Directory Id="amdrocm_llvm_lllcl" Name="lld" />
+            <Directory Id="amdrocm_llvm_lilllicmll" Name="llvm" />
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+</Include>
