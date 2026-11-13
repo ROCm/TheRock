@@ -51,6 +51,7 @@ _spec.loader.exec_module(native_linux_package_install_test)
 # sys.path.
 import build_repo_setup_package  # noqa: E402
 import get_url_repo_params  # noqa: E402
+import native_linux_package_test_common  # noqa: E402
 
 
 def _noop_print(*args, **kwargs):
@@ -396,7 +397,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.gfx_arch)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_without_rocm_version_ignored_for_package_names(self):
@@ -410,33 +411,37 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.rocm_version_major_minor)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_with_rocm_version_uses_versioned_package_names(self):
-        # Version in package name is major.minor only (7.13.1 -> amdrocm7.13-gfx1100).
+        # Version in package name is major.minor only (10.3.0 -> amdrocm10.3-gfx1100).
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx1100",
-            rocm_version="7.13.1",
+            rocm_version="10.3.0",
         )
-        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(t.rocm_version_major_minor, "10.3")
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.13-gfx1100", "amdrocm-core-sdk7.13-gfx1100"],
+            [
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
+            ],
         )
 
     def test_rocm_version_generic_uses_versioned_package_names(self):
         t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
             repo_url="https://example.com",
             os_profile="ubuntu2404",
-            rocm_version="7.13.0",
+            rocm_version="10.3.0",
         )
-        self.assertEqual(t.rocm_version_major_minor, "7.13")
+        self.assertEqual(t.rocm_version_major_minor, "10.3")
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.13", "amdrocm-core-sdk7.13"],
+            ["amdrocm10.3", "amdrocm-core-sdk10.3", "amdrocm-hpc-sdk10.3"],
         )
 
     def test_major_minor_rocm_version_from_input(self):
@@ -469,7 +474,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertEqual(t.gfx_arch, "gfx1151")
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_gfx_arch_list_with_rocm_version_multi_arch_package_names(self):
@@ -477,15 +482,17 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch=["gfx1151", "gfx94x"],
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx1151",
-                "amdrocm-core-sdk7.13-gfx1151",
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
+                "amdrocm10.3-gfx1151",
+                "amdrocm-core-sdk10.3-gfx1151",
+                "amdrocm-hpc-sdk10.3-gfx1151",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
             ],
         )
 
@@ -499,7 +506,7 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
         self.assertIsNone(t.gfx_arch)
         self.assertEqual(
             t.package_names,
-            ["amdrocm", "amdrocm-core-sdk"],
+            ["amdrocm", "amdrocm-core-sdk", "amdrocm-hpc-sdk"],
         )
 
     def test_os_profile_and_release_type_normalized_lower(self):
@@ -536,16 +543,18 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx94x, GFX1100 ",
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
             ],
         )
 
@@ -554,16 +563,18 @@ class NativeLinuxPackageInstallTestInitTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx94x; GFX1100 ",
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         self.assertEqual(t.gfx_arch_list, ["gfx94x", "gfx1100"])
         self.assertEqual(
             t.package_names,
             [
-                "amdrocm7.13-gfx94x",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx1100",
+                "amdrocm10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx94x",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx1100",
             ],
         )
 
@@ -702,7 +713,47 @@ class ArgvFromCiEnvTest(unittest.TestCase):
             gfx_arch=args.gfx_arch,
             rocm_version=args.rocm_version,
         )
-        self.assertEqual(len(t.package_names), 4)
+        self.assertEqual(len(t.package_names), 6)
+
+    def test_builds_argv_for_install_test_type(self):
+        env = {
+            "TEST_TYPE": "install",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertIn("--test-type", argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
+        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
+        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
+
+    def test_ci_env_passes_shared_test_type_to_parser(self):
+        env = {
+            "TEST_TYPE": "comprehensive",
+            "OS_PROFILE": "ubuntu2404",
+            "REPO_URL": "https://example.com/deb",
+            "GFX_ARCH": "gfx94x",
+            "RELEASE_TYPE": "dev",
+            "INSTALL_PREFIX": "/opt/rocm/core",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            argv = native_linux_package_install_test._argv_from_ci_env()
+        self.assertIsNotNone(argv)
+        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
+        args = native_linux_package_install_test.parse_cli_arguments(
+            argv,
+            raise_instead_of_exit=True,
+        )
+        self.assertEqual(args.test_type, "full")
+
+    def test_returns_none_when_required_env_missing(self):
+        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
+            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
 
 
 class RunSimulateInstallTestTest(unittest.TestCase):
@@ -941,50 +992,6 @@ class MainValidationTest(unittest.TestCase):
         self.assertIn("Unsupported test_type", str(ctx.exception))
 
 
-class ArgvFromCiEnvTest(unittest.TestCase):
-    """Tests for _argv_from_ci_env() (CI workflow env → CLI argv)."""
-
-    def test_builds_argv_for_install_test_type(self):
-        env = {
-            "TEST_TYPE": "install",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertIn("--test-type", argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "install")
-        self.assertEqual(argv[argv.index("--os-profile") + 1], "ubuntu2404")
-        self.assertEqual(argv[argv.index("--repo-url") + 1], "https://example.com/deb")
-
-    def test_ci_env_passes_shared_test_type_to_parser(self):
-        env = {
-            "TEST_TYPE": "comprehensive",
-            "OS_PROFILE": "ubuntu2404",
-            "REPO_URL": "https://example.com/deb",
-            "GFX_ARCH": "gfx94x",
-            "RELEASE_TYPE": "dev",
-            "INSTALL_PREFIX": "/opt/rocm/core",
-        }
-        with patch.dict(os.environ, env, clear=False):
-            argv = native_linux_package_install_test._argv_from_ci_env()
-        self.assertIsNotNone(argv)
-        self.assertEqual(argv[argv.index("--test-type") + 1], "comprehensive")
-        args = native_linux_package_install_test.parse_cli_arguments(
-            argv,
-            raise_instead_of_exit=True,
-        )
-        self.assertEqual(args.test_type, "full")
-
-    def test_returns_none_when_required_env_missing(self):
-        with patch.dict(os.environ, {"TEST_TYPE": "install"}, clear=True):
-            self.assertIsNone(native_linux_package_install_test._argv_from_ci_env())
-
-
 class RunTestsTestTypeTest(unittest.TestCase):
     """Tests for run_tests() early exit paths for install."""
 
@@ -1104,6 +1111,12 @@ class RunTestsTestTypeTest(unittest.TestCase):
         self.assertEqual(args.gfx_arch, ["gfx94x;gfx1100"])
 
 
+def _write_install_layout(prefix: Path) -> None:
+    """Create the prefix directories the layout check requires."""
+    for relative in ("bin", "lib", "include", "share", "lib/cmake"):
+        (prefix / relative).mkdir(parents=True, exist_ok=True)
+
+
 class RunBasicVerificationTest(unittest.TestCase):
     """Tests for NativeLinuxPackageInstallTest.run_basic_verification()."""
 
@@ -1128,10 +1141,10 @@ class RunBasicVerificationTest(unittest.TestCase):
         # The file-security check is stubbed here (covered separately in its own tests).
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1144,14 +1157,38 @@ class RunBasicVerificationTest(unittest.TestCase):
         # Test that run_basic_verification returns False when fewer than VERIFY_MIN_COMPONENTS exist.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")  # only 1 component
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")  # only 1 component
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
                 install_prefix=d,
             )
             self.assertFalse(t.run_basic_verification())
+
+    def test_fails_when_any_required_directory_is_missing(self):
+        """Removing any one directory from INSTALL_LAYOUT_DIRS fails the layout check."""
+        for missing in native_linux_package_test_common.INSTALL_LAYOUT_DIRS:
+            with self.subTest(missing=missing):
+                with tempfile.TemporaryDirectory() as d:
+                    root = Path(d)
+                    _write_install_layout(root)
+                    shutil.rmtree(root / missing)
+                    with _suppress_script_output():
+                        self.assertFalse(
+                            native_linux_package_test_common.verify_install_layout(root)
+                        )
+
+    def test_passes_when_every_required_directory_is_present(self):
+        """A prefix with all INSTALL_LAYOUT_DIRS passes the layout check."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_install_layout(root)
+            with _suppress_script_output():
+                self.assertTrue(
+                    native_linux_package_test_common.verify_install_layout(root)
+                )
 
     @patch.object(
         native_linux_package_install_test.NativeLinuxPackageInstallTest,
@@ -1167,10 +1204,10 @@ class RunBasicVerificationTest(unittest.TestCase):
 
         mock_run.side_effect = subprocess.CalledProcessError(1, "dpkg")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1193,10 +1230,10 @@ class RunBasicVerificationTest(unittest.TestCase):
             subprocess.TimeoutExpired("rocminfo", 30),
         ]
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1489,10 +1526,10 @@ class VerifyInstalledFileSecurityTest(unittest.TestCase):
         # (bad ownership or insecure permissions) fails Step 2.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -1835,16 +1872,18 @@ class InstallDebPackagesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch=["gfx94x", "gfx1100"],
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         with _suppress_script_output():
             self.assertTrue(t.install_deb_packages())
         cmd = mock_streaming.call_args[0][0]
         self.assertEqual(cmd[:4], ["sudo", "apt", "install", "-y"])
-        self.assertIn("amdrocm7.13-gfx94x", cmd)
-        self.assertIn("amdrocm-core-sdk7.13-gfx94x", cmd)
-        self.assertIn("amdrocm7.13-gfx1100", cmd)
-        self.assertIn("amdrocm-core-sdk7.13-gfx1100", cmd)
+        self.assertIn("amdrocm10.3-gfx94x", cmd)
+        self.assertIn("amdrocm-core-sdk10.3-gfx94x", cmd)
+        self.assertIn("amdrocm10.3-gfx1100", cmd)
+        self.assertIn("amdrocm-core-sdk10.3-gfx1100", cmd)
+        self.assertIn("amdrocm-hpc-sdk10.3-gfx94x", cmd)
+        self.assertIn("amdrocm-hpc-sdk10.3-gfx1100", cmd)
 
     @patch("native_linux_package_install_test._run_streaming")
     def test_returns_false_when_apt_install_fails(self, mock_streaming):
@@ -2093,12 +2132,16 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                     repo_url="https://example.com",
                     os_profile="ubuntu2404",
                     gfx_arch="gfx942",
-                    rocm_version="7.15.0",
+                    rocm_version="10.3.0",
                     build_variant=build_variant,
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan7.15-gfx942", "amdrocm-core-sdk-asan7.15-gfx942"],
+                    [
+                        "amdrocm-asan10.3-gfx942",
+                        "amdrocm-core-sdk-asan10.3-gfx942",
+                        "amdrocm-hpc-sdk-asan10.3-gfx942",
+                    ],
                 )
 
     def test_asan_family_with_rocm_version_only(self):
@@ -2107,12 +2150,16 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                     repo_url="https://example.com",
                     os_profile="rhel10",
-                    rocm_version="7.15.0",
+                    rocm_version="10.3.0",
                     build_variant=build_variant,
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan7.15", "amdrocm-core-sdk-asan7.15"],
+                    [
+                        "amdrocm-asan10.3",
+                        "amdrocm-core-sdk-asan10.3",
+                        "amdrocm-hpc-sdk-asan10.3",
+                    ],
                 )
 
     def test_asan_family_without_version_or_arch(self):
@@ -2125,7 +2172,7 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     t.package_names,
-                    ["amdrocm-asan", "amdrocm-core-sdk-asan"],
+                    ["amdrocm-asan", "amdrocm-core-sdk-asan", "amdrocm-hpc-sdk-asan"],
                 )
 
     def test_no_build_variant_unchanged(self):
@@ -2134,11 +2181,15 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx942",
-            rocm_version="7.15.0",
+            rocm_version="10.3.0",
         )
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+            [
+                "amdrocm10.3-gfx942",
+                "amdrocm-core-sdk10.3-gfx942",
+                "amdrocm-hpc-sdk10.3-gfx942",
+            ],
         )
 
     def test_release_build_variant_does_not_alter_package_names(self):
@@ -2149,12 +2200,16 @@ class BuildVariantPackageNamesTest(unittest.TestCase):
             repo_url="https://example.com",
             os_profile="ubuntu2404",
             gfx_arch="gfx942",
-            rocm_version="7.15.0",
+            rocm_version="10.3.0",
             build_variant="release",
         )
         self.assertEqual(
             t.package_names,
-            ["amdrocm7.15-gfx942", "amdrocm-core-sdk7.15-gfx942"],
+            [
+                "amdrocm10.3-gfx942",
+                "amdrocm-core-sdk10.3-gfx942",
+                "amdrocm-hpc-sdk10.3-gfx942",
+            ],
         )
 
 
@@ -2344,10 +2399,10 @@ class VerifyNoRunpathTest(unittest.TestCase):
         # Even with enough components present, a failed RUNPATH check fails Step 2.
         mock_run.return_value = MagicMock(returncode=0, stdout="ii rocm-pkg 1.0\n")
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "bin").mkdir()
-            (Path(d) / "lib").mkdir()
-            (Path(d) / "bin" / "rocminfo").write_text("")
-            (Path(d) / "bin" / "hipcc").write_text("")
+            root = Path(d)
+            _write_install_layout(root)
+            (root / "bin" / "rocminfo").write_text("")
+            (root / "bin" / "hipcc").write_text("")
             t = native_linux_package_install_test.NativeLinuxPackageInstallTest(
                 repo_url="https://example.com",
                 os_profile="ubuntu2404",
@@ -3161,6 +3216,30 @@ class ArgvFromCiEnvRepoSetupPackageTest(unittest.TestCase):
         self.assertIn("--install-prefix", argv)
         self.assertNotIn("--repo-url", argv)
         self.assertNotIn("--repo-config-only", argv)
+
+
+class HpcSdkHintTest(unittest.TestCase):
+    """The HPC SDK hint names the requested packages and stays silent otherwise."""
+
+    def _hint(self, package_names: list[str]) -> str:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            native_linux_package_test_common.print_hpc_sdk_hint(package_names)
+        return buf.getvalue()
+
+    def test_hint_when_hpc_sdk_in_list(self):
+        text = self._hint(
+            ["amdrocm10.3", "amdrocm-core-sdk10.3", "amdrocm-hpc-sdk10.3-gfx942"]
+        )
+        self.assertEqual(
+            text,
+            "[HINT] amdrocm-hpc-sdk failed. Check that the repo publishes this "
+            "package for this ROCm version and GPU arch "
+            "(--rocm-version, --gfx-arch, --repo-url).\n",
+        )
+
+    def test_silent_when_hpc_sdk_is_absent(self):
+        self.assertEqual(self._hint(["amdrocm10.3", "amdrocm-core-sdk10.3"]), "")
 
 
 if __name__ == "__main__":

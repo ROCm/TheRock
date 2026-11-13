@@ -7,6 +7,7 @@ These tests cover:
   - PopulatedFiles: per-instance isolation, dedup semantics
   - Multi-arch packaging: each library package independently tracks its own files
   - params.populated_packages: registration and cross-package search helpers
+  - mark_amdsmi_rocm_sdk_core: flagging the amdsmi module shipped in rocm-sdk-core
 """
 
 import argparse
@@ -30,6 +31,7 @@ from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, Popula
 from build_python_packages import (
     _artifact_catalog_has_matches,
     _run_kpack_split,
+    mark_amdsmi_rocm_sdk_core,
     PROFILER_WHEEL_INCLUDES,
     profiler_artifact_filter,
     validate_kpack_split_target_completeness,
@@ -2099,7 +2101,8 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
 
         libprofiler-hub.so* arrives from its own artifact and must be selected
         the same way as librocprof-sys*. bin/rocsys must be selected too:
-        bin/rocprof-sys-* does not match that name.
+        bin/rocprof-sys-* does not match that name. Each tool's LICENSE.md
+        arrives from its doc artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2135,6 +2138,14 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
                 "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
             },
         )
+        for name in ["rocprofiler-compute", "rocprofiler-systems"]:
+            self._add_artifact(
+                artifact_dir,
+                name,
+                "doc",
+                "generic",
+                {f"share/doc/{name}/LICENSE.md": f"{name} license"},
+            )
 
         params = self._make_params(artifact_dir)
         profiler_artifacts = params.filter_artifacts(
@@ -2155,6 +2166,8 @@ class ProfilerWheelIncludesTest(TmpDirTestCase):
             "bin/rocsys was dropped from the profiler wheel",
         )
         self.assertTrue(profiler.files.has("bin/rocprof-sys-run"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-compute/LICENSE.md"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-systems/LICENSE.md"))
 
     def test_profiler_wheel_excludes_unrelated_files(self):
         """The allowlist is not a bare lib/** or bin/** catch-all.
@@ -2261,6 +2274,36 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+
+class MarkAmdsmiRocmSdkCoreTest(TmpDirTestCase):
+    def _write_wrapper(self, text: str) -> Path:
+        return self.write_file("share/amd_smi/amdsmi/amdsmi_wrapper.py", text)
+
+    def test_flag_is_set(self):
+        wrapper = self._write_wrapper("x = 1\n_AMDSMI_ROCM_SDK_CORE = False\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n_AMDSMI_ROCM_SDK_CORE = True\n")
+
+    def test_wrapper_without_flag_is_unchanged(self):
+        wrapper = self._write_wrapper("x = 1\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n")
+
+    def test_missing_module_is_ignored(self):
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_duplicate_flag_fails(self):
+        self._write_wrapper(
+            "_AMDSMI_ROCM_SDK_CORE = False\n_AMDSMI_ROCM_SDK_CORE = False\n"
+        )
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_changed_flag_line_fails(self):
+        self._write_wrapper("_AMDSMI_ROCM_SDK_CORE: bool = False\n")
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
 
 
 # ---------------------------------------------------------------------------

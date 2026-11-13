@@ -149,11 +149,11 @@ option(ENABLE_TESTS "Enable installation of ROCgdb testsuite files" OFF)
 # (NOTICES.txt, roccoremerge program/manpage).
 option(ROCGDB_UPSTREAM_BUILD "Building from upstream master (skips AMD-specific files)" OFF)
 
-# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py or
-# rocjitsu_emulator.py (e.g. an upstream branch), fetch both from ROCm/ROCgdb
-# amd-staging at configure time so that they can be installed into tests/rocgdb
-# for TheRock CI to invoke.
-option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py and rocjitsu_emulator.py from amd-staging if missing in source tree" OFF)
+# When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py,
+# rocjitsu_emulator.py or rocgdb_emulate.py (e.g. an upstream branch), fetch
+# them from ROCm/ROCgdb amd-staging at configure time so that they can be
+# installed for TheRock CI to invoke.
+option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from amd-staging if missing in source tree" OFF)
 
 # Find standard build tools.
 find_program(MAKE_EXECUTABLE NAMES make REQUIRED)
@@ -291,6 +291,28 @@ endif()
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
 set(ROCGDB_SEPARATE_DEBUG_INFO_DIR "\\\${prefix}/lib/debug:/usr/lib/debug")
 set(ROCGDB_DATA_DIR "\\\${prefix}/share/rocgdb")
+
+# Directories GDB searches for auto-load scripts (and trusts, since the
+# safe-path defaults to this same list). Setting --with-auto-load-dir replaces
+# GDB's built-in default of "$debugdir:$datadir/auto-load", so that default is
+# repeated here. $debugdir and $datadir are expanded by GDB at run time and
+# must reach configure unexpanded.
+#
+# On Linux we also look at the locations where distros install helper scripts
+# (e.g. python3-dbg's pythonX.Y-gdb.py and libstdc++'s pretty-printers):
+#   /usr/share/gdb/auto-load        Debian, Ubuntu, Fedora, RHEL, SUSE, Arch, Alpine
+#   /usr/local/share/gdb/auto-load  Locally installed packages (e.g. from source)
+# Fedora, RHEL and SUSE debuginfo packages also place scripts under
+# /usr/lib/debug, which is already covered by $debugdir through
+# ROCGDB_SEPARATE_DEBUG_INFO_DIR.
+set(ROCGDB_AUTO_LOAD_DIR_FLAG "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(ROCGDB_AUTO_LOAD_DIR
+      "$debugdir:$datadir/auto-load:/usr/share/gdb/auto-load:/usr/local/share/gdb/auto-load")
+  set(ROCGDB_AUTO_LOAD_DIR_FLAG
+      "--with-auto-load-dir=${ROCGDB_AUTO_LOAD_DIR}"
+      "--with-auto-load-safe-path=${ROCGDB_AUTO_LOAD_DIR}")
+endif()
 set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
 
 # If the version is not set, set it to a generic value.
@@ -396,6 +418,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         "--infodir=${ROCGDB_INFO_DIR}"
 
         --with-amd-dbgapi
+        ${ROCGDB_AUTO_LOAD_DIR_FLAG}
         "--with-bugurl=${ROCGDB_BUG_URL}"
         ${ROCGDB_EXPAT_FLAG}
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"
@@ -734,6 +757,7 @@ if(BUILD_TESTING)
   endif()
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb-emulate")
 
   # Add build integrity tests to check if we have the files we want.
   message(STATUS "BUILD_TESTING set. Adding rocgdb installation integrity tests.")
@@ -799,11 +823,12 @@ if(BUILD_TESTING)
       USE_SOURCE_PERMISSIONS)
   endforeach()
 
-  # Install the CI wrapper that invokes the rocgdb testsuite, and the emulator
-  # module it imports for --emulate. Both are taken from the source tree. If
-  # either is missing and ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, both are fetched
-  # from the same amd-staging commit so the pair always matches.
-  set(ROCGDB_CI_SCRIPTS test_rocgdb.py rocjitsu_emulator.py)
+  # Install the CI wrapper that invokes the rocgdb testsuite, the emulator
+  # module it imports for --emulate, and rocgdb-emulate, which runs rocgdb
+  # inside a mirage session. All are taken from the source tree. If any is
+  # missing and ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, all are fetched from the
+  # same amd-staging commit so they always match.
+  set(ROCGDB_CI_SCRIPTS test_rocgdb.py rocjitsu_emulator.py rocgdb_emulate.py)
   set(ROCGDB_CI_SCRIPTS_DIR "${ROCGDB_SOURCE_DIR}/.github/scripts")
   set(missing_ci_scripts)
   foreach(script IN LISTS ROCGDB_CI_SCRIPTS)
@@ -832,6 +857,14 @@ if(BUILD_TESTING)
     FILES ${ROCGDB_CI_SCRIPTS_DIR}/rocjitsu_emulator.py
     DESTINATION tests/rocgdb
     COMPONENT tests
+  )
+
+  # Installed next to rocgdb, without the .py extension.
+  install(
+    PROGRAMS ${ROCGDB_CI_SCRIPTS_DIR}/rocgdb_emulate.py
+    DESTINATION bin
+    RENAME rocgdb-emulate
+    COMPONENT rocgdb
   )
 
   # Install the optional xfails ignore list, if present in the sources.

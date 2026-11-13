@@ -402,9 +402,12 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 
 > [!TIP]
 > The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
-> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
-> The compatible ROCm packages are installed automatically, you do not need to
-> install ROCm separately:
+> and `amd-torch-device-gfx110x` which contain GPU-specific kernels and depend on
+> `rocm-sdk-device-gfx1100`. Install them through the `device-*` extras rather
+> than by package name: the family package (`amd-torch-device-gfx110x`) carries
+> kernels shared by the whole GPU family, such as the AOTriton attention kernels,
+> and without it fused attention fails at runtime. The compatible ROCm packages
+> are installed automatically, you do not need to install ROCm separately:
 >
 > ```bash
 > pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
@@ -416,6 +419,7 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 > # rocm-sdk-device-gfx1100==10.1.0a...     ~50 MB  (only gfx1100 device code)
 > # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
 > # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
+> # amd-torch-device-gfx110x==2.11.0+...            (device code shared by gfx110X)
 > # Total:                                 ~1.1 GB
 > #
 > # For comparison, a similar per-family (non-multi-arch) torch wheel for

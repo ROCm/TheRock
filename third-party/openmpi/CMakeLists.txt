@@ -13,6 +13,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-openmpi
+        HARDENING_DEFERRED "OpenMPI (autotools)"
         FPRINT_SOURCE_DIR "${_source_dir}"
         FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
         USE_DIST_AMDGPU_TARGETS
