@@ -4,6 +4,19 @@ Rubric tables, templates, and vocabularies for the `rocm-pr-quality` base skill.
 single source of truth the author/review actions and the shared checker share. Overlays add to
 or tighten these; they never relax a MUST.
 
+## Contents
+
+- [MUST set](#must-set-verbatim--non-overridable-by-overlays) and [waiver-ability](#waiver-ability)
+- [Rule strengths](#rule-strengths-how-overlays-may-change-a-rule), [change classes](#change-classes-extensible-multiple-tags-allowed), [test-level mapping](#test-level-mapping-should)
+- [The four review questions](#the-four-review-questions)
+- [Test-substance smell scan](#test-substance-smell-scan-a-hit-is-a-prompt-to-inspect-not-a-verdict) and [agent anti-patterns](#agent--ai-generated-change-anti-patterns-a-hit-warrants-a-closer-read)
+- [PR-hygiene checklist](#pr-hygiene-checklist-author--reviewer) and [self-evident changes](#self-evident-changes-reduced-justification-exemptions)
+- [Finding tiers](#finding-tiers-individual-findings), [overall assessment](#overall-assessment-pr-level), [risk levels](#risk-levels-15)
+- [Waiver codes](#waiver-codes)
+- [PR description template](#pr-description-template) and [two-PR known-bug flow](#two-pr-known-bug-flow-satisfies-m1-without-a-same-pr-fix)
+- [Worked review output](#worked-review-output-hypothetical-fixture) (evaluation fixtures: [`evals.md`](evals.md))
+- [Review attestation](#review-attestation-action-2-approvals-only)
+
 ______________________________________________________________________
 
 ## MUST set (verbatim — non-overridable by overlays)
@@ -85,15 +98,24 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Test-substance smell scan (a hit is `BLOCKING`, not a nit)
+## Test-substance smell scan (a hit is a prompt to inspect, not a verdict)
+
+A smell tells you where to look. Read what the test actually asserts before grading it.
 
 - assert-callable only / asserts only that a mock was called
 - `hasattr`-guarded test bodies that silently skip
 - lone `is not None` / `.called` assertions with no behavioral check
-- copy-paste tests that should be parametrized
+- copy-paste tests that could be parametrized
 - mock-only assertions that pass against a no-op implementation
 - phantom methods / attributes that do not exist in the source (AI-slop tell)
 - non-obvious tolerance or parameter choices with no recorded rationale ("why")
+
+Grading: reserve `BLOCKING` for a **demonstrated** missing guarantee: the test passes against a
+no-op, asserts nothing about behavior, cannot fail, silently skips, or exercises a method that does
+not exist. A mock-call assertion that is the intended contract (for example, "this function must
+call the logger once") is fine. Duplicated tests that each lock distinct behavior are a
+maintainability `SUGGESTION` (parametrize when touching them), not a blocker. A missing rationale
+for a non-obvious tolerance is `IMPORTANT` when the value gates pass/fail, otherwise `SUGGESTION`.
 
 Mutation question: *what single change to the source would make this test fail?* No clear answer
 → coverage padding.
@@ -305,6 +327,8 @@ Base set (overlays may add component-specific codes and may tighten who can appr
 | `W-FLAG`     | New behavior landed dark behind a safe-default flag; tests/soak before enable, with a tracker.   |
 | `W-NOTICKET` | No tracker at author time; credible reason + a commitment to file & link within a stated window. |
 
+A waiver relaxes only the rule it addresses, and the checker applies it that way. `W-DOC`, `W-BUILD`, `W-REVERT`, `W-HOTFIX`, and `W-FLAG` address the missing-tests check (M2). `W-NOTICKET`, `W-DOC`, and `W-REVERT` address the work-tracking check (M4). Any other code (for example one an overlay adds) is reported as pending the reviewer's adjudication; it does not silently suppress either check.
+
 Every waiver needs a one-to-two-sentence "why." A bare "N/A" is not a waiver. Higher-risk waivers
 (e.g. `W-HOTFIX`) require a named approver / lead sign-off.
 
@@ -385,3 +409,109 @@ When a defect is known but the fix is not ready, M1 may be met by a tracked two-
 
 The quarantine must be tracked, time-boxed, and removed by the fix — not left in place. Overlays
 define the concrete mechanism (e.g. a `known_bugs` data file).
+
+______________________________________________________________________
+
+## Worked review output (hypothetical fixture)
+
+This shows the shape a completed review takes. The PR is **invented** for illustration (library
+`libfoo`, ticket `FOO-101`); it is not a real PR and its file names, line numbers, and run links
+are placeholders. Real reviews cite real paths and runs. Evaluation cases built from the same
+shape are in [`evals.md`](evals.md).
+
+> **PR:** "[FOO-101] Fix scan overflow for 64-bit offsets", head `3f9c2a1`, base `develop`.
+> **Changed:** `src/scan.cpp` (+14/-3), `tests/scan_test.cpp` (+22/-0). Class: `defect-fix`.
+
+**Evidence checked:** the PR diff at `3f9c2a1`; the new test body (`tests/scan_test.cpp:41-62`);
+the PR's CI run (placeholder link, green, finished 1 day before the review); the base branch
+at review time.
+
+**Overall assessment:** `CHANGES REQUESTED` (one `BLOCKING` item).
+
+**The four questions**
+
+1. *What lands:* a fix to the offset arithmetic in `scan()` so inputs above 2^31 elements no
+   longer overflow a 32-bit intermediate.
+1. *Appropriate test level:* a unit test that runs `scan()` over a large (or mocked-size) input
+   and checks the result. A unit test is the lowest level that fails on the regression.
+1. *Omitted tests or flags, and waivers:* none omitted, no waiver declared.
+1. *Adjacent tests:* the 32-bit and 64-bit index instantiations of `scan()`, and `reduce()`,
+   which shares the offset helper.
+
+**Findings (most severe first)**
+
+| Finding                                                          | Severity     | Evidence                                                                                                                                                                                              |
+| ---------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The regression test cannot fail on the old code                  | `BLOCKING`   | `tests/scan_test.cpp:55` asserts only that a mocked allocator was called. It never reads the scan output, so it passes against the unpatched `scan()` (M1: the test must fail before and pass after). |
+| No reproduction evidence for the defect-fix                      | `IMPORTANT`  | The PR does not link a run showing the new test failing on the unpatched build.                                                                                                                       |
+| `reduce()` uses the same offset helper and is untested at 64-bit | `IMPORTANT`  | Adjacent-test question 4; `src/reduce.cpp:88` calls the helper changed in this PR.                                                                                                                    |
+| Two near-identical test cases differ only in input size          | `SUGGESTION` | `scan_test.cpp:30-39` and `:41-50`; each locks a distinct size, so this is a parametrization nicety, not a gap.                                                                                       |
+
+**Blocking items:** replace the mock-call assertion with one on the scan result for a 64-bit-sized
+input, and show it failing on the unpatched build.
+
+**Limits of this review:** reviewed commit `3f9c2a1` only; did not build or run the tests locally;
+did not review `reduce()` beyond the call site; CI evidence is the one linked run.
+
+______________________________________________________________________
+
+## Review attestation (Action 2, approvals only)
+
+When a review concludes `APPROVED`, the skill appends this block to the drafted approval comment
+(never to `CHANGES REQUESTED` / `REJECTED`, and never to a PR description). The human posts it; the
+skill never posts on its own. The `<!-- rocm-pr-quality:attestation v1 -->` marker is what a
+consumer (e.g. a pre-review gate) keys on, and the `Attestation` digest ties the block to this
+specific PR so a pasted template or a block copied from another PR can be detected. The digest is
+deliberately loose: commits pushed after the review are allowed and do not invalidate it.
+
+An attestation records an independent review, so the skill never produces one for the user's own PR,
+whether they are authoring it or reviewing it themselves. A self-review still gives feedback, just
+without the block. Compare the PR's author with the user's GitHub login; one person with several
+accounts counts as one author, and if you cannot tell, ask.
+
+Block (leaned-into default):
+
+```markdown
+<!-- rocm-pr-quality:attestation v1 -->
+> **Reviewed with the ROCm PR-quality skill.**
+> - Skill: `rocm-pr-quality` (base) - overlays: `<applied overlays, or "none">`
+> - Action: `review` - Result: **APPROVED** (`<n>` BLOCKING; `<n>` IMPORTANT)
+> - Risk: `<1-5>`
+> - Reviewed commit: `<full 40-char head SHA>`
+> - Attestation: `<8-hex digest>`
+>
+> <sub>Machine-checkable attestation. The digest ties this review to this PR; later commits are
+> allowed. The reviewed commit is informational (what the review looked at).</sub>
+```
+
+**Digest.** The first 8 hex characters of the sha256 of the UTF-8 string `<owner>/<repo>#<number>`,
+lowercased, with no trailing newline (for example, `rocm/therock#6653`). The repo is part of the
+input because PR numbers collide across repositories. Do not compute it by hand: take it from the
+`Attestation digest` line (or the `attestation` JSON field) printed by
+`tools/pr_quality_check.py`. If that tool is unavailable, this works in any shell (including
+PowerShell):
+
+```text
+python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].lower().encode()).hexdigest()[:8])" "<owner>/<repo>#<number>"
+```
+
+A consumer recomputes the digest from the repo and number of the PR the comment is posted on; a
+mismatch means the block was not generated for this PR. The reviewed commit is not compared to the
+PR's current head. This is a checksum, not a secret: it stops pasted templates and cross-PR copies,
+not a deliberate forgery.
+
+**Checking an attestation (Action 4).** `tools/pr_quality_check.py --pr <number|url> --check-attestation` scans the PR's conversation comments and review bodies for the marker and
+applies the rule above to each block it finds. A block is valid when it records an `APPROVED`
+result and its digest equals the PR's own digest. Overall status is `VERIFIED` if any block is
+valid, `INVALID` if blocks exist but none is valid (copied from another PR, placeholder digest,
+non-approval result), and `NONE` if there is no block. Exit codes are `0`, `5`, and `4`
+respectively. The report also lists each block's author, association, and time, and how many
+commits were pushed after the reviewed commit (informational only).
+
+The full head SHA is `gh pr view --json headRefOid -q .headRefOid` (or `git rev-parse HEAD`).
+
+One-line paste fallback (same marker, for when an approval was already posted without a block):
+
+```text
+<!-- rocm-pr-quality:attestation v1 --> rocm-pr-quality review APPROVED - commit <full-sha> - attestation <8-hex digest>
+```
