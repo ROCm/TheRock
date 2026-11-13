@@ -261,6 +261,47 @@ mirroring and enabling the extras are separate changes, tracked in
 https://github.com/ROCm/TheRock/issues/9788. Dependencies stay in the central
 index rather than being copied into each CI run's artifact directory.
 
+## ROCpd Dependencies
+
+ROCpd processes profiling databases produced by `rocprofv3`. The Linux
+`rocm-sdk-core` wheel includes its commands, but has no mandatory Python
+dependencies. Plain `rocm`, libraries, and devel installations do not install
+pandas. Help and Perfetto conversion remain available without analysis extras;
+CSV conversion and summaries require pandas.
+
+| Core-wheel extra  | Dependencies      | Functionality                |
+| ----------------- | ----------------- | ---------------------------- |
+| `rocpd`           | pandas            | CSV conversion and summaries |
+| `rocpd-dashboard` | pandas, jinja2    | HTML dashboard               |
+| `rocpd-otf2`      | otf2              | OTF2 conversion              |
+| `rocpd-pdf`       | pandas, reportlab | PDF export                   |
+
+On Linux, `rocm[profiler]` requests `rocm-sdk-core[rocpd]` at the same version,
+so CSV conversion and summaries work after the documented profiler install.
+Existing core installations can instead request `rocm-sdk-core[rocpd]` or an
+exporter extra at their installed core version. Extras can be combined; none
+of these dependencies are selected on Windows or macOS.
+
+The selected ROCm index must provide the ROCm wheels and the complete dependency
+closure for each requested extra. User installations do not require an external
+PyPI index. The mirroring tool obtains upstream wheels for publication to the
+ROCm index; offline installations must supply them in their wheelhouse.
+
+Before publishing ROCm wheels with these extras, publish the configured
+dependencies and deploy their aggregate-index ownership routes using the
+[mirroring procedure](#mirroring-third-party-python-dependencies). The mirror
+retains pandas 2.3.3, python-dateutil 3.0.0, and Pillow 12.3.0 alongside current
+releases for Python 3.10; numpy's existing 2.2.6 retention is reused. These are
+mirror-retention policies, not runtime version pins. Updating source metadata
+alone does not deploy the dependencies or repair previously published wheels.
+
+The SDK's installed requirements file combines analysis and optional exporters,
+including the obsolete `dataclasses` backport. The core wheel declares the
+feature groups separately so that requesting CSV or PDF does not require OTF2.
+OTF2 wheels are interpreter-specific; a compatible wheel or a source build may
+be needed on newer Python versions. Installing an analysis extra does not make
+OTF2 available.
+
 ## rocm-profiler
 
 The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
@@ -275,12 +316,13 @@ The `rocm-profiler` package provides ROCm profiling tools and runtime components
 The recommended way to install profiling tools is via the meta package:
 
 ```bash
-pip install "rocm[profiler]"
+python -m pip install --pre --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+  "rocm[profiler]"
 ```
 
 This will install:
 
-- `rocm-sdk-core` (required runtime + SDK)
+- `rocm-sdk-core[rocpd]` (required runtime, SDK, and ROCpd analysis dependencies on Linux)
 - `rocm-profiler` (profiling tools)
 
 #### Direct installation
@@ -293,11 +335,8 @@ pip install rocm-profiler
 
 This may result in missing dependencies unless `rocm-sdk-core` is also installed.
 
-Always prefer:
-
-```bash
-pip install "rocm[profiler]"
-```
+Prefer the meta-package installation above, using the ROCm index appropriate
+for your release.
 
 ### Package Layout
 
