@@ -65,6 +65,9 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(GMP_BUILD VERSION "6.3.0")
 
+include(ProcessorCount)
+ProcessorCount(PAR_JOBS)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
@@ -99,7 +102,7 @@ add_custom_target(
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --libdir "${CMAKE_INSTALL_PREFIX}/lib"
   COMMAND
-    make V=1
+    make -j "${PAR_JOBS}" V=1
   COMMAND
     make install
   COMMAND

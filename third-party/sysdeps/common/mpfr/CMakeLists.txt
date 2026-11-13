@@ -70,6 +70,9 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(MPFR_BUILD VERSION "4.2.2")
 
+include(ProcessorCount)
+ProcessorCount(PAR_JOBS)
+
 # MPFR depends on GMP, so we need to pass the GMP prefix to MPFR's configure.
 # Extract that information now.
 
@@ -119,7 +122,7 @@ add_custom_target(
       --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --with-gmp="${GMP_PREFIX}"
   COMMAND
-    make V=1
+    make -j "${PAR_JOBS}" V=1
   COMMAND
     make install
   COMMAND
