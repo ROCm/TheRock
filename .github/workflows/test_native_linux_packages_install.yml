@@ -328,11 +328,12 @@ jobs:
           echo "TEST - OS:${OS_PROFILE} REPO:${REPO_URL} Arch:${GFX_ARCH} Type:${RELEASE_TYPE}"
           $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s
 
-      - name: Installed cpp-sdk-user test
-        # Runs examples/cpp-sdk-user against the installed prefix
+      - name: find_package cmake test
+        # Configures, builds, and runs examples/cpp-sdk-user against the installed
+        # prefix, so every find_package in that example is exercised.
         if: ${{ inputs.install_prefix != '' }}
         run: |
-          echo "CPP SDK USER - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
+          echo "FIND_PACKAGE CMAKE TEST - OS:${OS_PROFILE} Prefix:${INSTALL_PREFIX}"
           $PYTHON_CMD build_tools/packaging/linux/downstream_cmake_smoke.py \
             --prefix "${INSTALL_PREFIX}" \
             --binary-dir "${RUNNER_TEMP}/cpp-sdk-user"
