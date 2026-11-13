@@ -1150,15 +1150,13 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
-        # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
-        # headers and configs) for the c2h tests.
+        # Runs the prebuilt c2h and lit tests in bin/libhipcxx.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
-            _get_artifact_path("libhipcxx/requirements-test.txt"),
-            _get_script_path("requirements-test-ninja.txt"),
+            _get_artifact_path("bin/libhipcxx/lit-amdclang/requirements-test.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx.py')} --variant amdclang",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
             "linux": 1,
@@ -1174,13 +1172,13 @@ test_matrix = {
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
         "job_name": "libhipcxx_hiprtc",
+        # Runs the prebuilt hiprtc lit tests in bin/libhipcxx/lit-hiprtc.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
         "additional_requirements_files": [
-            _get_artifact_path("libhipcxx/requirements-test.txt"),
-            _get_script_path("requirements-test-ninja.txt"),
+            _get_artifact_path("bin/libhipcxx/lit-hiprtc/requirements-test.txt"),
         ],
-        "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx.py')} --variant hiprtc",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,

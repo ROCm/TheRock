@@ -1,4 +1,11 @@
 # libhipcxx
+[options]
+unmatched_exclude = [
+  # The test-only installs of the libhipcxx_tests subprojects still emit the
+  # package license, which the libhipcxx stage already provides.
+  "share/doc/libhipcxx/**",
+]
+
 [components.lib."math-libs/libhipcxx/stage"]
 optional = true
 [components.dbg."math-libs/libhipcxx/stage"]
@@ -7,12 +14,22 @@ optional = true
 include = [
   "include/*",
 ]
-[components.test."math-libs/libhipcxx/build"]
+
+# The tests build in the separate libhipcxx_tests subprojects. bin/libhipcxx
+# holds the CTest files: the c2h tests (in bin/) and the prebuilt amdclang++
+# lit tests run from bin/libhipcxx, the prebuilt hiprtc lit tests from
+# bin/libhipcxx/lit-hiprtc. The lit test directories also carry the test
+# sources and headers that lit reads while running the tests.
+[components.test."math-libs/libhipcxx_tests/stage"]
+optional = true
 include = [
-  "libhipcxx/**/*",
+  "bin/libcudacxx.test.*",
+  "bin/libhipcxx/CTestTestfile.cmake",
+  "bin/libhipcxx/lit-amdclang/**",
 ]
-exclude = [
-  # Exclude folders not needed for testing
-  "libhipcxx/._upstream/**",
-  "libhipcxx/docs/**",
+[components.test."math-libs/libhipcxx_hiprtc_tests/stage"]
+optional = true
+include = [
+  "bin/hiprtcc",
+  "bin/libhipcxx/lit-hiprtc/**",
 ]

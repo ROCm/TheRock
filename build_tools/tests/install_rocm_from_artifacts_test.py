@@ -80,21 +80,9 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--base-only"])
         self.assertIn("rocjitsu-hotswap_lib", argv)
 
-    def test_libhipcxx_with_prim_includes_prim_dev(self):
-        argv = self._run_main(["--libhipcxx", "--prim", "--tests"])
-        self.assertIn("prim_dev", argv)
-        self.assertIn("prim_lib", argv)
-        self.assertIn("prim_test", argv)
-        self.assertIn("libhipcxx_test", argv)
-
-    def test_libhipcxx_tests_without_prim_includes_prim_dev(self):
+    def test_libhipcxx_tests_omit_prim_dev(self):
         argv = self._run_main(["--libhipcxx", "--tests"])
-        self.assertIn("prim_dev", argv)
-        self.assertNotIn("prim_test", argv)
         self.assertIn("libhipcxx_test", argv)
-
-    def test_libhipcxx_without_tests_omits_prim_dev(self):
-        argv = self._run_main(["--libhipcxx"])
         self.assertNotIn("prim_dev", argv)
 
     def test_clinfo_is_only_added_for_sanity(self):
