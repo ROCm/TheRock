@@ -70,6 +70,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("fftw3", "doc"),
     ("fftw3", "run"),
     ("fftw3", "lib"),
+    ("hipkernelprovider", "doc"),  # license notices; no Linux package yet.
     ("hipkernelprovider", "lib"),
     ("hipkernelprovider", "test"),
     ("hipthreads", "dev"),
