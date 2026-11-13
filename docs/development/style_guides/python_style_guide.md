@@ -10,6 +10,8 @@ Table of Contents
     - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
+    - [No single-use module-level constants](#no-single-use-module-level-constants)
+    - [Use single backticks for code in comments and docstrings](#use-single-backticks-for-code-in-comments-and-docstrings)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -283,6 +285,93 @@ print(f"Device code stripped, new size: {new_size} bytes")
 ```python
 original_size = binary_path.stat().st_size + 8000000  # Estimate original size
 print(f"Stripped {original_size - new_size} bytes")
+```
+
+#### No single-use module-level constants
+
+**Don't hoist a literal into a module-level constant when it is used only once.**
+
+Name a value at the narrowest scope that covers all of its uses:
+
+- Used once: inline the literal. If the value is not self-explanatory, add a
+  comment or name it with a local variable (see
+  [No magic numbers](#no-magic-numbers)).
+- Used two or more times within one function: a local variable in that function.
+- Used across functions, or a genuine configuration knob someone might tune: a
+  module-level constant.
+
+Extracting a literal that is referenced exactly once adds indirection: the
+reader has to jump to the definition to see the value. A local variable keeps a
+repeated value consistent without moving it away from the code that uses it.
+
+This is distinct from hoisting for performance. Compiling a regex once at module
+level (see [Performance best practices](#performance-best-practices)) is correct
+because it avoids recompilation. Extract on the second use or for a real
+performance win, not on the first.
+
+✅ **Preferred:**
+
+```python
+# Used once: inline.
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / "job_summary.md"
+
+
+# Used twice in one function: local variable.
+def publish_job_summary(content: str, output_dir: Path, mirror_dir: Path) -> None:
+    summary_file_name = "job_summary.md"
+    (output_dir / summary_file_name).write_text(content)
+    (mirror_dir / summary_file_name).write_text(content)
+```
+
+❌ **Avoid:**
+
+```python
+JOB_SUMMARY_FILE_NAME = "job_summary.md"  # Only used once, below
+
+
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / JOB_SUMMARY_FILE_NAME
+```
+
+#### Use single backticks for code in comments and docstrings
+
+**Mark code symbols, flags, and values with single backticks, not double.**
+
+Both forms appear in existing Python code today. This guide standardizes on
+single backticks because they match the Markdown used everywhere else in the
+repo (docs, PR descriptions, review comments). Double backticks are
+reStructuredText literal syntax, which only matters when a documentation
+generator such as Sphinx processes the docstrings. TheRock does not run one, so
+the extra backticks are only noise.
+
+This applies to new and modified code. Do not churn existing comments solely to
+convert double backticks.
+
+✅ **Preferred:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under `$RUNNER_TEMP`.
+
+    Returns `None` when the env var is unset. Pass `mirror=False` to skip.
+    """
+```
+
+❌ **Avoid:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under ``$RUNNER_TEMP``.
+
+    Returns ``None`` when the env var is unset. Pass ``mirror=False`` to skip.
+    """
 ```
 
 ### Script structure and organization
@@ -1020,6 +1109,8 @@ Before submitting code, verify:
 - [ ] No `from __future__ import annotations`
 - [ ] Complex type signatures extracted to NamedTuple/dataclass
 - [ ] No magic numbers or fake estimates
+- [ ] Named values scoped to their uses (inline once, local within one function, module constant across functions)
+- [ ] Single backticks, not double, for code in comments and docstrings
 - [ ] Tuples only for simple pairs, dataclasses for structured data
 - [ ] All imports at top of file (except documented circular dependencies)
 - [ ] No timeouts on binutils operations
