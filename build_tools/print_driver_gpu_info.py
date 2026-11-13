@@ -143,6 +143,19 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
     else:
+        run_command_with_search(
+            label="rocm-smi",
+            command="rocm-smi",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="rocminfo",
+            command="rocminfo",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        
         # Linux: amd-smi static + rocminfo
         run_command_with_search(
             label="amd-smi static",
