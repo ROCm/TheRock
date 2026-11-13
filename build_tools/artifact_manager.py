@@ -814,8 +814,8 @@ def upload_artifact(request: UploadRequest) -> bool:
     with fingerprint_path.open("rb"):
         pass
 
-    # Missing fingerprints are skipped. Existing fingerprints upload with
-    # independent retries; exhausted retries propagate as an error.
+    # Existing fingerprints upload with independent retries;
+    # exhausted retries propagate as an error.
     for attempt in range(MAX_RETRIES):
         try:
             log(f"  ++ Uploading {fingerprint_name}")
