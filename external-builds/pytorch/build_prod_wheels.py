@@ -179,6 +179,8 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_smi",
     "amdhip64",
     "hiprtc",
+    # Math libraries may depend on OpenBLAS so load it first.
+    "rocm-openblas",
     "hipblas",
     "hipfft",
     "hiprand",
@@ -189,7 +191,6 @@ LINUX_LIBRARY_PRELOADS = [
     "miopen",
     "hipdnn",
     "rocm_sysdeps_liblzma",
-    "rocm-openblas",
     # Linux only.
     "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",
@@ -205,6 +206,8 @@ WINDOWS_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
     "hiprtc",
+    # Math libraries may depend on OpenBLAS so load it first.
+    "rocm-openblas",
     "hipblas",
     "hipfft",
     "hiprand",
@@ -214,7 +217,6 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipblaslt",
     "miopen",
     "hipdnn",
-    "rocm-openblas",
 ]
 
 
