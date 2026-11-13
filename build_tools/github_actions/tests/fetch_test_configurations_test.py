@@ -351,6 +351,38 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         self.assertNotIn("rocroller", names)
 
+    def test_rocroller_skipped_for_gfx1250_family(self):
+        # gfx125X-dcgpu's fetch target is gfx1250, so the target exclusion
+        # drops the rocroller job for that multi-arch family.
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "rocroller"
+        self.assertNotIn("rocroller", self._selected_names())
+
+    def test_rocroller_skipped_for_gfx1250_strict(self):
+        # Give the explicit-only family a runner so a missing runner cannot
+        # hide a failure to exclude it.
+        def fake_get_all_families(_):
+            return {
+                "gfx1250": {
+                    "linux": {
+                        "test-runs-on": "linux-mi455-gpu-rocm",
+                        "fetch-gfx-targets": [],
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+        os.environ["AMDGPU_FAMILIES"] = "gfx1250-strict"
+        os.environ["PROJECTS_TO_TEST"] = "rocroller"
+        self.assertNotIn("rocroller", self._selected_names())
+
+    def test_rocroller_still_selected_for_other_families(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+        os.environ["PROJECTS_TO_TEST"] = "rocroller"
+        self.assertIn("rocroller", self._selected_names())
+
     # -----------------------
     # include_family / exclude_family matching
     # -----------------------
