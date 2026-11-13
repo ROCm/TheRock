@@ -815,8 +815,8 @@ test_matrix = {
     "miopen-dbsync": {
         "job_name": "miopen-dbsync",
         # --rocjitsu/--mirage ship the emulator so the runner can use it from the dist instead
-        # of building rocjitsu itself (ALMIOPEN-3270). Until the runner script switches over it
-        # still builds its own copy and ignores these.
+        # of building rocjitsu itself. Until the runner script switches over it still builds its
+        # own copy and ignores these.
         "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu --mirage",
         # Standard/comprehensive/full only: "test_types" makes the framework skip this
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
