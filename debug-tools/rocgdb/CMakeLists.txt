@@ -291,6 +291,28 @@ endif()
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
 set(ROCGDB_SEPARATE_DEBUG_INFO_DIR "\\\${prefix}/lib/debug:/usr/lib/debug")
 set(ROCGDB_DATA_DIR "\\\${prefix}/share/rocgdb")
+
+# Directories GDB searches for auto-load scripts (and trusts, since the
+# safe-path defaults to this same list). Setting --with-auto-load-dir replaces
+# GDB's built-in default of "$debugdir:$datadir/auto-load", so that default is
+# repeated here. $debugdir and $datadir are expanded by GDB at run time and
+# must reach configure unexpanded.
+#
+# On Linux we also look at the locations where distros install helper scripts
+# (e.g. python3-dbg's pythonX.Y-gdb.py and libstdc++'s pretty-printers):
+#   /usr/share/gdb/auto-load        Debian, Ubuntu, Fedora, RHEL, SUSE, Arch, Alpine
+#   /usr/local/share/gdb/auto-load  Locally installed packages (e.g. from source)
+# Fedora, RHEL and SUSE debuginfo packages also place scripts under
+# /usr/lib/debug, which is already covered by $debugdir through
+# ROCGDB_SEPARATE_DEBUG_INFO_DIR.
+set(ROCGDB_AUTO_LOAD_DIR_FLAG "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(ROCGDB_AUTO_LOAD_DIR
+      "$debugdir:$datadir/auto-load:/usr/share/gdb/auto-load:/usr/local/share/gdb/auto-load")
+  set(ROCGDB_AUTO_LOAD_DIR_FLAG
+      "--with-auto-load-dir=${ROCGDB_AUTO_LOAD_DIR}"
+      "--with-auto-load-safe-path=${ROCGDB_AUTO_LOAD_DIR}")
+endif()
 set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
 
 # If the version is not set, set it to a generic value.
@@ -396,6 +418,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
         "--infodir=${ROCGDB_INFO_DIR}"
 
         --with-amd-dbgapi
+        ${ROCGDB_AUTO_LOAD_DIR_FLAG}
         "--with-bugurl=${ROCGDB_BUG_URL}"
         ${ROCGDB_EXPAT_FLAG}
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"

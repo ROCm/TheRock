@@ -176,7 +176,6 @@ jobs:
       jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
       jax_commit: ${{ steps.checkout_jax.outputs.commit }}
     env:
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
       MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
@@ -256,6 +255,37 @@ jobs:
             --rocm-version "${ROCM_VERSION}" \
             --jax-source-dir jax-source
 
+      # Pull requests use the runner's EngFlow cache-reader token, whose writes
+      # EngFlow rejects. Only pushes to main assume the writer role to fetch
+      # the cache-writer token, which is never pre-mounted on a runner.
+      - name: Plan Bazel remote cache credentials
+        id: cache_plan
+        run: |
+          python build_tools/github_actions/write_jax_bazel_cache_credentials.py --plan
+
+      - name: Configure AWS credentials for the Bazel cache writer
+        id: cache_writer_aws
+        if: ${{ steps.cache_plan.outputs.writer_role != '' }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ${{ steps.cache_plan.outputs.aws_region }}
+          role-to-assume: ${{ steps.cache_plan.outputs.writer_role }}
+          role-duration-seconds: 900
+          # Only the next step gets these: not the job environment or the disk,
+          # where a later job on a reused runner could read them.
+          output-credentials: true
+          output-env-credentials: false
+
+      - name: Stage Bazel remote cache credentials
+        id: cache_credentials
+        env:
+          JAX_BAZEL_CACHE_CREDENTIALS_DIR: ${{ vars.JAX_BAZEL_CACHE_CREDENTIALS_DIR }}
+          AWS_ACCESS_KEY_ID: ${{ steps.cache_writer_aws.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.cache_writer_aws.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.cache_writer_aws.outputs.aws-session-token }}
+        run: |
+          python build_tools/github_actions/write_jax_bazel_cache_credentials.py
+
       - name: Build JAX Wheels in manylinux container
         working-directory: jax-source
         env:
@@ -263,20 +293,36 @@ jobs:
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
           ML_WHEEL_VERSION_SUFFIX: ${{ steps.resolve_jax_version.outputs.ml_wheel_version_suffix }}
           JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
+          JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
+          CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
         run: |
+          # configure_jax_bazel_cache.py reads the token from /data, staged
+          # in $RUNNER_TEMP.
+          credentials_mount=""
+          if [[ -n "${CACHE_CREDENTIALS_DIR}" ]]; then
+            credentials_mount="--volume ${CACHE_CREDENTIALS_DIR}:/data:ro"
+          fi
+
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
             --env ML_WHEEL_VERSION_SUFFIX \
             --env JAX_WHEELS \
+            ${credentials_mount} \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
+            --env RELEASE_TYPE="${RELEASE_TYPE}" \
+            --env GITHUB_EVENT_NAME \
+            --env GITHUB_REF \
+            --env JAX_BAZEL_REMOTE_CACHE_URL="${JAX_BAZEL_REMOTE_CACHE_URL}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
             "${MANYLINUX_IMAGE_TAG}" \
             bash -lc '
+              set -e
               ROCM_ROOT="$(rocm-sdk path --root)"
+              bazel_cache_options="$(python /workspace/build_tools/github_actions/configure_jax_bazel_cache.py)"
               python build/build.py build \
                 --wheels="${JAX_WHEELS}" \
                 --python_version="${PYTHON_VERSION}" \
@@ -286,10 +332,18 @@ jobs:
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
                 --bazel_options=--//jaxlib/tools:jaxlib_git_hash="${JAX_COMMIT}" \
+                ${bazel_cache_options} \
                 --verbose \
                 --detailed_timestamped_log \
                 --output_path="$(pwd)/dist"
             '
+
+      - name: Remove Bazel remote cache credentials
+        if: ${{ always() && steps.cache_credentials.outputs.credentials_dir != '' }}
+        env:
+          CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
+        run: |
+          rm -rf "${CACHE_CREDENTIALS_DIR}"
 
       - name: Extract JAX versions from built wheels
         id: write_jax_versions
@@ -307,9 +361,7 @@ jobs:
         run: |
           python build_tools/github_actions/upload_python_packages.py \
             --input-packages-dir="${PACKAGE_DIST_DIR}" \
-            --artifact-group="${ARTIFACT_GROUP}" \
-            --run-id="${{ github.run_id }}" \
-            --multiarch
+            --run-id="${{ github.run_id }}"
 
 
   configure_jax_tests:

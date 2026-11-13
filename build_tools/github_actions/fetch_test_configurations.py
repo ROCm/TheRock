@@ -663,6 +663,7 @@ test_matrix = {
             # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
             # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx117X architectures
             # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx908",
@@ -676,6 +677,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
                 # KNOWN FAILURE (timeout): Quick suite exceeds 900s on FP16 strided-batched clipped-ReLU
@@ -694,6 +696,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
             ],
@@ -824,8 +827,7 @@ test_matrix = {
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
     # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
-    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU; advisory, see
-    # expect_failure below).
+    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -846,11 +848,6 @@ test_matrix = {
         "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
             "linux": ["gfx942", "gfx950"],
-        },
-        # TODO(ALMIOPEN-2674): drop this once gfx950 dbsync has been green for a
-        # few consecutive standard/comprehensive/full runs.
-        "expect_failure": {
-            "linux": ["gfx950"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -964,10 +961,12 @@ test_matrix = {
             ],
         },
     },
-    # hipDNN samples tests
+    # hipDNN samples tests. Every provider is fetched so that samples whose
+    # operations only hipBLASLt (matmul) or hip-kernel-provider (layer norm,
+    # resample) implement find an engine instead of skipping.
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipblasltprovider --hipkernelprovider --hipdnn-samples --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -994,7 +993,7 @@ test_matrix = {
         # <name>_dev. Omitting the key takes the fetch-everything branch, which
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
-        "timeout_minutes": 10,
+        "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_script_path("requirements-test-ninja.txt"),
         ],
@@ -1172,6 +1171,8 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
+        # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
+        # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
