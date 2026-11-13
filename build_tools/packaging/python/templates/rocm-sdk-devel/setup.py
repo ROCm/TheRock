@@ -32,6 +32,8 @@ dist_info = import_dist_info()
 my_package = dist_info.ALL_PACKAGES["devel"]
 print(f"Loaded dist_info package: {my_package}")
 packages = find_packages(where="./src")
+platform_package_name = my_package.get_py_package_name()
+packages.append(platform_package_name)
 print("Found packages:", packages)
 
 setup(
@@ -40,6 +42,8 @@ setup(
     packages=packages,
     package_dir={
         "": "src",
+        # Install non-link SDK files directly; `rocm-sdk init` creates links.
+        platform_package_name: f"platform/{platform_package_name}",
     },
     zip_safe=False,
     include_package_data=True,
