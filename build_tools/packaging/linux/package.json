@@ -114,8 +114,7 @@
     ],
     "Postinstall": "True",
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_RPM_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -175,8 +174,7 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Disable_RPM_STRIP": "True"
+    "Gfxarch": "False"
   },
   {
     "Package": "amdrocm-runtime",
@@ -647,7 +645,8 @@
           {
             "Name": "hipblasltprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -1465,30 +1464,7 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM_tests",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "test"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
+            "Name": "hipCCL_tests",
             "Components": [
               "test"
             ]
@@ -1538,22 +1514,10 @@
         "Artifact": "prim",
         "Artifact_Subdir": [
           {
-            "Name": "rocPRIM",
+            "Name": "hipCCL",
             "Components": [
               "dev",
               "doc"
-            ]
-          },
-          {
-            "Name": "hipCUB",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
-            "Name": "rocThrust",
-            "Components": [
-              "dev"
             ]
           }
         ]
@@ -1566,18 +1530,6 @@
             "Components": [
               "lib",
               "dev"
-            ]
-          }
-        ]
-      },
-      {
-        "Artifact": "rocwmma",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocWMMA",
-            "Components": [
-              "dev",
-              "lib"
             ]
           }
         ]
@@ -2031,6 +1983,7 @@
             "Components": [
               "lib",
               "run",
+              "sys",
               "doc"
             ]
           }
@@ -2242,8 +2195,7 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Disable_DEB_STRIP": "True"
+    "Disable_DWZ": "True"
   },
   {
     "Package": "amdrocm-hipblas-common-devel",
@@ -2305,7 +2257,8 @@
               "dev"
             ]
           }
-        ]
+        ],
+        "Artifact_Gfxarch": "False"
       },
       {
         "Artifact": "host-blas",
@@ -2319,10 +2272,23 @@
               "dev"
             ]
           }
+        ],
+        "Artifact_Gfxarch": "False"
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev",
+              "lib"
+            ]
+          }
         ]
       }
     ],
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-ck",
@@ -2684,7 +2650,20 @@
           {
             "Name": "miopenprovider",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
+            "Components": [
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2751,6 +2730,17 @@
         "Artifact_Subdir": [
           {
             "Name": "miopenprovider",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "hipkernelprovider",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipkernelprovider",
             "Components": [
               "test"
             ]
@@ -3057,6 +3047,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "amd-dbgapi",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-dbgapi",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
       }
     ],
     "Disable_DWZ": "True",
@@ -3074,8 +3075,8 @@
       "amdrocm-decode-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocDecode video decoding library test suite and samples",
-    "Description_Long": "Test suite and sample applications for rocDecode library. Includes unit tests, codec validation, and example programs demonstrating GPU-accelerated video decoding workflows. Provides test executables for verifying GPU-accelerated video decode functionality using the VA-API backend.",
+    "Description_Short": "rocDecode video decoding library test suite",
+    "Description_Long": "Test suite for the rocDecode library. Includes the CTest project, test scripts, and media used to verify GPU-accelerated video decode functionality using the VA-API backend. Sample applications and utility sources ship in the rocDecode development package.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3149,8 +3150,8 @@
       "amdrocm-decode"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocDecode development headers and build configuration files",
-    "Description_Long": "Development package for rocDecode video decoding library. Contains C/C++ header files, CMake modules, and API declarations for integrating GPU-accelerated video decode into applications. Provides interfaces for decoder initialization, format configuration, and decoded frame access.",
+    "Description_Short": "rocDecode development headers, samples, and build configuration files",
+    "Description_Long": "Development package for rocDecode video decoding library. Contains C/C++ header files, CMake modules, API declarations, sample applications, and utility sources for integrating GPU-accelerated video decode into applications. Provides interfaces for decoder initialization, format configuration, and decoded frame access.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",

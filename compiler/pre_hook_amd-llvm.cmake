@@ -18,12 +18,26 @@ if(WIN32)
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  # Disable CIR on Windows. https://github.com/ROCm/llvm-project/pull/5071 enables CIR by default.
+  set(CLANG_ENABLE_CIR OFF)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
+  # MLIR is a dependency of cir/flang. If it is not explicitly on LLVM_ENABLE_PROJECTS then it is added
+  # to LLVM_DEPENDENCY_ONLY_PROJECTS, which causes issues:
+  # 1. MLIR_INCLUDE_TESTS=off, this disables the check-mlir target, which the CI tries to run.
+  # 2. MLIR_ENABLE_PDL_IN_PATTERNMATCH_default=0, which causes some mlir tests to fail because PDL
+  #    support is expected.
+  # 3. Compilation failure: error: no type named ‘type’ in ‘struct std::enable_if.
+  #    This stems from #include "llvm/ADT/TypeSwitch.h" not being located. When PDL is OFF,
+  #    a different header path is taken.
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang;mlir" CACHE STRING "Enable LLVM projects" FORCE)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  # Now that the CIR build is default on, mlir objects get installed and exported in clang config.
+  # TheRock explictly excludes llvm objects in artifact-amd-llvm.toml, which causes a failure
+  # when the clang config is used as those files are not present. Disable their install.
+  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF CACHE BOOL "Disable installation of MLIR aggregate object libraries" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
