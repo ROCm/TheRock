@@ -138,16 +138,37 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(matrix), 0)
         self.assertNotIn("main", {row["jax_ref"] for row in matrix})
 
-    def test_release_types_other_than_prerelease_build_tip(self):
+    def test_dev_and_nightly_build_tip(self):
         # Tip against the ROCm of the same run is a row of the matrix, the way
         # PyTorch's "nightly" ref is, so a break shows up as a failed cell.
-        for release_type in set(m.RELEASE_TYPES) - {"ci", "prerelease"}:
+        for release_type in ("dev", "nightly"):
             with self.subTest(release_type=release_type):
                 matrix = m.generate_jax_matrix_for_release_type(
                     release_type=release_type,
                     platform="linux",
                 )
                 self.assertIn("main", {row["jax_ref"] for row in matrix})
+
+    def test_bkc_releases_have_empty_matrices(self):
+        # BKC releases skip JAX builds, including when inputs select a version.
+        for release_type in ("dev-bkc", "nightly-bkc"):
+            with self.subTest(release_type=release_type):
+                self.assertEqual(
+                    m.generate_jax_matrix_for_release_type(
+                        release_type=release_type,
+                        platform="linux",
+                    ),
+                    [],
+                )
+                self.assertEqual(
+                    m.generate_jax_matrix_for_release_type(
+                        release_type=release_type,
+                        platform="linux",
+                        python_versions=["3.12"],
+                        jax_refs=["rocm-jaxlib-v0.10.2"],
+                    ),
+                    [],
+                )
 
     def test_ci_never_builds_a_moving_ref(self):
         # A pull request is judged against refs whose content is fixed;

@@ -5,7 +5,7 @@
 
 These exercise the install-time reconcile that mirrors per-ISA device files
 (.kpack archives, kernel DBs, per-arch .so) from the rocm-sdk-libraries overlay
-into the expanded rocm-sdk-devel tree, driven by each installed
+into the initialized rocm-sdk-devel tree, driven by each installed
 `rocm-sdk-device-*` wheel's `_devel_links` manifest.
 
 The reconcile is unit-tested against a synthetic site-packages directory: fake
@@ -23,6 +23,8 @@ import threading
 import unittest
 import unittest.mock
 from pathlib import Path, PurePosixPath
+
+from utils import intercept_file_write
 
 # Import the runtime module straight from the package template source tree.
 ROCM_SDK_SRC = (
@@ -53,7 +55,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.site = Path(self._tmp.name)
-        # The expanded (generic) devel platform dir must already exist.
+        # The initialized (generic) devel platform dir must already exist.
         self.devel_dir = self.site / DEVEL_NAME
         self.devel_dir.mkdir(parents=True)
         (self.devel_dir / "__init__.py").touch()
@@ -294,25 +296,11 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         publication_ready = threading.Event()
         allow_publication = threading.Event()
         worker_errors: list[BaseException] = []
-        real_open = Path.open
-        real_replace = Path.replace
 
-        def paused_open(path: Path, *args, **kwargs):
-            mode = args[0] if args else kwargs.get("mode", "r")
-            opened_file = real_open(path, *args, **kwargs)
-            if path == record_path and "w" in mode:
-                # Opening the destination for writing has already truncated it.
-                publication_ready.set()
-                if not allow_publication.wait(timeout=5):
-                    raise TimeoutError("Timed out waiting to write the RECORD")
-            return opened_file
-
-        def paused_replace(path: Path, target: Path) -> Path:
-            if Path(target) == record_path:
-                publication_ready.set()
-                if not allow_publication.wait(timeout=5):
-                    raise TimeoutError("Timed out waiting to publish the RECORD")
-            return real_replace(path, target)
+        def pause() -> None:
+            publication_ready.set()
+            if not allow_publication.wait(timeout=5):
+                raise TimeoutError("Timed out waiting to publish the RECORD")
 
         def update_record() -> None:
             try:
@@ -320,10 +308,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
             except BaseException as exc:
                 worker_errors.append(exc)
 
-        with (
-            unittest.mock.patch.object(Path, "open", new=paused_open),
-            unittest.mock.patch.object(Path, "replace", new=paused_replace),
-        ):
+        with intercept_file_write(record_path, on_write=pause):
             worker = threading.Thread(target=update_record)
             worker.start()
             try:
@@ -510,6 +495,42 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         self._reconcile()
         self.assertTrue(dest.samefile(src))
         self.assertEqual(dest.read_text(), "real kpack")
+
+    def test_missing_target_leaves_eager_record_entries(self):
+        """Missing targets fail after eager RECORD ownership and can be repaired."""
+        # Install a device wheel with two link targets.
+        present_relpath = ".kpack/blas_lib_gfx942.kpack"
+        missing_relpath = "lib/rocblas/library/Foo_gfx942.co"
+        record = self._add_device_wheel(
+            "gfx942",
+            {
+                present_relpath: "kpack data",
+                missing_relpath: "kernel object",
+            },
+        )
+
+        # Remove one link target and expect an error.
+        missing_target = self.site / LIBS_NAME / missing_relpath
+        missing_target.unlink()
+        with self.assertRaisesRegex(FileNotFoundError, "Hardlink target is not a file"):
+            self._reconcile()
+
+        # Verify RECORD ownership was established before the failure.
+        record_paths = self._record_paths(record)
+        for relpath in (present_relpath, missing_relpath):
+            self.assertEqual(record_paths.count(f"{DEVEL_NAME}/{relpath}"), 1)
+        present_target = self.site / LIBS_NAME / present_relpath
+        self.assertTrue((self.devel_dir / present_relpath).samefile(present_target))
+        self.assertFalse((self.devel_dir / missing_relpath).exists())
+
+        # Restore the link target and expect repair to succeed.
+        missing_target.write_text("kernel object")
+        self.assertEqual(self._reconcile(), 1)
+        record_paths = self._record_paths(record)
+        for relpath in (present_relpath, missing_relpath):
+            target = self.site / LIBS_NAME / relpath
+            self.assertTrue((self.devel_dir / relpath).samefile(target))
+            self.assertEqual(record_paths.count(f"{DEVEL_NAME}/{relpath}"), 1)
 
     def test_no_uncollapsed_parent_refs_reach_the_filesystem(self):
         # Manifest link targets lead with one ".." per relpath component, so a

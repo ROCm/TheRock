@@ -203,6 +203,9 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 #   Values are formatted with str.format() and currently support the placeholder
 #   "{rocm_path}", which expands to the absolute ROCM_PATH.
 #
+# - env_linux: Same shape as env, applied only when RUNNER_OS is Linux.
+#   Windows jobs and a local run with RUNNER_OS unset leave these unset.
+#
 # - ctest_parallel_count: Int. Overrides the module-level ctest_parallel_count
 #   default for this component. Use 0 to drop the "--parallel N" flag entirely
 #   (i.e. run ctest serially) for components whose tests can't share GPU/host
@@ -322,6 +325,29 @@ COMPONENT_OVERRIDES = {
             ],
         },
     },
+    # Temporary workaround for a known Linux in-tree amdgpu bug. HIP's
+    # stream-ordered pool remaps a virtual address and the GPU keeps the old
+    # pages. env_linux is applied for every Linux test tier, including the
+    # comprehensive suite the nightly runs. Windows is unchanged.
+    # Remove these entries once the Linux runners have an amdgpu with the
+    # GEM_VA TLB flush fix (fixed in-tree kernel or DKMS).
+    # https://github.com/ROCm/rocm-libraries/issues/14873
+    # https://github.com/ROCm/rocm-libraries/issues/15600
+    "rocsparse": {
+        "env_linux": {
+            "HIP_MEM_POOL_USE_VM": "0",
+        },
+    },
+    "hipsparse": {
+        "env_linux": {
+            "HIP_MEM_POOL_USE_VM": "0",
+        },
+    },
+    "rocalution": {
+        "env_linux": {
+            "HIP_MEM_POOL_USE_VM": "0",
+        },
+    },
 }
 
 
@@ -359,6 +385,7 @@ def apply_component_overrides(
       libraries straight out of the build tree.
     - 'env' sets literal environment variables (str.format() with the
       "{rocm_path}" placeholder).
+    - 'env_linux' is the same, and is applied only when RUNNER_OS is Linux.
 
     ctest_parallel: per-component ctest -j override; falls back to
     default_parallel_count when the component does not pin one.
@@ -376,9 +403,16 @@ def apply_component_overrides(
 
     _prepend_env_paths(env, rocm_path, overrides.get("additional_env_paths", {}))
     _prepend_env_paths(env, therock_dir, overrides.get("env_prepend_from_therock", {}))
-    for env_key, value_template in overrides.get("env", {}).items():
-        env[env_key] = value_template.format(rocm_path=str(rocm_path))
+    _apply_literal_env(env, overrides.get("env", {}), rocm_path)
+    if os.environ.get("RUNNER_OS", "").lower() == "linux":
+        _apply_literal_env(env, overrides.get("env_linux", {}), rocm_path)
     return test_dir, overrides.get("ctest_parallel", default_parallel_count)
+
+
+def _apply_literal_env(env, mapping, rocm_path):
+    """Set literal environment variables. Values may contain {rocm_path}."""
+    for env_key, value_template in mapping.items():
+        env[env_key] = value_template.format(rocm_path=str(rocm_path))
 
 
 TEST_DIR = str(Path(THEROCK_BIN_DIR) / TEST_COMPONENT)

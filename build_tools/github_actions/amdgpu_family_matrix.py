@@ -893,9 +893,9 @@ def get_build_runner_labels():
 def get_cpu_test_runner(platform: str) -> str:
     """Returns the CPU test runner label for components with linux_cpu_runner: True.
 
-    Prefers an explicit cpu_test_runners config, then draws from the "small" build
-    runner pool. These tests need no GPU and are light enough for small runners, so
-    this keeps them off the default pool that real builds compete for.
+    Prefers an explicit cpu_test_runners config, then draws from the "medium" build
+    runner pool. These tests need no GPU, so this keeps them off the default pool
+    that real builds compete for.
 
     Args:
         platform: "linux" or "windows"
@@ -911,14 +911,19 @@ def get_cpu_test_runner(platform: str) -> str:
             return cpu_runners[platform]
 
     # Otherwise draw from the build runner pools (CPU-only, no GPU). Prefer the
-    # "small" pool, falling back to "default" for platforms without one. Both are
-    # weighted lists, so select the same way builds do rather than taking the
-    # first entry -- that honors the provider split and skips zero-weight pools.
+    # "medium" pool, falling back to "small" then "default" for platforms without
+    # one. These are weighted lists, so select the same way builds do rather than
+    # taking the first entry -- that honors the provider split and skips
+    # zero-weight pools.
     build_runners = get_build_runner_labels()
     platform_config = build_runners.get(platform)
     if not platform_config:
         return ""
-    labels_config = platform_config.get("small") or platform_config.get("default")
+    labels_config = (
+        platform_config.get("medium")
+        or platform_config.get("small")
+        or platform_config.get("default")
+    )
     if not labels_config:
         return ""
     return select_weighted_label(labels_config, f"cpu-test-runner ({platform})")
@@ -929,6 +934,13 @@ VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
 
 # Opt-in label for also testing a family's Linux build on its test-runs-on-wsl runner.
 WSL_RUN_LABEL = "ci:run-wsl"
+
+# Artifacts that CI control labels need beyond the components' own artifacts.
+# Tests on WSL also install the WSL libhsakmt (see install_rocm_from_artifacts),
+# so a narrowed build adds the stage that produces it.
+CI_LABEL_REQUIRED_ARTIFACTS: dict[str, list[str]] = {
+    WSL_RUN_LABEL: ["wsl-rocdxg"],
+}
 
 
 def get_wsl_test_runner(

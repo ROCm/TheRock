@@ -19,6 +19,7 @@ from pathlib import Path
 _VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
+DEVEL_INITIALIZED = Path(".devel_links/devel.initialized")
 
 # BEGIN SHARED TARGET METADATA
 # Build-time import only. render_dist_info() replaces this marked block with

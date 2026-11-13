@@ -1,8 +1,14 @@
 # rocdecode
 [components.lib."media-libs/rocdecode/stage"]
 [components.dbg."media-libs/rocdecode/stage"]
+# Samples and utility sources ship in the dev package, alongside the headers.
 [components.dev."media-libs/rocdecode/stage"]
+include = [
+  "share/rocdecode/samples/**",
+  "share/rocdecode/utils/**",
+]
 [components.doc."media-libs/rocdecode/stage"]
+# Test package: the CTest project, test scripts and media.
 [components.test."media-libs/rocdecode/stage"]
 include = [
   "share/rocdecode/**",
