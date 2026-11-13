@@ -661,7 +661,7 @@ source_paths = ["rocfft", "hipfft"]
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "rand"]
+artifact_deps = ["core-runtime", "core-hip", "rand", "libhipcxx"]
 source_paths = ["rocprim", "hipcub", "rocthrust", "primbench", "hipccl", "hipccl3"]
 
 [artifacts.sparse]
@@ -701,7 +701,7 @@ artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "prim"]
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
