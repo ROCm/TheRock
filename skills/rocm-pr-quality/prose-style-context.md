@@ -151,7 +151,7 @@ Good:
 
 ## Pull-request structure
 
-Keep the headings the repository's PR template and automated policy checks require. Each section has one job. Where a repository names a section differently, match the job to the closest heading.
+Keep the headings the repository's PR template and automated policy checks require. Subsections under them are fine (see Formatting). Each section has one job. Where a repository names a section differently, match the job to the closest heading.
 
 ### Issue or tracker line
 
@@ -178,12 +178,13 @@ Say what to run and what each group checks. Use exact file or module names when 
 
 ### Test Result
 
-Keep completed evidence apart from pending automation.
+Report what has been run, not what is still running. The description outlives the CI run and becomes the commit message, so a line like "checks are pending" goes stale and confuses anyone reading the history.
 
-- Give exact pass, skip, and saved-result counts.
+- Say what was tested locally, with exact pass, skip, and saved-result counts. If the author relies on CI alone, say so.
+- Name the CI jobs the author expects to matter, when there are any.
 - Do not call an environment failure a test failure.
-- Write "Automated GitHub checks are pending" when that is the state.
 - Do not claim a run without evidence.
+- Do not write that checks are pending. Leave the live status to the checks panel.
 
 Name what did not run only where the reader would otherwise assume it did, such as a platform or device the change affects. Do not list non-events.
 
@@ -209,7 +210,8 @@ Link when an explanation the reader needs would bloat the body. Prefer repositor
 
 ## Formatting
 
-- Use only the headings the repository template requires.
+- Keep the headings the repository template requires. Add `###` subsections under them when they help the reader, for example "Why the previous code did not work" and "What this code improves" under Technical Details, or "Local testing" and "CI testing" under Test Plan. Skip them on a short description.
+- Put `#N`-style numbers in backticks unless you mean to link that issue or pull request. A bare `#1` in prose tags pull request 1.
 - Use bullets for parallel facts, not for ordinary prose. Avoid nested lists and bold used as organization.
 - Put code identifiers in backticks. Use numerals for exact inputs, counts, versions, and percentages.
 
@@ -221,7 +223,7 @@ These rules keep a claim from overreaching. They do not ask for a list of everyt
 - Separate changes to tests, build files, and configuration from changes to production behavior.
 - Separate current behavior from behavior judged to be correct. Passing tests that record existing behavior do not prove it is correct.
 - Do not treat one metric (line coverage, mutation score, a benchmark delta) as a quality claim alone. Say what was measured, on what input, on what hardware or platform.
-- Do not hide pending checks behind "all tests pass."
+- Do not write "all tests pass" without saying where they ran (locally, in CI, or both).
 - Do not claim device coverage for host-only tests, or carry a result from one GPU architecture to another.
 - When the change can affect the functions and types other code calls, or the binary interface, say so and name the consumers.
 
@@ -242,7 +244,7 @@ Before delivering prose, a reviewer should be able to answer these without openi
 
 1. What does this pull request change, and why?
 1. What was wrong or missing before?
-1. What evidence has passed, and what is pending?
+1. What evidence has been gathered, and was it local, in CI, or both?
 1. What production or device behavior can it affect?
 
 If an outsider could not follow the first answer without knowing what the component does, add that in one sentence. If any answer is missing, the prose is not ready.
