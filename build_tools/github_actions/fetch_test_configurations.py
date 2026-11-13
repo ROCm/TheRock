@@ -782,7 +782,7 @@ test_matrix = {
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
-        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --rand --tests",
         # GHA step timeout: sized to allow nightly comprehensive runs (~2 hr).
         # Per-test CTest TIMEOUT in rocm-libraries/projects/miopen/test/gtest/
         # test_categories.yaml bounds individual tests (quick: 10 min,
