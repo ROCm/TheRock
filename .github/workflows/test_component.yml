@@ -191,6 +191,22 @@ jobs:
           id
           echo "=== device nodes ==="
           ls -l /dev/dri /dev/kfd || true
+          echo "=== what sysfs offers ==="
+          # If this lists every card on the node rather than our allocation,
+          # amd-smi may be failing to match an enumerated card to a device
+          # node, which is a different bug from being denied card0.
+          ls /sys/class/drm/ || true
+          echo "=== which nodes we can actually open ==="
+          python - <<'PY' || true
+          import os
+
+          for path in ("/dev/kfd", "/dev/dri/card0", "/dev/dri/renderD128"):
+              try:
+                  os.close(os.open(path, os.O_RDWR))
+                  print(f"{path}: ok")
+              except OSError as err:
+                  print(f"{path}: {err}")
+          PY
           echo "=== amd-smi static ==="
           "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static || echo "exit=$?"
           echo "=== amd-smi list ==="
