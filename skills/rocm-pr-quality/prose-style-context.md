@@ -55,7 +55,7 @@ Apply every question to every sentence. If any answer is no, rewrite it, or dele
 1. Does it carry one main idea with a clear subject and verb?
 1. Is it concrete about an input, output, behavior, failure, or consequence?
 1. Does the reader know why the fact matters?
-1. Could a simpler verb replace an abstract noun phrase?
+1. Does it use a plain verb instead of an abstract noun phrase?
 1. Does it avoid slogans and sales language?
 1. Does it describe the current net change, not discarded development history?
 1. Does the diff, a test result, or an authoritative source support every factual claim?
@@ -184,7 +184,8 @@ Report what has been run, not what is still running. The description outlives th
 - Name the CI jobs the author expects to matter, when there are any.
 - Do not call an environment failure a test failure.
 - Do not claim a run without evidence.
-- Do not write that checks are pending. Leave the live status to the checks panel.
+- Do not write prose saying that checks are pending. Leave the live status to the checks panel.
+- Keep the unchecked entries in a validation checklist, such as the one in the `reference.md` description template. They record required validation that is still outstanding, including manual runs that never appear in the checks panel.
 
 Name what did not run only where the reader would otherwise assume it did, such as a platform or device the change affects. Do not list non-events.
 
