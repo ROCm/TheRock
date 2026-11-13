@@ -15,7 +15,7 @@ Ship unfinished APIs in every release without turning them into permanent commit
 - **One ROCm-wide opt-in.** A consumer defines `ROCM_ENABLE_EXPERIMENTAL_APIS` in its own build and includes the experimental header of each library it uses. Without the switch, an experimental header declares nothing.
 - **Per-feature revisions, checked at compile time and run time.** Each feature defines a macro, `<LIB>_EXPERIMENTAL_<FEATURE>`, set to its revision, and each library answers a runtime query for the revision it actually has. On a mismatch, each consumer chooses to error out or to fall back gracefully to its non-experimental path.
 - **Revisions bump only on breaking changes, detected by CI.** Additions do not bump. CI compares the experimental declarations against the PR's merge base, and each feature's promised behavior is pinned by contract tests that cannot change without a revision bump.
-- **No in-place changes.** A breaking change to a function gives it a new name, and experimental enum values are never renumbered or reused. A stale binary therefore fails loudly or falls back; it never silently runs changed code.
+- **No in-place changes.** A breaking change to a function or type gives it a new name, and experimental enum values are never renumbered or reused. A stale binary therefore fails loudly or falls back; it never silently runs changed code.
 - **Bounded, enforced lifetime.** Each feature has an owner and must graduate to the stable API or be removed within four ROCm releases. One release-long extension is allowed with an approver. The build fails once the deadline passes, and a cap on concurrent features keeps the tier from becoming a second, unpromised public API.
 - **Frameworks can use it safely.** A consumer standard for framework code (detect, check the revision, keep a fallback, ship official builds with the switch off) means a ROCm upgrade never breaks a framework build.
 - **First adopter: hipBLASLt.** A working implementation of the bump check and the deadline is in draft PR [rocm-libraries#14065](https://github.com/ROCm/rocm-libraries/pull/14065), and the fused GEMM + all-to-all epilogue is the first real feature.
@@ -220,6 +220,7 @@ Brand-new types need no marker; they live in the experimental headers.
 A breaking change never reuses a name or a value:
 
 - **Functions.** A function whose signature or documented behavior changes gets a new name, for example `hipblasLtExperimentalFoo` becomes `hipblasLtExperimentalFoo_v2`, and the old name is removed.
+- **Types.** A struct, union or typedef that changes in any way, including an added member, gets a new name, for example `hipblasLtExperimentalFooParams_v2_t`, and the old one is removed. Every function that takes the type changes signature, so it gets a new name too. A stale binary therefore never passes the old layout to code that expects the new one. Opaque handles, whose layout is private to the library, are not affected.
 - **Enum values.** An experimental enum value is never renumbered or reused. A retired value is rejected by the library with an invalid-value status.
 
 This is what keeps a stale binary from silently running changed code (see Stale binaries).
@@ -233,6 +234,7 @@ Each feature's revision changes only for breaking changes to that feature:
 | Add a function, type or enumerator                                       | No                                         |
 | Remove a function, type or enumerator                                    | Yes                                        |
 | Replace a function with a renamed version (signature or behavior change) | Yes                                        |
+| Replace a type with a renamed version (any change to its definition)     | Yes                                        |
 | Retire an enum value                                                     | Yes                                        |
 | Change documented behavior (a contract test changes)                     | Yes                                        |
 | Graduate or remove the feature                                           | Feature macro removed; the query returns 0 |
@@ -257,7 +259,7 @@ The checker attributes each change to the feature whose header or contract tests
 It fails a PR that:
 
 - removes a declaration without bumping the feature's revision;
-- changes the signature of a function under an existing name (the no-in-place rule);
+- changes the signature of a function, or the definition of a struct, union or typedef, under an existing name (the no-in-place rule);
 - changes an enumerator's value, or gives a new enumerator a value below the library's experimental enum high-water mark (a macro that only goes up), so retired values cannot be reused;
 - declares an enumerator without an explicit value;
 - lowers a revision.
@@ -301,7 +303,7 @@ The `#if` was decided in January and is fixed in the binary.
 With the runtime query and the no-in-place rule, such a binary never silently runs changed code:
 
 - If it checks the runtime revision before using the feature, it falls back.
-- If it calls a function that was renamed or removed, it fails with a dynamic-loader error ("undefined symbol ..."), at startup or at the first call depending on how it was linked. That is loud and names the symbol.
+- If it calls a function that was renamed or removed, including one renamed because a type it takes changed, it fails with a dynamic-loader error ("undefined symbol ..."), at startup or at the first call depending on how it was linked. That is loud and names the symbol.
 - If it passes a retired enum value, the library rejects it with an invalid-value status.
 
 The cost is that a load failure takes down the whole application, including users who never touch the experimental feature.
@@ -442,9 +444,10 @@ Rejected as more machinery than needed: one ROCm-wide switch plus per-feature re
 **A boolean opt-in without revisions** (the existing rocBLAS and MIOpen style).
 Simpler, but upgrades break silently on semantic changes, and nothing tells a consumer that a feature changed.
 
-**Changing functions in place.**
+**Changing functions or types in place.**
 Allowed by the earlier draft, provided the version was bumped.
-Rejected: a stale binary that skips the runtime check would silently call changed code. Renaming turns that into a loud failure or a clean fallback.
+Rejected: a stale binary that skips the runtime check would silently call changed code, or pass a struct with the old layout. Renaming turns that into a loud failure or a clean fallback.
+The cost is that adding a member to a struct renames the struct and every function that takes it; for an experimental API that is meant to settle within four releases, that churn is acceptable.
 
 **Runtime function lookup now.**
 Deferred, not rejected (see Stale binaries).
