@@ -7,12 +7,15 @@ r"""Upload a built amd-repo-setup package to the per-run outputs.
 Not to be confused with ``upload_package_repo.py``, which uploads the package
 repository itself (the content packages and their index).
 
-The destination is
-``{run_id}-linux/amd-repo-setup/{os_profile}/amd-repo-setup-{tier}.{pkg_type}``
-(e.g. ``12345678901-linux/amd-repo-setup/rhel10/amd-repo-setup-stablerc.rpm``).
-It sits outside ``packages/<format>/``, so release promotion
-(``publish_rocm_to_release_buckets.py``) does not copy it. Publishing it to
-repo.amd.com is a separate step.
+The package keeps the file name the builder gave it and goes to one folder per
+distro, because each amd-repo-setup package is built for one distro (its
+repository file names that distro). The ROCm packages differ: they are built
+once per format and stored under ``deb/`` and ``rpm/``.
+
+    {run_id}-linux/amd-repo-setup/<os_profile>/<file>    (run's artifacts bucket)
+    v5/amd-repo-setup/<os_profile>/<file>                (after publish_rocm_to_release_buckets.py)
+
+e.g. ``12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
@@ -21,7 +24,6 @@ line has no artifacts bucket and raises; the upload job does not run for it.
 Usage:
   python build_tools/packaging/linux/upload_repo_setup_package.py \
       --dest-dir repo-setup-package-out \
-      --tier stablerc \
       --run-id 12345678901 \
       --os-profile rhel10 \
       --pkg-type rpm
@@ -41,7 +43,6 @@ if str(_BUILD_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
 from _therock_utils.storage_backend import create_storage_backend
-from _therock_utils.storage_location import StorageLocation
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_api import gha_set_output
 
@@ -56,9 +57,9 @@ _OS_PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 # staging directory. \Z (not $) so a trailing newline is not accepted.
 _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
-# The tier becomes part of the object's file name (stable, stablerc, nightly).
-# Lowercase letters and digits only, so it cannot add a path segment.
-_TIER_RE = re.compile(r"^[a-z][a-z0-9]*\Z")
+# The file name goes into the object key and $GITHUB_OUTPUT, so only the
+# characters the builder's names use are allowed (\Z rejects a trailing newline).
+_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._~+-]*\Z")
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -72,11 +73,6 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="Builder output directory holding exactly one built package",
     )
     p.add_argument(
-        "--tier",
-        required=True,
-        help="Repository tier, used in the uploaded file name (e.g. 'nightly')",
-    )
-    p.add_argument(
         "--run-id",
         required=True,
         help="GitHub Actions workflow run ID, which selects the per-run prefix",
@@ -88,7 +84,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--pkg-type",
         required=True,
         choices=["deb", "rpm"],
-        help="Package type, used to find the package and as the file extension",
+        help="Package type, used to find the built package",
     )
     p.add_argument(
         "--output-dir",
@@ -106,8 +102,6 @@ def parse_args(argv=None) -> argparse.Namespace:
         p.error(f"--run-id must be numeric: {args.run_id!r}")
     if not _OS_PROFILE_RE.match(args.os_profile):
         p.error(f"--os-profile has an unexpected format: {args.os_profile!r}")
-    if not _TIER_RE.match(args.tier):
-        p.error(f"--tier has an unexpected format: {args.tier!r}")
     if not args.dest_dir.is_dir():
         p.error(f"--dest-dir is not a directory: {args.dest_dir}")
     return args
@@ -135,12 +129,10 @@ def upload(args: argparse.Namespace) -> str:
     staging run uploads nothing there, so it writes no output.
     """
     package = find_package(args.dest_dir, args.pkg_type)
+    if not _FILENAME_RE.match(package.name):
+        raise ValueError(f"built package has an unexpected file name: {package.name!r}")
     root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    dest = StorageLocation(
-        root.bucket,
-        f"{root.prefix}/amd-repo-setup/{args.os_profile}"
-        f"/amd-repo-setup-{args.tier}.{args.pkg_type}",
-    )
+    dest = root.repo_setup_package(args.os_profile, package.name)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     # Log where the file actually goes: with --output-dir that is a local path,
     # and an s3:// URI would describe an upload that did not happen.

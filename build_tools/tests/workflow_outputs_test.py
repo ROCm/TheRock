@@ -164,6 +164,16 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
             "99999-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
         )
 
+    # -- amd-repo-setup packages --
+
+    def test_repo_setup_packages(self):
+        loc = self.root.repo_setup_packages()
+        self._assert_relative_path(loc, "99999-linux/amd-repo-setup")
+
+    def test_repo_setup_package(self):
+        loc = self.root.repo_setup_package("foo", "bar.deb")
+        self._assert_relative_path(loc, "99999-linux/amd-repo-setup/foo/bar.deb")
+
     # -- Python packages --
 
     def test_python_packages(self):

@@ -268,6 +268,31 @@ class WorkflowOutputRoot:
             self.bucket, f"{self.prefix}/logs/packaging/{pkg_type}/index.html"
         )
 
+    def repo_setup_packages(self) -> StorageLocation:
+        """Location for the ``amd-repo-setup`` bootstrap packages directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-linux/amd-repo-setup``, which
+        holds one folder per distro (see ``repo_setup_package()``).
+        ``publish_rocm_to_release_buckets.py`` publishes it as is to
+        ``v5/amd-repo-setup/`` in the release bucket.
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/amd-repo-setup")
+
+    def repo_setup_package(self, os_profile: str, filename: str) -> StorageLocation:
+        """Location for an ``amd-repo-setup`` bootstrap package.
+
+        ``{run_id}-linux/amd-repo-setup/{os_profile}/{filename}``, under the
+        builder's file name (e.g. ``amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``).
+
+        Args:
+            os_profile: Target distro profile (e.g. 'ubuntu2404', 'rhel10').
+            filename: The built package's file name.
+        """
+        return StorageLocation(
+            self.bucket,
+            f"{self.repo_setup_packages().relative_path}/{os_profile}/{filename}",
+        )
+
     # -- Python packages --------------------------------------------------------
 
     def python_packages(self) -> StorageLocation:

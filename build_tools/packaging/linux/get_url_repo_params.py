@@ -582,6 +582,19 @@ def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
 _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
 
+def parse_build_date(value: str) -> date | None:
+    """Parse a ``YYYYMMDD`` build date; empty means none (use today).
+
+    Raises:
+        ValueError: If ``value`` is not empty and not a real ``YYYYMMDD`` date.
+    """
+    if not value:
+        return None
+    if not re.fullmatch(r"[0-9]{8}", value, re.ASCII):
+        raise ValueError(f"build date must be YYYYMMDD, got {value!r}")
+    return datetime.strptime(value, "%Y%m%d").date()
+
+
 def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
     """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
 
@@ -617,31 +630,30 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
     """Emit every parameter the amd-repo-setup build matrix needs, in one output.
 
     Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
-    the build line configures and what follows from it -- ``stream``, ``tier``,
-    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``. A line with no
-    public stream gets all five empty, which callers read as "no package for
-    this line"; the matrix is still emitted.
+    the build line configures and what follows from it -- ``stream``,
+    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``, ``version_suffix``.
+    A line with no public stream gets all five empty, which callers read as
+    "no package for this line"; the matrix is still emitted.
     """
     # Deferred: build_repo_setup_package imports jinja2 at module level, and this
     # script's other subcommands run in a workflow job that installs no Python
     # packages. Only this subcommand needs the builder.
-    from build_repo_setup_package import (
-        REPO_ID_PREFIX,
-        is_signed,
-        list_profiles,
-        repo_id,
-        stream_shape,
-    )
+    from build_repo_setup_package import is_signed, list_profiles, stream_shape
 
+    try:
+        build_date = parse_build_date(args.build_date)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
     profiles = list_profiles(args.pkg_type)
     outputs = {
         "os_profiles": json.dumps(profiles),
         "images": json.dumps(get_container_image_map(profiles)),
         "stream": "",
-        "tier": "",
         "repo_base_url": "",
         "gpg_key_url": "",
         "repo_sub_folder": "",
+        "version_suffix": "",
     }
     stream = get_public_repo_stream(args.release_type)
     if stream:
@@ -652,22 +664,22 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
             )
             return 1
         outputs["stream"] = stream
-        # Names the stream's package file (amd-repo-setup-<tier>.<fmt>): the repo
-        # file stem without its prefix, so rc is "stablerc".
-        outputs["tier"] = repo_id(stream).removeprefix(f"{REPO_ID_PREFIX}-")
         outputs["repo_base_url"] = get_public_repo_base_url(args.release_type)
         outputs["gpg_key_url"] = get_public_repo_gpg_key_url(
             args.release_type, signed=is_signed(stream)
         )
-        # A build_id stream serves each build from its own dated folder; a flat
-        # one serves one tree at the root, and the builder rejects a sub-folder
-        # there. The run id is only validated where it is used.
+        # A build_id stream serves each build from its own dated folder (the
+        # builder rejects one for a flat stream), and its version carries only
+        # the date, so the run id is also the version suffix: one file per build.
         if shape == _SHAPE_BUILD_ID:
             try:
-                outputs["repo_sub_folder"] = nightly_sub_folder(args.run_id)
+                outputs["repo_sub_folder"] = nightly_sub_folder(
+                    args.run_id, today=build_date
+                )
             except ValueError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
+            outputs["version_suffix"] = args.run_id
     gha_set_output(outputs)
     return 0
 
@@ -954,9 +966,9 @@ def main(argv: list[str] | None = None) -> int:
     p_rp = subparsers.add_parser(
         "get-repo-setup-params",
         help=(
-            "Print os_profiles=, images=, stream=, tier=, repo_base_url=, "
-            "gpg_key_url= and repo_sub_folder= for an amd-repo-setup build. The last "
-            "five are empty for a line with no public repository (e.g. ci/dev)."
+            "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url=, "
+            "repo_sub_folder= and version_suffix= for an amd-repo-setup build. The "
+            "last five are empty for a line with no public repository (e.g. ci/dev)."
         ),
     )
     p_rp.add_argument(
@@ -971,6 +983,11 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         required=True,
         help="Release line (e.g. prerelease, release, nightly)",
+    )
+    p_rp.add_argument(
+        "--build-date",
+        default="",
+        help="Build date (YYYYMMDD) of the dated build folder; empty means today",
     )
     p_rp.add_argument(
         "--run-id",

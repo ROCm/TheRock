@@ -723,6 +723,7 @@ class MainFunctionTest(unittest.TestCase):
                 "rocm_deb_package_version",
                 "rocm_rpm_package_version",
                 "rocm_msi_package_version",
+                "rocm_build_date",
             },
         )
         self.assertEqual(
@@ -758,6 +759,7 @@ class MainFunctionTest(unittest.TestCase):
                 "rocm_deb_package_version": "7.99.0~pre2",
                 "rocm_rpm_package_version": "7.99.0~rc2",
                 "rocm_msi_package_version": f"7.99.{build_field}.0",
+                "rocm_build_date": compute_rocm_package_version.get_current_date(),
             }
         )
 
@@ -783,8 +785,34 @@ class MainFunctionTest(unittest.TestCase):
                 "rocm_deb_package_version": "7.99.0.custom1",
                 "rocm_rpm_package_version": "7.99.0.custom1",
                 "rocm_msi_package_version": f"7.99.{build_field}.0",
+                "rocm_build_date": compute_rocm_package_version.get_current_date(),
             }
         )
+
+    def test_sets_the_build_date(self):
+        # The current date, even where the version carries a different one
+        # (nightly-bkc uses the release-metadata base date).
+        version_data = {"rocm-version": "7.99.0", **TEST_BKC_VERSION_DATA}
+        with (
+            mock.patch.object(
+                compute_rocm_package_version,
+                "get_current_date",
+                return_value="20261106",
+            ),
+            mock.patch.object(
+                compute_rocm_package_version,
+                "load_version_file",
+                return_value=version_data,
+            ),
+            mock.patch.object(
+                compute_rocm_package_version, "gha_set_output"
+            ) as gha_set_output,
+        ):
+            compute_rocm_package_version.main(["--release-type", "nightly-bkc"])
+
+        outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(outputs["rocm_build_date"], "20261106")
+        self.assertIn("20260811", outputs["rocm_deb_package_version"])
 
     def test_build_variant_suffix_varies_by_local_version(self):
         """Build variant suffix uses + (no local) or . (has local version)."""

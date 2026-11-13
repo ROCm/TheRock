@@ -9,6 +9,7 @@ These release file types are supported:
 - [x] tarballs
 - [x] python packages
 - [x] native linux packages
+- [x] amd-repo-setup packages (linux, when the build uploaded them)
 - [x] native windows packages
 
 Example with ``--run-id 12345 --platform linux --release-type dev``:
@@ -43,6 +44,13 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
+    amd-repo-setup packages (nightly, prerelease), under the builder's file names:
+
+    s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+      -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
+    s3://therock-prerelease-artifacts/12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm
+      -> s3://therock-repo-amd-rc-core/v5/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm
+
     native windows packages (dev/nightly), with ``--platform windows``:
 
     s3://therock-dev-artifacts/12345-windows/packages/msi/
@@ -50,8 +58,8 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
 
 ASAN build variant:
 
-    For ASAN builds (--build-variant asan), python packages are skipped and
-    tarballs/native packages are published to separate paths:
+    For ASAN builds (--build-variant asan), python and amd-repo-setup packages
+    are skipped and tarballs/native packages are published to separate paths:
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
@@ -200,17 +208,34 @@ def _publish_python_packages_structured(
     logger.info("Copied %d python package files (structured)", len(plans))
 
 
+def _build_date(value: str) -> str:
+    """argparse type for ``--build-date``: ``YYYYMMDD``, or empty for today."""
+    if not value:
+        return datetime.date.today().strftime("%Y%m%d")
+    try:
+        if len(value) != 8 or not (value.isascii() and value.isdigit()):
+            raise ValueError
+        datetime.datetime.strptime(value, "%Y%m%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"must be YYYYMMDD, got {value!r}") from None
+    return value
+
+
 def publish_native_linux_packages(
     artifacts_root: WorkflowOutputRoot,
     release_type: str,
     backend: StorageBackend,
     build_variant: str = "release",
+    build_date: str | None = None,
 ) -> None:
     """Copy native Linux packages from the artifacts bucket to the release packages bucket.
 
     The source packages were uploaded by upload_package_repo.py (called from
     multi_arch_build_native_linux_packages.yml) and already include repodata
     (Packages/Release files for deb, repodata/ for rpm).
+
+    The dated folder uses ``build_date``, the run's build date (the nightly
+    amd-repo-setup package names the same folder), or today if none is given.
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-linux/packages/deb/
@@ -238,7 +263,7 @@ def publish_native_linux_packages(
     the merge logic in upload_package_repo.py (regenerate_repo_metadata_from_s3).
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
-    today = datetime.date.today().strftime("%Y%m%d")
+    today = build_date or datetime.date.today().strftime("%Y%m%d")
     is_asan = _is_asan_variant(build_variant)
 
     for pkg_type in ["deb", "rpm"]:
@@ -259,6 +284,28 @@ def publish_native_linux_packages(
         logger.info("Copied %d files for %s packages", count, pkg_type)
         if count == 0:
             raise FileNotFoundError(f"No {pkg_type} packages found at {source.s3_uri}")
+
+
+def publish_repo_setup_packages(
+    artifacts_root: WorkflowOutputRoot,
+    release_type: str,
+    backend: StorageBackend,
+    overwrite: bool = False,
+) -> None:
+    """Copy the amd-repo-setup packages from the artifacts bucket to the release bucket.
+
+    Files already published are left in place unless ``overwrite`` is set (for
+    re-publishing a corrected package by hand). Not every build uploads
+    packages, so finding none is not an error.
+    """
+    source = artifacts_root.repo_setup_packages()
+    dest_bucket = get_product_release_bucket_config(release_type, "core")
+    dest = StorageLocation(dest_bucket.name, "v5/amd-repo-setup")
+    logger.info("amd-repo-setup packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    if overwrite:
+        logger.warning("Replacing any amd-repo-setup packages already published")
+    count = backend.copy_directory(source, dest, skip_existing=not overwrite)
+    logger.info("Copied %d amd-repo-setup packages", count)
 
 
 def publish_native_windows_packages(
@@ -337,7 +384,22 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--skip-native-packages",
         action="store_true",
-        help="Skip publishing native Linux packages (deb/rpm)",
+        help="Skip publishing native Linux packages (deb/rpm repositories and the "
+        "amd-repo-setup packages)",
+    )
+    parser.add_argument(
+        "--overwrite-repo-setup-packages",
+        action="store_true",
+        help="Replace amd-repo-setup packages that are already published. For "
+        "re-publishing a corrected package by hand; by default a published "
+        "package is never replaced",
+    )
+    parser.add_argument(
+        "--build-date",
+        type=_build_date,
+        default="",
+        help="Build date (YYYYMMDD) of the dated package folders, shared with the "
+        "rest of the run; empty means today",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without copying"
@@ -372,8 +434,24 @@ def main(argv: list[str]) -> None:
         logger.info("Skipping python packages for ASAN build variant")
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(
-            artifacts_root, args.release_type, backend, args.build_variant
+            artifacts_root,
+            args.release_type,
+            backend,
+            args.build_variant,
+            build_date=args.build_date,
         )
+        # After the package repositories, which the amd-repo-setup package
+        # configures. ASAN builds don't build the package, and their packages
+        # go to packages-asan/, which it doesn't configure.
+        if not is_asan:
+            publish_repo_setup_packages(
+                artifacts_root,
+                args.release_type,
+                backend,
+                overwrite=args.overwrite_repo_setup_packages,
+            )
+        else:
+            logger.info("Skipping amd-repo-setup packages for ASAN build variant")
     if artifacts_root.platform == "windows" and not args.skip_native_packages:
         publish_native_windows_packages(artifacts_root, args.release_type, backend)
 
