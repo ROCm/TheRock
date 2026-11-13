@@ -645,6 +645,7 @@ test_matrix = {
             # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
             # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx117X architectures
             # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx908",
@@ -658,6 +659,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
                 # KNOWN FAILURE (timeout): Quick suite exceeds 900s on FP16 strided-batched clipped-ReLU
@@ -676,6 +678,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
             ],
@@ -1150,8 +1153,6 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
-        # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
-        # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
