@@ -658,6 +658,14 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
 source_paths = ["rocfft", "hipfft"]
 
+# NOTE: libhipcxx must be declared before prim (prim requires it). Features are
+# emitted in this file's order within an artifact group, and therock_add_feature
+# requires dependencies to be defined first.
+[artifacts.libhipcxx]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -697,11 +705,6 @@ source_paths = ["composablekernel"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
-
-[artifacts.libhipcxx]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
 
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
