@@ -18,7 +18,8 @@ On Windows:
   - run "hipInfo.exe"
 
 Driver commands (amd-smi, rocminfo, hipInfo) are run with check=True and will
-cause this script to exit non-zero if they fail. The KFD version check also
+cause this script to exit non-zero if they fail. amd-smi and rocminfo are each
+skipped for the GPU families listed below, for unrelated reasons noted there. The KFD version check also
 causes a non-zero exit when the version is below the supported minimum or
 cannot be queried. A version above the supported maximum produces a warning
 but does not fail.
@@ -45,6 +46,20 @@ _KFD_VERSION_MAX = (2, 0)  # exclusive
 
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
+
+# amd-smi runs CPU discovery during init, before it parses which processors
+# were asked for, and treats finding none as fatal -- it exits 196 having
+# printed no GPU information at all, even when invoked as `amd-smi static -g
+# all`. CPU discovery goes through ESMI, which needs /dev/hsmp (CAP_SYS_ADMIN
+# to open, regardless of mode) or /dev/cpu/*/msr (CAP_SYS_RAWIO). Neither is
+# available to a container that does not run as root, so amd-smi cannot
+# report on a GPU it can otherwise see perfectly well.
+#
+# This is not a GPU problem and the GPU checks here do not depend on it:
+# initialising the amdsmi library directly with INIT_AMD_GPUS on an affected
+# runner returns the expected handle and BDF, and rocminfo, which reaches the
+# device over KFD rather than ESMI, is unaffected and still checked below.
+_AMDSMI_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
 
 
 def _get_kfd_version() -> Tuple[int, int]:
@@ -157,14 +172,24 @@ def run_sanity(os_name: str) -> int:
         )
         
         # Linux: amd-smi static + rocminfo
-        run_command_with_search(
-            label="amd-smi static",
-            command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
-        )
-        # Check if rocminfo should be skipped for this GPU family
         amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        skip_amdsmi = any(
+            family in amdgpu_families for family in _AMDSMI_EXCLUDED_FAMILIES
+        )
+        if skip_amdsmi:
+            log(f"\n=== amd-smi static ===")
+            log(
+                f"Skipping amd-smi: disabled for {amdgpu_families} "
+                f"(excluded families: {_AMDSMI_EXCLUDED_FAMILIES})"
+            )
+        else:
+            run_command_with_search(
+                label="amd-smi static",
+                command="amd-smi",
+                args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
+        # Check if rocminfo should be skipped for this GPU family
         skip_rocminfo = any(
             family in amdgpu_families for family in _ROCMINFO_EXCLUDED_FAMILIES
         )
