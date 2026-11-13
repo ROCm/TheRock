@@ -82,8 +82,11 @@ on:
         default: "small"
       trigger_xla_tests:
         description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
-          the caller for exactly one representative matrix cell.
+          Unused on the CI path today (multi_arch_ci_linux.yml never sets it);
+          declared because configure_jax_release_matrix.py's generated matrix
+          rows carry this key, and every row key must be an input on both the
+          CI and release build workflows. See multi_arch_build_linux_jax_wheels.yml
+          for where it actually drives a test_xla job.
         type: boolean
         default: false
     outputs:
@@ -164,8 +167,7 @@ on:
           - large
         default: small
       trigger_xla_tests:
-        description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests.
+        description: "Unused on the CI path today; see multi_arch_build_linux_jax_wheels.yml."
         type: boolean
         default: false
 run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})
@@ -400,4 +402,3 @@ jobs:
       test_subset: ${{ matrix.test_subset }}
       test_timeout_minutes: ${{ matrix.test_timeout_minutes }}
       test_list: ${{ matrix.test_list }}
-      trigger_xla_tests: ${{ inputs.trigger_xla_tests }}
