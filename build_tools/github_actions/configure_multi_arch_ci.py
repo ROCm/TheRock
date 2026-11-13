@@ -71,6 +71,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from amdgpu_family_matrix import (
     CI_LABEL_REQUIRED_ARTIFACTS,
     all_build_variants,
+    build_variant_runs_tests,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     get_wsl_test_runner,
@@ -1868,6 +1869,7 @@ def _expand_build_config_for_platform(
     if test_only_families is None:
         test_only_families = []
     build_variant = variant_config["build_variant_label"]
+    current_triggers = _get_current_triggers(ci_inputs, git_context)
 
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
@@ -1919,15 +1921,19 @@ def _expand_build_config_for_platform(
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # Which triggers run this variant's tests is declared by its
+            # "tests_on_trigger" in amdgpu_family_matrix.py's all_build_variants.
+            # workflow_dispatch implicitly allows tests, as it does per-family.
+            if not (
+                ci_inputs.is_workflow_dispatch
+                or build_variant_runs_tests(variant_config, current_triggers)
+            ):
                 test_runs_on = ""
                 print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
+                    f"  {family_name}: {build_variant} does not run tests on "
+                    f"{sorted(current_triggers)}, disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
@@ -1946,7 +1952,7 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
             else:
