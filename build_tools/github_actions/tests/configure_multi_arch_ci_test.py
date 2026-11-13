@@ -20,6 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+import configure_pytorch_release_matrix as pytorch_release_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
@@ -2551,18 +2552,42 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x"],
             windows_families=[],
         )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
+        # Keep this propagation test independent of actual release support.
+        with (
+            patch.object(
+                pytorch_release_matrix,
+                "RELEASE_PYTORCH_REFS",
+                {"linux": ["release/fake-old", "release/fake-new"]},
+            ),
+            patch.object(
+                pytorch_release_matrix,
+                "EXCLUDED_IMPLICIT_TARGETS",
+                {
+                    "linux": {
+                        "release/fake-old": {"fake-target-z", "fake-target-a"},
+                        "release/fake-new": set(),
+                    },
+                },
+            ),
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
+            )
 
         exclusions = {
             row["pytorch_git_ref"]: row["exclude_implicit_targets"]
             for row in result.linux.pytorch_build_matrix
         }
-        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
+        self.assertEqual(
+            exclusions,
+            {
+                "release/fake-old": "fake-target-a;fake-target-z",
+                "release/fake-new": "",
+            },
+        )
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
