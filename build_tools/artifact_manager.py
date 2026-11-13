@@ -48,6 +48,7 @@ from dataclasses import dataclass
 import os
 import platform as platform_module
 import shutil
+import stat
 import sys
 import threading
 import time
@@ -790,36 +791,28 @@ def upload_artifact(request: UploadRequest) -> bool:
     else:
         return False
 
-    # Fingerprints are optional metadata. Their failures must not retry the
-    # archive or fail an otherwise successful artifact publication.
+    # Missing fingerprints are skipped; unexpected local filesystem errors
+    # propagate. Fingerprint upload failures use separate, non-blocking retries.
+    fingerprint_name = (
+        request.source_path.name.removesuffix(".tar.zst").removesuffix(".tar.xz")
+        + ".fprint"
+    )
+    # Archives come from build/artifacts or build/.upload_cache.
+    # Fingerprints remain in build/artifacts in both cases.
+    fingerprint_path = (
+        request.source_path.parent.parent / "artifacts" / fingerprint_name
+    )
     try:
-        artifact_name = ArtifactName.from_filename(request.artifact_key)
-        if artifact_name is None:
-            log(
-                f"  !! WARNING: Cannot determine fingerprint for "
-                f"{request.artifact_key}"
-            )
-            return True
-
-        fingerprint_name = (
-            f"{artifact_name.name}_"
-            f"{artifact_name.component}_"
-            f"{artifact_name.target_family}.fprint"
-        )
-        # Archives come from build/artifacts or build/.upload_cache.
-        # Fingerprints remain in build/artifacts in both cases.
-        fingerprint_path = (
-            request.source_path.parent.parent / "artifacts" / fingerprint_name
-        )
-        if not fingerprint_path.is_file():
-            log(f"  == Skipping missing fingerprint: {fingerprint_path}")
-            return True
-    except Exception as e:
-        log(
-            f"  !! WARNING: Cannot locate fingerprint for "
-            f"{request.artifact_key}: {e}"
-        )
+        fingerprint_stat = fingerprint_path.stat()
+    except FileNotFoundError:
+        log(f"  == Skipping missing fingerprint: {fingerprint_path}")
         return True
+
+    if not stat.S_ISREG(fingerprint_stat.st_mode):
+        raise ValueError(f"Fingerprint is not a regular file: {fingerprint_path}")
+
+    with fingerprint_path.open("rb"):
+        pass
 
     # Retry only the fingerprint, after the archive/checksum have succeeded.
     for attempt in range(MAX_RETRIES):
