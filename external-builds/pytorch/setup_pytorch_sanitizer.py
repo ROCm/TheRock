@@ -19,6 +19,7 @@ _COMPANION_BUILDS = (
     ("build_triton", "--build-triton"),
     ("build_pytorch_audio", "--build-pytorch-audio"),
     ("build_pytorch_vision", "--build-pytorch-vision"),
+    ("build_pytorch_torchcodec", "--build-pytorch-torchcodec"),
     ("build_apex", "--build-apex"),
 )
 

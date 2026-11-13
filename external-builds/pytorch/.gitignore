@@ -3,6 +3,7 @@ src/
 /pytorch
 /pytorch_vision
 /pytorch_audio
+/pytorch_torchcodec
 /triton
 
 # Manifest files

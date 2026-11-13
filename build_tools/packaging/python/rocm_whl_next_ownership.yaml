@@ -316,6 +316,9 @@ python_indexes:
       torchaudio:
         owner_path: pytorch/whl-next
         stream_group: all
+      torchcodec:
+        owner_path: pytorch/whl-next
+        stream_group: all
       torchvision:
         owner_path: pytorch/whl-next
         stream_group: all

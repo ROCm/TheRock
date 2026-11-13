@@ -1,13 +1,17 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Writes torch_version, torchaudio_version, torchvision_version, triton_version, and apex_version to GITHUB_OUTPUT.
+"""Writes torch_version, torchaudio_version, torchvision_version, triton_version, apex_version, and torchcodec_version to GITHUB_OUTPUT.
 
 Fails if any wheels that were expected for the platform were not set.
 
 Currently,
 * Windows expects torch, torchaudio, and torchvision
 * Linux expects torch, torchaudio, torchvision, triton, and apex
+* torchcodec is optional on all platforms: it is only built for release and
+  nightly builds, it is skipped for Python versions that upstream does not
+  support, and the torch nightly build is allowed to fail. torchcodec_version is
+  only written if the wheel exists.
 """
 
 import argparse
@@ -63,6 +67,7 @@ def get_all_wheel_versions(
     torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
     triton_version = get_wheel_version(package_dist_dir, "triton")
     apex_version = get_wheel_version(package_dist_dir, "apex")
+    torchcodec_version = get_wheel_version(package_dist_dir, "torchcodec")
     _log("")
 
     if torch_version:
@@ -93,6 +98,11 @@ def get_all_wheel_versions(
         _log("Did not find apex (that's okay, is not currently built on Windows)")
     else:
         raise FileNotFoundError("Did not find apex wheel")
+
+    if torchcodec_version:
+        all_versions = all_versions | {"torchcodec_version": torchcodec_version}
+    else:
+        _log("Did not find torchcodec (that's okay, it is optional)")
 
     return all_versions
 

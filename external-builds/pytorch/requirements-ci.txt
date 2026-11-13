@@ -4,3 +4,8 @@
 # of dvc[s3] as in TheRock/requirements.txt
 boto3>1.42.0
 packaging>=26.0
+
+# torchcodec build requirements (built with --no-isolation). Its CMake needs
+# the pybind11 CMake package, which pybind11[global] installs.
+scikit-build-core>=0.10
+pybind11[global]

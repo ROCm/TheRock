@@ -43,11 +43,11 @@ stable, nightly, and dev release channels.
 
 The following projects are not currently packaged and released by TheRock, functionality may vary.
 
-| Project       | Linux support        | Windows support  | Notes                                                                     |
-| ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------- |
-| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter) |
-| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)  |
-| torchcodec    | ❌ Not supported     | ❌ Not supported | See Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)            |
+| Project       | Linux support        | Windows support  | Notes                                                                                                                          |
+| ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter)                                                      |
+| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)                                                       |
+| torchcodec    | 🚧 In progress       | 🚧 In progress   | CPU-only build, see [Building torchcodec](#building-torchcodec) and Issue [#1490](https://github.com/ROCm/TheRock/issues/1490) |
 
 ### Supported PyTorch versions
 
@@ -154,6 +154,7 @@ Now checkout repositories using their default branches:
   python pytorch_audio_repo.py checkout
   python pytorch_vision_repo.py checkout
   python pytorch_apex_repo.py checkout
+  python pytorch_torchcodec_repo.py checkout  # optional, see "Building torchcodec"
   ```
 
 - On Windows, use shorter paths to avoid command length limits:
@@ -203,6 +204,37 @@ mix/match build steps.
     --pytorch-vision-dir C:/b/vision ^
     --output-dir %HOME%/tmp/pyout
   ```
+
+### Building torchcodec
+
+[torchcodec](https://github.com/meta-pytorch/torchcodec) is built when a
+checkout exists in `pytorch_torchcodec` (or `--pytorch-torchcodec-dir` is set),
+or with `--build-pytorch-torchcodec`. Pass `--no-build-pytorch-torchcodec` to
+skip it.
+
+- On Windows the build needs the MSVC environment (`cl.exe` in `PATH`, for
+  example a Visual Studio developer command prompt, or `vcvarsall.bat x64`
+  first). Like the other wheels, torchcodec is built with the `clang-cl` of the
+  ROCm SDK. Upstream builds it with MSVC, but with the ROCm torch the CMake
+  configuration fails on mixing Clang and MSVC compilers. Set
+  `TORCHCODEC_WINDOWS_COMPILER=msvc` to build with `cl.exe` instead. The build
+  has been checked on a Windows machine, but not in CI yet.
+- The build is CPU-only: upstream torchcodec has no ROCm/HIP support. It links
+  against the pre-built non-GPL FFmpeg that upstream downloads at build time
+  (`BUILD_AGAINST_ALL_FFMPEG_FROM_S3`). Image decoders are not built (set
+  `TORCHCODEC_BUILD_IMAGE=1` to build them, this needs the codec libraries).
+- The torchcodec release is selected from the torch version in
+  `pytorch_torchcodec_repo.py` (`DEFAULT_STABLE_TAG` and the optional
+  `TORCH_VERSION_TO_TAG` overrides). For torch nightly use
+  `python pytorch_torchcodec_repo.py checkout --repo-hashtag nightly`.
+- Upstream supports Python up to 3.14, newer Python versions skip torchcodec.
+- The build requirements are not installed by the script. Install them first
+  with `python -m pip install -r requirements-ci.txt` (scikit-build-core and
+  pybind11).
+- torchcodec loads the FFmpeg shared libraries from the system at runtime,
+  they are not part of the wheel. Install FFmpeg (for example
+  `apt install ffmpeg`) to decode. On Windows install a shared FFmpeg build and
+  make its `bin` directory with the DLLs available in `PATH`.
 
 ## Running/testing PyTorch
 
@@ -516,6 +548,7 @@ the latest (potentially unstable) code:
 - https://github.com/pytorch/audio/tree/main
 - https://github.com/pytorch/vision/tree/main
 - https://github.com/ROCm/apex/tree/master
+- https://github.com/meta-pytorch/torchcodec/tree/main
 
 ```bash
 python pytorch_torch_repo.py checkout --repo-hashtag main
@@ -524,6 +557,7 @@ python pytorch_vision_repo.py checkout --repo-hashtag main
 # Note that triton will be checked out at the PyTorch pin.
 python pytorch_triton_repo.py checkout
 python pytorch_apex_repo.py checkout --repo-hashtag master
+python pytorch_torchcodec_repo.py checkout --repo-hashtag main
 ```
 
 #### PyTorch nightly branches
@@ -535,6 +569,7 @@ tracking the latest pytorch.org nightly release:
 - https://github.com/pytorch/audio/tree/nightly
 - https://github.com/pytorch/vision/tree/nightly
 - https://github.com/ROCm/apex/tree/master
+- https://github.com/meta-pytorch/torchcodec/tree/nightly
 
 ```bash
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
@@ -543,6 +578,7 @@ python pytorch_vision_repo.py checkout --repo-hashtag nightly
 # Note that triton will be checked out at the PyTorch pin.
 python pytorch_triton_repo.py checkout
 python pytorch_apex_repo.py checkout --repo-hashtag master
+python pytorch_torchcodec_repo.py checkout --repo-hashtag nightly
 ```
 
 #### ROCm PyTorch release branches
