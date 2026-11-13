@@ -7,7 +7,8 @@
 # Wraps multi_arch_build_portable_linux_pytorch_wheels.yml and
 # multi_arch_build_windows_pytorch_wheels.yml with GPU checkboxes and ROCm
 # version keywords (resolved by resolve_dev_pytorch_wheel_inputs.py), then
-# summarizes the standard test suite from every platform in this run.
+# summarizes each platform's build in the run summary. Test results are in each
+# platform's Test PyTorch jobs.
 #
 # Dev wheel versions carry only the PyTorch commit and ROCm version, so two
 # concurrent runs of the same branch and ROCm version would overwrite each
@@ -197,8 +198,8 @@ jobs:
       test_package_extra_index_url: ${{ inputs.rocm_package_index_url }}
       release_type: dev
 
-  test_summary:
-    name: Dev PyTorch Wheels Test Summary
+  summary:
+    name: Dev PyTorch Wheels Summary
     if: ${{ always() && needs.resolve_inputs.result == 'success' }}
     needs: [resolve_inputs, build_linux, build_windows]
     runs-on: ubuntu-26.04
@@ -206,13 +207,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
-        with:
-          persist-credentials: false
-          sparse-checkout: external-builds/pytorch/summarize_test_results.py
-
       - name: Summarize builds
         env:
           LINUX_RESULT: ${{ needs.build_linux.result }}
@@ -241,17 +235,3 @@ jobs:
               echo "\`\`\`"
             done
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Download test reports
-        if: ${{ inputs.test_level != 'none' }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: artifacts
-          pattern: test-reports-*
-
-      - name: Summarize tests
-        if: ${{ inputs.test_level != 'none' }}
-        run: |
-          mkdir -p artifacts
-          python3 external-builds/pytorch/summarize_test_results.py \
-            --standard-dir artifacts

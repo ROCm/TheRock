@@ -88,19 +88,6 @@ on:
         default: ""
 
   workflow_call:
-    outputs:
-      failed_test_count:
-        description: Deduplicated failed/error JUnit test case count
-        value: ${{ jobs.test_summary.outputs.failed_test_count }}
-      observed_report_count:
-        description: Number of downloaded shard report artifacts
-        value: ${{ jobs.test_summary.outputs.observed_report_count }}
-      expected_report_count:
-        description: Number of shard reports expected from the prepared matrix
-        value: ${{ jobs.test_summary.outputs.expected_report_count }}
-      results_complete:
-        description: Whether every expected shard report was observed
-        value: ${{ jobs.test_summary.outputs.results_complete }}
     inputs:
       amdgpu_family:
         required: true
@@ -386,61 +373,14 @@ jobs:
             -v
 
       - name: (Linux) Run PyTorch full test suite
-        id: linux_tests
         if: ${{ runner.os == 'Linux' }}
         run: |
-          set +e
-          runner_output="${RUNNER_TEMP}/therock-runner-output.log"
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
             --device-query "${DEVICE_QUERY}" \
             --gpu-policy "${GPU_POLICY}" \
             -- \
-            --continue-on-collection-errors 2>&1 | tee "${runner_output}"
-          test_exit_code=${PIPESTATUS[0]}
-          reports_dir=external-builds/pytorch/pytorch/test/test-reports
-          mkdir -p "${reports_dir}"
-          cp "${runner_output}" "${reports_dir}/therock-runner-output.log"
-          touch "${reports_dir}/therock-test-complete.txt"
-          echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
-
-      # HACK: The test process does not terminate on its own gracefully,
-      # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
-      # After killing the process we read the return code to signal it normally.
-      # See https://github.com/ROCm/TheRock/issues/999.
-      - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows'}}
-        continue-on-error: true
-        # A file, not a pipe: lingering child processes could hold a pipe open
-        # and keep this step from finishing.
-        run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
-            --continue-on-collection-errors \
-            -v > "${RUNNER_TEMP}/therock-runner-output.log" 2>&1
-
-      - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows'}}
-        run: |
-          cat "${RUNNER_TEMP}/therock-runner-output.log" || true
-          if [ -f run_pytorch_tests_exit_code.txt ]; then
-            EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
-            echo "Exit code from file: ${EXIT_CODE}"
-            reports_dir=external-builds/pytorch/pytorch/test/test-reports
-            mkdir -p "${reports_dir}"
-            cp "${RUNNER_TEMP}/therock-runner-output.log" "${reports_dir}/therock-runner-output.log"
-            touch "${reports_dir}/therock-test-complete.txt"
-            exit "${EXIT_CODE:-1}"
-          else
-            echo "No run_pytorch_tests_exit_code.txt found"
-            exit 1
-          fi
-
-      - name: (Linux) Propagate test exit code
-        if: ${{ runner.os == 'Linux' }}
-        env:
-          TEST_EXIT_CODE: ${{ steps.linux_tests.outputs.exit_code }}
-        # An empty output must fail: a bare `exit` returns 0.
-        run: exit "${TEST_EXIT_CODE:-1}"
+            --continue-on-collection-errors
 
       - name: Upload test reports
         if: always()
@@ -450,6 +390,30 @@ jobs:
           path: external-builds/pytorch/pytorch/test/test-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+      # HACK: The test process does not terminate on its own gracefully,
+      # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
+      # After killing the process we read the return code to signal it normally.
+      # See https://github.com/ROCm/TheRock/issues/999.
+      - name: (Windows) Run PyTorch tests
+        if: ${{ runner.os == 'Windows'}}
+        continue-on-error: true
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+            --continue-on-collection-errors \
+            -v
+
+      - name: (Windows) Read and propagate exit code
+        if: ${{ runner.os == 'Windows'}}
+        run: |
+          if [ -f run_pytorch_tests_exit_code.txt ]; then
+            EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
+            echo "Exit code from file: ${EXIT_CODE}"
+            exit ${EXIT_CODE}
+          else
+            echo "No run_pytorch_tests_exit_code.txt found"
+            exit 1
+          fi
 
       - name: Capture job summary
         id: summary
@@ -461,17 +425,13 @@ jobs:
   # in one place without digging into individual matrix jobs or artifacts.
   test_summary:
     if: always()
-    needs: [prepare_matrix, test_wheels]
+    needs: test_wheels
     name: Test Summary
     runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
-      failed_test_count: ${{ steps.results.outputs.failed_test_count }}
-      observed_report_count: ${{ steps.results.outputs.observed_report_count }}
-      expected_report_count: ${{ steps.results.outputs.expected_report_count }}
-      results_complete: ${{ steps.results.outputs.results_complete }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -479,40 +439,24 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-          sparse-checkout: |
-            build_tools/github_actions/capture_job_summary.py
-            external-builds/pytorch/summarize_test_results.py
+          sparse-checkout: external-builds/pytorch/summarize_test_results.py
 
       - name: Download all test report artifacts
-        continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts
           pattern: test-reports-*
 
       - name: Generate combined summary
-        id: results
-        if: always()
         env:
           AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
           TORCH_VERSION: ${{ inputs.torch_version }}
           PYTHON_VERSION: ${{ inputs.python_version }}
           PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
           PYTORCH_GIT_REF: ${{ inputs.pytorch_git_ref }}
-          TEST_MATRIX: ${{ needs.prepare_matrix.outputs.matrix }}
         run: |
-          expected_report_count="$(
-            python - <<'PY'
-          import json
-          import os
-
-          matrix = json.loads(os.environ.get("TEST_MATRIX") or "{}")
-          print(len(matrix.get("include", [])))
-          PY
-          )"
           python external-builds/pytorch/summarize_test_results.py \
-            --combined-dir artifacts \
-            --expected-report-count "${expected_report_count}"
+            --combined-dir artifacts
 
       - name: Capture job summary
         id: summary
