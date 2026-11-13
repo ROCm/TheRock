@@ -11,11 +11,12 @@ local developer builds and CI builds, with a shared remote cache server
 so that cache entries can be reused across CI runners.
 
 [sccache](https://github.com/mozilla/sccache) is an alternative compiler
-cache with similar goals. We use sccache when building PyTorch and are
-considering standardizing on a cache setup that works well across our full
-ecosystem of projects using shared infrastructure (e.g., cache servers).
-
-This page focuses on just ccache, which is the current default for TheRock CI.
+cache with similar goals. We are evaluating both ccache and sccache for
+use across ROCm and downstream frameworks like PyTorch (see
+`build_tools/setup_sccache_rocm.py`). The goal is to standardize on a
+cache setup that works well across our full ecosystem of projects using
+shared infrastructure (e.g., cache servers). This page focuses on ccache,
+which is the current default for TheRock CI.
 
 ### Key files
 
