@@ -38,11 +38,11 @@ class TorchWheelPlanTest(unittest.TestCase):
                 self.assertFalse(plan.split_torchvision)
                 self.assertEqual(plan.torch_only_arg, "--torch-only")
 
-    def test_tsan_is_not_an_asan_build(self):
-        plan = plan_for("tsan")
-
-        self.assertFalse(plan.build_torch_only)
-        self.assertEqual(plan.build_variant_arg, "")
+    def test_unsupported_variants_are_rejected(self):
+        for variant in ("tsan", "lsan", "asann"):
+            with self.subTest(variant=variant):
+                with self.assertRaisesRegex(ValueError, "unsupported build variant"):
+                    plan_for(variant)
 
     def test_variant_with_whitespace_is_rejected(self):
         for variant in ("asan debug", "asan\nFOO=bar"):
@@ -55,7 +55,7 @@ class TorchWheelPlanTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / "github_env"
 
-            pytorch_wheel_variant.write_github_env(plan, os.fspath(env_file))
+            pytorch_wheel_variant.write_github_env(plan, env_file)
             text = env_file.read_text(encoding="utf-8")
 
         self.assertIn("PYTORCH_BUILD_TORCH_ONLY=true\n", text)

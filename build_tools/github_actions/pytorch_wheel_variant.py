@@ -5,12 +5,10 @@
 """Decide how a PyTorch wheel job treats a release build variant.
 
 ``asan``, ``asan-debug``, ``host-asan``, and ``host-asan-debug`` build torch
-with AddressSanitizer and skip companion projects. ``release`` keeps the
-normal checkouts, torchvision split, and tests. TSan and LSan are unchanged
-until they have a wheel build.
-
-The rule is the same one ``setup_pytorch_sanitizer.selected_sanitizer`` uses:
-a variant selects AddressSanitizer when it contains ``asan``.
+with AddressSanitizer and skip companion projects. ``release`` and an empty
+value keep the normal checkouts, torchvision split, and tests. Any other
+name, including ``tsan`` and ``lsan``, is rejected before the PyTorch
+checkout starts.
 """
 
 import argparse
@@ -18,12 +16,25 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 # Letters, digits, and . _ + - only, so the value can be written to GITHUB_ENV.
 #   host-asan-debug -> accepted
 #   asan debug      -> rejected
 #   asan\nFOO=bar   -> rejected
 _VARIANT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+# Names this wheel job builds. A typo or a sanitizer without a wheel build
+# fails here, before the PyTorch checkout, instead of publishing as a release wheel.
+_SUPPORTED_VARIANTS = frozenset(
+    {
+        "release",
+        "asan",
+        "asan-debug",
+        "host-asan",
+        "host-asan-debug",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -41,14 +52,21 @@ def plan_for(variant: str) -> TorchWheelPlan:
 
     An empty variant is the normal release build. A value with a space or a
     newline is rejected so it cannot be written into ``GITHUB_ENV``.
-    ``host-asan-debug`` is accepted. ``asan debug`` and ``asan\\nFOO=bar``
-    are not.
+    Only ``release`` and the four asan variants are accepted. ``tsan``,
+    ``lsan``, and a misspelling raise ``ValueError``.
     """
     variant = variant.strip()
     if variant and _VARIANT_RE.fullmatch(variant) is None:
         raise ValueError(
             f"invalid build variant {variant!r}: "
             "use one word like host-asan-debug, with no spaces or newlines"
+        )
+    if not variant:
+        variant = "release"
+    if variant not in _SUPPORTED_VARIANTS:
+        supported = ", ".join(sorted(_SUPPORTED_VARIANTS))
+        raise ValueError(
+            f"unsupported build variant {variant!r}: expected one of {supported}"
         )
     if "asan" in variant:
         return TorchWheelPlan(
@@ -77,9 +95,9 @@ def github_env_lines(plan: TorchWheelPlan) -> list[str]:
     ]
 
 
-def write_github_env(plan: TorchWheelPlan, env_file: str) -> None:
+def write_github_env(plan: TorchWheelPlan, env_file: Path) -> None:
     """Append the plan to a GitHub Actions environment file."""
-    with open(env_file, "a", encoding="utf-8") as handle:
+    with env_file.open("a", encoding="utf-8") as handle:
         handle.write("\n".join(github_env_lines(plan)) + "\n")
 
 
@@ -102,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     if not env_file:
         print("GITHUB_ENV is not set", file=sys.stderr)
         return 1
-    write_github_env(plan, env_file)
+    write_github_env(plan, Path(env_file))
     return 0
 
 
