@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for publish_rocm_to_release_buckets.py."""
 
+import io
 import os
 import sys
 import unittest
@@ -149,7 +150,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
-    def test_asan_skips_python_packages(self, mock_copy):
+    def test_asan_skips_python_packages_in_legacy_mode(self, mock_copy):
         mock_copy.return_value = 2
         main(
             [
@@ -166,7 +167,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Only tarballs should be copied (python packages skipped for ASAN)
+        # Only tarballs copied (python skipped in legacy mode for ASAN isolation)
         self.assertEqual(mock_copy.call_count, 1)
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
@@ -242,37 +243,84 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.list_files")
-    def test_structured_python_index_override(
-        self, mock_list, mock_copy_file, mock_copy_dir
-    ):
-        mock_copy_dir.return_value = 2  # tarballs
-        mock_list.return_value = [
-            StorageLocation(
-                "therock-dev-artifacts",
-                "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
-            ),
+    def test_structured_python_index(self, mock_list, mock_copy_file, mock_copy_dir):
+        # Index is computed from --index-type and --build-variant.
+        test_cases = [
+            ("release", None, "whl-next"),
+            ("release", "whl", "whl"),
+            ("asan-debug", None, "whl-next-asan"),
+            ("host-asan", None, "whl-next-asan"),
         ]
-        main(
-            [
-                "--run-id",
-                "123",
-                "--platform",
-                "linux",
-                "--release-type",
-                "dev",
-                "--structured",
-                "--python-index",
-                "whl",
-                "--skip-native-packages",
-                "--dry-run",
-            ]
-        )
-        _, dest = mock_copy_file.call_args_list[0].args
-        self.assertEqual(
-            dest.relative_path,
-            "v5/rocm/core/whl/rocm-sdk-core/"
-            "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
-        )
+        for build_variant, index_type, expected_index in test_cases:
+            with self.subTest(build_variant=build_variant, index_type=index_type):
+                mock_copy_dir.reset_mock()
+                mock_copy_file.reset_mock()
+                mock_list.reset_mock()
+                mock_copy_dir.return_value = 2  # tarballs
+                mock_list.return_value = [
+                    StorageLocation(
+                        "therock-dev-artifacts",
+                        "123-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+                    ),
+                ]
+                args = [
+                    "--run-id",
+                    "123",
+                    "--platform",
+                    "linux",
+                    "--release-type",
+                    "dev",
+                    "--structured",
+                    "--build-variant",
+                    build_variant,
+                    "--skip-native-packages",
+                    "--dry-run",
+                ]
+                if index_type:
+                    args.extend(["--index-type", index_type])
+                main(args)
+                _, dest = mock_copy_file.call_args_list[0].args
+                self.assertEqual(
+                    dest.relative_path,
+                    f"v5/rocm/core/{expected_index}/rocm-sdk-core/"
+                    "rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl",
+                )
+
+        # Unsupported combinations fail before anything is copied, so the job
+        # does not report success: ASAN is only published to whl-next-asan, and
+        # variants without release paths yet (e.g. tsan) are not published.
+        rejected_cases = [
+            (
+                ["--build-variant", "asan", "--index-type", "whl"],
+                "only published to whl-next",
+            ),
+            (["--build-variant", "tsan"], "not supported for publishing yet"),
+        ]
+        for extra_args, message in rejected_cases:
+            with self.subTest(extra_args=extra_args):
+                mock_copy_dir.reset_mock()
+                mock_copy_file.reset_mock()
+                with (
+                    mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+                    self.assertRaises(SystemExit) as exit_ctx,
+                ):
+                    main(
+                        [
+                            "--run-id",
+                            "123",
+                            "--platform",
+                            "linux",
+                            "--release-type",
+                            "dev",
+                            "--structured",
+                            "--dry-run",
+                            *extra_args,
+                        ]
+                    )
+                self.assertEqual(exit_ctx.exception.code, 2)
+                self.assertIn(message, stderr.getvalue())
+                mock_copy_dir.assert_not_called()
+                mock_copy_file.assert_not_called()
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_file")
@@ -314,7 +362,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
-        # Calls: tarballs, deb, rpm (no python for ASAN)
+        # Calls: tarballs, deb, rpm (python skipped in legacy mode for ASAN)
         self.assertEqual(mock_copy.call_count, 3)
         # deb packages go to packages-asan path
         deb_source, deb_dest = mock_copy.call_args_list[1].args
@@ -337,7 +385,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
     def test_asan_debug_publishes_same_as_asan(self, mock_copy):
         # 'asan-debug' is a build_variant_suffix alias for 'asan' (see
         # amdgpu_family_matrix.py) — it must publish to the same tarball-asan
-        # path and skip python packages, exactly like 'asan'.
+        # path and skip python packages in legacy mode, exactly like 'asan'.
         mock_copy.return_value = 2
         main(
             [
@@ -354,6 +402,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
             ]
         )
 
+        # Only tarballs (python skipped in legacy mode for ASAN)
         self.assertEqual(mock_copy.call_count, 1)
         tarball_source, tarball_dest = mock_copy.call_args_list[0].args
         self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
@@ -386,6 +435,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                     ]
                 )
 
+                # Only tarballs (python skipped in legacy mode for ASAN)
                 self.assertEqual(mock_copy.call_count, 1)
                 tarball_source, tarball_dest = mock_copy.call_args_list[0].args
                 self.assertEqual(tarball_source.relative_path, "123-linux/tarballs")
