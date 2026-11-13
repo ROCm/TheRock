@@ -24,6 +24,11 @@ Each skill exposes three actions you invoke in one sentence:
 Component repositories add their own thin overlays on top (for example, `hipblaslt-pr-quality` in
 `rocm-libraries`). Overlays may tighten but never weaken the base rules.
 
+The base skill also carries a writing guide,
+[`prose-style-context.md`](rocm-pr-quality/prose-style-context.md), for PR descriptions, review
+comments, and handoffs. The author and review actions apply it when they draft or critique a
+description.
+
 ## Related automated check
 
 [`therock_pr_bot/`](therock_pr_bot/) is the **enforcement** counterpart to the advisory skills: an
