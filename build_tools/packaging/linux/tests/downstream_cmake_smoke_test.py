@@ -95,7 +95,7 @@ class CommandTests(unittest.TestCase):
             driver.write_text("# driver\n")
             cmake = root / "cmake"
             cmake.write_text("#!/bin/sh\n")
-            os.chmod(cmake, 0o755)
+            os.chmod(cmake, 0o700)
             binary = root / "build"
             with patch.object(sdk.subprocess, "run") as run:
                 run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
@@ -120,12 +120,11 @@ class CommandTests(unittest.TestCase):
 
 
 class ArgumentAndRunTests(unittest.TestCase):
-    def test_non_executable_cmake_is_rejected(self) -> None:
-        """A file that is not executable is not a usable cmake."""
+    def test_directory_is_rejected_as_cmake(self) -> None:
+        """A directory is not an executable cmake on any platform."""
         with tempfile.TemporaryDirectory() as tmp:
             cmake = Path(tmp) / "cmake"
-            cmake.write_text("#!/bin/sh\n")
-            os.chmod(cmake, 0o600)
+            cmake.mkdir()
             with patch.dict(os.environ, {"PATH": ""}):
                 with self.assertRaisesRegex(ValueError, "cmake executable not found"):
                     sdk.resolve_cmake(str(cmake))
@@ -150,7 +149,7 @@ class ArgumentAndRunTests(unittest.TestCase):
             driver.write_text("# driver\n")
             cmake = root / "cmake"
             cmake.write_text("#!/bin/sh\n")
-            os.chmod(cmake, 0o755)
+            os.chmod(cmake, 0o700)
             argv = [
                 "--prefix",
                 str(prefix),
