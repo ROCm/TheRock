@@ -482,3 +482,35 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # Feeds the XLA test pipeline from ROCm wheels already built above (no
+  # distro tarball needed for CI): pip-installs rocm[libraries,devel] from
+  # the find-links URL and resolves ROCM_PATH locally. See
+  # multi_arch_build_linux_jax_wheels_ci.yml's jaxlib build for the same
+  # ROCM_PATH="$(rocm-sdk path --root)" pattern.
+  test_xla:
+    needs: [build_python_packages]
+    name: Test XLA
+    if: >-
+      ${{
+        !failure() && !cancelled() && !contains(needs.*.result, 'cancelled') &&
+        fromJSON(inputs.build_config).build_jax == true &&
+        contains(fromJSON(inputs.build_config).dist_amdgpu_families, 'gfx950-dcgpu')
+      }}
+    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
+    with:
+      test_amdgpu_family: gfx950
+      rocm_package_find_links_url: >-
+        ${{
+          needs.build_python_packages.outputs.kpack_split == 'true'
+          && needs.build_python_packages.outputs.package_find_links_url
+          || format('{0}/{1}/index.html',
+              needs.build_python_packages.outputs.package_find_links_url, 'gfx950-dcgpu')
+        }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      xla_ref: rocm-jaxlib-v0.11.2
+      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: read
