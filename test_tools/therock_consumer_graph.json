@@ -158,7 +158,6 @@
   "hipccl": {
     "consumers": [
       "hipccl_tests",
-      "libhipcxx",
       "rocalution",
       "rocsolver",
       "rocsparse"
