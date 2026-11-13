@@ -183,9 +183,18 @@ jobs:
       # loaded" and carried on to list four BDFs, so ESMI initialised there and
       # not here, and root is the only difference left.
       #
-      # So this asks two things the previous run could not distinguish:
-      # whether the GPU half is now healthy (`-g all` skips CPU discovery), and
-      # which root-only CPU interface ESMI is being refused.
+      # /dev/hsmp is now 0666 and open() still returns EPERM, not EACCES, so
+      # this is a capability check inside the driver rather than a mode the
+      # cluster can relax; /dev/cpu/0/msr needs CAP_SYS_RAWIO at any mode. And
+      # `-g all` fails identically, because amd-smi does CPU discovery during
+      # init, before it parses which processors you asked for.
+      #
+      # Two things are still unproven, so this asks them directly:
+      #   - whether EPERM is really a driver capability check (retry O_RDONLY;
+      #     if that opens, it is gating the write path specifically)
+      #   - whether amdsmi's *GPU* enumeration is healthy, which the CLI cannot
+      #     answer because it dies before it looks. Initialising the library
+      #     with INIT_AMD_GPUS skips ESMI entirely.
       - name: Device node debug
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner && runner.os == 'Linux' }}
         timeout-minutes: 3
@@ -218,17 +227,79 @@ jobs:
               except OSError as err:
                   print(f"{path}: {err}")
           PY
-          echo "=== amd-smi static -g all (GPU only, no CPU discovery) ==="
-          # The decisive one. If this succeeds, nothing is wrong with our GPU
-          # access and the 196 is entirely the CPU path -- which makes the fix
-          # a narrower invocation here, not a cluster change.
+          echo "=== /dev/hsmp open modes ==="
+          # 0666 refusing O_RDWR with EPERM is not a permission failure. If
+          # O_RDONLY opens, the driver is gating writes and ESMI needs them to
+          # drive the HSMP mailbox; if both fail, it wants the capability to
+          # open at all. Either way no mode fixes it, but they are different
+          # bug reports.
+          python - <<'PY' || true
+          import os
+
+          for flag, label in ((os.O_RDONLY, "O_RDONLY"), (os.O_RDWR, "O_RDWR")):
+              try:
+                  os.close(os.open("/dev/hsmp", flag))
+                  print(f"/dev/hsmp {label}: ok")
+              except OSError as err:
+                  print(f"/dev/hsmp {label}: {err}")
+          PY
+          echo "=== amdsmi GPU-only init (skips ESMI) ==="
+          # The CLI cannot tell us whether GPU enumeration works, because CPU
+          # discovery kills it first. The library can: AMD_GPUS asks for the
+          # GPU half alone. A handle here means our GPU access is fine and the
+          # 196 is purely CPU telemetry -- which makes this an amd-smi bug
+          # rather than anything the cluster or the runner can fix.
+          #
+          # The bindings dlopen libamd_smi.so by bare name, so the loader needs
+          # the sibling lib/ that the CLI gets from its rpath.
+          LD_LIBRARY_PATH="${THEROCK_BIN_DIR:-build/bin}/../lib:${LD_LIBRARY_PATH:-}" \
+          python - <<'PY' || true
+          import os
+          import sys
+          from pathlib import Path
+
+          # The bindings ship next to the CLI, in share/amd_smi; THEROCK_BIN_DIR
+          # points at the sibling bin/.
+          root = Path(os.environ.get("THEROCK_BIN_DIR", "build/bin")).resolve().parent
+          for pattern in ("share/**/amdsmi/__init__.py", "lib/**/amdsmi/__init__.py",
+                          "libexec/**/amdsmi/__init__.py"):
+              hit = next(root.glob(pattern), None)
+              if hit:
+                  sys.path.insert(0, str(hit.parent.parent))
+                  print(f"bindings: {hit.parent}")
+                  break
+          else:
+              print(f"bindings: not found under {root}")
+
+          try:
+              import amdsmi
+          except Exception as err:
+              print(f"import amdsmi: {err!r}")
+              raise SystemExit(0)
+
+          # AMDSMI_INIT_AMD_GPUS; spelled out in case the enum is renamed.
+          flag = getattr(
+              getattr(amdsmi, "AmdSmiInitFlags", None), "INIT_AMD_GPUS", 1 << 1
+          )
+          try:
+              amdsmi.amdsmi_init(flag)
+          except Exception as err:
+              print(f"amdsmi_init(AMD_GPUS): {err!r}")
+              raise SystemExit(0)
+
+          try:
+              handles = amdsmi.amdsmi_get_processor_handles()
+              print(f"GPU handles: {len(handles)}")
+              for handle in handles:
+                  try:
+                      print(f"  bdf={amdsmi.amdsmi_get_gpu_device_bdf(handle)}")
+                  except Exception as err:
+                      print(f"  bdf: {err!r}")
+          except Exception as err:
+              print(f"amdsmi_get_processor_handles: {err!r}")
+          PY
+          echo "=== amd-smi static -g all ==="
           "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static -g all || echo "exit=$?"
-          echo "=== amd-smi list -g all ==="
-          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi list -g all || echo "exit=$?"
-          echo "=== amd-smi static ==="
-          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi static || echo "exit=$?"
-          echo "=== amd-smi list ==="
-          "${THEROCK_BIN_DIR:-build/bin}"/amd-smi list || echo "exit=$?"
 
       - name: Driver / GPU sanity check
         if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
