@@ -242,8 +242,10 @@ def compute_version(
             )
 
     # Handle wheel packages (Python packaging standards)
-    # Build version using parts: base_version + pre_release_tag + local_parts
-    # Pre-release tag is appended directly (e.g., "a20261007", "rc2", ".dev0")
+    # Build version using parts: base_version + release_segment + local_parts
+    # The release segment is appended directly and is either a pre-release
+    # segment ("a20261007", "rc2") or a development release segment (".dev0"):
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/
     # Local parts are joined: first with "+", rest with "."
     if package_type == "wheel":
         if custom_version_suffix:
@@ -255,28 +257,29 @@ def compute_version(
             _log(f"Full version  : '{rocm_package_version}'")
             return rocm_package_version
 
-        pre_release_tag = ""
+        release_segment = ""
         local_parts: list[str] = []
 
         if release_type == "release":
-            pass  # No pre-release tag or local parts for stable release
+            pass  # No release segment or local parts for a final release
         elif release_type in ("ci", "dev", "dev-bkc"):
-            # Construct a dev release version:
+            # Development release (".devN"), not a pre-release:
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#developmental-releases
             git_sha = get_git_sha(override_git_sha=override_git_sha)
-            pre_release_tag = ".dev0"
+            release_segment = ".dev0"
             local_parts.append(git_sha)
         elif release_type == "nightly":
-            # Construct a nightly (a / "alpha") version:
+            # Pre-release, alpha segment ("aN"):
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            pre_release_tag = f"a{current_date}"
+            release_segment = f"a{current_date}"
         elif release_type == "nightly-bkc":
-            pre_release_tag = f"a{release_metadata['base-date']}"
+            # Pre-release, alpha segment pinned to the BKC base date.
+            release_segment = f"a{release_metadata['base-date']}"
             local_parts.append(f"bkc.{current_date}")
         elif release_type == "prerelease":
-            # Construct a prerelease (rc / "release candidate") version
+            # Pre-release, release candidate segment ("rcN"):
             # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
-            pre_release_tag = f"rc{prerelease_version}"
+            release_segment = f"rc{prerelease_version}"
         else:
             raise ValueError(
                 f"Unhandled release type '{release_type}' for wheel packages"
@@ -289,8 +292,8 @@ def compute_version(
             local_parts.append(sanitized_variant)
             _log(f"Build variant : '{build_variant}' -> '{sanitized_variant}'")
 
-        # Compose final version: base + pre_release_tag + local_parts
-        rocm_package_version = base_version + pre_release_tag
+        # Compose final version: base + release_segment + local_parts
+        rocm_package_version = base_version + release_segment
         if local_parts:
             rocm_package_version += "+" + ".".join(local_parts)
 
