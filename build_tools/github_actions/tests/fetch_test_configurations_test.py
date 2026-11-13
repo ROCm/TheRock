@@ -251,6 +251,23 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
         )
 
+    def test_hipkernelprovider_label_selects_every_group_job(self):
+        sys.path.insert(
+            0, os.fspath(Path(__file__).parent.parent / "test_executable_scripts")
+        )
+        from hipkernelprovider_test_groups import GROUPS
+
+        os.environ["TEST_LABELS"] = json.dumps(["test:hipkernelprovider"])
+        fetch_test_configurations.run()
+        jobs = {job["job_name"]: job for job in self._get_components()}
+
+        self.assertEqual(set(jobs), {f"hipkernelprovider-{g}" for g in GROUPS})
+        for name, job in jobs.items():
+            # Every job's script must name a group the wrapper knows.
+            self.assertIn(
+                f"HKP_TEST_GROUP={name.split('-', 1)[1]} ", job["test_script"]
+            )
+
     # -----------------------
     # tensilelite ctest-stage gating (AIHPBLAS-4410)
     # -----------------------

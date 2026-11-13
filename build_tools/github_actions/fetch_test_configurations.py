@@ -198,6 +198,37 @@ _rocgdb_common = {
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
+# Common settings for the hip-kernel-provider jobs (one per engine group).
+_hipkernelprovider_common = {
+    "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
+    "timeout_minutes": 30,
+    # TODO: Use the copy in the hipkernelprovider test artifact after rocKE
+    # installs its component-owned requirements file.
+    "additional_requirements_files": [
+        "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
+    ],
+    "platform": ["linux", "windows"],
+    "total_shards_dict": {
+        "linux": 1,
+        "windows": 1,
+    },
+    "exclude_family": {
+        "linux": [
+            # CRITICAL FAILURE (hang): test hangs during execution
+            "gfx125X-dcgpu",
+        ],
+    },
+}
+
+
+def _hipkernelprovider_test_script(group: str) -> str:
+    # TEST_COMPONENT keeps test_runner.py's hipkernelprovider settings (test
+    # directory, gtest-only sharding) for every group's job.
+    return (
+        f"TEST_COMPONENT=hipkernelprovider HKP_TEST_GROUP={group} "
+        f"python {_get_script_path('test_hipkernelprovider.py')}"
+    )
+
 
 # Runner assignment for test components
 # =====================================
@@ -1035,28 +1066,51 @@ test_matrix = {
             ],
         },
     },
-    # hip-kernel-provider tests. test_hipkernelprovider.py installs the staged
-    # rocKE wheels, then delegates to test_runner.py.
+    # hip-kernel-provider tests, one job per engine group plus "unit", which runs
+    # every test no group claims. test_hipkernelprovider.py installs the staged
+    # rocKE wheels, then runs test_runner.py narrowed to HKP_TEST_GROUP by CTest
+    # label (groups and labels: hipkernelprovider_test_groups.py). The engine
+    # jobs declare base_project so test:hipkernelprovider and
+    # PROJECTS_TO_TEST=hipkernelprovider still select every job.
     "hipkernelprovider": {
-        "job_name": "hipkernelprovider",
-        "fetch_artifact_args": "--hipdnn --hipkernelprovider --hipdnn-integration-tests --tests",
-        "timeout_minutes": 30,
-        # TODO: Use the copy in the hipkernelprovider test artifact after rocKE
-        # installs its component-owned requirements file.
-        "additional_requirements_files": [
-            "build_tools/github_actions/test_executable_scripts/requirements-test-hipkernelprovider.txt",
-        ],
-        "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
-        "platform": ["linux", "windows"],
+        **_hipkernelprovider_common,
+        "job_name": "hipkernelprovider-unit",
+        "test_script": _hipkernelprovider_test_script("unit"),
+        # About 26 minutes on standard; sized for the slower tiers.
+        "timeout_minutes": 60,
+    },
+    "hipkernelprovider-hip-mlops": {
+        **_hipkernelprovider_common,
+        "job_name": "hipkernelprovider-hip-mlops",
+        "base_project": "hipkernelprovider",
+        "test_script": _hipkernelprovider_test_script("hip-mlops"),
+        # About 20 (linux) to 26 (windows) minutes of gtest cases on standard.
         "total_shards_dict": {
-            "linux": 4,
-            "windows": 4,
+            "linux": 2,
+            "windows": 2,
         },
+    },
+    "hipkernelprovider-asm-sdpa": {
+        **_hipkernelprovider_common,
+        "job_name": "hipkernelprovider-asm-sdpa",
+        "base_project": "hipkernelprovider",
+        "test_script": _hipkernelprovider_test_script("asm-sdpa"),
+    },
+    "hipkernelprovider-flydsl": {
+        **_hipkernelprovider_common,
+        "job_name": "hipkernelprovider-flydsl",
+        "base_project": "hipkernelprovider",
+        "test_script": _hipkernelprovider_test_script("flydsl"),
+    },
+    "hipkernelprovider-rocke": {
+        **_hipkernelprovider_common,
+        "job_name": "hipkernelprovider-rocke",
+        "base_project": "hipkernelprovider",
+        "test_script": _hipkernelprovider_test_script("rocke"),
         "exclude_family": {
-            "linux": [
-                # CRITICAL FAILURE (hang): test hangs during execution
-                "gfx125X-dcgpu",
-            ],
+            "linux": _hipkernelprovider_common["exclude_family"]["linux"],
+            # No rocKE attention engine ships for gfx11.
+            "windows": ["gfx110X-all"],
         },
     },
     # rocWMMA tests
