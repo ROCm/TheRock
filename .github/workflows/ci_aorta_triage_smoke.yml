@@ -1,0 +1,304 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Scheduled smoke test of the AORTA triage pipeline.
+#
+# Drives ``build_tools/github_actions/test_executable_scripts/test_aorta_triage.py``
+# from a GPU runner against a recipe checked out at job time. The test asserts
+# only milestone-1 plumbing (exit 0, ``matrix.md`` produced, no cell-level
+# ``error`` rows in ``matrix.json``); recipe-specific assertions (NaN bands,
+# confound flags, digest-pinned images) are deferred to follow-ups.
+#
+# Required repository secrets
+# ---------------------------
+#  * AORTA_INTERNAL_APP_ID          GitHub App ID for an org-managed App that
+#                                   has at minimum ``Contents: Read``
+#                                   permission on ``ROCm/aorta-internal`` and
+#                                   is installed on both ``ROCm/TheRock`` and
+#                                   ``ROCm/aorta-internal``.
+#  * AORTA_INTERNAL_APP_PRIVATE_KEY PEM-encoded private key for the same App.
+#                                   The workflow mints a short-lived
+#                                   installation token via
+#                                   ``actions/create-github-app-token`` -
+#                                   same pattern as ``bump_submodules.yml``
+#                                   so no personal PAT is involved.
+#                                   When either of these is unset the job
+#                                   logs a warning and skips the
+#                                   aorta-internal clone + pytest steps
+#                                   (the test's own ``skipif`` then reports
+#                                   SKIPPED rather than FAILED).
+#  * DOCKERHUB_USERNAME             (optional) Docker Hub user for pulling
+#                                   private recipe images (e.g.
+#                                   rocm/pytorch-private:*).
+#  * DOCKERHUB_TOKEN                (optional) Docker Hub token paired with
+#                                   the above. When either secret is unset
+#                                   the docker login step is skipped;
+#                                   recipes that need private images will
+#                                   then fail with a pull error and surface
+#                                   as an error cell, which is the desired
+#                                   signal.
+#
+# See ``test_aorta_triage.py`` for the env-var contract and pre-reqs.
+
+name: CI Weekly AORTA Triage Smoke
+
+on:
+  schedule:
+    # Sunday 03:00 UTC. Pairs with the existing weekly slot in ci_weekly.yml.
+    - cron: "0 3 * * 0"
+  # TEMPORARY (pre-merge testing only): trigger the workflow on every push to
+  # the development branch so we can validate end-to-end on a real GPU runner
+  # before this PR merges. Remove this `push:` block (and this comment)
+  # before final review / merge -- the merged version should rely on
+  # `schedule` + `workflow_dispatch` only.
+  push:
+    branches:
+      - aorta-triage-smoke-test
+    paths:
+      - .github/workflows/ci_aorta_triage_smoke.yml
+      - build_tools/github_actions/test_executable_scripts/test_aorta_triage.py
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: "GPU runner label (must have docker + ROCm)."
+        type: string
+        default: "linux-gfx950-1gpu-ccs-ossci-rocm"
+      python_version:
+        description: "Python version to set up on the runner."
+        type: string
+        default: "3.12"
+      aorta_repo:
+        description: "Public aorta source repo (owner/name)."
+        type: string
+        default: "ROCm/aorta"
+      aorta_ref:
+        description: "Git ref of aorta to install (branch, tag, or SHA)."
+        type: string
+        default: "main"
+      aorta_internal_repo:
+        description: "Private aorta-internal source repo (owner/name)."
+        type: string
+        default: "ROCm/aorta-internal"
+      aorta_internal_ref:
+        description: "Git ref of aorta-internal to install (branch, tag, or SHA)."
+        type: string
+        default: "main"
+      recipe_relpath:
+        description: "Recipe YAML path relative to the aorta-internal checkout root."
+        type: string
+        default: "recipes/recom_repro_smoke.yaml"
+      mitigations_relpath:
+        description: "Optional mitigations sidecar path relative to aorta-internal root. Leave empty to skip --mitigations-file."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  # Only one scheduled smoke at a time; serialize on workflow + ref.
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: false
+
+run-name: >-
+  CI Weekly AORTA Triage Smoke
+  (${{ inputs.runner_label || 'linux-gfx950-1gpu-ccs-ossci-rocm' }},
+   recipe=${{ inputs.recipe_relpath || 'recipes/recom_repro_smoke.yaml' }})
+
+jobs:
+  aorta_triage_smoke:
+    name: AORTA triage smoke (${{ inputs.runner_label || 'linux-gfx950-1gpu-ccs-ossci-rocm' }})
+    runs-on: ${{ inputs.runner_label || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      AORTA_REPO: ${{ inputs.aorta_repo || 'ROCm/aorta' }}
+      AORTA_REF: ${{ inputs.aorta_ref || 'main' }}
+      AORTA_INTERNAL_REPO: ${{ inputs.aorta_internal_repo || 'ROCm/aorta-internal' }}
+      AORTA_INTERNAL_REF: ${{ inputs.aorta_internal_ref || 'main' }}
+      RECIPE_RELPATH: ${{ inputs.recipe_relpath || 'recipes/recom_repro_smoke.yaml' }}
+      MITIGATIONS_RELPATH: ${{ inputs.mitigations_relpath || '' }}
+      TRIAGE_OUTPUT_DIR: ${{ github.workspace }}/triage-output
+
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version || '3.12' }}
+
+      - name: Compute scratch directories
+        id: scratch
+        # ``runner.temp`` is only available inside steps, so derive the
+        # per-job scratch dirs here and persist them via GITHUB_ENV so
+        # subsequent steps can reference them as plain env vars.
+        run: |
+          set -euo pipefail
+          aorta_src="${RUNNER_TEMP}/aorta-src"
+          aorta_internal_src="${RUNNER_TEMP}/aorta-internal-src"
+          echo "AORTA_SRC_DIR=${aorta_src}" >> "${GITHUB_ENV}"
+          echo "AORTA_INTERNAL_SRC_DIR=${aorta_internal_src}" >> "${GITHUB_ENV}"
+
+      - name: Detect aorta-internal App credentials availability
+        id: app_creds
+        env:
+          APP_ID: ${{ secrets.AORTA_INTERNAL_APP_ID }}
+          APP_KEY: ${{ secrets.AORTA_INTERNAL_APP_PRIVATE_KEY }}
+        # Mirror the secret presence into a step output so the
+        # ``create-github-app-token`` action and the clone step can gate on
+        # it (the ``secrets`` context is not available in step ``if:``
+        # conditions). Both secrets must be set; either missing means we
+        # cannot mint an installation token, so we degrade to the
+        # graceful-skip path.
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_ID:-}" ] && [ -n "${APP_KEY:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::AORTA_INTERNAL_APP_ID/AORTA_INTERNAL_APP_PRIVATE_KEY secrets are not configured; skipping aorta-internal clone and pytest steps."
+          fi
+
+      - name: Detect Docker Hub auth availability
+        id: dh_auth
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DH_USER:-}" ] && [ -n "${DH_TOKEN:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Runner health check
+        run: |
+          set -euxo pipefail
+          uname -a
+          python --version
+          pip --version
+          docker --version || echo "::warning::docker CLI not found on runner"
+          if command -v rocm-smi >/dev/null 2>&1; then
+            rocm-smi --showproductname || true
+          else
+            echo "::warning::rocm-smi not found on runner"
+          fi
+
+      - name: Install public aorta package
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          # Public ROCm/aorta source install. The PyPI project named `aorta`
+          # is unrelated; we deliberately pin to the GitHub repo.
+          python -m pip install \
+            "git+https://github.com/${AORTA_REPO}.git@${AORTA_REF}#egg=aorta"
+          aorta --version || aorta --help | head -1
+
+      - name: Generate aorta-internal App installation token
+        id: aorta_internal_token
+        if: steps.app_creds.outputs.available == 'true'
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.AORTA_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.AORTA_INTERNAL_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "aorta-internal"
+
+      - name: Clone aorta-internal (private)
+        id: clone_internal
+        if: steps.app_creds.outputs.available == 'true'
+        env:
+          # Short-lived installation token (~1h TTL) minted above; not a
+          # personal PAT.
+          AORTA_INTERNAL_TOKEN: ${{ steps.aorta_internal_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          rm -rf "${AORTA_INTERNAL_SRC_DIR}"
+          git clone --depth 1 --branch "${AORTA_INTERNAL_REF}" \
+            "https://x-access-token:${AORTA_INTERNAL_TOKEN}@github.com/${AORTA_INTERNAL_REPO}.git" \
+            "${AORTA_INTERNAL_SRC_DIR}"
+          echo "internal_available=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Install aorta-internal (editable)
+        if: steps.clone_internal.outputs.internal_available == 'true'
+        run: |
+          set -euxo pipefail
+          # Editable install so the recom_repro workload + mitigations
+          # entry-points register against the public aorta runtime.
+          python -m pip install -e "${AORTA_INTERNAL_SRC_DIR}"
+
+      - name: Resolve recipe + mitigations paths
+        if: steps.clone_internal.outputs.internal_available == 'true'
+        id: resolve_paths
+        run: |
+          set -euo pipefail
+          recipe_abs="${AORTA_INTERNAL_SRC_DIR}/${RECIPE_RELPATH}"
+          if [ ! -f "${recipe_abs}" ]; then
+            echo "::error::Recipe not found at ${recipe_abs}"
+            exit 1
+          fi
+          echo "recipe_abs=${recipe_abs}" >> "${GITHUB_OUTPUT}"
+          if [ -n "${MITIGATIONS_RELPATH}" ]; then
+            mitig_abs="${AORTA_INTERNAL_SRC_DIR}/${MITIGATIONS_RELPATH}"
+            if [ ! -f "${mitig_abs}" ]; then
+              echo "::error::Mitigations sidecar not found at ${mitig_abs}"
+              exit 1
+            fi
+            echo "mitigations_abs=${mitig_abs}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "mitigations_abs=" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Docker Hub login (optional)
+        id: docker_login
+        if: steps.dh_auth.outputs.available == 'true'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Warn when docker auth is not configured
+        if: steps.dh_auth.outputs.available != 'true'
+        run: |
+          echo "::warning::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets not set; private images referenced by the recipe may fail to pull."
+
+      - name: Run AORTA triage smoke test
+        if: steps.clone_internal.outputs.internal_available == 'true'
+        env:
+          AORTA_RECIPE_PATH: ${{ steps.resolve_paths.outputs.recipe_abs }}
+          AORTA_MITIGATIONS_FILE: ${{ steps.resolve_paths.outputs.mitigations_abs }}
+        run: |
+          set -euxo pipefail
+          mkdir -p "${TRIAGE_OUTPUT_DIR}"
+          # --basetemp gives the dispatcher a predictable output path under
+          # the runner workspace so the upload-artifact step below can find
+          # matrix.md / matrix.json regardless of the recipe's ticket dir.
+          python -m pytest \
+            build_tools/github_actions/test_executable_scripts/test_aorta_triage.py \
+            -k test_aorta_triage_smoke \
+            --basetemp="${TRIAGE_OUTPUT_DIR}" \
+            -v -s --log-cli-level=INFO
+
+      - name: Upload triage matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aorta-triage-matrix-${{ github.run_id }}
+          path: |
+            ${{ env.TRIAGE_OUTPUT_DIR }}/**/matrix.md
+            ${{ env.TRIAGE_OUTPUT_DIR }}/**/matrix.json
+            ${{ env.TRIAGE_OUTPUT_DIR }}/**/cells/**/trial_*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Docker Hub logout
+        if: always() && steps.docker_login.outcome == 'success'
+        run: |
+          docker logout || true
