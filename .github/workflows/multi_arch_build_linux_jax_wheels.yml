@@ -51,7 +51,11 @@ on:
         type: string
         default: "release"
       publish:
-        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        description: "Upload the wheels to the release bucket. False builds only."
+        type: boolean
+        default: true
+      run_tests:
+        description: "Test the published wheels from the release index. Needs publish."
         type: boolean
         default: true
       rocm_version:
@@ -136,7 +140,11 @@ on:
           - nightly
         default: release
       publish:
-        description: "Upload the wheels to the release bucket and test them from there. False builds only."
+        description: "Upload the wheels to the release bucket. False builds only."
+        type: boolean
+        default: true
+      run_tests:
+        description: "Test the published wheels from the release index. Needs publish."
         type: boolean
         default: true
       rocm_version:
@@ -355,7 +363,7 @@ jobs:
   configure_jax_tests:
     name: Configure JAX Tests
     # The tests install from the release index, so unpublished wheels go untested.
-    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
+    if: ${{ inputs.publish && inputs.run_tests && inputs.test_amdgpu_family != '' }}
     runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}

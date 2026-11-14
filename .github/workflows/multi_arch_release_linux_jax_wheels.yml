@@ -152,6 +152,7 @@ jobs:
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
       wheel_type: ${{ matrix.wheel_type }}
       publish: ${{ matrix.publish }}
+      run_tests: ${{ matrix.run_tests }}
       gfx_arch: ${{ matrix.gfx_arch }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
