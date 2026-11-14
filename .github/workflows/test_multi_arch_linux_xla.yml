@@ -6,23 +6,23 @@ name: Test Multi-Arch Linux XLA
 on:
   workflow_call:
     inputs:
-      test_amdgpu_family:
-        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+      test_amdgpu_target:
+        description: GPU target to test (e.g. gfx942, gfx950)
         required: true
         type: string
-      rocm_distro_url:
-        description: "URL of the TheRock multi-arch distro tarball to test against."
-        required: true
-        type: string
-      rocm_distro_hash:
-        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
-        type: string
-        default: "no_hash"
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
+      rocm_package_find_links_url:
+        description: "pip --find-links URL for the rocm[libraries,devel] wheel to install."
         type: string
         default: ""
-      ref:
+      rocm_package_index_url:
+        description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
+        type: string
+        default: ""
+      rocm_package_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
+        type: string
+        default: ""
+      therock_ref:
         description: "Branch, tag or SHA to checkout."
         type: string
         default: ""
@@ -34,10 +34,6 @@ on:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
         default: "ROCm/xla"
-      xla_commit:
-        description: "XLA commit to test. Empty uses xla_ref, which a moving ref like rocm-jaxlib-v0.11.2 may have advanced past."
-        type: string
-        default: ""
       test_runs_on:
         description: Runner label to execute tests on
         required: true
@@ -50,7 +46,7 @@ on:
         # environment, so a number input there is rejected and the workflow
         # cannot be run by hand. Converted with fromJSON() where it is used.
         type: string
-        default: "240"
+        default: "120"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -60,24 +56,24 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      test_amdgpu_family:
-        description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
+      test_amdgpu_target:
+        description: GPU target to test on (e.g. gfx942, gfx950)
         type: string
         default: "gfx950"
-      rocm_distro_url:
-        description: "URL of the TheRock multi-arch distro tarball to test against."
+      rocm_package_find_links_url:
+        description: "pip --find-links URL for the rocm[libraries,devel] wheel to install."
         type: string
         default: ""
-      rocm_distro_hash:
-        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+      rocm_package_index_url:
+        description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: "no_hash"
-      repository:
-        description: "Repository to checkout. Defaults to github.repository."
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      rocm_package_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
         type: string
         default: ""
-      ref:
-        description: "Branch, tag or SHA to checkout."
+      therock_ref:
+        description: "Branch, tag or SHA to checkout from TheRock repo."
         type: string
         default: ""
       xla_ref:
@@ -88,10 +84,6 @@ on:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
         default: "ROCm/xla"
-      xla_commit:
-        description: "XLA commit to test. Empty uses xla_ref."
-        type: string
-        default: ""
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
@@ -119,25 +111,11 @@ permissions:
 
 jobs:
   test_xla:
-    name: Test XLA | ${{ inputs.test_amdgpu_family || 'gfx950' }}
+    name: Test XLA | ${{ inputs.test_amdgpu_target || 'gfx950' }}
     runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
     # fromJSON turns the string input into the number timeout-minutes needs. The
     # fallback covers pull_request, where there is no inputs context at all.
     timeout-minutes: ${{ fromJSON(inputs.test_timeout_minutes || '240') }}
-
-    # Test cases excluded from the run. A single combination, so this does not
-    # fan out: the matrix is the one place a workflow can hold a real YAML list
-    # `join()` below turns it into the negative gtest filter.
-    #
-    # A value-parameterized name is <Instantiation>/<Fixture>.<Test>/<Param>.
-    strategy:
-      matrix:
-        include:
-          - excluded_tests:
-              - HloOpProfilerTest.BasicMeasurementsAreCorrect
-              - StreamExecutorGpuClientTest.NumaNode # Numa test doesn't work on DO nodes, rbe
-              - PrngTest.PassInGlobalRngSeed
-              - CommandBufferTests/CommandBufferTest.Convolutions* # TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
 
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -166,19 +144,26 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
-      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_family || 'gfx950' }}
+      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_target || 'gfx950' }}
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
-      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
-      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
-      XLA_TEST_FILTER: "-${{ join(matrix.excluded_tests, ':') }}"
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
+      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+      # Negative gtest filter, colon-separated:
+      #   HloOpProfilerTest.BasicMeasurementsAreCorrect
+      #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
+      #   PrngTest.PassInGlobalRngSeed
+      #   CommandBufferTests/CommandBufferTest.Convolutions* — TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
+      #   HloOpProfilerTest --TODO: fix known issue: https://amd-hub.atlassian.net/browse/ROCM-33725
+      XLA_TEST_FILTER: >-
+        -HloOpProfilerTest.BasicMeasurementsAreCorrect:StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:HloOpProfilerTest*:CommandBufferTests/CommandBufferTest.Convolutions*
       ROCM_COMMON_BAZEL_ARGS: >-
         --config=rocm_ci_hermetic
         --config=rocm_rbe_dynamic
         --config=rocm_rbe_dev
         --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}"
         --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}"
-        --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}"
-        --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}"
+        --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
         --test_filter="${XLA_TEST_FILTER}"
         --jobs=50
@@ -202,8 +187,8 @@ jobs:
         timeout-minutes: 15
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+          repository: "rocm/TheRock"
+          ref: ${{ inputs.therock_ref || '' }}
 
       - name: Checkout XLA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -212,7 +197,7 @@ jobs:
           persist-credentials: false
           path: xla
           repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
-          ref: ${{ inputs.xla_commit || inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+          ref: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
 
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
@@ -220,6 +205,24 @@ jobs:
         timeout-minutes: 3
         run: |
           python build_tools/print_driver_gpu_info.py
+
+      # Pip-install ROCm from already-built wheels and resolve a local install
+      # prefix, same as multi_arch_build_linux_jax_wheels_ci.yml's jaxlib
+      # build does for its own bazel ROCM_PATH. ROCM_AMD_GPU_TARGETS is
+      # already a concrete gfx target (e.g. "gfx950"), so the matching device
+      # extra is just "device-${ROCM_AMD_GPU_TARGETS}".
+      - name: Install rocm[libraries,devel] wheels
+        run: |
+          pkg="rocm[libraries,devel,device-${ROCM_AMD_GPU_TARGETS}]${ROCM_PACKAGE_VERSION:+==$ROCM_PACKAGE_VERSION}"
+          python build_tools/setup_venv.py .venv \
+            --packages "${pkg}" \
+            --index-url="${ROCM_PACKAGE_INDEX_URL}" \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Resolve ROCM_PATH from installed wheels
+        run: |
+          echo "ROCM_PATH=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
 
       - name: Run XLA tests [single_gpu]
         working-directory: xla

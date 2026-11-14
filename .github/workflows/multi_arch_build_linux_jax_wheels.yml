@@ -74,6 +74,12 @@ on:
           time, with the whole end-to-end set.
         type: string
         default: "medium"
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
+          the caller for exactly one representative matrix cell.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -163,6 +169,11 @@ on:
           - medium
           - large
         default: medium
+      trigger_xla_tests:
+        description: >-
+          Also run the XLA bazel suite alongside this cell's JAX tests.
+        type: boolean
+        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -399,8 +410,31 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
+  # Independent of the JAX build/test matrix (no rocm_package_index_url input
+  # at this level either, so default "" applies): pip-installs ROCm from the
+  # same wheels and runs the XLA bazel suite on one representative matrix
+  # cell, gated by trigger_xla_tests from configure_jax_release_matrix.py.
+  test_xla:
+    name: Test XLA
+    if: ${{ inputs.trigger_xla_tests }}
+    uses: ./.github/workflows/test_multi_arch_linux_xla.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      test_amdgpu_target: gfx950
+      rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
+      rocm_package_version: ${{ inputs.rocm_version }}
+      therock_ref: ${{ inputs.ref || '' }}
+      # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
+      xla_ref: ${{ inputs.jax_ref }}
+      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+
   test_jax_wheels:
-    if: ${{ needs.configure_jax_tests.outputs.enabled == 'true' }}
+    # !cancelled() so a skipped/failed test_xla (this build's own cell may
+    # not be the one with trigger_xla_tests) doesn't suppress JAX testing.
+    if: ${{ !cancelled() && needs.configure_jax_tests.outputs.enabled == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests]
     name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
     strategy:
@@ -436,7 +470,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels]
+    needs: [build_jax_wheels, configure_jax_tests, test_jax_wheels, test_xla]
     name: "Quartz - completed - build JAX Wheels"
     runs-on: ubuntu-26.04
     timeout-minutes: 10
