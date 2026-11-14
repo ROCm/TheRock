@@ -1,0 +1,45 @@
+#!/bin/bash
+
+is_debian_like() {
+    local id_like="$1"
+
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+if [ -e /etc/os-release ] &&
+   source /etc/os-release &&
+   is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+        remove)
+{% if enable_ldconfig %}
+            # Drop the removed package's ld.so.conf.d entry from the linker
+            # cache. On upgrade the new version's postinst refreshes it.
+            ldconfig || true
+{% endif %}
+            ;;
+
+        purge|upgrade)
+            # Nothing to do.
+            ;;
+
+        *)
+            exit 0
+            ;;
+    esac
+else
+{% if enable_ldconfig %}
+    # RPM passes the number of installed instances left; 0 means erase.
+    if [ "$1" = "0" ]; then
+        ldconfig || true
+    fi
+{% endif %}
+    true
+fi
