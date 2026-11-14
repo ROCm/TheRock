@@ -1,0 +1,15 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/man/**",
+  "lib/rocm_sysdeps/share/doc/**",
+]
+
+# lttng-tools: the daemons and the lttng command ship with the library, since the
+# out-of-process collector runs them.
+[components.lib."third-party/sysdeps/linux/lttng-tools/build/stage"]
+include = [
+  "**/bin/*",
+  "**/lib/lttng/libexec/*",
+  "**/share/xml/lttng/*",
+]
+[components.dev."third-party/sysdeps/linux/lttng-tools/build/stage"]

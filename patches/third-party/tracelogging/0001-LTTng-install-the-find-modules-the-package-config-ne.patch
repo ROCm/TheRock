@@ -1,0 +1,55 @@
+From ee82b19275605f97408533b0ad8bba87a102384d Mon Sep 17 00:00:00 2001
+From: bgopesh <gopesh.bhardwaj@amd.com>
+Date: Sun, 8 Nov 2026 01:13:00 +0530
+Subject: [PATCH] LTTng: install the find modules the package config needs
+
+traceloggingConfig.cmake finds only LTTngUST, and with CMake's own
+FindLTTngUST rather than the one this project builds with. The exported
+lttngh static library also has lttng-ust-tracepoint::lttng-ust-tracepoint
+as a link-only dependency, which nothing defines, so find_package(tracelogging)
+followed by linking tracelogging::tracelogging fails at generate time.
+
+Install FindLTTngUST.cmake, Findlttng-ust-tracepoint.cmake and
+AliasPkgConfigTarget.cmake next to the config, and find both dependencies
+with them.
+---
+ LTTng/cmake/modules/traceloggingConfig.cmake | 6 ++++++
+ LTTng/src/CMakeLists.txt                     | 6 +++++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/LTTng/cmake/modules/traceloggingConfig.cmake b/LTTng/cmake/modules/traceloggingConfig.cmake
+index a83ee3c..d308334 100644
+--- a/LTTng/cmake/modules/traceloggingConfig.cmake
++++ b/LTTng/cmake/modules/traceloggingConfig.cmake
+@@ -1,7 +1,13 @@
+ get_filename_component(TRACELOGGING_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+ include(CMakeFindDependencyMacro)
+ 
++# The exported lttngh library links LTTng::UST and, as a link-only dependency of
++# the static library, lttng-ust-tracepoint::lttng-ust-tracepoint. Find both with
++# the modules installed next to this file.
++list(PREPEND CMAKE_MODULE_PATH "${TRACELOGGING_CMAKE_DIR}")
+ find_dependency(LTTngUST REQUIRED)
++find_dependency(lttng-ust-tracepoint REQUIRED)
++list(REMOVE_AT CMAKE_MODULE_PATH 0)
+ 
+ if (NOT TARGET tracelogging::tracelogging)
+     include("${TRACELOGGING_CMAKE_DIR}/traceloggingTargets.cmake")
+diff --git a/LTTng/src/CMakeLists.txt b/LTTng/src/CMakeLists.txt
+index e69d431..809438f 100644
+--- a/LTTng/src/CMakeLists.txt
++++ b/LTTng/src/CMakeLists.txt
+@@ -43,5 +43,9 @@ install(
+     NAMESPACE tracelogging::
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/tracelogging)
+ 
+-install(FILES ${PROJECT_SOURCE_DIR}/cmake/modules/traceloggingConfig.cmake
++install(FILES
++    ${PROJECT_SOURCE_DIR}/cmake/modules/traceloggingConfig.cmake
++    ${PROJECT_SOURCE_DIR}/cmake/modules/AliasPkgConfigTarget.cmake
++    ${PROJECT_SOURCE_DIR}/cmake/modules/FindLTTngUST.cmake
++    ${PROJECT_SOURCE_DIR}/cmake/modules/Findlttng-ust-tracepoint.cmake
+     DESTINATION ${TRACELOGGING_CMAKE_DIR})
+-- 
+2.25.1
+

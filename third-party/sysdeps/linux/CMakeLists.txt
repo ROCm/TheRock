@@ -163,3 +163,76 @@ if(THEROCK_ENABLE_SYSDEPS_UTIL_LINUX)
       therock-util-linux
   )
 endif()
+
+# Optional sysdep: userspace-rcu (liburcu; dependency of lttng-ust).
+# Enabled implicitly whenever lttng-ust is enabled (see below).
+if(THEROCK_ENABLE_SYSDEPS_USERSPACE_RCU OR THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+  add_subdirectory(userspace-rcu)
+  therock_provide_artifact(sysdeps-userspace-rcu
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-userspace-rcu.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-userspace-rcu
+  )
+endif()
+
+# Optional sysdep: lttng-ust (LTTng userspace tracer; depends on userspace-rcu).
+# Provides liblttng-ust for the HIP/HSA curated tracepoint providers.
+if(THEROCK_ENABLE_SYSDEPS_LTTNG_UST)
+  add_subdirectory(lttng-ust)
+  therock_provide_artifact(sysdeps-lttng-ust
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-lttng-ust.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-lttng-ust
+  )
+endif()
+
+# Optional sysdeps: popt and libxml2, dependencies of lttng-tools. Enabled implicitly
+# whenever lttng-tools is enabled (see below).
+if(THEROCK_ENABLE_SYSDEPS_POPT OR THEROCK_ENABLE_SYSDEPS_LTTNG_TOOLS)
+  add_subdirectory(popt)
+  therock_provide_artifact(sysdeps-popt
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-popt.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-popt
+  )
+endif()
+if(THEROCK_ENABLE_SYSDEPS_LIBXML2 OR THEROCK_ENABLE_SYSDEPS_LTTNG_TOOLS)
+  add_subdirectory(libxml2)
+  therock_provide_artifact(sysdeps-libxml2
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-libxml2.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-libxml2
+  )
+endif()
+
+# Optional sysdep: lttng-tools (LTTng session and consumer daemons, liblttng-ctl and the
+# lttng command; depends on lttng-ust, userspace-rcu, popt and libxml2). Used by the
+# out-of-process collector to record the runtimes' trace events.
+if(THEROCK_ENABLE_SYSDEPS_LTTNG_TOOLS)
+  add_subdirectory(lttng-tools)
+  therock_provide_artifact(sysdeps-lttng-tools
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-lttng-tools.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-lttng-tools
+  )
+endif()
