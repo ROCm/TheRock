@@ -776,7 +776,7 @@ def upload_artifact(request: UploadRequest) -> bool:
                     sha_path, f"{request.artifact_key}.sha256sum"
                 )
 
-            return True
+            break
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
                 delay = BASE_DELAY_SECONDS * (2**attempt)
@@ -787,7 +787,49 @@ def upload_artifact(request: UploadRequest) -> bool:
             else:
                 log(f"  !! Failed to upload {request.artifact_key}: {e}")
                 return False
-    return False
+    else:
+        return False
+
+    # Missing fingerprints are skipped; unexpected local filesystem errors
+    # and exhausted fingerprint upload retries propagate.
+    fingerprint_name = (
+        request.source_path.name.removesuffix(".tar.zst").removesuffix(".tar.xz")
+        + ".fprint"
+    )
+    # Archives come from build/artifacts or build/.upload_cache.
+    # Fingerprints remain in build/artifacts in both cases.
+    fingerprint_path = (
+        request.source_path.parent.parent / "artifacts" / fingerprint_name
+    )
+    if not fingerprint_path.is_file():
+        log(
+            f"  == Skipping fingerprint: missing or not a regular file: "
+            f"{fingerprint_path}"
+        )
+        return True
+
+    # Existing fingerprints upload with independent retries;
+    # exhausted retries propagate as an error.
+    for attempt in range(MAX_RETRIES):
+        try:
+            log(f"  ++ Uploading {fingerprint_name}")
+            request.backend.upload_artifact(fingerprint_path, fingerprint_name)
+            break
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY_SECONDS * (2**attempt)
+                log(
+                    f"  ++ Retry {attempt + 1}/{MAX_RETRIES} "
+                    f"for {fingerprint_name}: {e}"
+                )
+                _delay_for_retry(delay)
+            else:
+                raise RuntimeError(
+                    f"Failed to upload {fingerprint_name} "
+                    f"after {MAX_RETRIES} attempts"
+                ) from e
+
+    return True
 
 
 def do_push(args: argparse.Namespace):
