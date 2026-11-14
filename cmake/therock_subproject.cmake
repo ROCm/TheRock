@@ -9,6 +9,7 @@
 # development flow.
 
 include(ExternalProject)
+include(therock_coverage)
 include(therock_compiler_hardening)
 therock_initialize_hardening_policy()
 
@@ -528,6 +529,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_PREFIX_DIR "${_prefix_dir}"
     THEROCK_CMAKE_SOURCE_DIR "${_cmake_source_dir}"
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
+    THEROCK_CMAKE_PROJECT_COVERAGE_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_coverage.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
     THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
@@ -649,6 +651,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
   get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
+  get_target_property(_cmake_project_coverage_file "${target_name}" THEROCK_CMAKE_PROJECT_COVERAGE_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
   get_target_property(_exclude_from_all "${target_name}" THEROCK_EXCLUDE_FROM_ALL)
@@ -918,6 +921,22 @@ function(therock_cmake_subproject_activate target_name)
   _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
   string(APPEND _init_contents "${_flag_init_contents}")
 
+  # Coverage: see therock_coverage.cmake.
+  therock_coverage_configure(
+    _coverage_init_contents
+    _coverage_cmake_arg
+    _coverage_project_include
+    "${_logical_target_name}"
+    "${_compiler_toolchain}"
+    "${_cmake_project_coverage_file}")
+  string(APPEND _init_contents "${_coverage_init_contents}")
+  set(_coverage_project_include_arg)
+  if(_coverage_project_include)
+    list(APPEND _fprint_files "${_coverage_project_include}")
+    set(_coverage_project_include_arg
+      "-DCMAKE_PROJECT_INCLUDE=${_coverage_project_include}")
+  endif()
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
   list(APPEND _fprint_files "${ROCM_BUILD_FLAGS_STATE_FILE}")
@@ -932,6 +951,10 @@ function(therock_cmake_subproject_activate target_name)
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
+
+  if(_coverage_cmake_arg)
+    list(APPEND _cmake_args "${_coverage_cmake_arg}")
+  endif()
 
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
@@ -1068,6 +1091,7 @@ function(therock_cmake_subproject_activate target_name)
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
         "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+        ${_coverage_project_include_arg}
         ${_cmake_args}
       # CMake doesn't always generate a compile_commands.json so touch one to keep
       # the build graph sane.
@@ -1085,6 +1109,7 @@ function(therock_cmake_subproject_activate target_name)
         "${_cmake_source_dir}/CMakeLists.txt"
         "${_cmake_project_toolchain_file}"
         "${_cmake_project_init_file}"
+        ${_coverage_project_include}
         "${_global_post_include}"
         "${_hardening_module}"
         "${ROCM_BUILD_FLAGS_STATE_FILE}"
