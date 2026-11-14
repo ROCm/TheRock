@@ -1833,6 +1833,34 @@ def _get_published_rocm_version(index_url: str) -> str:
     return get_latest_python_package_version("rocm", index_url)
 
 
+# Stop gap until the sanitizer enablement plan (ROCm/TheRock#9366) provides the
+# per-family host-asan configuration. Remove this helper and its call sites then.
+def _is_rocm_systems_host_asan_pull_request(
+    ci_inputs: CIInputs, build_variant: str
+) -> bool:
+    """A rocm-systems pull request running host-asan.
+
+    The caller names itself in the external_repo workflow input. The nightly
+    workflow sets that input too, so the pull-request and host-asan checks stay.
+    """
+    if not (
+        build_variant.startswith("host-asan")
+        and ci_inputs.is_pull_request
+        and ci_inputs.external_repo
+    ):
+        return False
+    try:
+        payload = json.loads(ci_inputs.external_repo)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    repository = payload.get("repository", "")
+    if not isinstance(repository, str):
+        return False
+    return repository.rsplit("/", 1)[-1] == "rocm-systems"
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1918,10 +1946,20 @@ def _expand_build_config_for_platform(
                 )
 
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
+        rocm_systems_gfx90a = (
+            family_name == "gfx90a"
+            and _is_rocm_systems_host_asan_pull_request(ci_inputs, build_variant)
+        )
         if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
             # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # A rocm-systems pull request tests host-asan on the gfx90a runner.
+            if rocm_systems_gfx90a:
+                print(
+                    f"  {family_name}: rocm-systems host-asan pull request "
+                    f"uses {test_runs_on}"
+                )
+            elif not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
@@ -1980,7 +2018,11 @@ def _expand_build_config_for_platform(
         # trigger matches.
         # Skip trigger-based gating for test-only families (ci:test:gfx*) - they
         # explicitly request tests regardless of trigger type.
-        elif test_runs_on and family_name not in test_only_families:
+        elif (
+            test_runs_on
+            and family_name not in test_only_families
+            and not rocm_systems_gfx90a
+        ):
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
@@ -2322,6 +2364,11 @@ def expand_build_configs(
             build_variant = "host-asan"
             print("  Using host-asan variant (push/pull_request default)")
 
+    linux_families = list(targets.linux_families)
+    if _is_rocm_systems_host_asan_pull_request(ci_inputs, build_variant):
+        linux_families = ["gfx90a"]
+        print("  rocm-systems host-asan pull request uses gfx90a")
+
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
 
@@ -2337,7 +2384,7 @@ def expand_build_configs(
     for platform, families, build_only, test_only in [
         (
             "linux",
-            targets.linux_families,
+            linux_families,
             targets.linux_build_only_families,
             targets.linux_test_only_families,
         ),
@@ -2469,6 +2516,18 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
 
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
+    # Match the host-asan rewrite below so stage reuse includes gfx90a.
+    effective_variant = ci_inputs.build_variant
+    if effective_variant == "asan" and "ci:asan" not in ci_inputs.pr_labels:
+        if (
+            "ci:host-asan" in ci_inputs.pr_labels
+            or ci_inputs.is_push
+            or ci_inputs.is_pull_request
+        ):
+            effective_variant = "host-asan"
+    if _is_rocm_systems_host_asan_pull_request(ci_inputs, effective_variant):
+        targets.linux_families[:] = ["gfx90a"]
+        print("  rocm-systems host-asan pull request uses gfx90a")
     targets.log()
 
     print("\n=== Deciding job configuration ===")
