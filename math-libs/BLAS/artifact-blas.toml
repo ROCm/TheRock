@@ -100,6 +100,8 @@ include = [
   "libexec/hipblaslt-samples/**",
   # TensileLite Python test artifacts
   "share/hipblaslt/tensilelite/**",
+  # rocjitsu race check, run by the hipblaslt-rocjitsu-race test
+  "share/hipblaslt/rocjitsu/**",
   # TensileLite client binary (common/benchmark tests)
   "libexec/hipblaslt/tensilelite/**",
   # TensileLite C++ tests (test_runner runs ctest from bin/hipblaslt-tensilelite/;

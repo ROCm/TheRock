@@ -459,6 +459,17 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(config["test_types"], ["standard", "comprehensive", "full"])
 
+    def test_ci_selector_aliases_name_real_jobs(self):
+        # determine_rocm_test_dependencies fans a changed project out to these
+        # job names; a name with no test_matrix entry is silently never run.
+        sys.path.insert(0, os.fspath(Path(__file__).parents[3] / "test_tools"))
+        from determine_rocm_test_dependencies import _CI_TEST_SELECTOR_ALIASES
+
+        jobs = set(fetch_test_configurations.test_matrix)
+        for project, selectors in _CI_TEST_SELECTOR_ALIASES.items():
+            with self.subTest(project=project):
+                self.assertEqual(set(selectors) - jobs, set())
+
     def test_miopen_dbsync_excluded_on_quick(self):
         # Integration: the real entry is not scheduled on the quick tier.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
@@ -467,7 +478,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def _dbsync_job(self, families, gated_gpu, gfx_target):
         """Run selection for miopen-dbsync on `families`; return its job or None."""
-        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        return self._selected_job("miopen-dbsync", families, gated_gpu, gfx_target)
+
+    def _selected_job(self, job_name, families, gated_gpu, gfx_target):
+        """Run selection for `job_name` on `families`; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = job_name
         os.environ["AMDGPU_FAMILIES"] = families
         if gated_gpu:
             # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
@@ -482,7 +497,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             }
         }
         fetch_test_configurations.run()
-        jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
+        jobs = [j for j in self._get_components() if j["job_name"] == job_name]
         return jobs[0] if jobs else None
 
     def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
@@ -531,6 +546,28 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 else:
                     os.environ["BUILD_VARIANT"] = build_variant
                 self.assertIsNotNone(self._dbsync_job("gfx94X-dcgpu", False, "gfx942"))
+
+    def test_hipblaslt_rocjitsu_race_is_advisory_on_cpu_runner(self):
+        for families, gfx_target in (
+            ("gfx94X-dcgpu", "gfx942"),
+            ("gfx950-dcgpu", "gfx950"),
+        ):
+            with self.subTest(families=families):
+                job = self._selected_job(
+                    "hipblaslt-rocjitsu-race", families, True, gfx_target
+                )
+                self.assertIsNotNone(job)
+                self.assertTrue(job["linux_cpu_runner"])
+                self.assertTrue(job["test_runner"])
+                self.assertTrue(job["expect_failure"])
+
+    def test_hipblaslt_rocjitsu_race_runs_on_quick(self):
+        os.environ["TEST_TYPE"] = "quick"
+        self.assertIsNotNone(
+            self._selected_job(
+                "hipblaslt-rocjitsu-race", "gfx950-dcgpu", False, "gfx950"
+            )
+        )
 
     def test_skip_build_variant_only_drops_listed_variants(self):
         self._inject_job("asan-incompatible", skip_build_variant=["asan"])
@@ -1085,6 +1122,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_linux_jobs_are_not_expect_failure(self):
         fetch_test_configurations.run()
         for job in self._get_components():
+            # Advisory by design while the emulator check is new.
+            if job["job_name"] == "hipblaslt-rocjitsu-race":
+                continue
             self.assertFalse(job.get("expect_failure"), job["job_name"])
 
     def test_native_gfx110x_wsl_components_are_not_expect_failure(self):

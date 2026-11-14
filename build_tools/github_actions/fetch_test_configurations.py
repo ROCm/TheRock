@@ -479,6 +479,36 @@ test_matrix = {
             ],
         },
     },
+    # Small hipBLASLt and TensileLite GEMMs under the rocjitsu race detector, which
+    # emulates the GPU on a CPU runner. The runner script ships with the hipBLASLt
+    # clients (rocm-libraries projects/hipblaslt/clients/scripts/rocjitsu), which
+    # also chooses the emulated device for each family; add a family to the
+    # script's TARGETS before adding it here. The workloads take seconds, so it
+    # also runs on the quick tier. Advisory while the check is new. Needs the
+    # rocjitsu artifact from the emulation stage. Not scheduled on ASAN builds,
+    # whose instrumented libraries have not been validated under rocjitsu.
+    "hipblaslt-rocjitsu-race": {
+        "job_name": "hipblaslt-rocjitsu-race",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--blas --rocjitsu --tests",
+        "additional_requirements_files": [
+            _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
+        ],
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_artifact_path('share/hipblaslt/rocjitsu/rocjitsu_race_smoke.py')}",
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx942", "gfx950"],
+        },
+        "expect_failure": {
+            "linux": ["gfx942", "gfx950"],
+        },
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
