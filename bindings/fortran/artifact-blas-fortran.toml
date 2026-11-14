@@ -1,0 +1,25 @@
+[components.dev."bindings/fortran/rocblas-fortran/stage"]
+include = [
+  "share/rocblas/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hipblas-fortran/stage"]
+include = [
+  "share/hipblas/fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/rocblas-fortran/stage"]
+include = [
+  "bin/rocblas_fortran_test_*",
+  "bin/rocblas-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hipblas-fortran/stage"]
+include = [
+  "bin/hipblas_fortran_test_*",
+  "bin/hipblas-fortran/**",
+]
+optional = true

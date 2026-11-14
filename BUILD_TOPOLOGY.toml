@@ -74,7 +74,7 @@
 #       to this artifact. Used for granular CI artifact reuse: when only specific
 #       source paths change in an external repo (e.g., rocm-libraries), only affected
 #       artifacts rebuild while others reuse baseline. Path names are directory
-#       basenames within projects/ or shared/ subdirs. Multiple artifacts can share
+#       basenames within projects/, shared/ or bindings/ subdirs. Multiple artifacts can share
 #       the same source_path (e.g., shared libraries). Defaults to [artifact_name]
 #       if omitted.
 #
@@ -215,6 +215,10 @@ artifact_groups = ["profiler-apps"]
 [build_stages.media-libs]
 description = "Media Libraries"
 artifact_groups = ["media-libs"]
+
+[build_stages.fortran-bindings]
+description = "Fortran bindings, built after the libraries they wrap"
+artifact_groups = ["fortran-bindings"]
 
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
@@ -361,6 +365,13 @@ description = "ROCm emulation, virtualization, and instrumentation tools"
 type = "generic"
 artifact_group_deps = []
 source_sets = ["rocm-systems"]
+disable_platforms = ["windows"]
+
+[artifact_groups.fortran-bindings]
+description = "Fortran bindings for the ROCm libraries"
+type = "generic"
+artifact_group_deps = ["compiler", "hip-runtime", "profiler-core", "math-libs"]
+source_sets = ["rocm-systems", "rocm-libraries"]
 disable_platforms = ["windows"]
 
 # ==============================================================================
@@ -933,4 +944,44 @@ artifact_group = "rocjitsu"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "EMULATION"
+disable_platforms = ["windows"]
+
+# --- Fortran Bindings ---
+
+[artifacts.runtime-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
+disable_platforms = ["windows"]
+# Covers bindings/fortran/** in both rocm-systems and rocm-libraries.
+source_paths = ["fortran"]
+
+[artifacts.blas-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["blas", "runtime-fortran"]
+disable_platforms = ["windows"]
+
+[artifacts.solver-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["solver", "blas-fortran", "runtime-fortran"]
+disable_platforms = ["windows"]
+
+[artifacts.sparse-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["sparse", "runtime-fortran"]
+disable_platforms = ["windows"]
+
+[artifacts.fft-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["fft", "runtime-fortran"]
+disable_platforms = ["windows"]
+
+[artifacts.rand-fortran]
+artifact_group = "fortran-bindings"
+type = "target-neutral"
+artifact_deps = ["rand", "runtime-fortran"]
 disable_platforms = ["windows"]
