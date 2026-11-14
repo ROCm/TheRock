@@ -20,7 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
-from amdgpu_family_matrix import get_all_families_for_trigger_types
+from amdgpu_family_matrix import all_build_variants, get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
 
@@ -658,6 +658,204 @@ class TestShouldSkipCI(unittest.TestCase):
             submodule_paths=["rocm-libraries"],
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_opt_in_label_absent_skips_pr(self):
+        inputs = self._inputs(pull_request_opt_in_label="ci:host-asan", pr_labels=[])
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_opt_in_label_present_runs_pr(self):
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan", pr_labels=["ci:host-asan"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_opt_out_label_present_skips_pr(self):
+        inputs = self._inputs(
+            pull_request_opt_out_label="ci:no-host-asan", pr_labels=["ci:no-host-asan"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_opt_out_label_absent_runs_pr(self):
+        inputs = self._inputs(
+            pull_request_opt_out_label="ci:no-host-asan", pr_labels=["ci:other"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_empty_opt_labels_leave_behavior_unchanged(self):
+        inputs = self._inputs(
+            pull_request_opt_in_label="",
+            pull_request_opt_out_label="",
+            pr_labels=["ci:no-host-asan", "ci:host-asan"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_opt_in_and_opt_out_both_present_skips(self):
+        """Opt-out wins when the PR carries both labels."""
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan",
+            pull_request_opt_out_label="ci:no-host-asan",
+            pr_labels=["ci:host-asan", "ci:no-host-asan"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_opt_labels_ignored_for_non_pr_events(self):
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = self._inputs(
+                    event_name=event_name,
+                    pull_request_opt_in_label="ci:host-asan",
+                    pull_request_opt_out_label="ci:no-host-asan",
+                    pr_labels=["ci:no-host-asan"],
+                )
+                git = cm.GitContext(changed_files=None)
+                self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_ci_skip_takes_precedence_over_opt_in(self):
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan",
+            pr_labels=["ci:host-asan", "ci:skip"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
+    def test_path_filter_skip_with_opt_in_label_present(self, mock_filter):
+        """Opt-in label does not override path-filter skipping."""
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan", pr_labels=["ci:host-asan"]
+        )
+        git = cm.GitContext(changed_files=["docs/README.md"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_from_environ_reads_opt_labels(self):
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "PULL_REQUEST_OPT_IN_LABEL": " ci:host-asan ",
+                "PULL_REQUEST_OPT_OUT_LABEL": "ci:no-host-asan",
+            },
+        )
+        self.assertEqual(inputs.pull_request_opt_in_label, "ci:host-asan")
+        self.assertEqual(inputs.pull_request_opt_out_label, "ci:no-host-asan")
+
+    def test_opt_in_label_matching_is_exact_for_pull_request_labels(self):
+        """The input is stripped; pull request label names are compared as-is."""
+        cases = [
+            ("ci:host-asan", False),
+            (" ci:host-asan ", True),
+            ("CI:Host-Asan", True),
+        ]
+        for label_name, expect_skip in cases:
+            with self.subTest(label=label_name):
+                inputs = _run_from_environ(
+                    event_name="pull_request",
+                    event_payload={"pull_request": {"labels": [{"name": label_name}]}},
+                    extra_env={"PULL_REQUEST_OPT_IN_LABEL": "  ci:host-asan  "},
+                )
+                git = cm.GitContext(changed_files=["CMakeLists.txt"])
+                self.assertEqual(cm.should_skip_ci(inputs, git), expect_skip)
+
+    def test_opt_out_label_matching_is_case_sensitive(self):
+        inputs = self._inputs(
+            pull_request_opt_out_label="ci:no-host-asan",
+            pr_labels=["CI:No-Host-Asan"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_skip_reason_names_missing_opt_in_label(self):
+        inputs = self._inputs(pull_request_opt_in_label="ci:host-asan")
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        reason = cm.get_skip_reason(inputs, git)
+        self.assertIn("opt-in label `ci:host-asan`", reason)
+
+    def test_skip_reason_names_present_opt_out_label(self):
+        inputs = self._inputs(
+            pull_request_opt_out_label="ci:no-host-asan",
+            pr_labels=["ci:no-host-asan"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        reason = cm.get_skip_reason(inputs, git)
+        self.assertIn("opt-out label `ci:no-host-asan`", reason)
+
+    def test_skip_reason_empty_when_ci_runs(self):
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan", pr_labels=["ci:host-asan"]
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertEqual(cm.get_skip_reason(inputs, git), "")
+
+    def test_label_policy_precedence(self):
+        """Expected outcome for combinations of the label policy and other labels.
+
+        Each row is (build_variant, opt_in, opt_out, pr_labels, skip reason
+        fragment, or "" when CI runs). The label policy is evaluated after
+        ci:skip and path filtering and before the "asan" variant label check,
+        so ci:asan never satisfies an opt-in input, and the arch
+        labels (ci:gfx*, ci:run-all-archs) do not bypass either input.
+        """
+        cases = [
+            # (variant, opt_in, opt_out, labels, expected reason fragment)
+            ("host-asan", "ci:host-asan", "", ["ci:asan"], "opt-in label"),
+            ("host-asan", "ci:host-asan", "", ["ci:host-asan"], ""),
+            ("asan", "ci:host-asan", "", ["ci:asan"], "opt-in label"),
+            ("asan", "ci:host-asan", "", [], "opt-in label"),
+            ("asan", "ci:host-asan", "", ["ci:host-asan"], ""),
+            # The asan variant label check applies when no opt-in input is set.
+            ("asan", "", "", [], "ASAN pull request"),
+            ("asan", "", "", ["ci:asan"], ""),
+            # Opt-out wins over opt-in.
+            ("host-asan", "ci:a", "ci:b", ["ci:a", "ci:b"], "opt-out label"),
+            ("host-asan", "", "ci:b", ["ci:b", "ci:asan"], "opt-out label"),
+            # ci:skip wins over both.
+            ("host-asan", "ci:a", "ci:b", ["ci:a", "ci:skip"], "ci:skip"),
+            ("host-asan", "ci:a", "ci:b", ["ci:a", "ci:b", "ci:skip"], "ci:skip"),
+            # Arch labels do not bypass the label policy.
+            ("host-asan", "ci:a", "", ["ci:run-all-archs"], "opt-in label"),
+            ("host-asan", "ci:a", "", ["ci:run-all-archs", "ci:a"], ""),
+            ("host-asan", "ci:a", "", ["ci:gfx94x"], "opt-in label"),
+            ("host-asan", "ci:a", "", ["ci:gfx94x", "ci:a"], ""),
+            ("host-asan", "", "ci:b", ["ci:run-all-archs", "ci:b"], "opt-out label"),
+            ("host-asan", "", "ci:b", ["ci:gfx94x", "ci:b"], "opt-out label"),
+            ("host-asan", "", "ci:b", ["ci:gfx94x"], ""),
+        ]
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        for variant, opt_in, opt_out, labels, fragment in cases:
+            with self.subTest(
+                variant=variant, opt_in=opt_in, opt_out=opt_out, labels=labels
+            ):
+                inputs = self._inputs(
+                    build_variant=variant,
+                    pull_request_opt_in_label=opt_in,
+                    pull_request_opt_out_label=opt_out,
+                    pr_labels=labels,
+                )
+                reason = cm.get_skip_reason(inputs, git)
+                if fragment:
+                    self.assertIn(fragment, reason)
+                else:
+                    self.assertEqual(reason, "")
+                self.assertEqual(cm.should_skip_ci(inputs, git), bool(fragment))
+
+    def test_arch_labels_still_apply_when_opt_in_label_present(self):
+        inputs = self._inputs(
+            build_variant="host-asan",
+            pull_request_opt_in_label="ci:host-asan",
+            pr_labels=["ci:host-asan", "ci:gfx950"],
+        )
+        targets = cm.select_targets(inputs)
+        self.assertIn("gfx950", targets.linux_families)
+        inputs = replace(inputs, pr_labels=["ci:host-asan", "ci:run-all-archs"])
+        targets = cm.select_targets(inputs)
+        self.assertIn("gfx950", targets.linux_families)
+        self.assertIn("gfx90a", targets.linux_families)
 
     @patch("configure_multi_arch_ci.is_ci_run_required")
     def test_external_repo_without_skip_config_runs_ci(self, mock_filter):
@@ -3121,7 +3319,8 @@ class TestFormatSummary(unittest.TestCase):
     def test_draft_skip_summary_points_at_opt_in_label(self):
         """A draft skip explains itself and names the opt-in label."""
         inputs = self._inputs(event_name="pull_request", is_draft_pr=True)
-        result = format_summary(inputs, cm.CIOutputs.skipped())
+        reason = cm.get_skip_reason(inputs, cm.GitContext())
+        result = format_summary(inputs, cm.CIOutputs.skipped(reason))
 
         self.assertIn("draft", result)
         self.assertIn("ci:run-on-draft", result)
@@ -3180,6 +3379,57 @@ class TestWriteOutputs(unittest.TestCase):
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_skipped_ci_summary_names_the_reason(self):
+        """The job summary says why CI was skipped, not only the step log."""
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        cases = [
+            (
+                dict(pull_request_opt_in_label="ci:host-asan"),
+                "opt-in label `ci:host-asan`",
+            ),
+            (
+                dict(
+                    pull_request_opt_out_label="ci:no-host-asan",
+                    pr_labels=["ci:no-host-asan"],
+                ),
+                "opt-out label `ci:no-host-asan`",
+            ),
+            (dict(pr_labels=["ci:skip"]), "`ci:skip` PR label"),
+        ]
+        for overrides, expected_text in cases:
+            with self.subTest(expected_text=expected_text):
+                inputs = cm.CIInputs(
+                    run_id="12345",
+                    event_name="pull_request",
+                    commit_ref="feature",
+                    base_ref="HEAD^",
+                    build_variant="host-asan",
+                    **overrides,
+                )
+                outputs = cm.configure(inputs, git)
+                github_output, step_summary = self._write_outputs(outputs)
+                self.assertIn("enable_build_jobs=false", github_output)
+                self.assertIn("CI was **skipped**", step_summary)
+                self.assertIn(expected_text, step_summary)
+
+    def test_running_ci_summary_has_no_skip_text(self):
+        with patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}):
+            inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="host-asan",
+                linux_amdgpu_families=["gfx94x"],
+                pr_labels=["ci:host-asan"],
+                pull_request_opt_in_label="ci:host-asan",
+                built_rocm_version="10.2.0.dev0+abcdef",
+            )
+            outputs = cm.configure(inputs, cm.GitContext.empty())
+        github_output, step_summary = self._write_outputs(outputs)
+        self.assertIn("enable_build_jobs=true", github_output)
+        self.assertNotIn("skipped", step_summary)
 
     def test_platform_outputs_follow_selected_stages(self):
         """Linux-only stages must not launch Windows artifact consumers.
@@ -3254,10 +3504,10 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertIsNone(outputs.builds.windows)
         self.assertIsNone(outputs.jobs)
 
-    @patch("configure_multi_arch_ci.should_skip_ci")
+    @patch("configure_multi_arch_ci.get_skip_reason")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):
-        """If should_skip_ci returns True, pipeline short-circuits."""
-        mock_skip.return_value = True
+        """If get_skip_reason returns a reason, pipeline short-circuits."""
+        mock_skip.return_value = "test reason"
         inputs = cm.CIInputs(
             run_id="12345",
             event_name="workflow_dispatch",
@@ -3268,6 +3518,7 @@ class TestConfigurePipeline(unittest.TestCase):
         )
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
+        self.assertEqual(outputs.skip_reason, "test reason")
         self.assertIsNone(outputs.builds.linux)
 
     @patch(
@@ -4305,6 +4556,307 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+class TestPullRequestTestsInput(unittest.TestCase):
+    """pull_request_tests input: sanitizer variants run tests on pull requests."""
+
+    @staticmethod
+    def _family(name, *, tests_on_trigger, runner="linux-runner", **extra):
+        info = {
+            "test-runs-on": runner,
+            "family": name,
+            "fetch-gfx-targets": ["gfx0000"],
+            "build_variants": ["release", "asan", "host-asan"],
+            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+            "tests_on_trigger": tests_on_trigger,
+        }
+        info.update(extra)
+        return {"linux": info}
+
+    def _expand(
+        self,
+        *,
+        build_variant="host-asan",
+        event_name="pull_request",
+        pull_request_tests=True,
+        pr_labels=None,
+        family=None,
+        build_only=None,
+        test_only=None,
+    ):
+        family = family or self._family("mock", tests_on_trigger=["nightly"])
+        all_families = {"mock": family}
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name=event_name,
+            commit_ref="feature" if event_name == "pull_request" else "main",
+            base_ref="HEAD^1",
+            build_variant=build_variant,
+            pr_labels=pr_labels or [],
+            built_rocm_version="10.2.0.dev0+abcdef",
+            pull_request_tests=pull_request_tests,
+        )
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            return_value=all_families,
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=cm.TargetSelection(
+                    linux_families=["mock"],
+                    linux_build_only_families=build_only or [],
+                    linux_test_only_families=test_only or [],
+                ),
+                jobs=_jobs(),
+            )
+        return result.linux.per_family_info[0]
+
+    def test_truthy_enables_tests_on_pr_for_sanitizer(self):
+        entry = self._expand(
+            family=self._family(
+                "mock",
+                tests_on_trigger=["nightly"],
+                trigger_test_label_only=True,
+                **{"test-runs-on-sandbox": "linux-sandbox"},
+            )
+        )
+        self.assertEqual(entry["test-runs-on"], "linux-sandbox")
+
+    def test_empty_default_keeps_tests_disabled(self):
+        entry = self._expand(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_release_variant_unchanged(self):
+        entry = self._expand(build_variant="release")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_release_variant_unchanged_when_family_tests_on_presubmit(self):
+        entry = self._expand(
+            build_variant="release",
+            family=self._family("mock", tests_on_trigger=["presubmit"]),
+        )
+        self.assertEqual(entry["test-runs-on"], "linux-runner")
+
+    def test_non_pull_request_events_ignore_input(self):
+        for event in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                self.assertFalse(
+                    cm._pull_request_tests_override_applies(
+                        "host-asan",
+                        cm.CIInputs(
+                            run_id="1",
+                            event_name=event,
+                            commit_ref="main",
+                            base_ref="HEAD^1",
+                            build_variant="host-asan",
+                            built_rocm_version="10.2.0.dev0+abcdef",
+                            pull_request_tests=True,
+                        ),
+                    )
+                )
+
+    def test_push_does_not_enable_tests(self):
+        entry = self._expand(event_name="push")
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_build_only_label_still_disables_tests(self):
+        entry = self._expand(build_only=["mock"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_cpu_test_only_label_still_disables_gpu_tests(self):
+        entry = self._expand(pr_labels=["ci:cpu-test-only"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_family_without_runner_stays_disabled(self):
+        entry = self._expand(
+            family=self._family("mock", tests_on_trigger=["nightly"], runner="")
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_override_applies_to_sanitizer_variant_names_only(self):
+        """Matches asan* and host-asan* variants; not release or tsan."""
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^1",
+            build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
+            pull_request_tests=True,
+        )
+        expected = {
+            "release": False,
+            "asan": True,
+            "asan-debug": True,
+            "host-asan": True,
+            "host-asan-debug": True,
+            "tsan": False,
+        }
+        self.assertEqual(
+            set(expected), set(all_build_variants["linux"]), "update expected"
+        )
+        for variant, applies in expected.items():
+            with self.subTest(variant=variant):
+                self.assertEqual(
+                    cm._pull_request_tests_override_applies(variant, ci_inputs),
+                    applies,
+                )
+
+    def test_host_asan_without_sandbox_uses_regular_runner(self):
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        self.assertNotIn("test-runs-on-sandbox", family["linux"])
+        entry = self._expand(family=family)
+        self.assertEqual(entry["test-runs-on"], "linux-runner")
+
+    def test_host_asan_with_sandbox_keeps_sandbox(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-sandbox": "linux-sandbox"},
+        )
+        self.assertEqual(self._expand(family=family)["test-runs-on"], "linux-sandbox")
+
+    def test_host_asan_blank_sandbox_falls_back_to_regular_runner(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-sandbox": ""},
+        )
+        self.assertEqual(self._expand(family=family)["test-runs-on"], "linux-runner")
+
+    def test_host_asan_regular_runner_still_gated_without_input(self):
+        entry = self._expand(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_without_sandbox_stays_disabled_outside_pull_requests(self):
+        """No sandbox runner and no pull request override: tests stay disabled."""
+        for event_name in ("schedule", "workflow_dispatch"):
+            for pull_request_tests in (False, True):
+                family = self._family("mock", tests_on_trigger=["nightly"])
+                with self.subTest(
+                    event_name=event_name, pull_request_tests=pull_request_tests
+                ):
+                    entry = self._expand(
+                        event_name=event_name,
+                        pull_request_tests=pull_request_tests,
+                        family=family,
+                    )
+                    self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_blank_sandbox_stays_disabled_outside_pull_requests(self):
+        for event_name in ("schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                family = self._family(
+                    "mock",
+                    tests_on_trigger=["nightly"],
+                    **{"test-runs-on-sandbox": ""},
+                )
+                entry = self._expand(event_name=event_name, family=family)
+                self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_with_sandbox_runs_on_schedule_and_dispatch(self):
+        for event_name in ("schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                family = self._family(
+                    "mock",
+                    tests_on_trigger=["nightly"],
+                    **{"test-runs-on-sandbox": "linux-sandbox"},
+                )
+                entry = self._expand(event_name=event_name, family=family)
+                self.assertEqual(entry["test-runs-on"], "linux-sandbox")
+
+    def test_host_asan_regular_runner_respects_build_only_label(self):
+        entry = self._expand(build_only=["mock"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_test_runner_label_with_matching_kernel_runner(self):
+        family = self._family(
+            "mock",
+            tests_on_trigger=["nightly"],
+            **{"test-runs-on-kernel": {"oem": "linux-oem-runner"}},
+        )
+        entry = self._expand(family=family, pr_labels=["test_runner:oem"])
+        self.assertEqual(entry["test-runs-on"], "linux-oem-runner")
+
+    def test_test_runner_label_without_kernel_runner_keeps_tests_disabled(self):
+        """The regular-runner fallback must not undo a kernel-label disable."""
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        entry = self._expand(family=family, pr_labels=["test_runner:oem"])
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def _configure_gfx90a(self, *, pull_request_tests, pr_labels=None, opt_in=""):
+        """Run the full pipeline for a gfx90a host-asan pull request."""
+        with patch.dict(os.environ, {"STAGE_REUSE_MODE": "dry-run"}):
+            os.environ.pop("CI_CONFIG_PATH", None)
+            inputs = cm.CIInputs(
+                run_id="12345",
+                event_name="pull_request",
+                commit_ref="feature",
+                base_ref="HEAD^",
+                build_variant="host-asan",
+                linux_amdgpu_families=["gfx90a"],
+                pr_labels=pr_labels or [],
+                built_rocm_version="10.2.0.dev0+abcdef",
+                pull_request_tests=pull_request_tests,
+                pull_request_opt_in_label=opt_in,
+            )
+            outputs = cm.configure(inputs, cm.GitContext.empty())
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertEqual(outputs.builds.linux.build_variant_label, "host-asan")
+        (entry,) = outputs.builds.linux.per_family_info
+        self.assertEqual(entry["amdgpu_family"], "gfx90a")
+        return entry
+
+    def test_gfx90a_host_asan_pull_request_tests_enabled_on_regular_runner(self):
+        entry = self._configure_gfx90a(pull_request_tests=True)
+        self.assertEqual(entry["test-runs-on"], "linux-gfx90a-1gpu-ossci-rocm")
+
+    def test_gfx90a_host_asan_opt_in_label_builds_only_gfx90a(self):
+        """A caller passing gfx90a gets gfx90a only, not the presubmit set."""
+        entry = self._configure_gfx90a(
+            pull_request_tests=True,
+            pr_labels=["ci:host-asan"],
+            opt_in="ci:host-asan",
+        )
+        self.assertEqual(entry["amdgpu_family"], "gfx90a")
+
+    def test_gfx90a_host_asan_pull_request_tests_disabled_without_input(self):
+        entry = self._configure_gfx90a(pull_request_tests=False)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_gfx90a_host_asan_kernel_label_without_runner_stays_disabled(self):
+        entry = self._configure_gfx90a(
+            pull_request_tests=True, pr_labels=["test_runner:oem"]
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_host_asan_debug_without_sandbox_stays_disabled(self):
+        family = self._family("mock", tests_on_trigger=["nightly"])
+        family["linux"]["build_variants"].append("host-asan-debug")
+        entry = self._expand(
+            build_variant="host-asan-debug", event_name="schedule", family=family
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_from_environ_parses_boolean_input(self):
+        """setup_multi_arch.yml passes the boolean input as "true" or "false"."""
+        cases = [
+            ({"PULL_REQUEST_TESTS": "true"}, True),
+            ({"PULL_REQUEST_TESTS": "True"}, True),
+            ({"PULL_REQUEST_TESTS": "false"}, False),
+            ({"PULL_REQUEST_TESTS": ""}, False),
+            ({}, False),
+        ]
+        for extra_env, expected in cases:
+            with self.subTest(extra_env=extra_env):
+                inputs = _run_from_environ(
+                    "pull_request",
+                    {"pull_request": {"labels": []}},
+                    extra_env=extra_env,
+                )
+                self.assertIs(inputs.pull_request_tests, expected)
+
+
 class TestCpuTestOnlyLabel(unittest.TestCase):
     """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
 

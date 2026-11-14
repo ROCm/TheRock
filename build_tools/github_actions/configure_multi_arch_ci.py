@@ -335,6 +335,19 @@ class CIInputs:
     # Non-empty when an external repo calls TheRock workflows
     external_repo: str = ""
 
+    # Pull request label policy set by the calling workflow. Only evaluated on
+    # pull_request events; an empty string disables the check.
+    # - opt_in: skip the run unless the PR has this label.
+    # - opt_out: skip the run if the PR has this label.
+    pull_request_opt_in_label: str = ""
+    pull_request_opt_out_label: str = ""
+
+    # Test policy set by the calling workflow. Only evaluated for sanitizer
+    # variants (asan*, host-asan*) on pull_request events. When true, runs
+    # tests for families that have a test runner, overriding the family's
+    # tests_on_trigger / trigger_test_label_only.
+    pull_request_tests: bool = False
+
     def log(self) -> None:
         """Log parsed inputs for CI diagnostics."""
         print("CIInputs:")
@@ -455,6 +468,9 @@ class CIInputs:
         build_native_windows = (
             os.environ.get("BUILD_NATIVE_WINDOWS", "true").lower() != "false"
         )
+        pull_request_tests = (
+            os.environ.get("PULL_REQUEST_TESTS", "false").strip().lower() == "true"
+        )
         python_version = os.environ.get("PYTHON_VERSION", "").strip()
 
         pr_labels: list[str] = []
@@ -541,6 +557,13 @@ class CIInputs:
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
+            pull_request_opt_in_label=os.environ.get(
+                "PULL_REQUEST_OPT_IN_LABEL", ""
+            ).strip(),
+            pull_request_opt_out_label=os.environ.get(
+                "PULL_REQUEST_OPT_OUT_LABEL", ""
+            ).strip(),
+            pull_request_tests=pull_request_tests,
         )
         inputs.validate()
         return inputs
@@ -920,11 +943,13 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Human-readable reason CI was skipped; empty when CI runs.
+    skip_reason: str = ""
 
     @staticmethod
-    def skipped() -> "CIOutputs":
+    def skipped(skip_reason: str = "") -> "CIOutputs":
         """Produce empty outputs when CI is skipped."""
-        return CIOutputs(is_ci_enabled=False)
+        return CIOutputs(is_ci_enabled=False, skip_reason=skip_reason)
 
 
 # ---------------------------------------------------------------------------
@@ -938,12 +963,25 @@ def should_skip_ci(
 ) -> bool:
     """Determine whether CI should be skipped entirely.
 
-    Returns True for:
+    See get_skip_reason() for the conditions and the reason text.
+    """
+    return bool(get_skip_reason(ci_inputs, git_context))
+
+
+def get_skip_reason(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+) -> str:
+    """Return why CI should be skipped entirely, or "" if it should run.
+
+    A reason is returned for:
     - 'ci:skip' PR label
     - Draft PRs without the 'ci:run-on-draft' label
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     - ASAN builds on PRs without ci:asan or ci:host-asan labels
+    - PRs missing the caller's pull_request_opt_in_label, or carrying its
+      pull_request_opt_out_label
 
     For external repo builds, path filtering uses changed_files and
     skip_ci_patterns from the external_repo JSON (both must be provided).
@@ -952,7 +990,7 @@ def should_skip_ci(
     # 1. Common skip behavior
     if "ci:skip" in ci_inputs.pr_labels:
         print("  Skipping: 'ci:skip' PR label")
-        return True
+        return "the `ci:skip` PR label is set"
 
     # 1b. Draft PRs are usually not ready for review, so builds and tests are
     #     skipped by default. Marking the PR ready for review re-triggers CI,
@@ -963,7 +1001,11 @@ def should_skip_ci(
             f"  Skipping: pull request is a draft (add '{RUN_ON_DRAFT_LABEL}' or mark "
             "the pull request ready for review to run CI)"
         )
-        return True
+        return (
+            "this pull request is a draft. Add the "
+            f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
+            "review to run builds and tests"
+        )
 
     # 2. Path filter skipping - check before ASAN label logic so we don't print
     #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
@@ -998,16 +1040,27 @@ def should_skip_ci(
         # Evaluate skip logic
         if not is_ci_run_required(changed_files, skip_ci_patterns, repo_name):
             print("  External repo build: CI can be skipped")
-            return True
+            return "only files matching the external repo skip patterns changed"
 
     # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
     if not ci_inputs.external_repo and git_context.changed_files is not None:
         print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
         if not is_ci_run_required(git_context.changed_files):
             print("  TheRock: CI can be skipped")
-            return True
+            return "no CI-relevant files changed"
 
-    # 3. ASAN skip - only evaluated if path filtering didn't skip CI
+    # 3. Caller-specified PR label policy (pull_request events only).
+    if ci_inputs.is_pull_request:
+        opt_in = ci_inputs.pull_request_opt_in_label
+        opt_out = ci_inputs.pull_request_opt_out_label
+        if opt_in and opt_in not in ci_inputs.pr_labels:
+            print(f"  Skipping: PR does not have opt-in label '{opt_in}'")
+            return f"the pull request does not have the opt-in label `{opt_in}`"
+        if opt_out and opt_out in ci_inputs.pr_labels:
+            print(f"  Skipping: PR has opt-out label '{opt_out}'")
+            return f"the pull request has the opt-out label `{opt_out}`"
+
+    # 4. ASAN skip - only evaluated if path filtering didn't skip CI
     has_asan_label = (
         "ci:asan" in ci_inputs.pr_labels or "ci:host-asan" in ci_inputs.pr_labels
     )
@@ -1019,12 +1072,12 @@ def should_skip_ci(
         print(
             "  Skipping: ASAN PR without enabling label (add 'ci:asan' or 'ci:host-asan' to enable)"
         )
-        return True
+        return "an ASAN pull request needs the `ci:asan` or `ci:host-asan` label"
 
     if has_asan_label and ci_inputs.build_variant == "asan":
         print("  Running: ASAN CI triggered by PR label")
 
-    return False
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -1776,6 +1829,21 @@ def _get_current_triggers(ci_inputs: CIInputs, git_context: GitContext) -> set[s
     return triggers
 
 
+def _pull_request_tests_override_applies(
+    build_variant: str, ci_inputs: CIInputs
+) -> bool:
+    """True when the caller's pull_request_tests input applies to this run.
+
+    Only sanitizer variants on pull_request events are affected; the release
+    variant and all other events keep the family-level test gating.
+    """
+    return (
+        ci_inputs.is_pull_request
+        and build_variant.startswith(("asan", "host-asan"))
+        and ci_inputs.pull_request_tests
+    )
+
+
 def _should_run_tests_for_family(
     platform_info: dict,
     ci_inputs: CIInputs,
@@ -1872,6 +1940,7 @@ def _expand_build_config_for_platform(
     # Extract kernel type from test_runner:<kernel> PR label (e.g. "oem").
     # Selects kernel-specific test runners for families that support them.
     test_runner_kernel = ""
+    pr_tests_override = _pull_request_tests_override_applies(build_variant, ci_inputs)
     for label in ci_inputs.pr_labels:
         if label.startswith("test_runner:"):
             test_runner_kernel = label.split(":")[1]
@@ -1920,17 +1989,29 @@ def _expand_build_config_for_platform(
         # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
         if build_variant.startswith("host-asan"):
             # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
+            # due to limited ASAN runner capacity and stability concerns,
+            # unless the calling workflow opts in via pull_request_tests.
+            if not (
+                ci_inputs.is_schedule
+                or ci_inputs.is_workflow_dispatch
+                or pr_tests_override
+            ):
                 test_runs_on = ""
                 print(
                     f"  {family_name}: host-asan tests only run on nightly, "
                     f"disabling tests"
                 )
-            elif "test-runs-on-sandbox" in platform_info:
+            elif platform_info.get("test-runs-on-sandbox"):
                 test_runs_on = platform_info["test-runs-on-sandbox"]
                 print(
                     f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
+                )
+            elif build_variant == "host-asan" and pr_tests_override:
+                # No sandbox pool for this family (or it is blanked outside
+                # rocm-systems PRs): keep the regular runner chosen above.
+                print(
+                    f"  {family_name}: no host-asan sandbox runner available, "
+                    f"using regular runner: {test_runs_on or '(none)'}"
                 )
             else:
                 test_runs_on = ""
@@ -1984,6 +2065,10 @@ def _expand_build_config_for_platform(
             should_run, reason = _should_run_tests_for_family(
                 platform_info, ci_inputs, git_context
             )
+            if not should_run and pr_tests_override:
+                should_run = True
+                reason = "pull_request_tests input"
+                print(f"  {family_name}: tests enabled ({reason})")
             if not should_run:
                 test_runs_on = ""
                 print(f"  {family_name}: tests disabled ({reason})")
@@ -2463,8 +2548,9 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     git_context.log()
 
     print("\n=== Checking if CI should run ===")
-    if should_skip_ci(ci_inputs=ci_inputs, git_context=git_context):
-        return CIOutputs.skipped()
+    skip_reason = get_skip_reason(ci_inputs=ci_inputs, git_context=git_context)
+    if skip_reason:
+        return CIOutputs.skipped(skip_reason)
     print("Result: CI will run")
 
     print("\n=== Selecting GPU target families ===")
