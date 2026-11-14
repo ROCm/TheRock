@@ -20,6 +20,7 @@ from unittest.mock import call, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_multi_arch_ci as cm
+import configure_pytorch_release_matrix as pytorch_release_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 from configure_multi_arch_ci_summary import format_summary
 from workflow_utils import WORKFLOWS_DIR
@@ -2512,57 +2513,65 @@ class TestExpandBuildConfigs(unittest.TestCase):
             linux_families=["gfx94x"],
             windows_families=["gfx110x"],
         )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
+        fake_refs = {
+            "linux": ["release/fake-ci-linux"],
+            "windows": ["release/fake-ci-windows"],
+        }
+        with patch.object(pytorch_release_matrix, "CI_PYTORCH_REFS", fake_refs):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(python_versions=["3.12"]),
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
+            )
 
-        self.assertEqual(
-            result.linux.pytorch_build_matrix,
-            [
-                {
-                    "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.13",
-                    "amdgpu_families": "gfx94X-dcgpu",
-                    "exclude_implicit_targets": "",
-                    "test_level": "standard",
-                    "test_amdgpu_families": "auto",
-                },
-            ],
-        )
-        self.assertEqual(
-            result.windows.pytorch_build_matrix,
-            [
-                {
-                    "python_version": "3.12",
-                    "pytorch_git_ref": "release/2.13",
-                    "amdgpu_families": "gfx110X-all",
-                    "exclude_implicit_targets": "",
-                    "test_level": "standard",
-                    "test_amdgpu_families": "auto",
-                }
-            ],
-        )
+        self.assertEqual(len(result.linux.pytorch_build_matrix), 1)
+        self.assertEqual(len(result.windows.pytorch_build_matrix), 1)
+        linux_row = result.linux.pytorch_build_matrix[0]
+        windows_row = result.windows.pytorch_build_matrix[0]
+        self.assertEqual(linux_row["pytorch_git_ref"], "release/fake-ci-linux")
+        self.assertEqual(windows_row["pytorch_git_ref"], "release/fake-ci-windows")
+        self.assertEqual(linux_row["amdgpu_families"], "gfx94X-dcgpu")
+        self.assertEqual(windows_row["amdgpu_families"], "gfx110X-all")
+        self.assertEqual(linux_row["python_version"], "3.12")
+        self.assertEqual(windows_row["python_version"], "3.12")
 
     def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
         targets = cm.TargetSelection(
             linux_families=["gfx94x"],
             windows_families=[],
         )
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
+        # Keep this propagation test independent of actual release support.
+        fake_refs = {"linux": ["release/fake-old", "release/fake-new"]}
+        fake_exclusions = {
+            "linux": {
+                "release/fake-old": {"fake-target-z", "fake-target-a"},
+                "release/fake-new": set(),
+            },
+        }
+        with patch.multiple(
+            pytorch_release_matrix,
+            RELEASE_PYTORCH_REFS=fake_refs,
+            EXCLUDED_IMPLICIT_TARGETS=fake_exclusions,
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(release_type="dev", python_versions=["3.12"]),
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
+            )
 
         exclusions = {
             row["pytorch_git_ref"]: row["exclude_implicit_targets"]
             for row in result.linux.pytorch_build_matrix
         }
-        self.assertEqual(exclusions["nightly"], "gfx1250-strict")
+        self.assertEqual(
+            exclusions,
+            {
+                "release/fake-old": "fake-target-a;fake-target-z",
+                "release/fake-new": "",
+            },
+        )
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
