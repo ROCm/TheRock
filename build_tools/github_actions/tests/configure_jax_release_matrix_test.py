@@ -1,10 +1,20 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+"""Test matrix behavior with fake policies, then validate the real configuration.
+
+Synthetic release configs exercise generation, Python-version filtering, and
+release-type selection without tying expectations to the changing support
+tables. Separate unmocked tests check that real default build configurations
+resolve their refs and generate nonempty matrices without duplicate rows. BKC
+release types intentionally produce empty matrices and are tested separately.
+"""
+
 import os
 import sys
 import unittest
 from pathlib import Path
+from itertools import product
 from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -19,57 +29,51 @@ from workflow_utils import (
 )
 
 
-class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
-    def setUp(self):
-        # Keep matrix behavior independent of the current supported releases.
-        self.enterContext(
-            mock.patch.object(
-                m,
-                "JAX_REF_CONFIGS",
-                {
-                    "rocm-jaxlib-vFAKE-old": {
-                        "jax_ref": "rocm-jaxlib-vFAKE-old",
-                        "jax_repository": "example/fake-jax",
-                        "gfx_arch": "fake-device-all",
-                    },
-                    "rocm-jaxlib-vFAKE-new": {
-                        "jax_ref": "rocm-jaxlib-vFAKE-new",
-                        "jax_repository": "example/fake-jax",
-                        "gfx_arch": "fake-device-all",
-                        "exclude_python_versions": ["3.11"],
-                    },
-                    "fake-tip": {
-                        "jax_ref": "fake-upstream-main",
-                        "jax_repository": "example/fake-upstream-jax",
-                        "rocm_jax_ref": "fake-infra",
-                        "gfx_arch": "fake-device-all",
-                        "jax_label": "fake-tip-label",
-                        "wheel_type": "nightly",
-                        "publish": False,
-                        "exclude_python_versions": ["3.11", "3.12"],
-                    },
-                },
-            )
-        )
-        for name, refs in (
-            ("CI_JAX_REFS", ["rocm-jaxlib-vFAKE-new"]),
-            (
-                "RELEASE_STABLE_JAX_REFS",
-                ["rocm-jaxlib-vFAKE-old", "rocm-jaxlib-vFAKE-new"],
-            ),
-            (
-                "RELEASE_JAX_REFS",
-                ["rocm-jaxlib-vFAKE-old", "rocm-jaxlib-vFAKE-new", "fake-tip"],
-            ),
-        ):
-            self.enterContext(mock.patch.object(m, name, {"linux": refs}))
-        self.enterContext(
-            mock.patch.object(m, "RELEASE_PYTHON_VERSIONS", ["3.11", "3.12", "3.13"])
-        )
-        self.enterContext(
-            mock.patch.object(m, "CI_PYTHON_VERSIONS", {"linux": ["3.12"]})
-        )
+# Fake old/new/tip refs exercise defaults, overrides, and increasing Python
+# exclusions without depending on the current supported JAX releases.
+FAKE_JAX_REF_CONFIGS = {
+    "rocm-jaxlib-vFAKE-old": {
+        "jax_ref": "rocm-jaxlib-vFAKE-old",
+        "jax_repository": "example/fake-jax",
+        "gfx_arch": "fake-device-all",
+    },
+    "rocm-jaxlib-vFAKE-new": {
+        "jax_ref": "rocm-jaxlib-vFAKE-new",
+        "jax_repository": "example/fake-jax",
+        "gfx_arch": "fake-device-all",
+        "exclude_python_versions": ["3.11"],
+    },
+    "fake-tip": {
+        "jax_ref": "fake-upstream-main",
+        "jax_repository": "example/fake-upstream-jax",
+        "rocm_jax_ref": "fake-infra",
+        "gfx_arch": "fake-device-all",
+        "jax_label": "fake-tip-label",
+        "wheel_type": "nightly",
+        "publish": False,
+        "exclude_python_versions": ["3.11", "3.12"],
+    },
+}
 
+FAKE_CI_JAX_REFS = {"linux": ["rocm-jaxlib-vFAKE-new"]}
+FAKE_STABLE_JAX_REFS = {
+    "linux": ["rocm-jaxlib-vFAKE-old", "rocm-jaxlib-vFAKE-new"],
+}
+FAKE_RELEASE_JAX_REFS = {
+    "linux": ["rocm-jaxlib-vFAKE-old", "rocm-jaxlib-vFAKE-new", "fake-tip"],
+}
+
+
+@mock.patch.multiple(
+    m,
+    JAX_REF_CONFIGS=FAKE_JAX_REF_CONFIGS,
+    CI_JAX_REFS=FAKE_CI_JAX_REFS,
+    RELEASE_STABLE_JAX_REFS=FAKE_STABLE_JAX_REFS,
+    RELEASE_JAX_REFS=FAKE_RELEASE_JAX_REFS,
+    RELEASE_PYTHON_VERSIONS=["3.11", "3.12", "3.13"],
+    CI_PYTHON_VERSIONS={"linux": ["3.12"]},
+)
+class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
     def test_default_matrix_includes_multiple_python_versions_and_refs(self):
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="dev",
@@ -152,8 +156,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertEqual(matrix[0]["wheel_type"], "nightly")
 
     def test_tip_builds_without_publishing(self):
-        # whl-next does not route jax/jaxlib yet and the tests install from
-        # there, so tip is a build-only signal while every pinned ref publishes.
+        # Honor publish=False without changing the default for other refs.
         matrix = m.generate_jax_matrix_for_release_type(
             release_type="nightly", platform="linux"
         )
@@ -161,6 +164,67 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertIs(published.pop("fake-upstream-main"), False)
         self.assertTrue(published)
         self.assertTrue(all(published.values()))
+
+    def test_release_types_select_default_refs(self):
+        cases = {
+            "ci": ["rocm-jaxlib-vFAKE-new"],
+            "prerelease": ["rocm-jaxlib-vFAKE-old", "rocm-jaxlib-vFAKE-new"],
+            "dev": [
+                "rocm-jaxlib-vFAKE-old",
+                "rocm-jaxlib-vFAKE-new",
+                "fake-upstream-main",
+            ],
+            "nightly": [
+                "rocm-jaxlib-vFAKE-old",
+                "rocm-jaxlib-vFAKE-new",
+                "fake-upstream-main",
+            ],
+        }
+        # 3.13 is supported by every fake ref, isolating release-type selection
+        # from the exclusion behavior tested separately below.
+        for release_type, refs in cases.items():
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type,
+                    platform="linux",
+                    python_versions=["3.13"],
+                )
+                self.assertEqual([row["jax_ref"] for row in matrix], refs)
+
+    def test_explicit_refs_get_all_default_python_versions(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="dev", platform="linux", jax_refs=["rocm-jaxlib-vFAKE-old"]
+        )
+        self.assertEqual(
+            [(row["python_version"], row["jax_ref"]) for row in matrix],
+            list(product(["3.11", "3.12", "3.13"], ["rocm-jaxlib-vFAKE-old"])),
+        )
+
+    def test_explicit_ref_and_python_version_override_ci_defaults(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="ci",
+            platform="linux",
+            jax_refs=["fake-tip"],
+            python_versions=["3.13"],
+        )
+        self.assertEqual(len(matrix), 1)
+        self.assertEqual(matrix[0]["jax_ref"], "fake-upstream-main")
+        self.assertEqual(matrix[0]["python_version"], "3.13")
+
+    def test_all_requested_combinations_excluded_produces_no_rows(self):
+        matrix = m.generate_jax_matrix_for_release_type(
+            release_type="dev",
+            platform="linux",
+            jax_refs=["fake-tip"],
+            python_versions=["3.11", "3.12"],
+        )
+        self.assertEqual(matrix, [])
+
+    def test_unknown_platform_raises(self):
+        with self.assertRaises(ValueError):
+            m.generate_jax_matrix_for_release_type(
+                release_type="dev", platform="unknown"
+            )
 
     def test_release_refs_build_release_wheels(self):
         # Configs without wheel_type default to release wheels; the fake tip
@@ -173,28 +237,6 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         self.assertGreater(len(matrix), 0)
         for row in matrix:
             self.assertEqual(row["wheel_type"], "release")
-
-    def test_prerelease_builds_stable_refs_only(self):
-        # A prerelease is a candidate for something we ship, so nothing in it
-        # may change between two runs. Upstream tip moves, so it is left out.
-        matrix = m.generate_jax_matrix_for_release_type(
-            release_type="prerelease",
-            platform="linux",
-        )
-
-        self.assertGreater(len(matrix), 0)
-        self.assertNotIn("fake-upstream-main", {row["jax_ref"] for row in matrix})
-
-    def test_dev_and_nightly_build_tip(self):
-        # Tip against the ROCm of the same run is a row of the matrix, the way
-        # PyTorch's "nightly" ref is, so a break shows up as a failed cell.
-        for release_type in ("dev", "nightly"):
-            with self.subTest(release_type=release_type):
-                matrix = m.generate_jax_matrix_for_release_type(
-                    release_type=release_type,
-                    platform="linux",
-                )
-                self.assertIn("fake-upstream-main", {row["jax_ref"] for row in matrix})
 
     def test_bkc_releases_have_empty_matrices(self):
         # BKC releases skip JAX builds, including when inputs select a version.
@@ -216,17 +258,6 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                     ),
                     [],
                 )
-
-    def test_ci_never_builds_a_moving_ref(self):
-        # A pull request is judged against refs whose content is fixed;
-        # upstream moving under it would fail CI outside the author's control.
-        matrix = m.generate_jax_matrix_for_release_type(
-            release_type="ci",
-            platform="linux",
-        )
-
-        self.assertGreater(len(matrix), 0)
-        self.assertNotIn("fake-upstream-main", {row["jax_ref"] for row in matrix})
 
     def test_generated_rows_cover_workflow_matrix_inputs(self):
         # workflow file like:
@@ -313,15 +344,14 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             },
         )
 
-    def test_ci_builds_single_jax_ref(self):
-        # CI keeps the runner queues short by building one ref, while still
-        # fanning out over Python versions. Comparing the set of distinct refs
-        # (rather than the row count) is what pins CI to exactly one ref.
+    def test_ci_uses_default_ref_and_python_version(self):
         matrix = m.generate_jax_matrix_for_release_type(
-            release_type="ci",
-            platform="linux",
+            release_type="ci", platform="linux"
         )
-        self.assertEqual({row["jax_ref"] for row in matrix}, {"rocm-jaxlib-vFAKE-new"})
+        self.assertEqual(
+            [(row["python_version"], row["jax_ref"]) for row in matrix],
+            [("3.12", "rocm-jaxlib-vFAKE-new")],
+        )
 
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):
@@ -337,6 +367,23 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 platform="linux",
                 jax_refs=["unknown-jax-ref"],
             )
+
+
+class ConfiguredJaxReleaseMatrixTest(unittest.TestCase):
+    def test_current_policy_generates_nonempty_matrices_without_duplicate_rows(self):
+        # Keep dangling refs and duplicate entries detectable when the live
+        # configuration changes, without maintaining a second release list.
+        for platform in m.CI_JAX_REFS:
+            for release_type in ("ci", "dev", "nightly", "prerelease"):
+                with self.subTest(platform=platform, release_type=release_type):
+                    matrix = m.generate_jax_matrix_for_release_type(
+                        release_type=release_type, platform=platform
+                    )
+                    self.assertTrue(matrix)
+                    combinations = {
+                        (row["python_version"], row["jax_ref"]) for row in matrix
+                    }
+                    self.assertEqual(len(matrix), len(combinations))
 
 
 if __name__ == "__main__":
