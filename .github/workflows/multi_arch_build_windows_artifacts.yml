@@ -258,18 +258,18 @@ jobs:
       - name: Prepare Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: |
-          mkdir -p "${BUILD_DIR}/comgr-scev-revert"
+          mkdir -p "${BUILD_DIR}/comgr-runtime-unroll-revert"
           cp "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.dll" \
              "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.pdb" \
              "${BUILD_DIR}/base/aux-overlay/build/therock_manifest.json" \
-             "${BUILD_DIR}/comgr-scev-revert/"
+             "${BUILD_DIR}/comgr-runtime-unroll-revert/"
 
       - name: Upload Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: comgr-windows-x64-scev-revert
-          path: ${{ env.BUILD_DIR }}/comgr-scev-revert/
+          name: comgr-windows-x64-runtime-unroll-revert
+          path: ${{ env.BUILD_DIR }}/comgr-runtime-unroll-revert/
           if-no-files-found: error
 
       - name: Report
