@@ -100,8 +100,12 @@ class PackageConfig:
     build_variant: str = ""
 
 
+@functools.lru_cache(maxsize=None)
 def read_package_json_file():
     """Reads package.json file and return the parsed data.
+
+    The file is parsed once per process and cached; callers must not modify
+    the returned data.
 
     Parameters: None
 
@@ -111,6 +115,22 @@ def read_package_json_file():
     with file_path.open("r", encoding="utf-8") as file:
         data = json.load(file)
     return data
+
+
+@functools.lru_cache(maxsize=None)
+def _package_index():
+    """Index package.json entries by package name for O(1) lookup.
+
+    Raises:
+    ValueError: If package.json defines the same package name more than once
+    """
+    index = {}
+    for package in read_package_json_file():
+        name = package.get("Package")
+        if name in index:
+            raise ValueError(f"Duplicate package name in package.json: {name}")
+        index[name] = package
+    return index
 
 
 def is_key_defined(pkg_info, key):
@@ -161,20 +181,6 @@ def is_meta_package(pkg_info):
     return is_key_defined(pkg_info, "Metapackage")
 
 
-def is_devel_package(pkg_info):
-    """
-    Verifies whether this is a development package (ends with -devel).
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if package name ends with -devel, False otherwise.
-    """
-    pkg_name = pkg_info.get("Package", "")
-    return pkg_name.endswith("-devel")
-
-
 def is_packaging_disabled(pkg_info):
     """
     Verifies whether 'Disablepackaging' key is enabled for a package.
@@ -204,6 +210,8 @@ def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
     if not artifactory:
         return False
 
+    # Cached listing of artifacts_dir instead of a glob() per component
+    names = _artifact_dir_name_index(str(artifacts_dir))
     for artifact in artifactory:
         artifact_prefix = artifact.get("Artifact")
         if not artifact_prefix:
@@ -211,9 +219,8 @@ def _has_arch_specific_artifacts(pkg_info, artifacts_dir):
         for subdir in artifact.get("Artifact_Subdir", []):
             for component in subdir.get("Components", []):
                 # Check for any gfx-specific directory (not generic)
-                pattern = f"{artifact_prefix}_{component}_gfx*"
-                matches = list(Path(artifacts_dir).glob(pattern))
-                if matches:
+                prefix = f"{artifact_prefix}_{component}_gfx"
+                if any(name.startswith(prefix) for name in names):
                     return True
     return False
 
@@ -232,25 +239,16 @@ def is_gfxarch_package(
 
     Returns:
     bool : For metapackages, True if Gfxarch is set, else False.
-           False if non-meta devel package.
-           Otherwise True if arch-specific artifacts exist, else False.
-           False if artifacts_dir is None: the package cannot be classified
-           as gfx-arch-specific without an artifact path.
+           Otherwise True only if Gfxarch is set and arch-specific
+           artifacts exist; False if artifacts_dir is None.
     """
-    # Only non-metapackage -devel should be non-gfxarch
-    # Metapackages like amdrocm-core-devel should create arch-specific variants
-    if is_devel_package(pkg_info) and not is_meta_package(pkg_info):
-        return False
-
     # Metapackages don't have artifacts but should still respect Gfxarch metadata
     if is_meta_package(pkg_info):
         return is_key_defined(pkg_info, "Gfxarch")
-    # Verify arch-specific artifacts exist
-    if artifacts_dir:
-        return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
-    # Do not fall through to Gfxarch metadata: without artifacts we cannot treat
-    # the package as gfx-arch-specific (explicit bool).
-    return False
+    # Non-meta: package.json must set Gfxarch, and arch-specific artifacts must exist
+    if not is_key_defined(pkg_info, "Gfxarch") or not artifacts_dir:
+        return False
+    return _has_arch_specific_artifacts(pkg_info, artifacts_dir)
 
 
 def get_package_info(pkgname, raise_if_missing=True):
@@ -267,12 +265,9 @@ def get_package_info(pkgname, raise_if_missing=True):
     ValueError: If package not found and raise_if_missing=True
     """
 
-    # Load JSON data from a file
-    data = read_package_json_file()
-
-    for package in data:
-        if package.get("Package") == pkgname:
-            return package
+    package = _package_index().get(pkgname)
+    if package is not None:
+        return package
 
     # Package not found
     if raise_if_missing:
@@ -283,12 +278,16 @@ def get_package_info(pkgname, raise_if_missing=True):
     return None
 
 
+@functools.lru_cache(maxsize=None)
 def get_package_list(artifact_dir):
     """Read package.json and return a list of package names.
 
     Packages marked as 'Disablepackaging' are excluded.
     If the entire Artifactory directory is missing, the package is excluded
     unless it is a metapackage.
+
+    The result is cached per artifacts directory and returned as tuples
+    so the cached value cannot be modified.
 
     Parameters:
         artifact_dir : The path to the Artifactory directory
@@ -342,7 +341,7 @@ def get_package_list(artifact_dir):
         else:
             skipped_list.append(pkg_name)
 
-    return pkg_list, skipped_list
+    return tuple(pkg_list), tuple(skipped_list)
 
 
 def remove_dir(dir_name):
@@ -971,7 +970,14 @@ def filter_components_fromartifactory(
                 # Find base artifact and all xnack variants (e.g., :xnack+, :xnack-)
                 base_pattern = f"{artifact_prefix}_{component}_{artifact_suffix}"
                 artifact_dirs = [Path(artifacts_dir) / base_pattern]
-                artifact_dirs.extend(Path(artifacts_dir).glob(f"{base_pattern}:*"))
+                # Cached listing of artifacts_dir instead of glob(f"{base_pattern}:*")
+                artifact_dirs.extend(
+                    Path(artifacts_dir) / name
+                    for name in _artifact_dir_name_index(str(artifacts_dir)).get(
+                        base_pattern, []
+                    )
+                    if ":" in name
+                )
 
                 for source_dir in artifact_dirs:
                     filename = source_dir / "artifact_manifest.txt"
