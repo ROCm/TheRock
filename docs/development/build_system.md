@@ -161,6 +161,47 @@ Each sub-project, by default, uses a standard directory layout for its build:
 Subprojects that opt in to source file globbing even when otherwise skipped
 (e.g. `-DTHEROCK_DEV_PROJECTS=amd-llvm`).
 
+### `THEROCK_ENABLE_COMPILER_*_DISTRIBUTION`
+
+When `THEROCK_ENABLE_COMPILER` is on, TheRock stages `amd-llvm` via LLVM
+multi-distributions (see
+[`clang/cmake/caches/ROCm.cmake`](../../compiler/amd-llvm/clang/cmake/caches/ROCm.cmake)).
+Per-distribution toggles compose the semicolon list
+`THEROCK_AMD_LLVM_DISTRIBUTION`, which is passed to `amd-llvm` as
+`INSTALL_DISTRIBUTION`. Reconfigure after flipping a toggle: the aggregate is
+`FORCE`d from the options.
+
+| Option                                           | LLVM distribution | Default                    | Ships (summary)                                                  |
+| ------------------------------------------------ | ----------------- | -------------------------- | ---------------------------------------------------------------- |
+| `THEROCK_ENABLE_COMPILER_DISTRIBUTION`           | `compiler`        | ON                         | clang, lld, offload driver tools, host builtins                  |
+| `THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION`  | `runtimes`        | ON                         | host/GPU runtimes (compiler-rt, OpenMP, offload, libc family, …) |
+| `THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION`       | `dev`             | ON                         | LLVM/Clang/LLD headers, libs, CMake packages, tablegens, …       |
+| `THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION`     | `tools`           | ON                         | llvm-objdump, opt, clang-tidy, …                                 |
+| `THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION`   | `fortran`         | ON (Linux); OFF (Windows)  | Flang, flang-rt, Fortran OpenMP modules, Flang/MLIR packages     |
+| `THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION`     | `utils`           | ON                         | FileCheck, not, other test utilities                             |
+| `THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION` | `multilibs`       | OFF (Linux); OFF (Windows) | Debug/ASan OpenMP and offload runtime variants                   |
+
+Behavior notes:
+
+- Distributions are **independent** install umbrellas. Staging `runtimes` does
+  not pull in `compiler`; stage every slice you need.
+- If every toggle is OFF, `THEROCK_AMD_LLVM_DISTRIBUTION` is empty and TheRock
+  falls back to a full `cmake --build` + `cmake --install` of `amd-llvm`.
+- Non-empty lists build/stage with
+  `install-<name>-distribution` (or `…-stripped` when split debug info is on).
+- Override the composed list for one project with
+  `-Damd-llvm_INSTALL_DISTRIBUTION=compiler;runtimes` (bypasses the toggles for
+  that activate only).
+
+Example — stage tools without Flang or multilibs:
+
+```bash
+cmake -B build -S . -GNinja \
+  -DTHEROCK_ENABLE_COMPILER=ON \
+  -DTHEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION=OFF \
+  -DTHEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION=OFF
+```
+
 ### `THEROCK_ENABLE_HIPCCL`
 
 Selects how the prim libraries are built (default `ON`, requires
