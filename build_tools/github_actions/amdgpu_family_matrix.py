@@ -191,19 +191,28 @@ all_build_variants = {
             # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
             # "build_variant_cmake_preset": "linux-release-package",
             "build_variant_cmake_preset": "",
+            # Every trigger, so the per-family tests_on_trigger remains the filter.
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         },
-        # full ASAN builds are run on nightly
+        # Full ASAN tests stay nightly. workflow_dispatch is allowed separately.
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+            "tests_on_trigger": ["nightly"],
         },
-        # host ASAN builds are run on nightly, with intent to run on presubmit and postsubmit
-        # host ASAN detects memory errors on host code (excluding kernel binaries), while ASAN sanitizes everything
+        # Host ASAN instruments host code and not device kernels. Tests stay
+        # nightly until a passing run opts presubmit in. See TheRock#9881.
         "host-asan": {
             "build_variant_label": "host-asan",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan",
+            "tests_on_trigger": ["nightly"],
         },
         # Debug variants: same as asan/host-asan but with RelWithDebInfo + -g1 -gdwarf-4.
         # Used for nightly and release ASAN builds where stack traces need source line info.
@@ -211,16 +220,24 @@ all_build_variants = {
             "build_variant_label": "asan-debug",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan-debug",
+            "tests_on_trigger": ["nightly"],
         },
         "host-asan-debug": {
             "build_variant_label": "host-asan-debug",
             "build_variant_suffix": "host-asan",
             "build_variant_cmake_preset": "linux-release-host-asan-debug",
+            "tests_on_trigger": ["nightly"],
         },
         "tsan": {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         },
     },
     "windows": {
@@ -228,9 +245,27 @@ all_build_variants = {
             "build_variant_label": "release",
             "build_variant_suffix": "",
             "build_variant_cmake_preset": "windows-release",
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
         },
     },
 }
+
+
+def build_variant_runs_tests(variant_config: dict, current_triggers: set[str]) -> bool:
+    """Return whether this variant runs tests on any of current_triggers.
+
+    A variant with no tests_on_trigger does not run tests. workflow_dispatch is
+    not a member of the list; callers allow it separately, the same way the
+    per-family gate does.
+    """
+    allowed = set(variant_config.get("tests_on_trigger", []))
+    return bool(allowed & current_triggers)
+
 
 """
 amdgpu_family_info_matrix dictionary fields:

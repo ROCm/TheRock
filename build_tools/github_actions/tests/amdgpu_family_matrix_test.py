@@ -23,6 +23,7 @@ import amdgpu_family_matrix
 from amdgpu_family_matrix import (
     VALID_DISABLED_FRAMEWORK_TESTS,
     VALID_TRIGGERS,
+    build_variant_runs_tests,
     get_all_families_for_trigger_types,
     get_build_runner_labels,
     is_framework_test_disabled_for_family,
@@ -125,6 +126,31 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                 preset = config["build_variant_cmake_preset"]
                 if preset:
                     self.assertIn(preset, preset_names, f"{platform}/{name}")
+
+    def test_variant_tests_on_trigger_preserves_current_jobs(self):
+        """Variant test lists record today's jobs and do not add new ones.
+
+        release and tsan list every trigger, so the per-family gate stays
+        their only filter. asan and host-asan stay nightly. workflow_dispatch
+        is not a listed trigger; callers allow it separately.
+        """
+        every = ["presubmit", "postsubmit", "submodule_bump", "nightly"]
+        nightly = ["nightly"]
+        linux = amdgpu_family_matrix.all_build_variants["linux"]
+        for name in ("release", "tsan"):
+            self.assertEqual(linux[name]["tests_on_trigger"], every)
+        for name in ("asan", "asan-debug", "host-asan", "host-asan-debug"):
+            self.assertEqual(linux[name]["tests_on_trigger"], nightly)
+            self.assertNotIn("presubmit", linux[name]["tests_on_trigger"])
+        windows = amdgpu_family_matrix.all_build_variants["windows"]["release"]
+        self.assertEqual(windows["tests_on_trigger"], every)
+
+        self.assertTrue(build_variant_runs_tests(linux["release"], {"presubmit"}))
+        self.assertFalse(build_variant_runs_tests(linux["host-asan"], {"presubmit"}))
+        self.assertTrue(build_variant_runs_tests(linux["host-asan"], {"nightly"}))
+        self.assertTrue(build_variant_runs_tests(linux["asan"], {"nightly"}))
+        self.assertFalse(build_variant_runs_tests(linux["asan"], {"presubmit"}))
+        self.assertFalse(build_variant_runs_tests({}, {"nightly"}))
 
     def test_builds_on_trigger_non_empty(self):
         """Every platform entry must list at least one build trigger."""
