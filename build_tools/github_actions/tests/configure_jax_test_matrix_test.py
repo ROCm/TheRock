@@ -24,6 +24,8 @@ GFX94X_MULTI_GPU = "linux-gfx942-8gpu-ossci-rocm"
 SUNDAY = date(2026, 8, 9)
 TUESDAY = date(2026, 8, 11)
 
+PY312 = ["--python-version", "3.12"]
+
 
 def subsets(matrix: dict) -> list[str]:
     return [job["test_subset"] for job in matrix["include"]]
@@ -64,10 +66,19 @@ class WantsMultiGpuTest(unittest.TestCase):
 
 class BuildTestMatrixTest(unittest.TestCase):
     def matrix(
-        self, target="gfx94X-dcgpu", platform="linux", size="small", today=TUESDAY
+        self,
+        target="gfx94X-dcgpu",
+        platform="linux",
+        size="small",
+        python_version="3.12",
+        today=TUESDAY,
     ) -> dict:
         return matrix_script.build_test_matrix(
-            target=target, platform=platform, size=size, today=today
+            target=target,
+            platform=platform,
+            size=size,
+            python_version=python_version,
+            today=today,
         )
 
     def test_a_pull_request_runs_only_the_single_gpu_job(self):
@@ -149,6 +160,62 @@ class BuildTestMatrixTest(unittest.TestCase):
         self.assertEqual(job["test_timeout_minutes"], 90)
 
 
+class EndToEndTest(unittest.TestCase):
+    """Which ROCm/jax-lab workloads the multi-GPU job runs, and its budget."""
+
+    def multi_job(self, size, python_version="3.12", today=SUNDAY) -> dict:
+        matrix = matrix_script.build_test_matrix(
+            target="gfx94X-dcgpu",
+            platform="linux",
+            size=size,
+            python_version=python_version,
+            today=today,
+        )
+        return job_for(matrix, "multi")
+
+    def test_medium_runs_its_two_workloads(self):
+        job = self.multi_job("medium")
+
+        self.assertEqual(job["e2e_list"], matrix_script.E2E_LISTS["medium"])
+        self.assertEqual(job["e2e_timeout_minutes"], 2 * 60)
+        self.assertEqual(job["job_timeout_minutes"], 240 + 2 * 60)
+
+    def test_large_runs_every_workload(self):
+        job = self.multi_job("large", today=TUESDAY)
+
+        self.assertEqual(job["e2e_list"], matrix_script.E2E_LISTS["large"])
+        self.assertEqual(job["e2e_timeout_minutes"], 13 * 60)
+        self.assertEqual(job["job_timeout_minutes"], 240 + 13 * 60)
+
+    def test_other_python_versions_run_none(self):
+        # jax-lab runs and pins Python 3.12 alone.
+        with contextlib.redirect_stdout(io.StringIO()):
+            job = self.multi_job("large", python_version="3.13")
+
+        self.assertEqual(job["e2e_list"], "")
+        self.assertEqual(job["e2e_timeout_minutes"], 0)
+        self.assertEqual(job["job_timeout_minutes"], 240)
+
+    def test_the_single_gpu_job_runs_none(self):
+        matrix = matrix_script.build_test_matrix(
+            target="gfx94X-dcgpu",
+            platform="linux",
+            size="large",
+            python_version="3.12",
+            today=TUESDAY,
+        )
+        job = job_for(matrix, "all")
+
+        self.assertEqual(job["e2e_list"], "")
+        self.assertEqual(job["job_timeout_minutes"], 240)
+
+    def test_every_list_exists(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        for size, path in matrix_script.E2E_LISTS.items():
+            with self.subTest(size=size):
+                self.assertTrue((repo_root / path).is_file())
+
+
 class OutputsTest(unittest.TestCase):
     def outputs(self, argv: list[str], today=TUESDAY) -> dict[str, str]:
         with open(os.environ["GITHUB_OUTPUT"], "w") as f:
@@ -168,7 +235,9 @@ class OutputsTest(unittest.TestCase):
         self.addCleanup(patch.stop)
 
     def test_the_matrix_a_workflow_consumes(self):
-        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "large"])
+        outputs = self.outputs(
+            ["--target", "gfx94X-dcgpu", "--test-size", "large", *PY312]
+        )
 
         self.assertEqual(outputs["enabled"], "true")
         self.assertEqual(
@@ -180,19 +249,27 @@ class OutputsTest(unittest.TestCase):
                         "test_runs_on": GFX94X_SINGLE_GPU,
                         "test_timeout_minutes": 120,
                         "test_list": "",
+                        "e2e_list": "",
+                        "e2e_timeout_minutes": 0,
+                        "job_timeout_minutes": 240,
                     },
                     {
                         "test_subset": "multi",
                         "test_runs_on": GFX94X_MULTI_GPU,
                         "test_timeout_minutes": 90,
                         "test_list": "",
+                        "e2e_list": matrix_script.E2E_LISTS["large"],
+                        "e2e_timeout_minutes": 780,
+                        "job_timeout_minutes": 1020,
                     },
                 ]
             },
         )
 
     def test_a_pull_request_gets_one_job_on_the_single_gpu_runner(self):
-        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "small"])
+        outputs = self.outputs(
+            ["--target", "gfx94X-dcgpu", "--test-size", "small", *PY312]
+        )
 
         self.assertEqual(
             json.loads(outputs["matrix"]),
@@ -203,6 +280,9 @@ class OutputsTest(unittest.TestCase):
                         "test_runs_on": GFX94X_SINGLE_GPU,
                         "test_timeout_minutes": 45,
                         "test_list": matrix_script.SMALL_TEST_LIST,
+                        "e2e_list": "",
+                        "e2e_timeout_minutes": 0,
+                        "job_timeout_minutes": 240,
                     }
                 ]
             },
@@ -210,10 +290,12 @@ class OutputsTest(unittest.TestCase):
 
     def test_the_nightly_picks_up_the_multi_gpu_job_on_its_day(self):
         weekday = self.outputs(
-            ["--target", "gfx94X-dcgpu", "--test-size", "medium"], today=TUESDAY
+            ["--target", "gfx94X-dcgpu", "--test-size", "medium", *PY312],
+            today=TUESDAY,
         )
         weekly = self.outputs(
-            ["--target", "gfx94X-dcgpu", "--test-size", "medium"], today=SUNDAY
+            ["--target", "gfx94X-dcgpu", "--test-size", "medium", *PY312],
+            today=SUNDAY,
         )
 
         self.assertEqual(len(json.loads(weekday["matrix"])["include"]), 1)
@@ -222,7 +304,7 @@ class OutputsTest(unittest.TestCase):
     def test_a_nightly_off_the_day_says_how_to_get_those_tests(self):
         # A nightly re-run onto another day loses the week of multi-accelerator
         # coverage, so the run says so and names the way back.
-        argv = ["--target", "gfx94X-dcgpu", "--test-size", "medium"]
+        argv = ["--target", "gfx94X-dcgpu", "--test-size", "medium", *PY312]
         with contextlib.redirect_stdout(io.StringIO()) as weekday:
             self.outputs(argv, today=TUESDAY)
         with contextlib.redirect_stdout(io.StringIO()) as weekly:
@@ -235,11 +317,16 @@ class OutputsTest(unittest.TestCase):
     def test_a_size_is_required_and_checked(self):
         # Defaulting it would quietly drop the multi-accelerator job.
         for argv in [
-            ["--target", "gfx94X-dcgpu"],
-            ["--target", "gfx94X-dcgpu", "--test-size", "meduim"],
+            ["--target", "gfx94X-dcgpu", *PY312],
+            ["--target", "gfx94X-dcgpu", "--test-size", "meduim", *PY312],
         ]:
             with self.subTest(argv=argv), self.assertRaises(SystemExit):
                 self.outputs(argv)
+
+    def test_a_python_version_is_required(self):
+        # It decides whether the end-to-end workloads run.
+        with self.assertRaises(SystemExit):
+            self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "large"])
 
 
 class SmallTestSelectionTest(unittest.TestCase):

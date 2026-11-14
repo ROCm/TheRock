@@ -37,8 +37,36 @@ decide whether it is worth a slot in that pool;
 including which day of the week a `medium` run takes one.
 
 The end-to-end workloads run as a step of that job, so they follow the same
-rule rather than taking a second slot in the pool. They are a placeholder that
-warns and runs nothing until `ROCm/jax-lab` is public.
+rule rather than taking a second slot in the pool.
+
+## End-to-end workloads
+
+`e2e_medium.txt` and `e2e_large.txt` list the
+[ROCm/jax-lab](https://github.com/ROCm/jax-lab) workloads each size runs, one
+`<target> <workload> <gpus>` per line, with the GPU count jax-lab's own CI gives
+each workload. `run_jax_e2e.py` runs them through jax-lab's
+`targets/<target>/run.sh` against the wheels the job installed, and fails the
+step if any of them fails:
+
+```bash
+python external-builds/jax/run_jax_e2e.py --jax-lab-dir jax-lab \
+  --workload-list external-builds/jax/test_selection/e2e_medium.txt \
+  --runner local --rocm-version 10.2.0a20261016
+```
+
+- They run on the Python 3.12 job only, the version jax-lab runs and pins.
+- The test workflow checks out jax-lab at a pinned commit, so a jax-lab change
+  reaches these runs through a PR here.
+- Each workload gets 60 minutes, as in jax-lab's CI, and the step's budget is
+  their sum.
+
+`large` runs every jax-lab workload. `medium` runs two MaxText ones:
+`llama3_1_8b`, the dense baseline, and `deepseek2_16b`, which adds
+mixture-of-experts routing with shared experts, MLA attention and YaRN RoPE.
+MaxText checks the most of any target (per-step TFLOP/s and step time on all 8
+GPUs, against one final number for the others) and needs no downloaded data.
+`mixtral_8x7b` and `gpt_oss_20b` peak at 69-92% of a 288 GB MI355X, more than
+an MI300X's 192 GB, while these two stay under half.
 
 ## `small_tests.txt`
 
