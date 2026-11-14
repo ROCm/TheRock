@@ -234,6 +234,8 @@
   },
   "libhipcxx": {
     "consumers": [
+      "hipccl",
+      "hipccl_tests",
       "hipthreads"
     ]
   },
