@@ -9,3 +9,10 @@ include = [
   "include/hrr/**",
 ]
 [components.doc."core/hrr/stage"]
+
+# Tests
+[components.test."core/hrr/stage"]
+include = [
+  "share/hrr/test/**",
+]
+optional = true

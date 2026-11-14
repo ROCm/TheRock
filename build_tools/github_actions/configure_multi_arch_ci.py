@@ -191,7 +191,7 @@ def _resolve_effective_build_stages(
 # stages. Used to auto-filter tests when build_stages narrows the build graph.
 # Test labels not listed here require a full build.
 STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
-    "compiler-runtime": ["kfdtest"],
+    "compiler-runtime": ["kfdtest", "hrr"],
     "runtime-tests": ["hip-tests", "rocrtst"],
     "math-libs": [
         "rocblas",

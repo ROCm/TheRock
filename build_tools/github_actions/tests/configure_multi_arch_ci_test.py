@@ -215,7 +215,7 @@ class TestCIInputs(unittest.TestCase):
         )
         self.assertEqual(
             sorted(inputs.linux_test_labels),
-            ["ci:run-wsl", "test:hip-tests", "test:kfdtest", "test:rocrtst"],
+            ["ci:run-wsl", "test:hip-tests", "test:hrr", "test:kfdtest", "test:rocrtst"],
         )
 
     def test_run_wsl_adds_wsl_rocdxg_to_partial_build(self):
