@@ -6,7 +6,9 @@ Produces human-readable markdown explaining what CI will do and why.
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
+    RUN_ON_DRAFT_LABEL,
 )
+import json
 from pathlib import Path
 import sys
 
@@ -39,11 +41,27 @@ def format_summary(
     if not outputs.jobs:
         return "\n".join(lines)
 
-    # One-liner: trigger, branch, variant
     lines.append(
         f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.commit_ref}`, "
         f"`{ci_inputs.build_variant}` variant."
     )
+    lines.append("")
+    source = "Source: TheRock"
+    if ci_inputs.checkout_commit:
+        commit = ci_inputs.checkout_commit
+        source = (
+            f"Source: [ROCm/TheRock@{commit[:7]}]"
+            f"(https://github.com/ROCm/TheRock/commit/{commit})"
+        )
+    if ci_inputs.external_repo:
+        external_repo = json.loads(ci_inputs.external_repo)
+        repository = external_repo["repository"]
+        commit = external_repo["ref"]
+        source += (
+            f" with submodule override [{repository}@{commit[:7]}]"
+            f"(https://github.com/{repository}/commit/{commit})"
+        )
+    lines.append(f"{source}.")
     lines.append("")
 
     # Nothing to build (e.g. workflow_dispatch with no families selected)
@@ -83,6 +101,12 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
+    elif ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+        reason = (
+            "this pull request is a draft. Add the "
+            f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
+            "review to run builds and tests"
+        )
     else:
         reason = "no CI-relevant files changed"
 

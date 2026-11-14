@@ -31,7 +31,10 @@ TEST_CATEGORY: Optional. When set, overrides TEST_TYPE, for jobs that always
     run one specific category regardless of the CI tier (e.g. hw-common). If
     the installed component does not define that category yet, the run is
     skipped with a warning instead of failing.
-AMDGPU_FAMILIES: GPU architecture for skip-marker filtering (e.g. "gfx942").
+AMDGPU_FAMILIES: GPU family (e.g. "gfx94X-dcgpu"). Its gfx token is the
+    skip-marker arch, and substitutes {AMDGPU_TARGETS} if AMDGPU_TARGETS is unset.
+AMDGPU_TARGETS: Optional comma-separated targets (e.g. "gfx942"). The first
+    substitutes {AMDGPU_TARGETS}; a lone entry replaces the family's skip arch.
 THEROCK_BIN_DIR: Path to the installed bin/ directory; its parent is the ROCm
     install prefix used to locate share/, lib/ and llvm tooling.
 JUNIT_XML_DIR: Optional. When set, pytest writes a JUnit XML report to
@@ -145,16 +148,51 @@ def load_test_categories_yaml(yaml_path):
 
 
 def extract_gpu_arch(amdgpu_families):
-    """Extract the first gfx architecture token from AMDGPU_FAMILIES."""
+    """Return the first GPU architecture named in AMDGPU_FAMILIES.
+
+    Examples:
+        "gfx942"          -> "gfx942"
+        "gfx94X-dcgpu"    -> "gfx94X"          (family name; the "-dcgpu" suffix is dropped)
+        "gfx1250-strict"  -> "gfx1250-strict"  (a separate target; "-strict" is kept)
+    """
     if not amdgpu_families:
         return None
-    match = re.search(r"gfx\w+", amdgpu_families)
+    # "-strict" is part of the target name (gfx1250-strict is its own target, with
+    # its own skip-gfx1250-strict marker), so keep it. Other suffixes such as
+    # "-dcgpu" or "-all" only group targets into a family, so drop them.
+    match = re.search(r"gfx\w+(?:-strict)?", amdgpu_families)
     if match:
         gpu_arch = match.group(0)
         logging.info(f"Detected GPU architecture: {gpu_arch}")
         return gpu_arch
     logging.warning(f"Could not parse GPU architecture from: {amdgpu_families}")
     return None
+
+
+def resolve_skip_arch(gpu_arch: str | None, amdgpu_targets: str | None) -> str | None:
+    """Pick the arch used in the ``not skip-<arch>`` pytest marker term.
+
+    Test configs opt out of a GPU with markers named after a single target,
+    e.g. ``skip-gfx942`` or ``skip-gfx1250``. *gpu_arch* is
+    ``extract_gpu_arch(AMDGPU_FAMILIES)``, often a family name such as
+    ``gfx94X``, which matches no such marker.
+    AMDGPU_TARGETS is the comma-separated target list that
+    configure_multi_arch_ci.py builds from the family's "fetch-gfx-targets".
+    When it names exactly one target, that target is the GPU under test, so use it.
+
+    Examples (gpu_arch, AMDGPU_TARGETS -> arch):
+        "gfx94X",  "gfx942"          -> "gfx942"
+        "gfx125X", "gfx1250"         -> "gfx1250"
+        "gfx125X", "gfx1250-strict"  -> "gfx1250-strict"
+        "gfx120X", "gfx1200,gfx1201" -> "gfx120X" (unchanged: either target
+            may be on the runner, and per-target skips still apply in the
+            test's own conftest, which sees the detected GPU)
+        "gfx942",  ""                -> "gfx942"  (unchanged)
+    """
+    if not gpu_arch:
+        return gpu_arch
+    targets = [t for t in (amdgpu_targets or "").split(",") if t]
+    return targets[0] if len(targets) == 1 else gpu_arch
 
 
 def build_marker_expression(category_config, gpu_arch, amdgpu_target=""):
@@ -338,7 +376,9 @@ if __name__ == "__main__":
     amdgpu_target = (
         AMDGPU_TARGETS.split(",")[0].strip() if AMDGPU_TARGETS else ""
     ) or (gpu_arch or "")
-    marker_expr = build_marker_expression(category_config, gpu_arch, amdgpu_target)
+    marker_expr = build_marker_expression(
+        category_config, resolve_skip_arch(gpu_arch, AMDGPU_TARGETS), amdgpu_target
+    )
 
     # Extra pytest CLI options for this category.  {ROCM_PATH} and
     # {AMDGPU_TARGETS} tokens are substituted with runtime values.

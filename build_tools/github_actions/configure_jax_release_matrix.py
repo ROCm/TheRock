@@ -66,7 +66,7 @@ JAX_REF_CONFIGS = {
     },
     # Upstream JAX at its moving tip, built against the ROCm of the same run
     # (tip vs tip), the way PyTorch's "nightly" ref is a row of its release
-    # matrix. Release types other than prerelease include it (RELEASE_JAX_REFS).
+    # matrix.
     # The manylinux Dockerfile comes from rocm-jax's default branch, since
     # rocm-jax has no ref named "main" and the Dockerfile has no JAX-version
     # coupling.
@@ -99,7 +99,7 @@ RELEASE_STABLE_JAX_REFS = {
     ],
 }
 
-# Refs for the other release types: stable refs + upstream tip.
+# Refs for "dev" and "nightly" releases: stable refs + upstream tip.
 RELEASE_JAX_REFS = {
     platform: [*refs, "jax-main"] for platform, refs in RELEASE_STABLE_JAX_REFS.items()
 }
@@ -194,6 +194,11 @@ def generate_jax_matrix_for_release_type(
         raise ValueError(f"Unknown release_type: {release_type!r}")
     if platform not in ["linux"]:
         raise ValueError(f"Unknown platform: {platform!r}")
+
+    # JAX is not supported for BKC releases today, so return an empty matrix.
+    # See https://github.com/ROCm/rockrel/issues/88 for context.
+    if release_type in ("dev-bkc", "nightly-bkc"):
+        return []
 
     versions = python_versions or _default_python_versions(
         release_type=release_type,
