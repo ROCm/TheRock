@@ -814,7 +814,10 @@ test_matrix = {
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
         "job_name": "miopen-dbsync",
-        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # --rocjitsu/--mirage ship the emulator so the runner can use it from the dist instead
+        # of building rocjitsu itself. Until the runner script switches over it still builds its
+        # own copy and ignores these.
+        "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu --mirage",
         # Standard/comprehensive/full only: "test_types" makes the framework skip this
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
