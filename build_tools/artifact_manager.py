@@ -48,7 +48,6 @@ from dataclasses import dataclass
 import os
 import platform as platform_module
 import shutil
-import stat
 import sys
 import threading
 import time
@@ -802,17 +801,12 @@ def upload_artifact(request: UploadRequest) -> bool:
     fingerprint_path = (
         request.source_path.parent.parent / "artifacts" / fingerprint_name
     )
-    try:
-        fingerprint_stat = fingerprint_path.stat()
-    except FileNotFoundError:
-        log(f"  == Skipping missing fingerprint: {fingerprint_path}")
+    if not fingerprint_path.is_file():
+        log(
+            f"  == Skipping fingerprint: missing or not a regular file: "
+            f"{fingerprint_path}"
+        )
         return True
-
-    if not stat.S_ISREG(fingerprint_stat.st_mode):
-        raise ValueError(f"Fingerprint is not a regular file: {fingerprint_path}")
-
-    with fingerprint_path.open("rb"):
-        pass
 
     # Existing fingerprints upload with independent retries;
     # exhausted retries propagate as an error.
