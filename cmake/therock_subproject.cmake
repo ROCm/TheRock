@@ -277,11 +277,22 @@ endfunction()
 # IGNORE_PACKAGES: List of find_package package names to ignore, even if they
 #   are advertised by the super-project. These packages will always fall-through
 #   to the system resolver.
-# COMPILER_TOOLCHAIN: Uses a built compiler toolchain instead of the
-#   super-project specified C/C++ compiler. This will add an implicit dep on
-#   the named compiler sub-project and reconfigure CMAKE_C(XX)_COMPILER options.
-#   Only a fixed set of supported toolchains are supported (currently
-#   "amd-llvm" and "amd-hip").
+# COMPILER_TOOLCHAIN: Uses a compiler toolchain other than the super-project
+#   specified C/C++ compiler, reconfiguring CMAKE_C(XX)_COMPILER options.
+#   Only a fixed set of toolchains are supported:
+#     "amd-llvm", "amd-hip": compilers TheRock builds itself.  These add an
+#       implicit dep on the named compiler sub-project, so the subproject does
+#       not build until that compiler has been staged.
+#     "host-gnu": a GNU compiler already installed on the host, named by
+#       EXTERNAL_C_COMPILER/EXTERNAL_CXX_COMPILER below.  There is no compiler
+#       sub-project behind it and therefore no implicit dep.  On Windows it
+#       suits a sub-project that compiles outside CMake (e.g. an autotools
+#       build run through MSYS2), as such a sub-project still inherits
+#       MSVC-only settings that only a CMake-built target would use: the
+#       /Brepro link option, CMAKE_LINKER, CMAKE_RC_COMPILER and CMAKE_MT.
+#       The compiler's directory is also on PATH at configure time only.
+# EXTERNAL_C_COMPILER, EXTERNAL_CXX_COMPILER: Absolute paths to the compilers
+#   backing COMPILER_TOOLCHAIN "host-gnu".  Required for it, ignored otherwise.
 # BACKGROUND_BUILD: Option to indicate that the subproject does low concurrency,
 #   high latency build steps. It will be run in the background in a job pool that
 #   allows some overlapping of work (controlled by
@@ -362,7 +373,7 @@ function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;EXTERNAL_C_COMPILER;EXTERNAL_CXX_COMPILER;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED"
   )
   if(TARGET "${target_name}")
@@ -554,6 +565,8 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_PROGRAM_DIRS "${_interface_program_dirs}"
     THEROCK_IGNORE_PACKAGES "${ARG_IGNORE_PACKAGES}"
     THEROCK_COMPILER_TOOLCHAIN "${ARG_COMPILER_TOOLCHAIN}"
+    THEROCK_EXTERNAL_C_COMPILER "${ARG_EXTERNAL_C_COMPILER}"
+    THEROCK_EXTERNAL_CXX_COMPILER "${ARG_EXTERNAL_CXX_COMPILER}"
     # Any extra depend files that must be added to the configure phase of dependents.
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
@@ -867,9 +880,12 @@ function(therock_cmake_subproject_activate target_name)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
-    elseif(_compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
-      # The Windows but using a clang-based toolchain way.
-      #   Working around "lld-link: warning: ignoring unknown argument '-rpath-link'"
+    elseif(_compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip"
+           OR _compiler_toolchain STREQUAL "host-gnu")
+      # Windows with a toolchain that takes gcc-style flags: the clang
+      # toolchains and an external GNU one.  -rpath-link
+      # is omitted because it is an ELF concept: lld-link warns that it is an
+      # unknown argument, and a PE-targeting GNU ld has no use for it either.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
     else()
@@ -1796,7 +1812,15 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
-  if(MSVC AND compiler_toolchain)
+  if(MSVC AND compiler_toolchain STREQUAL "host-gnu")
+    # An external GNU compiler shares neither the system MSVC flags nor the
+    # clang-targeting-MSVC flags below, so it starts from nothing and the
+    # subproject supplies whatever it needs.
+    string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT )\n")
+    string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
+    string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
+  elseif(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we
     # define flags from scratch for the toolchain compiler.
     #
@@ -1854,8 +1878,8 @@ function(_therock_cmake_subproject_setup_toolchain
       # TODO: For now, just set the default.
     elseif((NOT compiler_toolchain AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
            OR compiler_toolchain)
-      # If the system compiler and GCC/clang or an explicit toolchain (which are all
-      # LLVM based).
+      # Either a GCC/clang system compiler, or an explicit toolchain.  The
+      # LLVM-based toolchains and host-gnu all accept these spellings.
       string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_DEBUG \" -g1 -gz\")\n")
       string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
       string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_DEBUG \" -g1 -gz\")\n")
@@ -1935,8 +1959,51 @@ function(_therock_cmake_subproject_setup_toolchain
         message(STATUS "SANITIZER = ${_sanitizer_enabled}")
       endif()
     endif()
+  elseif(compiler_toolchain STREQUAL "host-gnu")
+    # A GNU compiler already installed on the host, named by the subproject
+    # instead of built by TheRock.  Unlike amd-llvm there is no dist tree and
+    # no subproject backing it, so nothing is added to
+    # _compiler_toolchain_addl_depends and the subproject gains no build-order
+    # dependency on a compiler build.
+    get_target_property(_external_c_compiler "${target_name}" THEROCK_EXTERNAL_C_COMPILER)
+    get_target_property(_external_cxx_compiler "${target_name}" THEROCK_EXTERNAL_CXX_COMPILER)
+    if(NOT _external_c_compiler OR NOT _external_cxx_compiler)
+      message(FATAL_ERROR
+        "Subproject ${target_name} uses COMPILER_TOOLCHAIN host-gnu but does not set "
+        "EXTERNAL_C_COMPILER and EXTERNAL_CXX_COMPILER")
+    endif()
+    set(HOST_GNU_C_COMPILER "${_external_c_compiler}")
+    set(HOST_GNU_CXX_COMPILER "${_external_cxx_compiler}")
+    string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@HOST_GNU_C_COMPILER@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@HOST_GNU_CXX_COMPILER@\")\n")
+
+    # A GNU driver finds its own binutils (as, ld, collect2) on PATH.  The
+    # super-project's environment is whatever configured it, which on Windows is
+    # a Visual Studio prompt carrying no MSYS2 directories, so the driver could
+    # not assemble even CMake's compiler probe.  Put the compiler's own
+    # directory first so that the declared compiler is actually usable.
+    #
+    # This covers configure time only, which is where the probe runs.  A
+    # toolchain file cannot set the environment ninja uses later, so a
+    # subproject that compiles through CMake would still need its build
+    # environment arranged separately.  The autotools subprojects this is
+    # written for do their compiling inside an MSYS2 login shell, which sets its
+    # own PATH.
+    cmake_path(GET _external_c_compiler PARENT_PATH HOST_GNU_BIN_DIR)
+    if(WIN32)
+      string(APPEND _toolchain_contents "set(ENV{PATH} \"@HOST_GNU_BIN_DIR@;\$ENV{PATH}\")\n")
+    else()
+      string(APPEND _toolchain_contents "set(ENV{PATH} \"@HOST_GNU_BIN_DIR@:\$ENV{PATH}\")\n")
+    endif()
+
+    if(THEROCK_VERBOSE)
+      message(STATUS "Compiler toolchain ${compiler_toolchain}:")
+      string(APPEND CMAKE_MESSAGE_INDENT "  ")
+      message(STATUS "CMAKE_C_COMPILER = ${HOST_GNU_C_COMPILER}")
+      message(STATUS "CMAKE_CXX_COMPILER = ${HOST_GNU_CXX_COMPILER}")
+    endif()
   else()
-    message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm' or none)")
+    message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm', 'amd-hip', 'host-gnu' or none)")
   endif()
 
   # Configure additional HIP dependencies.

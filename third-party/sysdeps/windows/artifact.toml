@@ -7,6 +7,15 @@ include = [
 ]
 [components.lib."third-party/sysdeps/windows/bzip2/build/stage"]
 
+# liblzma
+# The DLLs go in lib by its default patterns.  xz's own tools (xz.exe and
+# the rest) go in dev, as bzip2's do.
+[components.lib."third-party/sysdeps/windows/liblzma/build/stage"]
+[components.dev."third-party/sysdeps/windows/liblzma/build/stage"]
+include = [
+  "**/bin/*.exe"
+]
+
 # sqlite3
 [components.lib."third-party/sysdeps/windows/sqlite3/build/stage"]
 [components.dev."third-party/sysdeps/windows/sqlite3/build/stage"]

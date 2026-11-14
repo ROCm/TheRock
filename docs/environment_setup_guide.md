@@ -170,6 +170,54 @@ There are various, easy ways to acquire specific CMake versions. For Windows and
 1. `pip install 'cmake<4'`
 1. For Linux: if afterwards cmake is not found anymore, run `hash -r` to forget the previously cached location of cmake
 
+### Antivirus real-time scanning (Windows)
+
+Exclude the build tree from real-time antivirus scanning. A build writes
+thousands of fresh executables and libraries, and a scanner inspects each one
+as it is written.
+
+Besides the time that costs, it causes intermittent failures that are hard to
+read. The scanner opens a newly written file to inspect it without letting
+others write to or delete it until it finishes. A linker that reopens the output
+it has just written then fails:
+
+```
+ld.exe: reopening a.exe: Permission denied
+ld.exe: final link failed: Permission denied
+```
+
+The worst form of this is a configure test, because a test that fails to link
+is indistinguishable from a feature that is not supported. The build does not
+stop, it quietly continues with the feature disabled, and the result looks like
+a real answer. It is also intermittent, so a re-run usually succeeds and
+whatever changed in between appears to have fixed it.
+
+Building on a Windows Dev Drive is not sufficient on its own. A trusted Dev
+Drive gets Defender's performance mode, which makes real-time scanning
+asynchronous instead of skipping it, so files are still opened and the failures
+above still happen.
+
+With Microsoft Defender, exclude the directory you build in from an elevated
+PowerShell, for example:
+
+```powershell
+Add-MpPreference -ExclusionPath 'D:\therock\build'
+Get-MpPreference | Select-Object -ExpandProperty ExclusionPath   # verify
+Remove-MpPreference -ExclusionPath 'D:\therock\build'            # to undo
+```
+
+A drive used only for development can be excluded as a whole instead, by
+naming its root.
+
+The setting persists across reboots.
+
+A virus scanner is the usual process holding the file open, but not the only
+one, and any process that opens freshly written files produces the same
+symptoms. Windows Search is worth checking too: it indexes the user profile by
+default, so a build tree under `C:\Users\...` is in scope, while one on a
+separate drive is not unless someone added it. Remove the location under
+Indexing Options if so.
+
 ### patchelf
 
 Building with `THEROCK_BUNDLE_SYSDEPS=ON` (the default for portable Linux

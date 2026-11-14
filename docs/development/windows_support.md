@@ -56,7 +56,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |                |           |                                                            |
 | debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                                            |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                                |
-| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                                |
+| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ✅        | Needs MSYS2, see [Install tools](#install-tools)           |
 |                     |                                                                                                                          |                |           |                                                            |
 | profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | rocm-systems   | ❌        | Unsupported                                                |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | rocm-systems   | ❌        | Unsupported                                                |
@@ -127,7 +127,9 @@ powershell.exe .\build_tools\validate_windows_install.ps1
 
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
 CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
-configuration. It is safe to re-run at any time.
+configuration. It is safe to re-run at any time. It does not check MSYS2, which
+the debug tools need: run `build_tools\setup_msys2.ps1` with no arguments for
+that (see [Install tools](#install-tools)).
 
 ### Prerequisites
 
@@ -173,7 +175,10 @@ configuration. It is safe to re-run at any time.
 - A Dev Drive is recommended, due to how many source and build files are used.
   See the
   [Set up a Dev Drive on Windows 11](https://learn.microsoft.com/en-us/windows/dev-drive/)
-  article for setup instructions.
+  article for setup instructions. A Dev Drive still has its files scanned, so
+  also exclude the build directory from real-time antivirus scanning, as
+  [Antivirus real-time scanning](../environment_setup_guide.md#antivirus-real-time-scanning-windows)
+  describes.
 
 - Symlink support is recommended. If symlink support is not enabled, enable
   developer mode and/or grant your
@@ -240,6 +245,30 @@ If you prefer to install tools manually, you will need:
   `choco install winflexbison3` — provides the `flex` and `bison` tools that
   Meson uses when building Mesa's gallium/D3D12 driver. Not needed if
   `THEROCK_ENABLE_SYSDEPS_AMD_MESA` is `OFF`.
+
+- MSYS2 (**required for the debug tools**): https://www.msys2.org/.
+  rocgdb and the autotools sysdeps it links (gmp, mpfr, expat, ncurses and
+  libiconv) are built by MSYS2's UCRT64 gcc. `build_tools/setup_msys2.ps1`
+  installs MSYS2 with the packages the build uses, in `C:\msys64` by
+  default:
+
+  ```bash
+  powershell.exe .\build_tools\setup_msys2.ps1 -Install
+  ```
+
+  To put it elsewhere, pass `-InstallDir <dir>`, and configure TheRock with
+  `-DTHEROCK_MSYS2_ROOT=<dir>`. Without `-Install`, the script only reports
+  whether the installation is ready for the build. An MSYS2 installation of
+  your own works too, as long as it has the packages listed in the script.
+  `-Install` leaves such an installation alone unless given `-Force`. Run
+  the script with `-Help` for the details.
+
+  Needed whenever `THEROCK_ENABLE_ROCGDB` or one of the five
+  `THEROCK_ENABLE_SYSDEPS_*` features for those libraries is enabled, as
+  `THEROCK_ENABLE_DEBUG_TOOLS`, on by default, does. To build without MSYS2,
+  configure with `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF`, which also turns off
+  amd-dbgapi. `-DTHEROCK_ENABLE_ROCGDB=OFF` alone keeps the sysdeps, and so
+  still needs MSYS2.
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 

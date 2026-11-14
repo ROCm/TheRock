@@ -92,6 +92,35 @@ therock_cmake_subproject_declare(client
     assert graph["hip-clr"]["consumers"] == ["client"]
 
 
+def test_host_gnu_toolchain_implies_no_dep(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(amd-llvm)
+set(client_toolchain amd-llvm)
+if(WIN32)
+  set(client_toolchain host-gnu)
+endif()
+therock_cmake_subproject_declare(client
+  COMPILER_TOOLCHAIN ${client_toolchain}
+  EXTERNAL_C_COMPILER "C:/msys64/ucrt64/bin/gcc.exe"
+  EXTERNAL_CXX_COMPILER "C:/msys64/ucrt64/bin/g++.exe"
+  RUNTIME_DEPS amd-llvm)
+therock_cmake_subproject_declare(gnu-only
+  COMPILER_TOOLCHAIN host-gnu
+  EXTERNAL_C_COMPILER "C:/msys64/ucrt64/bin/gcc.exe")
+""",
+    )
+    tracked = {Path("CMakeLists.txt")}
+
+    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
+    graph = result.build_consumer_graph()
+
+    assert result.subprojects["client"].compiler_toolchains == {"amd-llvm", "host-gnu"}
+    assert result.subprojects["gnu-only"].all_deps == set()
+    assert graph["amd-llvm"]["consumers"] == ["client"]
+
+
 def test_unresolved_dep_var_raises(tmp_path: Path) -> None:
     _write(
         tmp_path / "CMakeLists.txt",

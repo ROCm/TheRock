@@ -7,7 +7,8 @@
 # 1. compiler-runtime (generic) - sysdeps, base, compiler, runtimes
 # 2. runtime-tests (generic) - hip-tests (parallel to math-libs)
 # 3. math-libs (per-arch) - BLAS, FFT, etc.
-# 4. debug-tools (generic) - amd-dbgapi (rocgdb eventually).
+# 4. debug-tools (generic) - amd-dbgapi, rocgdb and the sysdeps it links
+#    (built under MSYS2).
 #
 # Stages disabled on Windows: comm-libs, dctools-core, profiler-apps
 # (see BUILD_TOPOLOGY.toml disable_platforms)

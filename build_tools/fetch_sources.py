@@ -1072,14 +1072,9 @@ def main(argv):
         "--debug-tools",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "rocgdb",
-            ]
-        ),
+        default=[
+            "rocgdb",
+        ],
     )
     parser.add_argument(
         "--math-library-projects",

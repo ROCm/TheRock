@@ -69,11 +69,11 @@ The debug-tools components have dependencies on other ROCm components and system
 libraries. The handling of system library dependencies is controlled by the
 `THEROCK_BUNDLE_SYSDEPS` CMake option.
 
-| Component        | ROCm Dependencies        | Bundled System Dependencies (THEROCK_BUNDLE_SYSDEPS=ON) | System Dependencies (THEROCK_BUNDLE_SYSDEPS=OFF) |
-| ---------------- | ------------------------ | ------------------------------------------------------- | ------------------------------------------------ |
-| amd-dbgapi       | amd-comgr                | libbacktrace                                            | System libbacktrace                              |
-| rocr-debug-agent | amd-dbgapi, ROCR-Runtime | elfutils                                                | System elfutils                                  |
-| rocgdb           | amd-dbgapi               | bzip2, gmp, mpfr, expat, ncurses, liblzma, zlib, zstd   | System versions of these libraries               |
+| Component        | ROCm Dependencies        | Bundled System Dependencies (THEROCK_BUNDLE_SYSDEPS=ON)                        | System Dependencies (THEROCK_BUNDLE_SYSDEPS=OFF) |
+| ---------------- | ------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------ |
+| amd-dbgapi       | amd-comgr                | libbacktrace                                                                   | System libbacktrace                              |
+| rocr-debug-agent | amd-dbgapi, ROCR-Runtime | elfutils                                                                       | System elfutils                                  |
+| rocgdb           | amd-dbgapi               | bzip2, gmp, mpfr, expat, ncurses, liblzma, zlib, zstd, libiconv (Windows only) | System versions of these libraries (Linux only)  |
 
 **THEROCK_BUNDLE_SYSDEPS behavior:**
 
@@ -85,7 +85,9 @@ libraries. The handling of system library dependencies is controlled by the
   build system.
 
 **Note:** When `THEROCK_BUNDLE_SYSDEPS=OFF`, ensure the required development
-libraries listed in the table above are installed on your system.
+libraries listed in the table above are installed on your system. On Windows,
+rocgdb does not support `THEROCK_BUNDLE_SYSDEPS=OFF`, and configure stops with
+an error, since there are no system copies of these libraries for it to use.
 
 ### Configuration Variables
 

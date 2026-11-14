@@ -1,0 +1,48 @@
+From 81923df54fb68ed1c499547f4248c21ea53737a1 Mon Sep 17 00:00:00 2001
+From: Pedro Alves <pedro@palves.net>
+Date: Tue, 27 Oct 2026 06:06:20 +0000
+Subject: [PATCH] test.priv.h: include <wchar.h> for wcsrtombs() and
+ mbsrtowcs()
+
+test.priv.h includes <wchar.h> only when NEED_WCHAR_H is set, which
+configure decides by checking whether mbstate_t is declared without it.
+The test programs also call wcsrtombs() and mbsrtowcs() when
+HAVE_WCSRTOMBS and HAVE_MBSRTOWCS are set, and those are declared in
+<wchar.h> only.  mingw-w64 commit 8c4baed92d4d ("headers: crt: define
+mbstate_t in corecrt.h") moved mbstate_t to <corecrt.h>, which
+<stdlib.h> includes, so with current mingw-w64 headers
+(14.0.0.r569.g34eeafb7d in MSYS2) NEED_WCHAR_H comes out 0, and
+test/ncurses.c fails to build:
+
+  ncurses.c:124:44: error: implicit declaration of function 'wcsrtombs'; did you mean 'wcstombs'? [-Wimplicit-function-declaration]
+  ncurses.c:135:44: error: implicit declaration of function 'mbsrtowcs'; did you mean 'mbstowcs'? [-Wimplicit-function-declaration]
+
+Include <wchar.h> whenever those functions are going to be used.
+---
+ test/test.priv.h | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/test/test.priv.h b/test/test.priv.h
+index 3c0c2d3..61a3080 100644
+--- a/test/test.priv.h
++++ b/test/test.priv.h
+@@ -461,6 +461,16 @@
+ #endif
+ #endif
+ 
++/*
++ * NEED_WCHAR_H only says whether <wchar.h> is needed for mbstate_t.  The
++ * restartable conversions used when HAVE_WCSRTOMBS or HAVE_MBSRTOWCS are
++ * declared there regardless, and current mingw-w64 headers declare
++ * mbstate_t without pulling in <wchar.h>.
++ */
++#if !NEED_WCHAR_H && HAVE_WCHAR_H && (HAVE_WCSRTOMBS || HAVE_MBSRTOWCS)
++#include <wchar.h>
++#endif
++
+ #if defined(HAVE_XCURSES)
+ #include <xcurses.h>
+ #elif defined(HAVE_NCURSESW_NCURSES_H)
+-- 
+2.55.0
+
