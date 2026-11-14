@@ -106,6 +106,18 @@ def _paginate_list_objects_v2(
         _map_client_error(e, bucket_name=bucket_name, context="access")
 
 
+def _resolve_page_title(page_title: str | None, base_title: str, prefix: str) -> str:
+    """Return page_title, or a title naming the indexed prefix when it is None.
+
+    For example, base_title "Tarball index" with prefix
+    "v5/rocm/extras/rvs/tarball" gives "Tarball index: v5/rocm/extras/rvs/tarball/",
+    and with an empty (top-level) prefix gives just "Tarball index".
+    """
+    if page_title is not None:
+        return page_title
+    return f"{base_title}: {prefix}/" if prefix else base_title
+
+
 def _publish_html(
     s3_client: botocore.client.BaseClient,
     bucket_name: str,
@@ -215,6 +227,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         bucket_name: str,
         artifact_suffix: str,
         show_filter: bool,
+        base_title: str = "Artifact index",
     ) -> None:
         """
         Args:
@@ -226,10 +239,13 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
             show_filter: Whether to show the GPU-family dropdown filter on
                 the page. Set to False for artifact types (like Windows
                 installers) that aren't split by GPU family.
+            base_title: Artifact-type label used to build the default page
+                title, e.g. "Tarball index". See `_resolve_page_title()`.
         """
         super().__init__(s3_client, bucket_name)
         self.artifact_suffix = artifact_suffix
         self.show_filter = show_filter
+        self.base_title = base_title
 
     @staticmethod
     def _extract_gpu_families(files: list[tuple[str, float]]) -> list[str]:
@@ -251,7 +267,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         prefix: str,
         upload: bool = False,
         allow_empty: bool = False,
-        page_title: str = "Artifact index",
+        page_title: str | None = None,
         empty_message: str = "No artifacts available.",
     ) -> str:
         """Generate index.html for direct-child artifacts at s3://bucket_name/prefix.
@@ -268,6 +284,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         # the directory path used to build the S3 prefix below.
         prefix = prefix.strip("/")
         list_prefix = f"{prefix}/" if prefix else ""
+        page_title = _resolve_page_title(page_title, self.base_title, prefix)
         # Delimiter="/" asks S3 to only return direct children, instead of
         # the whole subtree, so there's no need to filter out nested keys
         # ourselves.
@@ -423,7 +440,7 @@ class DirectoryIndexGenerator(_S3IndexGenerator):
         prefix: str,
         upload: bool = False,
         allow_empty: bool = False,
-        page_title: str = "Directory index",
+        page_title: str | None = None,
         empty_message: str = "No directories available.",
     ) -> str:
         """Generate index.html for direct child directories at s3://bucket_name/prefix.
@@ -434,6 +451,7 @@ class DirectoryIndexGenerator(_S3IndexGenerator):
 
         prefix = prefix.strip("/")
         list_prefix = f"{prefix}/" if prefix else ""
+        page_title = _resolve_page_title(page_title, "Directory index", prefix)
 
         page_iterator = self._paginate(Prefix=list_prefix, Delimiter="/")
 
@@ -487,12 +505,16 @@ def generate_tarball_index_s3(
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
-    page_title: str = "Tarball index",
+    page_title: str | None = None,
     empty_message: str = "No tarballs available.",
 ) -> str:
     """Generate index.html listing .tar.gz tarballs at s3://bucket_name/prefix."""
     return ArtifactIndexGenerator(
-        s3_client, bucket_name, artifact_suffix=".tar.gz", show_filter=True
+        s3_client,
+        bucket_name,
+        artifact_suffix=".tar.gz",
+        show_filter=True,
+        base_title="Tarball index",
     ).generate(
         prefix,
         upload=upload,
@@ -508,12 +530,16 @@ def generate_windows_installer_index_s3(
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
-    page_title: str = "Windows Installers",
+    page_title: str | None = None,
     empty_message: str = "No Windows installers available.",
 ) -> str:
     """Generate index.html listing .msi Windows installers at s3://bucket_name/prefix."""
     return ArtifactIndexGenerator(
-        s3_client, bucket_name, artifact_suffix=".msi", show_filter=False
+        s3_client,
+        bucket_name,
+        artifact_suffix=".msi",
+        show_filter=False,
+        base_title="Windows Installers",
     ).generate(
         prefix,
         upload=upload,
@@ -529,7 +555,7 @@ def generate_directory_index_s3(
     prefix: str,
     upload: bool = False,
     allow_empty: bool = False,
-    page_title: str = "Directory index",
+    page_title: str | None = None,
     empty_message: str = "No directories available.",
 ) -> str:
     """Generate index.html listing direct child directories at s3://bucket_name/prefix.
@@ -590,6 +616,14 @@ examples:
         default="",
         help="Directory to index. Defaults to the top level directory.",
     )
+    parser.add_argument(
+        "--page-title",
+        default=None,
+        help=(
+            "Title of the generated page (default: the index type and "
+            "--directory, e.g. 'Tarball index: v5/rocm/extras/rvs/tarball/')."
+        ),
+    )
     index_type_group = parser.add_mutually_exclusive_group()
     index_type_group.add_argument(
         "--directory-index",
@@ -615,6 +649,7 @@ examples:
             bucket_name=args.bucket,
             prefix=args.directory,
             upload=args.upload,
+            page_title=args.page_title,
         )
     elif args.windows_installer_index:
         generate_windows_installer_index_s3(
@@ -622,6 +657,7 @@ examples:
             bucket_name=args.bucket,
             prefix=args.directory,
             upload=args.upload,
+            page_title=args.page_title,
         )
     else:
         generate_tarball_index_s3(
@@ -629,6 +665,7 @@ examples:
             bucket_name=args.bucket,
             prefix=args.directory,
             upload=args.upload,
+            page_title=args.page_title,
         )
 
 
