@@ -26,6 +26,8 @@ from pathlib import Path
 
 from github_actions_api import *
 from amdgpu_family_matrix import (
+    MULTI_GPU_POOL_NAMES,
+    MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
     select_weighted_label,
@@ -183,6 +185,34 @@ def _family_matches(
     )
 
 
+def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) -> str:
+    """Pick the runner label for a multi-GPU component, or "" if none is configured.
+
+    `pools` holds the family's multi-GPU runner pools keyed by config key (see
+    MULTI_GPU_RUNNER_KEYS). `pool` is the component's "multi_gpu_pool" (e.g.
+    "2gpu"), or None for the default 8-GPU pool.
+    """
+    if pool is not None and pool not in MULTI_GPU_POOL_NAMES:
+        # Catch typos here: an unknown pool would otherwise match nothing and
+        # silently drop the component from every family.
+        raise ValueError(
+            f"{job_name}: unknown multi_gpu_pool {pool!r}. "
+            f"Known pools: {sorted(MULTI_GPU_POOL_NAMES)}"
+        )
+    key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
+
+    # e.g. "rccl-2gpu", "rocshmem-multi-gpu"
+    context_name = f"{job_name}-{pool or 'multi-gpu'}"
+    labels = pools.get(f"{key}-labels")
+    if labels:
+        return select_weighted_label(labels, context_name)
+    default = pools.get(key)
+    if default:
+        print(f"  {context_name}: selected runner: {default}")
+        return default
+    return ""
+
+
 # Common settings applied to all jobs
 _common_settings = {
     "additional_requirements_files": [],
@@ -215,6 +245,10 @@ _rocgdb_common = {
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
+# pool by default. Add "multi_gpu_pool": "2gpu" to use the family's 2-GPU pool
+# instead; families without that pool skip the component rather than falling back.
 #
 # A component may also restrict which GPU families it runs on via "include_family"
 # (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
@@ -848,6 +882,7 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        "multi_gpu_pool": "2gpu",
         # RCCL collective ops use cross-process shared memory via /dev/shm
         "container_options": ["--ipc host"],
     },
@@ -1378,8 +1413,9 @@ def run():
     # This enables better load distribution across runner pools
     test_runs_on_labels = None
     test_runs_on_default = None
-    test_runs_on_multi_gpu_labels = None
-    test_runs_on_multi_gpu_default = None
+    # Multi-GPU runner pools for this family, keyed by their config key
+    # (e.g. "test-runs-on-multi-gpu-labels", "test-runs-on-2gpu").
+    multi_gpu_pools = {}
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
 
@@ -1409,28 +1445,20 @@ def run():
                 # This includes multi-GPU runners since they are also GPU tests
                 test_runs_on_labels = None
                 test_runs_on_default = ""
-                test_runs_on_multi_gpu_labels = None
-                test_runs_on_multi_gpu_default = ""
-            elif test_runs_on_from_workflow is not None:
-                # Workflow provided a non-empty runner - use it but allow label distribution
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = test_runs_on_from_workflow
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
             else:
-                # Fallback to static matrix (backward compatibility)
                 test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = platform_info.get("test-runs-on", "")
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
+                if test_runs_on_from_workflow is not None:
+                    # Workflow provided a non-empty runner - use it but allow
+                    # label distribution
+                    test_runs_on_default = test_runs_on_from_workflow
+                else:
+                    # Fallback to static matrix (backward compatibility)
+                    test_runs_on_default = platform_info.get("test-runs-on", "")
+                multi_gpu_pools = {
+                    key: platform_info[key]
+                    for key in MULTI_GPU_RUNNER_KEYS
+                    if key in platform_info
+                }
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
             # Enforce test_type_for_family if set in the family matrix.
@@ -1684,19 +1712,23 @@ def run():
     for component in all_components:
         job_name = component.get("job_name", "unknown")
         if "multi_gpu_runner" in component:
-            # Multi-GPU components use multi-GPU runner labels
-            if test_runs_on_multi_gpu_labels:
-                component["multi_gpu_runner"] = select_weighted_label(
-                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
-                )
-            elif test_runs_on_multi_gpu_default:
-                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
-            else:
-                # No multi-GPU runner configured for this family; skip the component
+            # Multi-GPU components use multi-GPU runner labels, from the tier
+            # matching their "gpu_count" when the family configures one.
+            pool = component.get("multi_gpu_pool")
+            runner = _select_multi_gpu_runner(
+                job_name=job_name,
+                pool=pool,
+                pools=multi_gpu_pools,
+            )
+            if not runner:
+                # No matching runner for this family; skip the component rather
+                # than moving it onto a pool with a different GPU count.
                 logging.info(
-                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no "
+                    f"{pool or 'multi-gpu'} runner configured"
                 )
                 continue
+            component["multi_gpu_runner"] = runner
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
