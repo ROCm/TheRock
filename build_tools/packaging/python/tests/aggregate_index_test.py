@@ -155,6 +155,35 @@ def test_checked_in_manifest_loads() -> None:
     assert index.packages["torch"].owner_path == "pytorch/whl-next"
 
 
+def test_rocpd_dependencies_generate_core_routes(tmp_path: Path) -> None:
+    manifest = load_ownership_manifest(
+        Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
+    )
+    dependencies = {
+        "pandas",
+        "numpy",
+        "python-dateutil",
+        "pytz",
+        "tzdata",
+        "six",
+        "jinja2",
+        "markupsafe",
+        "otf2",
+        "reportlab",
+        "pillow",
+        "charset-normalizer",
+    }
+    for stream in manifest.streams.known:
+        outputs = generate_outputs(manifest, tmp_path / stream, stream=stream)
+        routes = {
+            route["package"]: route["target"]
+            for route in json.loads(outputs.route_table.read_text())["routes"]
+        }
+        assert {package: routes[package] for package in dependencies} == {
+            package: f"/rocm/core/whl-next/{package}/" for package in dependencies
+        }, stream
+
+
 def test_checked_in_manifest_bkc_contains_only_gfx1250_targets() -> None:
     manifest_path = Path(__file__).parents[1] / "rocm_whl_next_ownership.yaml"
     manifest = load_ownership_manifest(manifest_path)

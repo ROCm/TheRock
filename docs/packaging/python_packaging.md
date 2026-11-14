@@ -244,6 +244,24 @@ other release streams are enabled in the workflow one at a time. If
 a run fails, rerun the workflow. Each run is idempotent, and older versions
 remain subject to their normal retention policy.
 
+### ROCpd Dependency Coverage
+
+The mirror includes pandas, python-dateutil, pytz, tzdata, six, otf2,
+reportlab, and charset-normalizer for ROCpd analysis and optional exporters.
+Their shared dependencies reuse the existing numpy, jinja2, markupsafe,
+pillow, pyelftools, and setuptools policies and aggregate routes.
+
+For Python 3.10, retain pandas 2.3.3, python-dateutil 3.0.0, and Pillow 12.3.0
+alongside current releases; numpy's existing 2.2.6 retention is reused.
+These are mirror-retention policies, not runtime version pins. Universal
+`py2.py3` wheels are accepted for dependencies that also support Python 3.
+
+Publish the dependency snapshot and verify the product-local and aggregate
+index pages before adding ROCpd extras to ROCm package metadata. Dependency
+mirroring and enabling the extras are separate changes, tracked in
+https://github.com/ROCm/TheRock/issues/9788. Dependencies stay in the central
+index rather than being copied into each CI run's artifact directory.
+
 ## rocm-profiler
 
 The `rocm-profiler` package provides ROCm profiling tools and runtime components. It contains:
