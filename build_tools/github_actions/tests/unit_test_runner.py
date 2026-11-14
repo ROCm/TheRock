@@ -316,6 +316,7 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "standard",
                 "comprehensive",
                 "full",
+                "workloads",
                 "ffm-quick",
                 "ffm-standard",
                 "ffm-comprehensive",
