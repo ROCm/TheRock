@@ -25,13 +25,9 @@ if(THEROCK_ENABLE_RPP)
       -DBACKEND=HIP
       # TODO: bundle FFTS as a sysdep to enable audio augmentations.
       -DRPP_AUDIO_SUPPORT=OFF
+      -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
-    # RPP's bundled test suite calls find_package(rpp) on itself.
-    # TODO(ROCm/rocm-libraries#10163): drop once the test suite is no longer
-    # configured by the library build.
-    IGNORE_PACKAGES
-      rpp
     INTERFACE_LINK_DIRS
       "lib"
   )

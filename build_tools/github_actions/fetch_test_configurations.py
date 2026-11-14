@@ -1269,15 +1269,8 @@ test_matrix = {
     "rpp": {
         "job_name": "rpp",
         "fetch_artifact_args": "--rpp --tests",
-        # Sized for comprehensive/full, which runs the perf suites serially and
-        # upstream allows 4000s each. quick and standard are far under this.
-        # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
-        # of the correctness suite.
-        "timeout_minutes": 60,
-        "additional_requirements_files": [
-            _get_script_path("requirements-test-ninja.txt"),
-        ],
-        "test_script": f"python {_get_script_path('test_rpp.py')}",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
