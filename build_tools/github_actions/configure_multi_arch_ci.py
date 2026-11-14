@@ -2106,7 +2106,8 @@ def _expand_build_config_for_platform(
         # Flip back to False if the generated matrix is empty.
         build_jax = bool(jax_build_matrix)
 
-    # ASAN builds native Linux packages (deb/rpm) but not Python packages.
+    # ASAN builds native Linux packages (deb/rpm). Python packages stay off
+    # unless PyTorch or JAX is enabled below, which needs them from this run.
     # The build_python_packages input allows callers to disable Python packages.
     is_asan = suffix in ("asan", "host-asan")
     build_python_packages = ci_inputs.build_python_packages and not is_asan
