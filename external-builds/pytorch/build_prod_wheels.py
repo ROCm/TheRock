@@ -476,6 +476,103 @@ def remove_dir_if_exists(dir: Path):
         shutil.rmtree(dir)
 
 
+# Shared libraries whose direct DT_NEEDED entries live outside torch/lib.
+# Versioned files (libfoo.so.1) match the same prefix. Symlinks are skipped.
+TORCH_LIB_RPATH_SONAMES = (
+    "libtorch_cpu.so",
+    "libtorch_hip.so",
+    "libtorch_python.so",
+    "libtorch_rocshmem.so",
+    "libaotriton_v2.so",
+    "libc10_hip.so",
+    "libc10d_hip_test.so",
+    "libcaffe2_nvrtc.so",
+)
+
+
+def _installed_py_package_dir(logical_name: str) -> str:
+    """Import directory of an installed ROCm package, including any nonce suffix.
+
+    Target-specific dist names are not the on-disk directory for kpack-split
+    packages. Those install under the arch-neutral pure Python name.
+    """
+    from rocm_sdk._dist_info import ALL_PACKAGES, PY_PACKAGE_SUFFIX_NONCE
+
+    package = ALL_PACKAGES[logical_name]
+    if package.is_target_specific:
+        return f"_{package.pure_py_package_name}{PY_PACKAGE_SUFFIX_NONCE}"
+    return package.get_py_package_name()
+
+
+def _torch_lib_rocm_rpath_entries() -> list[str]:
+    """$ORIGIN paths for ROCm libraries a non-Python process must load.
+
+    ``import torch`` preloads these through ``rocm_sdk.initialize_process``.
+    A standalone binary never runs that hook, so ``torch/lib`` has to name
+    the directories itself. Paths come from the SDK metadata so a package
+    nonce does not leave a dead entry.
+    """
+    from rocm_sdk._dist_info import ALL_LIBRARIES
+
+    core = f"$ORIGIN/../../{_installed_py_package_dir('core')}"
+    libraries = f"$ORIGIN/../../{_installed_py_package_dir('libraries')}"
+    entries = [
+        f"{core}/{ALL_LIBRARIES['rocprofiler-sdk'].posix_relpath}",
+        f"{core}/{ALL_LIBRARIES['rocm-openblas'].posix_relpath}",
+        f"{core}/{ALL_LIBRARIES['rocm_sysdeps_liblzma'].posix_relpath}",
+        f"{libraries}/{ALL_LIBRARIES['hipblas'].posix_relpath}",
+    ]
+    return list(dict.fromkeys(entries))
+
+
+def _torch_lib_rpath_install_lines(rpath: str, patchelf: str) -> list[str]:
+    """CMake lines that patchelf only the libraries which need a ROCm RUNPATH."""
+    sonames = " ".join(TORCH_LIB_RPATH_SONAMES)
+    return [
+        "function(therock_register_torch_lib_rpath_patch)",
+        "  install(CODE [[",
+        f"set(_rpath_sonames {sonames})",
+        'file(GLOB sos "${CMAKE_INSTALL_PREFIX}/lib/*.so*")',
+        "foreach(so ${sos})",
+        '  if(IS_SYMLINK "${so}")',
+        "    continue()",
+        "  endif()",
+        '  get_filename_component(so_name "${so}" NAME)',
+        "  set(_patch OFF)",
+        "  foreach(soname ${_rpath_sonames})",
+        '    string(FIND "${so_name}" "${soname}" _pos)',
+        "    if(_pos EQUAL 0)",
+        "      set(_patch ON)",
+        "    endif()",
+        "  endforeach()",
+        "  if(_patch)",
+        "    execute_process(",
+        f'      COMMAND "{patchelf}" --set-rpath "{rpath}" "${{so}}"',
+        "      COMMAND_ERROR_IS_FATAL ANY)",
+        "  endif()",
+        "endforeach()",
+        "]])",
+        "endfunction()",
+        "cmake_language(DEFER CALL therock_register_torch_lib_rpath_patch)",
+        "",
+    ]
+
+
+def _enable_torch_lib_rpath_install(env: dict[str, str]) -> None:
+    """patchelf --set-rpath on selected torch/lib libraries before the wheel is packed."""
+    cmake_file = (
+        Path(tempfile.mkdtemp(prefix="torch-rpath-")) / "patch_torch_lib_rpath.cmake"
+    )
+    # $ORIGIN stays so libraries in this directory can see each other.
+    rpath = ":".join(["$ORIGIN", *_torch_lib_rocm_rpath_entries()])
+    patchelf = os.environ.get("PATCHELF", "patchelf")
+    cmake_file.write_text(
+        "\n".join(_torch_lib_rpath_install_lines(rpath, patchelf))
+    )
+    arg = f"-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={shlex.quote(str(cmake_file))}"
+    env["CMAKE_ARGS"] = f"{env.get('CMAKE_ARGS', '')} {arg}".strip()
+
+
 def find_built_wheel(dist_dir: Path, dist_package: str) -> Path:
     dist_package = dist_package.replace("-", "_")
     glob = f"{dist_package}-*.whl"
@@ -1257,6 +1354,7 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+        _enable_torch_lib_rpath_install(env)
 
         # needed to find liblzma packaged by rocm as sysdep to build aotriton
         os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"

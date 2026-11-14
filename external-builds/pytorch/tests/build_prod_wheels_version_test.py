@@ -15,7 +15,12 @@ from packaging.version import Version
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
 
-from build_prod_wheels import compute_build_version
+from build_prod_wheels import (
+    TORCH_LIB_RPATH_SONAMES,
+    _torch_lib_rocm_rpath_entries,
+    _torch_lib_rpath_install_lines,
+    compute_build_version,
+)
 
 
 class ComputeBuildVersionTest(unittest.TestCase):
@@ -155,6 +160,55 @@ class ComputeBuildVersionTest(unittest.TestCase):
             compute_build_version(self.source_dir, "+rocm10.2.0", "ci"),
             "0.29.0a0+rocm10.2.0",
         )
+
+
+class TorchLibRpathTest(unittest.TestCase):
+    def test_entries_follow_sdk_metadata(self):
+        core = mock.Mock()
+        core.is_target_specific = False
+        core.get_py_package_name.return_value = "_rocm_sdk_core_nonce"
+        libraries = mock.Mock()
+        libraries.is_target_specific = True
+        libraries.pure_py_package_name = "rocm_sdk_libraries"
+
+        def library(posix_relpath):
+            entry = mock.Mock()
+            entry.posix_relpath = posix_relpath
+            return entry
+
+        dist_info = mock.Mock()
+        dist_info.ALL_PACKAGES = {"core": core, "libraries": libraries}
+        dist_info.PY_PACKAGE_SUFFIX_NONCE = "_nonce"
+        dist_info.ALL_LIBRARIES = {
+            "rocprofiler-sdk": library("lib"),
+            "rocm-openblas": library("lib/host-math/lib"),
+            "rocm_sysdeps_liblzma": library("lib/rocm_sysdeps/lib"),
+            "hipblas": library("lib"),
+        }
+        with mock.patch.dict(
+            sys.modules,
+            {"rocm_sdk": mock.Mock(), "rocm_sdk._dist_info": dist_info},
+        ):
+            entries = _torch_lib_rocm_rpath_entries()
+        self.assertEqual(
+            entries,
+            [
+                "$ORIGIN/../../_rocm_sdk_core_nonce/lib",
+                "$ORIGIN/../../_rocm_sdk_core_nonce/lib/host-math/lib",
+                "$ORIGIN/../../_rocm_sdk_core_nonce/lib/rocm_sysdeps/lib",
+                "$ORIGIN/../../_rocm_sdk_libraries_nonce/lib",
+            ],
+        )
+
+    def test_install_script_patches_only_selected_sonames(self):
+        lines = "\n".join(_torch_lib_rpath_install_lines("$ORIGIN", "patchelf"))
+        for soname in TORCH_LIB_RPATH_SONAMES:
+            self.assertIn(soname, lines)
+        self.assertNotIn("libc10.so ", lines)
+        self.assertNotIn("libtorch.so ", lines)
+        self.assertNotIn("libshm.so", lines)
+        self.assertIn('if(IS_SYMLINK "${so}")', lines)
+        self.assertIn("if(_pos EQUAL 0)", lines)
 
 
 if __name__ == "__main__":
