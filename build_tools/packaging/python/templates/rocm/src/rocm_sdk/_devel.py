@@ -36,7 +36,6 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
-import platform
 import re
 import stat
 import sys
@@ -53,7 +52,7 @@ _DEVEL_INITIALIZATION_LOCK = Path(".devel_links/devel.lock")
 
 
 def _is_windows():
-    return platform.system() == "Windows"
+    return sys.platform == "win32"
 
 
 def get_devel_root(*, force_initialize: bool = False) -> Path:
