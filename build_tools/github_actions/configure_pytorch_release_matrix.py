@@ -83,7 +83,6 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
 # them yet. Direct target selections remain available.
 EXCLUDED_IMPLICIT_TARGETS = {
     "linux": {
-        "release/2.15": {"gfx1250-strict"},
         "nightly": {"gfx1250-strict"},
     },
     "windows": {},
@@ -241,7 +240,7 @@ def generate_pytorch_matrix_for_release_type(
     #     "python_version": "3.11",
     #     "pytorch_git_ref": "release/2.13",
     #     "amdgpu_families": "gfx94X-dcgpu",
-    #     "exclude_implicit_targets": "gfx1250-strict",
+    #     "exclude_implicit_targets": "",
     #     "test_level": "standard"
     #   },
     #   ...
