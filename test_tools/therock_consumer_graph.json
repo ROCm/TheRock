@@ -172,6 +172,7 @@
       "hipdnn_integration_tests",
       "hipdnn_samples",
       "hipkernelprovider",
+      "miopen",
       "miopenprovider"
     ]
   },
