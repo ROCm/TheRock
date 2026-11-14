@@ -78,6 +78,21 @@ python_indexes:
         owner_path: pytorch/whl-next
       amd-torch-device-gfx115x:
         owner_path: pytorch/whl-next
+      amd-torch-device-gfx1170:
+        owner_path: pytorch/whl-next
+        streams:
+          - dev
+          - nightly
+      amd-torch-device-gfx1171:
+        owner_path: pytorch/whl-next
+        streams:
+          - dev
+          - nightly
+      amd-torch-device-gfx117x:
+        owner_path: pytorch/whl-next
+        streams:
+          - dev
+          - nightly
       amd-torch-device-gfx12-0:
         owner_path: pytorch/whl-next
       amd-torch-device-gfx1200:
@@ -146,6 +161,16 @@ python_indexes:
         owner_path: pytorch/whl-next
       amd-torchvision-device-gfx1153:
         owner_path: pytorch/whl-next
+      amd-torchvision-device-gfx1170:
+        owner_path: pytorch/whl-next
+        streams:
+          - dev
+          - nightly
+      amd-torchvision-device-gfx1171:
+        owner_path: pytorch/whl-next
+        streams:
+          - dev
+          - nightly
       amd-torchvision-device-gfx1200:
         owner_path: pytorch/whl-next
       amd-torchvision-device-gfx1201:

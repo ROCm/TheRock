@@ -1195,18 +1195,29 @@ def do_build_pytorch(
         # arch is supported — otherwise aotriton's configure step fails on the
         # empty target list (https://github.com/ROCm/aotriton/issues/169).
         #
-        # These prefixes match what aotriton's gpu_targets.py recognizes.
+        # This list matches what aotriton's gpu_targets.py recognizes.
         # See also the image list in pytorch/cmake/External/aotriton.cmake.
-        AOTRITON_SUPPORTED_ARCH_PREFIXES = (
-            "gfx90a",
-            "gfx942",
-            "gfx950",
-            "gfx11",
-            "gfx12",
+        aotriton_supported_arches = frozenset(
+            {
+                "gfx90a",
+                "gfx942",
+                "gfx950",
+                "gfx1100",
+                "gfx1101",
+                "gfx1102",
+                "gfx1103",
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+                "gfx1200",
+                "gfx1201",
+                "gfx1250",
+            }
         )
-        rocm_arch_list = env.get("PYTORCH_ROCM_ARCH", "").split(";")
         has_aotriton_supported_arch = any(
-            arch.startswith(AOTRITON_SUPPORTED_ARCH_PREFIXES) for arch in rocm_arch_list
+            arch.partition(":")[0] in aotriton_supported_arches
+            for arch in env.get("PYTORCH_ROCM_ARCH", "").split(";")
         )
         use_flash_attention = has_aotriton_supported_arch
         print(
