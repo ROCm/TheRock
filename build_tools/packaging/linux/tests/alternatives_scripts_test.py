@@ -18,6 +18,8 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 LINUX_DIR = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(LINUX_DIR.parents[1]), str(LINUX_DIR)]
 
@@ -34,11 +36,11 @@ from packaging_utils import (  # noqa: E402
 MAJOR, MINOR = 10, 2
 VERSION = f"{MAJOR}.{MINOR}.0"
 PREFIX = f"/opt/rocm/core-{MAJOR}.{MINOR}"
-RPM_SECTIONS = {"postinst": "%post", "prerm": "%preun"}
+RPM_SECTIONS = {"postinst": "%post", "prerm": "%preun", "posttrans": "%posttrans"}
 ACTIONS = {"postinst": "--install", "prerm": "--remove"}
 PREFIX_LINES = {
     "deb": f"PKG_INSTALL_PREFIX={PREFIX}",
-    "rpm": 'PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"',
+    "rpm": f'PKG_INSTALL_PREFIX="${{RPM_INSTALL_PREFIX0:-{PREFIX}}}"',
 }
 # Symlink flag -> (only package allowed to set it, alternatives it controls).
 SYMLINK_GROUPS = {
@@ -141,64 +143,167 @@ class AlternativesScriptsTest(unittest.TestCase):
                             for alternative in alternatives:
                                 self.assertEqual(f'"{alternative}"' in text, enabled)
 
-    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
-    def test_update_alternatives_install_and_remove(self) -> None:
-        """Run the real postinst and prerm against a sandboxed update-alternatives."""
-        root = (self.deb_root / "sandbox").resolve()
+    def sandbox(
+        self, name: str, target: str, opt_rocm: bool = True, relocated: bool = False
+    ):
+        """Render the scripts of SANDBOX_PACKAGES next to a sandboxed update-alternatives.
+
+        The payload is in <root>/prefix. With relocated, the scripts are built
+        for <root>/build-prefix, which does not exist, as after rpm --prefix.
+        Returns run(script, action, names, **env), links() and the expected links.
+        """
+        root = (self.deb_root / name).resolve()
         prefix = root / "prefix"
-        for directory in ("usr/bin", "opt/rocm", "alt", "admin", "tools"):
+        build_prefix = root / "build-prefix" if relocated else prefix
+        for directory in ("usr/bin", "alt", "admin", "tools"):
             (root / directory).mkdir(parents=True)
+        if opt_rocm:
+            (root / "opt/rocm").mkdir(parents=True)
         for directory in SANDBOX_DIR_LINKS.values():
             (prefix / directory).mkdir(parents=True, exist_ok=True)
         for binary in SANDBOX_BINARIES:
             (prefix / "bin" / binary).touch(mode=0o755)
 
-        # Same tool, but its state and the /usr/bin and /opt/rocm links live in root.
-        wrapper = root / "tools" / "update-alternatives"
-        wrapper.write_text(
-            "#!/bin/bash\n"
+        # Same tools, but the /usr/bin and /opt/rocm paths they get live in root.
+        rewrite = (
             "args=()\n"
             'for arg in "$@"; do\n'
-            f'    case "$arg" in /usr/bin/*|/opt/rocm/*) arg="{root}$arg" ;; esac\n'
+            f'    case "$arg" in /usr/bin/*|/opt/rocm|/opt/rocm/*) arg="{root}$arg" ;; esac\n'
             '    args+=("$arg")\n'
             "done\n"
-            f"exec {UPDATE_ALTERNATIVES} --altdir {root}/alt --admindir {root}/admin "
-            '"${args[@]}"\n',
-            encoding="utf-8",
         )
-        wrapper.chmod(0o755)
+        tools = {
+            "update-alternatives": f"{UPDATE_ALTERNATIVES} --altdir {root}/alt "
+            f"--admindir {root}/admin",
+            "mkdir": shutil.which("mkdir"),
+        }
+        for tool, command in tools.items():
+            wrapper = root / "tools" / tool
+            wrapper.write_text(
+                f'#!/bin/bash\n{rewrite}exec {command} "${{args[@]}}"\n',
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
         env = {
             **os.environ,
-            "PATH": f"{wrapper.parent}{os.pathsep}{os.environ['PATH']}",
+            "PATH": f"{root / 'tools'}{os.pathsep}{os.environ['PATH']}",
         }
+        env.pop("RPM_INSTALL_PREFIX0", None)
 
-        def run(script: str, action: str, names) -> None:
-            for name in names:
-                subprocess.run([root / name / script, action], env=env, check=True)
+        config = PackageConfig(root, root, target, VERSION, "", str(build_prefix), "")
+        for package in SANDBOX_PACKAGES:
+            if target == "deb":
+                deb_package.generate_debian_postscripts(
+                    self.packages[package], root / package, config
+                )
+                continue
+            sections = rpm_package.generate_rpm_postscripts(
+                self.packages[package], config
+            )
+            (root / package).mkdir()
+            for script, section in RPM_SECTIONS.items():
+                path = root / package / script
+                path.write_text(sections[section], encoding="utf-8")
+                path.chmod(0o755)
+
+        def run(script: str, action: str, names=SANDBOX_PACKAGES, **extra) -> None:
+            for package in names:
+                subprocess.run(
+                    [root / package / script, action], env=env | extra, check=True
+                )
 
         def links() -> dict[str, Path]:
             return {
                 str(link.relative_to(root)): Path(os.path.realpath(link))
                 for directory in ("usr/bin", "opt/rocm")
+                if (root / directory).is_dir()
                 for link in (root / directory).iterdir()
             }
 
-        config = PackageConfig(root, root, "deb", VERSION, "", str(prefix), "")
-        for name in SANDBOX_PACKAGES:
-            deb_package.generate_debian_postscripts(
-                self.packages[name], root / name, config
-            )
-
-        run("postinst", "configure", SANDBOX_PACKAGES)
         expected = {f"usr/bin/{b}": prefix / "bin" / b for b in SANDBOX_BINARIES}
         expected |= {
-            f"opt/rocm/{link}": prefix / target
-            for link, target in SANDBOX_DIR_LINKS.items()
+            f"opt/rocm/{link}": prefix / directory
+            for link, directory in SANDBOX_DIR_LINKS.items()
         }
+        return run, links, expected, {"RPM_INSTALL_PREFIX0": str(prefix)}
+
+    def test_rpm_spec_reruns_post_in_posttrans(self) -> None:
+        template = Environment(
+            loader=FileSystemLoader(str(LINUX_DIR)),
+            autoescape=select_autoescape(
+                enabled_extensions=("html", "htm", "xml"),
+                default_for_string=True,
+                default=False,
+            ),
+        ).get_template("template/rpm_specfile.j2")
+        for name in self.alternatives:
+            with self.subTest(package=name):
+                sections = {
+                    section: self.scripts[(name, "rpm", script)]
+                    for script, section in RPM_SECTIONS.items()
+                }
+                self.assertEqual(sections["%posttrans"], sections["%post"])
+                spec = template.render(rpm_scripts=sections)
+                self.assertIn(f"%posttrans\n{sections['%post']}", spec)
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_update_alternatives_install_and_remove(self) -> None:
+        """Run the real deb postinst and prerm against a sandboxed update-alternatives."""
+        run, links, expected, _ = self.sandbox("deb", "deb")
+
+        run("postinst", "configure")
         self.assertEqual(links(), expected)
 
         run("prerm", "remove", reversed(SANDBOX_PACKAGES))
         self.assertEqual(links(), {})
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_rpm_upgrade_keeps_alternatives(self) -> None:
+        """A relocated RPM install creates /opt/rocm, and only an erase removes links."""
+        run, links, expected, rpm_env = self.sandbox(
+            "rpm", "rpm", opt_rocm=False, relocated=True
+        )
+
+        run("postinst", "1", **rpm_env)
+        self.assertEqual(links(), expected)
+
+        # On upgrade RPM runs the new %post, then the old %preun with $1 = 1.
+        run("postinst", "2", **rpm_env)
+        run("prerm", "1", **rpm_env)
+        self.assertEqual(links(), expected)
+
+        run("prerm", "0", reversed(SANDBOX_PACKAGES), **rpm_env)
+        self.assertEqual(links(), {})
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_rpm_posttrans_restores_links_after_released_preun(self) -> None:
+        """Upgrade from a released package, whose %preun removes on upgrade too."""
+        run, links, expected, rpm_env = self.sandbox(
+            "rpm-posttrans", "rpm", opt_rocm=False
+        )
+
+        run("postinst", "2", **rpm_env)
+        run("prerm", "0", reversed(SANDBOX_PACKAGES), **rpm_env)
+        self.assertEqual(links(), {})
+
+        # zypper runs %posttrans without RPM_INSTALL_PREFIX0.
+        run("posttrans", "0")
+        self.assertEqual(links(), expected)
+
+    @unittest.skipUnless(UPDATE_ALTERNATIVES, "update-alternatives is not installed")
+    def test_rpm_posttrans_restores_relocated_links_after_released_preun(self) -> None:
+        """The same upgrade with rpm --prefix: the links follow the relocated prefix."""
+        run, links, expected, rpm_env = self.sandbox(
+            "rpm-posttrans-relocated", "rpm", opt_rocm=False, relocated=True
+        )
+
+        run("postinst", "2", **rpm_env)
+        run("prerm", "0", reversed(SANDBOX_PACKAGES), **rpm_env)
+        self.assertEqual(links(), {})
+
+        # rpm sets RPM_INSTALL_PREFIX0 in %posttrans to the relocated prefix.
+        run("posttrans", "1", **rpm_env)
+        self.assertEqual(links(), expected)
 
 
 if __name__ == "__main__":

@@ -288,6 +288,12 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
         template = env.get_template(template_name)
         rpm_script_sections[rpm_section] = template.render(context)
 
+    # Released packages remove the alternatives in %preun on upgrade too, after
+    # this package's %post added them. %posttrans runs after every %preun of
+    # the transaction, so add them again there.
+    if "%post" in rpm_script_sections:
+        rpm_script_sections["%posttrans"] = rpm_script_sections["%post"]
+
     return rpm_script_sections
 
 

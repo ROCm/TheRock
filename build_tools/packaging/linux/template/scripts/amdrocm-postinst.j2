@@ -1,18 +1,5 @@
 #!/bin/bash
 
-is_debian_like() {
-    local id_like="$1"
-
-    case " $id_like " in
-        (*" debian "*|*" ubuntu "*)
-            return 0
-            ;;
-        (*)
-            return 1
-            ;;
-    esac
-}
-
 do_update_alternatives() {
     # Skip update if update-alternatives does not exist.
     command -v update-alternatives >/dev/null || return 0
@@ -50,7 +37,15 @@ do_update_alternatives() {
 {% if target == "deb" %}
     PKG_INSTALL_PREFIX={{ install_prefix }}
 {% else %}
-    PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    # rpm sets RPM_INSTALL_PREFIX0 to the relocated prefix in posttrans too.
+    # zypper runs posttrans without it, but zypper never relocates a package,
+    # so it is then installed at the build-time prefix.
+    PKG_INSTALL_PREFIX="${RPM_INSTALL_PREFIX0:-{{ install_prefix }}}"
+{% endif %}
+
+{% if core_symlinks or llvm_symlinks %}
+    # A relocated RPM payload does not create /opt/rocm.
+    mkdir -p /opt/rocm
 {% endif %}
 
 {% if core_symlinks %}
@@ -131,23 +126,16 @@ do_update_alternatives() {
     true
 }
 
-if [ -e /etc/os-release ] &&
-   source /etc/os-release &&
-   is_debian_like "${ID_LIKE:-$ID}"
-then
-    case "$1" in
-        configure)
-            do_update_alternatives
-            ;;
+{% if target == "deb" %}
+case "$1" in
+    configure)
+        do_update_alternatives
+        ;;
 
-        abort-upgrade|abort-remove|abort-deconfigure)
-            echo "$1"
-            ;;
-
-        *)
-            exit 0
-            ;;
-    esac
-else
-    do_update_alternatives
-fi
+    abort-upgrade|abort-remove|abort-deconfigure)
+        echo "$1"
+        ;;
+esac
+{% else %}
+do_update_alternatives
+{% endif %}
