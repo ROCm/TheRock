@@ -1,11 +1,16 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# configure_file() substitutions:
-#   @_package_name@  FFTW3 or FFTW3f
-#   @_library_name@  fftw3 or fftw3f
+# configure_file() fills the package name (FFTW3 or FFTW3f), the library
+# name (fftw3 or fftw3f), and, on Linux with threads enabled, the threads
+# library name (fftw3_threads or fftw3f_threads). That name is empty on
+# Windows, where threads are not a separate library.
+#
+# Installed at lib/cmake/<name>. The prefix is this file's location, so a
+# copied install does not keep the directory that produced it. This file
+# replaces upstream FFTW3Config.cmake and does not include
+# FFTW3LibraryDepends.cmake.
 
-# Traverse from lib/cmake/<name> to the install prefix.
 get_filename_component(_fftw_import_prefix "${CMAKE_CURRENT_LIST_DIR}" PATH)
 get_filename_component(_fftw_import_prefix "${_fftw_import_prefix}" PATH)
 get_filename_component(_fftw_import_prefix "${_fftw_import_prefix}" PATH)
@@ -15,19 +20,66 @@ endif()
 
 set(@_package_name@_INCLUDE_DIRS "${_fftw_import_prefix}/include")
 set(@_package_name@_LIBRARY_DIRS "${_fftw_import_prefix}/lib")
+set(@_package_name@_LIBRARIES FFTW3::@_library_name@)
 
 if(NOT TARGET FFTW3::@_library_name@)
   add_library(FFTW3::@_library_name@ SHARED IMPORTED)
-  # One library is installed for every configuration.
   set_target_properties(FFTW3::@_library_name@ PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_fftw_import_prefix}/include"
-    IMPORTED_LOCATION "${_fftw_import_prefix}/lib/lib@_library_name@.so"
-    IMPORTED_LOCATION_DEBUG "${_fftw_import_prefix}/lib/lib@_library_name@.so"
-    IMPORTED_LOCATION_MINSIZEREL "${_fftw_import_prefix}/lib/lib@_library_name@.so"
-    IMPORTED_LOCATION_RELEASE "${_fftw_import_prefix}/lib/lib@_library_name@.so"
-    IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_import_prefix}/lib/lib@_library_name@.so"
   )
+  if(WIN32)
+    # Upstream CMake installs the DLL in bin/ and the import library in lib/.
+    # rocFFT reads IMPORTED_IMPLIB_<CONFIG> on Windows.
+    set(_fftw_implib "${_fftw_import_prefix}/lib/${CMAKE_IMPORT_LIBRARY_PREFIX}@_library_name@${CMAKE_IMPORT_LIBRARY_SUFFIX}")
+    set(_fftw_runtime "${_fftw_import_prefix}/bin/${CMAKE_SHARED_LIBRARY_PREFIX}@_library_name@${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set_target_properties(FFTW3::@_library_name@ PROPERTIES
+      IMPORTED_LOCATION "${_fftw_runtime}"
+      IMPORTED_LOCATION_DEBUG "${_fftw_runtime}"
+      IMPORTED_LOCATION_MINSIZEREL "${_fftw_runtime}"
+      IMPORTED_LOCATION_RELEASE "${_fftw_runtime}"
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_runtime}"
+      IMPORTED_IMPLIB "${_fftw_implib}"
+      IMPORTED_IMPLIB_DEBUG "${_fftw_implib}"
+      IMPORTED_IMPLIB_MINSIZEREL "${_fftw_implib}"
+      IMPORTED_IMPLIB_RELEASE "${_fftw_implib}"
+      IMPORTED_IMPLIB_RELWITHDEBINFO "${_fftw_implib}"
+    )
+    unset(_fftw_implib)
+    unset(_fftw_runtime)
+  else()
+    set(_fftw_shared "${_fftw_import_prefix}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}@_library_name@${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set_target_properties(FFTW3::@_library_name@ PROPERTIES
+      IMPORTED_LOCATION "${_fftw_shared}"
+      IMPORTED_LOCATION_DEBUG "${_fftw_shared}"
+      IMPORTED_LOCATION_MINSIZEREL "${_fftw_shared}"
+      IMPORTED_LOCATION_RELEASE "${_fftw_shared}"
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_shared}"
+    )
+    unset(_fftw_shared)
+  endif()
 endif()
+
+# The .so is already in lib. Upstream install(TARGETS) does not export it, so
+# the CMake name is created here and pointed at that file.
+set(_fftw_threads_name "@_threads_library_name@")
+if(_fftw_threads_name AND NOT WIN32)
+  find_package(Threads REQUIRED)
+  set(_fftw_threads_lib "${_fftw_import_prefix}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}${_fftw_threads_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+  if(NOT TARGET FFTW3::${_fftw_threads_name})
+    add_library(FFTW3::${_fftw_threads_name} SHARED IMPORTED)
+    set_target_properties(FFTW3::${_fftw_threads_name} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_fftw_import_prefix}/include"
+      INTERFACE_LINK_LIBRARIES "FFTW3::@_library_name@;Threads::Threads"
+      IMPORTED_LOCATION "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_DEBUG "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_MINSIZEREL "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_RELEASE "${_fftw_threads_lib}"
+      IMPORTED_LOCATION_RELWITHDEBINFO "${_fftw_threads_lib}"
+    )
+  endif()
+  unset(_fftw_threads_lib)
+endif()
+unset(_fftw_threads_name)
 
 set(@_package_name@_FOUND TRUE)
 unset(_fftw_import_prefix)

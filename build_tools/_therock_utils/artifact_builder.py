@@ -309,9 +309,10 @@ class ComponentBasedirDescriptor:
 class ComponentContents:
     def __init__(self, cd: ComponentDescriptor):
         self.component_descriptor = cd
-        # The set of all transitive extended paths. These are ignored when
-        # populating this component.
-        self.transitive_relpaths: set[str] = set()
+        # Paths already claimed, keyed by stage directory. A path claimed in
+        # one stage does not hide the same path in another stage. Within one
+        # stage, a path claimed by an earlier component is skipped here.
+        self.transitive_relpaths: dict[str, set[str]] = {}
 
         # We poke any files that we want in this component directly into this
         # pattern matcher.
@@ -431,18 +432,21 @@ class ComponentScanner:
         contents = ComponentContents(cd)
 
         # Anything that we are extending goes in the hitlist that we will skip
-        # as part of this one.
+        # as part of this one. The hitlist stays split by stage directory.
         for extend_contents in extends:
-            contents.transitive_relpaths.update(extend_contents.transitive_relpaths)
+            for basedir, paths in extend_contents.transitive_relpaths.items():
+                contents.transitive_relpaths.setdefault(basedir, set()).update(paths)
 
         # Process each basedir.
         for bd in cd.basedirs.values():
             pm = self._get_basedir(bd.basedir_relpath)
             dest_pm = PatternMatcher()
             contents.basedir_contents[bd.basedir_relpath] = dest_pm
+            claimed = contents.transitive_relpaths.setdefault(bd.basedir_relpath, set())
             for relpath, direntry in pm.matches():
-                if relpath in contents.transitive_relpaths:
-                    # Ignore - implicit no match because we have already seen it.
+                if relpath in claimed:
+                    # Ignore - implicit no match because we have already seen it
+                    # in this stage directory.
                     continue
                 if relpath not in self.all_entries:
                     self.all_entries[relpath] = direntry
@@ -450,7 +454,7 @@ class ComponentScanner:
                     # Match. Add it.
                     self.matched_relpaths.add(relpath)
                     dest_pm.add_entry(relpath, direntry)
-                    contents.transitive_relpaths.add(relpath)
+                    claimed.add(relpath)
 
         # Memorize that we have processed this descriptor.
         self.components[cd.name] = contents
