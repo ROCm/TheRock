@@ -220,6 +220,20 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
     "cv-libs": ["rpp"],
     "media-libs": ["rocdecode", "rocjpeg"],
     "debug-tools": ["rocgdb", "rocr-debug-agent"],
+    "fortran-bindings": [
+        "hip-fortran",
+        "roctx-fortran",
+        "rocblas-fortran",
+        "hipblas-fortran",
+        "rocsolver-fortran",
+        "hipsolver-fortran",
+        "rocsparse-fortran",
+        "hipsparse-fortran",
+        "rocfft-fortran",
+        "hipfft-fortran",
+        "rocrand-fortran",
+        "hiprand-fortran",
+    ],
 }
 
 

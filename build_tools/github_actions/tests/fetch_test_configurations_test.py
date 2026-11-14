@@ -556,6 +556,36 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocblas", names)
         self.assertNotIn("miopen-dbsync", names)
 
+    def test_fortran_binding_jobs_fetch_their_family(self):
+        jobs = fetch_test_configurations.FORTRAN_BINDING_TEST_JOBS
+        self.assertEqual(len(jobs), 12)
+        self.assertEqual(jobs["hip-fortran"], "runtime")
+        self.assertEqual(jobs["roctx-fortran"], "runtime")
+        self.assertEqual(jobs["hipsolver-fortran"], "solver")
+        for job, family in jobs.items():
+            self.assertEqual(
+                fetch_test_configurations.test_matrix[job]["fetch_artifact_args"],
+                f"--fortran-bindings={family} --tests",
+            )
+
+    def test_fortran_binding_jobs_not_scheduled_on_asan_builds(self):
+        os.environ["PROJECTS_TO_TEST"] = "roctx-fortran,rocblas-fortran"
+        os.environ["BUILD_VARIANT"] = "release"
+        self.assertIn("rocblas-fortran", self._selected_names())
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                os.environ["BUILD_VARIANT"] = build_variant
+                names = self._selected_names()
+                self.assertNotIn("roctx-fortran", names)
+                self.assertNotIn("rocblas-fortran", names)
+
+    def test_fortran_binding_jobs_not_scheduled_without_their_stage(self):
+        os.environ["PROJECTS_TO_TEST"] = "roctx-fortran,rocblas-fortran"
+        os.environ["SKIP_STAGES"] = "fortran-bindings"
+        names = self._selected_names()
+        self.assertNotIn("roctx-fortran", names)
+        self.assertNotIn("rocblas-fortran", names)
+
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
