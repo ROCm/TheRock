@@ -14,7 +14,7 @@ installed repository filename carries the stream, and the two layout shapes
 install different files:
 
   flat     (stable, rc)   the repository file and the signing key
-  build_id (nightly)      the repository file only
+  build_id (nightly, dev) the repository file only
 
 Checking a package against the stream it was built for therefore also confirms
 that it configures that stream: a package built for another stream installs a

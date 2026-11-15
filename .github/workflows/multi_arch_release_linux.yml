@@ -57,6 +57,10 @@ on:
         description: "Build date (YYYYMMDD) for the run's dated package folders; empty means today"
         type: string
         default: ""
+      enable_repo_setup_package:
+        description: "Build and publish the amd-repo-setup package (dev, nightly, prerelease)"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -158,6 +162,7 @@ jobs:
       build_date: ${{ inputs.build_date }}
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
+      enable_repo_setup_package: ${{ inputs.enable_repo_setup_package }}
       build_variant: ${{ inputs.build_variant }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
@@ -179,6 +184,7 @@ jobs:
       build_date: ${{ inputs.build_date }}
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
+      enable_repo_setup_package: ${{ inputs.enable_repo_setup_package }}
       build_variant: ${{ inputs.build_variant }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
