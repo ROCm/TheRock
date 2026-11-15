@@ -43,6 +43,7 @@ repository serves x86_64 (`amd64`) packages only.
 | `stable`  | `https://stable.repo.amd.com/rocm/core/packages`  | yes    | `amdrocm-stable.{sources,repo}`   |
 | `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
 | `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
+| `dev`     | `https://dev.repo.amd.com/rocm/core/packages`     | no     | `amdrocm-dev.{sources,repo}`      |
 
 `rc` is the release-candidate stream for the next GA release. Its package carries
 the prerelease version of the ROCm packages it serves (`10.1.0~pre3` on deb,
@@ -63,6 +64,7 @@ identifier appears in the path:
 | `stable`  | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
 | `rc`      | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
 | `nightly` | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
+| `dev`     | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
 
 The signing key is at `<stream-root>/gpg/packages.gpg` — for example
 `https://stable.repo.amd.com/rocm/gpg/packages.gpg`. Note that this is *not*
@@ -70,19 +72,19 @@ under the repository base: packages live under `<stream-root>/core/packages/`
 while the key sits beside `core/`, so the two are supplied separately when
 building the package.
 
-> **Nightly is unsigned and expires.** The nightly repository publishes no
-> signatures, so the nightly `amd-repo-setup` disables signature verification
-> (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
+> **Nightly and dev are unsigned and expire.** Their repositories publish no
+> signatures, so their `amd-repo-setup` packages disable signature verification
+> (`gpgcheck=0` / apt `Trusted: yes`) and ship no key.
 >
-> More importantly, a nightly repo file names **one specific build**. Nightly
-> retention prunes old builds, so a nightly `amd-repo-setup` stops resolving once
-> the build it points at is removed — `apt update` or `dnf makecache` then fails
-> against it — and the package must be rebuilt to follow the stream. Use
-> `stable` for anything beyond short-lived testing.
+> More importantly, a nightly or dev repo file names **one specific build**.
+> Retention prunes old builds, so the package stops resolving once the build it
+> points at is removed — `apt update` or `dnf makecache` then fails against it —
+> and the package must be rebuilt to follow the stream. Use `stable` for anything
+> beyond short-lived testing. `dev` is intended for developer testing rather than
+> end users.
 
-Two further streams exist on `repo.amd.com` but no `amd-repo-setup` is built for
-them: `weekly` is not yet serving content, and `dev` is intended for developer
-testing rather than end users.
+One further stream exists on `repo.amd.com`, `weekly`, but no `amd-repo-setup` is
+built for it because it is not yet serving content.
 
 ## Relationship to `amdgpu-install`
 
@@ -224,8 +226,9 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --verify-repo-url
 ```
 
-`--verify-repo-url` has no effect for the nightly stream: its build folder is
-published by the same run that builds the package, so it does not exist yet.
+`--verify-repo-url` has no effect for the nightly and dev streams: their build
+folder is published by the same run that builds the package, so it does not
+exist yet.
 
 ### Package naming
 

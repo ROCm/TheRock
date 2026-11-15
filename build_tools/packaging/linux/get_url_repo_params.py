@@ -525,6 +525,10 @@ _STREAM_ROOTS = {
         "stream": "nightly",
         "root": "https://nightly.repo.amd.com/rocm",
     },
+    "dev": {
+        "stream": "dev",
+        "root": "https://dev.repo.amd.com/rocm",
+    },
 }
 
 
@@ -596,7 +600,7 @@ def parse_build_date(value: str) -> date | None:
 
 
 def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
-    """Return the dated nightly sub-folder ``YYYYMMDD-<run_id>``.
+    """Return the dated build sub-folder ``YYYYMMDD-<run_id>`` (nightly, dev).
 
     ``today`` is injectable for deterministic tests; it defaults to the current
     UTC date.
@@ -968,7 +972,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Print os_profiles=, images=, stream=, repo_base_url=, gpg_key_url=, "
             "repo_sub_folder= and version_suffix= for an amd-repo-setup build. The "
-            "last five are empty for a line with no public repository (e.g. ci/dev)."
+            "last five are empty for a line with no public repository (e.g. ci)."
         ),
     )
     p_rp.add_argument(
@@ -982,7 +986,7 @@ def main(argv: list[str] | None = None) -> int:
         "--release-type",
         type=str,
         required=True,
-        help="Release line (e.g. prerelease, release, nightly)",
+        help="Release line (e.g. prerelease, release, nightly, dev)",
     )
     p_rp.add_argument(
         "--build-date",

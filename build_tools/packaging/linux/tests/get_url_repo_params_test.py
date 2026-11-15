@@ -451,9 +451,8 @@ class GetPublicRepoBaseUrlTest(unittest.TestCase):
             "https://nightly.repo.amd.com/rocm/core/packages",
         )
 
-    def test_ci_and_dev_are_empty(self):
+    def test_ci_is_empty(self):
         self.assertEqual(get_url_repo_params.get_public_repo_base_url("ci"), "")
-        self.assertEqual(get_url_repo_params.get_public_repo_base_url("dev"), "")
 
     def test_unknown_line_is_empty(self):
         self.assertEqual(get_url_repo_params.get_public_repo_base_url("bogus"), "")
@@ -505,12 +504,13 @@ class GetPublicRepoBaseUrlTest(unittest.TestCase):
         self.assertEqual(
             get_url_repo_params.get_public_repo_stream("nightly"), "nightly"
         )
+        self.assertEqual(get_url_repo_params.get_public_repo_stream("dev"), "dev")
         self.assertEqual(get_url_repo_params.get_public_repo_stream("ci"), "")
 
     def test_release_types_in_table_order(self):
         self.assertEqual(
             get_url_repo_params.get_public_repo_release_types(),
-            ("release", "prerelease", "nightly"),
+            ("release", "prerelease", "nightly", "dev"),
         )
 
 
@@ -642,6 +642,20 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         # The run id keeps each build's package file distinct.
         self.assertEqual(out["version_suffix"], "12345")
 
+    def test_dev_is_unsigned_with_a_dated_build_folder(self):
+        code, output = self._run(
+            "deb", "dev", run_id="43372966936", build_date="20261113"
+        )
+        self.assertEqual(code, 0)
+        out = _outputs(output)
+        self.assertEqual(out["stream"], "dev")
+        self.assertEqual(
+            out["repo_base_url"], "https://dev.repo.amd.com/rocm/core/packages"
+        )
+        self.assertEqual(out["gpg_key_url"], "")
+        self.assertEqual(out["repo_sub_folder"], "20261113-43372966936")
+        self.assertEqual(out["version_suffix"], "43372966936")
+
     def test_flat_streams_are_signed_with_no_build_folder(self):
         cases = {
             "release": ("stable", "https://stable.repo.amd.com/rocm"),
@@ -711,14 +725,12 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(out["version_suffix"], "")
 
     def test_outputs_follow_the_stream_shape_not_its_name(self):
-        # Register a build_id stream that is not called "nightly". Its outputs
-        # must come from its shape: a dated folder and no key.
+        # Register a build_id stream under a line with no table entry. Its
+        # outputs must come from its shape: a dated folder and no key.
+        roots = {"dev-bkc": {"stream": "weekly", "root": "https://weekly.example/rocm"}}
         with patch.dict(build_repo_setup_package.STREAM_SHAPES, {"weekly": "build_id"}):
-            with patch.dict(
-                get_url_repo_params._STREAM_ROOTS,
-                {"dev": {"stream": "weekly", "root": "https://weekly.example/rocm"}},
-            ):
-                code, output = self._run("deb", "dev")
+            with patch.dict(get_url_repo_params._STREAM_ROOTS, roots):
+                code, output = self._run("deb", "dev-bkc")
         self.assertEqual(code, 0)
         out = _outputs(output)
         self.assertEqual(out["stream"], "weekly")

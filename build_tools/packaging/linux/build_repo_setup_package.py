@@ -232,14 +232,14 @@ STREAM_SHAPES = {
     "stable": _FLAT,
     "rc": _FLAT,
     "nightly": _BUILD_ID,
+    "dev": _BUILD_ID,
 }
 STREAMS = tuple(STREAM_SHAPES)
 
 # Adding a stream is an entry here, any alternate names it carries (see
-# STREAM_IDS), and its golden tests. A build_id stream that publishes several
-# builds a day, as the dev repository does, would also need the run ID as
-# --version-suffix: its version carries only the date, so two of its packages
-# would otherwise share one.
+# STREAM_IDS), and its golden tests. CI passes the run ID as --version-suffix
+# for every build_id stream: their versions don't name the build, and dev
+# publishes several builds a day.
 
 # Alternate names a stream is known by, where they differ from the stream id.
 # Streams absent here, or missing a key, use the stream id unchanged.
