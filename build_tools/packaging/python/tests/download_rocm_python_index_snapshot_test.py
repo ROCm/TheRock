@@ -17,6 +17,7 @@ import download_rocm_python_index_snapshot as snapshot
 from aggregate_index import (
     MANIFEST_SCHEMA_VERSION,
     OwnershipManifest,
+    load_ownership_manifest,
     parse_ownership_manifest,
 )
 
@@ -104,6 +105,33 @@ def test_downloads_every_linked_package(
     assert (output_dir / "rocm/core/whl-next/extra-core/index.html").is_file()
     assert (output_dir / "rocm/core/whl-next/rocm-sdk-core/index.html").is_file()
     assert not (output_dir / "rocm/jax/whl-next/index.html").exists()
+
+
+def test_downloads_every_asan_owner_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    owner_packages = {
+        "core/whl-next-asan": "rocm-sdk-core",
+        "pytorch/whl-next-asan": "torch",
+        "third-party/whl-next": "sympy",
+    }
+    responses: dict[str, bytes] = {}
+    for owner_path, package in owner_packages.items():
+        owner_url = f"{ORIGIN}/rocm/{owner_path}"
+        responses[f"{owner_url}/index.html"] = _root_html(package)
+        responses[f"{owner_url}/{package}/index.html"] = _package_html(package)
+    _mock_responses(monkeypatch, responses)
+    manifest = load_ownership_manifest(
+        Path(__file__).parents[1] / "rocm_whl_next_asan_ownership.yaml"
+    )
+    output_dir = tmp_path / "snapshot"
+
+    snapshot.download_snapshot(
+        manifest, stream="nightly", origin=ORIGIN, output_dir=output_dir
+    )
+
+    for owner_path, package in owner_packages.items():
+        assert (output_dir / "rocm" / owner_path / package / "index.html").is_file()
 
 
 @pytest.mark.parametrize(
