@@ -297,6 +297,9 @@ def publish_repo_setup_packages(
     Files already published are left in place unless ``overwrite`` is set (for
     re-publishing a corrected package by hand). Not every build uploads
     packages, so finding none is not an error.
+
+    Only the packages are copied. The artifacts bucket also has an index.html
+    in each folder, which lists only this run's packages.
     """
     source = artifacts_root.repo_setup_packages()
     dest_bucket = get_product_release_bucket_config(release_type, "core")
@@ -304,7 +307,9 @@ def publish_repo_setup_packages(
     logger.info("amd-repo-setup packages: %s -> %s", source.s3_uri, dest.s3_uri)
     if overwrite:
         logger.warning("Replacing any amd-repo-setup packages already published")
-    count = backend.copy_directory(source, dest, skip_existing=not overwrite)
+    count = backend.copy_directory(
+        source, dest, include=["*.deb", "*.rpm"], skip_existing=not overwrite
+    )
     logger.info("Copied %d amd-repo-setup packages", count)
 
 
