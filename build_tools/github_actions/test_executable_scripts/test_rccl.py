@@ -34,20 +34,38 @@ def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
 
 
 def _rccl_test_env() -> dict[str, str]:
-    """Returns the environment for RCCL tests, pinned to a fixed pair of GPUs.
+    """Returns the environment for RCCL tests, pinned to the first two visible GPUs.
 
     Skips the calling test if fewer than 2 GPUs are visible, since RCCL
     collectives need at least two ranks.
     """
     environ_vars = os.environ.copy()
+    # rocminfo goes through ROCr, so this count already reflects the
+    # ROCR_VISIBLE_DEVICES isolation that CI applies to the job.
     gpu_count = _get_visible_gpu_count(
         env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR
     )
-    logging.info(f"Visible GPU count: {gpu_count}")
+    rocr_visible_devices = environ_vars.get("ROCR_VISIBLE_DEVICES")
+    logging.info(
+        f"ROCR_VISIBLE_DEVICES={rocr_visible_devices or '<unset>'}, "
+        f"visible GPU count: {gpu_count}"
+    )
 
     if gpu_count < 2:
         pytest.skip("Skipping RCCL tests: <2 GPUs visible")
-    environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
+
+    # Each CI job is allocated a different pair of GPUs (2,3 on one runner, 4,5
+    # on another), so the pair has to be read from ROCR_VISIBLE_DEVICES instead
+    # of hardcoded. Narrowing ROCR_VISIBLE_DEVICES keeps us inside the job's own
+    # allocation; it uses physical device IDs, so the values carry over as-is.
+    if rocr_visible_devices:
+        environ_vars["ROCR_VISIBLE_DEVICES"] = ",".join(
+            rocr_visible_devices.split(",")[:2]
+        )
+    # ROCr renumbers the devices it exposes starting at 0, and HIP enumerates
+    # whatever ROCr reports, so HIP_VISIBLE_DEVICES indexes into that filtered
+    # list rather than into physical device IDs.
+    environ_vars["HIP_VISIBLE_DEVICES"] = "0,1"
     return environ_vars
 
 
