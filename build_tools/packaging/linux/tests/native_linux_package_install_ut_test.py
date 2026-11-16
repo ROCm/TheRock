@@ -2632,8 +2632,11 @@ class RepoSetupPackageContractTest(unittest.TestCase):
     def test_rpm_per_distro_directory(self):
         cases = {
             "rhel8": "/etc/yum.repos.d/amdrocm-stablerc.repo",
+            "rhel9": "/etc/yum.repos.d/amdrocm-stablerc.repo",
             "rhel10": "/etc/yum.repos.d/amdrocm-stablerc.repo",
+            "sles15": "/etc/zypp/repos.d/amdrocm-stablerc.repo",
             "sles16": "/etc/zypp/repos.d/amdrocm-stablerc.repo",
+            "azl3": "/etc/yum.repos.d/amdrocm-stablerc.repo",
         }
         for os_profile, repo_file in cases.items():
             with self.subTest(os_profile=os_profile):

@@ -466,7 +466,7 @@ class TestParseArgs:
             irp.parse_args(self.VALID[:i] + self.VALID[i + 2 :])
 
     @pytest.mark.parametrize(
-        "option,value", [("--os-profile", "ubuntu2204"), ("--stream", "weekly")]
+        "option,value", [("--os-profile", "ubuntu1804"), ("--stream", "weekly")]
     )
     def test_unknown_profile_or_stream_is_rejected(self, option, value):
         argv = list(self.VALID)
