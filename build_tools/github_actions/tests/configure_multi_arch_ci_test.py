@@ -2562,7 +2562,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             row["pytorch_git_ref"]: row["exclude_implicit_targets"]
             for row in result.linux.pytorch_build_matrix
         }
-        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
+        self.assertEqual(exclusions["nightly"], "gfx1250-strict")
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
