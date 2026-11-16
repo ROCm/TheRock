@@ -48,7 +48,9 @@ def get_wheel_version(package_dist_dir: Path, wheel_name: str) -> str | None:
 
 
 def get_all_wheel_versions(
-    package_dist_dir: Path, os: str = platform.system()
+    package_dist_dir: Path,
+    os: str = platform.system(),
+    torch_only: bool = False,
 ) -> Mapping[str, str | Path]:
     _log(f"Looking for wheels in '{package_dist_dir}'")
     all_files = list(package_dist_dir.glob("*"))
@@ -69,6 +71,9 @@ def get_all_wheel_versions(
         all_versions = all_versions | {"torch_version": torch_version}
     else:
         raise FileNotFoundError("Did not find torch wheel")
+
+    if torch_only:
+        return all_versions
 
     if torchaudio_version:
         all_versions = all_versions | {"torchaudio_version": torchaudio_version}
@@ -106,6 +111,13 @@ def main(argv: list[str]):
         default=Path(env_dist_dir if not env_dist_dir == None else "<no-valid-dir>"),
         help="Path where wheels are located",
     )
+    p.add_argument(
+        "--torch-only",
+        action="store_true",
+        default=False,
+        help="Require only the torch wheel. Used by ASAN builds, which do not "
+        "produce torchaudio, torchvision, triton, or apex.",
+    )
 
     args = p.parse_args(argv)
     if args.dist_dir == Path("<no-valid-dir>"):
@@ -118,7 +130,7 @@ def main(argv: list[str]):
 
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
-    all_versions = get_all_wheel_versions(args.dist_dir)
+    all_versions = get_all_wheel_versions(args.dist_dir, torch_only=args.torch_only)
     _log("")
     gha_set_output(all_versions)
 
