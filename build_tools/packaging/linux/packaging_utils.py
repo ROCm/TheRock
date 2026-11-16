@@ -83,6 +83,7 @@ def normalize_target_list(
 # versioned_pkg - Used to indicate versioned or non versioned packages
 # gfxarch_list - List of all architectures to build device packages for
 # deb_compression_args - Resolved dpkg-deb compression arguments (DEB only)
+#
 # frozen=True makes this dataclass immutable (hashable and thread-safe).
 # Note: gfxarch_list uses tuple instead of list because frozen dataclasses
 # require all fields to be immutable types (tuples are immutable, lists are not).
