@@ -173,8 +173,8 @@ def get_modified_paths_api(
 ) -> Optional[Set[str]]:
     """Get paths of files changed using GitHub API (compare endpoint).
 
-    Returns None if the result is truncated (>300 files) to signal caller
-    should fall back to run_all_tests.
+    Returns None if the result is truncated (>300 files) to signal that the
+    diff is incomplete and cannot be used to narrow the run.
     """
     result = subprocess.run(
         [
@@ -189,7 +189,7 @@ def get_modified_paths_api(
     )
     data = json.loads(result.stdout)
     files = data.get("files", [])
-    # GitHub compare API returns max 300 files; if truncated, fall back to run-all
+    # GitHub compare API returns max 300 files; a truncated diff is unusable.
     if len(files) >= 300:
         logger.warning("Compare API returned 300+ files, result may be truncated")
         return None
@@ -324,9 +324,9 @@ def configure(
     focuses on determining changed_projects.
     """
 
-    # Schedule/workflow_dispatch events run all tests
+    # Schedule/workflow_dispatch events have no diff to narrow against.
     if event_name in ("schedule", "workflow_dispatch"):
-        logger.info(f"{event_name} event - running all tests")
+        logger.info(f"{event_name} event has no diff - not scoping to projects")
         return ""
 
     # Get modified paths via GitHub API
@@ -339,12 +339,12 @@ def configure(
         logger.info(f"Getting push diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
     else:
-        logger.warning("No SHAs provided - running all tests")
+        logger.warning("No SHAs provided - not scoping to projects")
         return ""
 
-    # If API returned None (truncated results), fall back to run-all
+    # A truncated diff is an incomplete diff, so it cannot narrow the run.
     if modified_paths is None:
-        logger.info("Truncated API response - running all tests")
+        logger.info("Truncated API response - not scoping to projects")
         return ""
 
     if not modified_paths:
@@ -355,7 +355,7 @@ def configure(
 
     # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("Shared CI files changed - running all tests")
+        logger.info("Shared CI files changed - not scoping to projects")
         return ""
 
     # Apply the calling repository's workflow test policy.
@@ -363,14 +363,14 @@ def configure(
         workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
         if workflow_test_scope != "configured-projects":
             logger.info(
-                "Workflow changed in %s - running all tests",
+                "Workflow changed in %s - not scoping to projects",
                 github_repo,
             )
             return ""
 
         config = load_repo_config(config_path)
         if not config:
-            logger.warning("No config loaded - running all tests")
+            logger.warning("No config loaded - not scoping to projects")
             return ""
 
         own_projects = get_valid_prefixes(config)
@@ -385,7 +385,7 @@ def configure(
         if unclassified:
             logger.info(
                 f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-                " - running all tests"
+                " - not scoping to projects"
             )
             return ""
 
@@ -398,7 +398,7 @@ def configure(
     # Find changed projects from config
     config = load_repo_config(config_path)
     if not config:
-        logger.warning("No config loaded - running all tests")
+        logger.warning("No config loaded - not scoping to projects")
         return ""
 
     valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
@@ -411,7 +411,7 @@ def configure(
     if unclassified:
         logger.info(
             f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-            " - running all tests"
+            " - not scoping to projects"
         )
         return ""
 

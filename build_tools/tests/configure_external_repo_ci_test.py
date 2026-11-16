@@ -225,7 +225,7 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_ci_workflow_changed_runs_all_tests(self, mock_api):
+    def test_ci_workflow_changed_is_not_scoped(self, mock_api):
         mock_api.return_value = {".github/workflows/therock-ci.yml"}
         result = configure(
             event_name="pull_request",
@@ -253,7 +253,7 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result, "projects/rocblas")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_truncated_api_response_runs_all_tests(self, mock_api):
+    def test_truncated_api_response_is_not_scoped(self, mock_api):
         mock_api.return_value = None  # Signals truncated response
         result = configure(
             event_name="pull_request",
@@ -264,7 +264,7 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result, "")
 
-    def test_no_shas_provided_runs_all_tests(self):
+    def test_no_shas_provided_is_not_scoped(self):
         result = configure(
             event_name="pull_request",
             github_repo="ROCm/rocm-libraries",
@@ -274,8 +274,8 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result, "")
 
-    def test_push_without_base_sha_runs_all_tests(self):
-        """Push events without base_sha should run all tests."""
+    def test_push_without_base_sha_is_not_scoped(self):
+        """Push events without base_sha have no diff to narrow against."""
         result = configure(
             event_name="push",
             github_repo="ROCm/rocm-libraries",
@@ -335,7 +335,7 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
             ["emulation/mirage", "emulation/rocjitsu"],
         )
 
-    def test_ctest_harness_triggers_full_run(self):
+    def test_ctest_harness_is_not_scoped(self):
         r = self._configure(["shared/ctest/TestCategories.cmake"])
         self.assertEqual(r, "")
 
@@ -354,10 +354,9 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
             ["projects/hipccl/hipccl3/rocprim/foo.hpp"],
             repo="ROCm/rocm-libraries",
         )
-        self.assertFalse(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "projects/hipccl")
+        self.assertEqual(r, "projects/hipccl")
 
-    def test_mixed_recognized_and_unclassified_runs_all(self):
+    def test_mixed_recognized_and_unclassified_is_not_scoped(self):
         r = self._configure(
             ["projects/rocm-core/src/x.cpp", "tools/rocm-build/helper.py"]
         )

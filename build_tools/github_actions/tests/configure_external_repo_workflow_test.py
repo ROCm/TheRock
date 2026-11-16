@@ -1,4 +1,10 @@
-"""Regression tests for external-repository workflow changes."""
+"""Regression tests for external-repository workflow changes.
+
+configure() returns only the project scope: a comma-separated list of project
+paths, or "" when the diff cannot be narrowed safely. Downstream, "" means
+every project is tested. Test depth is decided separately, by
+configure_multi_arch_ci.py, so nothing here asserts on it.
+"""
 
 import json
 import os
@@ -74,27 +80,36 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             get_paths.assert_called_once_with(repo, "base", "head")
             return result
 
+    def assertNoProjectScope(self, result):
+        """The run was not narrowed, so every project is tested."""
+        self.assertEqual(result, "")
+
+    def assertProjectScope(self, result, expected):
+        self.assertEqual(set(result.split(",")), set(expected))
+
     def test_libraries_workflow_selects_library_projects(self):
         result = self.configure({WORKFLOW})
 
-        self.assertEqual(set(result.split(",")), LIBRARY_PROJECTS)
+        self.assertProjectScope(result, LIBRARY_PROJECTS)
         self.assertNotIn("projects/rccl", result.split(","))
 
     def test_libraries_workflow_with_known_source_selects_all_libraries(self):
         result = self.configure({WORKFLOW, "projects/rocblas/src/rocblas.cpp"})
 
-        self.assertEqual(set(result.split(",")), LIBRARY_PROJECTS)
+        self.assertProjectScope(result, LIBRARY_PROJECTS)
 
-    def test_systems_workflow_preserves_full_test_run(self):
+    def test_systems_workflow_is_not_scoped(self):
+        """rocm-systems has no configured-projects policy, so nothing narrows."""
         result = self.configure(
             {WORKFLOW},
             repo="ROCm/rocm-systems",
             entries=SYSTEM_ENTRIES,
         )
 
-        self.assertEqual(result, "")
+        self.assertNoProjectScope(result)
 
-    def test_shared_ci_changes_preserve_full_test_run(self):
+    def test_shared_ci_changes_are_not_scoped(self):
+        """Project discovery and CTest logic can alter selection everywhere."""
         for path in (
             ".github/repos-config.json",
             ".github/scripts/get_changed_projects.py",
@@ -103,17 +118,19 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
             with self.subTest(path=path):
                 result = self.configure({WORKFLOW, path})
 
-                self.assertEqual(result, "")
+                self.assertNoProjectScope(result)
 
-    def test_workflow_with_unclassified_path_preserves_full_test_run(self):
+    def test_workflow_with_unclassified_path_is_not_scoped(self):
+        """An unattributable path could affect anything, so nothing narrows."""
         result = self.configure({WORKFLOW, "unexpected/config.py"})
 
-        self.assertEqual(result, "")
+        self.assertNoProjectScope(result)
 
-    def test_workflow_without_config_preserves_full_test_run(self):
+    def test_workflow_without_config_is_not_scoped(self):
+        """Without repos-config.json there are no project prefixes to match."""
         result = self.configure({WORKFLOW}, config_exists=False)
 
-        self.assertEqual(result, "")
+        self.assertNoProjectScope(result)
 
     def test_configured_repository_workflow_selects_its_projects(self):
         with patch.dict(
@@ -128,10 +145,11 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
 
         self.assertEqual(result, "projects/example")
 
-    def test_unknown_repository_workflow_preserves_full_test_run(self):
+    def test_unknown_repository_workflow_is_not_scoped(self):
+        """A repo absent from WORKFLOW_TEST_SCOPE_BY_REPO keeps full coverage."""
         result = self.configure({WORKFLOW}, repo="ROCm/unknown")
 
-        self.assertEqual(result, "")
+        self.assertNoProjectScope(result)
 
     def test_ordinary_source_changes_stay_selective(self):
         result = self.configure({"projects/rocblas/src/rocblas.cpp"})
