@@ -492,6 +492,123 @@ def test_generate_outputs_writes_routed_artifacts(tmp_path: Path) -> None:
     assert validation_report["unpublished_packages"] == []
 
 
+def _valid_asan_manifest() -> dict[str, object]:
+    data = _valid_manifest()
+    data["python_indexes"] = [
+        {
+            "public_base": "/rocm/whl-next-asan",
+            "packages": {
+                "torch": {"owner_path": "pytorch/whl-next-asan"},
+                "rocm-sdk-core": {"owner_path": "core/whl-next-asan"},
+                "numpy": {"owner_path": "third-party/whl-next"},
+            },
+        }
+    ]
+    return data
+
+
+def _write_asan_content_root(root: Path) -> None:
+    for owner_path, package_name in [
+        ("core/whl-next-asan", "rocm-sdk-core"),
+        ("pytorch/whl-next-asan", "torch"),
+        ("third-party/whl-next", "numpy"),
+    ]:
+        _write_product_root(root, owner_path, [package_name])
+        _write_package_page(root, owner_path, package_name)
+
+
+@pytest.mark.parametrize(
+    "validate_content, generation_mode",
+    [(True, "content"), (False, "manifest")],
+)
+def test_generate_outputs_writes_asan_artifacts_to_asan_paths(
+    tmp_path: Path, validate_content: bool, generation_mode: str
+) -> None:
+    content_root = tmp_path / "content"
+    output_dir = tmp_path / "out"
+    _write_asan_content_root(content_root)
+    manifest = parse_ownership_manifest(_valid_asan_manifest())
+
+    outputs = generate_outputs(
+        manifest,
+        output_dir,
+        stream="nightly",
+        content_root=content_root if validate_content else None,
+        strict_completeness=validate_content,
+    )
+
+    assert outputs.aggregate_root == output_dir / "rocm/whl-next-asan/index.html"
+    assert outputs.route_table == output_dir / "rocm-whl-next-asan-routes.json"
+    assert outputs.validation_report == output_dir / "validation.json"
+    assert not (output_dir / "rocm/whl-next").exists()
+    assert not (output_dir / "rocm-whl-next-routes.json").exists()
+
+    route_table = json.loads(outputs.route_table.read_text(encoding="utf-8"))
+    assert route_table["public_base"] == "/rocm/whl-next-asan"
+    assert [route["target"] for route in route_table["routes"]] == [
+        "/rocm/core/whl-next-asan/rocm-sdk-core/",
+        "/rocm/pytorch/whl-next-asan/torch/",
+        "/rocm/third-party/whl-next/numpy/",
+    ]
+
+    validation_report = json.loads(
+        outputs.validation_report.read_text(encoding="utf-8")
+    )
+    assert validation_report["public_base"] == "/rocm/whl-next-asan"
+    assert validation_report["generation_mode"] == generation_mode
+    assert validation_report["content_validated"] is validate_content
+    assert validation_report["owners"] == {
+        "core/whl-next-asan": {"package_count": 1},
+        "pytorch/whl-next-asan": {"package_count": 1},
+        "third-party/whl-next": {"package_count": 1},
+    }
+
+
+def test_asan_strict_skips_standard_roots(
+    tmp_path: Path,
+) -> None:
+    content_root = tmp_path / "content"
+    _write_asan_content_root(content_root)
+    _write_product_root(content_root, "core/whl-next", ["unlisted-core"])
+    _write_product_root(content_root, "pytorch/whl-next", ["unlisted-torch"])
+    manifest = parse_ownership_manifest(_valid_asan_manifest())
+
+    validated = validate_product_indexes(
+        manifest,
+        content_root,
+        stream="nightly",
+        strict_completeness=True,
+    )
+
+    assert {package.owner_path for package in validated.packages.values()} == {
+        "core/whl-next-asan",
+        "pytorch/whl-next-asan",
+        "third-party/whl-next",
+    }
+
+
+@pytest.mark.parametrize(
+    "owner_path", ["core/whl-next", "pytorch/whl-next", "jax/whl-next-asan"]
+)
+def test_asan_index_rejects_non_asan_owner_path(owner_path: str) -> None:
+    data = _valid_asan_manifest()
+    data["python_indexes"][0]["packages"]["torch"] = {"owner_path": owner_path}
+
+    with pytest.raises(ManifestError, match="is not allowed for /rocm/whl-next-asan"):
+        parse_ownership_manifest(data)
+
+
+@pytest.mark.parametrize("owner_path", ["core/whl-next-asan", "pytorch/whl-next-asan"])
+def test_standard_index_rejects_asan_owner_path(owner_path: str) -> None:
+    data = _valid_manifest()
+    data["python_indexes"][0]["packages"]["torch"] = {"owner_path": owner_path}
+
+    with pytest.raises(
+        ManifestError, match="is an ASAN build and is not allowed for /rocm/whl-next"
+    ):
+        parse_ownership_manifest(data)
+
+
 def test_generate_outputs_requires_manifest_packages_by_default(
     tmp_path: Path,
 ) -> None:
@@ -1142,7 +1259,7 @@ def test_validate_product_indexes_rejects_empty_package_page(
                 "streams": _single_stream_config(),
                 "python_indexes": [],
             },
-            "exactly one /rocm/whl-next index",
+            "exactly one index",
         ),
         (
             {
@@ -1324,7 +1441,7 @@ def test_rejects_patterns_key_in_schema_v3() -> None:
         ("/rocm/whl-next/", "must not end"),
         ("/other/whl-next", "contained under /rocm"),
         ("/rocm/../whl-next", "path segment"),
-        ("/rocm/whl", "must be '/rocm/whl-next'"),
+        ("/rocm/whl", "must be one of '/rocm/whl-next', '/rocm/whl-next-asan'"),
     ],
 )
 def test_rejects_invalid_public_base(public_base: str, match: str) -> None:
