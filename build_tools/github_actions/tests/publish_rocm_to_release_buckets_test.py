@@ -200,9 +200,11 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
                 self.assertEqual(dest.bucket, dest_bucket)
                 self.assertEqual(dest.relative_path, "v5/amd-repo-setup")
-                # A published package is never replaced by default.
+                # Only the packages are copied, and a published package is
+                # never replaced by default.
                 self.assertEqual(
-                    mock_copy.call_args_list[-1].kwargs, {"skip_existing": True}
+                    mock_copy.call_args_list[-1].kwargs,
+                    {"include": ["*.deb", "*.rpm"], "skip_existing": True},
                 )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
@@ -548,6 +550,15 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
             self._write(
                 f"{root.repo_setup_packages().relative_path}/{package}", contents
             )
+        # The artifacts bucket indexes each run's folders. Those pages list one
+        # run's packages, so they must not be published.
+        for package in packages:
+            distro = package.split("/")[0]
+            self._write(
+                f"{root.repo_setup_packages().relative_path}/{distro}/index.html"
+            )
+        if packages:
+            self._write(f"{root.repo_setup_packages().relative_path}/index.html")
 
         with mock.patch(
             "github_actions.publish_rocm_to_release_buckets.create_storage_backend",
