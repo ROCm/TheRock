@@ -174,6 +174,22 @@ class CmakeTargetSelectionTest(unittest.TestCase):
                 "gfx1250;gfx1250-strict",
                 "all",
             ),
+            # Family plus a loose target: dist follows the families only. The
+            # targets-only fallback must not pull the loose target into dist.
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx1250)\nset(THEROCK_AMDGPU_TARGETS gfx1250-strict)\nset(THEROCK_AMDGPU_DIST_BUNDLE_NAME combined)",
+                "gfx1250;gfx1250-strict",
+                "gfx1250",
+                "all",
+            ),
+            # Targets-only build with an explicit, different dist selection:
+            # the explicit setting overrides the targets-only fallback.
+            (
+                "set(THEROCK_AMDGPU_TARGETS gfx1250)\nset(THEROCK_DIST_AMDGPU_TARGETS gfx1250-strict)",
+                "gfx1250",
+                "gfx1250-strict",
+                "all",
+            ),
             (
                 "set(THEROCK_DIST_AMDGPU_FAMILIES gfx1250-strict)",
                 "THEROCK_AMDGPU_TARGETS-NOTFOUND",
