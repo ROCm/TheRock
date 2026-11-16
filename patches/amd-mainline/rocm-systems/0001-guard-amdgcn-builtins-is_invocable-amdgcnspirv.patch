@@ -1,53 +1,53 @@
-From 17232a28759e0e88e775dc97f7808d8cab2043eb Mon Sep 17 00:00:00 2001
+From c841d0c4213f0e6625d24076c0e1b1842f40918c Mon Sep 17 00:00:00 2001
 From: idubinov <igor.dubinov@amd.com>
-Date: Tue, 10 Nov 2026 15:27:14 +0000
+Date: Mon, 16 Nov 2026 12:05:50 +0000
 Subject: [PATCH] Guard feature-gated AMDGCN builtins with is_invocable for
  amdgcnspirv
 
 On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the
 target GPU is only known at JIT time), so clang rejects calls to
 feature-gated builtins (MFMA/SMFMAC/WMMA/async-LDS/global atomic fadd)
-that are guarded by __has_builtin() alone. Add a
-__builtin_amdgcn_is_invocable() guard (falls back to true when the
-predicate builtin is unavailable).
+that are guarded by __has_builtin() alone. Guard them with
+__builtin_amdgcn_is_invocable() instead. On concrete gfx targets the
+predicate folds to a constant, so the generated code there is unchanged.
+
+The two async-LDS checks in mega_kernel are nested ifs: clang currently
+honors only the first is_invocable of an && condition.
 
 - rocprofiler-compute: sample/rocflop.cpp, sample/mega_kernel,
   sample/wmma_gemm_fp16
 - hip-tests: catch/unit/memory/hipHostRegister.cc
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- .../catch/unit/memory/hipHostRegister.cc      |  16 +-
- .../sample/mega_kernel/mega_kernel.hip        | 192 ++++++++++--------
- .../rocprofiler-compute/sample/rocflop.cpp    | 166 ++++++++-------
- .../sample/wmma_gemm_fp16/wmma_gemm_fp16.hip  | 111 +++++-----
- 4 files changed, 265 insertions(+), 220 deletions(-)
+ .../catch/unit/memory/hipHostRegister.cc      |  12 +-
+ .../sample/mega_kernel/mega_kernel.hip        | 183 +++++++++---------
+ .../rocprofiler-compute/sample/rocflop.cpp    | 168 ++++++++--------
+ .../sample/wmma_gemm_fp16/wmma_gemm_fp16.hip  | 107 +++++-----
+ 4 files changed, 243 insertions(+), 227 deletions(-)
 
 diff --git a/projects/hip-tests/catch/unit/memory/hipHostRegister.cc b/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
-index 851ae7748d..6f376210cc 100644
+index 851ae7748d7..33be47dd9d1 100644
 --- a/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
 +++ b/projects/hip-tests/catch/unit/memory/hipHostRegister.cc
-@@ -38,16 +38,26 @@ template <typename T> __global__ void Inc(T* Ad) {
+@@ -38,16 +38,20 @@ template <typename T> __global__ void Inc(T* Ad) {
  }
  
  #if HT_AMD
-+// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
-+// only known at JIT time), so clang requires an is_invocable guard as well.
-+#if __has_builtin(__builtin_amdgcn_is_invocable)
-+#define HOST_REGISTER_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
-+#else
-+#define HOST_REGISTER_IS_INVOCABLE(builtin) true
-+#endif
++// Feature-gated AMDGCN builtins are guarded with __builtin_amdgcn_is_invocable:
++// on amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time).
 +
  __global__ void AtomicFAddKernelKernel(float* data, size_t n) {
    size_t i = blockDim.x * blockIdx.x + threadIdx.x;
    if (i < n) {
- #if __has_builtin(__builtin_amdgcn_global_atomic_fadd_f32)
+-#if __has_builtin(__builtin_amdgcn_global_atomic_fadd_f32)
 -    __builtin_amdgcn_global_atomic_fadd_f32(data, 1.0f);
 -#else
-+    if (HOST_REGISTER_IS_INVOCABLE(__builtin_amdgcn_global_atomic_fadd_f32)) {
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_global_atomic_fadd_f32)) {
 +      __builtin_amdgcn_global_atomic_fadd_f32(data, 1.0f);
 +      return;
 +    }
-+#endif
      if (i == 0) {
        *data = -1.0;
      }
@@ -56,26 +56,22 @@ index 851ae7748d..6f376210cc 100644
  }
  #endif
 diff --git a/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip b/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
-index 72641530d8..600c02272d 100644
+index fb20b3a13d6..ff9dd2038a0 100644
 --- a/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
 +++ b/projects/rocprofiler-compute/sample/mega_kernel/mega_kernel.hip
-@@ -122,6 +122,15 @@
+@@ -121,6 +121,11 @@
  
  #include "mega_kernel_types.h"
  
-+// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
-+// only known at JIT time), so clang requires an is_invocable guard as well.
++// Feature-gated AMDGCN builtins are guarded with __builtin_amdgcn_is_invocable:
++// on amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time).
 +// Use nested ifs: clang only honors the first is_invocable in an && chain.
-+#if __has_builtin(__builtin_amdgcn_is_invocable)
-+#define MEGA_KERNEL_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
-+#else
-+#define MEGA_KERNEL_IS_INVOCABLE(builtin) true
-+#endif
 +
  // ============================================================================
- // NPI TOOLCHAIN WORKAROUND: gfx1250 fallback detection
+ // TOOLCHAIN WORKAROUND: gfx1250 fallback detection
  // ============================================================================
-@@ -2671,104 +2680,114 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
+@@ -2607,104 +2612,111 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
                                            TestResults* results, int lane_id, int tid) {
      bool passed = true;
  
@@ -95,21 +91,18 @@ index 72641530d8..600c02272d 100644
 -        async_barrier_counter = 0;
 -    }
 -    __syncthreads();
--
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_global_load_async_to_lds_b128)) {
++        if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_global_store_async_from_lds_b128)) {
++            // MI350 (gfx950) / gfx1250: Full async LDS load/store support
++            // global_load_async_to_lds_b8/b32/b64/b128: Load from global to LDS asynchronously
++            // global_store_async_from_lds_b8/b32/b64/b128: Store from LDS to global asynchronously
+ 
 -    // Perform async load from global to LDS
 -    // Only first thread in each block issues the async load for this test
 -    if (threadIdx.x == 0) {
 -        // Cast pointers to appropriate address spaces
 -        // address_space(1) = global, address_space(3) = local/LDS
 -        typedef int __attribute__((ext_vector_type(4))) vint4;
-+#if __has_builtin(__builtin_amdgcn_global_load_async_to_lds_b128) && \
-+    __has_builtin(__builtin_amdgcn_global_store_async_from_lds_b128)
-+    if (MEGA_KERNEL_IS_INVOCABLE(__builtin_amdgcn_global_load_async_to_lds_b128)) {
-+        if (MEGA_KERNEL_IS_INVOCABLE(__builtin_amdgcn_global_store_async_from_lds_b128)) {
-+            // MI350 (gfx950) / gfx1250: Full async LDS load/store support
-+            // global_load_async_to_lds_b8/b32/b64/b128: Load from global to LDS asynchronously
-+            // global_store_async_from_lds_b8/b32/b64/b128: Store from LDS to global asynchronously
-+
 +            // Initialize global source with test pattern
 +            if (tid < 64) {
 +                // First, copy test data to global memory
@@ -269,11 +262,10 @@ index 72641530d8..600c02272d 100644
 +            return;
 +        }
 +    }
-+#endif
      // Async LDS builtins not available - mark as bypassed
      (void)global_src;
      (void)global_dst;
-@@ -2779,13 +2798,6 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
+@@ -2715,13 +2727,6 @@ __device__ void test_async_lds_operations([[maybe_unused]] float* global_src, fl
          atomicMin(&results->async_lds_load_passed, -1);
          atomicMin(&results->async_lds_store_passed, -1);
      }
@@ -288,28 +280,25 @@ index 72641530d8..600c02272d 100644
  
  // ============================================================================
 diff --git a/projects/rocprofiler-compute/sample/rocflop.cpp b/projects/rocprofiler-compute/sample/rocflop.cpp
-index 4e638a139f..5a0d8efeb6 100644
+index 4e638a139fc..dab18fae304 100644
 --- a/projects/rocprofiler-compute/sample/rocflop.cpp
 +++ b/projects/rocprofiler-compute/sample/rocflop.cpp
-@@ -13,6 +13,14 @@
+@@ -13,6 +13,10 @@
  #include <sys/wait.h>
  #include <fcntl.h>
  
-+// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
-+// only known at JIT time), so clang requires an is_invocable guard as well.
-+#if __has_builtin(__builtin_amdgcn_is_invocable)
-+#define ROCFLOP_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
-+#else
-+#define ROCFLOP_IS_INVOCABLE(builtin) true
-+#endif
++// Feature-gated AMDGCN builtins are guarded with __builtin_amdgcn_is_invocable:
++// on amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time).
 +
  using float16 = _Float16;
  
  // Vector types. Useful for packed math (where supported) and MFMA inputs.
-@@ -60,62 +68,66 @@ template<typename T> __global__ void fma_throughput(vec4<T>* buffer, int count)
+@@ -59,64 +63,64 @@ template<typename T> __global__ void fma_throughput(vec4<T>* buffer, int count)
+ // runtime has_mfma check).
  __global__ void matmul_fp16_throughput(vec4<float16>* inputs, vec4<float>* outputs, int count)
  {
- #if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x16f16)
+-#if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x16f16)
 -    int grid_size = gridDim.x * blockDim.x;
 -    int tid = blockDim.x * blockIdx.x + threadIdx.x;
 -
@@ -331,7 +320,7 @@ index 4e638a139f..5a0d8efeb6 100644
 -            accum1 = __builtin_amdgcn_mfma_f32_16x16x16f16(value1, value1, accum1, 0, 0, 0);
 -            accum2 = __builtin_amdgcn_mfma_f32_16x16x16f16(value2, value2, accum2, 0, 0, 0);
 -            accum3 = __builtin_amdgcn_mfma_f32_16x16x16f16(value3, value3, accum3, 0, 0, 0);
-+    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_mfma_f32_16x16x16f16)) {
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_mfma_f32_16x16x16f16)) {
 +        int grid_size = gridDim.x * blockDim.x;
 +        int tid = blockDim.x * blockIdx.x + threadIdx.x;
 +
@@ -358,14 +347,14 @@ index 4e638a139f..5a0d8efeb6 100644
 -    }
  
 -    outputs[tid] = accum0 + accum1 + accum2 + accum3;
+-#endif
 +        outputs[tid] = accum0 + accum1 + accum2 + accum3;
 +    }
- #endif
  }
  
  __global__ void matmul_fp32_throughput(float* inputs, vec4<float>* outputs, int count)
  {
- #if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x4f32)
+-#if __has_builtin(__builtin_amdgcn_mfma_f32_16x16x4f32)
 -    int grid_size = gridDim.x * blockDim.x;
 -    int tid = blockDim.x * blockIdx.x + threadIdx.x;
 -
@@ -387,7 +376,7 @@ index 4e638a139f..5a0d8efeb6 100644
 -            accum1 = __builtin_amdgcn_mfma_f32_16x16x4f32(value1, value1, accum1, 0, 0, 0);
 -            accum2 = __builtin_amdgcn_mfma_f32_16x16x4f32(value2, value2, accum2, 0, 0, 0);
 -            accum3 = __builtin_amdgcn_mfma_f32_16x16x4f32(value3, value3, accum3, 0, 0, 0);
-+    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_mfma_f32_16x16x4f32)) {
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_mfma_f32_16x16x4f32)) {
 +        int grid_size = gridDim.x * blockDim.x;
 +        int tid = blockDim.x * blockIdx.x + threadIdx.x;
 +
@@ -414,15 +403,17 @@ index 4e638a139f..5a0d8efeb6 100644
 -    }
  
 -    outputs[tid] = accum0 + accum1 + accum2 + accum3;
+-#endif
 +        outputs[tid] = accum0 + accum1 + accum2 + accum3;
 +    }
- #endif
  }
  
-@@ -125,38 +137,40 @@ __global__ void matmul_fp32_throughput(float* inputs, vec4<float>* outputs, int
+ // SMFMAC requires CDNA3+'s gfx940-insts target feature; kernel body is empty
+@@ -124,40 +128,40 @@ __global__ void matmul_fp32_throughput(float* inputs, vec4<float>* outputs, int
+ // runtime arch.major/minor check).
  __global__ void sparse_matmul_fp16_throughput(vec4<float16>* input0, vec8<float16>* input1, vec4<float>* outputs, int count)
  {
- #if __has_builtin(__builtin_amdgcn_smfmac_f32_16x16x32_f16)
+-#if __has_builtin(__builtin_amdgcn_smfmac_f32_16x16x32_f16)
 -    int grid_size = gridDim.x * blockDim.x;
 -    int tid = blockDim.x * blockIdx.x + threadIdx.x;
 -
@@ -451,7 +442,7 @@ index 4e638a139f..5a0d8efeb6 100644
 -            accum1 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x1, y1, accum1, 0, 0, 0);
 -            accum2 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x2, y2, accum2, 0, 0, 0);
 -            accum3 = __builtin_amdgcn_smfmac_f32_16x16x32_f16(x3, y3, accum3, 0, 0, 0);
-+    if (ROCFLOP_IS_INVOCABLE(__builtin_amdgcn_smfmac_f32_16x16x32_f16)) {
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_smfmac_f32_16x16x32_f16)) {
 +        int grid_size = gridDim.x * blockDim.x;
 +        int tid = blockDim.x * blockIdx.x + threadIdx.x;
 +
@@ -485,31 +476,28 @@ index 4e638a139f..5a0d8efeb6 100644
 -    }
  
 -    outputs[tid] = accum0 + accum1 + accum2 + accum3;
+-#endif
 +        outputs[tid] = accum0 + accum1 + accum2 + accum3;
 +    }
- #endif
  }
  
+ int g_current_device = -1;
 diff --git a/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip b/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
-index eb6ef30017..b63d33fe95 100644
+index eb6ef30017b..22db4fc6893 100644
 --- a/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
 +++ b/projects/rocprofiler-compute/sample/wmma_gemm_fp16/wmma_gemm_fp16.hip
-@@ -9,6 +9,14 @@
+@@ -9,6 +9,10 @@
  
  #include "wmma_gemm_fp16_config.hpp"
  
-+// On amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
-+// only known at JIT time), so clang requires an is_invocable guard as well.
-+#if __has_builtin(__builtin_amdgcn_is_invocable)
-+#define WMMA_GEMM_IS_INVOCABLE(builtin) __builtin_amdgcn_is_invocable(builtin)
-+#else
-+#define WMMA_GEMM_IS_INVOCABLE(builtin) true
-+#endif
++// Feature-gated AMDGCN builtins are guarded with __builtin_amdgcn_is_invocable:
++// on amdgcnspirv __has_builtin() is true for every AMDGCN builtin (the GPU is
++// only known at JIT time).
 +
  using namespace wmma_gemm_fp16;
  
  using Float16x4  = _Float16 __attribute__((ext_vector_type(4)));
-@@ -61,73 +69,74 @@ __device__ inline void inner_gemm(uint32_t sub_m_start,
+@@ -61,73 +65,72 @@ __device__ inline void inner_gemm(uint32_t sub_m_start,
                                    const _Float16* __restrict__ b,
                                    _Float16* __restrict__ d)
  {
@@ -527,8 +515,7 @@ index eb6ef30017..b63d33fe95 100644
 -    return;
 -#else
 -    Floatx8 frag_acc = {};
-+#if __has_builtin(__builtin_amdgcn_wmma_f32_16x16x32_f16)
-+    if (WMMA_GEMM_IS_INVOCABLE(__builtin_amdgcn_wmma_f32_16x16x32_f16)) {
++    if (__builtin_amdgcn_is_invocable(__builtin_amdgcn_wmma_f32_16x16x32_f16)) {
 +        Floatx8 frag_acc = {};
  
 -    const uint32_t major_wave = __builtin_amdgcn_readfirstlane(threadIdx.x / kWaveSize);
@@ -618,10 +605,10 @@ index eb6ef30017..b63d33fe95 100644
 +        }
  
 -    write_output(frag_d, wave_row, wave_col, n, d);
+-#endif
 +        write_output(frag_d, wave_row, wave_col, n, d);
 +        return;
 +    }
- #endif
 +    (void)sub_m_start;
 +    (void)sub_n_start;
 +    (void)m;
