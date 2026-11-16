@@ -114,6 +114,28 @@ class TestUploadPackages(unittest.TestCase):
             )
 
 
+class TestUploadPythonPackageLogs(unittest.TestCase):
+    """Tests for upload_python_package_logs()."""
+
+    def test_uploads_logs_outside_the_wheel_index(self):
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            log_dir = Path(tmp)
+            (log_dir / "rocm_sdk_core.log").write_text("core log", encoding="utf-8")
+            (log_dir / "notes.txt").write_text("not a log", encoding="utf-8")
+            backend = LocalStorageBackend(Path(staging))
+
+            upload_python_packages.upload_python_package_logs(
+                log_dir, output_root, backend
+            )
+
+            base = Path(staging) / "12345-linux"
+            uploaded = base / "logs" / "python" / "rocm_sdk_core.log"
+            self.assertEqual(uploaded.read_text(encoding="utf-8"), "core log")
+            self.assertFalse((base / "logs" / "python" / "notes.txt").exists())
+            self.assertFalse((base / "python").exists())
+
+
 class TestWriteGhaUploadSummary(unittest.TestCase):
     """Tests for write_gha_upload_summary()."""
 

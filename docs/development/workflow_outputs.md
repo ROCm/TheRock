@@ -79,6 +79,9 @@ families in parallel, producing identically-named log files (e.g.,
         {subproject}_install.log
         ninja_logs.tar.gz
 
+    logs/python/                                (ROCm Python package builds)
+        {package}.log                           (one per package, including success)
+
     packages/deb/                               (APT repository)
         pool/main/
             *.deb

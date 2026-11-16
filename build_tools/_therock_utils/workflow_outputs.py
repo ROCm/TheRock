@@ -274,6 +274,14 @@ class WorkflowOutputRoot:
         """Location for the shared Python packages directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/python")
 
+    def python_package_logs(self) -> StorageLocation:
+        """Location for ROCm Python package build logs.
+
+        ``build_packages()`` writes one ``<package>.log`` per package. A
+        successful CI upload places those files here, outside ``python/``.
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/python")
+
     # -- Tarballs ---------------------------------------------------------------
 
     def tarballs(self) -> StorageLocation:
