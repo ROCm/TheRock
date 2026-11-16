@@ -1197,7 +1197,7 @@ test_matrix = {
     "hipthreads": {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
-        "timeout_minutes": 45,
+        "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("hipthreads/test/requirements-test.txt"),
         ],
@@ -1212,6 +1212,9 @@ test_matrix = {
                 # KNOWN FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
                 # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
                 "gfx125X-dcgpu",
+            ],
+            "windows": [
+                "gfx117X-all",
             ],
         },
     },
