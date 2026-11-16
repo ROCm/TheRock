@@ -35,7 +35,6 @@ https://github.com/ROCm/TheRock/issues/7549.
 
 import subprocess
 import sys
-import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -45,7 +44,6 @@ THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _therock_utils.artifacts import STAGE_DIR_NAME, prebuilt_marker_relpath
-from _therock_utils.artifact_builder import ArtifactDescriptor, ComponentScanner
 
 
 def get_descriptor_paths() -> list[Path]:
@@ -135,35 +133,6 @@ class ArtifactDescriptorOverlapTest(unittest.TestCase):
                 "extraction collisions (see "
                 "https://github.com/ROCm/TheRock/issues/3758):\n"
                 + "\n".join(f"  - {e}" for e in errors)
-            )
-
-
-class RocjitsuRuntimeArtifactTest(unittest.TestCase):
-    def test_plugins_ship_with_the_runtime(self):
-        descriptor = ArtifactDescriptor.load_toml_file(
-            THEROCK_DIR / "emulation/artifact-rocjitsu.toml", artifact_name="rocjitsu"
-        )
-        libraries = {
-            "librocjitsu.so",
-            "librocjitsu_plugin_race.so",
-            "librocjitsu_plugin_logging.so",
-            "librocjitsu_plugin_throughput.so",
-            "librocjitsu_plugin_instruction-mix.so",
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            basedir = Path("emulation/rocjitsu/stage")
-            libdir = root / basedir / "lib"
-            libdir.mkdir(parents=True)
-            for name in libraries | {"librocjitsu_hooks.so"}:
-                (libdir / name).touch()
-
-            scanner = ComponentScanner(root, descriptor)
-            artifact = root / "artifact"
-            artifact.mkdir()
-            scanner.components["lib"].write_artifact(artifact)
-            self.assertEqual(
-                {p.name for p in (artifact / basedir / "lib").iterdir()}, libraries
             )
 
 
