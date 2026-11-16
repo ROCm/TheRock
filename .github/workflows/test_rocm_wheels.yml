@@ -210,6 +210,9 @@ jobs:
         if: ${{ !cancelled() && steps.install_libraries.outcome == 'success' }}
         env:
           DEVICE_EXTRAS: ${{ steps.device_extras.outputs.device_extras }}
+          # Per-run indexes contain only ROCm builds. Add the cloudpickle
+          # project page for Linux artifact installs.
+          PIP_FIND_LINKS: ${{ runner.os == 'Linux' && inputs.package_index_url == '' && inputs.package_find_links_url != '' && 'https://pypi.org/simple/cloudpickle/' || '' }}
         run: |
           pkg="rocm[libraries,devel]"
           if [ -n "${DEVICE_EXTRAS}" ]; then
