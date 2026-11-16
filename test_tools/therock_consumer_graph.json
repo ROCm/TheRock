@@ -244,6 +244,9 @@
       "libhipcxx_tests"
     ]
   },
+  "libhipcxx_tests": {
+    "consumers": []
+  },
   "miopen": {
     "consumers": [
       "miopenprovider"
