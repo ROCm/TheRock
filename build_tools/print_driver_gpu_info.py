@@ -127,6 +127,23 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+def print_sysfs_firmware_versions() -> None:
+    """Print per-component firmware versions from /sys/class/drm/card*/device/fw_version/."""
+    log("\n=== sysfs firmware versions ===")
+    cards = sorted(Path("/sys/class/drm").glob("card*/device/fw_version"))
+    if not cards:
+        log("/sys/class/drm/card*/device/fw_version: not found")
+        return
+    for fw_dir in cards:
+        log(f"-- {fw_dir.parent.parent.name} ({fw_dir})")
+        for entry in sorted(fw_dir.iterdir()):
+            try:
+                value = entry.read_text().strip()
+            except OSError as e:
+                value = f"<read error: {e}>"
+            log(f"  {entry.name}: {value}")
+
+
 def run_sanity(os_name: str) -> int:
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -175,14 +192,18 @@ def run_sanity(os_name: str) -> int:
             extra_command_search_paths=[bin_dir],
         )
 
-        # Print loaded GPU firmware versions (useful for debugging hangs)
-        firmware_info = Path("/sys/kernel/debug/dri/0/amdgpu_firmware_info")
-        if firmware_info.exists():
-            log(f"\n=== amdgpu firmware info ===")
-            try:
-                log(firmware_info.read_text().rstrip())
-            except PermissionError:
-                log("(permission denied - need root/debugfs access)")
+        # Firmware versions for debugging hangs (TheRock#3199). sysfs works
+        # without debugfs and includes mes_fw_version / mes_kiq_fw_version.
+        print_sysfs_firmware_versions()
+        try:
+            run_command_with_search(
+                label="amd-smi firmware",
+                command="amd-smi",
+                args=["firmware"],
+                extra_command_search_paths=[bin_dir],
+            )
+        except subprocess.CalledProcessError as e:
+            log(f"amd-smi firmware failed (non-fatal): {e}")
 
         # WSL kernel releases look like "6.6.87.2-microsoft-standard-WSL2"
         # (containers share the host kernel).

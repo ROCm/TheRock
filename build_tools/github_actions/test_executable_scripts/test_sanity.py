@@ -18,12 +18,13 @@ env = os.environ.copy()
 # Note: test_component.yml defaults ROCM_KPACK_DEBUG to "1" (components may
 # override it via their test_matrix "rocm_kpack_debug" entry, and the general
 # THEROCK_CI_DEBUG mode forces it back on); sanity inherits "1".
-env["AMD_LOG_LEVEL"] = "4"
+env["AMD_LOG_LEVEL"] = "7"
 # Extra HIP/HSA diagnostics for debugging gfx1150 hang (TheRock#3199)
 env["HIP_TRACE_API"] = "1"
 env["HIP_LAUNCH_BLOCKING"] = "1"
 env["AMD_SERIALIZE_KERNEL"] = "3"
 env["AMD_SERIALIZE_COPY"] = "3"
+env["HSA_ENABLE_SDMA"] = "0"
 
 # The sanity checks run tools like 'offload-arch' which may search for DLLs on
 # multiple search paths (PATH, CWD, system32, etc.).
