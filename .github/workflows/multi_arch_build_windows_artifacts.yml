@@ -258,18 +258,18 @@ jobs:
       - name: Prepare Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: |
-          mkdir -p "${BUILD_DIR}/comgr-lsr-cost-revert"
+          mkdir -p "${BUILD_DIR}/comgr-regression-combination"
           cp "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.dll" \
              "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.pdb" \
              "${BUILD_DIR}/base/aux-overlay/build/therock_manifest.json" \
-             "${BUILD_DIR}/comgr-lsr-cost-revert/"
+             "${BUILD_DIR}/comgr-regression-combination/"
 
       - name: Upload Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: comgr-windows-x64-lsr-cost-revert
-          path: ${{ env.BUILD_DIR }}/comgr-lsr-cost-revert/
+          name: comgr-windows-x64-regression-combination
+          path: ${{ env.BUILD_DIR }}/comgr-regression-combination/
           if-no-files-found: error
 
       - name: Report
