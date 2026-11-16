@@ -114,13 +114,12 @@ def test_structured_key_composition() -> None:
     assert key == "v5/rocm/pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
 
 
-def test_structured_key_whl_next() -> None:
-    key = structured_key(
-        "pytorch", "whl-next", "torch-2.10.0-cp310-cp310-linux_x86_64.whl"
-    )
+@pytest.mark.parametrize("index", ["whl-next", "whl-next-asan"])
+def test_structured_key_whl_next(index: str) -> None:
+    key = structured_key("pytorch", index, "torch-2.10.0-cp310-cp310-linux_x86_64.whl")
     assert (
         key
-        == "v5/rocm/pytorch/whl-next/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
+        == f"v5/rocm/pytorch/{index}/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl"
     )
 
 
@@ -134,9 +133,10 @@ def test_structured_key_underscore_filename_dashed_dir() -> None:
     )
 
 
-def test_structured_key_rejects_bad_index() -> None:
+@pytest.mark.parametrize("index", ["", "whl/next", "..", "Whl-Next", "-whl"])
+def test_structured_key_rejects_bad_index(index: str) -> None:
     with pytest.raises(ValueError, match="index="):
-        structured_key("pytorch", "wheels", "torch-2.10.0.whl")
+        structured_key("pytorch", index, "torch-2.10.0.whl")
 
 
 # ---------------------------------------------------------------------------
