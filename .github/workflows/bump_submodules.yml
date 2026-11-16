@@ -6,6 +6,11 @@ name: Bump Submodule automation
 on:
   workflow_dispatch:
     inputs:
+      target_branch:
+        description: 'TheRock PR base: main, release/therock-*, or release/bkc/therock-* (for releases: "all" bumps systems and libraries only)'
+        required: false
+        default: 'main'
+        type: string
       submodule:
         description: 'Submodule to bump (default: all)'
         required: false
@@ -17,14 +22,6 @@ on:
           - rocm-libraries
           - rocgdb
           - mesa-fork
-      pin_before:
-        description: 'Pin-only replay: TheRock SHA before the submodule bump (leave empty for a normal bump)'
-        required: false
-        default: ''
-      pin_after:
-        description: 'Pin-only replay: TheRock SHA to pin the submodule CI to'
-        required: false
-        default: ''
   schedule:
     - cron: "0 */12 * * *" # Existing cadence: rocgdb and mesa-fork. UTC: 12AM/12PM; Eastern: 8PM/8AM; Pacific: 5PM/5AM.
     - cron: "0 7 * * *" # rocm-systems and rocm-libraries. UTC: 7AM; Eastern: 3AM; Pacific: 12AM.
@@ -49,6 +46,7 @@ jobs:
     # App tokens create and close PRs. GITHUB_TOKEN cancels runs on those PRs.
 
     env:
+      TARGET_BRANCH: ${{ inputs.target_branch || 'main' }}
       INPUT_SUBMODULE: ${{ github.event.inputs.submodule || 'all' }}
 
     steps:
@@ -75,12 +73,12 @@ jobs:
           echo "submodules=${submodules[*]}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
 
       - name: Generate GitHub App token rocm-systems
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: systems-token
         with:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
@@ -93,7 +91,7 @@ jobs:
           permission-workflows: write     # Update TheRock refs in upstream workflow files.
 
       - name: Generate GitHub App token rocm-libraries
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: librarian-token
         with:
           app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
@@ -107,7 +105,7 @@ jobs:
 
       - name: Install prerequisites
         run: |
-          pip install requests
+          pip install -r build_tools/github_actions/requirements-bump.txt
 
       # The script authenticates temporary clones and pushes with SYSTEMS_TOKEN or LIBRARIES_TOKEN
       # from the GitHub App token steps above; it does not use checkout credentials.
@@ -128,55 +126,21 @@ jobs:
               --mesa_token "${SYSTEMS_TOKEN}"
           done
 
-      # With pin_before/pin_after set, replays the push-event ref/pin update
-      # for one submodule without opening a new "Bump <submodule>" PR in
-      # TheRock (e.g. to apply a bump_automation.py fix to an already-landed
-      # bump). Otherwise runs a normal bump like the scheduled step.
       # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       - name: Run manually dispatched bump automation
         if: github.event_name == 'workflow_dispatch'
         env:
-          PIN_BEFORE: ${{ github.event.inputs.pin_before }}
-          PIN_AFTER: ${{ github.event.inputs.pin_after }}
           SYSTEMS_TOKEN: ${{ steps.systems-token.outputs.token }}
           LIBRARIES_TOKEN: ${{ steps.librarian-token.outputs.token }}
-          ACTIONS_TOKEN: ${{ github.token }}
         run: |
-          token_args=(
-            --systems_token "${SYSTEMS_TOKEN}"
-            --libraries_token "${LIBRARIES_TOKEN}"
-            --rocgdb_token "${SYSTEMS_TOKEN}"
-            --mesa_token "${SYSTEMS_TOKEN}"
-          )
-
-          if [[ -z "${PIN_BEFORE}" && -z "${PIN_AFTER}" ]]; then
-            python3 build_tools/github_actions/bump_automation.py \
-              --event_type "schedule" \
-              --submodule "${INPUT_SUBMODULE}" \
-              "${token_args[@]}"
-            exit 0
-          fi
-
-          # Lowercase only: bump_automation.py matches existing pins with a
-          # lowercase SHA regex, so an uppercase pin would never be updated.
-          sha_re='^[0-9a-f]{40}$'
-          if [[ ! "${PIN_BEFORE}" =~ ${sha_re} || ! "${PIN_AFTER}" =~ ${sha_re} ]]; then
-            echo "::error::pin_before and pin_after must both be full 40-character lowercase commit SHAs (got pin_before='${PIN_BEFORE}' pin_after='${PIN_AFTER}')."
-            exit 1
-          fi
-          if [[ "${INPUT_SUBMODULE}" == "all" ]]; then
-            echo "::error::submodule must name one specific submodule (not 'all') when pin_before/pin_after are set."
-            exit 1
-          fi
-
           python3 build_tools/github_actions/bump_automation.py \
-            --event_type "push" \
-            --before "${PIN_BEFORE}" \
-            --after "${PIN_AFTER}" \
-            --only-submodule "${INPUT_SUBMODULE}" \
-            --skip-next-bump \
-            --actions_token "${ACTIONS_TOKEN}" \
-            "${token_args[@]}"
+            --event_type "workflow_dispatch" \
+            --target_branch "${TARGET_BRANCH}" \
+            --submodule "${INPUT_SUBMODULE}" \
+            --systems_token "${SYSTEMS_TOKEN}" \
+            --libraries_token "${LIBRARIES_TOKEN}" \
+            --rocgdb_token "${SYSTEMS_TOKEN}" \
+            --mesa_token "${SYSTEMS_TOKEN}"
 
       # Temporary clones and pushes use SYSTEMS_TOKEN or LIBRARIES_TOKEN from the App token steps.
       # ACTIONS_TOKEN is the workflow GITHUB_TOKEN (actions: write) and only cancels runs.

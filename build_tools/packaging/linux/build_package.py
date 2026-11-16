@@ -35,7 +35,6 @@ create RPM and DEB packages and upload to artifactory server
 """
 
 import argparse
-import json
 import os
 import shutil
 import sys
@@ -79,21 +78,6 @@ class BuildTask(NamedTuple):
     logs_dir: Path
 
 
-def load_kpack_from_manifest(artifacts_dir: Path) -> bool:
-    """Detect kpack mode by scanning therock_manifest.json files in artifact directory.
-
-    Returns True if any manifest has KPACK_SPLIT_ARTIFACTS set to True.
-    """
-    for manifest_path in artifacts_dir.rglob("therock_manifest.json"):
-        try:
-            manifest = json.loads(manifest_path.read_text())
-            if manifest.get("flags", {}).get("KPACK_SPLIT_ARTIFACTS", False):
-                return True
-        except (json.JSONDecodeError, OSError):
-            pass
-    return False
-
-
 def get_all_target_families(artifact_dir):
     """Extract the list of GFX architectures from artifact directory.
 
@@ -124,12 +108,11 @@ def get_all_target_families(artifact_dir):
 
 ################### Package Variant Builders #######################
 def build_package_variants(pkg_name, config: PackageConfig) -> list:
-    """Build all required package variants based on package type and mode.
+    """Build all required package variants based on package type.
 
     This is the main entry point for building packages. It determines which
     variants to build based on:
     - Whether the package is a gfxarch package (GfxArch=True/False)
-    - Whether kpack mode is enabled
     - Package type (DEB/RPM)
 
     Parameters:
@@ -144,32 +127,24 @@ def build_package_variants(pkg_name, config: PackageConfig) -> list:
             - Versioned package (e.g., amdrocm-core8.2)
             - Non-versioned package (e.g., amdrocm-core)
 
-        For GfxArch=True (gfxarch packages) in kpack mode (multi-arch):
+        For GfxArch=True (gfxarch packages):
             - Host package (e.g., amdrocm-fft-host8.2)
             - Device packages (e.g., amdrocm-fft8.2-gfx1100, amdrocm-fft8.2-gfx94x)
             - Meta package (e.g., amdrocm-fft8.2)
             - Non-versioned package (e.g., amdrocm-fft)
-
-        For GfxArch=True (gfxarch packages) in single-arch mode:
-            - Versioned package with arch suffix (e.g., amdrocm-fft8.2-gfx1100)
-            - Non-versioned package with arch suffix (e.g., amdrocm-fft-gfx1100)
     """
     pkg_info = get_package_info(pkg_name)  # Raises ValueError if not found
 
-    if config.enable_kpack:
-        if is_gfxarch_package(pkg_info, config.enable_kpack, config.artifacts_dir):
-            # GfxArch=True: host + devices + meta + non-versioned
-            return build_gfxarch_package_variants(pkg_name, config)
-        else:
-            # GfxArch=False: versioned + non-versioned
-            return build_simple_package_variants(pkg_name, config)
+    if is_gfxarch_package(pkg_info, config.artifacts_dir):
+        # GfxArch=True: host + devices + versioned (meta) + non-versioned
+        return build_gfxarch_package_variants(pkg_name, config)
     else:
-        # Single-arch mode
-        return build_singlearch_package_variants(pkg_name, config)
+        # GfxArch=False: versioned + non-versioned
+        return build_simple_package_variants(pkg_name, config)
 
 
 def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
-    """Build all variants for a gfxarch package in kpack mode (multi-arch).
+    """Build all variants for a gfxarch package.
 
     For regular gfxarch packages (Metapackage=False), creates:
     - Host package (e.g., amdrocm-fft-host8.2) - generic artifacts
@@ -223,7 +198,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
     # Non-versioned package (user-facing, depends on meta)
     logger.info(f"Building non-versioned variant for {pkg_name}")
-    # For gfxarch packages in kpack mode, non-versioned has no arch suffix (e.g., amdrocm-fft)
+    # For gfxarch packages, non-versioned has no arch suffix (e.g., amdrocm-fft)
     # It depends on the meta package which pulls in host + all devices
     meta_config = replace(config, gfx_arch=GFX_META)
     pkg = build_nonversioned_package(pkg_name, meta_config)
@@ -234,7 +209,7 @@ def build_gfxarch_package_variants(pkg_name, config: PackageConfig) -> list:
 
 
 def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
-    """Build variants for a non-gfxarch package in kpack mode.
+    """Build variants for a non-gfxarch package.
 
     Creates:
     - Versioned package (e.g., amdrocm-core8.2)
@@ -262,56 +237,6 @@ def build_simple_package_variants(pkg_name, config: PackageConfig) -> list:
     pkg = build_nonversioned_package(pkg_name, simple_config)
     if pkg:
         built_packages.extend(pkg)
-
-    return built_packages
-
-
-def build_singlearch_package_variants(pkg_name, config: PackageConfig) -> list:
-    """Build package variants in single-arch mode (non-kpack).
-
-    Creates:
-    - Versioned package (e.g., amdrocm-core8.2 or amdrocm-fft8.2-gfx1100 for gfxarch packages)
-    - Non-versioned package (e.g., amdrocm-core or amdrocm-fft-gfx1100 for gfxarch packages)
-
-    In single-arch mode, gfxarch packages include the arch suffix in both variants
-    because they're specific to that architecture.
-
-    Parameters:
-        pkg_name: Name of the package to build
-        config: Configuration object
-
-    Returns:
-        List of built package filenames
-    """
-    built_packages = []
-
-    # Versioned package
-    logger.info(f"Building versioned package for {pkg_name} (single-arch mode)")
-    try:
-        versioned_config = replace(config, versioned_pkg=True)
-        if versioned_config.pkg_type == "rpm":
-            pkg = create_versioned_rpm_package(pkg_name, versioned_config)
-        else:
-            pkg = create_versioned_deb_package(pkg_name, versioned_config)
-        if pkg:
-            built_packages.extend(pkg)
-    except Exception as e:
-        logger.error(f"Failed to build versioned package for {pkg_name}: {e}")
-
-    # Non-versioned package
-    logger.info(f"Building non-versioned package for {pkg_name} (single-arch mode)")
-    try:
-        # In single-arch mode, non-versioned packages keep the arch suffix
-        # to indicate they're specific to that architecture (e.g., amdrocm-fft-gfx1100)
-        nonversioned_config = replace(config, versioned_pkg=False)
-        if nonversioned_config.pkg_type == "rpm":
-            pkg = create_nonversioned_rpm_package(pkg_name, nonversioned_config)
-        else:
-            pkg = create_nonversioned_deb_package(pkg_name, nonversioned_config)
-        if pkg:
-            built_packages.extend(pkg)
-    except Exception as e:
-        logger.error(f"Failed to build non-versioned package for {pkg_name}: {e}")
 
     return built_packages
 
@@ -424,9 +349,8 @@ def build_nonversioned_package(pkg_name, config: PackageConfig) -> list:
     it depends on the versioned package (e.g., amdrocm-fft -> amdrocm-fft8.2).
 
     IMPORTANT: Caller must set config.gfx_arch appropriately before calling:
-    - GFX_META for gfxarch packages in kpack mode (e.g., "amdrocm-fft")
-    - "" (empty string) for non-gfxarch packages in any mode (e.g., "amdrocm-core")
-    - Actual arch (e.g., "gfx1100") for gfxarch packages in single-arch mode (e.g., "amdrocm-fft-gfx1100")
+    - GFX_META for gfxarch packages (e.g., "amdrocm-fft")
+    - "" (empty string) for non-gfxarch packages (e.g., "amdrocm-core")
 
     Parameters:
         pkg_name: Name of the package to build
@@ -559,28 +483,12 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
             targets_str = ",".join(normalized_targets)
             f.write(f"PACKAGING_ARCH_LIST={targets_str}\n")
 
-    # Auto-detect kpack from manifest if not explicitly requested via --enable-kpack
-    artifacts_dir = Path(args.artifacts_dir).resolve()
-    if not args.enable_kpack:
-        args.enable_kpack = load_kpack_from_manifest(artifacts_dir)
-        if args.enable_kpack:
-            logger.info(
-                "Detected KPACK_SPLIT_ARTIFACTS in manifest — producing host + device packages"
-            )
-
-    # Configure architecture based on multi-arch mode
-    if args.enable_kpack:
-        # Multi-arch: Build host + device + meta packages for each target
-        # Example: amdrocm-fft-host8.2 + amdrocm-fft8.2-gfx94x + amdrocm-fft8.2 (meta)
-        # For non-gfxarch packages: use empty string (no arch variants, just versioned + non-versioned)
-        # For gfxarch packages: variant builders will set GFX_HOST, GFX_META, or device arch
-        default_gfx_arch = ""  # Default used for non-gfxarch packages
-        gfxarch_list = normalized_targets
-    else:
-        # Single-arch: Build only one package for the specified target
-        # Example: amdrocm-fft8.2-gfx94x (no host, no other variants)
-        default_gfx_arch = normalized_targets[0] if normalized_targets else ""
-        gfxarch_list = []
+    # Build host + device + meta packages for each target
+    # Example: amdrocm-fft-host8.2 + amdrocm-fft8.2-gfx94x + amdrocm-fft8.2 (meta)
+    # For non-gfxarch packages: use empty string (no arch variants, just versioned + non-versioned)
+    # For gfxarch packages: variant builders will set GFX_HOST, GFX_META, or device arch
+    default_gfx_arch = ""  # Default used for non-gfxarch packages
+    gfxarch_list = normalized_targets
 
     # Parse version for install prefix (major.minor)
     parts = args.rocm_version.split(".")
@@ -620,7 +528,6 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         version_suffix=args.version_suffix,
         install_prefix=prefix,
         gfx_arch=default_gfx_arch,
-        enable_kpack=args.enable_kpack,
         gfxarch_list=tuple(gfxarch_list),
         build_variant=args.build_variant,
     )
@@ -806,12 +713,6 @@ def main(argv: list[str]):
         "--runpath-pkg",
         action="store_true",
         help="Keep RUNPATH in binaries (by default, RUNPATH is converted to RPATH)",
-    )
-
-    p.add_argument(
-        "--enable-kpack",
-        action="store_true",
-        help="Enable multi-architecture package generation",
     )
 
     p.add_argument(

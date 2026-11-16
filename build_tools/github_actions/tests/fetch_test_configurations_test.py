@@ -489,10 +489,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
 
-    def test_miopen_dbsync_declares_gfx950_advisory(self):
-        # The matrix entry itself says gfx950 is advisory -- no conditional elsewhere.
+    def test_miopen_dbsync_declares_no_advisory_families(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["expect_failure"]["linux"], ["gfx950"])
+        self.assertNotIn("expect_failure", config)
 
     def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
@@ -500,17 +499,62 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertTrue(job["linux_cpu_runner"])
         self.assertTrue(job["test_runner"])
 
-    def test_miopen_dbsync_gfx950_is_advisory(self):
+    def test_miopen_dbsync_gfx950_is_blocking(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
-        self.assertTrue(job["expect_failure"])
+        self.assertIsNotNone(job)
+        self.assertFalse(job.get("expect_failure"))
 
     def test_miopen_dbsync_gfx942_stays_blocking(self):
         job = self._dbsync_job("gfx94X-dcgpu", False, "gfx942")
         self.assertIsNotNone(job)
-        self.assertFalse(job["expect_failure"])
+        self.assertFalse(job.get("expect_failure"))
 
     def test_miopen_dbsync_excluded_on_other_families(self):
         self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
+
+    def test_miopen_dbsync_not_scheduled_on_asan_builds(self):
+        # StaticFDBSync is compiled out under ASAN, so the job must not be scheduled.
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            for families, gfx_target in (
+                ("gfx94X-dcgpu", "gfx942"),
+                ("gfx950-dcgpu", "gfx950"),
+            ):
+                with self.subTest(build_variant=build_variant, families=families):
+                    os.environ["BUILD_VARIANT"] = build_variant
+                    self.assertIsNone(self._dbsync_job(families, False, gfx_target))
+
+    def test_miopen_dbsync_still_scheduled_on_non_asan_builds(self):
+        for build_variant in (None, "release", "tsan"):
+            with self.subTest(build_variant=build_variant):
+                if build_variant is None:
+                    os.environ.pop("BUILD_VARIANT", None)
+                else:
+                    os.environ["BUILD_VARIANT"] = build_variant
+                self.assertIsNotNone(self._dbsync_job("gfx94X-dcgpu", False, "gfx942"))
+
+    def test_skip_build_variant_only_drops_listed_variants(self):
+        self._inject_job("asan-incompatible", skip_build_variant=["asan"])
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertNotIn("asan-incompatible", self._selected_names())
+        os.environ["BUILD_VARIANT"] = "release"
+        self.assertIn("asan-incompatible", self._selected_names())
+
+    def test_skip_build_variant_is_an_exact_match(self):
+        self._inject_job("asan-only-listed", skip_build_variant=["asan"])
+        os.environ["BUILD_VARIANT"] = "host-asan"
+        self.assertIn("asan-only-listed", self._selected_names())
+
+    def test_asan_build_still_schedules_unflagged_components(self):
+        self._inject_job("asan-compatible")
+        os.environ["BUILD_VARIANT"] = "asan"
+        self.assertIn("asan-compatible", self._selected_names())
+
+    def test_asan_build_with_project_filter_keeps_only_unflagged_components(self):
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync,rocblas"
+        os.environ["BUILD_VARIANT"] = "asan"
+        names = self._selected_names()
+        self.assertIn("rocblas", names)
+        self.assertNotIn("miopen-dbsync", names)
 
     def test_gpu_components_not_scheduled_on_gated_gfx950(self):
         # The CPU lane must not leak GPU-requiring components onto gated gfx950.

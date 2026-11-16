@@ -17,12 +17,17 @@ The CI pipelines test a growing set of GPU targets depending on trigger type/fre
 CI runs on pull requests if modified files pass the filters in
 [`configure_ci_path_filters.py`](../../build_tools/github_actions/configure_ci_path_filters.py).
 
+Builds and tests are skipped on **draft** pull requests. See
+[Draft pull requests](#draft-pull-requests).
+
 The following labels may be added to a pull request to modify CI behavior:
 
 | Label or group             | Description                                                                                                                                                                                       |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci:skip`                  | Skip all builds and tests                                                                                                                                                                         |
+| `ci:run-on-draft`          | Run builds and tests on a draft pull request. See [Draft pull requests](#draft-pull-requests).                                                                                                    |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
+| `ci:exactly`               | Build and test only the architectures named by the `ci:gfx...` labels, dropping the defaults. See [Running exactly the architectures you label](#running-exactly-the-architectures-you-label).    |
 | `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
 | `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
@@ -43,10 +48,37 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:skip-native-windows`   | Skip native Windows package builds.                                                                                                                                                               |
 | `ci:build-python-packages` | Opt-in to building Python packages.                                                                                                                                                               |
 | `ci:skip-python-packages`  | Skip Python package builds.                                                                                                                                                                       |
+| `ci:skip-rocm`             | Skip ROCm builds and tests; use published ROCm packages for frameworks. See [Building frameworks with published ROCm](#building-frameworks-with-published-rocm).                                  |
 | `ci:build-pytorch`         | Opt-in to building PyTorch packages.                                                                                                                                                              |
 | `ci:skip-pytorch`          | Skip PyTorch package builds.                                                                                                                                                                      |
 | `ci:build-jax`             | Opt-in to building JAX packages.                                                                                                                                                                  |
 | `ci:skip-jax`              | Skip JAX package builds.                                                                                                                                                                          |
+
+#### Draft pull requests
+
+Multi-Arch CI skips builds and tests on draft pull requests. A draft is usually
+not ready for review, and every push to one would otherwise cost a full CI run
+(builds plus GPU test time). The setup job still runs, logs why CI was skipped,
+and reports the reason in the job summary, so required status checks still pass.
+
+To get CI signal on a draft:
+
+- **Mark the pull request ready for review.** CI starts immediately — no new
+  push is needed.
+- **Add the `ci:run-on-draft` label.** CI starts immediately (the workflows
+  trigger on `labeled`) and keeps running on every subsequent push while the
+  pull request stays a draft.
+
+If a pull request has both `ci:skip` and `ci:run-on-draft`, `ci:skip` wins and
+nothing runs.
+
+Converting a pull request back to draft also triggers the workflows, so any
+in-flight build and test is cancelled instead of finishing a run nobody is
+waiting on. With `ci:run-on-draft` present the new run builds and tests again
+rather than skipping, so remove that label first if you only want to stop the
+run.
+
+`push`, `schedule`, and `workflow_dispatch` runs are unaffected.
 
 #### Build/Test-specific architecture labels
 
@@ -79,6 +111,57 @@ standard `ci:gfx...` labels.
 > The `ci:test:gfx...` label will only enable tests if test hardware is available
 > for that architecture. If no test runner exists for the family, the label is
 > ignored with a warning.
+
+#### Running exactly the architectures you label
+
+The architecture labels above _add to_ the default presubmit families. Add
+`ci:exactly` to drop those defaults, making the `ci:gfx...`, `ci:build:gfx...`,
+and `ci:test:gfx...` labels the complete architecture selection.
+
+| Labels                                             | Result                                 |
+| -------------------------------------------------- | -------------------------------------- |
+| `ci:gfx950`                                        | Presubmit families **plus** gfx950     |
+| `ci:exactly` + `ci:gfx950`                         | gfx950 only                            |
+| `ci:exactly` + `ci:build:gfx950`                   | gfx950 only, no tests                  |
+| `ci:exactly` + `ci:gfx950` + `ci:gfx94x`           | gfx950 and gfx94x only                 |
+| `ci:exactly` + `ci:run-all-archs`                  | All architectures                      |
+| `ci:exactly` (alone)                               | **Error**: no architecture would build |
+| `ci:exactly` + `ci:test:gfx950`                    | **Error**: no build label              |
+| `ci:exactly` + `ci:gfx94x` + `ci:platform:windows` | **Error**: gfx94x has no Windows build |
+
+Only the architecture selection is narrowed. Package builds, `test:...`,
+`test_filter:...`, and `ci:platform:...` keep their usual meaning. `ci:exactly`
+also works on `workflow_dispatch` through the `pr_labels` input, where it drops
+the caller-supplied `linux_amdgpu_families` / `windows_amdgpu_families`.
+
+#### Building frameworks with published ROCm
+
+When CI-relevant changes are confined to PyTorch or JAX files, CI can skip ROCm
+builds and use published ROCm packages. Ownership is listed under `[job_paths]`
+in [`skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml).
+
+Explicit labels override automatic selection:
+
+- Use `ci:skip-rocm` with `ci:build-pytorch` or `ci:build-jax` (or both) to
+  build frameworks using the latest nightly ROCm packages.
+- Use `ci:skip-pytorch` or `ci:skip-jax` to disable a framework that the
+  workflow enables by default.
+
+> [!NOTE]
+> Automatic use of published packages is disabled by:
+>
+> - Build variants other than `release`, until ROCm releases include Python
+>   packages for other build variants (see
+>   https://github.com/ROCm/TheRock/issues/3161 for example).
+> - `ci:build-python-packages`, `ci:build-native-linux`, or
+>   `ci:build-native-windows` labels, which request ROCm packaging jobs.
+> - Nonempty `build_stages`, `prebuilt_stages`, or `baseline_run_id` inputs,
+>   which request specific stage builds or artifact reuse.
+> - An `external_repo` input, whose changes are treated as ROCm changes.
+
+See
+[ci_overview.md - "Skipping ROCm builds for Framework-only CI runs"](ci_overview.md#skipping-rocm-builds-for-framework-only-ci-runs)
+for more details.
 
 ### Push
 

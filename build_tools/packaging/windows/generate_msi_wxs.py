@@ -222,7 +222,7 @@ def fetch_artifacts(
     # rest so the fetch stays small. Additional components can be pulled in once
     # more MSI packages are scoped.
     exclude_components = sorted(
-        {"run", "dev", "dbg", "doc", "test"} - PACKAGE_COMPONENTS
+        {"run", "dev", "dbg", "sys", "doc", "test"} - PACKAGE_COMPONENTS
     )
     cmd = [
         sys.executable,

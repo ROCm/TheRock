@@ -1,6 +1,7 @@
 """Regression tests for external-repository workflow changes."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build_tools.github_actions import configure_external_repo_ci as ci
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+import configure_external_repo_ci as ci
 
 WORKFLOW = ".github/workflows/therock-multi-arch-ci-nightly.yml"
 

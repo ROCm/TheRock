@@ -9,8 +9,8 @@ exclude = [
   "bin/*oclgl*",
   "bin/*oclperf*",
   "bin/*oclruntime*",
-]
-include = [
+  # System config files (ld.so.conf.d, OpenCL ICD) belong to 'sys'. This also
+  # keeps the "ld.so.conf.d" directory name from matching "**/*.so.*".
   "etc/**",
 ]
 [components.run."core/ocl-clr/stage"]
@@ -34,6 +34,7 @@ exclude = [
   "lib/hsakmt-staticdrm.lib",
   "lib/wkmi.lib",
 ]
+[components.sys."core/ocl-clr/stage"]
 [components.doc."core/ocl-clr/stage"]
 exclude = [
   "share/doc/rocr/**",

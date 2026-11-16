@@ -20,6 +20,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LIBLZMA_VERSION "${CMAKE_MATCH_1}")
 
     therock_cmake_subproject_declare(therock-liblzma
+      HARDENING_DEFERRED "liblzma (CMake)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"

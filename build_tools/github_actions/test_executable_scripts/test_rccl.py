@@ -28,24 +28,34 @@ def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
         check=False,
     )
 
-    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+(?:-strict)?$", re.IGNORECASE)
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
+
+def _rccl_test_env() -> dict[str, str]:
+    """Returns the environment for RCCL tests, pinned to a fixed pair of GPUs.
+
+    Skips the calling test if fewer than 2 GPUs are visible, since RCCL
+    collectives need at least two ranks.
+    """
+    environ_vars = os.environ.copy()
+    gpu_count = _get_visible_gpu_count(
+        env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR
+    )
+    logging.info(f"Visible GPU count: {gpu_count}")
+
+    if gpu_count < 2:
+        pytest.skip("Skipping RCCL tests: <2 GPUs visible")
+    environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
+    return environ_vars
 
 
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
-        environ_vars = os.environ.copy()
-        # Expect at least 2 GPUs for RCCL collectives
-        gpu_count = _get_visible_gpu_count(
-            env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR
-        )
-        logging.info(f"Visible GPU count: {gpu_count}")
-
-        if gpu_count < 2:
-            pytest.skip("Skipping RCCL unit tests: <2 GPUs visible")
-        environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
+        environ_vars = _rccl_test_env()
+        # The UT_* knobs are only read by rccl-UnitTests.
         environ_vars["UT_MIN_GPUS"] = "2"
         environ_vars["UT_MAX_GPUS"] = "2"
         environ_vars["UT_POW2_GPUS"] = "1"
@@ -73,11 +83,16 @@ class TestRCCL:
         ],
     )
     def test_rccl_correctness_tests(self, executable):
-        cmd = [f"{THEROCK_BIN_DIR}/{executable}"]
+        environ_vars = _rccl_test_env()
+        # -g sets the number of GPUs per thread. It defaults to 1, which would
+        # make each collective a single-rank no-op, so pass 2 to match the pair
+        # pinned by HIP_VISIBLE_DEVICES.
+        cmd = [f"{THEROCK_BIN_DIR}/{executable}", "-g", "2"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
             cmd,
             cwd=THEROCK_DIR,
             check=False,
+            env=environ_vars,
         )
         assert result.returncode == 0

@@ -6,7 +6,9 @@ Produces human-readable markdown explaining what CI will do and why.
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
+    RUN_ON_DRAFT_LABEL,
 )
+import json
 from pathlib import Path
 import sys
 
@@ -39,11 +41,27 @@ def format_summary(
     if not outputs.jobs:
         return "\n".join(lines)
 
-    # One-liner: trigger, branch, variant
     lines.append(
         f"Trigger: `{ci_inputs.event_name}` on `{ci_inputs.commit_ref}`, "
         f"`{ci_inputs.build_variant}` variant."
     )
+    lines.append("")
+    source = "Source: TheRock"
+    if ci_inputs.checkout_commit:
+        commit = ci_inputs.checkout_commit
+        source = (
+            f"Source: [ROCm/TheRock@{commit[:7]}]"
+            f"(https://github.com/ROCm/TheRock/commit/{commit})"
+        )
+    if ci_inputs.external_repo:
+        external_repo = json.loads(ci_inputs.external_repo)
+        repository = external_repo["repository"]
+        commit = external_repo["ref"]
+        source += (
+            f" with submodule override [{repository}@{commit[:7]}]"
+            f"(https://github.com/{repository}/commit/{commit})"
+        )
+    lines.append(f"{source}.")
     lines.append("")
 
     # Nothing to build (e.g. workflow_dispatch with no families selected)
@@ -83,6 +101,12 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
+    elif ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+        reason = (
+            "this pull request is a draft. Add the "
+            f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
+            "review to run builds and tests"
+        )
     else:
         reason = "no CI-relevant files changed"
 
@@ -147,12 +171,11 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
 def _append_build_rocm(
     lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
 ) -> None:
-    # Note: this assumes that the build_rocm job is never skipped.
-    # We may decide to skip it under certain conditions in the future
-    # (e.g. only editing pytorch-related files, no ROCm-related files).
-    # This code will need to adapt then.
-
     jobs = outputs.jobs
+    if jobs.build_rocm.action.value == "skip":
+        lines.append("ROCm builds, artifact copying, and Python packaging are skipped.")
+        lines.append("")
+        return
 
     # Prebuilt info
     prebuilt = jobs.build_rocm.prebuilt_stages
@@ -235,12 +258,15 @@ def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("|----------|--------|-------------|----------|")
 
     rows = 0
+    package_index_url = ""
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
     ]:
         if config is None:
             continue
+        if config.pytorch_build_matrix:
+            package_index_url = config.rocm_package_index_url
         for row in config.pytorch_build_matrix:
             families = ", ".join(
                 f"`{family}`" for family in row["amdgpu_families"].split(";")
@@ -254,6 +280,9 @@ def _append_build_pytorch(lines: list[str], outputs: CIOutputs) -> None:
     if rows == 0:
         lines.append("| — | — | — | — |")
     lines.append("")
+    if package_index_url:
+        lines.append(f"Building PyTorch using ROCm packages from {package_index_url}.")
+        lines.append("")
 
 
 def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
@@ -261,12 +290,15 @@ def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
     lines.append("|----------|--------|---------|------------|----------|")
 
     rows = 0
+    package_index_url = ""
     for platform, config in [
         ("Linux", outputs.builds.linux),
         ("Windows", outputs.builds.windows),
     ]:
         if config is None:
             continue
+        if config.jax_build_matrix:
+            package_index_url = config.rocm_package_index_url
         for row in config.jax_build_matrix:
             gfx_arch = row["gfx_arch"] or "—"
             lines.append(
@@ -278,16 +310,18 @@ def _append_build_jax(lines: list[str], outputs: CIOutputs) -> None:
     if rows == 0:
         lines.append("| — | — | — | — | — |")
     lines.append("")
+    if package_index_url:
+        lines.append(f"Building JAX using ROCm packages from {package_index_url}.")
+        lines.append("")
 
 
 def _append_test_rocm(lines: list[str], outputs: CIOutputs) -> None:
-    # Note: this assumes that the test_rocm job is never skipped.
-    # We may decide to skip it under certain conditions in the future
-    # (e.g. only editing pytorch-related files, no ROCm-related files).
-    # This code will need to adapt then.
-
     jobs = outputs.jobs
     test_rocm = jobs.test_rocm
+    if test_rocm.action.value == "skip":
+        lines.append("ROCm tests are skipped.")
+        lines.append("")
+        return
 
     lines.append(
         f"Test level: **{test_rocm.test_type}** ({test_rocm.test_type_reason})"

@@ -19,11 +19,13 @@ Public API:
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
+    get_jobs_for_changes() - Identify job groups directly affected by changed paths
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
 
 import fnmatch
+from functools import cache
 import os
 from pathlib import Path
 import re
@@ -187,17 +189,17 @@ def load_skip_ci_config(
     return patterns, ci_filenames
 
 
-# Cached config loaded at module import time for TheRock
-_cached_skip_patterns: Optional[list[str]] = None
-_cached_ci_workflow_filenames: Optional[set[str]] = None
-
-
+@cache
 def _get_therock_config() -> tuple[list[str], set[str]]:
-    """Get TheRock's skip-CI config, loading and caching on first access."""
-    global _cached_skip_patterns, _cached_ci_workflow_filenames
-    if _cached_skip_patterns is None:
-        _cached_skip_patterns, _cached_ci_workflow_filenames = load_skip_ci_config()
-    return _cached_skip_patterns, _cached_ci_workflow_filenames or set()
+    """Get TheRock's skip-CI config, cached on first access."""
+    return load_skip_ci_config()
+
+
+@cache
+def _get_job_paths() -> dict[str, list[str]]:
+    """Get TheRock's job ownership patterns, cached on first access."""
+    config = _load_toml_file(_THEROCK_CONFIG_PATH)
+    return config.get("job_paths", {}) if config else {}
 
 
 # Default path where external repo config is checked out in setup_multi_arch.yml
@@ -387,51 +389,65 @@ def is_ci_run_required(
         # TheRock: load from TOML configs
         effective_patterns, ci_workflow_filenames = _get_therock_config()
 
-    def is_skippable(path: str) -> bool:
-        return _is_path_skippable_for_patterns(path, effective_patterns)
-
-    # For TheRock, also check CI workflow files
-    if ci_workflow_filenames:
-        github_workflows_paths = [
-            p for p in paths_list if p.startswith(".github/workflows")
-        ]
-        other_paths = [p for p in paths_list if not p.startswith(".github/workflows")]
-
-        related_to_ci = _check_for_workflow_file_related_to_ci(
-            github_workflows_paths, ci_workflow_filenames
+    def is_relevant(path: str) -> bool:
+        return not _is_path_unrelated_to_ci(
+            path, effective_patterns, ci_workflow_filenames
         )
-        contains_non_skippable = any(not is_skippable(p) for p in other_paths)
 
-        print(f"{label}is_ci_run_required findings:")
-        print(f"  related_to_ci: {related_to_ci}")
-        print(f"  contains_non_skippable: {contains_non_skippable}")
-
-        if related_to_ci:
-            print(f"{label}CI required: CI-related workflow file modified")
-            return True
-        elif contains_non_skippable:
-            print(f"{label}CI required: non-skippable file modified")
-            return True
-        else:
-            print(f"{label}All files skippable, CI can be skipped")
-            return False
-
-    # External repo case (or TheRock without ci_workflows): just check against skip_patterns
-    non_skippable = [f for f in paths_list if not is_skippable(f)]
+    relevant_paths = [path for path in paths_list if is_relevant(path)]
 
     print(f"{label}Evaluating {len(paths_list)} changed file(s):")
     for f in paths_list[:10]:
-        skippable = is_skippable(f)
-        print(f"  {'[skip]' if skippable else '[ci]  '} {f}")
+        print(f"  {'[ci]  ' if is_relevant(f) else '[skip]'} {f}")
     if len(paths_list) > 10:
         print(f"  ... and {len(paths_list) - 10} more")
 
-    if non_skippable:
-        print(f"{label}CI required: {len(non_skippable)} non-skippable file(s)")
+    if relevant_paths:
+        print(f"{label}CI required: {len(relevant_paths)} CI-relevant file(s)")
         return True
     else:
         print(f"{label}All files skippable, CI can be skipped")
         return False
+
+
+def get_jobs_for_changes(paths: Iterable[str] | None) -> set[str]:
+    """Return job groups directly affected by CI-relevant changes.
+
+    Job names come from [job_paths] in skip-ci-config.toml: pytorch, jax,
+    rocm_python, rocm_native_linux, and rocm_native_windows. Unmapped,
+    CI-relevant paths add rocm. Matches accumulate across paths, for example:
+
+    * {"pytorch"}: only PyTorch-owned paths are relevant to CI.
+    * {"pytorch", "jax"}: both frameworks are directly affected.
+    * {"pytorch", "rocm"}: PyTorch and shared ROCm paths changed.
+    * {"rocm_python"}: only ROCm Python packaging paths changed.
+    * set(): no paths changed, or all changed paths are unrelated to this CI.
+
+    If paths is None (diff unavailable), return all configured groups plus rocm
+    conservatively. These are direct impacts, not the full set of jobs to run;
+    dependency requirements, downstream coverage, and overrides are handled by
+    job selection.
+    """
+    job_paths = _get_job_paths()
+    if paths is None:
+        return {"rocm", *job_paths}
+
+    skip_patterns, ci_workflow_filenames = _get_therock_config()
+    jobs: set[str] = set()
+    for path in paths:
+        if _is_path_unrelated_to_ci(path, skip_patterns, ci_workflow_filenames):
+            continue
+
+        affected = {
+            job
+            for job, patterns in job_paths.items()
+            if any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+        }
+        if affected:
+            jobs.update(affected)
+        else:
+            jobs.add("rocm")
+    return jobs
 
 
 def get_ci_workflow_filenames() -> set[str]:
@@ -623,21 +639,19 @@ def _get_pr_files_via_api(
 # ============================================================================
 
 
-def _is_path_skippable_for_patterns(path: str, patterns: list[str]) -> bool:
-    """Checks if a file path matches any of the provided skippable patterns."""
-    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
-
-
-def _check_for_workflow_file_related_to_ci(
-    paths: Optional[Iterable[str]], ci_workflow_filenames: set[str]
+def _is_path_unrelated_to_ci(
+    path: str, skip_patterns: list[str], ci_workflow_filenames: set[str]
 ) -> bool:
-    """Checks if any path in the collection is a CI-related workflow file.
+    """Check skip patterns and exclude workflows outside the CI allowlist.
 
-    Returns True if at least one path matches a CI workflow pattern.
+    An empty allowlist disables this exclusion, as used by external repositories
+    or when the allowlist is unavailable.
     """
-    if paths is None:
-        return False
-    return any(Path(p).name in ci_workflow_filenames for p in paths)
+    return any(fnmatch.fnmatch(path, pattern) for pattern in skip_patterns) or (
+        bool(ci_workflow_filenames)
+        and path.startswith(".github/workflows/")
+        and Path(path).name not in ci_workflow_filenames
+    )
 
 
 def get_changed_files_for_external_repo(
