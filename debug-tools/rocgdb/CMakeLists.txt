@@ -1051,6 +1051,34 @@ if(BUILD_TESTING)
     )
   endforeach()
 
+  if(WIN32)
+    # rocgdb.exe may import only the versioned amd-dbgapi DLL, our private
+    # rocm_sysdeps_*.dll, and DLLs every Windows has.  Anything else, such as an
+    # MSYS2 runtime DLL that a change in the toolchain let in, would load on the
+    # build machine and fail on a user's.  The allowlist goes to the script as
+    # one regular expression, joined with '|', as a ';' would split it into
+    # several arguments.  llvm-readobj comes from amd-llvm, on
+    # CMAKE_PROGRAM_PATH.
+    set(_allowed_imports
+      "rocm-dbgapi-[0-9]+-[0-9]+\\.dll"
+      "rocm_sysdeps_[a-z0-9_]+\\.dll"
+      "api-ms-win-[a-z0-9-]+\\.dll"
+      "kernel32\\.dll"
+      "user32\\.dll"
+      "ws2_32\\.dll"
+      "bcrypt\\.dll")
+    list(JOIN _allowed_imports "|" _allowed_imports)
+    find_program(ROCGDB_LLVM_READOBJ llvm-readobj)
+    add_test(
+      NAME rocgdb_imports
+      COMMAND ${CMAKE_COMMAND}
+        "-DFILE=${CMAKE_INSTALL_PREFIX}/bin/rocgdb.exe"
+        "-DREADOBJ=${ROCGDB_LLVM_READOBJ}"
+        "-DALLOW=${_allowed_imports}"
+        -P "${THEROCK_SOURCE_DIR}/cmake/therock_check_imports.cmake"
+    )
+  endif()
+
   # Also install the required testsuite files so we can run tests later on.
   #
   # rocgdb's testsuite does not prebuild executables, so it needs to run on
