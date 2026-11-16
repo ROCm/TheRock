@@ -212,6 +212,58 @@ option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
 ################################################################################
+# Coverage Options
+# -D<PROJECT>_ENABLE_COVERAGE is passed unchanged to the subproject whose
+# upper-cased name is <PROJECT> (see therock_cmake_subproject_activate()). The
+# group options below set it for every subproject in that group's list. An
+# explicit -D<PROJECT>_ENABLE_COVERAGE=OFF still wins.
+################################################################################
+
+option(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL
+  "Enable coverage instrumentation for all rocm-libraries projects" OFF)
+option(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL
+  "Enable coverage instrumentation for all rocm-systems projects" OFF)
+option(THEROCK_COVERAGE_ALL
+  "Enable coverage instrumentation for all coverage-enabled projects" OFF)
+
+# Each listed subproject must implement <PROJECT>_ENABLE_COVERAGE with LLVM
+# source-based coverage. hipBLASLt and hipTensor are left out until their
+# instrumented builds link. Test subprojects built from a library's source read
+# the library's option, so they are not listed either. See
+# docs/development/code_coverage.md.
+set(THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS
+  rocRAND hipRAND
+  hipCCL rocPRIM hipCUB rocThrust
+  rocFFT hipFFT
+  rocBLAS hipBLAS
+  rocSPARSE hipSPARSELt
+  rocSOLVER hipSOLVER
+  rocWMMA
+  hipDNN
+)
+set(THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS
+  rccl
+  rocshmem
+)
+
+set(_therock_coverage_selected "")
+if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_LIBRARIES_ALL)
+  list(APPEND _therock_coverage_selected ${THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS})
+endif()
+if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_SYSTEMS_ALL)
+  list(APPEND _therock_coverage_selected ${THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS})
+endif()
+
+foreach(_proj IN LISTS _therock_coverage_selected)
+  string(TOUPPER "${_proj}" _proj_upper)
+  # Respect an explicit -D<PROJECT>_ENABLE_COVERAGE=OFF from the command line.
+  if(NOT DEFINED ${_proj_upper}_ENABLE_COVERAGE)
+    set(${_proj_upper}_ENABLE_COVERAGE ON)
+    message(STATUS "Coverage: enabling ${_proj_upper}_ENABLE_COVERAGE")
+  endif()
+endforeach()
+
+################################################################################
 # Feature selection
 # Each feature added via therock_add_feature produces a boolean cache variable
 # like `THEROCK_ENABLE_${feature_name}` that takes its default value from the
