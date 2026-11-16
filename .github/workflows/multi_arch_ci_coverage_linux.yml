@@ -7,7 +7,8 @@
 # builds one instrumented Linux stack for every coverage-enabled project, then
 # fans out to multi_arch_ci_coverage_report.yml once per project.
 #
-# The rocm-libraries nightly invokes this via a cross-repo reusable `uses:` call.
+# The rocm-libraries nightly invokes this via a cross-repo reusable `uses:` call,
+# with nightly: true.
 # A future Windows mirror copies this file, swapping the build reusable and
 # runners; multi_arch_ci_coverage_report.yml is reused unchanged.
 #
@@ -34,6 +35,10 @@ on:
         type: string
         description: "Comma-separated coverage projects (e.g. hipdnn), case-insensitive. Empty = every project in build_tools/github_actions/configure_coverage_ci.py."
         default: ""
+      nightly:
+        type: boolean
+        description: "Nightly mode (RFC0014 nightly phase 1): also pass -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON, -DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON and -DTHEROCK_COVERAGE_ALL=ON, instrumenting every project in TheRock's coverage group lists. Reports still cover only projects_to_test."
+        default: false
       amdgpu_families:
         type: string
         description: "Comma-separated GPU families to collect coverage on."
@@ -74,6 +79,10 @@ on:
         type: string
         description: "Comma-separated coverage projects (e.g. hipdnn), case-insensitive. Empty = every project in build_tools/github_actions/configure_coverage_ci.py."
         default: ""
+      nightly:
+        type: boolean
+        description: "Nightly mode (RFC0014 nightly phase 1): also pass -DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON, -DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON and -DTHEROCK_COVERAGE_ALL=ON, instrumenting every project in TheRock's coverage group lists. Reports still cover only projects_to_test."
+        default: false
       amdgpu_families:
         type: string
         description: "Comma-separated GPU families to collect coverage on."
@@ -137,6 +146,7 @@ jobs:
         env:
           PROJECTS_TO_TEST: ${{ inputs.projects_to_test || '' }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families || 'gfx94X-dcgpu' }}
+          NIGHTLY: ${{ inputs.nightly }}
         run: python ./build_tools/github_actions/configure_coverage_ci.py
 
       - name: Compute package version
@@ -171,8 +181,9 @@ jobs:
 
   # Build the whole stage: test jobs need the full dependency set, and
   # instrumenting as a unit keeps the per-project build cost flat.
-  # coverage_cmake_options holds the selected projects' coverage options;
-  # everything else in the stage builds normally.
+  # coverage_cmake_options holds the selected projects' coverage options, plus
+  # the group options in nightly mode; everything else in the stage builds
+  # normally.
   build_instrumented_math_libs:
     name: Build Instrumented Math Libs
     needs: [setup_coverage_matrix, build_compiler_runtime]

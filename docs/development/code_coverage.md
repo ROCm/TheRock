@@ -129,6 +129,16 @@ end. Running coverage separately keeps failures off the nightly's status.
 Automatic nightly dispatch is a follow-up; `baseline_run_id` is already the
 right input.
 
+Nightly runs set `nightly`, following phase 1 of the nightly plan in
+[RFC0014](../rfcs/RFC0014-Code-Coverage-Infrastructure.md): build the whole
+instrumented stack once. It adds all three group options
+(`-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON`,
+`-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON` and `-DTHEROCK_COVERAGE_ALL=ON`) to
+`coverage_cmake_options`, so every listed project that implements its option is
+instrumented. Reports still cover only `projects_to_test`. The workflow builds
+only compiler-runtime and math-libs, so the rocm-systems projects, which build
+in comm-libs, are not instrumented yet.
+
 ### The instrumented build
 
 `setup_coverage_matrix` runs `configure_coverage_ci.py`, emitting the matrix
@@ -142,12 +152,13 @@ the whole fan-out, so with several families one failed build skips every
 family's report; the default is a single family until multi-arch lands.
 
 `coverage_cmake_options` holds the selected projects' CMake options, such as
-`-DHIPDNN_ENABLE_COVERAGE=ON`. It is passed to the math-libs build's
-`extra_cmake_options` input, which appends it to that stage's configure line
-only; TheRock then passes each option to its subproject as described in
+`-DHIPDNN_ENABLE_COVERAGE=ON`, plus the group options in nightly mode. It is
+passed to the math-libs build's `extra_cmake_options` input, which appends it
+to that stage's configure line only; TheRock then passes each option to its
+subproject as described in
 [Enabling coverage for a local build](#enabling-coverage-for-a-local-build).
-Everything not selected builds normally. Artifacts publish under
-`release_type: ci`.
+Outside nightly mode, everything not selected builds normally. Artifacts
+publish under `release_type: ci`.
 
 ### Test execution
 

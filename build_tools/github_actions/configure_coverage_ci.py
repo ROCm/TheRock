@@ -10,6 +10,8 @@ Environment variables:
   - PROJECTS_TO_TEST: comma-separated project names, case-insensitive. Empty
     selects every project in COVERAGE_PROJECTS.
   - AMDGPU_FAMILIES: comma-separated GPU families to collect coverage on.
+  - NIGHTLY: "true" adds NIGHTLY_CMAKE_OPTIONS, so the build instruments every
+    project in TheRock's coverage group lists, not just the selected ones.
 
 Outputs (written to GITHUB_OUTPUT):
   - coverage_matrix: JSON array with one report job per (project, GPU family).
@@ -17,7 +19,8 @@ Outputs (written to GITHUB_OUTPUT):
   - families_matrix_json: JSON array of {"amdgpu_family": ...} objects, one
     math-libs build per family.
   - coverage_cmake_options: space-separated CMake options that instrument the
-    selected projects, for the math-libs build's extra_cmake_options input.
+    selected projects (plus NIGHTLY_CMAKE_OPTIONS when NIGHTLY is set), for the
+    math-libs build's extra_cmake_options input.
 """
 
 import argparse
@@ -29,9 +32,17 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
 
-from github_actions_api import gha_set_output
+from github_actions_api import gha_set_output, str2bool
 
 DEFAULT_AMDGPU_FAMILIES = "gfx94X-dcgpu"
+
+# The group options declared in the top-level CMakeLists.txt. RFC0014's nightly
+# phase 1 instruments the whole stack in one build.
+NIGHTLY_CMAKE_OPTIONS = (
+    "-DTHEROCK_COVERAGE_ROCM_LIBRARIES_ALL=ON",
+    "-DTHEROCK_COVERAGE_ROCM_SYSTEMS_ALL=ON",
+    "-DTHEROCK_COVERAGE_ALL=ON",
+)
 
 
 @dataclass(frozen=True)
@@ -94,7 +105,9 @@ def parse_amdgpu_families(amdgpu_families: str) -> list[str]:
     return [family for family in families if family] or [DEFAULT_AMDGPU_FAMILIES]
 
 
-def build_outputs(projects: list[str], amdgpu_families: list[str]) -> dict[str, str]:
+def build_outputs(
+    projects: list[str], amdgpu_families: list[str], nightly: bool = False
+) -> dict[str, str]:
     matrix = []
     cmake_options = {}
     for name in projects:
@@ -112,6 +125,8 @@ def build_outputs(projects: list[str], amdgpu_families: list[str]) -> dict[str, 
                     "amdgpu_families": family,
                 }
             )
+    if nightly:
+        cmake_options.update(dict.fromkeys(NIGHTLY_CMAKE_OPTIONS))
     return {
         "coverage_matrix": json.dumps(matrix),
         "dist_amdgpu_families": ";".join(amdgpu_families),
@@ -140,7 +155,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     outputs = build_outputs(
-        projects, parse_amdgpu_families(os.getenv("AMDGPU_FAMILIES", ""))
+        projects,
+        parse_amdgpu_families(os.getenv("AMDGPU_FAMILIES", "")),
+        nightly=str2bool(os.getenv("NIGHTLY")),
     )
     if args.print_outputs:
         print(json.dumps(outputs, indent=2))
