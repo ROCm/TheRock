@@ -843,11 +843,8 @@ def test_rpm_release_carries_the_stream_whatever_the_version():
 # The profile has to reach the package version, because one package is built per
 # profile and their contents differ -- each embeds its own repository URL.
 #
-# These two tests pass explicit profile names rather than iterating OS_PROFILES.
-# OS_PROFILES currently holds exactly one deb profile, so a loop over it would
-# compare a one-element set against itself and pass no matter what deb_version
-# did with the argument -- including ignoring it. Naming a second debian-family
-# profile keeps the assertion honest before that profile is added for real.
+# These two tests pass explicit profile names rather than iterating OS_PROFILES,
+# so they test deb_version itself and don't depend on which profiles are listed.
 
 
 @pytest.mark.parametrize(
@@ -881,10 +878,7 @@ def test_every_rpm_profile_has_a_dist_tag():
 def test_rpm_profiles_never_share_a_package_version():
     tags = [p["dist_tag"] for p in brp.OS_PROFILES.values() if p["pkg_type"] == "rpm"]
     assert len(tags) == len(set(tags))
-    # Include a second SUSE profile: the collision only becomes reachable once
-    # one exists, and it must be distinguishable before then.
-    all_tags = tags + [".sles15"]
-    assert len({_rpm("stable", dist=t) for t in all_tags}) == len(all_tags)
+    assert len({_rpm("stable", dist=t) for t in tags}) == len(tags)
 
 
 def test_version_suffix_reaches_both_package_types():
@@ -1576,17 +1570,30 @@ def test_install_maps_keyring_only_when_signed():
 
 
 def test_list_profiles_rpm():
-    assert brp.list_profiles("rpm") == ["rhel8", "rhel10", "sles16"]
+    assert brp.list_profiles("rpm") == [
+        "rhel8",
+        "rhel10",
+        "sles16",
+        "rhel9",
+        "sles15",
+        "azl3",
+    ]
 
 
 def test_list_profiles_deb():
-    assert brp.list_profiles("deb") == ["ubuntu2404"]
+    assert brp.list_profiles("deb") == [
+        "ubuntu2404",
+        "ubuntu2204",
+        "ubuntu2604",
+        "debian12",
+        "debian13",
+    ]
 
 
 def test_list_profiles_cli_emits_json(capsys):
     brp.run_list_profiles(["--pkg-type", "rpm"])
     out = capsys.readouterr().out
-    assert json.loads(out) == ["rhel8", "rhel10", "sles16"]
+    assert json.loads(out) == ["rhel8", "rhel10", "sles16", "rhel9", "sles15", "azl3"]
 
 
 def test_list_profiles_cli_rejects_invalid_pkg_type(capsys):
@@ -1597,7 +1604,13 @@ def test_list_profiles_cli_rejects_invalid_pkg_type(capsys):
 def test_main_dispatches_list_profiles(capsys):
     brp.main(["list-profiles", "--pkg-type", "deb"])
     out = capsys.readouterr().out
-    assert json.loads(out) == ["ubuntu2404"]
+    assert json.loads(out) == [
+        "ubuntu2404",
+        "ubuntu2204",
+        "ubuntu2604",
+        "debian12",
+        "debian13",
+    ]
 
 
 # --- dest-dir normalization -----------------------------------------------
