@@ -3,7 +3,7 @@
 default_patterns = false
 include = [
   "lib/librocjitsu.so",
-  "lib/librocjitsu_plugin_*.so",
+  "lib/librocjitsu_plugin_race.so",
 ]
 [components.dbg."emulation/rocjitsu/stage"]
 [components.dev."emulation/rocjitsu/stage"]
