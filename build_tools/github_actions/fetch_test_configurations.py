@@ -1216,6 +1216,9 @@ test_matrix = {
                 # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
                 "gfx125X-dcgpu",
             ],
+            "windows": [
+                "gfx117X-all",
+            ],
         },
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
