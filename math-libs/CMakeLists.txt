@@ -130,10 +130,8 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
       -DCMAKE_CXX_STANDARD=17
       -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl # Install into include/hipccl/
-      # The header/unit tests include <hipcub/hipcub.hpp>, but hipCUB requires
-      # libhipcxx at configure time, so they cannot be built here. The test
-      # artifact only ships the source copy (LIBHIPCXX_COPY_TO_BUILD); the test
-      # jobs reconfigure and build the tests from it once prim is available.
+      # Header/unit tests need hipCUB (which itself needs libhipcxx), so they
+      # build in the separate libhipcxx_tests subproject after prim.
       -DLIBCUDACXX_ENABLE_LIBCUDACXX_TESTS=OFF
       -Dlibhipcxx_ENABLE_CMAKE_TESTS=OFF
     CMAKE_INCLUDES
@@ -154,18 +152,10 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   therock_cmake_subproject_require_host_program(libhipcxx lit)
   therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
   therock_cmake_subproject_activate(libhipcxx)
-
-  therock_provide_artifact(libhipcxx
-    DESCRIPTOR artifact-libhipcxx.toml
-    COMPONENTS
-      dbg
-      dev
-      lib
-      test
-    SUBPROJECT_DEPS
-      libhipcxx
-  )
 endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# Set by the PRIM block below; consumed by libhipcxx_tests.
+set(_libhipcxx_prim_build_deps)
 
 if(THEROCK_ENABLE_PRIM)
   # THEROCK_FLAG_BUILD_HIPCCL selects between the unified hipCCL superbuild
@@ -427,6 +417,71 @@ if(THEROCK_ENABLE_PRIM)
       ${_prim_subproject_deps}
   )
 endif(THEROCK_ENABLE_PRIM)
+
+if(THEROCK_ENABLE_LIBHIPCXX)
+  ##############################################################################
+  # libhipcxx tests + artifact
+  #
+  # Declared after PRIM because the libhipcxx header tests include
+  # <hipcub/hipcub.hpp>, while hipCUB requires libhipcxx at configure time. The
+  # main libhipcxx subproject (tests off) is therefore a build dep of prim, and
+  # the tests build here, depending on both.
+  #
+  # Requires prim: without it nothing provides hipCUB and the header tests fail
+  # on <hipcub/hipcub.hpp>. Prim-off builds (e.g. a hipThreads-only config) skip
+  # the tests and ship no libhipcxx `test` component; no job that fetches it
+  # runs without prim.
+  ##############################################################################
+  set(_libhipcxx_artifact_subproject_deps libhipcxx)
+
+  if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_PRIM)
+    therock_cmake_subproject_declare(libhipcxx_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_tests"
+      BACKGROUND_BUILD
+      DEFAULT_GPU_TARGETS
+        gfx942  # Fixes issue with empty target list for unsupported architectures.
+      CMAKE_ARGS
+        -DLIBHIPCXX_COPY_TO_BUILD=ON
+        -DHIP_PLATFORM=amd
+        -DROCM_PATH=
+        -DROCM_DIR=
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+        -DCMAKE_CXX_STANDARD=17
+        -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        rocm-cmake
+        libhipcxx
+        ${_libhipcxx_prim_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        hip-clr
+        ${libhipcxx_runtime_deps}
+    )
+    therock_cmake_subproject_glob_c_sources(libhipcxx_tests
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_require_host_program(libhipcxx_tests lit)
+    therock_cmake_subproject_activate(libhipcxx_tests)
+    list(APPEND _libhipcxx_artifact_subproject_deps libhipcxx_tests)
+  endif()
+
+  therock_provide_artifact(libhipcxx
+    DESCRIPTOR artifact-libhipcxx.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      ${_libhipcxx_artifact_subproject_deps}
+  )
+endif(THEROCK_ENABLE_LIBHIPCXX)
 
 set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
