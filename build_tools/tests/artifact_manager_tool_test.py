@@ -481,6 +481,187 @@ class TestPushStageAll(ArtifactManagerTestBase):
             )
 
 
+class TestUploadArtifactFingerprints(ArtifactManagerTestBase):
+    """Verify per-artifact fingerprint ordering and failure handling."""
+
+    def setUp(self):
+        super().setUp()
+        self.backend = mock.create_autospec(ArtifactBackend, instance=True)
+        delay_patcher = mock.patch("artifact_manager._delay_for_retry")
+        self.delay = delay_patcher.start()
+        self.addCleanup(delay_patcher.stop)
+
+    def _make_request(
+        self,
+        archive_directory="artifacts",
+        extension=".tar.zst",
+        target_family="generic",
+        with_checksum=True,
+        with_fingerprint=True,
+    ):
+        stem = f"test-artifact_lib_{target_family}"
+        archive_dir = self.build_dir / archive_directory
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archive_path = archive_dir / f"{stem}{extension}"
+        content = b"fake archive content"
+        archive_path.write_bytes(content)
+        if with_checksum:
+            Path(f"{archive_path}.sha256sum").write_text(
+                f"{hashlib.sha256(content).hexdigest()}  {archive_path.name}\n"
+            )
+
+        fingerprint_path = self.build_dir / "artifacts" / f"{stem}.fprint"
+        fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
+        if with_fingerprint:
+            fingerprint_path.write_text("test-fingerprint\n")
+        else:
+            fingerprint_path.unlink(missing_ok=True)
+
+        request = artifact_manager.UploadRequest(
+            source_path=archive_path,
+            artifact_key=archive_path.name,
+            backend=self.backend,
+        )
+        return request, fingerprint_path
+
+    def _expected_calls(self, request, fingerprint_path, with_checksum=True):
+        calls = [mock.call(request.source_path, request.artifact_key)]
+        if with_checksum:
+            calls.append(
+                mock.call(
+                    Path(f"{request.source_path}.sha256sum"),
+                    f"{request.artifact_key}.sha256sum",
+                )
+            )
+        calls.append(mock.call(fingerprint_path, fingerprint_path.name))
+        return calls
+
+    def test_fingerprint_upload_follows_archive_and_optional_checksum(self):
+        for directory in ("artifacts", ".upload_cache"):
+            for extension in (".tar.zst", ".tar.xz"):
+                for family in ("generic", "gfx94X-dcgpu"):
+                    for with_checksum in (True, False):
+                        with self.subTest(
+                            directory=directory,
+                            extension=extension,
+                            family=family,
+                            with_checksum=with_checksum,
+                        ):
+                            self.backend.reset_mock()
+                            request, fingerprint = self._make_request(
+                                archive_directory=directory,
+                                extension=extension,
+                                target_family=family,
+                                with_checksum=with_checksum,
+                            )
+                            if not with_checksum:
+                                Path(f"{request.source_path}.sha256sum").unlink(
+                                    missing_ok=True
+                                )
+                            self.assertTrue(artifact_manager.upload_artifact(request))
+                            self.assertEqual(
+                                self.backend.upload_artifact.call_args_list,
+                                self._expected_calls(
+                                    request, fingerprint, with_checksum
+                                ),
+                            )
+        self.delay.assert_not_called()
+
+    def test_missing_fingerprint_is_skipped_without_retry(self):
+        request, fingerprint = self._make_request(with_fingerprint=False)
+        with mock.patch("artifact_manager.log") as log:
+            self.assertTrue(artifact_manager.upload_artifact(request))
+        self.assertEqual(
+            self.backend.upload_artifact.call_args_list,
+            self._expected_calls(request, fingerprint)[:-1],
+        )
+        log.assert_any_call(
+            f"  == Skipping fingerprint: missing or not a regular file: "
+            f"{fingerprint}"
+        )
+        self.delay.assert_not_called()
+
+    def test_archive_failure_never_uploads_fingerprint(self):
+        request, _ = self._make_request()
+        self.backend.upload_artifact.side_effect = OSError("Archive upload failed")
+        self.assertFalse(artifact_manager.upload_artifact(request))
+        self.assertEqual(
+            self.backend.upload_artifact.call_args_list,
+            [mock.call(request.source_path, request.artifact_key)] * 3,
+        )
+        self.assertEqual(self.delay.call_count, 2)
+
+    def test_checksum_failure_never_uploads_fingerprint(self):
+        request, fingerprint = self._make_request()
+
+        def upload(source_path, artifact_key):
+            if artifact_key.endswith(".sha256sum"):
+                raise OSError("Checksum upload failed")
+
+        self.backend.upload_artifact.side_effect = upload
+        self.assertFalse(artifact_manager.upload_artifact(request))
+        self.assertEqual(
+            self.backend.upload_artifact.call_args_list,
+            self._expected_calls(request, fingerprint)[:-1] * 3,
+        )
+        self.assertEqual(self.delay.call_count, 2)
+
+    def test_transient_fingerprint_failure_retries_then_succeeds(self):
+        request, fingerprint = self._make_request()
+        self.backend.upload_artifact.side_effect = [
+            None,
+            None,
+            OSError("Fingerprint upload failed"),
+            None,
+        ]
+        with mock.patch(
+            "artifact_manager.calculate_hash", wraps=artifact_manager.calculate_hash
+        ) as calculate_hash:
+            self.assertTrue(artifact_manager.upload_artifact(request))
+        calculate_hash.assert_called_once_with(request.source_path, "sha256")
+        expected = self._expected_calls(request, fingerprint)
+        self.assertEqual(
+            self.backend.upload_artifact.call_args_list,
+            expected + [expected[-1]],
+        )
+        self.delay.assert_called_once_with(2)
+
+    def test_persistent_fingerprint_failure_raises(self):
+        request, fingerprint = self._make_request()
+        upload_error = OSError("Fingerprint upload failed")
+
+        def upload(source_path, artifact_key):
+            if artifact_key.endswith(".fprint"):
+                raise upload_error
+
+        self.backend.upload_artifact.side_effect = upload
+
+        with mock.patch(
+            "artifact_manager.calculate_hash",
+            wraps=artifact_manager.calculate_hash,
+        ) as calculate_hash:
+            with self.assertRaises(RuntimeError) as ctx:
+                artifact_manager.upload_artifact(request)
+
+        self.assertEqual(
+            str(ctx.exception),
+            f"Failed to upload {fingerprint.name} after 3 attempts",
+        )
+        self.assertIs(ctx.exception.__cause__, upload_error)
+
+        calculate_hash.assert_called_once_with(request.source_path, "sha256")
+
+        expected = self._expected_calls(request, fingerprint)
+        self.assertEqual(
+            self.backend.upload_artifact.call_args_list,
+            expected[:-1] + [expected[-1]] * 3,
+        )
+        self.assertEqual(
+            self.delay.call_args_list,
+            [mock.call(2), mock.call(4)],
+        )
+
+
 class TestFetchFailures(ArtifactManagerTestBase):
     """Tests that fetch fails when required artifacts cannot be retrieved."""
 

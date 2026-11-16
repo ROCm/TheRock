@@ -616,9 +616,9 @@ jobs:
         env:
           BUILD_PYTORCH_ONLY: ${{ steps.build-mode.outputs.build_pytorch_only }}
         run: |
-          set "PYTORCH_ONLY_FLAG="
-          if "%BUILD_PYTORCH_ONLY%"=="true" set "PYTORCH_ONLY_FLAG=--pytorch-only"
-          python build_tools/github_actions/write_pytorch_versions.py --dist-dir "%PACKAGE_DIST_DIR%" %PYTORCH_ONLY_FLAG%
+          set "TORCH_ONLY_FLAG="
+          if "%BUILD_PYTORCH_ONLY%"=="true" set "TORCH_ONLY_FLAG=--torch-only"
+          python build_tools/github_actions/write_pytorch_versions.py --dist-dir "%PACKAGE_DIST_DIR%" %TORCH_ONLY_FLAG%
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials

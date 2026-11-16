@@ -1,14 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Writes built PyTorch package versions to GITHUB_OUTPUT.
+"""Writes torch_version, torchaudio_version, torchvision_version, triton_version, and apex_version to GITHUB_OUTPUT.
 
-Fails if any wheels expected for the selected build mode and platform were not set.
+Fails if any wheels that were expected for the platform were not set.
 
 Currently,
-* PyTorch-only builds expect torch
-* Full Windows builds expect torch, torchaudio, and torchvision
-* Full Linux builds expect torch, torchaudio, torchvision, triton, and apex
+* Windows expects torch, torchaudio, and torchvision
+* Linux expects torch, torchaudio, torchvision, triton, and apex
 """
 
 import argparse
@@ -51,7 +50,7 @@ def get_wheel_version(package_dist_dir: Path, wheel_name: str) -> str | None:
 def get_all_wheel_versions(
     package_dist_dir: Path,
     os: str = platform.system(),
-    pytorch_only: bool = False,
+    torch_only: bool = False,
 ) -> Mapping[str, str | Path]:
     _log(f"Looking for wheels in '{package_dist_dir}'")
     all_files = list(package_dist_dir.glob("*"))
@@ -62,20 +61,19 @@ def get_all_wheel_versions(
     _log("")
     all_versions = {}
     torch_version = get_wheel_version(package_dist_dir, "torch")
+    torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
+    torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
+    triton_version = get_wheel_version(package_dist_dir, "triton")
+    apex_version = get_wheel_version(package_dist_dir, "apex")
+    _log("")
 
     if torch_version:
         all_versions = all_versions | {"torch_version": torch_version}
     else:
         raise FileNotFoundError("Did not find torch wheel")
 
-    if pytorch_only:
+    if torch_only:
         return all_versions
-
-    torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
-    torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
-    triton_version = get_wheel_version(package_dist_dir, "triton")
-    apex_version = get_wheel_version(package_dist_dir, "apex")
-    _log("")
 
     if torchaudio_version:
         all_versions = all_versions | {"torchaudio_version": torchaudio_version}
@@ -114,9 +112,11 @@ def main(argv: list[str]):
         help="Path where wheels are located",
     )
     p.add_argument(
-        "--pytorch-only",
+        "--torch-only",
         action="store_true",
-        help="Expect only a torch wheel instead of companion project wheels.",
+        default=False,
+        help="Require only the torch wheel. Used by ASAN builds, which do not "
+        "produce torchaudio, torchvision, triton, or apex.",
     )
 
     args = p.parse_args(argv)
@@ -130,10 +130,7 @@ def main(argv: list[str]):
 
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
-    all_versions = get_all_wheel_versions(
-        args.dist_dir,
-        pytorch_only=args.pytorch_only,
-    )
+    all_versions = get_all_wheel_versions(args.dist_dir, torch_only=args.torch_only)
     _log("")
     gha_set_output(all_versions)
 

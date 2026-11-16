@@ -114,6 +114,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -230,6 +234,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -264,6 +272,7 @@ jobs:
       EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
@@ -329,6 +338,11 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
+      - name: Select PyTorch wheel variant
+        run: |
+          python build_tools/github_actions/pytorch_wheel_variant.py \
+            --build-variant "${BUILD_VARIANT}"
+
       - name: Checkout PyTorch source
         timeout-minutes: 30
         run: |
@@ -350,7 +364,10 @@ jobs:
         env:
           REQUESTED_PYTORCH_ONLY: ${{ inputs.build_pytorch_only }}
         run: |
-          build_pytorch_only="${REQUESTED_PYTORCH_ONLY}"
+          build_pytorch_only="${PYTORCH_BUILD_TORCH_ONLY}"
+          if [[ "${REQUESTED_PYTORCH_ONLY}" == true ]]; then
+            build_pytorch_only=true
+          fi
           if [[ "${BUILD_RELEASE_TYPE}" == "dev" && \
                 ! -f external-builds/pytorch/pytorch/related_commits ]]; then
             echo "Dev PyTorch checkout has no related_commits; building torch only."
@@ -485,6 +502,7 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
+            ${PYTORCH_BUILD_VARIANT_ARG} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -575,13 +593,13 @@ jobs:
         env:
           BUILD_PYTORCH_ONLY: ${{ steps.build-mode.outputs.build_pytorch_only }}
         run: |
-          pytorch_only_flag=""
+          torch_only_flag=""
           if [ "${BUILD_PYTORCH_ONLY}" = "true" ]; then
-            pytorch_only_flag="--pytorch-only"
+            torch_only_flag="--torch-only"
           fi
           python build_tools/github_actions/write_pytorch_versions.py \
             --dist-dir "${PACKAGE_DIST_DIR}" \
-            ${pytorch_only_flag}
+            ${torch_only_flag}
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -595,6 +613,7 @@ jobs:
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${BUILD_VARIANT}" \
             --structured
 
       - name: Capture job summary
