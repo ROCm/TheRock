@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "artifact": "amd-llvm_dbg_generic",
+      "fingerprint": "e408f141cceb6e998b6517d62e3ac0e007c55069c64cf4b910fbf488bc90818d",
+      "platform": "linux",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-linux",
+        "archive": "amd-llvm_dbg_generic.tar.zst",
+        "sha256": "657a626c6638c30122a19085a24d44cc0ce715aeac6b535177bdd81a2a2599b8"
+      }
+    },
+    {
+      "artifact": "amd-llvm_dev_generic",
+      "fingerprint": "e408f141cceb6e998b6517d62e3ac0e007c55069c64cf4b910fbf488bc90818d",
+      "platform": "linux",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-linux",
+        "archive": "amd-llvm_dev_generic.tar.zst",
+        "sha256": "ef746269816080c2e5843044b5aef7dcc9cc9063f2331a011ad899fa89689dd0"
+      }
+    },
+    {
+      "artifact": "amd-llvm_doc_generic",
+      "fingerprint": "e408f141cceb6e998b6517d62e3ac0e007c55069c64cf4b910fbf488bc90818d",
+      "platform": "linux",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-linux",
+        "archive": "amd-llvm_doc_generic.tar.zst",
+        "sha256": "4818030c7ba4ca332a299bd96484ad2e01707f1ab9cae217843e0f28b5467b6b"
+      }
+    },
+    {
+      "artifact": "amd-llvm_lib_generic",
+      "fingerprint": "e408f141cceb6e998b6517d62e3ac0e007c55069c64cf4b910fbf488bc90818d",
+      "platform": "linux",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-linux",
+        "archive": "amd-llvm_lib_generic.tar.zst",
+        "sha256": "9b1d18d89463dcfc7d33cf09b2b0baa6656315d3219146aff747917af11d43a8"
+      }
+    },
+    {
+      "artifact": "amd-llvm_run_generic",
+      "fingerprint": "e408f141cceb6e998b6517d62e3ac0e007c55069c64cf4b910fbf488bc90818d",
+      "platform": "linux",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-linux",
+        "archive": "amd-llvm_run_generic.tar.zst",
+        "sha256": "0f645cab018f114177c3c3a2250ce39b7459294569dc089aadc3c5954130c190"
+      }
+    },
+    {
+      "artifact": "amd-llvm_dbg_generic",
+      "fingerprint": "f4a7479c2602b6c542f59f10b938f1e07c8bfe487157f369e933aaf2e1007ba9",
+      "platform": "windows",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-windows",
+        "archive": "amd-llvm_dbg_generic.tar.zst",
+        "sha256": "742fb3b27a5aada64975975efa1f40b5b90b583c39cf6352b8f622125a121fc0"
+      }
+    },
+    {
+      "artifact": "amd-llvm_dev_generic",
+      "fingerprint": "f4a7479c2602b6c542f59f10b938f1e07c8bfe487157f369e933aaf2e1007ba9",
+      "platform": "windows",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-windows",
+        "archive": "amd-llvm_dev_generic.tar.zst",
+        "sha256": "285ea15bb3245c44831e1e88345a7280e01fdc66c365b9f1258eff6b75150c4d"
+      }
+    },
+    {
+      "artifact": "amd-llvm_doc_generic",
+      "fingerprint": "f4a7479c2602b6c542f59f10b938f1e07c8bfe487157f369e933aaf2e1007ba9",
+      "platform": "windows",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-windows",
+        "archive": "amd-llvm_doc_generic.tar.zst",
+        "sha256": "0f1983ecdf6ab89442ef943f3cfae46b887f7d225bcf57946e19f41baf685dc1"
+      }
+    },
+    {
+      "artifact": "amd-llvm_lib_generic",
+      "fingerprint": "f4a7479c2602b6c542f59f10b938f1e07c8bfe487157f369e933aaf2e1007ba9",
+      "platform": "windows",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-windows",
+        "archive": "amd-llvm_lib_generic.tar.zst",
+        "sha256": "162b31547da25a31ca875bde298bccf720e482c118eee21305deb92b94abd516"
+      }
+    },
+    {
+      "artifact": "amd-llvm_run_generic",
+      "fingerprint": "f4a7479c2602b6c542f59f10b938f1e07c8bfe487157f369e933aaf2e1007ba9",
+      "platform": "windows",
+      "build_variant": "release",
+      "producer": {
+        "repository": "ROCm/TheRock",
+        "run_id": "43738549005"
+      },
+      "source": {
+        "root": "s3://therock-ci-artifacts/43738549005-windows",
+        "archive": "amd-llvm_run_generic.tar.zst",
+        "sha256": "40912005d79b79bf4061b70ad195ffce8c3068f9cf3f0b9545f669a1914d8340"
+      }
+    }
+  ]
+}
