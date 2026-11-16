@@ -54,6 +54,7 @@ on:
         type: choice
         options:
           - dev
+          - nightly
         default: dev
       # For workflow_dispatch, default to a single GPU family to limit CI load for most workflow runs.
       # Note: empty string will be converted to the default by github, so we need an explicit "none".
