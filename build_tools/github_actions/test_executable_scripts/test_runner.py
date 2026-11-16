@@ -622,6 +622,22 @@ def amdsmi_python_tests_enabled():
     return raw.strip().lower() not in {"0", "false", "off", "no"}
 
 
+def amdsmi_unprivileged_python_write_exclude():
+    """Name regex for Python write runners that need CAP_SYS_ADMIN.
+
+    amdsmi_python_functional and amdsmi_python_cli issue set/reset calls and
+    fail the ctest entry on AMDSMI_STATUS_NO_PERM. They do not read
+    AMDSMI_NON_PRIVILEGED, which is what the C++ suite uses to skip those
+    writes. amdsmi_python_unit stays selected. Baremetal and a container with
+    CAP_SYS_ADMIN still run the write runners.
+    """
+    if test_component_job_name != "amdsmi":
+        return None
+    if detect_privilege_tier() != "unprivileged":
+        return None
+    return r"amdsmi_python_(functional|cli)"
+
+
 def build_ctest_command(
     category,
     gpu_arch,
@@ -678,6 +694,15 @@ def build_ctest_command(
         le_patterns.append("^amdsmi_python$")
         print("# AMDSMI_PYTHON_TESTS disables the Python ctest entries")
 
+    # -E matches test names. These two runners have the same labels as
+    # amdsmi_python_unit, so a label exclude would drop the unit runner too.
+    name_exclude = amdsmi_unprivileged_python_write_exclude()
+    if name_exclude:
+        print(
+            "# Unprivileged runtime: excluding amdsmi_python_functional "
+            "and amdsmi_python_cli"
+        )
+
     # Add label options together for readability: -L ... -LE ...
     # Anchor each include label with ^...$ so ctest matches it exactly. ctest's
     # -L uses partial regex matching, so an unanchored "-L full" also matches
@@ -687,6 +712,8 @@ def build_ctest_command(
         cmd.extend(["-L", f"^{label}$"])
     if le_patterns:
         cmd.extend(["-LE", "|".join(le_patterns)])
+    if name_exclude:
+        cmd.extend(["-E", name_exclude])
 
     # Add common ctest parameters
     cmd.append("--output-on-failure")

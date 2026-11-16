@@ -352,7 +352,12 @@ class PrivilegeTierTest(unittest.TestCase):
         try:
             test_runner.test_component_job_name = "amdsmi"
             os.environ["AMDSMI_PYTHON_TESTS"] = "0"
-            cmd = test_runner.build_ctest_command("comprehensive", "gfx942", {"gfx94X"}, set())
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="baremetal"
+            ):
+                cmd = test_runner.build_ctest_command(
+                    "comprehensive", "gfx942", {"gfx94X"}, set()
+                )
             le_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-LE"]
             self.assertTrue(any("^amdsmi_python$" in v.split("|") for v in le_values))
         finally:
@@ -368,13 +373,50 @@ class PrivilegeTierTest(unittest.TestCase):
         try:
             test_runner.test_component_job_name = "amdsmi"
             os.environ.pop("AMDSMI_PYTHON_TESTS", None)
-            cmd = test_runner.build_ctest_command("comprehensive", "gfx942", {"gfx94X"}, set())
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="baremetal"
+            ):
+                cmd = test_runner.build_ctest_command(
+                    "comprehensive", "gfx942", {"gfx94X"}, set()
+                )
             le_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-LE"]
             self.assertFalse(any("amdsmi_python" in v for v in le_values))
+            self.assertNotIn("-E", cmd)
         finally:
             test_runner.test_component_job_name = original
             if previous is not None:
                 os.environ["AMDSMI_PYTHON_TESTS"] = previous
+
+    def test_unprivileged_excludes_python_write_runners(self):
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "amdsmi"
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="unprivileged"
+            ):
+                cmd = test_runner.build_ctest_command(
+                    "comprehensive", "gfx942", {"gfx94X"}, set()
+                )
+            excludes = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-E"]
+            self.assertEqual(excludes, [r"amdsmi_python_(functional|cli)"])
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_privileged_keeps_python_write_runners(self):
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "amdsmi"
+            for tier in ("privileged", "baremetal"):
+                with self.subTest(tier=tier):
+                    with patch.object(
+                        test_runner, "detect_privilege_tier", return_value=tier
+                    ):
+                        cmd = test_runner.build_ctest_command(
+                            "comprehensive", "gfx942", {"gfx94X"}, set()
+                        )
+                    self.assertNotIn("-E", cmd)
+        finally:
+            test_runner.test_component_job_name = original
 
     def test_other_components_are_unchanged(self):
         original = test_runner.test_component_job_name
@@ -383,6 +425,13 @@ class PrivilegeTierTest(unittest.TestCase):
             env = {}
             test_runner.apply_amdsmi_privilege_env(env)
             self.assertNotIn("AMDSMI_NON_PRIVILEGED", env)
+            with patch.object(
+                test_runner, "detect_privilege_tier", return_value="unprivileged"
+            ):
+                cmd = test_runner.build_ctest_command(
+                    "comprehensive", "gfx942", {"gfx94X"}, set()
+                )
+            self.assertNotIn("-E", cmd)
         finally:
             test_runner.test_component_job_name = original
 
