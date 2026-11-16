@@ -6,26 +6,33 @@
 Full installation and simulate-install test script for ROCm native packages.
 
 Test modes (--test-type):
-- sanity: Basic test. Repo-based install plus basic verification only
-  (steps 1 and 2).
+- sanity: Basic test. Repo setup, published checksum metadata, install, and
+  basic verification (steps 1 and 2). A checksum mismatch stops the install.
 - quick / standard: CI aliases for sanity.
 - full: Full test. Repo-based install plus basic verification plus full
   verification (steps 1, 2, and 3).
   Steps (invoked one by one from main):
-  1. Repo setup and install: set up package-manager repository and install
-     ROCm packages. Arch suffixes in metapackage names are used only when both
-     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm7.13-gfx1100``).
-     With ``--rocm-version`` only: ``amdrocm7.13`` / ``amdrocm-core-sdk7.13``.
-     With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk``.
+  1. Repo setup and install: set up package-manager repository, require the
+     published index checksum metadata, and install ROCm packages. The
+     amd-repo-setup package path checks the URL in the repo file it installed.
+     ``--repo-config-only`` stops after that file is verified and does not
+     check the index or install ROCm. Arch suffixes in metapackage names are
+     used only when both
+     ``--gfx-arch`` and ``--rocm-version`` are set (e.g. ``amdrocm10.3-gfx1100``).
+     With ``--rocm-version`` only: ``amdrocm10.3``, ``amdrocm-core-sdk10.3``,
+     and ``amdrocm-hpc-sdk10.3``.
+     With neither or ``--gfx-arch`` alone: ``amdrocm`` / ``amdrocm-core-sdk`` /
+     ``amdrocm-hpc-sdk``.
   2. Basic verification: install prefix, key components, installed packages
      list, rocminfo. (Run for both sanity and full.)
   3. Full verification: rdhc.py / RDHC test. (Run only for full.)
 - comprehensive: CI alias for full.
-- install: Repo-based install only (step 1). No rocminfo or component checks.
+- install: Repo setup, published checksum metadata, and package install
+  (step 1). No rocminfo or component checks. Checksum failure stops the install.
   Used by release workflows that dispatch install tests off the critical path.
 - simulate: Dry-run only. Simulated install of local .deb or .rpm files
-  (apt install --simulate or rpm -Uvh --test --nodeps). No repo setup or
-  actual install. Requires --packages-dir.
+  (apt install --simulate or rpm -Uvh --test --nodeps). No repository, no
+  published checksum check, and no actual install. Requires --packages-dir.
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
 APT list, Zypper/Yum repo file and section), ROCM_APT_SOURCES_LIST,
@@ -53,15 +60,19 @@ CI typically runs this module under pytest (same file; reporting handled by pyte
 
 Workflow/container ``env`` maps to CLI flags via :func:`_argv_from_ci_env` + ``test_native_linux_package_install``.
 For versioned metapackage names only, set ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` and omit ``--rocm-version`` when unversioned packages are desired.
-For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx94x gfx1100``), semicolon-separated (e.g. ``gfx94x;gfx1100``), or a single comma-separated value (e.g. ``gfx94x,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
+For multiple arches from CI, set ``GFX_ARCH`` to whitespace-separated tokens (e.g. ``gfx942 gfx1100``), semicolon-separated (e.g. ``gfx942;gfx1100``), or a single comma-separated value (e.g. ``gfx942,gfx1100``); optional ``NATIVE_LINUX_INSTALL_ROCM_VERSION`` pairs with ``GFX_ARCH`` like ``--rocm-version`` with ``--gfx-arch`` on the CLI.
 You can still invoke this file as a script for ad-hoc runs (no pytest required).
 
 Example invocations:
 
+ # install, sanity, and full check published checksums before install.
+ # Manual setup checks --repo-url. amd-repo-setup checks the URL in its repo file.
+ # --repo-config-only verifies that file and stops, so it does not check the index.
+
  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile ubuntu2404 \\
-         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
@@ -70,12 +81,12 @@ Example invocations:
          --os-profile ubuntu2404 \\
          --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
          --release-type prerelease \\
-         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/gpg/packages.gpg
 
  # Nightly RPM (RHEL 8) - run inside a rhel8/UBI 8 container or VM
  python3 native_linux_package_install_test.py \\
          --os-profile rhel8 \\
-         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/x86_64/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/rhel8/20261111-42927985179/x86_64/ \\
          --gfx-arch gfx94x \\
          --release-type nightly
 
@@ -84,49 +95,49 @@ Example invocations:
          --os-profile sles16 \\
          --repo-url https://rc.repo.amd.com/rocm/core/packages/sles16/x86_64/ \\
          --release-type prerelease \\
-         --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
+         --gpg-key-url https://rc.repo.amd.com/rocm/gpg/packages.gpg
 
- # --test-type sanity (default): repo install + basic verification only (steps 1-2)
+ # --test-type sanity (default): checksum metadata, then install, then basic verification (steps 1-2)
  python3 native_linux_package_install_test.py --test-type sanity \\
          --os-profile ubuntu2404 \\
-         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type full: same as sanity plus rdhc full verification (steps 1-3)
+ # --test-type full: checksum metadata, install, basic verification, and rdhc (steps 1-3)
  python3 native_linux_package_install_test.py --test-type full \\
          --os-profile ubuntu2404 \\
-         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
          --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type install: repo install only (no verification)
+ # --test-type install: checksum metadata, then install. No rocminfo or rdhc.
  python3 native_linux_package_install_test.py --test-type install \\
          --os-profile ubuntu2404 \\
-         --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+         --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
          --gfx-arch gfx94x --release-type nightly
 
  # Versioned metapackages with multiple GPU architectures (requires --rocm-version for arch in names).
- # Installs e.g. amdrocm7.13-gfx94x, amdrocm-core-sdk7.13-gfx94x, amdrocm7.13-gfx1100, ...
+ # Installs e.g. amdrocm10.3-gfx942, amdrocm-core-sdk10.3-gfx942, amdrocm-hpc-sdk10.3-gfx942, amdrocm10.3-gfx1100, ...
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.13.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3.1 --gfx-arch gfx942 gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Same semantics: comma- or semicolon-separated arches in one --gfx-arch argument (or repeat --gfx-arch).
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.13 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3 --gfx-arch gfx942,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
  python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.13 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3 --gfx-arch 'gfx942;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Versioned generic metapackages (no arch suffix) when --rocm-version is set without --gfx-arch.
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
- --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://dev.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42966747409 \\
+ --rocm-version 10.3 --release-type dev --install-prefix /opt/rocm/core
 
- # Simulate install (dry-run) from local .deb or .rpm directory
+ # Simulate install (dry-run) from local .deb or .rpm files. No repository, so no checksum check.
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
  python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
@@ -147,7 +158,6 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from packaging_utils import normalize_target_list
 from native_linux_package_test_common import (
     ENV_NATIVE_LINUX_INSTALL_ROCM_VERSION,
     VERIFY_KEY_COMPONENTS,
@@ -155,7 +165,14 @@ from native_linux_package_test_common import (
     derive_package_type,
     is_sles,
     major_minor_rocm_version_from_input,
+    print_hpc_sdk_hint,
     run_streaming as _run_streaming,
+    verify_install_layout,
+)
+from packaging_utils import normalize_target_list
+from verify_package_repo_checksums import (
+    PackageChecksumError,
+    verify_published_repository_checksums,
 )
 
 
@@ -390,18 +407,20 @@ class NativeLinuxPackageInstallTest:
         install_prefix: Installation prefix (default: /opt/rocm/core)
         gfx_arch: Optional GPU architecture(s). Used in package names only
         together with ``rocm_version``; otherwise ignored for install targets.
-        rocm_version: Optional ROCm release (e.g. ``7.13`` or ``7.13.1``).
+        rocm_version: Optional ROCm release (e.g. ``10.3`` or ``10.3.0``).
         Major.minor only is used in package names. With ``gfx_arch`` and
         ``rocm_version``: ``amdrocm{version}-{arch}`` per arch. With
-        ``rocm_version`` only: ``amdrocm{version}`` / ``amdrocm-core-sdk{version}``.
-        If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` (``gfx_arch`` alone
+        ``rocm_version`` only: ``amdrocm{version}`` / ``amdrocm-core-sdk{version}``
+        (plus ``amdrocm-hpc-sdk{version}``).
+        If unset: unversioned ``amdrocm`` / ``amdrocm-core-sdk`` / ``amdrocm-hpc-sdk``
+        (``gfx_arch`` alone
         does not add arch suffixes).
         gpg_key_url: GPG key URL
         build_variant: Build variant (e.g. 'asan', 'host-asan', 'asan-debug',
         'host-asan-debug'). When it contains 'asan', '-asan' is inserted before
         the version suffix in package names so that variant packages are
-        tested (e.g. ``amdrocm-asan7.15-gfx942`` instead of
-        ``amdrocm7.15-gfx942``). Debug variants collapse to the same '-asan'
+        tested (e.g. ``amdrocm-asan10.3-gfx942`` instead of
+        ``amdrocm10.3-gfx942``). Debug variants collapse to the same '-asan'
         name as their non-debug counterpart — there is no separate
         amdrocm-asan-debug package.
         repo_setup_package_dir: Directory holding the built ``amd-repo-setup``
@@ -804,6 +823,7 @@ gpgcheck=0
                 return True
             print("\n" + "=" * 80)
             print(f"[FAIL] Failed to install DEB packages (exit code: {return_code})")
+            print_hpc_sdk_hint(self.package_names)
             return False
         except subprocess.TimeoutExpired:
             print("\n" + "=" * 80)
@@ -860,6 +880,7 @@ gpgcheck=0
                 return True
             print("\n" + "=" * 80)
             print(f"[FAIL] Failed to install RPM packages (exit code: {return_code})")
+            print_hpc_sdk_hint(self.package_names)
             return False
         except subprocess.TimeoutExpired:
             print("\n" + "=" * 80)
@@ -868,6 +889,75 @@ gpgcheck=0
         except OSError as e:
             print(f"\n[FAIL] Error during installation: {e}")
             return False
+
+    def verify_published_checksum_metadata(self) -> bool:
+        """Require published index checksums before installing packages.
+
+        DEB metadata must provide MD5 and SHA256, and its ``Release`` checksum
+        must match ``Packages.gz``. RPM metadata must provide SHA256 or stronger,
+        and ``repomd.xml`` must match the primary metadata. APT, DNF, and Zypper
+        check the downloaded package archives again during installation.
+
+        Manual setup checks ``--repo-url``. Install-via-package checks the URL
+        in the repo file the amd-repo-setup package wrote. A missing URL fails.
+
+        Returns:
+            True when the published checksum metadata matches.
+        """
+        print("\n" + "=" * 80)
+        print("CHECKING PUBLISHED REPOSITORY CHECKSUMS")
+        print("=" * 80)
+        repo_url = self._checksum_repo_url()
+        if not repo_url:
+            print("\n[FAIL] Published repository checksum metadata check failed")
+            print("  repository URL is missing")
+            return False
+        try:
+            verify_published_repository_checksums(repo_url, self.package_type)
+        except PackageChecksumError as error:
+            print("\n[FAIL] Published repository checksum metadata check failed")
+            for line in error.errors:
+                print(f"  {line}")
+            return False
+        print("\n[PASS] Published repository checksum metadata matches")
+        return True
+
+    def _checksum_repo_url(self) -> str:
+        """Return the repository URL whose published index is checked.
+
+        Manual setup uses ``--repo-url``. Install-via-package uses the URL in
+        the repo file the amd-repo-setup package wrote, because that is the
+        repository apt, dnf, or zypper will install from.
+        """
+        if self.repo_setup_package_dir:
+            return self._repo_file_baseurl() or ""
+        return self.repo_url
+
+    def _repo_file_baseurl(self) -> str | None:
+        """Read the repository URL from the amd-repo-setup repo file.
+
+        DEB uses the ``URIs:`` line. RPM uses ``baseurl=``. The returned URL has
+        no trailing slash. Returns None when the file or that line is missing.
+        """
+        try:
+            contract = self._repo_setup_package_contract()
+        except ValueError as error:
+            print(f"[FAIL] {error}")
+            return None
+        repo_file = Path(contract.repo_file)
+        marker = "URIs:" if self.package_type == "deb" else "baseurl="
+        if not repo_file.is_file():
+            print(f"[FAIL] Repo file not found: {repo_file}")
+            return None
+        text = repo_file.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            if not line.startswith(marker):
+                continue
+            url = line[len(marker) :].strip().rstrip("/")
+            if url:
+                return url
+        print(f"[FAIL] Repo file missing expected {marker!r} entry: {repo_file}")
+        return None
 
     def _find_repo_setup_package(self) -> Path | None:
         """Locate the built amd-repo-setup package in repo_setup_package_dir.
@@ -1068,7 +1158,8 @@ gpgcheck=0
         """Step 1: Repo setup and install. Run for both sanity (basic) and full test.
 
         Returns:
-        True if repository setup and package installation both succeeded.
+        True if repository setup, checksum metadata, and package installation
+        all succeeded. Config-only returns after the repo file is verified.
         """
         print("\n" + "=" * 80)
         print("STEP 1: REPOSITORY SETUP AND PACKAGE INSTALLATION")
@@ -1089,11 +1180,12 @@ gpgcheck=0
             if ver:
                 print(
                     "GPU Architecture(s): (none — generic versioned packages "
-                    f"amdrocm{ver}, amdrocm-core-sdk{ver})"
+                    f"amdrocm{ver}, amdrocm-core-sdk{ver}, amdrocm-hpc-sdk{ver})"
                 )
             else:
                 print(
-                    "GPU Architecture(s): (none — generic packages amdrocm, amdrocm-core-sdk)"
+                    "GPU Architecture(s): (none — generic packages amdrocm, "
+                    "amdrocm-core-sdk, amdrocm-hpc-sdk)"
                 )
         print(f"Repository URL: {self.repo_url or '(from amd-repo-setup package)'}")
         print(f"Packages (in order): {self.package_names}")
@@ -1109,6 +1201,8 @@ gpgcheck=0
                     "\n[PASS] Repo configured via amd-repo-setup package (config-only)"
                 )
                 return True
+            if not self.verify_published_checksum_metadata():
+                return False
             if self.package_type == "deb":
                 return self.install_deb_packages()
             return self.install_rpm_packages()
@@ -1117,11 +1211,13 @@ gpgcheck=0
         if self.package_type == "deb":
             if not self.setup_deb_repository():
                 return False
+        elif not self.setup_rpm_repository():
+            return False
+        if not self.verify_published_checksum_metadata():
+            return False
+        if self.package_type == "deb":
             return self.install_deb_packages()
-        else:
-            if not self.setup_rpm_repository():
-                return False
-            return self.install_rpm_packages()
+        return self.install_rpm_packages()
 
     def run_basic_verification(self) -> bool:
         """Step 2: Basic test — install prefix, key components, packages list, rocminfo.
@@ -1148,6 +1244,10 @@ gpgcheck=0
             return False
 
         print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
+
+        if not verify_install_layout(install_path):
+            print("\n[FAIL] Basic verification FAILED (install layout)")
+            return False
 
         key_components = VERIFY_KEY_COMPONENTS
         print("\nChecking for key ROCm components:")
@@ -1659,85 +1759,97 @@ gpgcheck=0
 
 _CLI_EXAMPLES_EPILOG = """
 Examples:
+ # install, sanity, and full check published checksum metadata before install.
+ # Manual setup checks --repo-url. amd-repo-setup checks the URL in its repo file.
+ # --repo-config-only verifies that file and stops, so it does not check the index.
+ # DEB requires MD5sum and SHA256 in Packages, and Release must match Packages.gz.
+ # RPM requires SHA256 or stronger, and repomd.xml must match primary metadata.
+ # A primary location that leaves the RPM repository fails the check.
+ # simulate has no repository, so it skips that check.
+ # A mismatch or unreadable index fails the run before apt, dnf, or zypper install.
+
  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease DEB with GPG verification
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
  --repo-url https://rc.repo.amd.com/rocm/core/packages/ubuntu2404 \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/gpg/packages.gpg
 
  # Nightly RPM (RHEL 8)
- python native_linux_package_install_test.py --os-profile rhel8 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ python3 native_linux_package_install_test.py --os-profile rhel8 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rhel8/20261111-42927985179/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # --test-type full on RHEL 8 (rdhc needs pciutils/kmod on the host — install before running)
- python native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/rpm/20260204-21658678136/rhel8/x86_64/ \\
+ python3 native_linux_package_install_test.py --test-type full --os-profile rhel8 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/rhel8/20261111-42927985179/x86_64/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
  # Prerelease RPM (RHEL 8)
- python native_linux_package_install_test.py --os-profile rhel8 \\
+ python3 native_linux_package_install_test.py --os-profile rhel8 \\
  --repo-url https://rc.repo.amd.com/rocm/core/packages/rhel8/x86_64/ \\
  --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
- --gpg-key-url https://rc.repo.amd.com/rocm/core/packages/gpg/rocm.gpg
+ --gpg-key-url https://rc.repo.amd.com/rocm/gpg/packages.gpg
 
- # --test-type sanity (default): repo install + basic verification only
- python native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ # --test-type sanity (default): checksum metadata, then install, then basic verification
+ python3 native_linux_package_install_test.py --test-type sanity --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type full: install + basic verification + rdhc
- python native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
+ # --test-type full: checksum metadata, install, basic verification, and rdhc
+ python3 native_linux_package_install_test.py --test-type full --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
  --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
- # --test-type install: install only
- python native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
- --repo-url https://therock-dev-artifacts.s3.amazonaws.com/26299074718-linux/packages/deb \\
+ # --test-type install: checksum metadata, then install. No rocminfo or rdhc.
+ python3 native_linux_package_install_test.py --test-type install --os-profile ubuntu2404 \\
+ --repo-url https://dev.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42966747409 \\
  --gfx-arch gfx94x --release-type dev --install-prefix /opt/rocm/core
 
- # Versioned + multiple --gfx-arch (metapackages amdrocm7.13-<arch> per arch)
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.12.1 --gfx-arch gfx94x gfx1100 --release-type nightly \\
+ # Versioned + multiple --gfx-arch (metapackages amdrocm10.3-<arch> per arch)
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3.1 --gfx-arch gfx942 gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Comma-separated arches in one argument (equivalent normalization)
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.12 --gfx-arch gfx94x,gfx1100 --release-type nightly \\
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3 --gfx-arch gfx942,gfx1100 --release-type nightly \\
  --install-prefix /opt/rocm/core
 
  # Semicolon-separated (quote for POSIX shells so ``;`` is not a command separator)
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://nightly.repo.amd.com/rocm/core/packages/deb/20260204-21658678136/ \\
- --rocm-version 7.12 --gfx-arch 'gfx94x;gfx1100' --release-type nightly \\
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://nightly.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42927985179/ \\
+ --rocm-version 10.3 --gfx-arch 'gfx942;gfx1100' --release-type nightly \\
  --install-prefix /opt/rocm/core
 
- # --rocm-version without --gfx-arch: amdrocm7.13 / amdrocm-core-sdk7.13 only
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
- --rocm-version 7.13 --release-type dev --install-prefix /opt/rocm/core
+ # --rocm-version without --gfx-arch: amdrocm10.3 / amdrocm-core-sdk10.3 / amdrocm-hpc-sdk10.3
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://dev.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42966747409 \\
+ --rocm-version 10.3 --release-type dev --install-prefix /opt/rocm/core
 
- # without --rocm-version without --gfx-arch: amdrocm / amdrocm-core-sdk only
- python native_linux_package_install_test.py --os-profile ubuntu2404 \\
- --repo-url https://therock-dev-artifacts.s3.amazonaws.com/25137154844-linux/packages/deb \\
+ # without --rocm-version without --gfx-arch: amdrocm / amdrocm-core-sdk / amdrocm-hpc-sdk
+ python3 native_linux_package_install_test.py --os-profile ubuntu2404 \\
+ --repo-url https://dev.repo.amd.com/rocm/core/packages/ubuntu2404/20261111-42966747409 \\
  --release-type dev --install-prefix /opt/rocm/core
 
- # Simulate install (dry-run) from local packages
- python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
- python native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
+ # Simulate install (dry-run) from local packages. No repository, so no checksum check.
+ python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/pkgs --os-profile ubuntu2404
+ python3 native_linux_package_install_test.py --test-type simulate --packages-dir /path/to/rpms --pkg-type rpm
 """
 
 
 def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     kwargs: dict = dict(
-        description="Full installation and simulate-install test for ROCm native packages",
+        description=(
+            "Install ROCm native packages and fail if published checksum "
+            "metadata does not match. simulate skips the repository check."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EXAMPLES_EPILOG,
     )
@@ -1747,12 +1859,14 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
     parser.add_argument(
         "--os-profile",
         type=str,
-        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for sanity/full; for simulate, used only to derive pkg-type if --pkg-type is omitted.",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles15, sles16, almalinux9, centos7, azl3). Required for install, sanity, and full. For simulate, used only to derive pkg-type if --pkg-type is omitted.",
     )
     parser.add_argument(
         "--repo-url",
         type=str,
-        help="Full repository URL (constructed in YAML workflow). Required for sanity/full; not used for simulate.",
+        help="HTTPS repository URL checked before install for install, sanity, and "
+        "full. Optional with --repo-setup-package-dir, which reads the URL from "
+        "the installed repo file. Not used for simulate or --repo-config-only.",
     )
     parser.add_argument(
         "--gfx-arch",
@@ -1761,8 +1875,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         default=None,
         metavar="ARCH",
         help="GPU architecture(s), optional. Used in package names only with --rocm-version "
-        "(e.g. amdrocm7.13-gfx94x). Without --rocm-version, arch is ignored for install targets "
-        "(generic amdrocm / amdrocm-core-sdk). "
+        "(e.g. amdrocm10.3-gfx942). Without --rocm-version, arch is ignored for install targets "
+        "(generic amdrocm / amdrocm-core-sdk / amdrocm-hpc-sdk). "
         "Repeat flag or list; commas and semicolons split within each value. Not used for simulate.",
     )
     parser.add_argument(
@@ -1771,8 +1885,8 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         default=None,
         metavar="VER",
         help=(
-            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm7.13-ARCH per arch; "
-            "without --gfx-arch: amdrocm7.13 and amdrocm-core-sdk7.13. Required for arch in package names. "
+            "ROCm release (major.minor only in package names). With --gfx-arch: amdrocm10.3-ARCH per arch; "
+            "without --gfx-arch: amdrocm10.3, amdrocm-core-sdk10.3, and amdrocm-hpc-sdk10.3. Required for arch in package names. "
             "Optional. Not used for simulate."
         ),
     )
@@ -1811,7 +1925,7 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         "--test-type",
         type=str,
         default="sanity",
-        help="Test type: 'install' = repo install only; 'sanity' = install + basic verification; 'full' = sanity + rdhc; 'simulate' = dry-run local packages (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
+        help="Test type: 'install', 'sanity', and 'full' check published checksum metadata before install. 'sanity' then runs basic verification; 'full' also runs rdhc. 'simulate' dry-runs local packages and skips the checksum check (requires --packages-dir). Also accepts CI test types: quick, standard, comprehensive.",
     )
     parser.add_argument(
         "--packages-dir",
@@ -1825,15 +1939,17 @@ def _build_argument_parser(*, exit_on_error: bool = True) -> ArgumentParser:
         metavar="DIR",
         help="Directory containing the built amd-repo-setup .deb/.rpm. When set, the "
         "repository is configured by installing that package (instead of writing repo "
-        "files); --repo-url and --gpg-key-url become optional. Requires a "
-        "--release-type with a public stream. Not valid with --test-type simulate.",
+        "files); --repo-url and --gpg-key-url become optional. The published checksum "
+        "metadata is still checked, using the URL in the installed repo file, before "
+        "ROCm packages are installed. Requires a --release-type with a public stream. "
+        "Not valid with --test-type simulate.",
     )
     parser.add_argument(
         "--repo-config-only",
         action="store_true",
         help="With --repo-setup-package-dir: install the amd-repo-setup package, "
-        "verify the repo config, and stop (do not install ROCm). --install-prefix "
-        "is not required.",
+        "verify the repo config, and stop. Does not check published checksum "
+        "metadata and does not install ROCm. --install-prefix is not required.",
     )
     parser.add_argument(
         "--pkg-type",
@@ -1982,10 +2098,12 @@ def run_tests(args: Namespace) -> int:
             )
             print(
                 "GPU Architecture(s): (none — generic versioned packages "
-                f"amdrocm{_gv}, amdrocm-core-sdk{_gv})"
+                f"amdrocm{_gv}, amdrocm-core-sdk{_gv}, amdrocm-hpc-sdk{_gv})"
             )
         else:
-            print("GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk)")
+            print(
+                "GPU Architecture(s): (none — generic amdrocm, amdrocm-core-sdk, amdrocm-hpc-sdk)"
+            )
     if args.rocm_version:
         _rv = NativeLinuxPackageInstallTest._major_minor_rocm_version_from_input(
             args.rocm_version
@@ -2098,7 +2216,7 @@ def _argv_from_ci_env() -> list[str] | None:
     repo_url = (os.environ.get("REPO_URL") or "").strip()
     gfx_raw = (os.environ.get("GFX_ARCH") or "").strip()
     # Semicolons delimit arches in CI; normalize to whitespace so split() does not
-    # leave stray ';' on the first token (e.g. "gfx94x; gfx1100").
+    # leave stray ';' on the first token (e.g. "gfx942; gfx1100").
     gfx_arch = gfx_raw.replace(";", " ").split() if gfx_raw else []
     release_type = (os.environ.get("RELEASE_TYPE") or "").strip()
     install_prefix = (os.environ.get("INSTALL_PREFIX") or "").strip()
