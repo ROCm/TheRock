@@ -1156,7 +1156,10 @@ test_matrix = {
         # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
         # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 30,
+        # Whole amdclang suite (c2h + lit) on one runner. 60 minutes so
+        # slower Windows architectures can finish after the per-test caps
+        # in test_libhipcxx_amdclang.py were doubled.
+        "timeout_minutes": 60,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
             _get_script_path("requirements-test-ninja.txt"),
