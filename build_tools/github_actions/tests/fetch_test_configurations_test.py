@@ -1273,6 +1273,94 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(job_names.count("rocgdb-gpu"), 1)
 
     # -----------------------
+    # rocr-debug-agent group labels
+    # -----------------------
+
+    def test_all_rocr_debug_agent_label_selects_both_variants(self):
+        """test:rocr-debug-agent should expand to both the cpu and gpu variants."""
+        with patch.dict(
+            os.environ, {"TEST_LABELS": json.dumps(["test:rocr-debug-agent"])}
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocr-debug-agent-cpu", names)
+        self.assertIn("rocr-debug-agent-gpu", names)
+
+    def test_all_rocr_debug_agent_label_excludes_unrelated_jobs(self):
+        """test:rocr-debug-agent should not include jobs outside its group."""
+        with patch.dict(
+            os.environ, {"TEST_LABELS": json.dumps(["test:rocr-debug-agent"])}
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertNotIn("rocgdb-cpu", names)
+        self.assertNotIn("rocgdb-gpu", names)
+        self.assertNotIn("rocblas", names)
+
+    def test_rocr_debug_agent_cpu_label_selects_only_cpu_variant(self):
+        """test:rocr-debug-agent-cpu is a literal label, not a group prefix."""
+        with patch.dict(
+            os.environ, {"TEST_LABELS": json.dumps(["test:rocr-debug-agent-cpu"])}
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocr-debug-agent-cpu", names)
+        self.assertNotIn("rocr-debug-agent-gpu", names)
+
+    def test_rocr_debug_agent_gpu_label_selects_only_gpu_variant(self):
+        """test:rocr-debug-agent-gpu is a literal label, not a group prefix."""
+        with patch.dict(
+            os.environ, {"TEST_LABELS": json.dumps(["test:rocr-debug-agent-gpu"])}
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocr-debug-agent-gpu", names)
+        self.assertNotIn("rocr-debug-agent-cpu", names)
+
+    def test_rocr_debug_agent_labels_combine_with_other_labels(self):
+        """test:rocr-debug-agent and other labels should union their jobs."""
+        with patch.dict(
+            os.environ,
+            {"TEST_LABELS": json.dumps(["test:rocr-debug-agent", "test:rocblas"])},
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        names = {job["job_name"] for job in components}
+        self.assertIn("rocr-debug-agent-cpu", names)
+        self.assertIn("rocr-debug-agent-gpu", names)
+        self.assertIn("rocblas", names)
+
+    def test_rocr_debug_agent_deduplicated(self):
+        """Passing test:rocr-debug-agent with explicit members should not duplicate."""
+        with patch.dict(
+            os.environ,
+            {
+                "TEST_LABELS": json.dumps(
+                    [
+                        "test:rocr-debug-agent",
+                        "test:rocr-debug-agent-cpu",
+                        "test:rocr-debug-agent-gpu",
+                    ]
+                )
+            },
+        ):
+            fetch_test_configurations.run()
+            components = self._get_components()
+
+        job_names = [job["job_name"] for job in components]
+        self.assertEqual(job_names.count("rocr-debug-agent-cpu"), 1)
+        self.assertEqual(job_names.count("rocr-debug-agent-gpu"), 1)
+
+    # -----------------------
     # mesa-fork labels
     # -----------------------
 
@@ -1315,7 +1403,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_cpu_only_components_run_without_gpu_runner(self):
         """CPU-only components (linux_cpu_runner=True) run even without GPU runner."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocgdb-cpu"])
+        os.environ["TEST_LABELS"] = json.dumps(
+            ["test:rocgdb-cpu", "test:rocr-debug-agent-cpu"]
+        )
 
         def fake_get_all_families(_):
             # No test-runs-on or test-runs-on-labels defined - GPU runner not available
@@ -1329,12 +1419,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         names = {job["job_name"] for job in components}
-        # rocgdb-cpu has linux_cpu_runner=True, should be included
+        # rocgdb-cpu and rocr-debug-agent-cpu have linux_cpu_runner=True, should be included
         self.assertIn("rocgdb-cpu", names)
+        self.assertIn("rocr-debug-agent-cpu", names)
 
     def test_gpu_components_excluded_without_gpu_runner(self):
         """GPU-requiring components are excluded when no GPU runner is available."""
-        os.environ["TEST_LABELS"] = json.dumps(["test:rocblas"])
+        os.environ["TEST_LABELS"] = json.dumps(
+            ["test:rocblas", "test:rocr-debug-agent-gpu"]
+        )
 
         def fake_get_all_families(_):
             # No test-runs-on or test-runs-on-labels defined - GPU runner not available
@@ -1350,6 +1443,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         names = {job["job_name"] for job in components}
         # rocblas requires GPU, should be excluded when no runner available
         self.assertNotIn("rocblas", names)
+        self.assertNotIn("rocr-debug-agent-gpu", names)
 
     def test_multi_gpu_excluded_when_gpu_tests_gated(self):
         """Multi-GPU tests excluded when TEST_RUNS_ON is empty (trigger gating)."""
