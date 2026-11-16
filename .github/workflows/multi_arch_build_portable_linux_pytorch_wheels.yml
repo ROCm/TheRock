@@ -106,6 +106,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       test_package_extra_index_url:
         description: >-
           Optional --extra-index-url for tests, for ROCm packages that are not on
@@ -227,6 +231,10 @@ on:
           Only takes effect for gfx94X-dcgpu Python 3.12 builds.
         type: boolean
         default: false
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -261,6 +269,7 @@ jobs:
       EXCLUDE_IMPLICIT_TARGETS: ${{ inputs.exclude_implicit_targets }}
       CACHE_TYPE: ${{ inputs.cache_type }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
       # TODO: Move the sccache bucket and IAM role mapping into a shared script.
@@ -326,6 +335,11 @@ jobs:
         run: |
           pip install -r external-builds/pytorch/requirements-ci.txt
 
+      - name: Select PyTorch wheel variant
+        run: |
+          python build_tools/github_actions/pytorch_wheel_variant.py \
+            --build-variant "${BUILD_VARIANT}"
+
       - name: Checkout PyTorch source repos (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         timeout-minutes: 30
@@ -333,17 +347,20 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo-hashtag nightly \
             --no-commit-hipify
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --repo-hashtag nightly \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --repo-hashtag nightly \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --repo-hashtag master \
-            --no-commit-hipify
+          # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
+          if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
+            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --repo-hashtag nightly \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+              --repo-hashtag nightly \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+              --repo-hashtag master \
+              --no-commit-hipify
+          fi
 
       - name: Checkout PyTorch source repos (stable)
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
@@ -357,17 +374,20 @@ jobs:
             --gitrepo-origin "${pytorch_origin}" \
             --repo-hashtag "${PYTORCH_GIT_REF}" \
             --no-commit-hipify
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout \
-            --no-commit-hipify
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout \
-            --require-related-commit \
-            --no-commit-hipify
+          # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
+          if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
+            ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_triton_repo.py checkout \
+              --no-commit-hipify
+            ./external-builds/pytorch/pytorch_apex_repo.py checkout \
+              --require-related-commit \
+              --no-commit-hipify
+          fi
 
       # determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV (--rocm-sdk-version, --version-suffix).
@@ -435,7 +455,6 @@ jobs:
           elif [ "${CACHE_TYPE}" = "ccache" ]; then
             cache_flag="--use-ccache"
           fi
-
           # build_prod_wheels.py forwards --index-url and --find-links to pip
           # (ignoring empty), so pass both and supply whichever source applies:
           # --index-url for a PEP 503 index, --find-links for a flat page.
@@ -458,6 +477,7 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --pytorch-git-ref="${PYTORCH_GIT_REF}" \
             --pytorch-rocm-arch "${AMDGPU_TARGETS}" \
+            ${PYTORCH_BUILD_VARIANT_ARG} \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Report cache stats
@@ -522,15 +542,18 @@ jobs:
             -j "$(nproc)"
           rm -f "${FAT_STAGE}"/torch-*.whl
 
-          mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
-          python -m rocm_kpack.tools.split_python_wheels \
-            --input "${FAT_STAGE}"/torchvision-*.whl \
-            --output-dir "${PACKAGE_DIST_DIR}" \
-            --device-package-prefix amd-torchvision-device \
-            --overlay-root torchvision/ \
-            --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
-            --compression zstd \
-            -j "$(nproc)"
+          # AddressSanitizer variants do not build torchvision, so there is no wheel to split.
+          if [[ "${PYTORCH_SPLIT_TORCHVISION}" == true ]]; then
+            mv "${PACKAGE_DIST_DIR}"/torchvision-*.whl "${FAT_STAGE}/"
+            python -m rocm_kpack.tools.split_python_wheels \
+              --input "${FAT_STAGE}"/torchvision-*.whl \
+              --output-dir "${PACKAGE_DIST_DIR}" \
+              --device-package-prefix amd-torchvision-device \
+              --overlay-root torchvision/ \
+              --device-requires-dist "rocm-sdk-device-@GFXARCH@ == ${ROCM_SDK_VERSION}" \
+              --compression zstd \
+              -j "$(nproc)"
+          fi
 
           rm -rf "${FAT_STAGE}"
           echo "Post-split contents of ${PACKAGE_DIST_DIR}:"
@@ -543,7 +566,8 @@ jobs:
         id: pytorch-versions
         run: |
           python build_tools/github_actions/write_pytorch_versions.py \
-            --dist-dir "${PACKAGE_DIST_DIR}"
+            --dist-dir "${PACKAGE_DIST_DIR}" \
+            ${PYTORCH_TORCH_ONLY_ARG}
 
       - name: Configure AWS Credentials
         uses: ./.github/actions/configure_aws_product_publication_credentials
@@ -557,6 +581,7 @@ jobs:
           python build_tools/github_actions/publish_pytorch_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${BUILD_VARIANT}" \
             --structured
 
       - name: Capture job summary
