@@ -25,7 +25,7 @@ jobs:
     name: "Consumer graph drift check"
     runs-on: ubuntu-26.04
     steps:
-      - name: Checking out repository
+      - name: Checkout TheRock
         timeout-minutes: 10
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,7 +39,7 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt
 
-      - name: Fetch sources
+      - name: Fetch submodules with fetch_sources.py
         # All subproject sources must be present for the graph to be complete.
         timeout-minutes: 30
         env:
