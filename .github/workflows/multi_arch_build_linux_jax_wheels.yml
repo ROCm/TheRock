@@ -410,10 +410,6 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-  # Independent of the JAX build/test matrix (no rocm_package_index_url input
-  # at this level either, so default "" applies): pip-installs ROCm from the
-  # same wheels and runs the XLA bazel suite on one representative matrix
-  # cell, gated by trigger_xla_tests from configure_jax_release_matrix.py.
   test_xla:
     name: Test XLA
     if: ${{ inputs.trigger_xla_tests }}
@@ -422,7 +418,7 @@ jobs:
     with:
       test_amdgpu_target: gfx950
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
-      rocm_package_version: ${{ inputs.rocm_version }}
+      rocm_version: ${{ inputs.rocm_version }}
       therock_ref: ${{ inputs.ref || '' }}
       # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
       xla_ref: ${{ inputs.jax_ref }}
@@ -432,8 +428,6 @@ jobs:
       contents: read
 
   test_jax_wheels:
-    # !cancelled() so a skipped/failed test_xla (this build's own cell may
-    # not be the one with trigger_xla_tests) doesn't suppress JAX testing.
     if: ${{ !cancelled() && needs.configure_jax_tests.outputs.enabled == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests]
     name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}

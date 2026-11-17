@@ -17,9 +17,9 @@ on:
       rocm_package_index_url:
         description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: ""
-      rocm_package_version:
-        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      rocm_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
         default: ""
       therock_ref:
@@ -28,8 +28,8 @@ on:
         default: ""
       xla_ref:
         description: "ROCm/xla ref to check out."
-        required: true
         type: string
+        default: "rocm-jaxlib-v0.11.2"
       xla_repository:
         description: "Repository holding the XLA checkout the test suite runs from."
         type: string
@@ -46,7 +46,7 @@ on:
         # environment, so a number input there is rejected and the workflow
         # cannot be run by hand. Converted with fromJSON() where it is used.
         type: string
-        default: "120"
+        default: "240"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -68,8 +68,8 @@ on:
         description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
-      rocm_package_version:
-        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
+      rocm_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
         default: ""
       therock_ref:
@@ -144,11 +144,11 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
-      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_target || 'gfx950' }}
+      ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_target }}
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
-      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
-      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
       # Negative gtest filter, colon-separated:
       #   HloOpProfilerTest.BasicMeasurementsAreCorrect
       #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
@@ -196,8 +196,8 @@ jobs:
         with:
           persist-credentials: false
           path: xla
-          repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
-          ref: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+          repository: ${{ inputs.xla_repository }}
+          ref: ${{ inputs.xla_ref }}
 
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
@@ -213,7 +213,7 @@ jobs:
       # extra is just "device-${ROCM_AMD_GPU_TARGETS}".
       - name: Install rocm[libraries,devel] wheels
         run: |
-          pkg="rocm[libraries,devel,device-${ROCM_AMD_GPU_TARGETS}]${ROCM_PACKAGE_VERSION:+==$ROCM_PACKAGE_VERSION}"
+          pkg="rocm[libraries,devel,device-${ROCM_AMD_GPU_TARGETS}]${ROCM_VERSION:+==$ROCM_VERSION}"
           python build_tools/setup_venv.py .venv \
             --packages "${pkg}" \
             --index-url="${ROCM_PACKAGE_INDEX_URL}" \
