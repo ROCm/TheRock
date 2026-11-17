@@ -167,7 +167,6 @@ on:
           - large
         default: small
       trigger_xla_tests:
-        description: "Unused on the CI path today; see multi_arch_build_linux_jax_wheels.yml."
         type: boolean
         default: false
 run-name: Build Multi-Arch Linux JAX Wheels CI (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, py${{ inputs.python_version }}, ${{ inputs.jax_ref }})

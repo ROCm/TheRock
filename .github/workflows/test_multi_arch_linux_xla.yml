@@ -93,7 +93,7 @@ on:
         type: string
         default: "ROCm/xla"
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_target
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
         type: string
         default: "linux-gfx950-1gpu-ccs-ossci-rocm"
       test_timeout_minutes:
