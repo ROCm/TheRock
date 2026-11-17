@@ -235,6 +235,8 @@ jobs:
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          # include/exclude_family match these (family overrides included); empty = static matrix.
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
