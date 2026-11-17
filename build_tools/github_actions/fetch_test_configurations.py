@@ -131,14 +131,22 @@ _GPU_CONTAINER_OPTIONS = {
     ],
 }
 
+# Options that Apptainer-backed runners cannot honor: they always run as the
+# invoking user and cannot grant capabilities, so requesting them fails the job.
+_APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
+_APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
-def _build_container_options(job_config: dict, platform: str) -> dict:
+
+def _build_container_options(
+    job_config: dict, platform: str, amdgpu_families: str = ""
+) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
         job_config: The job configuration dictionary
         platform: The platform (e.g., "linux", "windows", "wsl")
+        amdgpu_families: The AMDGPU family string being tested
 
     Returns:
         The modified job_config with updated container_options
@@ -162,6 +170,12 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     # Add any job-specific container options
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
+
+    # Drop options the Apptainer runners for this family cannot honor
+    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+        options_parts = [
+            opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
+        ]
 
     # Concatenate all parts with a space separator
     job_config["container_options"] = " ".join(options_parts)
@@ -233,7 +247,8 @@ _rocgdb_common = {
 # (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
 # that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
 # targets, so those must be matched by the group string (e.g. "gfx1150",
-# "gfx125X-dcgpu"). Examples:
+# "gfx125X-dcgpu"). Targets = AMDGPU_TARGETS if set, else the static fetch-gfx-targets.
+# Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 #
@@ -389,7 +404,8 @@ test_matrix = {
             "linux": [
                 # CRITICAL FAILURE (hang): test causes hang during execution
                 # https://github.com/ROCm/TheRock/actions/runs/36185080189/job/108239321671
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -423,7 +439,13 @@ test_matrix = {
             "linux": 1,
         },
         "include_family": {
-            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
+            "linux": [
+                "gfx90a",
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx120X-all",
+                "gfx1250-strict",
+            ],
         },
     },
     "origami": {
@@ -475,7 +497,8 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -1369,6 +1392,8 @@ def run():
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
+    amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
@@ -1478,9 +1503,15 @@ def run():
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
         # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
-        _family_gfx_targets = []
-        if amdgpu_families and shortened_family and shortened_family in all_families:
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201"). AMDGPU_TARGETS
+        # (fetch-gfx-targets after the caller's family overrides) wins over the matrix.
+        _family_gfx_targets = amdgpu_targets
+        if (
+            not _family_gfx_targets
+            and amdgpu_families
+            and shortened_family
+            and shortened_family in all_families
+        ):
             _family_gfx_targets = (
                 all_families[shortened_family]
                 .get(platform, {})
@@ -1739,7 +1770,8 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform) for c in components_with_runners
+        _build_container_options(c, platform, amdgpu_families)
+        for c in components_with_runners
     ]
 
     # Separate sanity from the regular component matrix.

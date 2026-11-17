@@ -139,6 +139,7 @@ GTEST_ONLY_SHARDING_COMPONENTS = {
     "hipkernelprovider",
     "miopenprovider",
     "hipdnn-integration-tests",
+    "rocwmma",
 }
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
