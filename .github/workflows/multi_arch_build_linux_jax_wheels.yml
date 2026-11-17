@@ -412,17 +412,21 @@ jobs:
 
   test_xla:
     name: Test XLA
+    needs: [build_jax_wheels, configure_jax_tests]
     if: ${{ inputs.trigger_xla_tests }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
     with:
-      test_amdgpu_target: gfx950
+      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       therock_ref: ${{ inputs.ref || '' }}
       # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
       xla_ref: ${{ inputs.jax_ref }}
-      test_runs_on: linux-gfx950-1gpu-ccs-ossci-rocm
+      test_runs_on: ${{ matrix.test_runs_on }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read

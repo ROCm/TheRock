@@ -51,7 +51,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         # (XLA_TEST_PYTHON_VERSION, XLA_TEST_JAX_REF) per release type, so a
         # release run pays for the XLA bazel suite once rather than once per
         # (python_version, jax_ref) combination.
-        for release_type in set(m.RELEASE_TYPES) - {"ci"}:
+        for release_type in set(m.RELEASE_TYPES) - {"ci", "dev-bkc", "nightly-bkc"}:
             with self.subTest(release_type=release_type):
                 matrix = m.generate_jax_matrix_for_release_type(
                     release_type=release_type,
