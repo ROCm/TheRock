@@ -18,7 +18,7 @@
 # FINALIZE_SCRIPT: Optional compatibility bridge for projects that cannot yet
 #   take those build inputs. Invoked as
 #   `<script> --input-dir <raw wheels> --output-dir <wheels>
-#    --rocm-version <THEROCK_PACKAGE_VERSION> --patchelf <patchelf>`.
+#    --rocm-version <THEROCK_PACKAGE_VERSION>`.
 # ARTIFACT_DESCRIPTOR: Artifact descriptor, relative to the calling directory.
 #   It must include share/<name>/wheels/*.whl in the lib component.
 # ENV_FROM_VARS: Names of sub-project CMake variables (i.e. those set by the

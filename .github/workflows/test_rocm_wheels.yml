@@ -233,7 +233,8 @@ jobs:
           # small for runners with less GPU memory.
           ROCSHMEM_HEAP_SIZE: 16777216 # 16 MiB
         run: |
-          "${ROCSHMEM4PY_VENV_DIR}/bin/python" build_tools/github_actions/rocshmem4py_smoke.py
+          "${ROCSHMEM4PY_VENV_DIR}/bin/python" \
+            build_tools/packaging/python/rocshmem4py_install_test.py
 
       - name: Install rocm[libraries,devel]
         id: install_devel

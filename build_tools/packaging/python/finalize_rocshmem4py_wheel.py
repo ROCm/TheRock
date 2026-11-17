@@ -7,8 +7,8 @@
 Temporary compatibility bridge, opted into via FINALIZE_SCRIPT of
 therock_python_wheel_subproject(). After upstream rocshmem4py builds the wheel,
 this rewrites its version, its rocm-sdk-core requirement, and the extension
-RPATH. Remove this script, its test, and the FINALIZE_SCRIPT argument once
-rocshmem4py accepts those three values as build inputs from TheRock.
+RPATH. Remove this script and the FINALIZE_SCRIPT argument once rocshmem4py
+accepts those three values as build inputs from TheRock.
 """
 
 import argparse
@@ -23,7 +23,7 @@ import tempfile
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name, parse_wheel_filename
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
@@ -41,18 +41,6 @@ ROCSHMEM4PY_RPATH = ":".join(
 )
 
 
-def resolve_rocm_version(rocm_version: str) -> str:
-    """Map TheRock's local-build default version to a valid wheel version."""
-    # "git" is the THEROCK_PACKAGE_VERSION default for builds that do not set a
-    # version. Use build_python_packages.py's default so local wheels pin the
-    # rocm-sdk-core version that a local packaging run produces.
-    if rocm_version != "git":
-        return rocm_version
-    import compute_rocm_package_version
-
-    return compute_rocm_package_version.compute_version(custom_version_suffix=".dev0")
-
-
 def compute_version(built_version: str, rocm_version: str) -> str:
     """Replace upstream local metadata with TheRock's ROCm build identity."""
     version = Version(built_version)
@@ -61,6 +49,8 @@ def compute_version(built_version: str, rocm_version: str) -> str:
 
 
 def _set_runtime_requirement(metadata_path: Path, rocm_version: str) -> None:
+    # Wheel core metadata uses the email-header format. Parsing it as such
+    # preserves repeated Requires-Dist fields and their environment markers.
     parser = email.parser.BytesParser(
         policy=email.policy.default.clone(max_line_length=0)
     )
@@ -82,7 +72,6 @@ def _update_wheel_contents(
     _new_version: Version,
     *,
     rocm_version: str,
-    patchelf: str,
 ) -> None:
     metadata_paths = list(wheel_root.glob("*.dist-info/METADATA"))
     extensions = list(wheel_root.glob("_rocshmem4py*.so"))
@@ -95,7 +84,7 @@ def _update_wheel_contents(
     _set_runtime_requirement(metadata_paths[0], rocm_version)
     subprocess.run(
         [
-            patchelf,
+            "patchelf",
             "--set-rpath",
             ROCSHMEM4PY_RPATH,
             "--force-rpath",
@@ -110,7 +99,6 @@ def finalize_wheel(
     *,
     output_dir: Path,
     rocm_version: str,
-    patchelf: str,
 ) -> Path:
     sys.path.insert(0, str(_CHANGE_WHEEL_VERSION_DIR))
     from change_wheel_version import change_wheel_version
@@ -128,7 +116,6 @@ def finalize_wheel(
         callback_func=functools.partial(
             _update_wheel_contents,
             rocm_version=rocm_version,
-            patchelf=patchelf,
         ),
     )
     if finalized_wheel != staged_wheel:
@@ -141,9 +128,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--rocm-version", required=True)
-    parser.add_argument("--patchelf", default="patchelf")
     args = parser.parse_args(argv)
-    rocm_version = resolve_rocm_version(args.rocm_version)
+    try:
+        rocm_version = str(Version(args.rocm_version))
+    except InvalidVersion:
+        parser.error(
+            "--rocm-version must be the concrete version selected by the "
+            f"parent packaging pipeline; got {args.rocm_version!r}"
+        )
+    if shutil.which("patchelf") is None:
+        parser.error("patchelf must be available on PATH")
 
     input_wheels = sorted(args.input_dir.glob("rocshmem4py-*.whl"))
     if not input_wheels:
@@ -159,7 +153,6 @@ def main(argv: list[str] | None = None) -> None:
                 wheel,
                 output_dir=staging_dir,
                 rocm_version=rocm_version,
-                patchelf=args.patchelf,
             )
             for wheel in input_wheels
         ]

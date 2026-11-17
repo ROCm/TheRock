@@ -60,14 +60,12 @@ if(THEROCK_PYTHON_WHEEL_FINALIZE_SCRIPT)
       "THEROCK_PACKAGE_VERSION is required to version and runtime-pin "
       "${THEROCK_PYTHON_WHEEL_NAME}")
   endif()
-  find_program(THEROCK_PYTHON_WHEEL_PATCHELF NAMES patchelf REQUIRED)
   set(_raw_wheel_dir "${CMAKE_CURRENT_BINARY_DIR}/raw-wheelhouse")
   set(_finalize_commands
     COMMAND "${Python3_EXECUTABLE}" "${THEROCK_PYTHON_WHEEL_FINALIZE_SCRIPT}"
       --input-dir "${_raw_wheel_dir}"
       --output-dir "${_wheel_dir}"
       --rocm-version "${THEROCK_PACKAGE_VERSION}"
-      --patchelf "${THEROCK_PYTHON_WHEEL_PATCHELF}"
   )
 else()
   set(_raw_wheel_dir "${_wheel_dir}")
