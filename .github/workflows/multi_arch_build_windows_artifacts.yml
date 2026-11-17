@@ -244,6 +244,16 @@ jobs:
         run: |
           cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
+      - name: Validate S_CSELECT compare folding
+        if: ${{ inputs.stage_name == 'compiler-runtime' }}
+        run: |
+          cmake --build "${BUILD_DIR}/compiler/amd-llvm/build" --target llc FileCheck
+          "${BUILD_DIR}/compiler/amd-llvm/build/bin/llc.exe" \
+            -mtriple=amdgpu9.00 -run-pass=peephole-opt -o - \
+            compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/optimize-compare-cselect.mir | \
+            "${BUILD_DIR}/compiler/amd-llvm/build/bin/FileCheck.exe" \
+              compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/optimize-compare-cselect.mir
+
       - name: Run build tests (Comgr, blocking)
         if: ${{ !cancelled() && inputs.stage_name == 'compiler-runtime' }}
         env:
@@ -258,18 +268,18 @@ jobs:
       - name: Prepare Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: |
-          mkdir -p "${BUILD_DIR}/comgr-regression-combination"
+          mkdir -p "${BUILD_DIR}/comgr-cselect-fix"
           cp "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.dll" \
              "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.pdb" \
              "${BUILD_DIR}/base/aux-overlay/build/therock_manifest.json" \
-             "${BUILD_DIR}/comgr-regression-combination/"
+             "${BUILD_DIR}/comgr-cselect-fix/"
 
       - name: Upload Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: comgr-windows-x64-regression-combination
-          path: ${{ env.BUILD_DIR }}/comgr-regression-combination/
+          name: comgr-windows-x64-cselect-fix
+          path: ${{ env.BUILD_DIR }}/comgr-cselect-fix/
           if-no-files-found: error
 
       - name: Report
