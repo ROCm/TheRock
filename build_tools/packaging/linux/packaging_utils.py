@@ -149,6 +149,25 @@ def is_postinstallscripts_available(pkg_info):
     return is_key_defined(pkg_info, "Postinstall")
 
 
+def is_etc_install_enabled(pkg_info):
+    """
+    Verifies whether the package installs its etc/ files at the system /etc.
+
+    Enabled per package with the Install_Etc key; other packages keep any
+    etc/ files under the install prefix. A package that ships an
+    ld.so.conf.d entry also needs "enable_ldconfig" in
+    amdrocm-alternatives.json.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if Install_Etc key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Install_Etc")
+
+
 def is_meta_package(pkg_info):
     """
     Verifies whether Metapackage key is enabled for a package.
@@ -371,7 +390,7 @@ def version_to_str(version_str):
     This function transforms a ROCm version from its dotted format
     (e.g., "7.1.0") into a numeric string (e.g., "70100")
     Ex : 7.10.0 -> 71000
-         10.1.0 - > 100100
+         10.1.0 -> 100100
          7.1 -> 70100
          7.1.1.1 -> 70101
          7.10.0~rc2 -> 71000

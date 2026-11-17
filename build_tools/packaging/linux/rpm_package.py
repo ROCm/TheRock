@@ -184,12 +184,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkg_name = update_package_name(pkg_name, config)
 
-    # etc/ files install at the system /etc rather than the prefix. They are
-    # staged next to the specfile and listed individually so the package
-    # never owns OS directories.
+    # For opted-in packages, etc/ files install at the system /etc rather than
+    # the prefix. They are staged next to the specfile and listed individually
+    # so the package never owns OS directories.
     etc_staging_dir = Path(specfile).parent / "etc_staging"
     etc_files = []
-    if stage_etc_files(sourcedir_list, etc_staging_dir, version, config.version_suffix):
+    if is_etc_install_enabled(pkg_info) and stage_etc_files(
+        sourcedir_list, etc_staging_dir, version, config.version_suffix
+    ):
         etc_files = list_etc_entries(etc_staging_dir)
 
     env = Environment(
