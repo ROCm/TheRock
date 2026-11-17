@@ -22,6 +22,10 @@ on:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
         default: ""
+      therock_repo:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
       therock_ref:
         description: "Branch, tag or SHA to checkout from TheRock repo."
         type: string
@@ -70,6 +74,10 @@ on:
         default: "https://nightly.repo.amd.com/rocm/whl-next/"
       rocm_version:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
+        type: string
+        default: ""
+      therock_repo:
+        description: "Repository to checkout. Defaults to github.repository."
         type: string
         default: ""
       therock_ref:
@@ -186,7 +194,7 @@ jobs:
         timeout-minutes: 15
         with:
           persist-credentials: false
-          repository: "rocm/TheRock"
+          repository: ${{ inputs.therock_repo || github.repository }}
           ref: ${{ inputs.therock_ref || '' }}
 
       - name: Checkout XLA
