@@ -212,6 +212,8 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
         "rocwmma",
         "hiptensor",
         "composable-kernel",
+        "hipthreads",
+        "hipthreads_examples",
     ],
     "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
     "comm-libs": ["rccl", "rocshmem"],

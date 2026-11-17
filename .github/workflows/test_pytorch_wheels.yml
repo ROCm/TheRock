@@ -303,6 +303,25 @@ jobs:
             -- \
             --continue-on-collection-errors
 
+      # Keep this separate from the core invocation because bypassing upstream's
+      # Windows blocklist would also re-enable blocklisted core modules.
+      - name: Run PyTorch transformer tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 60
+        env:
+          # Opt Navi into AOTriton kernels that are disabled by default so the
+          # transformer suite exercises them instead of only fallback paths.
+          TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL: "1"
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
+            --include test_transformers \
+            -- \
+            --ignore-win-blocklist \
+            --continue-on-collection-errors
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
