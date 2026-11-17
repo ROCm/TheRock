@@ -413,10 +413,6 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
 
 
 def test_superrepo_map_attributes_each_key(tmp_path: Path) -> None:
-    # straddler has no real counterpart today (see
-    # test_no_libraries_to_systems_consumer_edges), but a subproject sourced
-    # from both roots must report both rather than silently keeping whichever
-    # matched first.
     _write(
         tmp_path / "CMakeLists.txt",
         """
@@ -441,8 +437,6 @@ therock_cmake_subproject_declare(variable-sourced
         tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
     ).analyze()
 
-    # Two keys sharing one subtree are attributed independently; the
-    # unresolved EXTERNAL_SOURCE_DIR is absent rather than guessed at.
     assert result.build_superrepo_map() == {
         "hip-clr": ["rocm-systems"],
         "ocl-clr": ["rocm-systems"],
@@ -452,15 +446,7 @@ therock_cmake_subproject_declare(variable-sourced
 
 
 def test_superrepo_map_on_real_tree() -> None:
-    """Anchor real-tree attribution and pin the monorepos' one-way dependency.
-
-    Nothing in rocm-systems consumes a rocm-libraries component, so a change
-    confined to rocm-libraries cannot affect any rocm-systems test. Scoped test
-    selection relies on that: it is what makes skipping rocm-systems jobs (e.g.
-    hip-tests) on a rocm-libraries bump sound rather than merely cheap. If the
-    edge assertion fails, a new edge inverted that relationship and the scoping
-    rationale no longer holds -- widen selection before landing the edge.
-    """
+    """Anchor real-tree attribution and pin the monorepos' one-way dependency."""
     repo_root = Path(__file__).resolve().parents[2]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
@@ -472,8 +458,6 @@ def test_superrepo_map_on_real_tree() -> None:
     assert superrepo_map.get("miopen") == ["rocm-libraries"]
     assert superrepo_map.get("hip-tests") == ["rocm-systems"]
     assert superrepo_map.get("hip-clr") == ["rocm-systems"]
-    # amd-llvm is its own submodule, not a monorepo subtree, so it has no
-    # attribution -- unknown, not unaffected.
     assert "amd-llvm" not in superrepo_map
 
     offenders = [

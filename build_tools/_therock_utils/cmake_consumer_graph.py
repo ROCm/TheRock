@@ -257,21 +257,13 @@ class AnalysisResult:
     def build_superrepo_map(self) -> dict[str, list[str]]:
         """Map each graph key to the external monorepo(s) its sources live in.
 
-        This surfaces the attribution ``build_subtree_map`` discards: which root
-        (``rocm-libraries`` / ``rocm-systems``) an EXTERNAL_SOURCE_DIR resolved
-        under. It lets a change confined to one monorepo seed test selection with
-        just that monorepo's components instead of falling back to testing
-        everything.
-
-        Values are lists because a subproject may declare several source dirs and
-        is attributed to each root they land in; today every subproject resolves
-        to exactly one root.
+        Values are lists because a subproject attributed to several roots
+        reports each; today every subproject resolves to exactly one.
 
         A key is absent when it has no statically resolvable source under either
-        root: third-party and separately-submoduled subprojects (amd-llvm,
-        rocgdb, libhipcxx), and the ``therock_enable_external_source()`` cases
-        ``_resolve_source_dir_section`` skips. Absent is *unknown*, not
-        *unaffected* -- callers must not treat it as "safe to skip".
+        root (third-party, separately-submoduled such as amd-llvm/rocgdb/
+        libhipcxx, and ``therock_enable_external_source()`` cases). Absent is
+        *unknown*, not *unaffected* -- callers must not treat it as safe to skip.
         """
         key_to_roots: dict[str, set[str]] = {}
         for key, root_name, _subtree in self._attributed_sources():
