@@ -135,6 +135,17 @@ class TestUploadPythonPackageLogs(unittest.TestCase):
             self.assertFalse((base / "logs" / "python" / "notes.txt").exists())
             self.assertFalse((base / "python").exists())
 
+    def test_missing_log_dir_skips(self):
+        output_root = _make_output_root()
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            missing = Path(tmp) / "logs"
+            backend = LocalStorageBackend(Path(staging))
+            index_url = upload_python_packages.upload_python_package_logs(
+                missing, output_root, backend
+            )
+            self.assertIsNone(index_url)
+            self.assertEqual(list(Path(staging).rglob("*")), [])
+
 
 class TestWriteGhaUploadSummary(unittest.TestCase):
     """Tests for write_gha_upload_summary()."""
