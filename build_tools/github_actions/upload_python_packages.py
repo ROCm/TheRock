@@ -102,29 +102,36 @@ def upload_packages(
 
 def upload_python_package_logs(
     log_dir: Path, output_root: WorkflowOutputRoot, backend: StorageBackend
-) -> None:
+) -> str | None:
     """Upload per-package setup.py logs from a successful build.
 
     Logs are ``<packages_dir>/logs/<package>.log``. A missing directory is
     skipped: PyTorch and JAX uploads use this script and do not write these
     files.
+
+    Returns:
+        URL to the log index page, or None if no logs were uploaded.
     """
     if not log_dir.is_dir():
         log(
             f"[INFO] Python package log directory {log_dir} not found. "
             "Skipping log upload."
         )
-        return
+        return None
 
     log_files = sorted(path for path in log_dir.glob("*.log") if path.is_file())
     if not log_files:
         log(f"[INFO] No Python package logs in {log_dir}. Skipping log upload.")
-        return
+        return None
 
     dest = output_root.python_package_logs()
     log(f"[INFO] Uploading {len(log_files)} Python package log(s) to {dest.s3_uri}")
     count = backend.upload_directory(log_dir, dest, include=["*.log"])
     log(f"[INFO] Uploaded {count} Python package log(s)")
+
+    index_url = output_root.python_package_logs_index().https_url
+    log(f"[INFO] Python package logs uploaded to: {index_url}")
+    return index_url
 
 
 def write_gha_upload_summary(packages_loc: StorageLocation):

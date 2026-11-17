@@ -282,6 +282,10 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/logs/python")
 
+    def python_package_logs_index(self) -> StorageLocation:
+        """Location for the Python package log index (server-side generated)."""
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/python/index.html")
+
     # -- Tarballs ---------------------------------------------------------------
 
     def tarballs(self) -> StorageLocation:
