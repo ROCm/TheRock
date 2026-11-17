@@ -5,7 +5,7 @@
 
 These exercise the install-time reconcile that mirrors per-ISA device files
 (.kpack archives, kernel DBs, per-arch .so) from the rocm-sdk-libraries overlay
-into the expanded rocm-sdk-devel tree, driven by each installed
+into the initialized rocm-sdk-devel tree, driven by each installed
 `rocm-sdk-device-*` wheel's `_devel_links` manifest.
 
 The reconcile is unit-tested against a synthetic site-packages directory: fake
@@ -14,13 +14,17 @@ discovers them via `distributions(path=[site])`, alongside a libraries overlay
 holding the real device files and the manifests.
 """
 
+import errno
 import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 from pathlib import Path, PurePosixPath
+
+from utils import intercept_file_write
 
 # Import the runtime module straight from the package template source tree.
 ROCM_SDK_SRC = (
@@ -51,7 +55,7 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.site = Path(self._tmp.name)
-        # The expanded (generic) devel platform dir must already exist.
+        # The initialized (generic) devel platform dir must already exist.
         self.devel_dir = self.site / DEVEL_NAME
         self.devel_dir.mkdir(parents=True)
         (self.devel_dir / "__init__.py").touch()
@@ -284,6 +288,159 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         self.assertIn(rec_name, paths)
         self.assertEqual(len(paths), len(set(paths)), "duplicate RECORD entries")
 
+    def test_record_update_is_atomically_published(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        original_record = record_path.read_text(encoding="utf-8")
+        new_entry = "_rocm_sdk_devel_test/bin/new-link.dll"
+
+        publication_ready = threading.Event()
+        allow_publication = threading.Event()
+        worker_errors: list[BaseException] = []
+
+        def pause() -> None:
+            publication_ready.set()
+            if not allow_publication.wait(timeout=5):
+                raise TimeoutError("Timed out waiting to publish the RECORD")
+
+        def update_record() -> None:
+            try:
+                _devel._ensure_record_entries(record_path, [new_entry])
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with intercept_file_write(record_path, on_write=pause):
+            worker = threading.Thread(target=update_record)
+            worker.start()
+            try:
+                self.assertTrue(
+                    publication_ready.wait(timeout=5),
+                    "RECORD update did not reach its publication step",
+                )
+                self.assertEqual(
+                    record_path.read_text(encoding="utf-8"), original_record
+                )
+            finally:
+                allow_publication.set()
+                worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "RECORD update did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        updated_record = record_path.read_text(encoding="utf-8")
+        self.assertIn("lib/a.dll", updated_record)
+        self.assertIn(new_entry, updated_record)
+
+    def test_record_update_retries_transient_replace_failure(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        real_replace = Path.replace
+        replace_attempts = 0
+
+        def flaky_replace(path: Path, target: Path) -> Path:
+            nonlocal replace_attempts
+            replace_attempts += 1
+            if replace_attempts == 1:
+                raise PermissionError("destination is temporarily busy")
+            return real_replace(path, target)
+
+        with (
+            unittest.mock.patch.object(Path, "replace", new=flaky_replace),
+            unittest.mock.patch.object(_devel.time, "sleep") as sleep,
+        ):
+            _devel._ensure_record_entries(record_path, ["new-link"])
+
+        self.assertEqual(replace_attempts, 2)
+        sleep.assert_called_once_with(_devel._REPLACE_RETRY_DELAY_SECONDS)
+        self.assertIn("new-link", record_path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows file replacement behavior")
+    def test_record_update_retries_while_reader_has_file_open(self):
+        record_path = self._add_device_wheel("gfx110X", {"lib/a.dll": "data"})
+        original_record = record_path.read_text(encoding="utf-8")
+        retry_started = threading.Event()
+        allow_retry = threading.Event()
+        worker_errors: list[BaseException] = []
+
+        def paused_sleep(_seconds: float) -> None:
+            retry_started.set()
+            if not allow_retry.wait(timeout=5):
+                raise TimeoutError("Timed out waiting to retry RECORD replacement")
+
+        def update_record() -> None:
+            try:
+                _devel._ensure_record_entries(record_path, ["new-link"])
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with (
+            record_path.open(encoding="utf-8") as reader,
+            unittest.mock.patch.object(_devel.time, "sleep", new=paused_sleep),
+        ):
+            worker = threading.Thread(target=update_record)
+            worker.start()
+            try:
+                self.assertTrue(
+                    retry_started.wait(timeout=5),
+                    "RECORD replacement did not encounter the open reader",
+                )
+                self.assertEqual(reader.read(), original_record)
+            finally:
+                reader.close()
+                allow_retry.set()
+                worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "RECORD update did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        self.assertIn("new-link", record_path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows file locking behavior")
+    def test_file_lock_waits_for_contender(self):
+        lock_path = self.site / "test.lock"
+        acquired = threading.Event()
+        contender_started = threading.Event()
+        worker_errors: list[BaseException] = []
+
+        def contend_for_lock() -> None:
+            try:
+                with lock_path.open("a") as lock_file:
+                    contender_started.set()
+                    lock = _devel.FileLock(lock_file)
+                    acquired.set()
+                    lock.unlock()
+            except BaseException as exc:
+                worker_errors.append(exc)
+
+        with lock_path.open("a") as first_lock_file:
+            first_lock = _devel.FileLock(first_lock_file)
+            worker = threading.Thread(target=contend_for_lock)
+            worker.start()
+            self.assertTrue(contender_started.wait(timeout=5))
+            self.assertFalse(acquired.wait(timeout=0.1))
+            first_lock.unlock()
+            worker.join(timeout=5)
+
+        self.assertFalse(worker.is_alive(), "Contending lock did not finish")
+        if worker_errors:
+            raise worker_errors[0]
+        self.assertTrue(acquired.is_set())
+
+    @unittest.skipUnless(os.name == "nt", "Windows file locking behavior")
+    def test_file_lock_retries_beyond_native_limit(self):
+        import msvcrt
+
+        native_timeout = OSError(errno.EDEADLOCK, "file is locked")
+        with (
+            (self.site / "test.lock").open("a") as lock_file,
+            unittest.mock.patch.object(
+                msvcrt,
+                "locking",
+                side_effect=[native_timeout, native_timeout, None],
+            ) as locking,
+        ):
+            _devel.FileLock(lock_file)
+
+        self.assertEqual(locking.call_count, 3)
+
     def test_existing_duplicate_record_entry_is_removed(self):
         # A duplicate RECORD row (e.g. from a botched prior write) must be
         # repaired even when there is nothing new to link.
@@ -338,6 +495,42 @@ class ReconcileDeviceLinksTest(unittest.TestCase):
         self._reconcile()
         self.assertTrue(dest.samefile(src))
         self.assertEqual(dest.read_text(), "real kpack")
+
+    def test_missing_target_leaves_eager_record_entries(self):
+        """Missing targets fail after eager RECORD ownership and can be repaired."""
+        # Install a device wheel with two link targets.
+        present_relpath = ".kpack/blas_lib_gfx942.kpack"
+        missing_relpath = "lib/rocblas/library/Foo_gfx942.co"
+        record = self._add_device_wheel(
+            "gfx942",
+            {
+                present_relpath: "kpack data",
+                missing_relpath: "kernel object",
+            },
+        )
+
+        # Remove one link target and expect an error.
+        missing_target = self.site / LIBS_NAME / missing_relpath
+        missing_target.unlink()
+        with self.assertRaisesRegex(FileNotFoundError, "Hardlink target is not a file"):
+            self._reconcile()
+
+        # Verify RECORD ownership was established before the failure.
+        record_paths = self._record_paths(record)
+        for relpath in (present_relpath, missing_relpath):
+            self.assertEqual(record_paths.count(f"{DEVEL_NAME}/{relpath}"), 1)
+        present_target = self.site / LIBS_NAME / present_relpath
+        self.assertTrue((self.devel_dir / present_relpath).samefile(present_target))
+        self.assertFalse((self.devel_dir / missing_relpath).exists())
+
+        # Restore the link target and expect repair to succeed.
+        missing_target.write_text("kernel object")
+        self.assertEqual(self._reconcile(), 1)
+        record_paths = self._record_paths(record)
+        for relpath in (present_relpath, missing_relpath):
+            target = self.site / LIBS_NAME / relpath
+            self.assertTrue((self.devel_dir / relpath).samefile(target))
+            self.assertEqual(record_paths.count(f"{DEVEL_NAME}/{relpath}"), 1)
 
     def test_no_uncollapsed_parent_refs_reach_the_filesystem(self):
         # Manifest link targets lead with one ".." per relpath component, so a

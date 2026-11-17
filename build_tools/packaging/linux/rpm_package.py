@@ -125,7 +125,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             pkg_name,
             config.artifacts_dir,
             config.gfx_arch,
-            config.enable_kpack,
             target_members=package_target_members(config),
         )
         sourcedir_list.extend(dir_list)
@@ -138,19 +137,14 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         sourcedir_list = [path for path in sourcedir_list if path.is_dir()]
 
         # GFX_META is a versioned meta package (empty content, just dependencies)
-        is_gfx_meta = config.enable_kpack and config.gfx_arch == GFX_META
+        is_gfx_meta = config.gfx_arch == GFX_META
 
         # Skip if we have no artifacts for non-meta packages
         if not sourcedir_list and not is_meta and not is_gfx_meta:
-            if config.enable_kpack:
-                logger.info(
-                    f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
-                )
-                return False
-            else:
-                sys.exit(
-                    f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
-                )
+            logger.info(
+                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+            )
+            return False
 
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
@@ -192,7 +186,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "rpmrecommends": rpmrecommends,
         "rpmsuggests": rpmsuggests,
         "disable_rpm_strip": True,
-        "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
         "exclude_libpython_requires": exclude_libpython_requires,
@@ -205,23 +198,48 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
 
 def generate_rpm_postscripts(pkg_info, config: PackageConfig):
-    """Generate RPM postinst/prerm sections.
+    """Generate RPM %post and %preun sections.
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
     config: Configuration object containing package metadata
 
-    Returns: rpm script sections for specfile
+    Returns: Dictionary containing rendered RPM script sections.
     """
-    # RPM maintainer scripts
-    EXEC_SCRIPTS = {
-        "preinst": "%pre",
-        "postinst": "%post",
-        "prerm": "%preun",
-        "postrm": "%postun",
-    }
+
     pkg_name = pkg_info.get("Package")
+    if not pkg_name:
+        raise ValueError("Package metadata does not contain a valid 'Package' name")
+
+    alternatives_binaries = load_alternatives_binaries()
+    json_pkg_config = alternatives_binaries.get(pkg_name)
+
+    if json_pkg_config is None:
+        raise ValueError(
+            f"No alternatives configuration found for RPM package " f"{pkg_name!r}"
+        )
+
     parts = config.rocm_version.split(".")
+
+    if len(parts) < 3:
+        raise ValueError(
+            f"Version string '{config.rocm_version}' does not have "
+            "major.minor.patch versions"
+        )
+
+    version_major_match = re.match(r"^\d+", parts[0])
+    version_minor_match = re.match(r"^\d+", parts[1])
+    version_patch_match = re.match(r"^\d+", parts[2])
+
+    if not all(
+        (
+            version_major_match,
+            version_minor_match,
+            version_patch_match,
+        )
+    ):
+        raise ValueError(f"Unable to parse version string '{config.rocm_version}'")
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -230,29 +248,45 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
             default=False,
         ),
     )
-    # Prepare your context dictionary
-    context = {
-        "install_prefix": config.install_prefix,
-        "version_major": int(re.match(r"^\d+", parts[0]).group()),
-        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
-        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
-        "target": "rpm",
+
+    rpm_sections = {
+        "preinst": "%pre",
+        "postinst": "%post",
+        "prerm": "%preun",
+        "postrm": "%postun",
     }
 
-    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
-    # Collect all matching files
-    # This will hold rendered RPM script sections
+    scripts = json_pkg_config["scripts"]
+    binaries = json_pkg_config["binaries"]
+    core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
+    llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+
+    unsupported_scripts = set(scripts) - set(rpm_sections)
+    if unsupported_scripts:
+        raise ValueError(
+            f"Unsupported RPM maintainer scripts for package "
+            f"{pkg_name!r}: {sorted(unsupported_scripts)}"
+        )
+
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(version_major_match.group()),
+        "version_minor": int(version_minor_match.group()),
+        "version_patch": int(version_patch_match.group()),
+        "target": "rpm",
+        "package_name": pkg_name,
+        "binaries": binaries,
+        "core_symlinks": core_symlinks,
+        "llvm_symlinks": llvm_symlinks,
+    }
+
     rpm_script_sections = {}
 
-    for script, rpm_section in EXEC_SCRIPTS.items():
-        pattern = f"{pkg_name}-{script}.j2"
-
-        for file in templates_root.glob(pattern):
-            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
-            rendered = template.render(context)
-
-            # Store rendered script under its RPM section name
-            rpm_script_sections[rpm_section] = rendered
+    for script in scripts:
+        rpm_section = rpm_sections[script]
+        template_name = f"template/scripts/amdrocm-{script}.j2"
+        template = env.get_template(template_name)
+        rpm_script_sections[rpm_section] = template.render(context)
 
     return rpm_script_sections
 

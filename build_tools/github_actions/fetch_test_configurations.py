@@ -100,44 +100,63 @@ _BASE_CONTAINER_OPTIONS = [
     "--ulimit nofile=1048576:1048576",
 ]
 
-# GPU-specific container options (only applied when linux_cpu_runner != True)
-# --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
-# --group-add video - Grants access to GPU video group
-# --device /dev/kfd - AMD KFD device for GPU compute
-# --device /dev/dri - Direct Rendering Infrastructure devices
-# --group-add 993,992,110 - Additional GPU-related groups
-# --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
-# -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
-_GPU_CONTAINER_OPTIONS = [
-    "--security-opt seccomp=unconfined",
-    "--group-add video",
-    "--device /dev/kfd",
-    "--device /dev/dri",
-    "--group-add 993",
-    "--group-add 992",
-    "--group-add 110",
-    "--env-file /etc/podinfo/gha-gpu-isolation-settings",
-    "-e ROCR_VISIBLE_DEVICES",
-    "-e KUBE_CPU_REQUEST",
-]
+# GPU-specific container options per platform (only applied when linux_cpu_runner != True)
+# linux:
+#   --security-opt seccomp=unconfined - enables memory mapping and device ioctls needed by ROCm/HPC GPU workloads
+#   --group-add video - Grants access to GPU video group
+#   --device /dev/kfd - AMD KFD device for GPU compute
+#   --device /dev/dri - Direct Rendering Infrastructure devices
+#   --group-add 993,992,110 - Additional GPU-related groups
+#   --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+#   -e ROCR_VISIBLE_DEVICES - Pass host's GPU isolation env var to container (used on ARC runners)
+# wsl: the GPU is only /dev/dxg (no /dev/kfd or /dev/dri), with its driver
+#   libraries in /usr/lib/wsl on the host.
+_GPU_CONTAINER_OPTIONS = {
+    "linux": [
+        "--security-opt seccomp=unconfined",
+        "--group-add video",
+        "--device /dev/kfd",
+        "--device /dev/dri",
+        "--group-add 993",
+        "--group-add 992",
+        "--group-add 110",
+        "--env-file /etc/podinfo/gha-gpu-isolation-settings",
+        "-e ROCR_VISIBLE_DEVICES",
+        "-e KUBE_CPU_REQUEST",
+    ],
+    "wsl": [
+        "--device /dev/dxg",
+        "-v /usr/lib/wsl:/usr/lib/wsl",
+        "-e LD_LIBRARY_PATH=/usr/lib/wsl/lib",
+    ],
+}
+
+# Options that Apptainer-backed runners cannot honor: they always run as the
+# invoking user and cannot grant capabilities, so requesting them fails the job.
+_APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
+_APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
 
-def _build_container_options(job_config: dict, platform: str) -> dict:
+def _build_container_options(
+    job_config: dict, platform: str, amdgpu_families: str = ""
+) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
         job_config: The job configuration dictionary
-        platform: The platform (e.g., "linux", "windows")
+        platform: The platform (e.g., "linux", "windows", "wsl")
+        amdgpu_families: The AMDGPU family string being tested
 
     Returns:
         The modified job_config with updated container_options
     """
-    # Containers are Linux-only (test_component.yml gates container.image on
-    # platform == 'linux'). On other platforms, collapse container_options to an
-    # empty string so `options: ${{ fromJSON(...).container_options }}` doesn't
-    # evaluate to a YAML sequence and fail template parsing.
-    if platform != "linux":
+    # Containers are Linux-only, including WSL (test_component.yml gates
+    # container.image on platform != 'windows'). On Windows, collapse
+    # container_options to an empty string so
+    # `options: ${{ fromJSON(...).container_options }}` doesn't evaluate to a
+    # YAML sequence and fail template parsing.
+    if platform not in _GPU_CONTAINER_OPTIONS:
         job_config["container_options"] = ""
         return job_config
 
@@ -146,11 +165,17 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
 
     # Add GPU-specific options unless this is a CPU-only runner
     if not job_config.get("linux_cpu_runner", False):
-        options_parts.extend(_GPU_CONTAINER_OPTIONS)
+        options_parts.extend(_GPU_CONTAINER_OPTIONS[platform])
 
     # Add any job-specific container options
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
+
+    # Drop options the Apptainer runners for this family cannot honor
+    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+        options_parts = [
+            opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
+        ]
 
     # Concatenate all parts with a space separator
     job_config["container_options"] = " ".join(options_parts)
@@ -183,7 +208,7 @@ _rocgdb_common = {
     "timeout_minutes": 30,
     "platform": ["linux"],
     "total_shards": 1,
-    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:aa3f8966fcdefca04d4c04fb10ae7f8b654d1bb1cc6a894ea7089e5a01953197",  # 2026-07-22T15:21:18.527038581Z
+    "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:e89ba4458be7add8ee1f8e398da9f3fd8816a0ad56d521054543916d4133184a",
     "container_options": ["--cap-add=SYS_PTRACE"],
 }
 
@@ -222,7 +247,8 @@ _rocgdb_common = {
 # (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
 # that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
 # targets, so those must be matched by the group string (e.g. "gfx1150",
-# "gfx125X-dcgpu"). Examples:
+# "gfx125X-dcgpu"). Targets = AMDGPU_TARGETS if set, else the static fetch-gfx-targets.
+# Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 #
@@ -246,6 +272,10 @@ _rocgdb_common = {
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
 # still supply artifacts and do not exclude tests. Omit the field for no stage gate.
+#
+# A component's "skip_build_variant" lists BUILD_VARIANT values (exact match) on which
+# it is not scheduled, e.g. ["asan", "host-asan", "asan-debug", "host-asan-debug"] for a
+# test that cannot work under ASAN. Omit the field to run on every build variant.
 
 test_matrix = {
     # Sanity runs first when compiler-runtime artifacts are available.
@@ -261,7 +291,7 @@ test_matrix = {
             "windows": 1,
         },
         # Supply the system OpenCL ICD loader for clinfo (Linux only).
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:b4966196b9cec5742776504fd76e7deb4d3765471da687354be9edcaf689c151",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f7f293a91b8bcf68d7a4afa715578eb252e0455e56e2df3dfab6921bcc5dbd80",
         # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
         # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
         "container_options": ["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
@@ -272,10 +302,14 @@ test_matrix = {
         "fetch_artifact_args": "--hip-tests --tests",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
-        "platform": ["linux", "windows"],
+        # "wsl": the Linux build on a WSL-hosted runner (ci:run-wsl).
+        "platform": ["linux", "windows", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 4,
             "windows": 4,
+            "wsl": 4,
         },
     },
     # hipFile (storage-libs) unit tests. CPU-only (mocked), so they run quickly
@@ -370,7 +404,8 @@ test_matrix = {
             "linux": [
                 # CRITICAL FAILURE (hang): test causes hang during execution
                 # https://github.com/ROCm/TheRock/actions/runs/36185080189/job/108239321671
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -404,7 +439,13 @@ test_matrix = {
             "linux": 1,
         },
         "include_family": {
-            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
+            "linux": [
+                "gfx90a",
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx120X-all",
+                "gfx1250-strict",
+            ],
         },
     },
     "origami": {
@@ -456,7 +497,8 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -626,6 +668,7 @@ test_matrix = {
             # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
             # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx117X architectures
             # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx908",
@@ -639,6 +682,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
                 # KNOWN FAILURE (timeout): Quick suite exceeds 900s on FP16 strided-batched clipped-ReLU
@@ -657,6 +701,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
             ],
@@ -720,6 +765,43 @@ test_matrix = {
             ],
         },
     },
+    # hipFFT multi-GPU subset: only the *multi_gpu* hipfft tests, scheduled on
+    # 8-GPU runners. Shares the hipfft-test binary/artifacts with the single-GPU
+    # "hipfft" job above. test_runner.py rewrites the ctest label to
+    # "multigpu_<category>" for this job (see MULTI_GPU_COMPONENTS), so it selects
+    # only the multigpu_* labelled tests from hipfft's test_categories.yaml.
+    "hipfft-multi-gpu": {
+        "job_name": "hipfft-multi-gpu",
+        # Selected whenever the base hipfft component is (test:hipfft /
+        # PROJECTS_TO_TEST=hipfft), since this variant has no label of its own.
+        "base_project": "hipfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "test_types": ["comprehensive", "full"],
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
+    # rocFFT multi-GPU subset: mirror of hipfft-multi-gpu for rocFFT. Selects only
+    # the multigpu_* labelled tests from rocfft's test_categories.yaml on 8-GPU
+    # runners, sharing the rocfft-test binary/artifacts with the single-GPU
+    # "rocfft" job above.
+    "rocfft-multi-gpu": {
+        "job_name": "rocfft-multi-gpu",
+        "base_project": "rocfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+        },
+        "test_types": ["comprehensive", "full"],
+        "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
@@ -750,10 +832,10 @@ test_matrix = {
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
     # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
-    # MI300A (228 CU) -- in a single job, gfx950 (MI355X, 256 CU; advisory, see expect_failure
-    # below), and the Navi families, which carry one FAMILY_MAP entry per shipped SystemDB
-    # (gfx110X-all -> gfx110060 at 96 CU + gfx110220 at 32 CU, gfx1151 -> gfx115128 at 40 CU,
-    # gfx120X-all -> gfx120020 at 32 CU + gfx120140 at 64 CU).
+    # MI300A (228 CU) -- in a single job, gfx950 (MI355X, 256 CU), and gfx90a (MI210, 104 CU, and
+    # MI250X GCD, 110 CU -- also in a single job; advisory, see expect_failure below).
+    # It also covers the Navi targets whose shipped SystemDB passes under rocjitsu: gfx1100
+    # (gfx110060, 96 CU), gfx1200 (gfx120020, 32 CU) and gfx1201 (gfx120140, 64 CU).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -765,45 +847,29 @@ test_matrix = {
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
         # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
         # build measures ~15 min, so 30 gives margin and fails a hung interposer faster. A Navi
-        # job runs at most two CU configs, and its wall time is host dependent (the same gfx1100
-        # database measured 11.8 s on one machine and 58.8 s on another). On the
-        # ROCm/rocm-libraries#13411 interposer runs the slowest observed Navi param is gfx1201 at
-        # ~114 s, and a gfx110X-all job is two params that measured 58.8 s and 28.9 s on a slower
-        # host, so 30 min still leaves plenty of margin.
+        # job runs at most two CU configs, the same count as the gfx942 job.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
         "linux_cpu_runner": True,
         "test_types": ["standard", "comprehensive", "full"],
+        # StaticFDBSync skips itself at runtime under ASAN.
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
             "linux": [
                 "gfx942",
                 "gfx950",
-                # Navi system DBs shipped in rocm-libraries projects/miopen/src/kernels/:
-                # gfx110060, gfx110220, gfx115128, gfx120020, gfx120140. Nothing gated
-                # them before. The Windows gfx110X lane lands on gfx1101 runners, where
-                # every Navi StaticFDBSync param is SKIPPED, which is how
-                # ROCm/rocm-libraries#13394 reached develop. The matching FAMILY_MAP
-                # entries come from ROCm/rocm-libraries#13411; see also #12013.
+                "gfx90a",
+                # Navi targets with a FAMILY_MAP entry in run_dbsync_rocjitsu.py. gfx1102
+                # and gfx1151 are absent until the runner validates them.
                 "gfx1100",
-                "gfx1102",
-                "gfx1151",
                 "gfx1200",
                 "gfx1201",
             ],
         },
-        # TODO(ALMIOPEN-2674): drop gfx950 once its dbsync has been green for a
-        # few consecutive standard/comprehensive/full runs.
-        # TODO(ROCm/rocm-libraries#13429): drop gfx1151 once CK is_applicable stops
-        # aborting with "invalid device function" on real gfx1151. gfx1151 dbsync is
-        # validated only under the rocjitsu interposer, and the CU correction is
-        # load-bearing there: the rocjitsu config declares 32 CU while the shipped
-        # database gfx115128 is a 40 CU database.
-        # Entries match per family group, so listing either target of a group makes
-        # that whole job advisory. If the gfx120X re-runs on #13411 do not pass, add
-        # "gfx1200" to the list below and gfx120X-all becomes advisory too.
+        # gfx90a is advisory while dbsync under rocjitsu's cdna2 emulation is qualified.
         "expect_failure": {
-            "linux": ["gfx950", "gfx1151"],
+            "linux": ["gfx90a"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -846,6 +912,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("share/rocprofiler-sdk/tests/requirements.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} --enable-cdash",
         "platform": ["linux"],
@@ -856,7 +923,7 @@ test_matrix = {
         # rocprofv3 mpi-ranks tests gate on find_package(MPI) and launch under
         # mpiexec. OpenMPI is not bundled in TheRock artifacts and is provided via
         # the specialized openmpi image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:f67d0b02cae8faf0d2f3e4a1de38a01af6bad2eb27f10a5e07bf19748a84d1e6",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi@sha256:64f8d6e3e6dfd46e2b1b9321b99aa72fd09140025638e27e5a0d50acb0e69e89",
         "exclude_family": {
             "linux": [
                 # CRITICAL FAILURE (pytest hangs): rocprofiler-sdk test hangs during pytest collection
@@ -888,6 +955,9 @@ test_matrix = {
     "hipdnn_install": {
         "job_name": "hipdnn_install",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -903,8 +973,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -913,10 +983,12 @@ test_matrix = {
             ],
         },
     },
-    # hipDNN samples tests
+    # hipDNN samples tests. Every provider is fetched so that samples whose
+    # operations only hipBLASLt (matmul) or hip-kernel-provider (layer norm,
+    # resample) implement find an engine instead of skipping.
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipblasltprovider --hipkernelprovider --hipdnn-samples --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
@@ -943,7 +1015,10 @@ test_matrix = {
         # <name>_dev. Omitting the key takes the fetch-everything branch, which
         # is why "hipdnn_install" omits it too. Do not "fix" this by adding the
         # enumerated artifact flags back; find_package would fail.
-        "timeout_minutes": 10,
+        "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipdnn_cudnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -972,8 +1047,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
+            "linux": 2,
+            "windows": 2,
         },
         "exclude_family": {
             "linux": [
@@ -1017,8 +1092,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipkernelprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 2,
-            "windows": 2,
+            "linux": 4,
+            "windows": 4,
         },
         "exclude_family": {
             "linux": [
@@ -1118,10 +1193,13 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
+        # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
+        # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_amdclang.py')}",
         "platform": ["linux", "windows"],
@@ -1143,6 +1221,7 @@ test_matrix = {
         "timeout_minutes": 20,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
+            _get_script_path("requirements-test-ninja.txt"),
         ],
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
@@ -1177,6 +1256,9 @@ test_matrix = {
                 # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
                 "gfx125X-dcgpu",
             ],
+            "windows": [
+                "gfx117X-all",
+            ],
         },
     },
     # hipthreads example apps (build + run consumer samples against the artifact).
@@ -1186,6 +1268,9 @@ test_matrix = {
         # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
         "timeout_minutes": 30,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_hipthreads_examples.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1197,6 +1282,9 @@ test_matrix = {
         "job_name": "rocdecode",
         "fetch_artifact_args": "--rocdecode --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocdecode.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
@@ -1208,12 +1296,15 @@ test_matrix = {
         # on Linux via the specialized media image below. Windows runs the always-on
         # tests (raw decode, caps, negative API) with ENABLE_EXTENDED_TESTS=OFF via
         # the vaon12 backend, so it needs no FFmpeg and no container image.
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:d715ae2db664b055c90343e00588ce9ac3eec387513fe359396e5e08e75521ca",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_media@sha256:7853bb7fc56e8ddd768e849b5594d0b7f2e89aad9618e29943888ee9d916c6d2",
     },
     "rocjpeg": {
         "job_name": "rocjpeg",
         "fetch_artifact_args": "--rocjpeg --tests",
         "timeout_minutes": 10,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1228,6 +1319,9 @@ test_matrix = {
         # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
         # of the correctness suite.
         "timeout_minutes": 60,
+        "additional_requirements_files": [
+            _get_script_path("requirements-test-ninja.txt"),
+        ],
         "test_script": f"python {_get_script_path('test_rpp.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1252,10 +1346,13 @@ test_matrix = {
         "fetch_artifact_args": "--rocrtst --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_runner.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "wsl"],
+        # Advisory on WSL until its results are stable.
+        "expect_failure": {"wsl": ["gfx110X-all"]},
         "total_shards_dict": {
             "linux": 1,
             "windows": 1,
+            "wsl": 1,
         },
     },
     # hipTensor tests
@@ -1303,12 +1400,17 @@ def run():
         "--platform",
         type=str,
         default=platform_module.system().lower(),
-        help="Platform to configure tests for (linux or windows)",
+        help=(
+            "Platform to configure tests for: linux, windows, or wsl (the Linux"
+            " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
+        ),
     )
     args, _ = parser.parse_known_args()
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
+    amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
@@ -1346,6 +1448,7 @@ def run():
             ["presubmit", "postsubmit", "nightly"]
         )
         if shortened_family in all_families:
+            # wsl has no entry of its own here; its runner is TEST_RUNS_ON.
             platform_info = all_families[shortened_family].get(platform, {})
             # Use policy-gated value from workflow if available, otherwise use static matrix
             if gpu_tests_gated:
@@ -1408,12 +1511,24 @@ def run():
             )
             continue
 
+        if build_variant in test_matrix[key].get("skip_build_variant", []):
+            logging.info(
+                f"Excluding job {job_name}: skip_build_variant lists {build_variant}"
+            )
+            continue
+
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
         # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
-        _family_gfx_targets = []
-        if amdgpu_families and shortened_family and shortened_family in all_families:
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201"). AMDGPU_TARGETS
+        # (fetch-gfx-targets after the caller's family overrides) wins over the matrix.
+        _family_gfx_targets = amdgpu_targets
+        if (
+            not _family_gfx_targets
+            and amdgpu_families
+            and shortened_family
+            and shortened_family in all_families
+        ):
             _family_gfx_targets = (
                 all_families[shortened_family]
                 .get(platform, {})
@@ -1443,6 +1558,12 @@ def run():
             )
             continue
 
+        # Key used for test-label / project selection. Split jobs (e.g. the
+        # multi-GPU variants) declare a "base_project" so that selecting the base
+        # component (via `test:hipfft` label or PROJECTS_TO_TEST=hipfft) also picks
+        # up the variant, which otherwise has no matching label of its own.
+        selection_key = test_matrix[key].get("base_project", key)
+
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
         # Filter out ci: control labels - they're not test component selectors
@@ -1453,14 +1574,19 @@ def run():
             for label in parsed_test_labels
             for member in TEST_LABEL_GROUPS.get(label, [label])
         ]
-        if key != "sanity" and expanded_test_labels and key not in expanded_test_labels:
+        if (
+            key != "sanity"
+            and expanded_test_labels
+            and selection_key not in expanded_test_labels
+        ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
         # Tier gate: a component may declare which test tiers it runs on via
         # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
         # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
-        # quick. Omit the field to run on every tier.
+        # quick, and the hipfft/rocfft multi-GPU split jobs run comprehensive/full
+        # only. Omit the field to run on every tier.
         allowed_test_types = test_matrix[key].get("test_types")
         if allowed_test_types and test_type not in allowed_test_types:
             logging.info(
@@ -1471,8 +1597,10 @@ def run():
         # If the test is enabled for a particular platform and a particular (or all) projects are selected.
         # Note: Sanity goes through the same all_components loop as other components, but is separated
         # into its own sanity_component GHA output after the loop (see gha_set_output below).
+        # Split jobs match via selection_key (base_project) so PROJECTS_TO_TEST=hipfft
+        # also selects hipfft-multi-gpu.
         if platform in test_matrix[key]["platform"] and (
-            key == "sanity" or key in project_array or "*" in project_array
+            key == "sanity" or selection_key in project_array or "*" in project_array
         ):
             logging.info(f"Requesting job {job_name} with test_type {test_type}")
 
@@ -1659,7 +1787,8 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform) for c in components_with_runners
+        _build_container_options(c, platform, amdgpu_families)
+        for c in components_with_runners
     ]
 
     # Separate sanity from the regular component matrix.

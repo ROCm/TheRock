@@ -235,7 +235,7 @@ positional arguments:
     test                Run installation tests to verify integrity
     version             Print version information
     targets             Print information about the GPU targets that are supported
-    init                Expand devel contents to initialize rocm[devel]
+    init                Initialize rocm[devel] links and link device files
 
 $ rocm-sdk test
 ...
@@ -247,12 +247,12 @@ gfx1100;gfx1101;gfx1102;gfx1103;gfx1151;gfx1200;gfx1201;...
 ```
 
 If you also installed the `rocm-sdk-devel` development package using the
-`rocm[devel]` extra and want to use it outside of Python, you can _eagerly_
-expand its contents using `rocm-sdk init`:
+`rocm[devel]` extra and want to use it outside of Python, you can initialize
+its links using `rocm-sdk init`:
 
 ```console
 $ rocm-sdk init
-Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
+Devel links initialized in '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 ```
 
 The paths in the devel package can be used like so:
@@ -276,13 +276,14 @@ For more details on using the `rocm-sdk-devel` package to build projects, see
 [Using Packages from Frameworks in `docs/packaging/python_packaging.md`](https://github.com/ROCm/TheRock/blob/main/docs/packaging/python_packaging.md#using-packages-from-frameworks).
 
 > [!TIP]
-> The devel tree is expanded - and its device files linked from the installed
-> `rocm-sdk-device-*` wheels - only once: on the first `rocm-sdk init` /
-> `rocm-sdk test`, or the first use of a devel tool such as `hipcc`. If you
-> install or remove a `rocm-sdk-device-*` wheel (for example, adding a second GPU
-> target) **after** that first expansion, re-run `rocm-sdk init` or `rocm-sdk test`
-> to link the new device files. The compiler tools do not re-scan on their own,
-> so a device wheel added later is not picked up until you run one of those again.
+> The devel package's generic links are initialized automatically only once: on
+> the first `rocm-sdk path` / `rocm-sdk test`, or the first use of a devel tool
+> such as `hipcc`. Explicit `rocm-sdk init` reinitializes those links and refreshes
+> device files from the installed `rocm-sdk-device-*` wheels. If you install or
+> remove a device wheel (for example, adding a second GPU target) **after** the
+> first initialization, re-run `rocm-sdk init` or `rocm-sdk test` to link the new
+> device files. The compiler tools do not re-scan on their own, so a device wheel
+> added later is not picked up until you run one of those again.
 > Uninstalling a `rocm-sdk-device-*` wheel removes its devel files automatically
 > via `pip`. If the devel tree ever ends up in a bad state, recreate the virtual
 > environment.
@@ -402,9 +403,12 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 
 > [!TIP]
 > The device extras install GPU-specific packages like `amd-torch-device-gfx1100`
-> which contain GPU-specific kernels and depend on `rocm-sdk-device-gfx1100`.
-> The compatible ROCm packages are installed automatically, you do not need to
-> install ROCm separately:
+> and `amd-torch-device-gfx110x` which contain GPU-specific kernels and depend on
+> `rocm-sdk-device-gfx1100`. Install them through the `device-*` extras rather
+> than by package name: the family package (`amd-torch-device-gfx110x`) carries
+> kernels shared by the whole GPU family, such as the AOTriton attention kernels,
+> and without it fused attention fails at runtime. The compatible ROCm packages
+> are installed automatically, you do not need to install ROCm separately:
 >
 > ```bash
 > pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
@@ -416,6 +420,7 @@ pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
 > # rocm-sdk-device-gfx1100==10.1.0a...     ~50 MB  (only gfx1100 device code)
 > # torch==2.11.0+rocm...                  ~100 MB  (host code, shared across GPUs)
 > # amd-torch-device-gfx1100==2.11.0+...    ~50 MB  (only gfx1100 device code)
+> # amd-torch-device-gfx110x==2.11.0+...            (device code shared by gfx110X)
 > # Total:                                 ~1.1 GB
 > #
 > # For comparison, a similar per-family (non-multi-arch) torch wheel for
@@ -459,8 +464,8 @@ Install JAX with ROCm support using the unified multi-arch index.
 > ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
 
 ```bash
-# Set the version (currently supported: 0.10.2, 0.11.0, 0.11.1, and 0.11.2)
-JAX_VERSION=0.11.2
+# Set the version (currently supported: 0.10.2, 0.11.0, 0.11.1, 0.11.2, and 0.12.0)
+JAX_VERSION=0.12.0
 
 # 1. Install ROCm (replace device-gfx942 with your GPU)
 pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \

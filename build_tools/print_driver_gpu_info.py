@@ -10,6 +10,10 @@ On Linux:
   - run "rocminfo"
   - report the KFD IOCTL version and warn if outside the range required by rocdbgapi (>= 1.13 and < 2.0)
 
+On Linux inside WSL (kernel release contains "microsoft"):
+  - as above, except the KFD IOCTL check: WSL has no amdgpu kernel driver and
+    no /dev/kfd. The GPU is /dev/dxg, and amd-smi reports the WDDM driver version.
+
 On Windows:
   - run "hipInfo.exe"
 
@@ -35,11 +39,17 @@ from typing import List, Optional, Tuple
 # _IOR: direction=0x80, size=8, type='K'=0x4b, nr=0x01 -> 0x80084b01
 _AMDKFD_IOC_GET_VERSION = 0x80084B01
 _KFD_DEVICE = "/dev/kfd"
+_DXG_DEVICE = "/dev/dxg"
 _KFD_VERSION_MIN = (1, 13)
 _KFD_VERSION_MAX = (2, 0)  # exclusive
 
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
+
+# amd-smi does ESMI CPU discovery during init and exits 196 printing nothing when
+# it finds none, which is always the case in a non-root Apptainer container with no
+# access to /dev/hsmp or /dev/cpu/*/msr -- the GPU itself is fine and reachable.
+_AMDSMI_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
 
 
 def _get_kfd_version() -> Tuple[int, int]:
@@ -139,14 +149,24 @@ def run_sanity(os_name: str) -> int:
         )
     else:
         # Linux: amd-smi static + rocminfo
-        run_command_with_search(
-            label="amd-smi static",
-            command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
-        )
-        # Check if rocminfo should be skipped for this GPU family
         amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        skip_amdsmi = any(
+            family in amdgpu_families for family in _AMDSMI_EXCLUDED_FAMILIES
+        )
+        if skip_amdsmi:
+            log(f"\n=== amd-smi static ===")
+            log(
+                f"Skipping amd-smi: disabled for {amdgpu_families} "
+                f"(excluded families: {_AMDSMI_EXCLUDED_FAMILIES})"
+            )
+        else:
+            run_command_with_search(
+                label="amd-smi static",
+                command="amd-smi",
+                args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
+        # Check if rocminfo should be skipped for this GPU family
         skip_rocminfo = any(
             family in amdgpu_families for family in _ROCMINFO_EXCLUDED_FAMILIES
         )
@@ -169,6 +189,19 @@ def run_sanity(os_name: str) -> int:
             args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
+
+        # WSL kernel releases look like "6.6.87.2-microsoft-standard-WSL2"
+        # (containers share the host kernel).
+        if "microsoft" in platform.release().lower():
+            log("\n=== GPU-PV (WSL) ===")
+            if not os.path.exists(_DXG_DEVICE):
+                log(
+                    f"error: {_DXG_DEVICE} not found - is the GPU passed through to WSL?"
+                )
+                return 1
+            log(f"{_DXG_DEVICE} present; KFD IOCTL check does not apply under WSL")
+            log("\n=== End of sanity check ===")
+            return 0
 
         log("\n=== KFD IOCTL version ===")
         if not os.path.exists(_KFD_DEVICE):

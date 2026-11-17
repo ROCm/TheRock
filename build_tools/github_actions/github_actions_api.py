@@ -562,6 +562,22 @@ def gha_load_github_event() -> dict[str, Any]:
     return data
 
 
+def gha_get_pr_labels() -> list[str]:
+    """Read PR label names from the GitHub Actions event payload.
+
+    Returns an empty list when ``GITHUB_EVENT_PATH`` is not set (e.g.
+    local development) or when the event is not a ``pull_request``.
+    """
+    if not os.environ.get("GITHUB_EVENT_PATH"):
+        return []
+    try:
+        event = gha_load_github_event()
+    except (FileNotFoundError, ValueError, RuntimeError, KeyError):
+        return []
+    pr_obj = event.get("pull_request", {})
+    return [label["name"] for label in pr_obj.get("labels", [])]
+
+
 def is_current_run_pr_from_fork() -> bool:
     """Whether the current workflow run is a pull request from a fork.
 

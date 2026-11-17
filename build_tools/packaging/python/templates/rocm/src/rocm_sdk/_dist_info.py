@@ -19,6 +19,7 @@ from pathlib import Path
 _VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
+DEVEL_INITIALIZED = Path(".devel_links/devel.initialized")
 
 # BEGIN SHARED TARGET METADATA
 # Build-time import only. render_dist_info() replaces this marked block with
@@ -292,6 +293,7 @@ LibraryEntry(
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("rocm_kpack", "core", "librocm_kpack.so*", "rocm_kpack*.dll")
+LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "rocdecode*.dll")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("amd_smi", "core", "libamd_smi.so*", "")

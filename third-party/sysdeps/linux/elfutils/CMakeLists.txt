@@ -15,6 +15,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-elfutils
+      HARDENING_DEFERRED "elfutils (autotools)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -115,14 +116,12 @@ add_custom_target(
     make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+      "PATCHELF=${PATCHELF}" --
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py"
 )
 
 # This matches the conventions of the FindLibElf.cmake module in ROCR-Runtime.

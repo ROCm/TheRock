@@ -38,6 +38,7 @@ COMMON_CONSOLE_SCRIPT_TESTS = [
     ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
     ("amdflang", ["--help"], "LLVM compiler", True),
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
+    ("clang-offload-bundler", ["--version"], "clang-offload-bundler", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
     ("hipify-clang", ["--help"], "USAGE:", True),
@@ -47,7 +48,16 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("amd-smi", [], "AMD-SMI", True),
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
+    ("rocm-smi", [], "Management", True),
     ("hipify-perl", ["--help"], "USAGE:", True),
+    ("rocpd", ["--help"], "Aggregate", True),
+    ("rocpd2csv", ["--help"], "Convert", True),
+    ("rocpd2otf2", ["--help"], "Convert", True),
+    ("rocpd2pftrace", ["--help"], "Convert", True),
+    ("rocpd2summary", ["--help"], "Generate summary", True),
+    ("rocprofv3", ["--help"], "ROCProfilerV3", True),
+    ("rocprof-attach", ["--help"], "attachment", True),
+    ("rocprofv3-avail", ["--help"], "query tool", True),
 ]
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
