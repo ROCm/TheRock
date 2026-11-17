@@ -31,6 +31,12 @@ Usage:
         --run-id 12345 \
         --build-dir build/
 
+    # Populate verified artifacts selected by a cache lookup
+    python artifact_manager.py populate \
+        --plan build/llvm-cache-plan.json \
+        --platform linux \
+        --run-id 12345 --output build/llvm-cache-population.json
+
     # List what artifacts a stage needs/produces
     python artifact_manager.py info \
         --stage math-libs \
@@ -50,9 +56,14 @@ import platform as platform_module
 import shutil
 import sys
 import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional, Set
+
+# Import the cache script directly from its tools directory.
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent / "artifact_cache"))
+import artifact_cache
 
 from _therock_utils.archive_util import open_archive_for_read
 from _therock_utils.os_util import rmtree_with_retry
@@ -67,6 +78,7 @@ from _therock_utils.artifact_backend import (
     LocalDirectoryBackend,
     S3Backend,
     create_backend_from_env,
+    create_backend_from_uri,
 )
 from _therock_utils.artifacts import (
     ArtifactName,
@@ -1167,6 +1179,149 @@ def do_copy(args: argparse.Namespace):
 
 
 # =============================================================================
+# Populate (Verified cache-plan copies)
+# =============================================================================
+
+
+def _download_population_file(
+    backend: ArtifactBackend, filename: str, directory: Path
+) -> Path:
+    """Read a required file through the retry helper, without trusting old bytes."""
+    path = directory / filename
+    path.unlink(missing_ok=True)
+    downloaded = download_artifact(
+        DownloadRequest(artifact_key=filename, dest_path=path, backend=backend)
+    )
+    if downloaded is None:
+        raise OSError(f"Cannot read required cache file: {backend.base_uri}/{filename}")
+    return downloaded
+
+
+def populate_artifacts_from_cache(
+    plan: artifact_cache.PopulationPlan, destination: ArtifactBackend, scratch: Path
+) -> None:
+    """Copy every planned file and verify it before the caller reports readiness.
+
+    Source metadata must match the lookup plan. Destination archives must match
+    its SHA-256 values. Partial copies may remain on failure; they never justify
+    reuse without a successful population result. Retries overwrite these files.
+    """
+    sources = {
+        root: create_backend_from_uri(root)
+        for root in dict.fromkeys(request.source.root for request in plan.requests)
+    }
+    metadata = scratch / "metadata"
+    metadata.mkdir()
+    for request in plan.requests:
+        source = sources[request.source.root]
+        if isinstance(source, LocalDirectoryBackend) and isinstance(
+            destination, LocalDirectoryBackend
+        ):
+            same_location = (
+                source.base_path.resolve() == destination.base_path.resolve()
+            )
+        else:
+            same_location = source.base_uri.rstrip("/") == destination.base_uri.rstrip(
+                "/"
+            )
+        artifact_cache.require(
+            not same_location, "Destination must differ from every source location"
+        )
+        for filename in (request.fingerprint_file, request.checksum_file):
+            _download_population_file(source, filename, metadata)
+        artifact_cache.verify_source_metadata(request, metadata)
+
+    for request in plan.requests:
+        source = sources[request.source.root]
+        if not copy_single_artifact(
+            CopyRequest(
+                artifact_key=request.source.archive,
+                source_backend=source,
+                dest_backend=destination,
+            )
+        ):
+            raise OSError(f"Failed to populate {request.source.archive}")
+        archive_path = _download_population_file(
+            destination, request.source.archive, scratch
+        )
+        artifact_cache.require(
+            calculate_hash(archive_path, "sha256").hexdigest() == request.source.sha256,
+            f"{request.artifact}: destination archive checksum mismatch",
+        )
+        archive_path.unlink()
+        log(f"  Verified archive: {request.artifact}")
+
+    # Publish fingerprints only after all destination archives pass verification.
+    for request in plan.requests:
+        source = sources[request.source.root]
+        for filename in (request.checksum_file, request.fingerprint_file):
+            if not copy_single_artifact(
+                CopyRequest(
+                    artifact_key=filename,
+                    source_backend=source,
+                    dest_backend=destination,
+                )
+            ):
+                raise OSError(f"Failed to populate {filename}")
+            copied_file = _download_population_file(destination, filename, scratch)
+            artifact_cache.require(
+                copied_file.read_bytes() == (metadata / filename).read_bytes(),
+                f"{request.artifact}: destination sidecar mismatch: {filename}",
+            )
+            copied_file.unlink()
+
+
+def do_populate(args: argparse.Namespace) -> None:
+    """Consume a lookup plan; save ready only after a complete verified copy."""
+    artifact_cache.require(
+        args.output.resolve() != args.plan.resolve(),
+        "Output must not overwrite the lookup plan",
+    )
+    artifact_names = {
+        artifact + suffix
+        for artifact in artifact_cache.LLVM_ARTIFACTS
+        for suffix in (
+            ".fprint",
+            *artifact_cache.ARCHIVE_SUFFIXES,
+            *(suffix + ".sha256sum" for suffix in artifact_cache.ARCHIVE_SUFFIXES),
+        )
+    }
+    artifact_cache.require(
+        args.output.resolve().name not in artifact_names,
+        "Output must not overwrite an artifact or sidecar",
+    )
+    args.output.unlink(missing_ok=True)
+    plan = artifact_cache.load_population_plan(args.plan, args.platform)
+    result = artifact_cache.PopulationResult(
+        schema_version=artifact_cache.SCHEMA_VERSION,
+        artifact="amd-llvm",
+        platform=args.platform,
+        status="miss",
+        action="build",
+        destination=None,
+        artifacts=[],
+    )
+    if plan.requests:
+        destination = create_backend_from_env(
+            run_id=args.run_id,
+            platform=args.platform,
+            github_repository=args.run_github_repo,
+        )
+        with tempfile.TemporaryDirectory(prefix="therock-cache-populate-") as temporary:
+            populate_artifacts_from_cache(plan, destination, Path(temporary))
+        result.status = "ready"
+        result.action = "reuse"
+        result.destination = destination.base_uri
+        result.artifacts = [request.artifact for request in plan.requests]
+    artifact_cache.write_json(args.output, result)
+    log(
+        f"amd-llvm: {result.status.upper()} "
+        f"({len(result.artifacts)}/{len(artifact_cache.LLVM_ARTIFACTS)} verified components)"
+    )
+    log(f"Action: {result.action}. Result: {args.output}")
+
+
+# =============================================================================
 # Info Commands
 # =============================================================================
 
@@ -1477,6 +1632,20 @@ def main(argv: Optional[List[str]] = None):
     )
     copy_parser.set_defaults(func=do_copy)
 
+    # populate command
+    populate_parser = subparsers.add_parser(
+        "populate", help="Copy and verify a complete LLVM cache lookup plan"
+    )
+    _add_backend_args(populate_parser)
+    populate_parser.add_argument("--plan", type=Path, required=True)
+    populate_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Population result; removed before each attempt",
+    )
+    populate_parser.set_defaults(func=do_populate)
+
     # info command
     info_parser = subparsers.add_parser(
         "info", help="Show information about stage artifact requirements"
@@ -1507,12 +1676,20 @@ def main(argv: Optional[List[str]] = None):
             "--extraction-cache-dir requires --flatten with extraction enabled"
         )
 
-    # Set environment variable if --local-staging-dir provided (only on fetch/push)
+    # Set environment variable if --local-staging-dir provided (on commands with backend arguments)
     local_staging_dir = getattr(args, "local_staging_dir", None)
     if local_staging_dir:
         os.environ["THEROCK_LOCAL_STAGING_DIR"] = str(local_staging_dir)
 
-    args.func(args)
+    if args.command == "populate":
+        try:
+            args.func(args)
+        except Exception as error:
+            # Transfer failures are errors, not ordinary cache misses.
+            print(f"ERROR: {error}", file=sys.stderr)
+            sys.exit(2)
+    else:
+        args.func(args)
 
 
 if __name__ == "__main__":

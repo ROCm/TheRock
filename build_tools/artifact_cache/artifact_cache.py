@@ -119,6 +119,24 @@ class LookupPlan:
     copy_requests: list[CopyRequest]
 
 
+@dataclass
+class PopulationResult:
+    schema_version: int
+    artifact: str
+    platform: str
+    status: str
+    action: str
+    destination: str | None
+    artifacts: list[str]
+
+
+@dataclass
+class PopulationPlan:
+    """The validated copy requests; lookup's per-component rows are diagnostic."""
+
+    requests: list[CopyRequest]
+
+
 def require(condition: bool, message: str) -> None:
     """Raise a clear error when a required condition is not met."""
     if not condition:
@@ -175,8 +193,8 @@ def entry_key(entry: CacheEntry) -> CacheKey:
     )
 
 
-def to_json(value: CacheIndex | LookupPlan) -> dict[str, object]:
-    """Convert an index or plan to JSON data, omitting unavailable match details."""
+def to_json(value: CacheIndex | LookupPlan | PopulationResult) -> dict[str, object]:
+    """Serialize cache data, omitting unavailable lookup match details."""
     json_data = asdict(value)
     if isinstance(value, LookupPlan):
         for match in json_data["artifacts"]:
@@ -232,7 +250,7 @@ def load_index(path: Path) -> CacheIndex:
         raise ValueError(f"Invalid index structure in {path}: {error}") from error
 
 
-def write_json(path: Path, value: CacheIndex | LookupPlan) -> None:
+def write_json(path: Path, value: CacheIndex | LookupPlan | PopulationResult) -> None:
     """Replace a report/index only after its complete content has been written."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
@@ -339,6 +357,105 @@ def lookup_artifacts_by_fingerprint(
         # Partial hits are diagnostic only, never a partial stage replacement.
         copy_requests=copy_requests if complete_hit else [],
     )
+
+
+def load_population_plan(path: Path, platform: str) -> PopulationPlan:
+    """Require a complete hit matching the consumer's platform.
+
+    An ordinary lookup miss has no copy requests. Invalid or contradictory
+    plans raise an error before any destination files are written.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        require(
+            type(data["schema_version"]) is int
+            and data["schema_version"] == SCHEMA_VERSION,
+            "Unsupported plan schema_version",
+        )
+        require(data["artifact"] == "amd-llvm", "Expected an amd-llvm plan")
+        require(data["platform"] == platform, "Plan platform does not match consumer")
+        require(isinstance(data["copy_requests"], list), "copy_requests must be a list")
+        if data["status"] == "miss":
+            require(
+                data["action"] == "build" and not data["copy_requests"],
+                "Invalid miss plan",
+            )
+            return PopulationPlan(requests=[])
+        require(
+            data["status"] == "hit" and data["action"] == "populate",
+            "Expected a populate plan",
+        )
+        requests: list[CopyRequest] = []
+        for row in data["copy_requests"]:
+            artifact = text_field(row["artifact"], "artifact")
+            require(artifact in LLVM_ARTIFACTS, "Unsupported artifact")
+            source = ArtifactSource(
+                root=source_root(row["source"]["root"]),
+                archive=text_field(row["source"]["archive"], "archive"),
+                sha256=digest(row["source"]["sha256"], "archive checksum"),
+            )
+            require(
+                source.archive
+                in tuple(artifact + suffix for suffix in ARCHIVE_SUFFIXES),
+                "Archive filename must match its component",
+            )
+            require(
+                row["fingerprint_file"] == artifact + ".fprint",
+                "Incorrect fingerprint filename",
+            )
+            require(
+                row["checksum_file"] == source.archive + ".sha256sum",
+                "Incorrect checksum filename",
+            )
+            requests.append(
+                CopyRequest(
+                    artifact=artifact,
+                    fingerprint=digest(row["fingerprint"], "fingerprint"),
+                    producer=Producer(
+                        repository=text_field(
+                            row["producer"]["repository"], "producer.repository"
+                        ),
+                        run_id=text_field(row["producer"]["run_id"], "producer.run_id"),
+                    ),
+                    source=source,
+                    fingerprint_file=row["fingerprint_file"],
+                    checksum_file=row["checksum_file"],
+                )
+            )
+        require(
+            len(requests) == len(LLVM_ARTIFACTS)
+            and {row.artifact for row in requests} == set(LLVM_ARTIFACTS),
+            "Population requires every LLVM component exactly once",
+        )
+        require(
+            len({row.fingerprint for row in requests}) == 1,
+            "Component fingerprints must describe one LLVM bundle",
+        )
+        return PopulationPlan(requests=requests)
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"Invalid population plan: {error}") from error
+
+
+def verify_source_metadata(request: CopyRequest, directory: Path) -> None:
+    """Check downloaded sidecars against the lookup plan before copying archives."""
+    fingerprint = (
+        (directory / request.fingerprint_file).read_text(encoding="utf-8").strip()
+    )
+    require(
+        fingerprint == request.fingerprint,
+        f"{request.artifact}: source fingerprint mismatch",
+    )
+    fields = (directory / request.checksum_file).read_text(encoding="utf-8").split()
+    require(len(fields) in (1, 2), f"{request.artifact}: invalid checksum sidecar")
+    require(
+        fields[0] == request.source.sha256,
+        f"{request.artifact}: source checksum mismatch",
+    )
+    if len(fields) == 2:
+        require(
+            fields[1].removeprefix("*") == request.source.archive,
+            f"{request.artifact}: checksum names another archive",
+        )
 
 
 def download_metadata(root: str, metadata_dir: Path, archive_suffix: str) -> None:

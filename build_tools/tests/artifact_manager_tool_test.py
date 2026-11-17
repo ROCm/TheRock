@@ -4,11 +4,17 @@
 
 """Integration tests for artifact_manager.py CLI tool.
 
-These tests verify end-to-end behavior of the artifact_manager push/fetch commands,
+These tests verify artifact_manager push, fetch, copy, and cache population,
 particularly error handling and exit codes.
 """
 
 import argparse
+import copy
+from contextlib import redirect_stderr, redirect_stdout
+import io
+import json
+import subprocess
+import tarfile
 import hashlib
 import os
 import platform
@@ -20,6 +26,8 @@ import unittest
 from pathlib import Path
 from typing import Optional
 from unittest import mock
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 
 def is_windows():
@@ -27,12 +35,21 @@ def is_windows():
 
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1] / "artifact_cache"))
 
 from _therock_utils.archive_util import open_archive_for_write
-from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from _therock_utils.artifact_backend import (
+    ArtifactBackend,
+    LocalDirectoryBackend,
+    S3Backend,
+    HTTPSBackend,
+    create_backend_from_uri,
+)
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.archive_util import open_archive_for_write
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
+import artifact_cache as cache
 import artifact_manager
 import buildctl
 
@@ -1982,6 +1999,507 @@ class BootstrapMarkerTest(unittest.TestCase):
                         output_dir / "math-libs" / "hipthreads" / "build.prebuilt"
                     ).exists()
                 )
+
+
+class TestPopulate(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix="therock-population-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.source = self.root / "source with spaces"
+        self.source.mkdir()
+        self.staging = self.root / "outputs"
+        self.destination = self.staging / "456-linux"
+        environment = patch.dict(
+            os.environ, {"THEROCK_LOCAL_STAGING_DIR": str(self.staging)}
+        )
+        environment.start()
+        self.addCleanup(environment.stop)
+        retry_delay = patch.object(artifact_manager, "_delay_for_retry")
+        retry_delay.start()
+        self.addCleanup(retry_delay.stop)
+        self.plan_path = self.root / "plan.json"
+        self.result_path = self.root / "result.json"
+        self.fingerprint = "a" * 64
+        for artifact in cache.LLVM_ARTIFACTS:
+            archive = self.source / (artifact + ".tar.xz")
+            payload = f"{artifact}: original payload\n".encode()
+            with tarfile.open(archive, "w:xz") as output:
+                info = tarfile.TarInfo("share/probe.txt")
+                info.size = len(payload)
+                output.addfile(info, io.BytesIO(payload))
+            checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+            (self.source / (archive.name + ".sha256sum")).write_text(
+                f"{checksum}  {archive.name}\n", encoding="utf-8"
+            )
+            (self.source / (artifact + ".fprint")).write_text(
+                self.fingerprint + "\n", encoding="utf-8"
+            )
+        self.index = cache.record_artifacts_from_ci_run(
+            index=cache.CacheIndex(schema_version=1, entries=[]),
+            metadata_dir=self.source,
+            platform="linux",
+            repository="ROCm/TheRock",
+            run_id="123",
+            root=self.source.as_uri(),
+            archive_suffix=".tar.xz",
+        )
+        self.plan = cache.lookup_artifacts_by_fingerprint(
+            self.index, self.source, "linux"
+        )
+        self.save_plan()
+
+    def save_plan(self) -> None:
+        cache.write_json(self.plan_path, self.plan)
+
+    def cli(self, *extra: str) -> tuple[int, str]:
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            try:
+                artifact_manager.main(
+                    [
+                        "populate",
+                        "--plan",
+                        str(self.plan_path),
+                        "--output",
+                        str(self.result_path),
+                        "--platform",
+                        "linux",
+                        "--local-staging-dir",
+                        str(self.staging),
+                        "--run-id",
+                        "456",
+                        *extra,
+                    ]
+                )
+                code = 0
+            except SystemExit as error:
+                code = error.code
+        return code, stdout.getvalue() + stderr.getvalue()
+
+    def assert_failure(self, expected: str) -> None:
+        self.result_path.write_text(
+            '{"status":"ready","action":"reuse"}', encoding="utf-8"
+        )
+        code, output = self.cli()
+        self.assertEqual(code, 2, output)
+        self.assertIn(expected, output)
+        self.assertFalse(
+            self.result_path.exists(), "Failure must remove an earlier ready result"
+        )
+
+    def assert_complete(self) -> None:
+        result = json.loads(self.result_path.read_text())
+        self.assertEqual((result["status"], result["action"]), ("ready", "reuse"))
+        self.assertEqual(set(result["artifacts"]), set(cache.LLVM_ARTIFACTS))
+        for request in self.plan.copy_requests:
+            for filename in (
+                request.source.archive,
+                request.checksum_file,
+                request.fingerprint_file,
+            ):
+                self.assertEqual(
+                    (self.destination / filename).read_bytes(),
+                    (self.source / filename).read_bytes(),
+                )
+
+    def test_local_copy_verifies_complete_bundle_and_repeats(self) -> None:
+        original_plan = self.plan_path.read_bytes()
+        self.destination.mkdir(parents=True)
+        unrelated = self.destination / "other-project.tar.xz"
+        unrelated.write_bytes(b"other project")
+        for _ in range(2):
+            code, output = self.cli()
+            self.assertEqual(code, 0, output)
+            self.assert_complete()
+            self.assertEqual(self.plan_path.read_bytes(), original_plan)
+            self.assertEqual(unrelated.read_bytes(), b"other project")
+
+    def test_cli_runs_as_script_without_aws_dependencies(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                artifact_manager.__file__,
+                "populate",
+                "--plan",
+                str(self.plan_path),
+                "--local-staging-dir",
+                str(self.staging),
+                "--run-id",
+                "456",
+                "--platform",
+                "linux",
+                "--output",
+                str(self.result_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_complete()
+
+    def test_miss_has_no_io_and_clears_previous_ready_result(self) -> None:
+        self.plan.status, self.plan.action, self.plan.copy_requests = (
+            "miss",
+            "build",
+            [],
+        )
+        self.save_plan()
+        self.result_path.write_text('{"status":"ready"}', encoding="utf-8")
+        with patch.object(artifact_manager, "create_backend_from_uri") as download:
+            code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        download.assert_not_called()
+        self.assertFalse(any(self.destination.glob("*")))
+        result = json.loads(self.result_path.read_text())
+        self.assertEqual(
+            (result["status"], result["action"], result["artifacts"]),
+            ("miss", "build", []),
+        )
+
+    def test_incomplete_duplicate_unsafe_and_incompatible_plans_fail_before_copy(
+        self,
+    ) -> None:
+        original = cache.to_json(self.plan)
+        changes = {
+            "missing component": lambda data: data["copy_requests"].pop(),
+            "duplicate component": lambda data: data["copy_requests"].__setitem__(
+                0, data["copy_requests"][1]
+            ),
+            "mixed fingerprints": lambda data: data["copy_requests"][0].__setitem__(
+                "fingerprint", "b" * 64
+            ),
+            "unsafe archive": lambda data: data["copy_requests"][0][
+                "source"
+            ].__setitem__("archive", "../outside.tar.xz"),
+            "unsafe sidecar": lambda data: data["copy_requests"][0].__setitem__(
+                "fingerprint_file", "../outside"
+            ),
+            "platform": lambda data: data.__setitem__("platform", "windows"),
+            "schema": lambda data: data.__setitem__("schema_version", True),
+            "action": lambda data: data.__setitem__("action", "build"),
+        }
+        for name, change in changes.items():
+            with self.subTest(name=name):
+                data = copy.deepcopy(original)
+                change(data)
+                self.plan_path.write_text(json.dumps(data))
+                with patch.object(
+                    artifact_manager, "create_backend_from_uri"
+                ) as download:
+                    self.assert_failure("ERROR:")
+                    download.assert_not_called()
+                self.assertFalse(any(self.destination.glob("*")))
+
+    def test_missing_or_invalid_plan_removes_stale_result(self) -> None:
+        for contents in (None, "not json"):
+            with self.subTest(contents=contents):
+                if contents is None:
+                    self.plan_path.unlink(missing_ok=True)
+                else:
+                    self.plan_path.write_text(contents)
+                self.assert_failure("ERROR:")
+
+    def test_missing_or_mismatched_metadata_prevents_any_copy(self) -> None:
+        request = self.plan.copy_requests[-1]
+        for filename, contents in (
+            (request.fingerprint_file, None),
+            (request.fingerprint_file, b"b" * 64),
+            (request.checksum_file, None),
+            (request.checksum_file, b"b" * 64),
+            (request.checksum_file, b""),
+            (request.checksum_file, f"{request.source.sha256} wrong.tar.xz".encode()),
+        ):
+            with self.subTest(filename=filename, contents=contents):
+                path = self.source / filename
+                original = path.read_bytes()
+                if contents is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(contents)
+                try:
+                    self.assert_failure("ERROR:")
+                    self.assertFalse(any(self.destination.glob("*")))
+                finally:
+                    path.write_bytes(original)
+
+    def test_missing_and_corrupt_archive_do_not_authorize_reuse(self) -> None:
+        path = self.source / self.plan.copy_requests[1].source.archive
+        original = path.read_bytes()
+        for contents in (None, b"corrupt archive"):
+            with self.subTest(contents=contents):
+                if contents is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(contents)
+                self.assert_failure("ERROR:")
+                self.assertFalse(any(self.destination.glob("*.fprint")))
+                path.write_bytes(original)
+        code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        self.assert_complete()
+
+    def test_copy_failure_then_retry_verifies_all_components(self) -> None:
+        original_copy = LocalDirectoryBackend.copy_artifact
+        fail_name = self.plan.copy_requests[-1].fingerprint_file
+
+        def fail_last(destination, key, source):
+            if key == fail_name:
+                raise OSError("simulated interrupted copy")
+            return original_copy(destination, key, source)
+
+        with patch.object(LocalDirectoryBackend, "copy_artifact", fail_last):
+            self.assert_failure("simulated interrupted copy")
+        code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        self.assert_complete()
+
+    def test_destination_corruption_is_detected_for_archives_and_sidecars(self) -> None:
+        original_copy = LocalDirectoryBackend.copy_artifact
+        request = self.plan.copy_requests[0]
+        for corrupt_name in (
+            request.source.archive,
+            request.checksum_file,
+            request.fingerprint_file,
+        ):
+
+            def corrupt(destination, key, source):
+                original_copy(destination, key, source)
+                if key == corrupt_name:
+                    (destination.base_path / key).write_bytes(
+                        b"corrupted at destination"
+                    )
+
+            with self.subTest(filename=corrupt_name):
+                with patch.object(LocalDirectoryBackend, "copy_artifact", corrupt):
+                    self.assert_failure("destination")
+
+    def test_output_must_not_overwrite_input_plan_or_artifact(self) -> None:
+        original = self.plan_path.read_bytes()
+        code, output = self.cli("--output", str(self.plan_path))
+        self.assertEqual(code, 2, output)
+        self.assertEqual(self.plan_path.read_bytes(), original)
+        request = self.plan.copy_requests[0]
+        for filename in (request.fingerprint_file, request.source.archive):
+            path = self.source / filename
+            original = path.read_bytes()
+            code, output = self.cli("--output", str(path))
+            self.assertEqual(code, 2, output)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_destination_cannot_be_the_source(self) -> None:
+        archive = self.source / self.plan.copy_requests[0].source.archive
+        original = archive.read_bytes()
+        with patch.object(
+            artifact_manager,
+            "create_backend_from_env",
+            return_value=LocalDirectoryBackend(staging_dir=self.source),
+        ):
+            self.assert_failure("Destination must differ")
+        self.assertEqual(archive.read_bytes(), original)
+
+    def test_destination_readback_failure_removes_stale_result(self) -> None:
+        original_download = LocalDirectoryBackend.download_artifact
+
+        def fail_readback(backend, key, path):
+            if backend.base_path == self.destination:
+                raise OSError("cannot read copied archive")
+            return original_download(backend, key, path)
+
+        with patch.object(LocalDirectoryBackend, "download_artifact", fail_readback):
+            self.assert_failure("cannot read copied archive")
+
+    def test_digest_only_and_binary_checksum_sidecars(self) -> None:
+        for position, request in enumerate(self.plan.copy_requests):
+            suffix = f" *{request.source.archive}" if position % 2 else ""
+            (self.source / request.checksum_file).write_text(
+                request.source.sha256 + suffix + "\n", encoding="utf-8"
+            )
+        code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        self.assert_complete()
+
+    def test_each_component_uses_its_own_source(self) -> None:
+        for position, request in enumerate(self.plan.copy_requests):
+            component_source = self.root / f"run-{position}"
+            component_source.mkdir()
+            for name in (
+                request.source.archive,
+                request.checksum_file,
+                request.fingerprint_file,
+            ):
+                shutil.copyfile(self.source / name, component_source / name)
+            request.source.root = component_source.as_uri()
+            request.producer.run_id = str(position)
+        self.save_plan()
+        code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        self.assert_complete()
+
+    def test_s3_copy_uses_recorded_locations_and_verifies_destination(self) -> None:
+        objects = {}
+        expected_copies = []
+        for position, request in enumerate(self.plan.copy_requests):
+            prefix = f"run-{position}-linux"
+            request.source.root = f"https://cache.s3.amazonaws.com/{prefix}"
+            for filename in (
+                request.source.archive,
+                request.checksum_file,
+                request.fingerprint_file,
+            ):
+                objects[("cache", f"{prefix}/{filename}")] = (
+                    self.source / filename
+                ).read_bytes()
+            expected_copies.append(
+                {"Bucket": "cache", "Key": f"{prefix}/{request.source.archive}"}
+            )
+        self.save_plan()
+        destination = S3Backend(StorageLocation("current-run-bucket", "456-linux"))
+        client = mock.Mock()
+
+        def download(bucket, key, path):
+            Path(path).write_bytes(objects[(bucket, key)])
+
+        def copy_object(source, bucket, key):
+            objects[(bucket, key)] = objects[(source["Bucket"], source["Key"])]
+
+        def head_object(Bucket, Key):
+            if (Bucket, Key) not in objects:
+                raise FileNotFoundError(Key)
+            return {}
+
+        client.download_file.side_effect = download
+        client.copy.side_effect = copy_object
+        client.head_object.side_effect = head_object
+        with (
+            patch.object(
+                S3Backend,
+                "s3_client",
+                new_callable=mock.PropertyMock,
+                return_value=client,
+            ),
+            patch.object(
+                artifact_manager, "create_backend_from_env", return_value=destination
+            ) as factory,
+        ):
+            code, output = self.cli("--run-github-repo", "ROCm/TheRock")
+            self.assertEqual(code, 0, output)
+            factory.assert_called_once_with(
+                run_id="456", platform="linux", github_repository="ROCm/TheRock"
+            )
+            actual_copies = [
+                call.args[0]
+                for call in client.copy.call_args_list
+                if call.args[0]["Key"].endswith(".tar.xz")
+            ]
+            self.assertEqual(actual_copies, expected_copies)
+            for request in self.plan.copy_requests:
+                for filename in (
+                    request.source.archive,
+                    request.checksum_file,
+                    request.fingerprint_file,
+                ):
+                    self.assertEqual(
+                        objects[(destination.bucket, f"456-linux/{filename}")],
+                        (self.source / filename).read_bytes(),
+                    )
+            result = json.loads(self.result_path.read_text())
+            self.assertEqual(result["status"], "ready")
+            self.assertEqual(result["destination"], destination.base_uri)
+            client.copy.side_effect = OSError("S3 copy failed")
+            self.assert_failure("S3 copy failed")
+
+    def test_https_sources_use_the_shared_copy_fallback(self) -> None:
+        root = "https://artifacts.example.invalid/source"
+        for request in self.plan.copy_requests:
+            request.source.root = root
+        self.save_plan()
+
+        def response(request, timeout):
+            url = request if isinstance(request, str) else request.full_url
+            path = self.source / url.rsplit("/", 1)[-1]
+            if not path.is_file():
+                raise HTTPError(url, 404, "not found", {}, None)
+            return io.BytesIO(path.read_bytes())
+
+        with patch("_therock_utils.artifact_backend.urlopen", side_effect=response):
+            code, output = self.cli()
+        self.assertEqual(code, 0, output)
+        self.assert_complete()
+
+
+class TestRecordedArtifactBackends(unittest.TestCase):
+    def test_recorded_roots_preserve_bucket_prefix_and_local_paths(self):
+        for root in ("s3://bucket/prefix", "https://bucket.s3.amazonaws.com/prefix"):
+            with self.subTest(root=root):
+                backend = create_backend_from_uri(root)
+                self.assertIsInstance(backend, S3Backend)
+                self.assertEqual(
+                    (backend.bucket, backend.s3_prefix), ("bucket", "prefix")
+                )
+        with tempfile.TemporaryDirectory(prefix="artifact source ") as temporary:
+            path = Path(temporary).resolve()
+            backend = create_backend_from_uri(path.as_uri())
+            self.assertIsInstance(backend, LocalDirectoryBackend)
+            self.assertEqual(backend.base_path, path)
+        self.assertIsInstance(
+            create_backend_from_uri("https://example.invalid/root"), HTTPSBackend
+        )
+        with self.assertRaises(ValueError):
+            create_backend_from_uri("https://example.invalid/root?different=query")
+
+    def test_http_optional_sidecar_only_treats_404_as_missing(self):
+        source = HTTPSBackend("https://example.invalid")
+        for status in (404, 403, 500):
+            with (
+                self.subTest(status=status),
+                patch(
+                    "_therock_utils.artifact_backend.urlopen",
+                    side_effect=HTTPError(source.base_uri, status, "error", {}, None),
+                ),
+            ):
+                if status == 404:
+                    self.assertFalse(source.artifact_exists("archive.sha256sum"))
+                else:
+                    with self.assertRaises(HTTPError):
+                        source.artifact_exists("archive.sha256sum")
+
+    def test_local_to_s3_and_s3_to_local_copy_fallbacks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = LocalDirectoryBackend(directory / "source")
+            local_destination = LocalDirectoryBackend(directory / "destination")
+            remote = S3Backend(StorageLocation("bucket", "prefix"))
+            client = mock.Mock()
+            remote._s3_client = client
+            objects = {}
+            archive = "test_lib_generic.tar.xz"
+            (source.base_path / archive).write_bytes(b"archive bytes")
+            (source.base_path / (archive + ".sha256sum")).write_bytes(b"sidecar bytes")
+
+            def upload(path, bucket, key):
+                objects[(bucket, key)] = Path(path).read_bytes()
+
+            def download(bucket, key, path):
+                Path(path).write_bytes(objects[(bucket, key)])
+
+            def head(Bucket, Key):
+                if (Bucket, Key) not in objects:
+                    raise FileNotFoundError(Key)
+                return {}
+
+            client.upload_file.side_effect = upload
+            client.download_file.side_effect = download
+            client.head_object.side_effect = head
+            remote.copy_artifact(archive, source)
+            local_destination.copy_artifact(archive, remote)
+            for name in (archive, archive + ".sha256sum"):
+                self.assertEqual(
+                    (local_destination.base_path / name).read_bytes(),
+                    (source.base_path / name).read_bytes(),
+                )
+            client.copy.assert_not_called()
 
 
 if __name__ == "__main__":

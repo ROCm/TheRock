@@ -21,8 +21,13 @@ from pathlib import Path
 from typing import List, Optional, Set
 import os
 import shutil
+import tempfile
+from urllib.error import HTTPError
+from urllib.parse import unquote, urlsplit
+from urllib.request import Request, url2pathname, urlopen
 
 from .workflow_outputs import WorkflowOutputRoot
+from .storage_location import StorageLocation
 
 
 @dataclass
@@ -35,6 +40,7 @@ class ArtifactLocation:
 
 # Supported artifact archive extensions (in order of preference)
 ARTIFACT_EXTENSIONS = (".tar.zst", ".tar.xz")
+HTTP_DOWNLOAD_TIMEOUT_SECONDS = 120
 
 
 def _is_artifact_archive(filename: str) -> bool:
@@ -94,7 +100,15 @@ class ArtifactBackend(ABC):
             artifact_key: The artifact filename (e.g., "blas_lib_gfx94X.tar.zst")
             source_backend: The backend to copy from
         """
-        pass
+        with tempfile.TemporaryDirectory(prefix="therock-artifact-copy-") as temporary:
+            archive_path = Path(temporary) / artifact_key
+            source_backend.download_artifact(artifact_key, archive_path)
+            self.upload_artifact(archive_path, artifact_key)
+            checksum_key = f"{artifact_key}.sha256sum"
+            if source_backend.artifact_exists(checksum_key):
+                checksum_path = Path(temporary) / checksum_key
+                source_backend.download_artifact(checksum_key, checksum_path)
+                self.upload_artifact(checksum_path, checksum_key)
 
     @property
     @abstractmethod
@@ -106,13 +120,16 @@ class ArtifactBackend(ABC):
 class LocalDirectoryBackend(ArtifactBackend):
     """Backend using a local directory (for testing/prototyping).
 
-    Directory structure mirrors S3 layout via WorkflowOutputRoot::
+    Without output_root, staging_dir is the exact artifact directory.
+    Otherwise, directory structure mirrors S3 layout via WorkflowOutputRoot::
 
         {staging_dir}/{output_root.prefix}/
             {artifact_name}_{component}_{target_family}.tar.zst
     """
 
-    def __init__(self, staging_dir: Path, output_root: WorkflowOutputRoot):
+    def __init__(
+        self, staging_dir: Path, output_root: WorkflowOutputRoot | None = None
+    ):
         self.staging_dir = Path(staging_dir)
         self.output_root = output_root
         self.base_path.mkdir(parents=True, exist_ok=True)
@@ -120,7 +137,11 @@ class LocalDirectoryBackend(ArtifactBackend):
     @property
     def base_path(self) -> Path:
         """Local artifacts directory path."""
-        return self.staging_dir / self.output_root.prefix
+        return (
+            self.staging_dir / self.output_root.prefix
+            if self.output_root is not None
+            else self.staging_dir
+        )
 
     @property
     def base_uri(self) -> str:
@@ -128,7 +149,7 @@ class LocalDirectoryBackend(ArtifactBackend):
 
     def _artifact_path(self, artifact_key: str) -> Path:
         """Get local path for an artifact file."""
-        return self.output_root.artifact(artifact_key).local_path(self.staging_dir)
+        return self.base_path / artifact_key
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List artifacts in local staging directory."""
@@ -175,9 +196,7 @@ class LocalDirectoryBackend(ArtifactBackend):
     ) -> None:
         """Copy artifact from another local backend."""
         if not isinstance(source_backend, LocalDirectoryBackend):
-            raise TypeError(
-                f"Cannot copy from {type(source_backend).__name__} to LocalDirectoryBackend"
-            )
+            return super().copy_artifact(artifact_key, source_backend)
         src = source_backend.base_path / artifact_key
         if not src.exists():
             raise FileNotFoundError(f"Artifact not found in source backend: {src}")
@@ -203,17 +222,22 @@ class S3Backend(ArtifactBackend):
             {artifact_name}_{component}_{target_family}.tar.zst
     """
 
-    def __init__(self, output_root: WorkflowOutputRoot):
+    def __init__(self, output_root: WorkflowOutputRoot | StorageLocation):
         self.output_root = output_root
+        self.location = (
+            output_root.root()
+            if isinstance(output_root, WorkflowOutputRoot)
+            else output_root
+        )
         self._s3_client = None
 
     @property
     def bucket(self) -> str:
-        return self.output_root.bucket
+        return self.location.bucket
 
     @property
     def s3_prefix(self) -> str:
-        return self.output_root.prefix
+        return self.location.relative_path
 
     @property
     def s3_client(self):
@@ -255,7 +279,12 @@ class S3Backend(ArtifactBackend):
 
     @property
     def base_uri(self) -> str:
-        return self.output_root.root().s3_uri
+        return self.location.s3_uri
+
+    def _artifact_location(self, artifact_key: str) -> StorageLocation:
+        """Resolve a filename under an explicit root or a workflow output root."""
+        key = f"{self.s3_prefix}/{artifact_key}".lstrip("/")
+        return StorageLocation(self.bucket, key)
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
@@ -286,13 +315,13 @@ class S3Backend(ArtifactBackend):
 
     def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
         """Download from S3."""
-        loc = self.output_root.artifact(artifact_key)
+        loc = self._artifact_location(artifact_key)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         self.s3_client.download_file(self.bucket, loc.relative_path, str(dest_path))
 
     def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
         """Upload to S3."""
-        loc = self.output_root.artifact(artifact_key)
+        loc = self._artifact_location(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
 
     def copy_artifact(
@@ -300,34 +329,105 @@ class S3Backend(ArtifactBackend):
     ) -> None:
         """Server-side copy from another S3 backend (cross-bucket supported)."""
         if not isinstance(source_backend, S3Backend):
-            raise TypeError(
-                f"Cannot copy from {type(source_backend).__name__} to S3Backend"
-            )
+            return super().copy_artifact(artifact_key, source_backend)
         copy_source = {
             "Bucket": source_backend.bucket,
-            "Key": f"{source_backend.s3_prefix}/{artifact_key}",
+            "Key": source_backend._artifact_location(artifact_key).relative_path,
         }
-        dest_key = f"{self.s3_prefix}/{artifact_key}"
+        dest_key = self._artifact_location(artifact_key).relative_path
         self.s3_client.copy(copy_source, self.bucket, dest_key)
         # Also copy sha256sum if it exists
         sha_key = f"{artifact_key}.sha256sum"
         if source_backend.artifact_exists(sha_key):
             sha_copy_source = {
                 "Bucket": source_backend.bucket,
-                "Key": f"{source_backend.s3_prefix}/{sha_key}",
+                "Key": source_backend._artifact_location(sha_key).relative_path,
             }
             self.s3_client.copy(
-                sha_copy_source, self.bucket, f"{self.s3_prefix}/{sha_key}"
+                sha_copy_source,
+                self.bucket,
+                self._artifact_location(sha_key).relative_path,
             )
 
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in S3."""
         try:
-            loc = self.output_root.artifact(artifact_key)
+            loc = self._artifact_location(artifact_key)
             self.s3_client.head_object(Bucket=self.bucket, Key=loc.relative_path)
             return True
         except Exception:
             return False
+
+
+class HTTPSBackend(ArtifactBackend):
+    """Read explicitly named files from an HTTPS artifact root."""
+
+    def __init__(self, root: str):
+        self.root = root.rstrip("/")
+
+    @property
+    def base_uri(self) -> str:
+        return self.root
+
+    def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
+        """Stream one file to disk; propagate missing files and network failures."""
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        with urlopen(
+            f"{self.root}/{artifact_key}", timeout=HTTP_DOWNLOAD_TIMEOUT_SECONDS
+        ) as response:
+            with dest_path.open("wb") as output:
+                shutil.copyfileobj(response, output)
+
+    def artifact_exists(self, artifact_key: str) -> bool:
+        """Check an optional sidecar; only HTTP 404 means it is absent."""
+        try:
+            with urlopen(
+                Request(f"{self.root}/{artifact_key}", method="HEAD"),
+                timeout=HTTP_DOWNLOAD_TIMEOUT_SECONDS,
+            ):
+                return True
+        except HTTPError as error:
+            if error.code == 404:
+                return False
+            raise
+
+    def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
+        raise NotImplementedError("HTTPS sources require explicit filenames")
+
+    def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
+        raise NotImplementedError("HTTPS artifact roots are read-only")
+
+    def copy_artifact(self, artifact_key: str, source_backend: ArtifactBackend) -> None:
+        raise NotImplementedError("HTTPS artifact roots are read-only")
+
+
+def create_backend_from_uri(root: str) -> ArtifactBackend:
+    """Open a recorded source root without inferring a producer run or bucket."""
+    location = urlsplit(root)
+    if location.query or location.fragment or location.username or location.password:
+        raise ValueError(
+            "Artifact roots must not contain credentials, queries, or fragments"
+        )
+    if location.scheme == "file":
+        if location.netloc not in ("", "localhost"):
+            raise ValueError("Only local file URLs are supported")
+        directory = Path(url2pathname(location.path))
+        if not directory.is_absolute() or not directory.is_dir():
+            raise ValueError(f"Artifact source directory does not exist: {directory}")
+        return LocalDirectoryBackend(staging_dir=directory.resolve())
+    if location.scheme == "s3" and location.netloc:
+        return S3Backend(StorageLocation(location.netloc, location.path.strip("/")))
+    if location.scheme == "https" and location.netloc:
+        if location.hostname.endswith(".s3.amazonaws.com") and location.port in (
+            None,
+            443,
+        ):
+            bucket = location.hostname.removesuffix(".s3.amazonaws.com")
+            return S3Backend(StorageLocation(bucket, unquote(location.path).strip("/")))
+        return HTTPSBackend(root)
+    raise ValueError(
+        "Artifact source must be an s3://, https://, or local file:// root"
+    )
 
 
 def create_backend_from_env(
