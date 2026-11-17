@@ -1215,6 +1215,7 @@ def do_build_pytorch(
                 "gfx1200",
                 "gfx1201",
                 "gfx1250",
+                "gfx1250-strict",
             }
         )
         has_aotriton_supported_arch = any(
