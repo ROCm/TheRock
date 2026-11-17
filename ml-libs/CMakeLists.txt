@@ -29,12 +29,6 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
-  if(MSVC)
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
-  else()
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
-  endif()
-
   # Translate the generic <comp_name>_SANITIZER preset convention (e.g.
   # amd-llvm_SANITIZER) into hipconv's own HIPCONV_DISABLE_ASAN option (see
   # projects/miopen/src/hipconv/CMakeLists.txt): hipconv is a subdirectory of
@@ -53,7 +47,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
@@ -114,7 +108,7 @@ if(THEROCK_ENABLE_HIPDNN)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      "-DHIPDNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DHIP_DNN_BUILD_PLUGINS=OFF
       -DHIP_DNN_GENERATE_SDK_HEADERS=OFF
       -DENABLE_CLANG_TIDY=OFF
@@ -224,7 +218,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      "-DMIOPENPROVIDER_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
@@ -272,7 +266,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      "-DHIPDNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
