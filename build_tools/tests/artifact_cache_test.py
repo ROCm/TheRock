@@ -42,12 +42,12 @@ class StaticCacheTest(unittest.TestCase):
                 checksum + "\n"
             )
         self.empty = artifact_cache.CacheIndex(schema_version=1, entries=[])
-        self.index = self.record()
+        self.index = self.record_artifacts_from_ci_run()
 
-    def record(
+    def record_artifacts_from_ci_run(
         self, index: artifact_cache.CacheIndex | None = None, suffix: str = ".tar.zst"
     ) -> artifact_cache.CacheIndex:
-        return artifact_cache.record(
+        return artifact_cache.record_artifacts_from_ci_run(
             index=self.empty if index is None else index,
             metadata_dir=self.metadata,
             platform="linux",
@@ -58,13 +58,13 @@ class StaticCacheTest(unittest.TestCase):
             archive_suffix=suffix,
         )
 
-    def lookup(
+    def lookup_artifacts_by_fingerprint(
         self,
         index: artifact_cache.CacheIndex | None = None,
         platform: str = "linux",
         variant: str = "ci-x86_64-release",
     ) -> artifact_cache.LookupPlan:
-        return artifact_cache.lookup(
+        return artifact_cache.lookup_artifacts_by_fingerprint(
             index=self.index if index is None else index,
             fingerprints_dir=self.metadata,
             platform=platform,
@@ -129,7 +129,7 @@ class StaticCacheTest(unittest.TestCase):
         for entry in historical:
             entry.fingerprint = "b" * 64
         index.entries = historical + index.entries
-        plan = self.lookup(index)
+        plan = self.lookup_artifacts_by_fingerprint(index)
         self.assertEqual(plan.status, "hit")
         self.assertEqual(plan.action, "populate")
         self.assertEqual(len(plan.copy_requests), len(artifact_cache.LLVM_ARTIFACTS))
@@ -141,7 +141,7 @@ class StaticCacheTest(unittest.TestCase):
             self.assertEqual(request.producer, expected[artifact].producer)
             self.assertEqual(request.fingerprint_file, artifact + ".fprint")
             self.assertEqual(request.checksum_file, artifact + ".tar.zst.sha256sum")
-        self.assertEqual(plan, self.lookup(index))
+        self.assertEqual(plan, self.lookup_artifacts_by_fingerprint(index))
 
     def test_required_components_match_the_actual_cmake_artifact_declaration(
         self,
@@ -172,18 +172,18 @@ class StaticCacheTest(unittest.TestCase):
             ("different build type label", {"variant": "ci-x86_64-debug"}),
         ):
             with self.subTest(case=case):
-                self.assert_build(self.lookup(**arguments))
+                self.assert_build(self.lookup_artifacts_by_fingerprint(**arguments))
         for artifact in artifact_cache.LLVM_ARTIFACTS:
             (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
         with self.subTest(case="changed fingerprints"):
-            self.assert_build(self.lookup())
+            self.assert_build(self.lookup_artifacts_by_fingerprint())
 
     def test_incomplete_bundles_prevent_partial_copy(self) -> None:
         for position, artifact in enumerate(artifact_cache.LLVM_ARTIFACTS):
             with self.subTest(missing="index entry", artifact=artifact):
                 index = copy.deepcopy(self.index)
                 index.entries.pop(position)
-                plan = self.lookup(index)
+                plan = self.lookup_artifacts_by_fingerprint(index)
                 self.assert_build(plan)
                 self.assertEqual(
                     sum(row.status == "hit" for row in plan.artifacts),
@@ -194,7 +194,7 @@ class StaticCacheTest(unittest.TestCase):
                 original = path.read_bytes()
                 path.unlink()
                 try:
-                    plan = self.lookup()
+                    plan = self.lookup_artifacts_by_fingerprint()
                     self.assert_build(plan)
                     self.assertIn(
                         "missing_expected_fingerprint",
@@ -208,7 +208,7 @@ class StaticCacheTest(unittest.TestCase):
         for value in (b"", b" \n", b"not-a-hash", b"a" * 63, b"\xff"):
             with self.subTest(value=value):
                 path.write_bytes(value)
-                self.assert_build(self.lookup())
+                self.assert_build(self.lookup_artifacts_by_fingerprint())
 
     def test_inconsistent_component_fingerprints_prevent_mixed_bundle(self) -> None:
         (self.metadata / "amd-llvm_lib_generic.fprint").write_text("b" * 64)
@@ -216,7 +216,7 @@ class StaticCacheTest(unittest.TestCase):
         next(
             entry for entry in index.entries if entry.artifact == "amd-llvm_lib_generic"
         ).fingerprint = ("b" * 64)
-        plan = self.lookup(index)
+        plan = self.lookup_artifacts_by_fingerprint(index)
         self.assert_build(plan)
         self.assertTrue(
             all(
@@ -268,7 +268,9 @@ class StaticCacheTest(unittest.TestCase):
                         (self.metadata / f"{archive}.sha256sum").write_text(
                             value + "\n"
                         )
-                    plan = self.lookup(self.record(suffix=suffix))
+                    plan = self.lookup_artifacts_by_fingerprint(
+                        self.record_artifacts_from_ci_run(suffix=suffix)
+                    )
                     self.assertEqual(plan.status, "hit")
                     for request in plan.copy_requests:
                         self.assertEqual(
@@ -332,7 +334,7 @@ class StaticCacheTest(unittest.TestCase):
             path.unlink()
             path.mkdir()
             with self.assertRaises(OSError):
-                self.lookup()
+                self.lookup_artifacts_by_fingerprint()
             result = self.lookup_cli()
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn(str(path), result.stderr)
@@ -462,7 +464,7 @@ class StaticCacheTest(unittest.TestCase):
         self.assertEqual(updated.entries[-1].producer.run_id, "67890")
         self.assertIn("Recorded 1 LLVM", result.stdout)
         self.assertIn(f"Already indexed: {len(partial.entries)}", result.stdout)
-        self.assertEqual(self.lookup(updated).status, "hit")
+        self.assertEqual(self.lookup_artifacts_by_fingerprint(updated).status, "hit")
 
     def test_record_downloads_metadata_and_preserves_producer_location(self) -> None:
         for platform, repository, root in (
@@ -517,7 +519,12 @@ class StaticCacheTest(unittest.TestCase):
                     [call.args[0] for call in fetch.call_args_list], expected_urls
                 )
                 index = artifact_cache.load_index(self.index_path)
-                self.assertEqual(self.lookup(index, platform=platform).status, "hit")
+                self.assertEqual(
+                    self.lookup_artifacts_by_fingerprint(
+                        index, platform=platform
+                    ).status,
+                    "hit",
+                )
                 for entry in index.entries:
                     self.assertEqual(entry.source.root, expected_root)
                     self.assertEqual(

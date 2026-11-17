@@ -2,11 +2,30 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Plan reuse of the complete amd-llvm artifact using a static cache index.
+r"""Plan reuse of the complete amd-llvm artifact using a static cache index.
 
-Reads existing configure-time fingerprints. Recording a producer downloads its
-fingerprints and checksums, or reads local metadata. A lookup hit is a candidate
-for population; that step must verify availability and checksums before reuse.
+The record command downloads a CI run's fingerprints and archive checksums,
+or reads local metadata. The lookup command compares existing configure-time
+fingerprints with the index and writes a build or populate plan.
+
+Examples (run from the repository root):
+
+    Add a CI run's artifact metadata to the index:
+        python build_tools/artifact_cache.py record \
+            --run-id 43738549005 \
+            --platform linux --build-variant release
+
+    Look for artifacts matching the current build's fingerprints:
+        python build_tools/artifact_cache.py lookup \
+            --fingerprints-dir build/artifacts \
+            --platform linux --build-variant release \
+            --output build/llvm-cache-plan.json
+
+Both commands use build_tools/artifact_cache_index.json by default.
+Use --index to select another index file.
+
+A lookup hit is a candidate for population; that step must verify availability
+and checksums before reuse. These commands do not download artifact archives.
 """
 
 import argparse
@@ -239,7 +258,7 @@ def write_json(path: Path, value: CacheIndex | LookupPlan) -> None:
             temporary_path.unlink(missing_ok=True)
 
 
-def lookup(
+def lookup_artifacts_by_fingerprint(
     index: CacheIndex, fingerprints_dir: Path, platform: str, build_variant: str
 ) -> LookupPlan:
     """Compare the current build's fingerprints with the static cache index.
@@ -365,7 +384,7 @@ def download_metadata(root: str, metadata_dir: Path, archive_suffix: str) -> Non
                 raise ValueError(f"Cannot download {download_url}: {error}") from error
 
 
-def record(
+def record_artifacts_from_ci_run(
     index: CacheIndex,
     metadata_dir: Path,
     platform: str,
@@ -375,7 +394,7 @@ def record(
     root: str,
     archive_suffix: str,
 ) -> CacheIndex:
-    """Add a producer's LLVM artifact metadata to the static cache index.
+    """Add LLVM artifact metadata from a previous CI run to the static cache index.
 
     Read fingerprint and checksum files from metadata_dir for every required
     component. Check that the files are valid and the component fingerprints
@@ -448,7 +467,9 @@ def record(
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     """Define and read command-line options."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     lookup_parser = subparsers.add_parser(
         "lookup", help="Write a complete LLVM hit/miss plan"
@@ -511,7 +532,7 @@ def run_record(args: argparse.Namespace) -> None:
                 metadata_dir=metadata_dir,
                 archive_suffix=args.archive_suffix,
             )
-        updated_index = record(
+        updated_index = record_artifacts_from_ci_run(
             index=index,
             metadata_dir=metadata_dir,
             platform=args.platform,
@@ -548,7 +569,7 @@ def run_lookup(args: argparse.Namespace) -> None:
     # earlier hit in place for another step to consume.
     args.output.unlink(missing_ok=True)
     index = load_index(args.index)
-    plan = lookup(
+    plan = lookup_artifacts_by_fingerprint(
         index=index,
         fingerprints_dir=args.fingerprints_dir,
         platform=args.platform,
