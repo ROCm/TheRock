@@ -391,7 +391,7 @@ only for docs/comments/skill-only changes with no device impact.>
 
 - `[x]` only for passed/completed validation; `[ ]` for pending/not-run/failed/unknown.
 - Include the command after the test group in backticks when known; omit if no useful command.
-- Report the wall time of newly added tests in seconds. Where possible, also report it as a
+- Report the wall time of newly added tests in appropriate units. Where possible, also report it as a
   fraction of the wall time of the relevant existing test suite, measured under comparable
   conditions.
 - Include `Devices: ...` only for hardware tests; include `Link: ...` only when a real link exists.
