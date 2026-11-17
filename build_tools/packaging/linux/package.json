@@ -864,6 +864,12 @@
             ]
           },
           {
+            "Name": "rocRoller",
+            "Components": [
+              "dev"
+            ]
+          },
+          {
             "Name": "origami",
             "Components": [
               "dev"
@@ -1468,6 +1474,24 @@
             "Components": [
               "test"
             ]
+          },
+          {
+            "Name": "rocPRIM_tests",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipCUB",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocThrust",
+            "Components": [
+              "test"
+            ]
           }
         ]
       },
@@ -1515,6 +1539,27 @@
         "Artifact_Subdir": [
           {
             "Name": "hipCCL",
+            "Components": [
+              "dev",
+              "doc"
+            ]
+          },
+          {
+            "Name": "rocPRIM",
+            "Components": [
+              "dev",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipCUB",
+            "Components": [
+              "dev",
+              "doc"
+            ]
+          },
+          {
+            "Name": "rocThrust",
             "Components": [
               "dev",
               "doc"
