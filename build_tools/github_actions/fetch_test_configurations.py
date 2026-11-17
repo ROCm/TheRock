@@ -131,14 +131,22 @@ _GPU_CONTAINER_OPTIONS = {
     ],
 }
 
+# Options that Apptainer-backed runners cannot honor: they always run as the
+# invoking user and cannot grant capabilities, so requesting them fails the job.
+_APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
+_APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
-def _build_container_options(job_config: dict, platform: str) -> dict:
+
+def _build_container_options(
+    job_config: dict, platform: str, amdgpu_families: str = ""
+) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
         job_config: The job configuration dictionary
         platform: The platform (e.g., "linux", "windows", "wsl")
+        amdgpu_families: The AMDGPU family string being tested
 
     Returns:
         The modified job_config with updated container_options
@@ -162,6 +170,12 @@ def _build_container_options(job_config: dict, platform: str) -> dict:
     # Add any job-specific container options
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
+
+    # Drop options the Apptainer runners for this family cannot honor
+    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+        options_parts = [
+            opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
+        ]
 
     # Concatenate all parts with a space separator
     job_config["container_options"] = " ".join(options_parts)
@@ -645,6 +659,7 @@ test_matrix = {
             # hipsparselt does not support gfx908, gfx90a (see TheRock#2042)
             # hipsparselt does not support gfx110X architectures (TensileLibrary missing)
             # hipsparselt does not plan to support Linux and Windows gfx115X architectures
+            # hipsparselt does not support gfx117X architectures
             # hipsparselt does not support gfx120X (see TheRock#6473)
             "linux": [
                 "gfx908",
@@ -658,6 +673,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
                 # KNOWN FAILURE (timeout): Quick suite exceeds 900s on FP16 strided-batched clipped-ReLU
@@ -676,6 +692,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
                 "gfx1200",
                 "gfx1201",
             ],
@@ -1150,6 +1167,8 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
+        # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
+        # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
         "additional_requirements_files": [
@@ -1210,6 +1229,9 @@ test_matrix = {
                 # KNOWN FAILURE (hipErrorNoBinaryForGpu/hsa-hotswap errors - fundamental gfx1250 arch issue)
                 # https://github.com/ROCm/TheRock/actions/runs/35881596668/job/107251861504
                 "gfx125X-dcgpu",
+            ],
+            "windows": [
+                "gfx117X-all",
             ],
         },
     },
@@ -1731,7 +1753,8 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform) for c in components_with_runners
+        _build_container_options(c, platform, amdgpu_families)
+        for c in components_with_runners
     ]
 
     # Separate sanity from the regular component matrix.
