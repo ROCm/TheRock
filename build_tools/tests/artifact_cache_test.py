@@ -337,7 +337,7 @@ class StaticCacheTest(unittest.TestCase):
                 self.lookup_artifacts_by_fingerprint()
             result = self.lookup_cli()
             self.assertEqual(result.returncode, 2, result.stderr)
-            self.assertIn(str(path), result.stderr)
+            self.assertIn(repr(str(path)), result.stderr)
             self.assertFalse(self.plan_path.exists())
 
     def test_cli_plan_output_cannot_overwrite_the_index(self) -> None:
