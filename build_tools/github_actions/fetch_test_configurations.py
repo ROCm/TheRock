@@ -846,7 +846,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 1,
             "windows": 1,
         },
         # Architectures that we have multi GPU setup for testing
