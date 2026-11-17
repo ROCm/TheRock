@@ -8,7 +8,7 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
-- Identify changes confined to an external repo's TheRock CI plumbing
+- Identify diffs confined to an external repo's TheRock CI plumbing
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -21,7 +21,7 @@ Public API:
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
     get_jobs_for_changes() - Identify job groups directly affected by changed paths
-    is_external_repo_ci_change() - Check if an external repo touched TheRock CI plumbing
+    is_external_repo_ci_only_change() - Check if an external repo diff is confined to TheRock CI plumbing
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -746,8 +746,8 @@ def get_changed_files_for_external_repo(
 #
 # A change here can alter test selection for every project at once, so the run
 # cannot be narrowed to a subset of projects and instead covers all of them.
-# CI-plumbing changes build no new library code, so they run at quick depth,
-# mirroring TheRock's own CI-workflow changes.
+# That breadth is decided separately, by the calling repo's
+# configure_external_repo_ci.py; these patterns only drive test *depth*.
 EXTERNAL_REPO_CI_PATTERNS = [
     # Workflows in the calling repo that invoke TheRock's reusable workflows.
     ".github/workflows/therock*",
@@ -765,23 +765,42 @@ EXTERNAL_REPO_CI_PATTERNS = [
 ]
 
 
-def is_external_repo_ci_change(changed_files: Optional[Iterable[str]]) -> bool:
-    """Whether an external repo's diff touches TheRock CI plumbing.
+def is_external_repo_ci_only_change(
+    changed_files: Optional[Iterable[str]],
+    skip_patterns: Optional[list[str]] = None,
+) -> bool:
+    """Whether an external repo's diff touches *only* TheRock CI plumbing.
+
+    CI-plumbing changes build no new library code, so a diff confined to them
+    can be tested at quick depth, mirroring TheRock's own CI-workflow changes.
+    The test is deliberately strict: a diff that also edits library source
+    returns False, so that source keeps its normal (standard) depth. Such a
+    change is CI-*affecting* but not CI-*only* -- it still widens the run to
+    every project, but widening breadth is not a reason to shrink depth.
 
     Args:
         changed_files: Paths changed in the calling repository, or None when
             the diff could not be determined.
+        skip_patterns: Skip-CI patterns from the calling repo's TOML config.
+            Paths matching these (docs, markdown) are ignored, so a workflow
+            edit that also touches a README still qualifies as CI-only.
 
     Returns:
-        True if at least one changed path matches EXTERNAL_REPO_CI_PATTERNS.
-        A diff that mixes CI plumbing with library source still counts: the CI
-        change alone already widens the run to every project, so the breadth
-        (and therefore the cost tradeoff that selects "quick") is the same.
+        True only when at least one CI-relevant path changed and every such
+        path matches EXTERNAL_REPO_CI_PATTERNS.
     """
     if not changed_files:
         return False
-    return any(
-        fnmatch.fnmatch(path, pattern)
+    # An empty workflow allowlist disables the TheRock-only workflow exclusion,
+    # matching how is_ci_run_required() treats external repositories.
+    relevant_paths = [
+        path
         for path in changed_files
-        for pattern in EXTERNAL_REPO_CI_PATTERNS
+        if not _is_path_unrelated_to_ci(path, skip_patterns or [], set())
+    ]
+    if not relevant_paths:
+        return False
+    return all(
+        any(fnmatch.fnmatch(path, pattern) for pattern in EXTERNAL_REPO_CI_PATTERNS)
+        for path in relevant_paths
     )

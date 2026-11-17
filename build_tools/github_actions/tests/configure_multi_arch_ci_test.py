@@ -886,8 +886,8 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
-    def test_external_repo_ci_change_is_quick(self):
-        """An external repo diff touching TheRock CI plumbing → quick tests.
+    def test_external_repo_ci_only_change_is_quick(self):
+        """An external repo diff confined to TheRock CI plumbing → quick tests.
 
         from_external_repo() makes has_submodule_changes unconditionally True,
         so this must win over the submodule rule to take effect at all.
@@ -905,6 +905,31 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
         self.assertIn("CI plumbing", result.test_rocm.test_type_reason)
+
+    def test_external_repo_ci_change_mixed_with_source_is_standard(self):
+        """CI plumbing *plus* project source → standard, not quick.
+
+        Modeled on ROCm/rocm-libraries@10dc0c5. The shared/ctest edit widens
+        the run to every project, but the hipdnn CMake edit is real source and
+        must keep standard depth, so Priority 4 has to decline and let the
+        submodule rule answer.
+        """
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[
+                "projects/hipdnn/cmake/Tests.cmake",
+                "shared/ctest/tests/CMakeLists.txt",
+            ],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "standard")
+        self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_external_repo_source_change_stays_standard(self):
         """An external repo diff touching library source obeys the ruleset."""
