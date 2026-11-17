@@ -413,7 +413,14 @@ jobs:
   test_xla:
     name: Test XLA
     needs: [build_jax_wheels, configure_jax_tests]
-    if: ${{ inputs.trigger_xla_tests }}
+    if: >-
+      ${{
+        !cancelled() &&
+        inputs.trigger_xla_tests &&
+        needs.configure_jax_tests.outputs.enabled == 'true' &&
+        contains(inputs.test_amdgpu_family, 'gfx950') &&
+        matrix.test_subset != 'multi'
+      }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     strategy:
