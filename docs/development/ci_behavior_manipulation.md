@@ -28,8 +28,8 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:run-on-draft`          | Run builds and tests on a draft pull request. See [Draft pull requests](#draft-pull-requests).                                                                                                    |
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
 | `ci:exactly`               | Build and test only the architectures named by the `ci:gfx...` labels, dropping the defaults. See [Running exactly the architectures you label](#running-exactly-the-architectures-you-label).    |
-| `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
-| `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
+| `ci:asan`                  | Run the full `asan` variant (not `host-asan`) on pull requests. Pull requests skip ASAN CI unless `ci:asan` or `ci:host-asan` is present.                                                         |
+| `ci:host-asan`             | Run the `host-asan` variant on pull requests.                                                                                                                                                     |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
 | `ci:run-wsl`               | Also test the Linux build on the WSL GPU runner (`test-runs-on-wsl`), as non-blocking `Test <family> (WSL)` jobs for WSL-capable components (hip-tests, rocrtst). Adds to native tests.           |
 | `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
@@ -79,6 +79,36 @@ rather than skipping, so remove that label first if you only want to stop the
 run.
 
 `push`, `schedule`, and `workflow_dispatch` runs are unaffected.
+
+#### Per-workflow label inputs
+
+Workflows that call
+[`setup_multi_arch.yml`](../../.github/workflows/setup_multi_arch.yml) can set
+these inputs. They apply only to `pull_request` events and are ignored on
+`push`, `schedule` and `workflow_dispatch`.
+
+| Input                        | Description                                                                                                                                                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pull_request_opt_in_label`  | Skip the run unless the pull request has this label (case-sensitive). Empty by default, which disables the check.                                                                                                                                                 |
+| `pull_request_opt_out_label` | Skip the run if the pull request has this label (case-sensitive). Empty by default, which disables the check.                                                                                                                                                     |
+| `pull_request_tests`         | `true` runs tests for `host-asan*` variants on families that have a test runner, even if the family does not test on presubmit. Families without a sandbox runner use the regular runner for `host-asan` and run no tests for `host-asan-debug`. Default `false`. |
+
+`pull_request_tests` does not enable tests for families without a test runner,
+or when `ci:build:gfx...` or `ci:cpu-test-only` is set.
+
+CI is skipped by the first matching check:
+
+1. The `ci:skip` label is present.
+1. The pull request is a draft without the `ci:run-on-draft` label.
+1. Only skippable files changed (see [Pull request](#pull-request)).
+1. `pull_request_opt_in_label` is set and the pull request lacks it.
+1. `pull_request_opt_out_label` is set and the pull request has it. The opt-out
+   label takes precedence over the opt-in label.
+1. The `asan` variant is built without the `ci:asan` or `ci:host-asan` label.
+
+For example, with `pull_request_opt_in_label: "ci:host-asan"`, a pull request
+without the `ci:host-asan` label is skipped even if it has `ci:gfx...` or
+`ci:run-all-archs` labels.
 
 #### Build/Test-specific architecture labels
 

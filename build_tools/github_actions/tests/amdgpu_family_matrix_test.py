@@ -115,6 +115,23 @@ class TestFamilyMatrixInvariants(unittest.TestCase):
                         variant, defined, f"{target_name}/{platform}: {variant}"
                     )
 
+    def test_build_variants_defined_in_raw_matrices(self):
+        """Same check against the raw matrices, including explicit-only families."""
+        raw_matrices = {
+            "amdgpu_family_info_matrix": amdgpu_family_matrix.amdgpu_family_info_matrix,
+            "amdgpu_family_info_matrix_explicit_only": amdgpu_family_matrix.amdgpu_family_info_matrix_explicit_only,
+        }
+        for matrix_name, matrix in raw_matrices.items():
+            for target_name, entry in matrix.items():
+                for platform, platform_info in entry.items():
+                    defined = amdgpu_family_matrix.all_build_variants.get(platform, {})
+                    for variant in platform_info.get("build_variants", []):
+                        self.assertIn(
+                            variant,
+                            defined,
+                            f"{matrix_name}/{target_name}/{platform}: {variant}",
+                        )
+
     def test_build_variant_presets_exist(self):
         """Every build variant's CMake preset must exist in CMakePresets.json."""
         presets_path = Path(__file__).parents[3] / "CMakePresets.json"

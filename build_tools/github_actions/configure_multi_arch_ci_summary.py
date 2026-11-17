@@ -6,7 +6,6 @@ Produces human-readable markdown explaining what CI will do and why.
 from configure_multi_arch_ci import (
     CIInputs,
     CIOutputs,
-    RUN_ON_DRAFT_LABEL,
 )
 import json
 from pathlib import Path
@@ -36,7 +35,7 @@ def format_summary(
     lines.append("")
 
     if not outputs.is_ci_enabled:
-        return _format_skipped_ci(lines, ci_inputs)
+        return _format_skipped_ci(lines, outputs)
 
     if not outputs.jobs:
         return "\n".join(lines)
@@ -97,20 +96,11 @@ def format_summary(
     return "\n".join(lines)
 
 
-def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
-    # Determine skip reason (same priority order as should_skip_ci).
-    if "ci:skip" in ci_inputs.pr_labels:
-        reason = "`ci:skip` PR label"
-    elif ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
-        reason = (
-            "this pull request is a draft. Add the "
-            f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
-            "review to run builds and tests"
-        )
+def _format_skipped_ci(lines: list[str], outputs: CIOutputs) -> str:
+    if outputs.skip_reason:
+        lines.append(f"CI was **skipped**: {outputs.skip_reason}.")
     else:
-        reason = "no CI-relevant files changed"
-
-    lines.append(f"CI was **skipped**: {reason}. See logs for details.")
+        lines.append("CI was **skipped**. See logs for details.")
     return "\n".join(lines)
 
 
