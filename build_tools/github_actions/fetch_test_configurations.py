@@ -137,8 +137,8 @@ _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
 # Apptainer-backed labels in families that also have docker runners, where the
 # options must stay for the docker runners.
 _APPTAINER_RUNNER_LABELS = [
-    "linux-gfx950-crusoe-1gpu-test",
-    "linux-gfx950-crusoe-8gpu-test",
+    "test-linux-gfx950-1gpu-crusoe-rocm",
+    "test-linux-gfx950-8gpu-crusoe-rocm",
 ]
 _APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
@@ -1460,8 +1460,14 @@ def run():
                 test_runs_on_multi_gpu_labels = None
                 test_runs_on_multi_gpu_default = ""
             elif test_runs_on_from_workflow is not None:
-                # Workflow provided a non-empty runner - use it but allow label distribution
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                # Workflow provided a non-empty runner. Spread over the label pool
+                # only when that runner is in it; any other runner (a kernel or
+                # test label) is used as-is.
+                pool = platform_info.get("test-runs-on-labels") or []
+                if any(
+                    entry.get("label") == test_runs_on_from_workflow for entry in pool
+                ):
+                    test_runs_on_labels = pool
                 test_runs_on_default = test_runs_on_from_workflow
                 test_runs_on_multi_gpu_labels = platform_info.get(
                     "test-runs-on-multi-gpu-labels"

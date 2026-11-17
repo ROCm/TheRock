@@ -1120,7 +1120,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_container_options_drop_root_on_apptainer_label(self):
         job = {
-            "test_runner": "linux-gfx950-crusoe-1gpu-test",
+            "test_runner": "test-linux-gfx950-1gpu-crusoe-rocm",
             "container_options": ["--cap-add SYS_MODULE"],
         }
         out = fetch_test_configurations._build_container_options(
@@ -1144,12 +1144,43 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_container_options_use_multi_gpu_runner_label(self):
         job = {
             "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
-            "multi_gpu_runner": "linux-gfx950-crusoe-8gpu-test",
+            "multi_gpu_runner": "test-linux-gfx950-8gpu-crusoe-rocm",
         }
         out = fetch_test_configurations._build_container_options(
             job, "linux", "gfx950-dcgpu"
         )
         self.assertNotIn("--user 0:0", out["container_options"])
+
+    def _run_gfx950_with_pool(self, test_runs_on):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = test_runs_on
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {
+                "linux": {
+                    "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "weight": 1}
+                    ],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_workflow_runner_outside_label_pool_is_used_as_is(self):
+        hip = self._run_gfx950_with_pool("test-linux-gfx950-1gpu-crusoe-rocm")[
+            "hip-tests"
+        ]
+        self.assertEqual(hip["test_runner"], "test-linux-gfx950-1gpu-crusoe-rocm")
+        self.assertNotIn("--user 0:0", hip["container_options"])
+
+    def test_workflow_runner_in_label_pool_keeps_pool(self):
+        hip = self._run_gfx950_with_pool("linux-gfx950-1gpu-ccs-ossci-rocm")[
+            "hip-tests"
+        ]
+        self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
+        self.assertIn("--user 0:0", hip["container_options"])
 
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
