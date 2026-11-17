@@ -165,8 +165,9 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
-        # etc/ files install at the system /etc rather than the prefix.
-        if stage_etc_files(
+        # For opted-in packages, etc/ files install at the system /etc rather
+        # than the prefix.
+        if is_etc_install_enabled(pkg_info) and stage_etc_files(
             sourcedir_list,
             package_dir / "etc",
             build_config.rocm_version,
