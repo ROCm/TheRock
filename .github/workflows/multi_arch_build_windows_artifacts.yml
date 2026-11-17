@@ -265,21 +265,46 @@ jobs:
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: python build_tools/hack/validate_driver_comgr_cache.py --build-dir "${BUILD_DIR}"
 
+      - name: Validate restored OpenCL relaxed math behavior
+        if: ${{ inputs.stage_name == 'compiler-runtime' }}
+        run: |
+          compiler_bin="${BUILD_DIR}/compiler/amd-llvm/build/bin"
+          clang_tests="compiler/amd-llvm/clang/test"
+          "${compiler_bin}/clang.exe" -cc1 \
+            "${clang_tests}/CodeGenOpenCL/relaxed-fpmath.cl" -emit-llvm -o - | \
+            "${compiler_bin}/FileCheck.exe" \
+              "${clang_tests}/CodeGenOpenCL/relaxed-fpmath.cl" -check-prefix=NORMAL
+          "${compiler_bin}/clang.exe" -cc1 \
+            "${clang_tests}/CodeGenOpenCL/relaxed-fpmath.cl" \
+            -emit-llvm -cl-fast-relaxed-math -o - | \
+            "${compiler_bin}/FileCheck.exe" \
+              "${clang_tests}/CodeGenOpenCL/relaxed-fpmath.cl" -check-prefix=FAST
+          "${compiler_bin}/clang.exe" -cc1 -triple amdgpu7.00-amd-amdhsa \
+            -O0 -emit-llvm -o - "${clang_tests}/CodeGenOpenCL/amdgpu-ieee.cl" \
+            -target-feature +dx10-clamp-and-ieee-mode \
+            -mno-amdgpu-ieee -cl-fast-relaxed-math | \
+            "${compiler_bin}/FileCheck.exe" \
+              "${clang_tests}/CodeGenOpenCL/amdgpu-ieee.cl" -check-prefixes=COMMON,OFF
+          "${compiler_bin}/clang.exe" -S -### -cl-fast-relaxed-math \
+            "${clang_tests}/Driver/opencl.cl" 2>&1 | \
+            "${compiler_bin}/FileCheck.exe" \
+              "${clang_tests}/Driver/opencl.cl" -check-prefix=CHECK-FAST-RELAXED-MATH
+
       - name: Prepare Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         run: |
-          mkdir -p "${BUILD_DIR}/comgr-cselect-fix"
+          mkdir -p "${BUILD_DIR}/comgr-opencl-fast-math-revert"
           cp "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.dll" \
              "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr_3.pdb" \
              "${BUILD_DIR}/base/aux-overlay/build/therock_manifest.json" \
-             "${BUILD_DIR}/comgr-cselect-fix/"
+             "${BUILD_DIR}/comgr-opencl-fast-math-revert/"
 
       - name: Upload Comgr bundle
         if: ${{ inputs.stage_name == 'compiler-runtime' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: comgr-windows-x64-cselect-fix
-          path: ${{ env.BUILD_DIR }}/comgr-cselect-fix/
+          name: comgr-windows-x64-opencl-fast-math-revert
+          path: ${{ env.BUILD_DIR }}/comgr-opencl-fast-math-revert/
           if-no-files-found: error
 
       - name: Report
