@@ -198,6 +198,8 @@ if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
       YAML2OBJ
     )
     if(WIN32)
+      # Run the focused S_CSELECT regression test on this build branch.
+      list(APPEND _llvm_required_tools "LLC")
       # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
       # we might as well build them from source ourselves.
       list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
