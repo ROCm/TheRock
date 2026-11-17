@@ -69,13 +69,13 @@ UNSUPPORTED_AMDGPU_FAMILIES = {
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
         "release/2.15": {"gfx90c"},
-        "nightly": {},
+        "nightly": set(),
     },
     "windows": {
         "release/2.13": {"gfx90c"},
         "release/2.14": {"gfx90c"},
         "release/2.15": {"gfx90c"},
-        "nightly": {},
+        "nightly": set(),
     },
 }
 
