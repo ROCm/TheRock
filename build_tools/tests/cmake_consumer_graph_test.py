@@ -413,6 +413,10 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
 
 
 def test_superrepo_map_attributes_each_key(tmp_path: Path) -> None:
+    # straddler has no real counterpart today (see
+    # test_no_libraries_to_systems_consumer_edges), but a subproject sourced
+    # from both roots must report both rather than silently keeping whichever
+    # matched first.
     _write(
         tmp_path / "CMakeLists.txt",
         """
@@ -424,37 +428,12 @@ therock_cmake_subproject_declare(ocl-clr
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
 therock_cmake_subproject_declare(rocroller
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller)
-therock_cmake_subproject_declare(variable-sourced
-  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
-""",
-    )
-    tracked = {Path("CMakeLists.txt")}
-
-    result = RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
-
-    assert result.build_superrepo_map() == {
-        "hip-clr": ["rocm-systems"],
-        "ocl-clr": ["rocm-systems"],
-        "rocroller": ["rocm-libraries"],
-    }
-    # Two keys sharing one subtree are attributed independently, and the
-    # unresolved EXTERNAL_SOURCE_DIR is absent rather than guessed at.
-    assert "variable-sourced" not in result.build_superrepo_map()
-
-
-def test_superrepo_map_fans_out_across_roots(tmp_path: Path) -> None:
-    # No real subproject declares sources in both monorepos today (see
-    # test_no_libraries_to_systems_consumer_edges), but the map must report both
-    # rather than silently keeping whichever root matched first.
-    _write(
-        tmp_path / "CMakeLists.txt",
-        """
-set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-libraries")
-set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
 therock_cmake_subproject_declare(straddler
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/a)
 therock_cmake_subproject_declare(straddler
   EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/b)
+therock_cmake_subproject_declare(variable-sourced
+  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
 """,
     )
 
@@ -462,19 +441,32 @@ therock_cmake_subproject_declare(straddler
         tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
     ).analyze()
 
+    # Two keys sharing one subtree are attributed independently; the
+    # unresolved EXTERNAL_SOURCE_DIR is absent rather than guessed at.
     assert result.build_superrepo_map() == {
-        "straddler": ["rocm-libraries", "rocm-systems"]
+        "hip-clr": ["rocm-systems"],
+        "ocl-clr": ["rocm-systems"],
+        "rocroller": ["rocm-libraries"],
+        "straddler": ["rocm-libraries", "rocm-systems"],
     }
 
 
 def test_superrepo_map_on_real_tree() -> None:
-    # Real-tree anchors for the two monorepos, plus a separately-submoduled
-    # subproject that must stay unattributed. Skips outside a git checkout.
+    """Anchor real-tree attribution and pin the monorepos' one-way dependency.
+
+    Nothing in rocm-systems consumes a rocm-libraries component, so a change
+    confined to rocm-libraries cannot affect any rocm-systems test. Scoped test
+    selection relies on that: it is what makes skipping rocm-systems jobs (e.g.
+    hip-tests) on a rocm-libraries bump sound rather than merely cheap. If the
+    edge assertion fails, a new edge inverted that relationship and the scoping
+    rationale no longer holds -- widen selection before landing the edge.
+    """
     repo_root = Path(__file__).resolve().parents[2]
     if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
         pytest.skip("not a TheRock git checkout")
 
-    superrepo_map = RepositoryAnalyzer(repo_root).analyze().build_superrepo_map()
+    result = RepositoryAnalyzer(repo_root).analyze()
+    superrepo_map = result.build_superrepo_map()
 
     assert superrepo_map.get("rocblas") == ["rocm-libraries"]
     assert superrepo_map.get("miopen") == ["rocm-libraries"]
@@ -484,34 +476,13 @@ def test_superrepo_map_on_real_tree() -> None:
     # attribution -- unknown, not unaffected.
     assert "amd-llvm" not in superrepo_map
 
-
-def test_no_libraries_to_systems_consumer_edges() -> None:
-    """Pin the one-directional dependency between the two monorepos.
-
-    Nothing in rocm-systems consumes a rocm-libraries component, so a change
-    confined to rocm-libraries cannot affect any rocm-systems test. Scoped test
-    selection relies on that: it is what makes skipping rocm-systems jobs (e.g.
-    hip-tests) on a rocm-libraries bump sound rather than merely cheap.
-
-    If this fails, a new edge inverted that relationship and the scoping
-    rationale no longer holds -- widen selection before landing the edge.
-    """
-    repo_root = Path(__file__).resolve().parents[2]
-    if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
-        pytest.skip("not a TheRock git checkout")
-
-    result = RepositoryAnalyzer(repo_root).analyze()
-    graph = result.build_consumer_graph()
-    superrepo_map = result.build_superrepo_map()
-
     offenders = [
         f"{producer} -> {consumer}"
-        for producer, node in graph.items()
+        for producer, node in result.build_consumer_graph().items()
         if superrepo_map.get(producer) == ["rocm-libraries"]
         for consumer in node["consumers"]
         if superrepo_map.get(consumer) == ["rocm-systems"]
     ]
-
     assert offenders == [], (
         "rocm-systems now consumes rocm-libraries; scoped selection would "
         f"under-test these consumers: {offenders}"
