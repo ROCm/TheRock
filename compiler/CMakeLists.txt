@@ -109,6 +109,14 @@ if(THEROCK_ENABLE_COMPILER)
     set(_llvm_include_tests ON)
   endif()
 
+  # FileCheck-class utils only when tests/tools/comgr-tests.
+  # COMGR_TESTS enables utils install only, not the full tool allow-list.
+  set(_llvm_install_utils OFF)
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS
+     OR THEROCK_BUILD_COMGR_TESTS)
+    set(_llvm_install_utils ON)
+  endif()
+
   set(_therock_llvm_cache
     "${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/clang/cmake/caches/TheRock.cmake")
   # Only required when configuring amd-llvm from source. Math-libs (and other
@@ -125,6 +133,7 @@ if(THEROCK_ENABLE_COMPILER)
       "-DLLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-llvm-translator"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
       -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
+      -DLLVM_INSTALL_UTILS=${_llvm_install_utils}
       -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
       -DTHEROCK_COMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}
       -C${_therock_llvm_cache}
@@ -151,7 +160,6 @@ if(THEROCK_ENABLE_COMPILER)
       # pristine checkouts.
       "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
       "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
-      -DTHEROCK_BUILD_COMGR_TESTS=${THEROCK_BUILD_COMGR_TESTS}
       -DUSE_NEW_HOSTCALL_IMPL=${THEROCK_USE_NEW_HOSTCALL_IMPL}
       # FLANG_RUNTIME_F128_MATH_LIB is host-architecture dependent and is
       # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D

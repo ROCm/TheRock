@@ -266,8 +266,14 @@ if(THEROCK_ENABLE_COMPILER)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
     "NOT WIN32" OFF)
+  # Default ON only when utils will actually install.
+  set(_therock_utils_dist_default OFF)
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS
+     OR THEROCK_BUILD_COMGR_TESTS)
+    set(_therock_utils_dist_default ON)
+  endif()
   option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
-    "Stage LLVM 'utils' distribution for amd-llvm" ON)
+    "Stage LLVM 'utils' distribution for amd-llvm" ${_therock_utils_dist_default})
 
   set(_therock_amd_llvm_distribution)
   if(THEROCK_ENABLE_COMPILER_DISTRIBUTION)
