@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 
 from libhipcxx_utils import (
+    add_libhipcxx_prehook,
     get_gpu_architecture_portable,
     prepend_env_path,
 )
@@ -110,6 +111,10 @@ if is_windows:
 
 cmd.extend(["-GNinja", ".."])
 
+# See add_libhipcxx_prehook() for why this is needed.
+PRE_HOOK_FILE = THEROCK_DIR / "math-libs" / "pre_hook_libhipcxx_tests.cmake"
+add_libhipcxx_prehook(cmd, PRE_HOOK_FILE)
+
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
@@ -120,11 +125,19 @@ if is_windows:
         "check-hipcxx",
     ]
 else:
+    hiprtc_cmake_options = [
+        f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / AMDCLANGPP_BINARY_NAME}",
+        f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
+        f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+    ]
+    # The script runs 'cmake --preset' in a new build dir. That configure
+    # needs the pre-hook too.
+    add_libhipcxx_prehook(hiprtc_cmake_options, PRE_HOOK_FILE)
     cmd = [
         "bash",
         "../ci/hiprtc_libhipcxx.sh",
         "-cmake-options",
-        f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / AMDCLANGPP_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+        " ".join(hiprtc_cmake_options),
     ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")

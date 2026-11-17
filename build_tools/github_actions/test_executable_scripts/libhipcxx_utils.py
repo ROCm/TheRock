@@ -17,6 +17,32 @@ def prepend_env_path(env: dict, var_name: str, new_path: str):
         env[var_name] = new_path
 
 
+def add_libhipcxx_prehook(cmd: list, pre_hook_file) -> bool:
+    """
+    rocthrust and hipcub in the build tree need the target
+    libhipcxx::libhipcxx. Only the installed libhipcxx package defines it.
+    Our source-tree configure loads the old libcudacxx package. It does not
+    define the target, so CMake fails at generate time.
+
+    The pre-hook file defines libhipcxx::libhipcxx as an empty placeholder.
+    This is safe. The tests do not need headers from it. They take headers
+    from the source tree. The libhipcxx_tests subproject already uses this
+    pre-hook.
+
+    We use -D, not an env var. An env var would reach the export tests in
+    cmake/test too. They need the real libhipcxx package. The placeholder
+    would hide it from them.
+    """
+    if not pre_hook_file.exists():
+        logging.warning(
+            f"Pre-hook {pre_hook_file} not found. Configure may fail. "
+            "roc::rocthrust needs libhipcxx::libhipcxx, but nothing defines it."
+        )
+        return False
+    cmd.append(f"-DCMAKE_PROJECT_INCLUDE_BEFORE={pre_hook_file.as_posix()}")
+    return True
+
+
 def _try_offload_arch(therock_build_dir: str, file_ending: str):
     """Try offload-arch; return gfxNNNN string or None."""
     executable = therock_build_dir + f"/lib/llvm/bin/offload-arch{file_ending}"
