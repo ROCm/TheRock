@@ -31,6 +31,7 @@ benefit from further discussion.
 - [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
 - [RFC0014: Code Coverage Infrastructure for TheRock](./RFC0014-Code-Coverage-Infrastructure.md)
 - [RFC0015: Distributing Fortran Bindings Across rocm-systems and rocm-libraries](./RFC0015-Fortran-Bindings-Split.md)
+- [RFC0016: PowerPC (ppc64le) Build-Only Host Support](./RFC0016-PowerPC-ppc64le-Build-Only-Host-Support.md)
 
 ## Adding an RFC
 
