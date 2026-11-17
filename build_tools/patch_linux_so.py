@@ -6,6 +6,7 @@
 
 import argparse
 import glob
+import os
 from pathlib import Path
 import re
 import shlex
@@ -35,11 +36,15 @@ def resolve_symlinks(lib_path: Path):
 
 
 def update_library_links(
-    libfile: Path, linker_name: str, patchelf: str = "patchelf"
+    libfile: Path, linker_name: str, patchelf: str | None = None
 ) -> None:
     """
     Normalize a shared library so that its real file is named exactly as its ELF SONAME,
     and ensure a canonical linker-visible symlink exists.
+
+    Deprecated: new callers should use `update_sysdeps_library_links`. Once all
+    sysdeps patch_install scripts have moved to it, this function will be folded
+    into `update_sysdeps_library_links`, which will be the only entry point.
 
     This function is used when a library has been installed under a prefixed or
     non-standard filename (e.g., librocm_sysdeps_elf.so).
@@ -66,8 +71,11 @@ def update_library_links(
 
     patchelf : str, optional
         Path to the `patchelf` executable used to extract the SONAME.
-        Defaults to "patchelf".
+        Defaults to the PATCHELF environment variable (set by the build), or
+        "patchelf" from PATH.
     """
+    if patchelf is None:
+        patchelf = os.environ.get("PATCHELF", "patchelf")
     if not libfile.exists():
         raise FileNotFoundError(f"File '{libfile}' not found")
 
@@ -113,6 +121,38 @@ def update_library_links(
         if symlink_path.exists():
             symlink_path.unlink()
         libfile.rename(symlink_path)
+
+
+def update_sysdeps_library_links(
+    lib_dir: Path, linker_name: str, sysdeps_name: str | None = None
+) -> None:
+    """Normalizes a sysdeps library given its original linker name.
+
+    This is the entry point for the sysdeps patch_install scripts. It currently
+    wraps `update_library_links`, which is deprecated and will be folded into
+    this function once all callers have moved here.
+
+    The installed (prefixed) library file is derived from the linker name, e.g.
+    `libcap.so` -> `librocm_sysdeps_cap.so`. Results in:
+    - libcap.so -> librocm_sysdeps_cap.so.2
+    - librocm_sysdeps_cap.so.2 (real file)
+
+    Parameters
+    ----------
+    lib_dir : Path
+        Directory containing the installed library.
+
+    linker_name : str
+        The original linker-visible filename to create (e.g. libcap.so).
+
+    sysdeps_name : str, optional
+        The installed library filename, if it is not the linker name with the
+        `lib` prefix replaced by `librocm_sysdeps_` (e.g. libnl-genl-3.so is
+        installed as librocm_sysdeps_nl_genl_3.so).
+    """
+    if sysdeps_name is None:
+        sysdeps_name = "librocm_sysdeps_" + linker_name.removeprefix("lib")
+    update_library_links(lib_dir / sysdeps_name, linker_name)
 
 
 def relativize_pc_file(pc_file: Path) -> None:
