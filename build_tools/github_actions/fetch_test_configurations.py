@@ -134,6 +134,12 @@ _GPU_CONTAINER_OPTIONS = {
 # Options that Apptainer-backed runners cannot honor: they always run as the
 # invoking user and cannot grant capabilities, so requesting them fails the job.
 _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
+# Apptainer-backed labels in families that also have docker runners, where the
+# options must stay for the docker runners.
+_APPTAINER_RUNNER_LABELS = [
+    "linux-gfx950-crusoe-1gpu-test",
+    "linux-gfx950-crusoe-8gpu-test",
+]
 _APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
 
@@ -144,7 +150,8 @@ def _build_container_options(
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
-        job_config: The job configuration dictionary
+        job_config: The job configuration dictionary. Its multi_gpu_runner or
+            test_runner label also decides whether Apptainer options apply.
         platform: The platform (e.g., "linux", "windows", "wsl")
         amdgpu_families: The AMDGPU family string being tested
 
@@ -171,8 +178,14 @@ def _build_container_options(
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
 
-    # Drop options the Apptainer runners for this family cannot honor
-    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+    # Same runner choice as test_runs_on in test_artifacts.yml
+    runner = job_config.get("multi_gpu_runner") or job_config.get("test_runner")
+
+    # Drop options the Apptainer runners for this family or label cannot honor
+    if (
+        any(family in amdgpu_families for family in _APPTAINER_FAMILIES)
+        or runner in _APPTAINER_RUNNER_LABELS
+    ):
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]

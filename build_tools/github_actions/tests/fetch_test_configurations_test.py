@@ -1118,6 +1118,39 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
+    def test_container_options_drop_root_on_apptainer_label(self):
+        job = {
+            "test_runner": "linux-gfx950-crusoe-1gpu-test",
+            "container_options": ["--cap-add SYS_MODULE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+        self.assertNotIn("--cap-add SYS_MODULE", out["container_options"])
+        self.assertIn("--device /dev/kfd", out["container_options"])
+
+    def test_container_options_keep_root_on_docker_label_same_family(self):
+        job = {
+            "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "container_options": ["--cap-add SYS_MODULE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertIn("--user 0:0", out["container_options"])
+        self.assertIn("--cap-add SYS_MODULE", out["container_options"])
+
+    def test_container_options_use_multi_gpu_runner_label(self):
+        job = {
+            "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "multi_gpu_runner": "linux-gfx950-crusoe-8gpu-test",
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
     # -----------------------
