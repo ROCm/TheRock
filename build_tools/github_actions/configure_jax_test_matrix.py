@@ -110,6 +110,21 @@ def wants_multi_gpu(size: str, today: date) -> bool:
     return size == TEST_SIZE_MEDIUM and today.weekday() == WEEKLY_MULTI_GPU_WEEKDAY
 
 
+def single_gpu_only(matrix: dict[str, list[dict[str, str | int]]]) -> dict:
+    """`matrix` with its multi-accelerator row, if any, dropped.
+
+    A job-level `if:` has no access to the `matrix` context (only
+    `matrix.*` expressions in steps/with do), so a caller that only wants
+    the single-GPU row (e.g. the XLA bazel suite) needs it filtered out of
+    the matrix itself rather than conditioned on in the workflow.
+    """
+    return {
+        "include": [
+            job for job in matrix["include"] if job["test_subset"] != TEST_SUBSET_MULTI
+        ]
+    }
+
+
 def build_test_matrix(
     *,
     target: str,
@@ -226,6 +241,9 @@ def main(argv: list[str]) -> None:
         {
             "enabled": str(bool(matrix["include"])).lower(),
             "matrix": json.dumps(matrix, separators=(",", ":")),
+            "single_gpu_matrix": json.dumps(
+                single_gpu_only(matrix), separators=(",", ":")
+            ),
         }
     )
 

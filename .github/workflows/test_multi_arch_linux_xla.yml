@@ -150,11 +150,10 @@ jobs:
       ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       # Negative gtest filter, colon-separated:
-      #   HloOpProfilerTest.BasicMeasurementsAreCorrect
       #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
       #   PrngTest.PassInGlobalRngSeed
+      #   HloOpProfilerTest* — TODO: fix known issue https://amd-hub.atlassian.net/browse/ROCM-33725
       #   CommandBufferTests/CommandBufferTest.Convolutions* — TODO: fix known therock issue https://amd-hub.atlassian.net/browse/ROCM-33231
-      #   HloOpProfilerTest --TODO: fix known issue: https://amd-hub.atlassian.net/browse/ROCM-33725
       XLA_TEST_FILTER: >-
         -StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:HloOpProfilerTest*:CommandBufferTests/CommandBufferTest.Convolutions*
       ROCM_COMMON_BAZEL_ARGS: >-

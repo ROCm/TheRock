@@ -371,6 +371,7 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
+      single_gpu_matrix: ${{ steps.configure.outputs.single_gpu_matrix }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
       TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
@@ -418,14 +419,13 @@ jobs:
         !cancelled() &&
         inputs.trigger_xla_tests &&
         needs.configure_jax_tests.outputs.enabled == 'true' &&
-        contains(inputs.test_amdgpu_family, 'gfx950') &&
-        matrix.test_subset != 'multi'
+        contains(inputs.test_amdgpu_family, 'gfx950')
       }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.single_gpu_matrix) }}
     with:
       test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
@@ -439,7 +439,7 @@ jobs:
       contents: read
 
   test_jax_wheels:
-    if: ${{ !cancelled() && needs.configure_jax_tests.outputs.enabled == 'true' }}
+    if: ${{ needs.configure_jax_tests.outputs.enabled == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests]
     name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
     strategy:
