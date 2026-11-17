@@ -169,7 +169,7 @@ defines the distributions and what each one installs. The superbuild passes
 [`clang/cmake/caches/TheRock.cmake`](../../compiler/amd-llvm/clang/cmake/caches/TheRock.cmake)
 to `-C`. That file includes `ROCm.cmake`, then adds the TheRock projects
 (device-libs, SPIR-V, sqtt) to those distributions. It also includes settings that come from
-TheRock_ options or specific changes tailored for TheRock build/packaging.
+TheRock\_ options or specific changes tailored for TheRock build/packaging.
 Per-distribution toggles compose the semicolon list
 `THEROCK_AMD_LLVM_DISTRIBUTION`, which is passed to `amd-llvm` as
 `INSTALL_DISTRIBUTION`. Reconfigure after flipping a toggle: the aggregate is
