@@ -266,10 +266,17 @@ if(THEROCK_ENABLE_COMPILER)
   cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
     "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
     "NOT WIN32" OFF)
-  # Default ON only when utils will actually install.
+  # THEROCK_BUILD_COMGR_TESTS is assigned in compiler/CMakeLists.txt, after
+  # this option is created. Mirror that default so a testing build stages utils.
+  if(DEFINED THEROCK_BUILD_COMGR_TESTS)
+    set(_therock_comgr_tests "${THEROCK_BUILD_COMGR_TESTS}")
+  elseif(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    set(_therock_comgr_tests OFF)
+  else()
+    set(_therock_comgr_tests "${THEROCK_BUILD_TESTING}")
+  endif()
   set(_therock_utils_dist_default OFF)
-  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS
-     OR THEROCK_BUILD_COMGR_TESTS)
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR _therock_comgr_tests)
     set(_therock_utils_dist_default ON)
   endif()
   option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
