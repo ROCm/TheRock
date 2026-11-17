@@ -23,7 +23,7 @@ on:
         type: string
         default: ""
       therock_ref:
-        description: "Branch, tag or SHA to checkout."
+        description: "Branch, tag or SHA to checkout  from TheRock repo."
         type: string
         default: ""
       xla_ref:
