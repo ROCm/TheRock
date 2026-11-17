@@ -3,10 +3,17 @@
 
 # TheRock-only overrides for amd-llvm.
 #
-# LLVM projects, runtimes, targets, distributions, tool allow-lists, external
-# projects (device-libs / SPIR-V / sqtt), install RPATH, and most OpenMP/Flang
-# options come from clang/cmake/caches/TheRock.cmake (via -C). Do not FORCE
-# those here or they will override the cache.
+# clang/cmake/caches/ROCm.cmake is the base ROCm LLVM configuration: projects,
+# runtimes, targets, the tool allow-list, Clang defaults, and the install
+# distributions. A direct -C ROCm.cmake build uses this file alone.
+#
+# clang/cmake/caches/TheRock.cmake is what this superbuild passes to -C. It
+# includes ROCm.cmake, then adds TheRock source paths (device-libs, SPIR-V,
+# sqtt), the distribution components for those projects, and settings that
+# come from a THEROCK_* option or from how TheRock packages the install.
+#
+# Do not FORCE cache-owned options here. This hook runs after -C, and FORCE
+# replaces the value the cache set.
 #
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
 # The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB (set by
