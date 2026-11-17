@@ -115,6 +115,43 @@ TheRock's own workflows set the inputs as follows:
   Because the opt-in check runs before the `asan` variant check, a pull request
   with only `ci:host-asan` is skipped by this workflow. Add `ci:asan` to run it.
 
+#### Disabling ROCm tests (`run_rocm_tests`)
+
+Callers of `setup_multi_arch.yml` can set the boolean input `run_rocm_tests`
+(default `true`). Like `build_pytorch` and `build_jax`, it maps to a job group
+decided in the setup job (`test_rocm`). Setting it to `false` skips the ROCm
+tests for the whole workflow: no GPU or CPU test runners are configured for any
+family, and builds are unaffected.
+
+With the default (`true`):
+
+- The sanitizer nightly-only test gates no longer exist. `asan`, `host-asan` and
+  their `-debug` variants run tests on pull request, push, schedule and
+  `workflow_dispatch` events wherever `tests_on_trigger` and runners allow.
+- Asan-family variants use the family's sandbox runner when one is configured,
+  otherwise the regular runner. Other variants (for example `release` or `tsan`)
+  always use the regular runner.
+- `tests_on_trigger`, `ci:test:gfx...`, `ci:build:gfx...`, `ci:cpu-test-only`
+  and `run-full-tests-only` behave as described elsewhere in this document.
+
+Callers that want build-only runs on pull requests can pass an expression, as
+[`multi_arch_ci_asan.yml`](../../.github/workflows/multi_arch_ci_asan.yml) does:
+
+```yaml
+with:
+  build_variant: "asan"
+  run_rocm_tests: ${{ github.event_name != 'pull_request' }}
+```
+
+> [!IMPORTANT]
+> Behavior change: asan-family workflows previously had tests disabled whenever
+> the family's sandbox runner was blank, which is the case outside rocm-systems
+> pull requests, including nightly and `workflow_dispatch` runs. With
+> `run_rocm_tests` defaulting to `true`, they now run on the regular runner.
+> Callers that want the old behavior set `run_rocm_tests: false`; TheRock's
+> [`multi_arch_release_asan.yml`](../../.github/workflows/multi_arch_release_asan.yml)
+> does so.
+
 #### Build/Test-specific architecture labels
 
 For fine-grained control over which architectures build vs. test, you can use

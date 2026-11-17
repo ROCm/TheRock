@@ -95,6 +95,7 @@ from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+    str2bool,
 )
 from get_latest_python_package_version import get_latest_python_package_version
 from stage_impact import analyze_artifact_impact_from_projects
@@ -306,6 +307,7 @@ class CIInputs:
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
+    run_rocm_tests: bool = True
     build_native_linux: bool = True
     build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
@@ -456,6 +458,8 @@ class CIInputs:
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
+        # str2bool("") is False, so an unset variable must default to "true".
+        run_rocm_tests = str2bool(os.environ.get("RUN_ROCM_TESTS", "true"))
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
@@ -524,6 +528,7 @@ class CIInputs:
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
+            run_rocm_tests=run_rocm_tests,
             build_native_linux=build_native_linux,
             build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
@@ -1771,22 +1776,18 @@ def decide_jobs(
         git_context=git_context,
         external_skip_patterns=external_skip_patterns,
     )
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-    )
-
-    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
-    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
+    if ci_inputs.run_rocm_tests:
+        test_rocm = TestRocmDecision(
+            action=JobAction.RUN,
+            test_type=test_type,
+            test_type_reason=test_type_reason,
+        )
+    else:
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="run_rocm_tests is false",
+        )
 
     return JobDecisions(
         build_rocm=build_rocm,
@@ -1978,44 +1979,18 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif "asan" in build_variant:
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
+        # asan-family variants use the sandbox runner when one is configured
+        # (it is blanked to "" outside rocm-systems PRs, so check truthiness),
+        # otherwise the family's regular runner.
+        if "asan" in build_variant:
+            sandbox_runner = platform_info.get("test-runs-on-sandbox")
+            if sandbox_runner:
+                test_runs_on = sandbox_runner
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
+
+        # run_rocm_tests=false (test_rocm SKIP) disables all test jobs.
+        if jobs.test_rocm.action == JobAction.SKIP:
+            test_runs_on = ""
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if (
@@ -2072,7 +2047,11 @@ def _expand_build_config_for_platform(
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
-        test_runs_on_cpu = get_cpu_test_runner(platform)
+        test_runs_on_cpu = (
+            ""
+            if jobs.test_rocm.action == JobAction.SKIP
+            else get_cpu_test_runner(platform)
+        )
 
         # tests_enabled is true when any test runner (GPU or CPU) is available.
         # This provides a single flag for workflows to gate test jobs.

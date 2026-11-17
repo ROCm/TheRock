@@ -89,6 +89,8 @@ jobs:
       build_python_packages: false
       build_pytorch: false
       build_jax: false
+      # Build only on pull requests; run tests on workflow_dispatch/nightly.
+      run_rocm_tests: ${{ github.event_name != 'pull_request' }}
 
   linux_build_and_test:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}

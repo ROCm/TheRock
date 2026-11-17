@@ -1310,45 +1310,6 @@ class TestDecideJobs(unittest.TestCase):
             ["rocgdb", "rocr-debug-agent"],
         )
 
-    # TODO(#3433): Remove ASAN tests once ASAN tests are passing
-    def test_asan_tests_only_run_on_nightly_triggers(self):
-        """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
-        git_context = cm.GitContext()
-
-        # PR and push should skip ASAN tests
-        for event in ["pull_request", "push"]:
-            result = cm.decide_jobs(
-                self._inputs(event_name=event, build_variant="asan"),
-                git_context=git_context,
-                targets=cm.TargetSelection(),
-            )
-            self.assertEqual(
-                result.test_rocm.action,
-                cm.JobAction.SKIP,
-                f"ASAN tests should skip on {event}",
-            )
-
-        # Schedule and workflow_dispatch should run ASAN tests
-        for event in ["schedule", "workflow_dispatch"]:
-            result = cm.decide_jobs(
-                self._inputs(event_name=event, build_variant="asan"),
-                git_context=git_context,
-                targets=cm.TargetSelection(),
-            )
-            self.assertEqual(
-                result.test_rocm.action,
-                cm.JobAction.RUN,
-                f"ASAN tests should run on {event}",
-            )
-
-        # Release builds should always run tests (contrast with ASAN)
-        result = cm.decide_jobs(
-            self._inputs(event_name="pull_request", build_variant="release"),
-            git_context=git_context,
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
-
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
     def test_external_repo_stage_reuse_uses_repo_as_changed_file(self, mock_reuse):
         """External repo builds pass repo name to stage-impact analysis.
@@ -3046,57 +3007,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
-    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
-    def test_asan_runner_selection(self):
-        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Schedule: sandbox pools are reserved for rocm-systems PRs.
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_asan_debug_nightly_has_no_sandbox_runner(self):
-        """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan-debug"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
-        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(
-                event_name="schedule", build_variant="host-asan-debug"
-            ),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
         result = cm.expand_build_configs(
@@ -4573,6 +4483,146 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         # The pools must be distinct, otherwise the split buys nothing.
         self.assertNotEqual(entry["test-runs-on-2gpu"], entry["test-runs-on-multi-gpu"])
         self.assertNotEqual(entry["test-runs-on-4gpu"], entry["test-runs-on-multi-gpu"])
+
+
+class TestRunRocmTests(unittest.TestCase):
+    """run_rocm_tests drives test_rocm and the per-family test runners."""
+
+    ASAN_VARIANTS = ["asan", "host-asan", "asan-debug", "host-asan-debug"]
+    OTHER_VARIANTS = ["release", "tsan"]
+    SANDBOX = "linux-sandbox-runner"
+    REGULAR = "linux-regular-runner"
+    CPU = "linux-cpu-runner"
+    EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"]
+
+    def _families(self, sandbox="absent", tests_on_trigger=None):
+        platform_info = {
+            "test-runs-on": self.REGULAR,
+            "family": "mock-fam",
+            "fetch-gfx-targets": ["gfx0000"],
+            "build_variants": self.ASAN_VARIANTS + self.OTHER_VARIANTS,
+            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+            "tests_on_trigger": tests_on_trigger
+            or ["presubmit", "postsubmit", "nightly"],
+        }
+        if sandbox != "absent":
+            platform_info["test-runs-on-sandbox"] = sandbox
+        return {"mock-fam": {"linux": platform_info}}
+
+    def _expand(
+        self,
+        variant,
+        event,
+        run_rocm_tests=True,
+        *,
+        sandbox="absent",
+        targets=None,
+        tests_on_trigger=None,
+    ):
+        """Runs decide_jobs + expand; returns (test_rocm action, family entry)."""
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name=event,
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant=variant,
+            run_rocm_tests=run_rocm_tests,
+            build_pytorch=False,
+        )
+        targets = targets or cm.TargetSelection(linux_families=["mock-fam"])
+        families = self._families(sandbox, tests_on_trigger)
+        with (
+            patch(
+                "configure_multi_arch_ci.get_all_families_for_trigger_types",
+                return_value=families,
+            ),
+            patch("configure_multi_arch_ci.get_cpu_test_runner", return_value=self.CPU),
+        ):
+            jobs = cm.decide_jobs(
+                ci_inputs, git_context=cm.GitContext(), targets=targets
+            )
+            result = cm.expand_build_configs(
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=jobs,
+            )
+        return jobs.test_rocm.action, result.linux.per_family_info[0]
+
+    def _runner(self, *args, **kwargs):
+        return self._expand(*args, **kwargs)[1]["test-runs-on"]
+
+    def test_asan_variants_run_tests_with_sandbox_runner(self):
+        for variant in self.ASAN_VARIANTS:
+            for event in self.EVENTS:
+                with self.subTest(variant=variant, event=event):
+                    action, entry = self._expand(variant, event, sandbox=self.SANDBOX)
+                    self.assertEqual(action, cm.JobAction.RUN)
+                    self.assertEqual(entry["test-runs-on"], self.SANDBOX)
+                    self.assertTrue(entry["tests_enabled"])
+
+    def test_asan_variants_fall_back_to_regular_runner(self):
+        """A blank ("") or absent sandbox runner uses the regular runner."""
+        for variant in self.ASAN_VARIANTS:
+            for sandbox in ["", "absent"]:
+                with self.subTest(variant=variant, sandbox=sandbox):
+                    runner = self._runner(variant, "pull_request", sandbox=sandbox)
+                    self.assertEqual(runner, self.REGULAR)
+
+    def test_other_variants_use_regular_runner(self):
+        for variant in self.OTHER_VARIANTS:
+            for event in self.EVENTS:
+                with self.subTest(variant=variant, event=event):
+                    runner = self._runner(variant, event, sandbox=self.SANDBOX)
+                    self.assertEqual(runner, self.REGULAR)
+
+    def test_false_skips_tests_for_all_variants(self):
+        for variant in self.ASAN_VARIANTS + self.OTHER_VARIANTS:
+            for event in self.EVENTS:
+                with self.subTest(variant=variant, event=event):
+                    action, entry = self._expand(
+                        variant, event, False, sandbox=self.SANDBOX
+                    )
+                    self.assertEqual(action, cm.JobAction.SKIP)
+                    self.assertEqual(entry["test-runs-on"], "")
+                    self.assertEqual(entry["test-runs-on-cpu"], "")
+                    self.assertFalse(entry["tests_enabled"])
+
+    def test_false_is_not_overridden_by_test_label(self):
+        action, entry = self._expand(
+            "release",
+            "pull_request",
+            False,
+            targets=cm.TargetSelection(
+                linux_families=["mock-fam"], linux_test_only_families=["mock-fam"]
+            ),
+        )
+        self.assertEqual(action, cm.JobAction.SKIP)
+        self.assertFalse(entry["tests_enabled"])
+
+    def test_true_still_respects_tests_on_trigger(self):
+        for variant in self.ASAN_VARIANTS + self.OTHER_VARIANTS:
+            with self.subTest(variant=variant):
+                runner = self._runner(
+                    variant,
+                    "pull_request",
+                    sandbox=self.SANDBOX,
+                    tests_on_trigger=["nightly"],
+                )
+                self.assertEqual(runner, "")
+
+    def test_environ_parsing(self):
+        for value, expected in [
+            (None, True),
+            ("false", False),
+        ]:
+            with self.subTest(value=value):
+                inputs = _run_from_environ(
+                    event_name="workflow_dispatch",
+                    event_payload={},
+                    extra_env={} if value is None else {"RUN_ROCM_TESTS": value},
+                )
+                self.assertIs(inputs.run_rocm_tests, expected)
 
 
 if __name__ == "__main__":
