@@ -18,7 +18,7 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
 import artifact_cache
 
 
@@ -51,7 +51,6 @@ class StaticCacheTest(unittest.TestCase):
             index=self.empty if index is None else index,
             metadata_dir=self.metadata,
             platform="linux",
-            build_variant="ci-x86_64-release",
             repository="ROCm/TheRock",
             run_id="12345",
             root="s3://test-bucket/12345-linux",
@@ -62,13 +61,11 @@ class StaticCacheTest(unittest.TestCase):
         self,
         index: artifact_cache.CacheIndex | None = None,
         platform: str = "linux",
-        variant: str = "ci-x86_64-release",
     ) -> artifact_cache.LookupPlan:
         return artifact_cache.lookup_artifacts_by_fingerprint(
             index=self.index if index is None else index,
             fingerprints_dir=self.metadata,
             platform=platform,
-            build_variant=variant,
         )
 
     def assert_build(self, plan: artifact_cache.LookupPlan) -> None:
@@ -93,8 +90,6 @@ class StaticCacheTest(unittest.TestCase):
             self.metadata,
             "--platform",
             "linux",
-            "--build-variant",
-            "ci-x86_64-release",
             "--output",
             self.plan_path,
         )
@@ -108,8 +103,6 @@ class StaticCacheTest(unittest.TestCase):
             self.metadata,
             "--platform",
             "linux",
-            "--build-variant",
-            "ci-x86_64-release",
             "--repository",
             "ROCm/TheRock",
             "--run-id",
@@ -147,7 +140,7 @@ class StaticCacheTest(unittest.TestCase):
         self,
     ) -> None:
         source = (
-            Path(artifact_cache.__file__).resolve().parents[1]
+            Path(artifact_cache.__file__).resolve().parents[2]
             / "compiler/CMakeLists.txt"
         )
         declaration = re.search(
@@ -168,8 +161,6 @@ class StaticCacheTest(unittest.TestCase):
         for case, arguments in (
             ("empty index", {"index": self.empty}),
             ("different platform", {"platform": "windows"}),
-            ("different architecture label", {"variant": "ci-aarch64-release"}),
-            ("different build type label", {"variant": "ci-x86_64-debug"}),
         ):
             with self.subTest(case=case):
                 self.assert_build(self.lookup_artifacts_by_fingerprint(**arguments))
@@ -236,7 +227,6 @@ class StaticCacheTest(unittest.TestCase):
         cases = [
             ("entry", "fingerprint", "not-a-hash"),
             ("entry", "platform", ""),
-            ("entry", "build_variant", None),
             ("entry", "artifact", "hipify_run_generic"),
             ("source", "root", "s3://"),
             ("source", "root", "https://user:password@example.invalid/path"),
@@ -349,8 +339,10 @@ class StaticCacheTest(unittest.TestCase):
         self.assertEqual(self.index_path.read_bytes(), before)
 
     def test_cli_record_failure_preserves_existing_index(self) -> None:
-        artifact_cache.write_json(self.index_path, self.empty)
+        artifact_cache.write_json(self.index_path, self.index)
         before = self.index_path.read_bytes()
+        for artifact in artifact_cache.LLVM_ARTIFACTS:
+            (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
         cases = (
             ("amd-llvm_run_generic.fprint", None),
             ("amd-llvm_doc_generic.tar.zst.sha256sum", None),
@@ -408,7 +400,7 @@ class StaticCacheTest(unittest.TestCase):
             self.assertNotIn("note", entry)
             self.assertNotIn("note", entry["source"])
 
-        # Adding a new fingerprint writes old and new entries in the minimal form.
+        # Replacing a fingerprint writes the selected bundle in the minimal form.
         for artifact in artifact_cache.LLVM_ARTIFACTS:
             (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
         result = self.record_cli(run_id="67890")
@@ -417,9 +409,10 @@ class StaticCacheTest(unittest.TestCase):
         self.assertNotIn("note", updated)
         self.assertEqual(
             len(updated["entries"]),
-            len(self.index.entries) + len(artifact_cache.LLVM_ARTIFACTS),
+            len(artifact_cache.LLVM_ARTIFACTS),
         )
         for entry in updated["entries"]:
+            self.assertEqual(entry["fingerprint"], "b" * 64)
             self.assertEqual(set(entry["producer"]), {"repository", "run_id"})
             self.assertNotIn("note", entry)
             self.assertNotIn("note", entry["source"])
@@ -466,6 +459,51 @@ class StaticCacheTest(unittest.TestCase):
         self.assertIn(f"Already indexed: {len(partial.entries)}", result.stdout)
         self.assertEqual(self.lookup_artifacts_by_fingerprint(updated).status, "hit")
 
+    def test_cli_record_replaces_history_only_for_selected_platform(self) -> None:
+        windows_entries = copy.deepcopy(self.index.entries)
+        for entry in windows_entries:
+            entry.platform = "windows"
+            entry.source.root = "s3://test-bucket/12345-windows"
+        selected_entries = copy.deepcopy(self.index.entries)
+        for entry in selected_entries:
+            entry.fingerprint = "b" * 64
+            entry.producer.run_id = "67890"
+            entry.source.root = "s3://test-bucket/67890-linux"
+
+        for already_recorded in (False, True):
+            with self.subTest(already_recorded=already_recorded):
+                index = copy.deepcopy(self.index)
+                index.entries.extend(windows_entries)
+                if already_recorded:
+                    index.entries.extend(selected_entries)
+                artifact_cache.write_json(self.index_path, index)
+                for artifact in artifact_cache.LLVM_ARTIFACTS:
+                    (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
+
+                result = self.record_cli(run_id="67890")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                updated = artifact_cache.load_index(self.index_path)
+                self.assertEqual(
+                    [entry for entry in updated.entries if entry.platform == "windows"],
+                    windows_entries,
+                )
+                self.assertEqual(
+                    [entry for entry in updated.entries if entry.platform == "linux"],
+                    selected_entries,
+                )
+                self.assertIn(
+                    f"Removed {len(artifact_cache.LLVM_ARTIFACTS)} older LLVM",
+                    result.stdout,
+                )
+                self.assertNotIn("Index unchanged.", result.stdout)
+                self.assertEqual("Recorded " in result.stdout, not already_recorded)
+                self.assertEqual(
+                    self.lookup_artifacts_by_fingerprint(updated).status, "hit"
+                )
+                for artifact in artifact_cache.LLVM_ARTIFACTS:
+                    (self.metadata / f"{artifact}.fprint").write_text(self.fingerprint)
+                self.assert_build(self.lookup_artifacts_by_fingerprint(updated))
+
     def test_record_downloads_metadata_and_preserves_producer_location(self) -> None:
         for platform, repository, root in (
             ("linux", "ROCm/TheRock", None),
@@ -482,8 +520,6 @@ class StaticCacheTest(unittest.TestCase):
                     str(self.index_path),
                     "--platform",
                     platform,
-                    "--build-variant",
-                    "ci-x86_64-release",
                     "--run-id",
                     "12345",
                 ]
@@ -573,8 +609,6 @@ class StaticCacheTest(unittest.TestCase):
                                 str(self.index_path),
                                 "--platform",
                                 "linux",
-                                "--build-variant",
-                                "release",
                                 "--run-id",
                                 "12345",
                             ]
@@ -602,8 +636,6 @@ class StaticCacheTest(unittest.TestCase):
                                 str(self.index_path),
                                 "--platform",
                                 "linux",
-                                "--build-variant",
-                                "release",
                                 "--run-id",
                                 "12345",
                                 *overrides,

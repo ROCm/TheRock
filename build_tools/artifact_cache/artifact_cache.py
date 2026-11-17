@@ -4,24 +4,25 @@
 
 r"""Plan reuse of the complete amd-llvm artifact using a static cache index.
 
-The record command downloads a CI run's fingerprints and archive checksums,
-or reads local metadata. The lookup command compares existing configure-time
+The record subcommand downloads a CI run's fingerprints and archive checksums,
+or reads local metadata. The lookup subcommand compares existing configure-time
 fingerprints with the index and writes a build or populate plan.
+Recording keeps one LLVM fingerprint per platform, replacing older entries.
 
 Examples (run from the repository root):
 
     Add a CI run's artifact metadata to the index:
-        python build_tools/artifact_cache.py record \
+        python build_tools/artifact_cache/artifact_cache.py record \
             --run-id 43738549005 \
-            --platform linux --build-variant release
+            --platform linux
 
     Look for artifacts matching the current build's fingerprints:
-        python build_tools/artifact_cache.py lookup \
+        python build_tools/artifact_cache/artifact_cache.py lookup \
             --fingerprints-dir build/artifacts \
-            --platform linux --build-variant release \
+            --platform linux \
             --output build/llvm-cache-plan.json
 
-Both commands use build_tools/artifact_cache_index.json by default.
+Both commands use build_tools/artifact_cache/artifact_cache_index.json by default.
 Use --index to select another index file.
 
 A lookup hit is a candidate for population; that step must verify availability
@@ -54,7 +55,6 @@ SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 class CacheKey(NamedTuple):
     platform: str
-    build_variant: str
     artifact: str
     fingerprint: str
 
@@ -75,7 +75,6 @@ class ArtifactSource:
 @dataclass
 class CacheEntry:
     platform: str
-    build_variant: str
     artifact: str
     fingerprint: str
     producer: Producer
@@ -113,7 +112,6 @@ class LookupPlan:
     schema_version: int
     artifact: str
     platform: str
-    build_variant: str
     status: str
     action: str
     reason: str
@@ -169,10 +167,9 @@ def source_root(location: object) -> str:
 
 
 def entry_key(entry: CacheEntry) -> CacheKey:
-    """Return the platform, variant, artifact, and fingerprint used for matching."""
+    """Return the platform, artifact, and fingerprint used for matching."""
     return CacheKey(
         platform=entry.platform,
-        build_variant=entry.build_variant,
         artifact=entry.artifact,
         fingerprint=entry.fingerprint,
     )
@@ -206,7 +203,6 @@ def load_index(path: Path) -> CacheIndex:
                 artifact=text_field(entry_data["artifact"], "artifact"),
                 fingerprint=digest(entry_data["fingerprint"], "fingerprint"),
                 platform=text_field(entry_data["platform"], "platform"),
-                build_variant=text_field(entry_data["build_variant"], "build_variant"),
                 producer=Producer(
                     repository=text_field(
                         producer_data["repository"], "producer.repository"
@@ -259,12 +255,12 @@ def write_json(path: Path, value: CacheIndex | LookupPlan) -> None:
 
 
 def lookup_artifacts_by_fingerprint(
-    index: CacheIndex, fingerprints_dir: Path, platform: str, build_variant: str
+    index: CacheIndex, fingerprints_dir: Path, platform: str
 ) -> LookupPlan:
     """Compare the current build's fingerprints with the static cache index.
 
     Read each required LLVM component's .fprint file from fingerprints_dir.
-    Match entries by artifact name, fingerprint, platform, and build variant.
+    Match entries by artifact name, fingerprint, and platform.
     Return a populate plan with copy requests only when all components match
     and their fingerprints describe the same bundle. Otherwise, return a
     build plan with no copy requests.
@@ -274,7 +270,6 @@ def lookup_artifacts_by_fingerprint(
     downloading or building artifacts.
     """
     text_field(platform, "platform")
-    text_field(build_variant, "build_variant")
     entries_by_key = {entry_key(entry): entry for entry in index.entries}
     matches: list[ArtifactMatch] = []
     copy_requests: list[CopyRequest] = []
@@ -300,7 +295,6 @@ def lookup_artifacts_by_fingerprint(
             entry = entries_by_key.get(
                 CacheKey(
                     platform=platform,
-                    build_variant=build_variant,
                     artifact=artifact,
                     fingerprint=expected_fingerprint,
                 )
@@ -338,7 +332,6 @@ def lookup_artifacts_by_fingerprint(
         schema_version=SCHEMA_VERSION,
         artifact="amd-llvm",
         platform=platform,
-        build_variant=build_variant,
         status="hit" if complete_hit else "miss",
         action="populate" if complete_hit else "build",
         reason="complete_index_match" if complete_hit else "incomplete_index_match",
@@ -388,26 +381,24 @@ def record_artifacts_from_ci_run(
     index: CacheIndex,
     metadata_dir: Path,
     platform: str,
-    build_variant: str,
     repository: str,
     run_id: str,
     root: str,
     archive_suffix: str,
 ) -> CacheIndex:
-    """Add LLVM artifact metadata from a previous CI run to the static cache index.
+    """Record one complete LLVM fingerprint for the selected platform.
 
     Read fingerprint and checksum files from metadata_dir for every required
     component. Check that the files are valid and the component fingerprints
-    describe the same LLVM bundle. Add missing entries with their platform,
-    build variant, producer repository/run ID, archive location, and checksum.
-    Keep existing entries when the artifact, fingerprint, platform, and build
-    variant already match.
+    describe the same LLVM bundle. Replace older fingerprints for this platform,
+    preserving entries for other platforms. Keep existing entries when the
+    artifact, fingerprint, and platform already match, and add missing entries
+    with the supplied producer, archive location, and checksum.
 
     Return an updated index for the caller to save, leaving the supplied index
     unchanged. Missing or invalid metadata raises an error.
     """
     text_field(platform, "platform")
-    text_field(build_variant, "build_variant")
     require(
         re.fullmatch(
             r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", text_field(repository, "repository")
@@ -444,7 +435,6 @@ def record_artifacts_from_ci_run(
                 artifact=artifact,
                 fingerprint=fingerprint,
                 platform=platform,
-                build_variant=build_variant,
                 producer=Producer(repository=repository, run_id=run_id),
                 source=ArtifactSource(
                     root=root, archive=archive, sha256=archive_checksum
@@ -455,13 +445,19 @@ def record_artifacts_from_ci_run(
         len({entry.fingerprint for entry in producer_entries}) == 1,
         "Producer component fingerprints must describe one LLVM bundle",
     )
-    existing_keys = {entry_key(entry) for entry in index.entries}
+    requested_keys = {entry_key(entry) for entry in producer_entries}
+    retained_entries = [
+        entry
+        for entry in index.entries
+        if entry.platform != platform or entry_key(entry) in requested_keys
+    ]
+    existing_keys = {entry_key(entry) for entry in retained_entries}
     new_entries = [
         entry for entry in producer_entries if entry_key(entry) not in existing_keys
     ]
     return CacheIndex(
         schema_version=SCHEMA_VERSION,
-        entries=[*index.entries, *new_entries],
+        entries=[*retained_entries, *new_entries],
     )
 
 
@@ -496,16 +492,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     for command_parser in (lookup_parser, record_parser):
         command_parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
         command_parser.add_argument("--platform", required=True)
-        command_parser.add_argument(
-            "--build-variant",
-            required=True,
-            help="Explicit CI compatibility label, shared by producer and consumer",
-        )
     return parser.parse_args(argv)
 
 
 def run_record(args: argparse.Namespace) -> None:
-    """Import producer metadata and save newly indexed components."""
+    """Record the selected platform's bundle and report added or removed entries."""
     index = load_index(args.index)
     require(
         re.fullmatch(r"[0-9]+", args.run_id) is not None,
@@ -536,17 +527,25 @@ def run_record(args: argparse.Namespace) -> None:
             index=index,
             metadata_dir=metadata_dir,
             platform=args.platform,
-            build_variant=args.build_variant,
             repository=args.repository,
             run_id=args.run_id,
             root=source_location,
             archive_suffix=args.archive_suffix,
         )
-    added_count = len(updated_index.entries) - len(index.entries)
+    existing_keys = {entry_key(entry) for entry in index.entries}
+    updated_keys = {entry_key(entry) for entry in updated_index.entries}
+    added_count = len(updated_keys - existing_keys)
+    removed_count = len(existing_keys - updated_keys)
     already_indexed_count = len(LLVM_ARTIFACTS) - added_count
-    if added_count:
+    if added_count or removed_count:
         write_json(args.index, updated_index)
-        print(f"Recorded {added_count} LLVM components from run {args.run_id}")
+        if added_count:
+            print(f"Recorded {added_count} LLVM components from run {args.run_id}")
+        if removed_count:
+            print(
+                f"Removed {removed_count} older LLVM component entries "
+                f"for {args.platform}"
+            )
         if already_indexed_count:
             print(
                 f"Already indexed: {already_indexed_count} components; "
@@ -573,7 +572,6 @@ def run_lookup(args: argparse.Namespace) -> None:
         index=index,
         fingerprints_dir=args.fingerprints_dir,
         platform=args.platform,
-        build_variant=args.build_variant,
     )
     write_json(args.output, plan)
     hit_count = sum(match.status == "hit" for match in plan.artifacts)

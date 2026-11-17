@@ -53,6 +53,9 @@ common = [
     "cmake/tests/*",
     "external-builds/pytorch/tests/*",
     "test_tools/tests/*",
+
+    # Artifact cache tooling is not yet integrated into CI.
+    "build_tools/artifact_cache/*",
 ]
 
 # Additional patterns for Linux-only skip
