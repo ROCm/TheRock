@@ -216,11 +216,26 @@ class WorkflowEdge:
     passed_inputs: set
 
 
+_UNQUOTED_EXPRESSION = re.compile(r"(:\s*)(\$\{\{.*?\}\})", re.S)
+
+
+def stub_workflow_expressions(inputs_raw: str) -> str:
+    """Quotes bare ``${{ ... }}`` values so a dispatch template parses as JSON.
+
+    A dispatch input is usually a quoted string containing an expression, but a
+    value whose expression already produces a JSON string (``toJSON(...)``) has
+    to be left unquoted, or it would be double-quoted at runtime. Quoting it
+    here makes the surrounding JSON parseable while leaving the expression text
+    intact, so callers can still tell an expression from a literal.
+    """
+    return _UNQUOTED_EXPRESSION.sub(lambda m: f'{m.group(1)}"{m.group(2)}"', inputs_raw)
+
+
 def _parse_dispatch_inputs_keys(inputs_raw: str) -> set:
     """Returns the input names in a benc-uk/workflow-dispatch inputs JSON string."""
     if not inputs_raw:
         return set()
-    parsed = json.loads(inputs_raw)
+    parsed = json.loads(stub_workflow_expressions(inputs_raw))
     if isinstance(parsed, dict):
         return set(parsed.keys())
     return set()

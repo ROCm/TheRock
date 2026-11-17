@@ -27,6 +27,7 @@ from workflow_utils import (
     get_required_workflow_dispatch_inputs,
     get_workflow_dispatch_inputs,
     load_workflow,
+    stub_workflow_expressions,
 )
 
 WORKFLOW_DISPATCH_ACTION_NAME = "benc-uk/workflow-dispatch"
@@ -47,7 +48,7 @@ def parse_dispatch_inputs_json(inputs_raw: str) -> dict:
     if not inputs_raw:
         return {}
 
-    parsed = json.loads(inputs_raw)
+    parsed = json.loads(stub_workflow_expressions(inputs_raw))
     if isinstance(parsed, dict):
         return parsed
 

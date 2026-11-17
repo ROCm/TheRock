@@ -68,6 +68,17 @@ def _run_from_environ(
         os.unlink(event_path)
 
 
+def _plan_component_keys(family_info: dict) -> set[str]:
+    """Component keys scheduled by a family's test plan."""
+    return {c["key"] for c in family_info["test_plan"]["components"]}
+
+
+def _plan_component(family_info: dict, key: str) -> dict:
+    """One scheduled component of a family's test plan, by key."""
+    plan = family_info["test_plan"]
+    return next(c for c in plan["components"] if c["key"] == key)
+
+
 def _jobs(
     *,
     test_type: str = "quick",
@@ -2384,13 +2395,9 @@ class TestExpandBuildConfigs(unittest.TestCase):
             "test-runs-on-cpu",
             "tests_enabled",
             "sanity_check_only_for_family",
+            "test_plan",
         }
-        optional_keys = {
-            "test-runs-on-labels",
-            "test-runs-on-multi-gpu",
-            "test-runs-on-multi-gpu-labels",
-            "test_type",
-        }
+        optional_keys = {"test_type"}
         for config in [result.linux, result.windows]:
             self.assertIsNotNone(config)
             per_family = config.per_family_info
@@ -3568,6 +3575,87 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         )
 
 
+class TestFamilyTestPlan(unittest.TestCase):
+    """Tests for the per-family test plan built during setup."""
+
+    def _plan(self, platform, family_info):
+        import amdgpu_family_matrix
+
+        platform_info = amdgpu_family_matrix.get_all_families_for_trigger_types(
+            ["presubmit"]
+        )["gfx110x"]["linux"]
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
+        )
+        return cm._build_family_test_plan(
+            platform=platform,
+            platform_info=platform_info,
+            family_info=family_info,
+            ci_inputs=ci_inputs,
+            jobs=_jobs(test_type="standard"),
+            projects_to_test="*",
+            build_variant="release",
+        )
+
+    def _linux_family_info(self, **overrides):
+        return {
+            "amdgpu_family": "gfx110X-all",
+            "amdgpu_targets": "gfx1100",
+            "test-runs-on": "linux-gfx1100",
+            "test-runs-on-cpu": "cpu-runner",
+            "tests_enabled": True,
+            "sanity_check_only_for_family": False,
+            **overrides,
+        }
+
+    def test_wsl_variant_without_cpu_runner_key(self):
+        """A family's WSL variant drops every "test-runs-on*" key but one.
+
+        _expand_build_config_for_platform derives wsl_per_family_info that way,
+        so the plan has to tolerate the missing CPU runner rather than raise.
+        """
+        wsl_info = {
+            k: v
+            for k, v in self._linux_family_info().items()
+            if not k.startswith("test-runs-on")
+        }
+        wsl_info["test-runs-on"] = "wsl-gfx1101-gpu-rocm"
+        self.assertNotIn("test-runs-on-cpu", wsl_info)
+
+        plan = self._plan("wsl", wsl_info)
+        self.assertEqual(plan["platform"], "wsl")
+        self.assertTrue(plan["components"])
+        for component in plan["components"]:
+            self.assertEqual(component["test_runner"], "wsl-gfx1101-gpu-rocm")
+        # WSL exposes only /dev/dxg, never the Linux KFD/DRI devices.
+        self.assertIn("--device /dev/dxg", plan["container_options"])
+        self.assertNotIn("/dev/kfd", plan["container_options"])
+
+    def test_gated_gpu_keeps_only_cpu_components(self):
+        """An empty "test-runs-on" withholds every GPU runner pool."""
+        plan = self._plan("linux", self._linux_family_info(**{"test-runs-on": ""}))
+
+        self.assertTrue(plan["components"])
+        self.assertIsNone(plan["sanity"])
+        for component in plan["components"]:
+            self.assertTrue(component["linux_cpu_runner"], component["job_name"])
+            self.assertEqual(component["test_runner"], "cpu-runner")
+
+    def test_sanity_check_only_family_drops_components(self):
+        """A sanity-only family still runs sanity, and nothing else."""
+        plan = self._plan(
+            "linux", self._linux_family_info(sanity_check_only_for_family=True)
+        )
+
+        self.assertEqual(plan["components"], [])
+        self.assertIsNotNone(plan["sanity"])
+
+
 class TestTriggerBasedTestFiltering(unittest.TestCase):
     """Tests for trigger-based build and test selection.
 
@@ -3965,16 +4053,16 @@ class TestTriggerBasedTestFiltering(unittest.TestCase):
         family_info = self._find_family_info(outputs, "gfx950-dcgpu")
 
         self.assertEqual(family_info["test-runs-on"], "")
-        self.assertNotIn("test-runs-on-multi-gpu", family_info)
-        self.assertNotIn("test-runs-on-multi-gpu-labels", family_info)
+        self.assertNotIn("rccl", _plan_component_keys(family_info))
 
-        # With submodule change, multi-GPU info should be present
+        # With submodule change, multi-GPU tests should be scheduled
         git_ctx = cm.GitContext(changed_files=["sub"], submodule_paths=["sub"])
         outputs_enabled = cm.configure(ci_inputs, git_ctx)
         family_enabled = self._find_family_info(outputs_enabled, "gfx950-dcgpu")
 
         self.assertNotEqual(family_enabled["test-runs-on"], "")
-        self.assertIn("test-runs-on-multi-gpu", family_enabled)
+        rccl = _plan_component(family_enabled, "rccl")
+        self.assertNotEqual(rccl["test_runner"], family_enabled["test-runs-on"])
 
     def test_test_type_for_family_override(self):
         """test_type_for_family forces quick test type despite global full."""
@@ -4308,7 +4396,9 @@ class TestMultiLabelRunnerSelection(unittest.TestCase):
 class TestCpuTestOnlyLabel(unittest.TestCase):
     """ci:cpu-test-only label: disable GPU tests, keep CPU-only tests."""
 
-    def _expand(self, pr_labels=None, platform="linux", family="gfx94x"):
+    def _expand(
+        self, pr_labels=None, platform="linux", family="gfx94x", test_type="quick"
+    ):
         ci_inputs = cm.CIInputs(
             run_id="1",
             event_name="pull_request",
@@ -4322,7 +4412,7 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
             ci_inputs=ci_inputs,
             git_context=cm.GitContext(),
             targets=cm.TargetSelection(**{f"{platform}_families": [family]}),
-            jobs=_jobs(),
+            jobs=_jobs(test_type=test_type),
         )
         return getattr(result, platform).per_family_info[0]
 
@@ -4344,15 +4434,15 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
 
     def test_label_disables_multi_gpu(self):
         """Label also disables multi-GPU tests."""
-        entry = self._expand(pr_labels=["ci:cpu-test-only"])
-        self.assertNotIn("test-runs-on-multi-gpu", entry)
-        self.assertNotIn("test-runs-on-multi-gpu-labels", entry)
+        # Multi-GPU components only run above the quick tier.
+        entry = self._expand(pr_labels=["ci:cpu-test-only"], test_type="standard")
+        self.assertNotIn("rccl", _plan_component_keys(entry))
 
-    def test_without_label_multi_gpu_present(self):
-        """Without label, multi-GPU info is present (when platform supports it)."""
-        entry = self._expand()
-        # gfx94x has multi-GPU support
-        self.assertIn("test-runs-on-multi-gpu-labels", entry)
+    def test_without_label_multi_gpu_runs_on_multi_gpu_runner(self):
+        """Without the label, gfx94x schedules its multi-GPU components."""
+        entry = self._expand(test_type="standard")
+        rccl = _plan_component(entry, "rccl")
+        self.assertNotEqual(rccl["test_runner"], entry["test-runs-on"])
 
 
 if __name__ == "__main__":

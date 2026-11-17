@@ -61,12 +61,14 @@ from dataclasses import asdict, dataclass, field, fields, replace
 from functools import cache
 from pathlib import Path
 
-# Add build tools and Python packaging utilities to path.
+# Add build tools, Python packaging utilities and test tools to path.
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
+sys.path.insert(0, str(_BUILD_TOOLS_DIR.parent / "test_tools"))
 from _therock_utils.build_topology import get_topology
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from determine_rocm_test_dependencies import resolve_projects_to_test
 
 from amdgpu_family_matrix import (
     CI_LABEL_REQUIRED_ARTIFACTS,
@@ -88,6 +90,11 @@ from configure_ci_path_filters import (
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
+from fetch_test_configurations import (
+    FamilyRunners,
+    TestPlanRequest,
+    build_test_plan,
+)
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -103,6 +110,10 @@ from stage_reuse_decision import (
 )
 
 _NULL_GIT_SHA = "0" * 40
+
+# Budget for this job's combined workflow outputs, under GitHub's 1MB cap. A
+# nightly run across every GPU family currently sits around 160KB.
+_MAX_OUTPUT_BYTES = 800_000
 
 
 # ---------------------------------------------------------------------------
@@ -1835,6 +1846,76 @@ def _get_published_rocm_version(index_url: str) -> str:
     return get_latest_python_package_version("rocm", index_url)
 
 
+def _build_family_test_plan(
+    platform: str,
+    platform_info: dict,
+    family_info: dict,
+    ci_inputs: CIInputs,
+    jobs: JobDecisions,
+    projects_to_test: str,
+    build_variant: str,
+) -> dict:
+    """Decide which test components run for one family, and on which runners.
+
+    This is the whole of what test_artifacts.yml used to configure for itself.
+    Doing it here means test selection sees the same resolved view the build
+    config does -- including external family overrides, which the standalone
+    path never saw -- and the test workflows become pure job expanders.
+
+    ``family_info`` carries the already policy-gated runner decisions (trigger
+    gating, ASAN sandbox routing, kernel-specific runners, ci:cpu-test-only).
+    An empty "test-runs-on" means GPU tests are off for this family, so every
+    GPU runner pool is withheld and only CPU-only components survive.
+    """
+    gpu_enabled = bool(family_info["test-runs-on"])
+    runners = FamilyRunners(
+        test_runs_on=family_info["test-runs-on"],
+        # A family's WSL variant carries no CPU runner of its own, so fall back
+        # to the platform default the same way the standalone path does.
+        test_runs_on_cpu=family_info.get("test-runs-on-cpu")
+        or get_cpu_test_runner(platform),
+        # The sandbox pool is deliberately not forwarded: when this family runs
+        # ASAN tests, the sandbox runner is already what "test-runs-on" holds.
+        test_runs_on_labels=(
+            platform_info.get("test-runs-on-labels") if gpu_enabled else None
+        ),
+        test_runs_on_multi_gpu=(
+            platform_info.get("test-runs-on-multi-gpu", "") if gpu_enabled else ""
+        ),
+        test_runs_on_multi_gpu_labels=(
+            platform_info.get("test-runs-on-multi-gpu-labels") if gpu_enabled else None
+        ),
+    )
+
+    # Per-family test labels (limiting which tests run for specific
+    # architectures) replace the run-wide ones rather than adding to them.
+    test_labels = platform_info.get("test_labels_for_family") or (
+        ci_inputs.linux_test_labels
+        if platform == "linux"
+        else ci_inputs.windows_test_labels
+    )
+
+    plan = build_test_plan(
+        TestPlanRequest(
+            platform=platform,
+            runners=runners,
+            amdgpu_families=family_info["amdgpu_family"],
+            family_gfx_targets=platform_info["fetch-gfx-targets"],
+            projects_to_test=projects_to_test,
+            test_type=family_info.get("test_type") or jobs.test_rocm.test_type,
+            test_labels=test_labels,
+            build_variant=build_variant,
+            skip_stages=jobs.build_rocm.skipped_stages,
+        )
+    )
+
+    # Families still being brought up run the sanity check and nothing else.
+    if family_info["sanity_check_only_for_family"]:
+        plan["components"] = []
+
+    return plan
+
+
 def _expand_build_config_for_platform(
     families: list[str],
     platform: str,
@@ -1843,6 +1924,7 @@ def _expand_build_config_for_platform(
     ci_inputs: CIInputs,
     jobs: JobDecisions,
     git_context: GitContext,
+    projects_to_test: str,
     build_only_families: list[str] | None = None,
     test_only_families: list[str] | None = None,
 ) -> BuildConfig | None:
@@ -2031,24 +2113,19 @@ def _expand_build_config_for_platform(
         }
         if family_test_type:
             family_info["test_type"] = family_test_type
-        if test_runs_on and "test-runs-on-labels" in platform_info:
-            family_info["test-runs-on-labels"] = platform_info["test-runs-on-labels"]
-        # Include multi-GPU runner info only when GPU tests are enabled.
-        # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
-        # should also be gated to respect the same trigger policy.
-        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
-            family_info["test-runs-on-multi-gpu"] = platform_info[
-                "test-runs-on-multi-gpu"
-            ]
-        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
-            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
-                "test-runs-on-multi-gpu-labels"
-            ]
-        # Per-family test labels allow limiting which tests run for specific architectures
-        if "test_labels_for_family" in platform_info:
-            family_info["test_labels_for_family"] = platform_info[
-                "test_labels_for_family"
-            ]
+
+        # The runner pools, the per-family test labels and the test tier all
+        # exist to decide which components run, which happens right here, so
+        # none of them have to travel any further than this.
+        family_info["test_plan"] = _build_family_test_plan(
+            platform=platform,
+            platform_info=platform_info,
+            family_info=family_info,
+            ci_inputs=ci_inputs,
+            jobs=jobs,
+            projects_to_test=projects_to_test,
+            build_variant=build_variant,
+        )
         per_family_info.append(family_info)
 
         test_runs_on_wsl = get_wsl_test_runner(
@@ -2062,6 +2139,18 @@ def _expand_build_config_for_platform(
                 k: v for k, v in family_info.items() if not k.startswith("test-runs-on")
             }
             wsl_family_info["test-runs-on"] = test_runs_on_wsl
+            # WSL runs the Linux build on a WSL-hosted runner, whose device set
+            # (/dev/dxg, no /dev/kfd) and component coverage differ, so it needs
+            # a plan of its own rather than a copy of the Linux one.
+            wsl_family_info["test_plan"] = _build_family_test_plan(
+                platform="wsl",
+                platform_info=platform_info,
+                family_info=wsl_family_info,
+                ci_inputs=ci_inputs,
+                jobs=jobs,
+                projects_to_test=projects_to_test,
+                build_variant=build_variant,
+            )
             wsl_per_family_info.append(wsl_family_info)
 
     if not per_family_info:
@@ -2308,6 +2397,13 @@ def expand_build_configs(
     #            env var in setup_multi_arch.yml
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
+
+    # Which components the changed projects pull in, via the committed consumer
+    # graph. This depends only on the changed projects and the PR labels, so it
+    # is the same answer for every family and platform.
+    projects_to_test = resolve_projects_to_test(ci_inputs.changed_projects)
+    print(f"  Projects to test: {projects_to_test}")
+
     build_variant = ci_inputs.build_variant
     # ASAN variant selection:
     # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
@@ -2372,6 +2468,7 @@ def expand_build_configs(
             ci_inputs=ci_inputs,
             jobs=jobs,
             git_context=git_context,
+            projects_to_test=projects_to_test,
             build_only_families=build_only,
             test_only_families=test_only,
         )
@@ -2429,6 +2526,21 @@ def write_outputs(
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
     }
+
+    # The build configs embed a test plan per GPU family, so they grow with both
+    # the family matrix and the component matrix. GitHub caps a job's combined
+    # outputs at 1MB and truncates past it, which would surface far downstream
+    # as unparseable JSON in whichever job read the config first.
+    total_bytes = sum(len(k) + len(v) for k, v in output_vars.items())
+    print(f"Workflow outputs: {total_bytes} bytes")
+    if total_bytes > _MAX_OUTPUT_BYTES:
+        raise ValueError(
+            f"Workflow outputs are {total_bytes} bytes, over the "
+            f"{_MAX_OUTPUT_BYTES} byte budget. Trim what each test plan carries "
+            f"in fetch_test_configurations.build_test_plan(); any field that is "
+            f"identical across GPU families belongs in describe_component()."
+        )
+
     gha_set_output(output_vars)
 
     # Lazy import: configure_multi_arch_ci_summary imports types from this

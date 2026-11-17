@@ -59,9 +59,48 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             if key not in self._orig_test_matrix_keys:
                 del fetch_test_configurations.test_matrix[key]
 
+    def _get_plan(self):
+        self.assertIn("test_plan", self.gha_output)
+        return json.loads(self.gha_output["test_plan"])
+
+    def _resolve(self, plan, entry):
+        """Fold one plan entry back into a single dict of effective config.
+
+        build_test_plan() splits a component's config between the plan (the
+        family-varying part) and describe_component() (the part that is the
+        same for every family), so that only the former has to travel through
+        a workflow output. Tests assert on the combination of the two.
+        """
+        if entry is None:
+            return None
+        resolved = dict(entry)
+        resolved.setdefault(
+            "container_options",
+            (
+                plan["container_options_cpu"]
+                if entry.get("linux_cpu_runner")
+                else plan["container_options"]
+            ),
+        )
+        resolved["test_type"] = plan["test_type"]
+        # Decided before the plan is built, so it is not carried in one.
+        resolved["platform"] = fetch_test_configurations.test_matrix[entry["key"]][
+            "platform"
+        ]
+        resolved.update(
+            fetch_test_configurations.describe_component(
+                entry["key"], plan["platform"], plan["test_type"]
+            )
+        )
+        return resolved
+
     def _get_components(self):
-        self.assertIn("components", self.gha_output)
-        return json.loads(self.gha_output["components"])
+        plan = self._get_plan()
+        return [self._resolve(plan, c) for c in plan["components"]]
+
+    def _get_sanity(self):
+        plan = self._get_plan()
+        return self._resolve(plan, plan["sanity"])
 
     # -----------------------
     # Basic selection tests
@@ -122,7 +161,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         TEST_LABELS='["test:hipblas"]',
                     )
                     fetch_test_configurations.run()
-                    sanity = json.loads(self.gha_output["sanity_component"])
+                    sanity = self._get_sanity()
                     self.assertEqual(sanity is not None, expected)
                     if expected:
                         self.assertEqual(sanity["job_name"], "sanity")
@@ -202,16 +241,16 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job = next(j for j in components if j["job_name"] == "kpack-opt-out")
         self.assertEqual(job["rocm_kpack_debug"], "0")
 
-    def test_kpack_debug_absent_when_not_set(self):
-        # When a component omits "rocm_kpack_debug", the field is not emitted and
-        # the workflow applies its "1" default via fromJSON(...).rocm_kpack_debug.
+    def test_kpack_debug_defaults_to_on_when_not_set(self):
+        # A component that omits "rocm_kpack_debug" gets the "1" default from
+        # describe_component(), which is where test_component.yml reads it.
         self._inject_job("kpack-default")
 
         fetch_test_configurations.run()
         components = self._get_components()
 
         job = next(j for j in components if j["job_name"] == "kpack-default")
-        self.assertNotIn("rocm_kpack_debug", job)
+        self.assertEqual(job["rocm_kpack_debug"], "1")
 
     # -----------------------
     # Sharding behavior
@@ -363,6 +402,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "job_name": name,
             "platform": ["linux"],
             "total_shards_dict": {"linux": 1},
+            # Every real entry declares these. The filters under test ignore
+            # them, but the emitted plan and describe_component() need them.
+            "timeout_minutes": 10,
+            "fetch_artifact_args": "--tests",
+            "test_script": f"echo {name}",
             **extra,
         }
 
@@ -675,12 +719,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._inject_job("xf-other", expect_failure={"linux": ["gfx1100"]})
         job = self._job_by_name("xf-other")
         self.assertIsNotNone(job)
-        self.assertIs(job["expect_failure"], False)
+        self.assertIs(job.get("expect_failure", False), False)
 
     def test_expect_failure_is_scoped_per_platform(self):
         # A windows-only declaration does not make the linux job advisory.
         self._inject_job("xf-otherplat", expect_failure={"windows": ["gfx942"]})
-        self.assertIs(self._job_by_name("xf-otherplat")["expect_failure"], False)
+        job = self._job_by_name("xf-otherplat")
+        self.assertIs(job.get("expect_failure", False), False)
 
     def test_expect_failure_omitted_leaves_job_blocking(self):
         # Components that never opt in do not carry the key at all.
@@ -696,7 +741,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         ]:
             with self.subTest(job=name):
                 self._inject_job(name, expect_failure=decl)
-                self.assertIsInstance(self._job_by_name(name)["expect_failure"], bool)
+                job = self._job_by_name(name)
+                self.assertIsInstance(job.get("expect_failure", False), bool)
 
     def test_expect_failure_does_not_mutate_test_matrix(self):
         # The boolean is written to the merged copy, so the declaration survives
@@ -725,7 +771,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         rccl = next(j for j in components if j["job_name"] == "rccl")
-        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
+        self.assertEqual(rccl["test_runner"], "linux-mi300-mgpu")
 
     def test_multi_gpu_job_uses_count_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
@@ -770,7 +816,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             components = self._get_components()
 
             rccl = next(j for j in components if j["job_name"] == "rccl")
-            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
+            self.assertEqual(rccl["test_runner"], "linux-mi300-mgpu-a")
             # Verify select_weighted_label was called for the multi-gpu jobs.
             # With rocshmem added there is more than one multi-GPU job (rccl and
             # rocshmem), each using a "<job_name>-multi-gpu" context.
@@ -818,7 +864,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("rocfft-multi-gpu", names)
         for name in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
             job = next(j for j in components if j["job_name"] == name)
-            self.assertEqual(job["multi_gpu_runner"], "linux-mi300-mgpu")
+            self.assertEqual(job["test_runner"], "linux-mi300-mgpu")
 
     def test_fft_multi_gpu_selected_via_base_project_label(self):
         """`test:hipfft`/`test:rocfft` labels select the multi-GPU variants too,
@@ -1039,7 +1085,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         self.assertEqual(len(components), 1)
         self.assertEqual(
-            components[0]["additional_requirements_files"], requirements_files
+            components[0]["additional_requirements_files"],
+            ",".join(requirements_files),
         )
 
     def test_windows_hip_tests_emits_pal_and_rocr_entries(self):
@@ -1084,7 +1131,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_platform_is_emitted(self):
         fetch_test_configurations.run()
-        self.assertEqual(self.gha_output["platform"], "linux")
+        self.assertEqual(self._get_plan()["platform"], "linux")
 
     def test_container_images_are_sha256_pinned(self):
         # Check the full matrix, including jobs filtered out for a given run.
@@ -1103,20 +1150,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         # Regression: a list value here caused
         # `options: ${{ fromJSON(...).container_options }}` in test_component.yml
         # to evaluate to a YAML sequence, failing template parsing.
-        job = {
-            "container_options": [
-                "--cap-add SYS_MODULE",
-                "-v /lib/modules:/lib/modules",
-            ]
-        }
-        out = fetch_test_configurations._build_container_options(job, "windows")
-        self.assertIsInstance(out["container_options"], str)
+        out = fetch_test_configurations._build_container_options(
+            "windows",
+            job_options=["--cap-add SYS_MODULE", "-v /lib/modules:/lib/modules"],
+        )
+        self.assertIsInstance(out, str)
 
     def test_container_options_on_linux_is_joined_string(self):
-        job = {"container_options": ["--cap-add=SYS_PTRACE"]}
-        out = fetch_test_configurations._build_container_options(job, "linux")
-        self.assertIsInstance(out["container_options"], str)
-        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+        out = fetch_test_configurations._build_container_options(
+            "linux", job_options=["--cap-add=SYS_PTRACE"]
+        )
+        self.assertIsInstance(out, str)
+        self.assertIn("--cap-add=SYS_PTRACE", out)
 
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
@@ -1147,8 +1192,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = self._run_wsl(["test:hip-tests", "test:rocrtst", "test:rocblas"])
 
         self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
-        self.assertEqual(self.gha_output["platform"], "wsl")
-        self.assertIsNone(json.loads(self.gha_output["sanity_component"]))
+        self.assertEqual(self._get_plan()["platform"], "wsl")
+        self.assertIsNone(self._get_sanity())
 
         hip = jobs["hip-tests"]
         self.assertEqual(hip["test_runner"], self._WSL_RUNNER)
@@ -1180,7 +1225,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = {job["job_name"]: job for job in self._get_components()}
         self.assertEqual(set(jobs), {"hip-tests", "rocrtst"})
         for job in jobs.values():
-            self.assertFalse(job["expect_failure"], job["job_name"])
+            self.assertFalse(job.get("expect_failure"), job["job_name"])
 
     # -----------------------
     # ASAN sandbox runner selection

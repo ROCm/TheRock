@@ -20,8 +20,43 @@ on:
         type: string
       platform:
         type: string
-      component:
+      # The fields below come from one entry of a test plan; see
+      # build_tools/github_actions/fetch_test_configurations.py. Everything that
+      # is the same for every GPU family (test_script, fetch_artifact_args, ...)
+      # is looked up here from component_key instead of being passed in.
+      component_key:
+        description: "test_matrix key identifying the component to run."
         type: string
+      job_name:
+        description: "Display name; also the TEST_COMPONENT the scripts see."
+        type: string
+      test_type:
+        type: string
+      timeout_minutes:
+        type: number
+      total_shards:
+        type: number
+      shard_arr:
+        description: "JSON array of 1-based shard numbers, e.g. '[1,2,3,4]'."
+        type: string
+      expect_failure:
+        description: "Advisory component: report results but never fail the run."
+        type: boolean
+        default: false
+      linux_cpu_runner:
+        description: "Component runs on a CPU-only runner, so skip the GPU probe."
+        type: boolean
+        default: false
+      gpu_enable_pal:
+        description: "Windows hip-tests backend selection (PAL=1, ROCR=0)."
+        type: string
+        default: ""
+      container_image:
+        type: string
+        default: ""
+      container_options:
+        type: string
+        default: ""
       release_type:
         type: string
         default: ci
@@ -49,12 +84,12 @@ permissions:
 jobs:
   test_component:
     name: >-
-      Test ${{ fromJSON(inputs.component).job_name }}
-      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+      Test ${{ inputs.job_name }}
+      (shard ${{ matrix.shard }}/${{ inputs.total_shards }})
       (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+      ${{ inputs.expect_failure && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
-    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
+    continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 210
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -64,19 +99,19 @@ jobs:
       # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
       image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform != 'windows' &&
-            (fromJSON(inputs.component).container_image || inputs.default_container_image)
+            (inputs.container_image || inputs.default_container_image)
             || null
         }}
       # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
       # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
       # and any job-specific options
-      options: ${{ fromJSON(inputs.component).container_options }}
+      options: ${{ inputs.container_options }}
     strategy:
       fail-fast: false
       matrix:
         # The shard array is based on "total_shards" from "fetch_test_configurations.py"
         # The test executable will shard based on the array. (ex: [1, 2, 3, 4] = four test shards)
-        shard: ${{ fromJSON(inputs.component).shard_arr }}
+        shard: ${{ fromJSON(inputs.shard_arr) }}
     defaults:
       run:
         shell: bash
@@ -130,6 +165,20 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      # Looked up here rather than passed in: these fields are identical for
+      # every GPU family, so shipping them through the setup job's outputs would
+      # multiply them by the number of families under test.
+      - name: Resolve component configuration
+        id: component
+        env:
+          COMPONENT_KEY: ${{ inputs.component_key }}
+          PLATFORM: ${{ inputs.platform }}
+          TEST_TYPE: ${{ inputs.test_type }}
+        run: |
+          python ./build_tools/github_actions/fetch_test_configurations.py \
+            --platform="${PLATFORM}" \
+            --describe-component="${COMPONENT_KEY}"
+
       - name: Run setup test environment workflow
         timeout-minutes: ${{ inputs.build_variant == 'asan' && 60 || 15 }}
         env:
@@ -143,7 +192,7 @@ jobs:
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          FETCH_ARTIFACT_ARGS: ${{ steps.component.outputs.fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
 
       # safe.directory must be set before Runner Health Status
@@ -169,7 +218,7 @@ jobs:
               --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
       - name: Driver / GPU sanity check
-        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
+        if: ${{ !inputs.linux_cpu_runner }}
         timeout-minutes: 3
         env:
           # Preload ASAN runtime so Python can load ASAN-instrumented libraries
@@ -186,7 +235,7 @@ jobs:
 
       - name: Setup Additional Requirements
         env:
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+          REQUIREMENTS_FILES: ${{ steps.component.outputs.additional_requirements_files }}
         run: |
           python ./build_tools/install_additional_requirements.py \
             --requirements-files "${REQUIREMENTS_FILES}"
@@ -207,12 +256,12 @@ jobs:
 
       - name: Test
         id: test
-        timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
+        timeout-minutes: ${{ inputs.timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
-          TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          TOTAL_SHARDS: ${{ inputs.total_shards }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          TEST_COMPONENT: ${{ inputs.job_name }}
           # General CI debug mode. runner.debug == '1' when a job is re-run with
           # GitHub's "Enable debug logging" checkbox. Used to force turning debug
           # options on.
@@ -221,38 +270,38 @@ jobs:
           # Most components enable it (default "1"); a few opt out via their
           # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
           # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
-          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
+          ROCM_KPACK_DEBUG: ${{ steps.component.outputs.rocm_kpack_debug }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
           # whose Windows memory path OOMs some tests (e.g. rocsparse bsr*0 graph_test).
           # Default unset components to the platform backend, mirroring the runtime fix
           # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
-          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
+          GPU_ENABLE_PAL: ${{ inputs.gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
-          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+          STEP_TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
           STEP_NAME: >-
-            Test ${{ fromJSON(inputs.component).job_name }}
-            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            Test ${{ inputs.job_name }}
+            (shard ${{ matrix.shard }}/${{ inputs.total_shards }})
             (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+            ${{ inputs.expect_failure && '(xfail)' || '' }}
         # This input is intentionally a shell program from fetch_test_configurations.py,
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
-          ${{ fromJSON(inputs.component).test_script }}
+          ${{ steps.component.outputs.test_script }}
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
         env:
           MATRIX_SHARD: ${{ matrix.shard }}
-          COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
-          COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
-          COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          COMPONENT_TEST_SCRIPT: ${{ steps.component.outputs.test_script }}
+          COMPONENT_TOTAL_SHARDS: ${{ inputs.total_shards }}
+          COMPONENT_TEST_TYPE: ${{ inputs.test_type }}
+          REQUIREMENTS_FILES: ${{ steps.component.outputs.additional_requirements_files }}
+          COMPONENT_FETCH_ARTIFACT_ARGS: ${{ steps.component.outputs.fetch_artifact_args }}
         run: |
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${ARTIFACT_RUN_ID}" \

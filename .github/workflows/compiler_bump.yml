@@ -649,12 +649,17 @@ jobs:
           BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
         run: |
           FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx94X-dcgpu")')
-          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
           echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+          # The setup job already decided this family's test plan; reuse it
+          # rather than re-deriving which components and runners apply. Emit
+          # nothing when the plan schedules nothing, so the dispatch is skipped.
+          echo "test_plan=$(echo "$FAMILY_INFO" |
+            jq -c 'select(.test_plan.sanity or (.test_plan.components | length > 0))
+                   | .test_plan')" >> "$GITHUB_OUTPUT"
 
       - name: Trigger test_artifacts for gfx94X-dcgpu
         id: trigger-tests
-        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
+        if: ${{ steps.family-info.outputs.test_plan != '' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
@@ -664,8 +669,7 @@ jobs:
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "gfx94X-dcgpu",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
+              "test_plan": ${{ toJSON(steps.family-info.outputs.test_plan) }},
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
@@ -714,23 +718,44 @@ jobs:
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Get family info
+      # These families are gated off by trigger in the setup config, so their
+      # precomputed plans have no GPU components. Build a plan here instead,
+      # pinning the runner this bump is expected to test on.
+      - name: Checking out repository
+        if: ${{ steps.check.outputs.should_run == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ github.repository }}
+          ref: ${{ needs.create-branch.outputs.branch_name }}
+
+      - name: Build test plan
         id: family-info
         if: ${{ steps.check.outputs.should_run == 'true' }}
         env:
           BUILD_CONFIG: ${{ needs.setup-linux.outputs.linux_build_config }}
           FAMILY: ${{ matrix.amdgpu_family }}
           HARDCODED_RUNS_ON: ${{ matrix.hardcoded_test_runs_on }}
+          TEST_TYPE: ${{ inputs.test_type || 'standard' }}
         run: |
           FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r --arg f "$FAMILY" '.per_family_info[] | select(.amdgpu_family == $f)')
-          echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+          TARGETS=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')
+          echo "amdgpu_targets=$TARGETS" >> "$GITHUB_OUTPUT"
 
           # Use hardcoded runner if provided, otherwise use config value
           if [ -n "$HARDCODED_RUNS_ON" ]; then
-            echo "test_runs_on=$HARDCODED_RUNS_ON" >> "$GITHUB_OUTPUT"
+            RUNS_ON="$HARDCODED_RUNS_ON"
           else
-            echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
+            RUNS_ON=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')
           fi
+          echo "test_runs_on=$RUNS_ON" >> "$GITHUB_OUTPUT"
+
+          AMDGPU_FAMILIES="$FAMILY" \
+          AMDGPU_TARGETS="$TARGETS" \
+          TEST_RUNS_ON="$RUNS_ON" \
+            python ./build_tools/github_actions/fetch_test_configurations.py \
+              --platform=linux
 
       - name: Trigger test_artifacts for ${{ matrix.amdgpu_family }}
         id: trigger-tests
@@ -744,8 +769,7 @@ jobs:
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "${{ matrix.amdgpu_family }}",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
+              "test_plan": ${{ toJSON(steps.family-info.outputs.test_plan) }},
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",
@@ -777,12 +801,14 @@ jobs:
           BUILD_CONFIG: ${{ needs.setup-windows.outputs.windows_build_config }}
         run: |
           FAMILY_INFO=$(echo "$BUILD_CONFIG" | jq -r '.per_family_info[] | select(.amdgpu_family == "gfx110X-all")')
-          echo "test_runs_on=$(echo "$FAMILY_INFO" | jq -r '.["test-runs-on"] // ""')" >> "$GITHUB_OUTPUT"
           echo "amdgpu_targets=$(echo "$FAMILY_INFO" | jq -r '.amdgpu_targets // ""')" >> "$GITHUB_OUTPUT"
+          echo "test_plan=$(echo "$FAMILY_INFO" |
+            jq -c 'select(.test_plan.sanity or (.test_plan.components | length > 0))
+                   | .test_plan')" >> "$GITHUB_OUTPUT"
 
       - name: Trigger test_artifacts for gfx110X-all (Windows)
         id: trigger-tests
-        if: ${{ steps.family-info.outputs.test_runs_on != '' }}
+        if: ${{ steps.family-info.outputs.test_plan != '' }}
         uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
         with:
           workflow: test_artifacts.yml
@@ -792,8 +818,7 @@ jobs:
               "artifact_run_id": "${{ github.run_id }}",
               "amdgpu_families": "gfx110X-all",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
-              "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
-              "test_type": "${{ inputs.test_type || 'standard' }}",
+              "test_plan": ${{ toJSON(steps.family-info.outputs.test_plan) }},
               "release_type": "dev",
               "repository": "${{ github.repository }}",
               "ref": "${{ needs.create-branch.outputs.branch_name }}",

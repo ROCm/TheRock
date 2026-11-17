@@ -175,16 +175,9 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      test_runs_on_cpu: ${{ matrix.family_info.test-runs-on-cpu }}
-      tests_enabled: ${{ matrix.family_info.tests_enabled }}
-      test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
-      # Per-family test_labels override global test_labels when specified
-      # Convert array to JSON string for workflow input compatibility
-      test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
-      sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
-      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
-      changed_projects: ${{ inputs.changed_projects }}
+      # Decided by configure_multi_arch_ci.py during setup; test_artifacts.yml
+      # only expands it into jobs.
+      test_plan: ${{ toJSON(matrix.family_info.test_plan) }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -209,13 +202,7 @@ jobs:
       artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
-      test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      tests_enabled: ${{ matrix.family_info.tests_enabled }}
-      test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
-      test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
-      sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
-      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
-      changed_projects: ${{ inputs.changed_projects }}
+      test_plan: ${{ toJSON(matrix.family_info.test_plan) }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

@@ -578,6 +578,39 @@ def _to_ci_test_selectors(projects: set[str]) -> set[str]:
     return result
 
 
+def resolve_projects_to_test(
+    changed_projects: list[str],
+    therock_dir: Path | None = None,
+    level: int | None = None,
+) -> str:
+    """Resolve changed projects to the PROJECTS_TO_TEST selector string.
+
+    Returns "*" (test everything) when nothing changed was reported. This is the
+    whole-run answer: it depends only on the changed projects and the PR labels,
+    not on the GPU family or platform, so configure_multi_arch_ci.py resolves it
+    once and reuses it for every family's test plan.
+    """
+    if not changed_projects:
+        return "*"
+
+    normalized: list[str] = []
+    for project in changed_projects:
+        normalized.extend(_normalize_changed_project(project))
+
+    # ci:no-downstream-test PR label overrides the walk level to 5 (self only),
+    # so only the changed projects are tested without walking their downstream
+    # consumers. The label takes precedence over any caller-supplied level.
+    if "ci:no-downstream-test" in gha_get_pr_labels():
+        level = 5
+        print(
+            "ci:no-downstream-test label detected, using level 5 (self only)",
+            file=sys.stderr,
+        )
+
+    result = get_subprojects_to_test(normalized, therock_dir, level=level)
+    return ",".join(sorted(_to_ci_test_selectors(result)))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Compute subproject test dependencies from the consumer graph"
@@ -661,52 +694,26 @@ def main():
         print(json.dumps(result, indent=2))
         return
 
-    # Parse and normalize changed_projects
-    changed = args.changed_projects
-    if changed:
-        flattened = []
-        for item in changed:
-            flattened.extend(p.strip() for p in item.split(",") if p.strip())
-        changed = flattened
+    # Parse changed_projects, which accepts space- or comma-separated values.
+    changed = []
+    for item in args.changed_projects or []:
+        changed.extend(p.strip() for p in item.split(",") if p.strip())
 
-    if changed:
-        normalized = []
-        for project in changed:
-            try:
-                normalized.extend(_normalize_changed_project(project))
-            except ValueError as e:
-                raise SystemExit(str(e)) from e
-        changed = normalized
-
-    # No projects specified → all tests
-    if not changed:
-        if args.gha_output:
-            gha_set_output({"projects_to_test": "*"})
-        else:
-            print("*")
-        return
-
-    # ci:no-downstream-test PR label overrides walk level to 5 (self only),
-    # so only the changed projects are tested without walking their downstream
-    # consumers.  The label takes precedence over any --level CLI arg.
-    level = args.level
-    if "ci:no-downstream-test" in gha_get_pr_labels():
-        level = 5
-        print(
-            "ci:no-downstream-test label detected, using level 5 (self only)",
-            file=sys.stderr,
+    try:
+        projects_to_test = resolve_projects_to_test(
+            changed, therock_dir, level=args.level
         )
-
-    result = get_subprojects_to_test(changed, therock_dir, level=level)
-    ci_test_selectors = _to_ci_test_selectors(result)
-    projects_to_test = ",".join(sorted(ci_test_selectors))
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
 
     if args.gha_output:
         gha_set_output({"projects_to_test": projects_to_test})
+    elif projects_to_test == "*":
+        print("*")
     elif args.format == "json":
-        print(json.dumps(sorted(ci_test_selectors)))
+        print(json.dumps(projects_to_test.split(",")))
     else:
-        for item in sorted(ci_test_selectors):
+        for item in projects_to_test.split(","):
             print(item)
 
 

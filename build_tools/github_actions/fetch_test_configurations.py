@@ -2,18 +2,27 @@
 # SPDX-License-Identifier: MIT
 
 """
-This script determines what test configurations to run.
+This module owns ``test_matrix``, the definition of every test component, and
+turns it into the two things CI needs:
+
+  - ``build_test_plan()`` decides which components run for one GPU family, at
+    which tier, and on which runner. configure_multi_arch_ci.py calls it once per
+    family during setup and ships the result to test_artifacts.yml, so the test
+    workflows need no configuration step of their own.
+  - ``describe_component()`` returns the static execution config for a single
+    component (test_script, fetch_artifact_args, ...). That config is identical
+    for every family, so test_component.yml looks it up on the test runner
+    instead of carrying it through workflow outputs.
+
+Running this file directly builds a test plan from the environment, which is how
+standalone dispatches of test_artifacts.yml configure themselves:
+
+  - AMDGPU_FAMILIES, AMDGPU_TARGETS, PROJECTS_TO_TEST, TEST_TYPE, TEST_LABELS,
+    BUILD_VARIANT, SKIP_STAGES, TEST_RUNS_ON, TEST_RUNS_ON_CPU
 
 Outputs (written to $GITHUB_OUTPUT):
-  - sanity_component: JSON object for sanity, or null when excluded. When
-    selected, sanity must pass before other components run. Its ``test_runner``
-    field is non-empty only on GPU runners.
-  - components: JSON array of component configs for the regular test matrix
-    (excludes sanity, which is output separately above).
-  - platform: lowercase OS name derived from RUNNER_OS.
-
-Required environment variables:
-  - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
+  - test_plan: JSON object; see build_test_plan() for its shape.
+  - with --describe-component: the fields listed in describe_component().
 """
 
 import argparse
@@ -22,6 +31,7 @@ import json
 import logging
 import os
 import platform as platform_module
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from github_actions_api import *
@@ -138,38 +148,40 @@ _APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
 
 
 def _build_container_options(
-    job_config: dict, platform: str, amdgpu_families: str = ""
-) -> dict:
-    """
-    Build the final container_options string by concatenating base, GPU, and job-specific options.
+    platform: str,
+    *,
+    cpu_only: bool = False,
+    job_options: list[str] | None = None,
+    amdgpu_families: str = "",
+) -> str:
+    """Concatenate base, GPU, and job-specific container options.
 
     Args:
-        job_config: The job configuration dictionary
         platform: The platform (e.g., "linux", "windows", "wsl")
+        cpu_only: True for components routed to a CPU-only runner
+        job_options: Extra options declared by the component itself
         amdgpu_families: The AMDGPU family string being tested
 
-    Returns:
-        The modified job_config with updated container_options
+    Nearly every component uses one of the two family-wide defaults (GPU and
+    CPU-only), so the test plan emits those once per family and only carries a
+    per-component string for the few components that pass ``job_options``.
     """
     # Containers are Linux-only, including WSL (test_component.yml gates
     # container.image on platform != 'windows'). On Windows, collapse
-    # container_options to an empty string so
-    # `options: ${{ fromJSON(...).container_options }}` doesn't evaluate to a
-    # YAML sequence and fail template parsing.
+    # container_options to an empty string so `options: ${{ ... }}` doesn't
+    # evaluate to a YAML sequence and fail template parsing.
     if platform not in _GPU_CONTAINER_OPTIONS:
-        job_config["container_options"] = ""
-        return job_config
+        return ""
 
     # Start with base options (always applied on Linux)
     options_parts = _BASE_CONTAINER_OPTIONS.copy()
 
     # Add GPU-specific options unless this is a CPU-only runner
-    if not job_config.get("linux_cpu_runner", False):
+    if not cpu_only:
         options_parts.extend(_GPU_CONTAINER_OPTIONS[platform])
 
     # Add any job-specific container options
-    if "container_options" in job_config:
-        options_parts.extend(job_config["container_options"])
+    options_parts.extend(job_options or [])
 
     # Drop options the Apptainer runners for this family cannot honor
     if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
@@ -178,9 +190,7 @@ def _build_container_options(
         ]
 
     # Concatenate all parts with a space separator
-    job_config["container_options"] = " ".join(options_parts)
-
-    return job_config
+    return " ".join(options_parts)
 
 
 def _family_matches(
@@ -200,6 +210,9 @@ def _family_matches(
 # Common settings applied to all jobs
 _common_settings = {
     "additional_requirements_files": [],
+    # Components whose tests need no artifacts of their own (hipdnn_install,
+    # hipdnn-cudnn-samples, profiler-hub) omit this and fetch nothing.
+    "fetch_artifact_args": "",
 }
 
 # Common settings for rocgdb jobs
@@ -1382,6 +1395,487 @@ test_matrix = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Test plan construction
+# ---------------------------------------------------------------------------
+#
+# A "test plan" is the compact, per-GPU-family answer to "which components run,
+# on which runner, at which tier". configure_multi_arch_ci.py builds one plan
+# per family during setup and passes it to test_artifacts.yml, which expands it
+# into jobs without any configuration step of its own.
+#
+# Only family-varying data belongs in a plan, because every byte travels through
+# a workflow output. Static per-component execution config (test_script,
+# fetch_artifact_args, ...) is identical for every family, so test_component.yml
+# re-reads it from this module via describe_component() once it is already on the
+# test runner.
+
+
+# Marks a selected component as needing a multi-GPU runner while the plan is
+# being assembled. Popped once a concrete label lands in "test_runner".
+_NEEDS_MULTI_GPU = "_needs_multi_gpu"
+
+
+def _appends_tensilelite_ctest(key: str, test_type: str) -> bool:
+    """Whether this component chains the C++/ctest stage after its pytest stage.
+
+    tensilelite runs the tensilelite/tests C++ gtest suite (via ctest -L
+    <test_type>, driven by the shared test_runner.py) after the existing pytest
+    stage, for every tier except quick -- that component's test_categories.yaml
+    only defines standard/comprehensive/full so far (promote to quick once the
+    standard tier proves stable). See AIHPBLAS-4410.
+
+    TODO(#7851): this is a temporary special-case. test_runner.py only knows how
+    to run the C++/ctest suite today, so the pytest and ctest stages have to be
+    chained here instead. Fold both into test_runner.py's own dual-mode support
+    and drop this branch once that lands.
+    """
+    return key == "tensilelite" and test_type != "quick"
+
+
+def _component_timeout_minutes(key: str, test_type: str) -> int:
+    """Job timeout for a component. Must agree with describe_component()."""
+    timeout_minutes = test_matrix[key]["timeout_minutes"]
+    if _appends_tensilelite_ctest(key, test_type):
+        # +15 min over the pytest-only baseline for the added ctest stage;
+        # re-measure once CI timing is observed and adjust.
+        timeout_minutes += 15
+    return timeout_minutes
+
+
+def describe_component(key: str, platform: str, test_type: str) -> dict:
+    """Static execution config for one component, looked up by test_matrix key.
+
+    These fields are the same for every GPU family and every runner, so they are
+    resolved inside the test job rather than copied into each family's test plan.
+    """
+    entry = {**_common_settings, **test_matrix[key]}
+
+    test_script = entry["test_script"]
+    if _appends_tensilelite_ctest(key, test_type):
+        test_script += (
+            " && TEST_COMPONENT=hipblaslt-tensilelite "
+            f"python {_get_script_path('test_runner.py')}"
+        )
+
+    return {
+        "test_script": test_script,
+        "fetch_artifact_args": entry["fetch_artifact_args"],
+        # Joined here because its only consumer is
+        # install_additional_requirements.py --requirements-files.
+        "additional_requirements_files": ",".join(
+            entry["additional_requirements_files"]
+        ),
+        # Most components enable the kpack loader's per-test diagnostics; a few
+        # opt out via "rocm_kpack_debug": "0" to keep -V ctest logs readable.
+        "rocm_kpack_debug": entry.get("rocm_kpack_debug", "1"),
+    }
+
+
+@dataclass
+class FamilyRunners:
+    """Runner pools for one GPU family, already gated by CI policy.
+
+    configure_multi_arch_ci.py resolves these while expanding its per-family
+    build config, where trigger gating, ASAN sandbox routing and kernel-specific
+    runners are already applied. An empty ``test_runs_on`` means GPU tests are
+    gated off for this family: only CPU-only components are scheduled.
+    """
+
+    test_runs_on: str = ""
+    test_runs_on_cpu: str = ""
+    test_runs_on_labels: list[dict] | None = None
+    test_runs_on_multi_gpu: str = ""
+    test_runs_on_multi_gpu_labels: list[dict] | None = None
+    test_runs_on_sandbox: str = ""
+
+
+@dataclass
+class TestPlanRequest:
+    """Everything needed to decide the test plan for one GPU family."""
+
+    platform: str
+    runners: FamilyRunners = field(default_factory=FamilyRunners)
+    amdgpu_families: str = ""
+    # Individual gfx targets for this family, used by the include_family /
+    # exclude_family / expect_failure filters alongside the family group string.
+    family_gfx_targets: list[str] = field(default_factory=list)
+    projects_to_test: str = "*"
+    test_type: str = "standard"
+    test_labels: list[str] = field(default_factory=list)
+    build_variant: str = "release"
+    skip_stages: list[str] = field(default_factory=list)
+
+
+def resolve_family_runners(
+    platform: str,
+    amdgpu_families: str,
+    test_runs_on: str | None,
+    test_runs_on_cpu: str,
+) -> tuple[FamilyRunners, str, list[str]]:
+    """Resolve runner pools for a family from the static family matrix.
+
+    Only the standalone CLI path needs this; configure_multi_arch_ci.py has
+    already resolved the same values (and has applied external family overrides
+    that this static view does not see).
+
+    Returns the runner pools, the family's forced test type ("" when the family
+    does not pin one) and the family's individual gfx targets.
+    """
+    runners = FamilyRunners(
+        test_runs_on_cpu=test_runs_on_cpu or get_cpu_test_runner(platform)
+    )
+    if not amdgpu_families:
+        return runners, "", []
+
+    shortened_family = amdgpu_families.split("-")[0].lower()
+    all_families = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit", "nightly"]
+    )
+    if shortened_family not in all_families:
+        return runners, "", []
+
+    # wsl has no entry of its own here; its runner is TEST_RUNS_ON.
+    platform_info = all_families[shortened_family].get(platform, {})
+
+    # An explicitly empty TEST_RUNS_ON carries a policy decision (e.g. trigger
+    # gating) and gates GPU tests, including multi-GPU ones. Leaving it unset
+    # falls back to the static matrix.
+    if test_runs_on != "":
+        runners.test_runs_on = test_runs_on or platform_info.get("test-runs-on", "")
+        runners.test_runs_on_labels = platform_info.get("test-runs-on-labels")
+        runners.test_runs_on_multi_gpu = platform_info.get("test-runs-on-multi-gpu", "")
+        runners.test_runs_on_multi_gpu_labels = platform_info.get(
+            "test-runs-on-multi-gpu-labels"
+        )
+    runners.test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
+
+    return (
+        runners,
+        platform_info.get("test_type_for_family") or "",
+        platform_info.get("fetch-gfx-targets", []),
+    )
+
+
+def build_test_plan(request: TestPlanRequest) -> dict:
+    """Select the components to test for one GPU family and assign their runners.
+
+    Returns the test plan consumed by test_artifacts.yml:
+
+        {
+          "platform": "linux",
+          # The two defaults nearly every component uses, emitted once per
+          # family; components that declare extra options carry their own
+          # "container_options" string instead.
+          "container_options": "<GPU default>",
+          "container_options_cpu": "<CPU-only default>",
+          "sanity": {...} | None,   # must pass before "components" run
+          "components": [{...}, ...],
+        }
+    """
+    platform = request.platform
+    amdgpu_families = request.amdgpu_families
+    test_type = request.test_type
+    runners = request.runners
+
+    # Check for ci:run-multi-gpu label to force multi-GPU tests
+    enable_multi_gpu_by_label = "ci:run-multi-gpu" in request.test_labels
+    if enable_multi_gpu_by_label:
+        logging.info("Multi-GPU tests forced via ci:run-multi-gpu label")
+
+    if not runners.test_runs_on:
+        logging.info(
+            "GPU tests gated (no GPU runner), only CPU-only components will run"
+        )
+
+    logging.info(f"Selecting projects: {request.projects_to_test}")
+    logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
+
+    # This string -> array conversion ensures no partial strings are detected
+    # during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
+    project_array = [item.strip() for item in request.projects_to_test.split(",")]
+
+    # Filter out ci: control labels - they're not test component selectors.
+    # Note: Benchmarks never use test_labels (always empty list)
+    component_test_labels = [c for c in request.test_labels if not c.startswith("ci:")]
+    parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
+    expanded_test_labels = [
+        member
+        for label in parsed_test_labels
+        for member in TEST_LABEL_GROUPS.get(label, [label])
+    ]
+
+    selected = []
+    for key in test_matrix:
+        job_name = test_matrix[key]["job_name"]
+
+        excluded_stages = set(request.skip_stages).intersection(
+            test_matrix[key].get("skip_stages", [])
+        )
+        if excluded_stages:
+            logging.info(
+                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
+            )
+            continue
+
+        if request.build_variant in test_matrix[key].get("skip_build_variant", []):
+            logging.info(
+                f"Excluding job {job_name}: skip_build_variant lists "
+                f"{request.build_variant}"
+            )
+            continue
+
+        # include_family (opt-in) and exclude_family (opt-out) together decide
+        # whether a job runs: it runs only when it matches an include (if any are
+        # listed for this platform) and matches no exclude. Matching is exact
+        # membership against either the family group string (e.g. "gfx120X-all")
+        # or an individual gfx target within that family (e.g. "gfx1200").
+        _include_list = test_matrix[key].get("include_family", {}).get(platform, [])
+        if _include_list and not _family_matches(
+            _include_list, amdgpu_families, request.family_gfx_targets
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family "
+                f"{amdgpu_families}: not listed in include_family"
+            )
+            continue
+
+        _exclude_list = test_matrix[key].get("exclude_family", {}).get(platform, [])
+        if _exclude_list and _family_matches(
+            _exclude_list, amdgpu_families, request.family_gfx_targets
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family "
+                f"{amdgpu_families}"
+            )
+            continue
+
+        # Key used for test-label / project selection. Split jobs (e.g. the
+        # multi-GPU variants) declare a "base_project" so that selecting the base
+        # component (via `test:hipfft` label or PROJECTS_TO_TEST=hipfft) also
+        # picks up the variant, which otherwise has no matching label of its own.
+        selection_key = test_matrix[key].get("base_project", key)
+
+        # If test labels are populated, and the test job name is not in the test
+        # labels, skip the test.
+        if (
+            key != "sanity"
+            and expanded_test_labels
+            and selection_key not in expanded_test_labels
+        ):
+            logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
+        # Tier gate: a component may declare which test tiers it runs on via
+        # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not
+        # in the list -- e.g. miopen-dbsync runs standard/comprehensive/full
+        # only, never quick, and the hipfft/rocfft multi-GPU split jobs run
+        # comprehensive/full only. Omit the field to run on every tier.
+        allowed_test_types = test_matrix[key].get("test_types")
+        if allowed_test_types and test_type not in allowed_test_types:
+            logging.info(
+                f"Excluding job {job_name}: test_type {test_type} not in "
+                f"{allowed_test_types}"
+            )
+            continue
+
+        # If the test is enabled for a particular platform and a particular (or
+        # all) projects are selected. Split jobs match via selection_key
+        # (base_project) so PROJECTS_TO_TEST=hipfft also selects hipfft-multi-gpu.
+        if platform not in test_matrix[key]["platform"] or not (
+            key == "sanity" or selection_key in project_array or "*" in project_array
+        ):
+            continue
+
+        logging.info(f"Requesting job {job_name} with test_type {test_type}")
+
+        # For CI testing, we construct a shard array based on "total_shards_dict".
+        # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3,
+        # 4] = 4 test shards). For display purposes, we add "i + 1" for the job
+        # name (ex: 1 of 4). During the actual test sharding in the test
+        # executable, this array will become 0th index.
+        total_shards = test_matrix[key].get("total_shards_dict", {}).get(platform, 1)
+        # If the test type is quick tests, we only need one shard for the test job
+        if test_type == "quick":
+            total_shards = 1
+
+        entry = {
+            "key": key,
+            "job_name": job_name,
+            "timeout_minutes": _component_timeout_minutes(key, test_type),
+            "total_shards": total_shards,
+            "shard_arr": [i + 1 for i in range(total_shards)],
+        }
+
+        # A component declares the families it is advisory on via
+        # "expect_failure". Resolve that declaration down to the single boolean
+        # the workflows read -- test_component.yml compares it with `== true` to
+        # set continue-on-error, so the emitted value must never stay a map.
+        _xfail = test_matrix[key].get("expect_failure")
+        if _xfail and _family_matches(
+            _xfail.get(platform, []), amdgpu_families, request.family_gfx_targets
+        ):
+            entry["expect_failure"] = True
+
+        # Routes the component to a CPU-only machine and selects the CPU-only
+        # container options; test_component.yml also skips its GPU probe.
+        if test_matrix[key].get("linux_cpu_runner", False):
+            entry["linux_cpu_runner"] = True
+
+        # Components that pre-pin a runner (e.g. rocgdb-corefile needs machines
+        # with GPU core-dump support) keep it; the loop below leaves it alone.
+        if "test_runner" in test_matrix[key]:
+            entry["test_runner"] = test_matrix[key]["test_runner"]
+
+        if "container_image" in test_matrix[key]:
+            entry["container_image"] = test_matrix[key]["container_image"]
+
+        # Only components declaring extra options need their own string; the
+        # rest fall back to the plan-level defaults.
+        if "container_options" in test_matrix[key]:
+            entry["container_options"] = _build_container_options(
+                platform,
+                cpu_only=entry.get("linux_cpu_runner", False),
+                job_options=test_matrix[key]["container_options"],
+                amdgpu_families=amdgpu_families,
+            )
+
+        # If the test requires multi GPU testing, we use a multi-GPU test runner
+        # for this specific test. Inside the "multi_gpu" field, we have a mapping
+        # of amdgpu_family -> bool (if multi GPU testing is enabled for that
+        # family). If the multi GPU test runner is not enabled, we skip the test.
+        if "multi_gpu" in test_matrix[key]:
+            # Jobs that require multi-GPU runners only run on standard,
+            # comprehensive, or full tiers by default (capacity constraint).
+            if test_type == "quick" and not enable_multi_gpu_by_label:
+                logging.info(
+                    f"Excluding job {job_name}: multi-GPU tests skipped for quick runs"
+                )
+                continue
+
+            family_has_multi_gpu = (
+                platform in test_matrix[key]["multi_gpu"]
+                and amdgpu_families in test_matrix[key]["multi_gpu"][platform]
+            )
+            if not (family_has_multi_gpu or enable_multi_gpu_by_label):
+                logging.info(
+                    f"Excluding job {job_name} since multi GPU testing is not "
+                    f"available for family {amdgpu_families}"
+                )
+                continue
+
+            # Mark this component as needing a multi-GPU runner. The actual
+            # runner selection is done in the per-component loop below, which
+            # resolves it into "test_runner" like every other component so the
+            # workflows have a single field to route on.
+            entry[_NEEDS_MULTI_GPU] = True
+            logging.info(f"Including job {job_name} for multi-GPU testing")
+
+        # Hip-tests on Windows run with both PAL and ROCR backends.
+        # See: https://github.com/ROCm/TheRock/issues/3587
+        if key == "hip-tests" and platform == "windows":
+            for backend, enable_pal in [("PAL", "1"), ("ROCR", "0")]:
+                selected.append(
+                    {
+                        **entry,
+                        "job_name": f"hip-tests ({backend})",
+                        "gpu_enable_pal": enable_pal,
+                    }
+                )
+            continue
+
+        selected.append(entry)
+
+    # Per-component runner selection for better load distribution. Each
+    # component gets its own independent random draw based on configured weights.
+    # For ASan builds, use the sandbox runner to isolate potentially failing
+    # tests. This matches multiple build variants, including "asan", "host-asan",
+    # "asan-debug", and "host-asan-debug".
+    logging.info("")
+    logging.info("Assigning runners to requested jobs...")
+    is_asan_build = "asan" in request.build_variant
+    components = []
+    for component in selected:
+        job_name = component["job_name"]
+        if component.pop(_NEEDS_MULTI_GPU, False):
+            # Multi-GPU components use multi-GPU runner labels
+            if runners.test_runs_on_multi_gpu_labels:
+                component["test_runner"] = select_weighted_label(
+                    runners.test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
+                )
+            elif runners.test_runs_on_multi_gpu:
+                component["test_runner"] = runners.test_runs_on_multi_gpu
+            else:
+                # No multi-GPU runner configured for this family; skip it
+                logging.info(
+                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU "
+                    f"runner configured"
+                )
+                continue
+        elif "test_runner" not in component:
+            # Regular components use standard runner labels. Skip if test_runner
+            # is already pre-pinned (e.g. rocgdb-corefile).
+            if component.get("linux_cpu_runner", False):
+                if not runners.test_runs_on_cpu:
+                    logging.info(
+                        f"  Excluding {job_name}: CPU runner required but none "
+                        f"configured"
+                    )
+                    continue
+                component["test_runner"] = runners.test_runs_on_cpu
+                logging.info(
+                    f"  {job_name}: CPU-only, using runner: {runners.test_runs_on_cpu}"
+                )
+            elif is_asan_build and runners.test_runs_on_sandbox:
+                # For ASAN builds, use the sandbox runner if available
+                component["test_runner"] = runners.test_runs_on_sandbox
+                logging.info(
+                    f"  {job_name}: using ASAN sandbox runner: "
+                    f"{runners.test_runs_on_sandbox}"
+                )
+            elif runners.test_runs_on_labels:
+                component["test_runner"] = select_weighted_label(
+                    runners.test_runs_on_labels, job_name
+                )
+            elif runners.test_runs_on:
+                component["test_runner"] = runners.test_runs_on
+            else:
+                # No GPU runner available and component requires GPU - skip it
+                logging.info(
+                    f"  Excluding {job_name}: GPU runner required but none configured"
+                )
+                continue
+        components.append(component)
+
+    # Separate sanity from the regular component matrix: it must pass before the
+    # others run.
+    sanity = next((c for c in components if c["key"] == "sanity"), None)
+
+    return {
+        "platform": platform,
+        # Uniform across the plan: a family either pins its own tier via
+        # test_type_for_family or inherits the run-wide one.
+        "test_type": test_type,
+        "container_options": _build_container_options(
+            platform, amdgpu_families=amdgpu_families
+        ),
+        "container_options_cpu": _build_container_options(
+            platform, cpu_only=True, amdgpu_families=amdgpu_families
+        ),
+        "sanity": sanity,
+        "components": [c for c in components if c["key"] != "sanity"],
+    }
+
+
+def dump_test_plan(plan: dict) -> str:
+    """Serialize a test plan for a workflow output.
+
+    Compact separators, because a nightly run carries one of these per GPU
+    family per platform through a single job's outputs.
+    """
+    return json.dumps(plan, separators=(",", ":"))
+
+
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1393,405 +1887,65 @@ def run():
             " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
         ),
     )
+    parser.add_argument(
+        "--describe-component",
+        type=str,
+        metavar="KEY",
+        help=(
+            "Instead of building a test plan, emit the static execution config"
+            " for one component (its test_matrix key). Used by test_component.yml"
+            " so that config does not have to travel through workflow outputs."
+        ),
+    )
     args, _ = parser.parse_known_args()
     platform = args.platform
-    projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    test_type = os.getenv("TEST_TYPE", "standard")
+
+    if args.describe_component:
+        gha_set_output(describe_component(args.describe_component, platform, test_type))
+        return
+
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
     # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
     amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
-    test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
-    build_variant = os.getenv("BUILD_VARIANT", "release")
-    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
 
-    # Check for ci:run-multi-gpu label to force multi-GPU tests
-    enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
-    if enable_multi_gpu_by_label:
-        logging.info("Multi-GPU tests forced via ci:run-multi-gpu label")
+    # Check if a GPU runner was passed from the workflow. This carries the policy
+    # decision (e.g. trigger gating). When set to empty, GPU tests are gated but
+    # CPU-only tests (linux_cpu_runner: True) can still run.
+    runners, test_type_for_family, family_gfx_targets = resolve_family_runners(
+        platform=platform,
+        amdgpu_families=amdgpu_families,
+        test_runs_on=os.getenv("TEST_RUNS_ON"),
+        test_runs_on_cpu=os.getenv("TEST_RUNS_ON_CPU", ""),
+    )
 
-    # Get runner config for per-component runner selection
-    # This enables better load distribution across runner pools
-    test_runs_on_labels = None
-    test_runs_on_default = None
-    test_runs_on_multi_gpu_labels = None
-    test_runs_on_multi_gpu_default = None
-    # For ASAN builds, use the sandbox runner if available
-    test_runs_on_sandbox = None
-
-    # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
-    # This carries the policy decision (e.g., trigger gating). When set to empty,
-    # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
-    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
-    # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
-    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
-    gpu_tests_gated = test_runs_on_from_workflow == ""
-    if gpu_tests_gated:
+    # Enforce test_type_for_family if set in the family matrix. This is a strict
+    # override - families with limited hardware (e.g. MI455) should always run
+    # quick tests regardless of what's passed in TEST_TYPE.
+    if test_type_for_family and test_type_for_family != test_type:
         logging.info(
-            "GPU tests gated (TEST_RUNS_ON is empty), only CPU-only components will run"
+            f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
+            f"(test_type_for_family for {amdgpu_families})"
         )
+        test_type = test_type_for_family
 
-    if amdgpu_families:
-        shortened_family = amdgpu_families.split("-")[0].lower()
-        all_families = get_all_families_for_trigger_types(
-            ["presubmit", "postsubmit", "nightly"]
+    plan = build_test_plan(
+        TestPlanRequest(
+            platform=platform,
+            runners=runners,
+            amdgpu_families=amdgpu_families,
+            # AMDGPU_TARGETS (fetch-gfx-targets after the caller's family
+            # overrides) wins over the static matrix.
+            family_gfx_targets=amdgpu_targets or family_gfx_targets,
+            projects_to_test=os.getenv("PROJECTS_TO_TEST", "*"),
+            test_type=test_type,
+            test_labels=_parse_test_labels(os.getenv("TEST_LABELS") or "[]"),
+            build_variant=os.getenv("BUILD_VARIANT", "release"),
+            skip_stages=os.getenv("SKIP_STAGES", "").split(","),
         )
-        if shortened_family in all_families:
-            # wsl has no entry of its own here; its runner is TEST_RUNS_ON.
-            platform_info = all_families[shortened_family].get(platform, {})
-            # Use policy-gated value from workflow if available, otherwise use static matrix
-            if gpu_tests_gated:
-                # GPU tests are gated - don't use runner labels or defaults for GPU
-                # This includes multi-GPU runners since they are also GPU tests
-                test_runs_on_labels = None
-                test_runs_on_default = ""
-                test_runs_on_multi_gpu_labels = None
-                test_runs_on_multi_gpu_default = ""
-            elif test_runs_on_from_workflow is not None:
-                # Workflow provided a non-empty runner - use it but allow label distribution
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = test_runs_on_from_workflow
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
-            else:
-                # Fallback to static matrix (backward compatibility)
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = platform_info.get("test-runs-on", "")
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
-            test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
-
-            # Enforce test_type_for_family if set in the family matrix.
-            # This is a strict override - families with limited hardware (e.g., MI455)
-            # should always run quick tests regardless of what's passed in TEST_TYPE.
-            test_type_for_family = platform_info.get("test_type_for_family")
-            if test_type_for_family and test_type_for_family != test_type:
-                logging.info(
-                    f"Overriding test_type from '{test_type}' to '{test_type_for_family}' "
-                    f"(test_type_for_family for {amdgpu_families})"
-                )
-                test_type = test_type_for_family
-
-    logging.info(f"Selecting projects: {projects_to_test}")
-
-    logging.info(f"Using test_matrix ({len(test_matrix)} test(s))")
-
-    # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
-    project_array = [item.strip() for item in projects_to_test.split(",")]
-
-    all_components = []
-    for key in test_matrix:
-        job_name = test_matrix[key]["job_name"]
-
-        excluded_stages = set(skip_stages).intersection(
-            test_matrix[key].get("skip_stages", [])
-        )
-        if excluded_stages:
-            logging.info(
-                f"Excluding {job_name}: stages {sorted(excluded_stages)} are skipped"
-            )
-            continue
-
-        if build_variant in test_matrix[key].get("skip_build_variant", []):
-            logging.info(
-                f"Excluding job {job_name}: skip_build_variant lists {build_variant}"
-            )
-            continue
-
-        # Resolve the individual gfx targets for the current family once, so both
-        # include_family and exclude_family can match either the family group
-        # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201"). AMDGPU_TARGETS
-        # (fetch-gfx-targets after the caller's family overrides) wins over the matrix.
-        _family_gfx_targets = amdgpu_targets
-        if (
-            not _family_gfx_targets
-            and amdgpu_families
-            and shortened_family
-            and shortened_family in all_families
-        ):
-            _family_gfx_targets = (
-                all_families[shortened_family]
-                .get(platform, {})
-                .get("fetch-gfx-targets", [])
-            )
-
-        # include_family (opt-in) and exclude_family (opt-out) together decide
-        # whether a job runs: it runs only when it matches an include (if any are
-        # listed for this platform) and matches no exclude. Matching is exact
-        # membership.
-        _include_list = test_matrix[key].get("include_family", {}).get(platform, [])
-        if _include_list and not _family_matches(
-            _include_list, amdgpu_families, _family_gfx_targets
-        ):
-            logging.info(
-                f"Excluding job {job_name} for platform {platform} and family "
-                f"{amdgpu_families}: not listed in include_family"
-            )
-            continue
-
-        _exclude_list = test_matrix[key].get("exclude_family", {}).get(platform, [])
-        if _exclude_list and _family_matches(
-            _exclude_list, amdgpu_families, _family_gfx_targets
-        ):
-            logging.info(
-                f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
-            )
-            continue
-
-        # Key used for test-label / project selection. Split jobs (e.g. the
-        # multi-GPU variants) declare a "base_project" so that selecting the base
-        # component (via `test:hipfft` label or PROJECTS_TO_TEST=hipfft) also picks
-        # up the variant, which otherwise has no matching label of its own.
-        selection_key = test_matrix[key].get("base_project", key)
-
-        # If test labels are populated, and the test job name is not in the test labels, skip the test
-        # Note: Benchmarks never use test_labels (always empty list)
-        # Filter out ci: control labels - they're not test component selectors
-        component_test_labels = [c for c in test_labels if not c.startswith("ci:")]
-        parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
-        expanded_test_labels = [
-            member
-            for label in parsed_test_labels
-            for member in TEST_LABEL_GROUPS.get(label, [label])
-        ]
-        if (
-            key != "sanity"
-            and expanded_test_labels
-            and selection_key not in expanded_test_labels
-        ):
-            logging.info(f"Excluding job {job_name} since it's not in the test labels")
-            continue
-
-        # Tier gate: a component may declare which test tiers it runs on via
-        # "test_types". Skip it entirely (schedule no job) for any TEST_TYPE not in
-        # the list -- e.g. miopen-dbsync runs standard/comprehensive/full only, never
-        # quick, and the hipfft/rocfft multi-GPU split jobs run comprehensive/full
-        # only. Omit the field to run on every tier.
-        allowed_test_types = test_matrix[key].get("test_types")
-        if allowed_test_types and test_type not in allowed_test_types:
-            logging.info(
-                f"Excluding job {job_name}: test_type {test_type} not in {allowed_test_types}"
-            )
-            continue
-
-        # If the test is enabled for a particular platform and a particular (or all) projects are selected.
-        # Note: Sanity goes through the same all_components loop as other components, but is separated
-        # into its own sanity_component GHA output after the loop (see gha_set_output below).
-        # Split jobs match via selection_key (base_project) so PROJECTS_TO_TEST=hipfft
-        # also selects hipfft-multi-gpu.
-        if platform in test_matrix[key]["platform"] and (
-            key == "sanity" or selection_key in project_array or "*" in project_array
-        ):
-            logging.info(f"Requesting job {job_name} with test_type {test_type}")
-
-            # Hip-tests on Windows run with both PAL and ROCR backends.
-            # See: https://github.com/ROCm/TheRock/issues/3587
-            if key == "hip-tests" and platform == "windows":
-                base = test_matrix[key]
-                total_shards = base.get("total_shards_dict", {}).get(platform, 1)
-                if test_type == "quick":
-                    total_shards = 1
-
-                shard_arr = list(range(1, total_shards + 1))
-
-                pal_entry = {
-                    **_common_settings,
-                    "job_name": "hip-tests (PAL)",
-                    "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
-                    "test_script": base["test_script"],
-                    "platform": base["platform"],
-                    "total_shards": total_shards,
-                    "test_type": test_type,
-                    "shard_arr": shard_arr,
-                    "gpu_enable_pal": "1",
-                }
-                all_components.append(pal_entry)
-
-                rocr_entry = {
-                    **_common_settings,
-                    "job_name": "hip-tests (ROCR)",
-                    "fetch_artifact_args": base["fetch_artifact_args"],
-                    "timeout_minutes": base["timeout_minutes"],
-                    "test_script": base["test_script"],
-                    "platform": base["platform"],
-                    "total_shards": total_shards,
-                    "test_type": test_type,
-                    "shard_arr": shard_arr,
-                    "gpu_enable_pal": "0",
-                }
-                all_components.append(rocr_entry)
-                continue
-
-            job_config_data = {**_common_settings, **test_matrix[key]}
-            job_config_data["test_type"] = test_type
-
-            # A component declares the families it is advisory on via
-            # "expect_failure" (see the key reference above). Resolve that
-            # declaration down to the single boolean the workflows read --
-            # test_component.yml compares it with `== true` to set
-            # continue-on-error, so the emitted value must never stay a map.
-            _xfail = job_config_data.get("expect_failure")
-            if _xfail:
-                job_config_data["expect_failure"] = _family_matches(
-                    _xfail.get(platform, []), amdgpu_families, _family_gfx_targets
-                )
-
-            # tensilelite: append the tensilelite/tests C++ gtest suite (run via
-            # ctest -L <test_type>, driven by the shared test_runner.py) after
-            # the existing pytest stage, for every tier except quick -- that
-            # component's test_categories.yaml only defines standard/
-            # comprehensive/full so far (promote to quick once the standard
-            # tier proves stable). See AIHPBLAS-4410.
-            #
-            # TODO(#7851): this is a temporary special-case. test_runner.py
-            # only knows how to run the C++/ctest suite today, so the pytest
-            # and ctest stages have to be chained here instead. Fold both
-            # into test_runner.py's own dual-mode support and drop this
-            # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
-                job_config_data["test_script"] = (
-                    job_config_data["test_script"]
-                    + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
-                )
-                # +15 min over the pytest-only baseline for the added ctest
-                # stage; re-measure once CI timing is observed and adjust.
-                job_config_data["timeout_minutes"] = (
-                    job_config_data["timeout_minutes"] + 15
-                )
-
-            # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
-            # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
-            # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
-            total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
-            job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
-            job_config_data["total_shards"] = total_shards
-
-            # If the test type is quick tests, we only need one shard for the test job
-            if test_type == "quick":
-                job_config_data["total_shards"] = 1
-                job_config_data["shard_arr"] = [1]
-
-            # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
-            # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
-            # If the multi GPU test runner is not enabled, we will skip the test
-            if "multi_gpu" in test_matrix[key]:
-                # Skip multi-GPU tests for quick runs unless enable_multi_gpu_by_label is set.
-                # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
-                # only run on standard, comprehensive, or full tiers by default.
-                if test_type == "quick" and not enable_multi_gpu_by_label:
-                    logging.info(
-                        f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
-                    )
-                    continue
-
-                # Check if this family has multi-GPU runner support, OR if enable_multi_gpu_by_label is set
-                family_has_multi_gpu = (
-                    platform in test_matrix[key]["multi_gpu"]
-                    and amdgpu_families in test_matrix[key]["multi_gpu"][platform]
-                )
-
-                if family_has_multi_gpu or enable_multi_gpu_by_label:
-                    # Mark this component as needing a multi-GPU runner.
-                    # The actual runner selection is done in the per-component loop below.
-                    job_config_data["multi_gpu_runner"] = True
-                    logging.info(f"Including job {job_name} for multi-GPU testing")
-                else:
-                    # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
-                    logging.info(
-                        f"Excluding job {job_name} since multi GPU testing is not available for family {amdgpu_families}"
-                    )
-                    continue
-
-            all_components.append(job_config_data)
-
-    # Per-component runner selection for better load distribution
-    # Each component gets its own independent random draw based on configured weights
-    # For ASan builds, use the sandbox runner to isolate potentially failing tests.
-    # This matches multiple build variants, including "asan", "host-asan",
-    # "asan-debug", and "host-asan-debug".
-    logging.info("")
-    logging.info("Assigning runners to requested jobs...")
-    is_asan_build = "asan" in build_variant
-    components_with_runners = []
-    for component in all_components:
-        job_name = component.get("job_name", "unknown")
-        if "multi_gpu_runner" in component:
-            # Multi-GPU components use multi-GPU runner labels
-            if test_runs_on_multi_gpu_labels:
-                component["multi_gpu_runner"] = select_weighted_label(
-                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
-                )
-            elif test_runs_on_multi_gpu_default:
-                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
-            else:
-                # No multi-GPU runner configured for this family; skip the component
-                logging.info(
-                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
-                )
-                continue
-        elif "test_runner" not in component:
-            # Regular components use standard runner labels.
-            # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
-            is_cpu_only = component.get("linux_cpu_runner", False)
-            if is_cpu_only:
-                if test_runs_on_cpu:
-                    component["test_runner"] = test_runs_on_cpu
-                    logging.info(
-                        f"  {job_name}: CPU-only, using runner: {test_runs_on_cpu}"
-                    )
-                else:
-                    logging.info(
-                        f"  Excluding {job_name}: CPU runner required but none configured"
-                    )
-                    continue
-            elif is_asan_build and test_runs_on_sandbox:
-                # For ASAN builds, use the sandbox runner if available
-                component["test_runner"] = test_runs_on_sandbox
-                logging.info(
-                    f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
-                )
-            elif test_runs_on_labels:
-                component["test_runner"] = select_weighted_label(
-                    test_runs_on_labels, job_name
-                )
-            elif test_runs_on_default:
-                component["test_runner"] = test_runs_on_default
-            else:
-                # No GPU runner available and component requires GPU - skip it
-                logging.info(
-                    f"  Excluding {job_name}: GPU runner required but none configured"
-                )
-                continue
-        components_with_runners.append(component)
-
-    # Build container options for all components (concatenates base, GPU, and job-specific options)
-    all_components = [
-        _build_container_options(c, platform, amdgpu_families)
-        for c in components_with_runners
-    ]
-
-    # Separate sanity from the regular component matrix.
-    sanity_component = next(
-        (c for c in all_components if c.get("job_name") == "sanity"), None
     )
-    output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 
-    gha_set_output(
-        {
-            "sanity_component": json.dumps(sanity_component),
-            "components": json.dumps(output_matrix),
-            "platform": platform,
-        }
-    )
+    gha_set_output({"test_plan": dump_test_plan(plan)})
 
 
 if __name__ == "__main__":
