@@ -126,6 +126,7 @@ if(THEROCK_ENABLE_COMPILER)
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
       -DLLVM_INCLUDE_TESTS=${_llvm_include_tests}
       -DTHEROCK_SANITIZER=${THEROCK_SANITIZER}
+      -DTHEROCK_COMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}
       -C${_therock_llvm_cache}
     )
   endif()
@@ -156,7 +157,6 @@ if(THEROCK_ENABLE_COMPILER)
       # selected in pre_hook_amd-llvm.cmake. Do not pass it as a CMAKE_ARGS -D
       # here: a -D value is written to the cache before the pre-hook runs and
       # would shadow the per-host selection made there.
-      "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
       # Keep examples in sync with the test toggle (cache defaults them OFF).
       -DLLVM_BUILD_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
       -DLLVM_INCLUDE_EXAMPLES=${THEROCK_BUILD_LLVM_TESTS}
