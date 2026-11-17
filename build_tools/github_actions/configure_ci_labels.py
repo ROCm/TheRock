@@ -57,6 +57,7 @@ COLOR_BUILD_VARIANT = "4b398c"  # Purple - build variant labels
 CI_LABELS: list[Label] = [
     # ci: general labels
     Label("ci:skip", COLOR_CI_GENERAL, "Skip all CI builds/tests for this PR"),
+    Label("ci:run-on-draft", COLOR_CI_GENERAL, "Opt-in to running CI on a draft pull request (ci:skip still wins)"),
     Label("ci:run-all-archs", COLOR_CI_GENERAL, "Opt-in to building for all architectures on a pull request"),
     Label("ci:exactly", COLOR_CI_GENERAL, "Build and test only the architectures named by the ci:gfx labels, dropping the defaults"),
     Label("ci:run-multi-arch", COLOR_CI_GENERAL, "Opt-in to running multi-arch CI on a pull request"),
