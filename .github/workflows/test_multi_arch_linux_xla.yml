@@ -22,10 +22,6 @@ on:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
         default: ""
-      therock_ref:
-        description: "Branch, tag or SHA to checkout  from TheRock repo."
-        type: string
-        default: ""
       xla_ref:
         description: "ROCm/xla ref to check out."
         type: string
@@ -72,10 +68,6 @@ on:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
         default: ""
-      therock_ref:
-        description: "Branch, tag or SHA to checkout from TheRock repo."
-        type: string
-        default: ""
       xla_ref:
         description: "ROCm/xla ref to check out."
         type: string
@@ -85,7 +77,7 @@ on:
         type: string
         default: "ROCm/xla"
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_target
         type: string
         default: "linux-gfx950-1gpu-ccs-ossci-rocm"
       test_timeout_minutes:
@@ -180,14 +172,6 @@ jobs:
           workflow_inputs: ${{ toJSON(inputs) }}
           gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
           gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 15
-        with:
-          persist-credentials: false
-          repository: "rocm/TheRock"
-          ref: ${{ inputs.therock_ref || '' }}
 
       - name: Checkout XLA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
