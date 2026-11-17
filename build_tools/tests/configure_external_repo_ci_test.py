@@ -2,7 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests for configure_external_repo_ci.py."""
+"""Tests for configure_external_repo_ci.py.
+
+That module is on its way out: it no longer decides test depth, only project
+scope. Coverage here is deliberately limited to the scoping logic still in use.
+Dead surface (has_non_skippable) and its duplicated CI-plumbing pattern lists
+are not tested -- the live copy of those patterns is EXTERNAL_REPO_CI_PATTERNS
+in configure_ci_path_filters.py, covered by configure_ci_path_filters_test.py.
+"""
 
 import os
 import sys
@@ -19,10 +26,8 @@ from configure_external_repo_ci import (
     find_matched_subtrees,
     get_unclassified_paths,
     get_valid_prefixes,
-    has_non_skippable,
     is_skippable,
     load_repo_config,
-    matches_patterns,
 )
 
 
@@ -48,39 +53,6 @@ class IsSkippableTest(unittest.TestCase):
         self.assertFalse(is_skippable("src/main.cpp"))
         self.assertFalse(is_skippable("projects/rocblas/src/blas.cpp"))
         self.assertFalse(is_skippable("CMakeLists.txt"))
-
-
-class HasNonSkippableTest(unittest.TestCase):
-    """Tests for has_non_skippable()."""
-
-    def test_all_skippable_returns_false(self):
-        paths = ["README.md", "docs/guide.rst", "CHANGELOG.md"]
-        self.assertFalse(has_non_skippable(paths))
-
-    def test_mixed_returns_true(self):
-        paths = ["README.md", "src/main.cpp"]
-        self.assertTrue(has_non_skippable(paths))
-
-    def test_all_non_skippable_returns_true(self):
-        paths = ["src/a.cpp", "src/b.cpp"]
-        self.assertTrue(has_non_skippable(paths))
-
-
-class MatchesPatternsTest(unittest.TestCase):
-    """Tests for matches_patterns()."""
-
-    def test_matches_workflow_pattern(self):
-        paths = [".github/workflows/therock-ci.yml"]
-        patterns = [".github/workflows/therock*"]
-        self.assertTrue(matches_patterns(paths, patterns))
-
-    def test_no_match_returns_false(self):
-        paths = ["src/main.cpp"]
-        patterns = [".github/workflows/therock*"]
-        self.assertFalse(matches_patterns(paths, patterns))
-
-    def test_empty_paths_returns_false(self):
-        self.assertFalse(matches_patterns([], ["*.md"]))
 
 
 class FindMatchedSubtreesTest(unittest.TestCase):
