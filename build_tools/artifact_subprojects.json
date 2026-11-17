@@ -148,16 +148,10 @@
     "rocprofiler-sdk",
     "rocprofiler-systems"
   ],
-  "rocr-debug-agent-tests": [
-    "ROCR-Runtime",
-    "amd-dbgapi",
-    "hip-clr",
-    "rocr-debug-agent",
-    "rocr-debug-agent-tests"
-  ],
   "rocr-debug-agent": [
     "ROCR-Runtime",
     "amd-dbgapi",
+    "hip-clr",
     "rocr-debug-agent"
   ],
   "rocrtst": [
