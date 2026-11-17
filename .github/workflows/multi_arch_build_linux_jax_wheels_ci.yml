@@ -6,7 +6,7 @@
 # This workflow is called once per CI matrix cell from multi_arch_ci_linux.yml.
 #
 # Built shape:
-#   - One manylinux JAX wheel build for one python_version and jax_ref matrix cell.
+#   - One JAX wheel build in build_image for one python_version and jax_ref matrix cell.
 #   - Installs ROCm packages from this run or a published package index.
 #   - Uploads the resulting wheels to run-scoped CI Python artifacts.
 #   - Tests those wheels when test_amdgpu_family names a family to test on.
@@ -28,7 +28,7 @@ on:
         type: string
         required: true
       gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        description: "ROCm device package selector used for the JAX build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
@@ -37,13 +37,13 @@ on:
         type: string
         required: true
       rocm_jax_ref:
-        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        description: "ROCm/rocm-jax ref the JAX tests check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
       build_image:
-        description: "Prebuilt image to build the wheels in, with ROCm installed from rocm_package_find_links_url at build time. Empty builds the manylinux image from rocm_jax_ref."
+        description: "Image to build the wheels in, with ROCm installed from the ROCm package URL at build time."
         type: string
-        default: ""
+        required: true
       wheel_type:
         description: "release builds the plugin and PJRT wheels for a ref whose jax/jaxlib are on PyPI; nightly also builds jax and jaxlib from the same checkout, dated from its HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: string
@@ -57,7 +57,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       rocm_package_index_url:
@@ -110,7 +110,7 @@ on:
         type: string
         default: "ROCm/jax"
       gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        description: "ROCm device package selector used for the JAX build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
@@ -119,13 +119,13 @@ on:
         type: string
         required: true
       rocm_jax_ref:
-        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        description: "ROCm/rocm-jax ref the JAX tests check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
       build_image:
-        description: "Prebuilt image to build the wheels in, with ROCm installed from rocm_package_find_links_url at build time. Empty builds the manylinux image from rocm_jax_ref."
+        description: "Image to build the wheels in, with ROCm installed from the ROCm package URL at build time."
         type: string
-        default: ""
+        required: true
       wheel_type:
         description: "release builds the plugin and PJRT for a ref on PyPI; nightly also builds jax and jaxlib, dated from the HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: choice
@@ -138,7 +138,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       rocm_package_index_url:
@@ -186,7 +186,7 @@ jobs:
     env:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ci
-      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      BUILD_IMAGE: ${{ inputs.build_image }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
@@ -197,16 +197,6 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
-
-      - name: Checkout rocm-jax
-        if: ${{ inputs.build_image == '' }}
-        timeout-minutes: 15
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          path: rocm-jax
-          repository: ROCm/rocm-jax
-          ref: ${{ inputs.rocm_jax_ref || inputs.jax_ref }}
 
       - name: Checkout JAX
         id: checkout_jax
@@ -232,28 +222,6 @@ jobs:
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      - name: Build manylinux image
-        if: ${{ inputs.build_image == '' }}
-        working-directory: jax-source
-        env:
-          THEROCK_VERSION: ${{ inputs.rocm_version }}
-          GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_URL: ${{ inputs.rocm_package_find_links_url || inputs.rocm_package_index_url }}
-        run: |
-          cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
-            Dockerfile.jax-manylinux_2_28-therock
-
-          # TODO(#6388): Replace this per-run rocm-jax Dockerfile build with a
-          # frozen/prebuilt CI image and refine when JAX CI should run.
-          docker build \
-            -t "${MANYLINUX_IMAGE_TAG}" \
-            --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_URL}" \
-            --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
-            --build-arg=GFX_ARCH="${GFX_ARCH}" \
-            --progress=plain \
-            .
 
       - name: Resolve JAX wheel version
         id: resolve_jax_version
@@ -296,7 +264,7 @@ jobs:
         run: |
           python build_tools/github_actions/write_jax_bazel_cache_credentials.py
 
-      - name: Build JAX Wheels in manylinux container
+      - name: Build JAX wheels
         working-directory: jax-source
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
@@ -305,9 +273,9 @@ jobs:
           JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
           JAX_BAZEL_REMOTE_CACHE_URL: ${{ vars.JAX_BAZEL_REMOTE_CACHE_URL }}
           CACHE_CREDENTIALS_DIR: ${{ steps.cache_credentials.outputs.credentials_dir }}
-          BUILD_IMAGE: ${{ inputs.build_image }}
           GFX_ARCH: ${{ inputs.gfx_arch }}
           ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
         run: |
           # configure_jax_bazel_cache.py reads the token from /data, staged
           # in $RUNNER_TEMP.
@@ -322,9 +290,9 @@ jobs:
             --env ML_WHEEL_VERSION_SUFFIX \
             --env JAX_WHEELS \
             ${credentials_mount} \
-            --env BUILD_IMAGE \
             --env GFX_ARCH \
             --env ROCM_PACKAGE_FIND_LINKS_URL \
+            --env ROCM_PACKAGE_INDEX_URL \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env RELEASE_TYPE="${RELEASE_TYPE}" \
@@ -334,19 +302,21 @@ jobs:
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
-            "${BUILD_IMAGE:-${MANYLINUX_IMAGE_TAG}}" \
+            "${BUILD_IMAGE}" \
             bash -lc '
               set -euo pipefail
-              if [[ -n "${BUILD_IMAGE}" ]]; then
-                case "${ROCM_PACKAGE_FIND_LINKS_URL}" in
-                  *.html) PIP_SRC="--find-links" ;;
-                  *)      PIP_SRC="--index-url" ;;
-                esac
-                python3 -m pip install --break-system-packages --pre \
-                  "${PIP_SRC}" "${ROCM_PACKAGE_FIND_LINKS_URL}" \
-                  "rocm[libraries,devel,${GFX_ARCH}]"
-                rocm-sdk init
+              if [[ -n "${ROCM_PACKAGE_FIND_LINKS_URL}" ]]; then
+                rocm_source=(--find-links "${ROCM_PACKAGE_FIND_LINKS_URL}")
+              elif [[ -n "${ROCM_PACKAGE_INDEX_URL}" ]]; then
+                rocm_source=(--index-url "${ROCM_PACKAGE_INDEX_URL}")
+              else
+                echo "Set rocm_package_find_links_url or rocm_package_index_url." >&2
+                exit 1
               fi
+              python3 -m pip install --break-system-packages --pre \
+                "${rocm_source[@]}" \
+                "rocm[libraries,devel,${GFX_ARCH}]==${ROCM_VERSION}"
+              rocm-sdk init
               ROCM_ROOT="$(rocm-sdk path --root)"
               bazel_cache_options="$(python /workspace/build_tools/github_actions/configure_jax_bazel_cache.py)"
               python build/build.py build \
