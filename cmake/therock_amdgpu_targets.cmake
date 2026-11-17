@@ -272,39 +272,74 @@ therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY
 # Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
 therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
   EXCLUDE_TARGET_PROJECTS
-    MIOpen # https://github.com/ROCm/TheRock/issues/6918
-    composable_kernel # https://github.com/ROCm/TheRock/issues/6918
-    hip-clr # https://github.com/ROCm/TheRock/issues/6918
-    hip-tests # https://github.com/ROCm/TheRock/issues/6918
-    hipDNN_samples # https://github.com/ROCm/TheRock/issues/6918
-    hipFFT # https://github.com/ROCm/TheRock/issues/6918
-    hipRAND # https://github.com/ROCm/TheRock/issues/6918
-    hipSOLVER # https://github.com/ROCm/TheRock/issues/6918
-    hipSPARSE # https://github.com/ROCm/TheRock/issues/6918
-    hipSPARSELt # https://github.com/ROCm/TheRock/issues/6918
-    hipTensor # https://github.com/ROCm/TheRock/issues/6918
-    hipdnn_integration_tests # https://github.com/ROCm/TheRock/issues/6918
-    hipkernelprovider # https://github.com/ROCm/TheRock/issues/6918
-    libhipcxx # https://github.com/ROCm/TheRock/issues/6918
-    mxDataGenerator # https://github.com/ROCm/TheRock/issues/6918
-    ocl-clr # https://github.com/ROCm/TheRock/issues/6918
-    rccl # https://github.com/ROCm/TheRock/issues/6918
-    rccl-tests # https://github.com/ROCm/TheRock/issues/6918
-    rocALUTION # https://github.com/ROCm/TheRock/issues/6918
-    rocFFT # https://github.com/ROCm/TheRock/issues/6918
-    rocRoller # https://github.com/ROCm/TheRock/issues/6918
-    rocSOLVER # https://github.com/ROCm/TheRock/issues/6918
-    rocSPARSE # https://github.com/ROCm/TheRock/issues/6918
-    rocWMMA # https://github.com/ROCm/TheRock/issues/6918
-    roctracer # https://github.com/ROCm/TheRock/issues/6918
-    rocBLAS # https://github.com/ROCm/TheRock/issues/6918
-    hipBLASLt # https://github.com/ROCm/TheRock/issues/6918
-    aqlprofile # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-sdk # https://github.com/ROCm/TheRock/issues/6918
-    rocrtst # https://github.com/ROCm/TheRock/issues/6918
-    rocshmem  # https://github.com/ROCm/TheRock/issues/6918
-    rocprofiler-systems-examples  # https://github.com/ROCm/TheRock/issues/6918
+    # SHOULDNOT WORK
+    # THEROCK_ENABLE_COMPOSABLE_KERNEL
+    composable_kernel
+    # THEROCK_ENABLE_HIPKERNELPROVIDER
+    hipkernelprovider
+    # rocrtst: OpenCL test kernels built with -mcpu=${target}
+    rocrtst
+    # hip-tests: hipHostRegister.cc __builtin_amdgcn_global_atomic_fadd_f32 rejected for amdgcnspirv
+    hip-tests
+
+    # INFRA:
+    # THEROCK_ENABLE_MIRAGE - no-op: declared with DISABLE_AMDGPU_TARGETS
+    mirage
+    # THEROCK_ENABLE_WSL_ROCDXG
+    therock-wsl-rocdxg
+
+    # THEROCK_ENABLE_ROCSHMEM
+    rocshmem
+    # THEROCK_ENABLE_MIOPENPROVIDER
+    miopenprovider
+    # THEROCK_ENABLE_HIPBLASLTPROVIDER
+    hipblasltprovider
+    # THEROCK_ENABLE_HIPDNN_SAMPLES
+    hipDNN_samples
+    # THEROCK_ENABLE_ROCPROFSYS
+    rocprofiler-systems
+    # THEROCK_ENABLE_ROCPROFILER_SYSTEMS_EXAMPLES - built under ROCPROFSYS + THEROCK_BUILD_TESTING
+    rocprofiler-systems-examples
+    # THEROCK_ENABLE_BLAS
+    hipBLAS-common
+    rocRoller
+    origami
+    hipBLASLt
+    rocBLAS
+    hipBLAS
+    mxDataGenerator # support artifact, only built when THEROCK_ENABLE_BLAS is ON
+    # THEROCK_ENABLE_MIOPEN
+    MIOpen
+    # THEROCK_ENABLE_RCCL
+    rccl
+    rccl-tests
+    # THEROCK_ENABLE_SOLVER
+    rocSOLVER
+    hipSOLVER
+    # THEROCK_ENABLE_ROCALUTION
+    rocALUTION
+    # THEROCK_ENABLE_ROCWMMA
+    rocWMMA
+    # THEROCK_ENABLE_SPARSE
+    rocSPARSE
+    hipSPARSE
+    hipSPARSELt
+
+    # # THEROCK_ENABLE_HIPTENSOR
+    # hipTensor
+    # # THEROCK_ENABLE_ROCPROFV3
+    rocprofiler-sdk
+    roctracer
+    aqlprofile
+    # rocprof-trace-decoder
+    # THEROCK_ENABLE_ROCPROFILER_COMPUTE: enabled; MFMA/WMMA sample guards fixed by
+    # patches/amd-mainline/rocm-systems/0001-guard-amdgcn-builtins-is_invocable-amdgcnspirv.patch
+    # rocprofiler-compute
+    # THEROCK_ENABLE_RDC
+    # [G1] rdc
+    # THEROCK_ENABLE_FFT
+    # [G1] rocFFT
+    # [G1] hipFFT
 )
 
 # Optional extension targets (used for out of tree target development).

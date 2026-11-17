@@ -701,6 +701,24 @@ amdgpu_family_info_matrix = {
             "disabled_framework_tests": ["pytorch", "jax"],
         },
     },
+    "amdgcnspirv": {
+        "linux": {
+            # Build-only during SPIR-V CI enablement: no test runner / tests yet.
+            "test-runs-on": "",
+            "family": "amdgcnspirv",
+            "fetch-gfx-targets": ["amdgcnspirv"],
+            "build_variants": ["release"],
+            "builds_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
+            "tests_on_trigger": [],
+            # TODO: Add issue that enables packaging
+            "exclude-from-packaging": True,
+        },
+    },
 }
 
 

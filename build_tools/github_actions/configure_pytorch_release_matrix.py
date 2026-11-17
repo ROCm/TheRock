@@ -64,12 +64,16 @@ CI_PYTORCH_REFS = {
 
 # Unknown explicit refs are left unfiltered so bring-up branches can opt into
 # new GPU families before the default PyTorch refs support them.
+#
+# amdgcnspirv: PyTorch's aten/src/ATen/native/hip/KernelUtils.cuh calls
+# feature-gated AMDGCN builtins (mov_dpp, flat_atomic_fadd_v2*) guarded only by
+# __has_builtin, which is always true for SPIR-V.
 UNSUPPORTED_AMDGPU_FAMILIES = {
     "linux": {
-        "release/2.13": {"gfx90c", "gfx117X-all"},
-        "release/2.14": {"gfx90c", "gfx117X-all"},
-        "release/2.15": {"gfx90c", "gfx117X-all"},
-        "nightly": {"gfx117X-all"},
+        "release/2.13": {"gfx90c", "gfx117X-all", "amdgcnspirv"},
+        "release/2.14": {"gfx90c", "gfx117X-all", "amdgcnspirv"},
+        "release/2.15": {"gfx90c", "gfx117X-all", "amdgcnspirv"},
+        "nightly": {"gfx117X-all", "amdgcnspirv"},
     },
     "windows": {
         "release/2.13": {"gfx90c", "gfx117X-all"},
