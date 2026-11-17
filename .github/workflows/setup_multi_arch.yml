@@ -32,6 +32,20 @@ on:
         type: string
         description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
+      pull_request_opt_in_label:
+        description: >-
+          Pull request events only: when set, the run is skipped unless the
+          pull request has this label (e.g. "ci:host-asan"). Empty disables
+          the check.
+        type: string
+        default: ""
+      pull_request_opt_out_label:
+        description: >-
+          Pull request events only: when set, the run is skipped if the pull
+          request has this label (e.g. "ci:no-host-asan"). Empty disables the
+          check.
+        type: string
+        default: ""
       prebuilt_stages:
         description: "Comma-separated build stages to skip (artifacts copied from baseline_run_id instead)."
         type: string
@@ -284,6 +298,8 @@ jobs:
           LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
           WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
           PR_LABELS: ${{ inputs.pr_labels }}
+          PULL_REQUEST_OPT_IN_LABEL: ${{ inputs.pull_request_opt_in_label }}
+          PULL_REQUEST_OPT_OUT_LABEL: ${{ inputs.pull_request_opt_out_label }}
           PREBUILT_STAGES: ${{ inputs.prebuilt_stages }}
           BUILD_STAGES: ${{ inputs.build_stages }}
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}

@@ -662,6 +662,111 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         self.assertFalse(cm.should_skip_ci(inputs, git))
 
+    def test_empty_opt_labels_leave_behavior_unchanged(self):
+        inputs = self._inputs(
+            pull_request_opt_in_label="",
+            pull_request_opt_out_label="",
+            pr_labels=["ci:no-host-asan", "ci:host-asan"],
+        )
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_opt_labels_ignored_for_non_pr_events(self):
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                inputs = self._inputs(
+                    event_name=event_name,
+                    pull_request_opt_in_label="ci:host-asan",
+                    pull_request_opt_out_label="ci:no-host-asan",
+                    pr_labels=["ci:no-host-asan"],
+                )
+                git = cm.GitContext(changed_files=None)
+                self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
+    def test_path_filter_skip_with_opt_in_label_present(self, mock_filter):
+        """Opt-in label does not override path-filter skipping."""
+        inputs = self._inputs(
+            pull_request_opt_in_label="ci:host-asan", pr_labels=["ci:host-asan"]
+        )
+        git = cm.GitContext(changed_files=["docs/README.md"])
+        self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_from_environ_reads_opt_labels(self):
+        inputs = _run_from_environ(
+            event_name="workflow_dispatch",
+            event_payload={},
+            extra_env={
+                "PULL_REQUEST_OPT_IN_LABEL": "ci:host-asan",
+                "PULL_REQUEST_OPT_OUT_LABEL": "ci:no-host-asan",
+            },
+        )
+        self.assertEqual(inputs.pull_request_opt_in_label, "ci:host-asan")
+        self.assertEqual(inputs.pull_request_opt_out_label, "ci:no-host-asan")
+
+    def test_label_policy_precedence(self):
+        """Expected outcome for combinations of the label policy and other labels.
+
+        Each row is (build_variant, opt_in, opt_out, pr_labels, expect_skip).
+        The label policy is evaluated after ci:skip and the draft check and
+        before the path filters and the "asan" variant label check, so ci:asan
+        never satisfies an opt-in input and the arch labels (ci:gfx*,
+        ci:run-all-archs) do not bypass either input.
+        """
+        cases = [
+            ("host-asan", "ci:host-asan", "", ["ci:asan"], True),
+            ("host-asan", "ci:host-asan", "", ["ci:host-asan"], False),
+            ("asan", "ci:host-asan", "", ["ci:asan"], True),
+            # TheRock's asan workflow (opt-in ci:asan) ignores a ci:host-asan-only PR.
+            ("asan", "ci:asan", "", ["ci:host-asan"], True),
+            ("asan", "ci:asan", "", ["ci:asan"], False),
+            ("asan", "ci:host-asan", "", [], True),
+            ("asan", "ci:host-asan", "", ["ci:host-asan"], False),
+            # The asan variant label check applies when no opt-in input is set.
+            ("asan", "", "", [], True),
+            ("asan", "", "", ["ci:asan"], False),
+            # Opt-out wins over opt-in.
+            ("host-asan", "ci:a", "ci:b", ["ci:a", "ci:b"], True),
+            ("host-asan", "", "ci:b", ["ci:b", "ci:asan"], True),
+            # ci:skip wins over both.
+            ("host-asan", "ci:a", "ci:b", ["ci:a", "ci:skip"], True),
+            # Arch labels do not bypass the label policy.
+            ("host-asan", "ci:a", "", ["ci:run-all-archs"], True),
+            ("host-asan", "ci:a", "", ["ci:run-all-archs", "ci:a"], False),
+            ("host-asan", "ci:a", "", ["ci:gfx94x"], True),
+            ("host-asan", "ci:a", "", ["ci:gfx94x", "ci:a"], False),
+            ("host-asan", "", "ci:b", ["ci:run-all-archs", "ci:b"], True),
+            ("host-asan", "", "ci:b", ["ci:gfx94x"], False),
+        ]
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        for variant, opt_in, opt_out, labels, expect_skip in cases:
+            with self.subTest(
+                variant=variant, opt_in=opt_in, opt_out=opt_out, labels=labels
+            ):
+                inputs = self._inputs(
+                    build_variant=variant,
+                    pull_request_opt_in_label=opt_in,
+                    pull_request_opt_out_label=opt_out,
+                    pr_labels=labels,
+                )
+                self.assertEqual(cm.should_skip_ci(inputs, git), expect_skip)
+
+    @patch("configure_multi_arch_ci.get_changed_files_for_external_repo")
+    def test_label_skip_happens_before_external_repo_path_filters(self, mock_changed):
+        """A label skip must not query the external repo's changed files."""
+        external_repo = json.dumps({"repository": "ROCm/rocm-libraries"})
+        for kwargs in (
+            dict(pull_request_opt_in_label="ci:host-asan", pr_labels=[]),
+            dict(
+                pull_request_opt_out_label="ci:no-host-asan",
+                pr_labels=["ci:no-host-asan"],
+            ),
+        ):
+            with self.subTest(**kwargs):
+                inputs = self._inputs(external_repo=external_repo, **kwargs)
+                self.assertTrue(cm.should_skip_ci(inputs, cm.GitContext()))
+                mock_changed.assert_not_called()
+
     @patch("configure_multi_arch_ci.is_ci_run_required")
     def test_external_repo_without_skip_config_runs_ci(self, mock_filter):
         """External repo without skip_ci_config runs CI (uses stage reuse)."""
