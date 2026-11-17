@@ -207,6 +207,55 @@ class ConfigureTest(unittest.TestCase):
         )
         self.assertEqual(result.run_all_tests, True)
 
+    def test_workflow_dispatch_test_filter_label_sets_test_type(self):
+        result = configure(
+            event_name="workflow_dispatch",
+            github_repo="ROCm/rocm-libraries",
+            base_sha=None,
+            head_sha=None,
+            config_path="",
+            pr_labels=["test:miopenprovider", "test_filter:workloads"],
+        )
+        self.assertEqual(result.test_type, "workloads")
+        self.assertEqual(result.run_all_tests, True)
+
+    def test_workflow_dispatch_without_test_filter_label_is_quick(self):
+        result = configure(
+            event_name="workflow_dispatch",
+            github_repo="ROCm/rocm-libraries",
+            base_sha=None,
+            head_sha=None,
+            config_path="",
+            pr_labels=["test:miopenprovider"],
+        )
+        self.assertEqual(result.test_type, "quick")
+
+    def test_workflow_dispatch_unknown_test_filter_raises(self):
+        with self.assertRaisesRegex(ValueError, "Unrecognized test_filter"):
+            configure(
+                event_name="workflow_dispatch",
+                github_repo="ROCm/rocm-libraries",
+                base_sha=None,
+                head_sha=None,
+                config_path="",
+                pr_labels=["test_filter:workload"],
+            )
+
+    def test_test_filter_label_ignored_outside_workflow_dispatch(self):
+        # A pull request or scheduled run must never select a test type from
+        # labels, so opt-in types such as "workloads" stay manual-only.
+        for event_name in ("pull_request", "push", "schedule"):
+            with self.subTest(event_name=event_name):
+                result = configure(
+                    event_name=event_name,
+                    github_repo="ROCm/rocm-libraries",
+                    base_sha=None,
+                    head_sha=None,
+                    config_path="",
+                    pr_labels=["test_filter:workloads"],
+                )
+                self.assertEqual(result.test_type, "quick")
+
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
     def test_only_docs_changed_no_projects(self, mock_config, mock_api):

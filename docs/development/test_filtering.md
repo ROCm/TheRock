@@ -39,6 +39,18 @@
   - Execution time: 2+ hours
   - Target: pre-release testing, submodule bumps, on-demand PR label (`test_filter:full`)
 
+<br/>
+
+- <b>workloads</b>: Opt-in workload suites that are not part of the quick → full ladder
+  - Runs on: on-demand only (`test_filter:workloads`); never chosen automatically
+  - Characteristics: hipDNN provider integration tests over the dnn-benchmarking workload graphs; only components that declare `workloads_timeout_minutes` in `fetch_test_configurations.py` run it (currently `miopenprovider` and `hipblasltprovider`)
+  - Execution time: hours (step timeout 180 min)
+  - Target: periodic workload coverage of the hipDNN providers
+
+External repositories (rocm-libraries, rocm-systems) set the test type in `configure_external_repo_ci.py`.
+On a `workflow_dispatch` run, a `test_filter:<type>` label in the `pr_labels` input (passed as the `PR_LABELS` environment variable) sets the test type.
+Pull request, push, and scheduled runs ignore labels there, so an opt-in type such as `workloads` runs only on demand.
+
 ## Test filter implementation
 
 Test filter implementation is done with CTest.
