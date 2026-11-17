@@ -330,6 +330,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
                 "THEROCK_CHECKOUT_REF": "main",
                 "THEROCK_CHECKOUT_COMMIT": "a" * 40,
+                "PULL_REQUEST_OPT_IN_LABEL": "ci:host-asan",
+                "PULL_REQUEST_OPT_OUT_LABEL": "ci:no-host-asan",
             },
         )
         self.assertEqual(inputs.linux_amdgpu_families, ["gfx94x", "gfx120x"])
@@ -358,6 +360,8 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
         self.assertEqual(inputs.checkout_ref, "main")
         self.assertEqual(inputs.checkout_commit, "a" * 40)
+        self.assertEqual(inputs.pull_request_opt_in_label, "ci:host-asan")
+        self.assertEqual(inputs.pull_request_opt_out_label, "ci:no-host-asan")
 
     def test_pull_request_extracts_labels(self):
         """PR labels are extracted from event.pull_request.labels."""
@@ -691,18 +695,6 @@ class TestShouldSkipCI(unittest.TestCase):
         )
         git = cm.GitContext(changed_files=["docs/README.md"])
         self.assertTrue(cm.should_skip_ci(inputs, git))
-
-    def test_from_environ_reads_opt_labels(self):
-        inputs = _run_from_environ(
-            event_name="workflow_dispatch",
-            event_payload={},
-            extra_env={
-                "PULL_REQUEST_OPT_IN_LABEL": "ci:host-asan",
-                "PULL_REQUEST_OPT_OUT_LABEL": "ci:no-host-asan",
-            },
-        )
-        self.assertEqual(inputs.pull_request_opt_in_label, "ci:host-asan")
-        self.assertEqual(inputs.pull_request_opt_out_label, "ci:no-host-asan")
 
     def test_label_policy_precedence(self):
         """Expected outcome for combinations of the label policy and other labels.
