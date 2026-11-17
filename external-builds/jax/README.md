@@ -50,7 +50,7 @@ For JAX development references, see:
 ### Supported JAX versions
 
 Support for JAX is provided via stable release branches from
-[ROCm/jax](https://github.com/ROCm/jax), built with the manylinux flow.
+[ROCm/jax](https://github.com/ROCm/jax).
 
 | JAX version | Linux                                                                                                   | Windows          |
 | ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
@@ -86,13 +86,13 @@ The [downstream ROCm/jax](https://github.com/ROCm/jax) build instructions
 assume that a stable ROCm version is already installed on the system.
 
 Supported JAX versions (0.10.2+) build against ROCm Python packages installed
-from the TheRock multi-arch Python package index (the manylinux flow).
+from the TheRock multi-arch Python package index.
 
 ### Prerequisites
 
 - **OS**: Linux (supported distributions with ROCm)
 - **Python**: 3.12 recommended (Python 3.11 is not supported for JAX 0.11.0+)
-- **Compiler**: Clang provided by the manylinux build environment
+- **Compiler**: JAX's hermetic Clang toolchain, fetched by Bazel
 - **ROCm**: ROCm Python packages from the TheRock multi-arch package index
 
 ### Steps
@@ -151,7 +151,7 @@ For more detailed build options, see the `ROCm/jax` repository and the
 
 ## Bazel remote cache
 
-The Linux JAX wheel job compiles with Bazel inside a fresh manylinux container,
+The Linux JAX wheel job compiles with Bazel inside a fresh rocmless build container,
 so it cannot use the ccache setup that covers TheRock's CMake stages (see
 [CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)). PyTorch
 wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.md#cache-buckets)).
