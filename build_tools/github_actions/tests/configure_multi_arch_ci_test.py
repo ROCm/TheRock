@@ -906,46 +906,34 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.test_rocm.test_type, "quick")
         self.assertIn("CI plumbing", result.test_rocm.test_type_reason)
 
-    def test_external_repo_ci_change_mixed_with_source_is_standard(self):
-        """CI plumbing *plus* project source → standard, not quick.
+    def test_external_repo_source_change_stays_standard(self):
+        """Library source obeys the ruleset, even when mixed with CI plumbing.
 
-        Modeled on ROCm/rocm-libraries@10dc0c5. The shared/ctest edit widens
-        the run to every project, but the hipdnn CMake edit is real source and
-        must keep standard depth, so Priority 4 has to decline and let the
-        submodule rule answer.
+        The mixed case is modeled on ROCm/rocm-libraries@10dc0c5: the
+        shared/ctest edit widens the run to every project, but the hipdnn CMake
+        edit is real source, so Priority 4 must decline and let the submodule
+        rule answer rather than riding that breadth down to quick depth.
         """
-        git = cm.GitContext.from_external_repo(
-            "rocm-libraries",
-            external_changed_files=[
+        for case, files in {
+            "source only": ["projects/rocblas/src/rocblas.cpp"],
+            "source mixed with shared/ctest": [
                 "projects/hipdnn/cmake/Tests.cmake",
                 "shared/ctest/tests/CMakeLists.txt",
             ],
-        )
-        result = cm.decide_jobs(
-            self._inputs(
-                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
-            ),
-            git_context=git,
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.test_type, "standard")
-        self.assertIn("submodule", result.test_rocm.test_type_reason)
-
-    def test_external_repo_source_change_stays_standard(self):
-        """An external repo diff touching library source obeys the ruleset."""
-        git = cm.GitContext.from_external_repo(
-            "rocm-libraries",
-            external_changed_files=["projects/rocblas/src/rocblas.cpp"],
-        )
-        result = cm.decide_jobs(
-            self._inputs(
-                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
-            ),
-            git_context=git,
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.test_type, "standard")
-        self.assertIn("submodule", result.test_rocm.test_type_reason)
+        }.items():
+            with self.subTest(case=case):
+                git = cm.GitContext.from_external_repo(
+                    "rocm-libraries", external_changed_files=files
+                )
+                result = cm.decide_jobs(
+                    self._inputs(
+                        external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+                    ),
+                    git_context=git,
+                    targets=cm.TargetSelection(),
+                )
+                self.assertEqual(result.test_rocm.test_type, "standard")
+                self.assertIn("submodule", result.test_rocm.test_type_reason)
 
     def test_external_repo_ci_change_yields_to_test_filter_label(self):
         """The quick downgrade is still overridable by an explicit label."""

@@ -370,72 +370,48 @@ class TestGetCIWorkflowFilenames(unittest.TestCase):
 
 
 class IsExternalRepoCIOnlyChangeTest(unittest.TestCase):
-    def test_caller_workflow_is_a_ci_only_change(self):
-        self.assertTrue(
-            is_external_repo_ci_only_change(
-                [".github/workflows/therock-multi-arch-ci.yml"]
-            )
-        )
-
-    def test_project_discovery_scripts_are_ci_only_changes(self):
+    def test_diffs_confined_to_ci_plumbing(self):
+        """One path per EXTERNAL_REPO_CI_PATTERNS family, each alone."""
         for path in (
-            ".github/scripts/get_changed_projects.py",
+            ".github/workflows/therock-multi-arch-ci.yml",
             ".github/scripts/therock_ref.py",
+            ".github/scripts/get_changed_projects.py",
             ".github/repos-config.json",
             "shared/ctest/TestCategories.cmake",
         ):
             with self.subTest(path=path):
                 self.assertTrue(is_external_repo_ci_only_change([path]))
 
-    def test_library_source_is_not_a_ci_only_change(self):
-        self.assertFalse(
-            is_external_repo_ci_only_change(["projects/rocblas/src/rocblas.cpp"])
-        )
+    def test_diffs_that_are_not_ci_only(self):
+        """Source, unrelated workflows, and CI-affecting-but-not-CI-only mixes.
 
-    def test_unrelated_workflow_is_not_a_ci_only_change(self):
-        """Only the workflows calling into TheRock count."""
-        self.assertFalse(
-            is_external_repo_ci_only_change([".github/workflows/close-stale-prs.yml"])
-        )
-
-    def test_ci_change_mixed_with_source_is_not_ci_only(self):
-        """CI-affecting is not CI-only: the source edit keeps its own depth."""
-        self.assertFalse(
-            is_external_repo_ci_only_change(
-                [
-                    "projects/rocblas/src/rocblas.cpp",
-                    ".github/workflows/therock-ci.yml",
-                ]
-            )
-        )
-
-    def test_shared_ctest_mixed_with_project_cmake_is_not_ci_only(self):
-        """Regression: shared/ctest plus project sources must not read as CI-only.
-
-        Modeled on ROCm/rocm-libraries@10dc0c5, which edited a project's CMake
-        alongside shared/ctest. Matching shared/ctest/* is not license to drop
-        the hipdnn changes to quick depth.
+        The mixed cases are what the all() quantifier buys: matching one CI
+        pattern is not license to drop a source edit to quick depth. The
+        shared/ctest pair is modeled on ROCm/rocm-libraries@10dc0c5.
         """
-        self.assertFalse(
-            is_external_repo_ci_only_change(
-                [
-                    "projects/hipdnn/cmake/Tests.cmake",
-                    "shared/ctest/tests/CMakeLists.txt",
-                ]
-            )
-        )
+        for case, paths in {
+            "library source": ["projects/rocblas/src/rocblas.cpp"],
+            "workflow not calling TheRock": [".github/workflows/close-stale-prs.yml"],
+            "caller workflow mixed with source": [
+                "projects/rocblas/src/rocblas.cpp",
+                ".github/workflows/therock-ci.yml",
+            ],
+            "shared/ctest mixed with project cmake": [
+                "projects/hipdnn/cmake/Tests.cmake",
+                "shared/ctest/tests/CMakeLists.txt",
+            ],
+        }.items():
+            with self.subTest(case=case):
+                self.assertFalse(is_external_repo_ci_only_change(paths))
 
-    def test_skippable_paths_do_not_defeat_ci_only(self):
-        """Docs riding along with a CI edit are noise, not a source change."""
+    def test_skippable_paths_are_ignored(self):
+        """Docs are noise: they neither defeat nor constitute a CI-only change."""
         self.assertTrue(
             is_external_repo_ci_only_change(
                 [".github/workflows/therock-ci.yml", "README.md"],
                 skip_patterns=["*.md"],
             )
         )
-
-    def test_skippable_paths_alone_are_not_a_ci_only_change(self):
-        """With nothing CI-relevant left, there is no CI change to speak of."""
         self.assertFalse(
             is_external_repo_ci_only_change(["README.md"], skip_patterns=["*.md"])
         )
