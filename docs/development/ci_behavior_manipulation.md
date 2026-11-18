@@ -177,6 +177,9 @@ decided in the setup job (`test_rocm`). Setting it to `false` skips the ROCm
 tests for the whole workflow: no GPU or CPU test runners are configured for any
 family, and builds are unaffected.
 
+`multi_arch_ci.yml` exposes this as a `workflow_dispatch` input of the same name
+(default `true`); set it to `false` for a build-only run.
+
 With the default (`true`):
 
 - The sanitizer nightly-only test gates no longer exist. `asan`, `host-asan` and
