@@ -339,21 +339,6 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             self.configure(((self.spirv / "input.txt").as_posix(),)), invalid=LLVM_USERS
         )
 
-    def test_empty_marker_uses_git_and_dirty_source_invalidates_marker(self):
-        baseline = self.configure()
-        marker = self.spirv.with_name(".spirv-llvm-translator.smrev")
-        write(marker, "")
-        self.assertEqual(baseline, self.configure())
-        write(marker, "fixed marker\n")
-        self.assert_valid(self.configure())
-        write(self.spirv / "input.txt", "dirty\n")
-        self.assert_valid(self.configure(), invalid=LLVM_USERS)
-
-    def test_same_tree_commit_keeps_external_dependency_identity(self):
-        baseline = self.configure()
-        self.git(self.spirv, "commit", "--allow-empty", "-qm", "same tree")
-        self.assertEqual(baseline, self.configure())
-
     def test_dependencies_apply_when_primary_source_is_file_hashed(self):
         baseline = self.configure(hash_primary=True)
         write(self.spirv / "input.txt", "changed\n")

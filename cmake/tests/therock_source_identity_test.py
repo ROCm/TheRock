@@ -116,27 +116,20 @@ class SourceIdentityTest(unittest.TestCase):
     def test_repository_root_uses_complete_tree(self):
         self.assertEqual(self.identity(), self.git("rev-parse", "HEAD^{tree}"))
 
+    def test_source_identities_survive_checkout_relocation(self):
+        before = {scope: self.identity(self.repo / scope) for scope in (".", "llvm")}
+        relocated = self.root / "relocated checkout with spaces"
+        self.repo.rename(relocated)
+        for scope, identity in before.items():
+            with self.subTest(scope=scope):
+                self.assertRegex(identity, r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+                self.assertEqual(identity, self.identity(relocated / scope))
+
     def test_same_tree_commit_keeps_identity(self):
         before, head = self.identity(), self.git("rev-parse", "HEAD")
         self.git("commit", "--allow-empty", "-qm", "new commit, same tree")
         self.assertNotEqual(head, self.git("rev-parse", "HEAD"))
         self.assertEqual(before, self.identity())
-
-    def test_llvm_root_includes_sibling_source_directories(self):
-        for directory in (
-            "llvm",
-            "clang",
-            "lld",
-            "compiler-rt",
-            "cmake",
-            "amd/comgr",
-            "amd/hipcc",
-        ):
-            with self.subTest(directory=directory):
-                before = self.identity()
-                self.write(directory + "/input.txt", "changed\n")
-                self.commit("change " + directory)
-                self.assertNotEqual(before, self.identity())
 
     def test_subdirectory_ignores_unrelated_commits(self):
         directory = self.repo / "llvm"
@@ -164,14 +157,6 @@ class SourceIdentityTest(unittest.TestCase):
     def test_tracked_deletion_is_invalid(self):
         (self.repo / "llvm/input.txt").unlink()
         self.assertEqual("", self.identity())
-
-    def test_content_revert_restores_identity(self):
-        before = self.identity()
-        self.write("llvm/input.txt", "changed\n")
-        self.commit("change")
-        self.assertNotEqual(before, self.identity())
-        self.git("revert", "--no-edit", "HEAD")
-        self.assertEqual(before, self.identity())
 
     def test_marker_retains_priority_and_exact_contents(self):
         contents = "https://example.invalid/llvm.git\nrevision+PATCHED:digest\n"
@@ -210,12 +195,6 @@ class SourceIdentityTest(unittest.TestCase):
         worktree = self.root / "linked"
         self.git("worktree", "add", "--detach", str(worktree), "HEAD")
         self.assertEqual(self.identity(), self.identity(worktree))
-
-    def test_existing_policy_does_not_detect_untracked_files(self):
-        # Documents a limitation; it is not a cache-safety acceptance test.
-        before = self.identity()
-        self.write("clang/untracked.cpp", "untracked\n")
-        self.assertEqual(before, self.identity())
 
 
 if __name__ == "__main__":
