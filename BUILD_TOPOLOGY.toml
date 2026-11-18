@@ -386,33 +386,44 @@ type = "target-neutral"
 artifact_deps = ["sysdeps"]
 feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 
+# expat, gmp, mpfr and ncurses are linked by rocgdb and by nothing else, so
+# they are grouped with it: CI builds them in the debug-tools stage, and
+# THEROCK_ENABLE_DEBUG_TOOLS instead of CORE decides whether they are built by
+# default.  If anything else starts linking one, it belongs with the core
+# sysdeps instead.
 [artifacts.sysdeps-expat]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
-disable_platforms = ["windows"]
+feature_group = "DEBUG_TOOLS"
 
 [artifacts.sysdeps-gmp]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
-disable_platforms = ["windows"]
+feature_group = "DEBUG_TOOLS"
 
 [artifacts.sysdeps-mpfr]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
-feature_group = "CORE"
-disable_platforms = ["windows"]
+feature_group = "DEBUG_TOOLS"
 
 [artifacts.sysdeps-ncurses]
-artifact_group = "third-party-sysdeps"
+artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
-disable_platforms = ["windows"]
+feature_group = "DEBUG_TOOLS"
+
+# Windows-only.  Linux and macOS have iconv in libc, so only Windows needs a
+# bundled libiconv (rocgdb links it statically).  Grouped with the debug tools
+# like expat, gmp, mpfr and ncurses, since rocgdb is its only consumer too.
+[artifacts.sysdeps-libiconv]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "DEBUG_TOOLS"
+disable_platforms = ["linux"]
 
 [artifacts.sysdeps-libmnl]
 artifact_group = "third-party-sysdeps"
@@ -529,7 +540,7 @@ source_paths = ["rocm-core", "rocm-smi-lib", "rocprofiler-register"]
 [artifacts.amd-llvm]
 artifact_group = "compiler"
 type = "target-neutral"
-artifact_deps = ["sysdeps"]
+artifact_deps = ["base", "sysdeps"]  # rocm-cmake is in base
 feature_name = "COMPILER"
 feature_group = "ALL"
 
@@ -907,9 +918,8 @@ disable_platforms = ["windows"]
 [artifacts.rocgdb]
 artifact_group = "debug-tools"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
+artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses", "sysdeps-libiconv"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
-disable_platforms = ["windows"]
 
 # --- ROCm Emulation Tools ---
 

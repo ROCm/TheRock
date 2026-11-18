@@ -64,11 +64,10 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     message(WARNING "Configuring amd-dbgapi with modified source directory: ${THEROCK_AMD_DBGAPI_SOURCE_DIR}")
   endif()
 
-  # Build a static library on Windows until there is ABI stability.
-  set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS)
-  if(WIN32)
-    set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
-  endif()
+  # amd-dbgapi is a shared library on Windows too: rocgdb is built by the
+  # ucrt64 gcc, which cannot link an MSVC-built static amd-dbgapi, whose C++
+  # pulls in the MSVC C++ runtime.  The DLL's name carries its version
+  # (rocm-dbgapi-0-84.dll and so on), so a mismatched rocgdb fails to start.
 
   # Only build and link against GoogleTest when tests are requested, so
   # the dependency isn't pulled in for non-testing configurations.
@@ -86,7 +85,6 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
       "-DENABLE_TESTS=${THEROCK_BUILD_TESTING}"
-      ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
       ${EXTRA_AMD_DBGAPI_BUILD_DEPS}
@@ -263,17 +261,64 @@ if(THEROCK_ENABLE_ROCGDB)
   ##############################################################################
   # rocgdb
   #
-  # The AMD source-level debugger for Linux, based on the GNU Debugger (GDB).
+  # The AMD source-level debugger, based on the GNU Debugger (GDB).
   ##############################################################################
-  therock_detect_shared_python_executables(_rocgdb_python_executables)
-  if(_rocgdb_python_executables)
-    message(STATUS "Building rocgdb against the following libpython versions: ${_rocgdb_python_executables}")
-    # Escape semicolons so the list survives a call to
-    # therock_cmake_subproject_declare and also add_custom_command
-    # expansion in CMAKE_ARGS.
-    string(REPLACE ";" "\\\$<SEMICOLON>" _rocgdb_python_executables_escaped "${_rocgdb_python_executables}")
+  if(WIN32)
+    # rocgdb links the bundled sysdeps, and Windows has no system ones to fall
+    # back on.  Checked here, when the super-project configures, instead of in
+    # rocgdb's own configure, which runs only once the build reaches rocgdb.
+    if(NOT THEROCK_BUNDLE_SYSDEPS)
+      message(FATAL_ERROR
+        "rocgdb on Windows requires THEROCK_BUNDLE_SYSDEPS=ON: it links the "
+        "bundled sysdeps, and there are no system ones to fall back on.")
+    endif()
+
+    # rocgdb's build needs its sources with the LF line endings they are stored
+    # with.  Git for Windows defaults to core.autocrlf=true, which checks text
+    # files out with CRLF, and the build then fails late, deep inside rocgdb's
+    # make: makeinfo, for one, reads an "@" at the end of a line of the manual
+    # as a line continuation, and rejects "@\r" with "unexpected @".  The rest of
+    # TheRock builds from such a checkout, so only rocgdb's is checked.  Any file
+    # stored with LF shows how the checkout was made, and the manual's main file
+    # is one rocgdb always has.
+    set(_rocgdb_probe "${THEROCK_ROCGDB_SOURCE_DIR}/gdb/doc/gdb.texinfo")
+    if(EXISTS "${_rocgdb_probe}")
+      # As hex, because file(READ) on Windows turns CRLF into LF.  The match is
+      # anchored to whole bytes, as "0d0a" could otherwise straddle two of them.
+      file(READ "${_rocgdb_probe}" _rocgdb_probe_head LIMIT 4096 HEX)
+      if(_rocgdb_probe_head MATCHES "^(..)*0d0a")
+        message(FATAL_ERROR
+          "rocgdb's source checkout, ${THEROCK_ROCGDB_SOURCE_DIR}, has CRLF "
+          "line endings, as ${_rocgdb_probe} shows, and rocgdb does not build "
+          "from such a checkout.  Check it out again with LF line endings, "
+          "which discards any local changes in it:\n"
+          "  git -C \"${THEROCK_ROCGDB_SOURCE_DIR}\" config core.autocrlf false\n"
+          "  git -C \"${THEROCK_ROCGDB_SOURCE_DIR}\" rm --cached -r -q .\n"
+          "  git -C \"${THEROCK_ROCGDB_SOURCE_DIR}\" reset --hard")
+      endif()
+    endif()
+
+    # Windows builds the no-python variant only, for now.  Every variant
+    # installs as bin/rocgdb.exe there, with no chooser script to pick between
+    # them, so a python variant would overwrite it.  Do not look for python at
+    # all, instead of depending on whether the host's python reports a shared
+    # libpython.
+    if(THEROCK_SHARED_PYTHON_EXECUTABLES)
+      message(STATUS "rocgdb is built without Python on Windows, ignoring "
+        "THEROCK_SHARED_PYTHON_EXECUTABLES")
+    endif()
+    message(STATUS "Building rocgdb without Python support")
   else()
-    message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
+    therock_detect_shared_python_executables(_rocgdb_python_executables)
+    if(_rocgdb_python_executables)
+      message(STATUS "Building rocgdb against the following libpython versions: ${_rocgdb_python_executables}")
+      # Escape semicolons so the list survives a call to
+      # therock_cmake_subproject_declare and also add_custom_command
+      # expansion in CMAKE_ARGS.
+      string(REPLACE ";" "\\\$<SEMICOLON>" _rocgdb_python_executables_escaped "${_rocgdb_python_executables}")
+    else()
+      message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
+    endif()
   endif()
 
   if(THEROCK_USE_EXTERNAL_ROCGDB AND THEROCK_ROCGDB_SOURCE_DIR)
@@ -301,10 +346,30 @@ if(THEROCK_ENABLE_ROCGDB)
     "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
     OFF)
 
+  # Which compiler builds rocgdb differs by host.  On Linux it is the
+  # TheRock-built amd-llvm.  On Windows gdb has never been ported to the
+  # windows-msvc target, so it needs a compiler targeting mingw, and TheRock's
+  # amd-llvm targets the MSVC ABI.  host-gnu names the MSYS2 ucrt64 gcc instead.
+  # Declaring it also gets the gcc-form -L for the bundled sysdeps, and leaves
+  # the compile flags to the recipe.
+  #
+  # Naming amd-llvm on Windows would declare that its clang compiles rocgdb,
+  # which it does not.  That choice does not change what gets built first:
+  # amd-comgr below is part of amd-llvm, so it is built ahead of rocgdb either
+  # way -- as an artifact rocgdb links against, not as the compiler that builds
+  # it.
+  set(_rocgdb_toolchain amd-llvm)
+  if(WIN32)
+    set(_rocgdb_toolchain host-gnu)
+  endif()
+  therock_autotools_subproject_args(rocgdb _autotools_args)
+
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "rocgdb"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocgdb"
+    ${_autotools_args}
+    COMPILER_TOOLCHAIN ${_rocgdb_toolchain}
     CMAKE_ARGS
       "-DPATCHELF=${PATCHELF}"
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
@@ -314,8 +379,6 @@ if(THEROCK_ENABLE_ROCGDB)
       "-DROCGDB_SOURCE_DIR=${THEROCK_ROCGDB_SOURCE_DIR}"
       "-DROCGDB_UPSTREAM_BUILD=${THEROCK_ROCGDB_UPSTREAM_BUILD}"
       "-DROCGDB_DOWNLOAD_CI_SCRIPT=${THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT}"
-    COMPILER_TOOLCHAIN
-      amd-llvm
     RUNTIME_DEPS
       amd-comgr
       amd-dbgapi
@@ -325,6 +388,7 @@ if(THEROCK_ENABLE_ROCGDB)
       ${THEROCK_BUNDLED_EXPAT}
       ${THEROCK_BUNDLED_NCURSES}
       ${THEROCK_BUNDLED_LIBLZMA}
+      ${THEROCK_BUNDLED_LIBICONV}
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_PROGRAM_DIRS
@@ -364,6 +428,7 @@ if(THEROCK_ENABLE_ROCGDB)
       ${THEROCK_BUNDLED_MPFR}
       ${THEROCK_BUNDLED_NCURSES}
       ${THEROCK_BUNDLED_LIBLZMA}
+      ${THEROCK_BUNDLED_LIBICONV}
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
       rocgdb

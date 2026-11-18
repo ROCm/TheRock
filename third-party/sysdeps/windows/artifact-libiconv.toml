@@ -1,0 +1,9 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/bin/**",
+  "lib/rocm_sysdeps/share/**",
+]
+
+# libiconv (static: the .a and headers, no runtime DLL)
+[components.lib."third-party/sysdeps/windows/libiconv/build/stage"]
+[components.dev."third-party/sysdeps/windows/libiconv/build/stage"]

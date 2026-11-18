@@ -11,7 +11,7 @@ import sys
 repo_root = Path(__file__).resolve().parents[4]
 build_tools_path = repo_root / "build_tools"
 sys.path.insert(0, str(build_tools_path))
-from patch_linux_so import relativize_pc_file
+from relativize_pc_files import relativize_pc_files
 
 
 def rename_pc_files(pc_file: Path) -> None:
@@ -38,7 +38,9 @@ def rename_pc_files(pc_file: Path) -> None:
 
 def symlink_or_copy(existing_path, new_link):
     """Create symlink if the destination filesystem supports it. Create a copy otherwise.
-    Exists to support Windows, where only modern systems might support symlinks.
+    Always a copy on Windows: creating a symlink there takes a privilege
+    (administrator, or Developer Mode) that not every machine grants, so an
+    artifact holding one would not extract the same everywhere.
     """
     existing_path = Path(existing_path)
     new_link = Path(new_link)
@@ -50,12 +52,13 @@ def symlink_or_copy(existing_path, new_link):
         else:
             new_link.unlink()
 
-    try:
-        rel_target = os.path.relpath(existing_path, start=new_link.parent)
-        new_link.symlink_to(rel_target, target_is_directory=existing_path.is_dir())
-        return
-    except OSError:
-        pass
+    if platform.system() != "Windows":
+        try:
+            rel_target = os.path.relpath(existing_path, start=new_link.parent)
+            new_link.symlink_to(rel_target, target_is_directory=existing_path.is_dir())
+            return
+        except OSError:
+            pass
 
     if existing_path.is_dir():
         shutil.copytree(existing_path, new_link)
@@ -162,9 +165,6 @@ if len(sys.argv) < 2:
 # 1st argument is the installation prefix.
 install_prefix = Path(sys.argv[1])
 
-# Required environment variables.
-patchelf_exe = get_env_or_exit("PATCHELF")
-
 # Make headers available under <ncursesw/> e.g.
 # `<ncurses.h>` and `<ncursesw/ncurses.h>`
 # This follows Ubuntu and Fedora packaging
@@ -173,6 +173,9 @@ ncursesw_dir = include_dir / "ncursesw"
 link_header_files_under_dir(include_dir, ncursesw_dir)
 
 if platform.system() == "Linux":
+    # Required environment variables.
+    patchelf_exe = get_env_or_exit("PATCHELF")
+
     # Specify the directory
     lib_dir = Path(install_prefix) / "lib"
 
@@ -186,12 +189,11 @@ if platform.system() == "Linux":
         update_library_links(so_file)
 
     # Fix .pc files to use relocatable paths.
-    pkgconfig_dir = lib_dir / "pkgconfig"
-    if pkgconfig_dir.exists():
-        for pc_file in pkgconfig_dir.glob("*.pc"):
-            relativize_pc_file(pc_file)
-            rename_pc_files(pc_file)
+    for pc_file in relativize_pc_files(install_prefix):
+        rename_pc_files(pc_file)
 
 elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
+    # The libraries are static, built under their usual names (no
+    # rocm_sysdeps_ prefix, which only shared libraries need), so only the .pc
+    # files need fixing.
+    relativize_pc_files(install_prefix)

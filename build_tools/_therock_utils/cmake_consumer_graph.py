@@ -84,6 +84,8 @@ _DECLARATION_ONE_VALUE_ARGS = {
     "DIR_PREFIX",
     "INSTALL_DESTINATION",
     "COMPILER_TOOLCHAIN",
+    "EXTERNAL_C_COMPILER",
+    "EXTERNAL_CXX_COMPILER",
     "INTERFACE_PROGRAM_DIRS",
     "CMAKE_LISTS_RELPATH",
     "INTERFACE_PKG_CONFIG_DIRS",
@@ -112,10 +114,13 @@ _DECLARATION_KEYWORDS = (
 )
 
 # TODO: mirrors CMake's therock_compiler_toolchain_subproject() (the CMake-side
-# source); share one definition via a data file if a third toolchain is added.
+# source); share one definition via a data file if another toolchain is added.
+# A toolchain mapped to None is installed on the host instead of built by
+# TheRock, so it implies no dependency.
 _TOOLCHAIN_SUBPROJECTS = {
     "amd-hip": "hip-clr",
     "amd-llvm": "amd-llvm",
+    "host-gnu": None,
 }
 
 
@@ -151,13 +156,14 @@ class Subproject:
         """Return the explicit (build/runtime) and implicit (toolchain) dependencies."""
         result = self.build_deps | self.runtime_deps
         for toolchain in self.compiler_toolchains:
-            toolchain_subproject = _TOOLCHAIN_SUBPROJECTS.get(toolchain)
-            if toolchain_subproject is None:
+            if toolchain not in _TOOLCHAIN_SUBPROJECTS:
                 raise AnalysisError(
                     f"Unsupported COMPILER_TOOLCHAIN value {toolchain!r} "
                     f"on subproject {self.name!r}"
                 )
-            result.add(toolchain_subproject)
+            toolchain_subproject = _TOOLCHAIN_SUBPROJECTS[toolchain]
+            if toolchain_subproject is not None:
+                result.add(toolchain_subproject)
         return result
 
 

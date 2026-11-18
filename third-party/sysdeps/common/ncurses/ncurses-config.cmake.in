@@ -7,11 +7,26 @@ if(_IMPORT_PREFIX STREQUAL "/")
 endif()
 
 if(NOT TARGET ncurses::ncurses)
-  add_library(ncurses::ncurses SHARED IMPORTED)
+  # The Windows build is static.
+  if(WIN32)
+    add_library(ncurses::ncurses STATIC IMPORTED)
+    set(_IMPORT_LIBRARY "${_IMPORT_PREFIX}/lib/libncursesw.a")
+  else()
+    add_library(ncurses::ncurses SHARED IMPORTED)
+    set(_IMPORT_LIBRARY "${_IMPORT_PREFIX}/lib/libncursesw.so")
+  endif()
   set_target_properties(ncurses::ncurses PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libncursesw.so"
+    IMPORTED_LOCATION "${_IMPORT_LIBRARY}"
   )
+  if(WIN32)
+    # Without it, ncurses_dll.h declares every symbol dllimport on mingw, and
+    # linking the static library fails on unresolved __imp_ symbols.
+    set_target_properties(ncurses::ncurses PROPERTIES
+      INTERFACE_COMPILE_DEFINITIONS NCURSES_STATIC
+    )
+  endif()
 endif()
 
 set(_IMPORT_PREFIX)
+set(_IMPORT_LIBRARY)

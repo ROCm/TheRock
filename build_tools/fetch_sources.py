@@ -332,6 +332,57 @@ def _update_submodules_with_reference(
         )
 
 
+# Submodules whose build fails when they are checked out with CRLF line endings,
+# which Git for Windows' default core.autocrlf=true does, each with a file that
+# is stored with LF, so that its line endings show how the checkout was made.
+# rocgdb's manual, for one, uses "@" at the end of a line as a line continuation,
+# which makeinfo rejects when a CR follows it.
+LF_CHECKOUT_SUBMODULES = {
+    "debug-tools/rocgdb/source": "gdb/doc/gdb.texinfo",
+}
+
+
+def ensure_lf_checkout(repo: Path, probe: str) -> None:
+    """Make the git checkout at REPO keep the LF line endings its files are
+    stored with.
+
+    Sets core.autocrlf=false in REPO's own config, so that later checkouts keep
+    LF whatever the user's config says.  If PROBE, a file stored with LF, has
+    CRLF line endings in the checkout, checks all of REPO out again, provided
+    that it has no local changes, and otherwise only warns.  Does nothing if
+    REPO is not checked out."""
+    probe_path = repo / probe
+    if not (repo / ".git").exists() or not probe_path.exists():
+        return
+    crlf = b"\r\n" in probe_path.read_bytes()
+    if crlf:
+        # Under the config the checkout was made with, so that its CRLF files
+        # don't all look modified.
+        changes = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=repo,
+            text=True,
+        )
+        if changes:
+            log(
+                f"WARNING: {repo} has CRLF line endings, which its build does "
+                "not support, but also local changes, so it is left alone.  "
+                "To check it out again with LF line endings, discarding those "
+                "changes, run there:\n"
+                "  git config core.autocrlf false\n"
+                "  git rm --cached -r -q .\n"
+                "  git reset --hard"
+            )
+            return
+    run_command(["git", "config", "core.autocrlf", "false"], cwd=repo)
+    if crlf:
+        log(f"{repo} has CRLF line endings, checking it out again with LF")
+        # Emptying the index makes reset check every file out again, instead of
+        # only those whose timestamps changed.
+        run_command(["git", "rm", "--cached", "-r", "-q", "."], cwd=repo)
+        run_command(["git", "reset", "--hard", "-q"], cwd=repo)
+
+
 def get_projects_from_topology(stage: str) -> List[str]:
     """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
     if not TOPOLOGY_PATH.exists():
@@ -658,6 +709,11 @@ def run(args):
                     + submodule_paths,
                     cwd=THEROCK_DIR,
                 )
+            # Only on Windows, where Git defaults to CRLF checkouts.
+            if is_windows():
+                for path, probe in LF_CHECKOUT_SUBMODULES.items():
+                    if path in submodule_paths:
+                        ensure_lf_checkout(THEROCK_DIR / path, probe)
         fetch_external_git_sources(args, external_sources)
         if external_name in projects:
             source_dir = THEROCK_DIR / external_config["submodule_path"]
@@ -1072,14 +1128,9 @@ def main(argv):
         "--debug-tools",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "rocgdb",
-            ]
-        ),
+        default=[
+            "rocgdb",
+        ],
     )
     parser.add_argument(
         "--math-library-projects",

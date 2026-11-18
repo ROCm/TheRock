@@ -70,6 +70,22 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
   endif()
 
+  # Link zstd statically on Windows.  LLVM picks the shared zstd whenever a
+  # zstd::libzstd_shared target merely exists (llvm/lib/Support/CMakeLists.txt
+  # and lld/ELF/CMakeLists.txt both test for it), and the Windows zstd sysdep
+  # exports one alongside the static library.  Without this, clang.exe and
+  # lld.exe import rocm_sysdeps_zstd.dll, which does not sit beside them in the
+  # build tree -- so they build fine and then fail to start, with no diagnostic,
+  # as soon as the build runs its own compiler.
+  #
+  # Only on Windows, and only for the bundled zstd: Linux builds zstd
+  # shared-only, so there is no static target there, and neither need a system
+  # zstd have one.  Asking for a static target that does not exist makes
+  # config-ix.cmake quietly turn LLVM_ENABLE_ZSTD off instead of failing.
+  if(WIN32 AND THEROCK_BUNDLED_ZSTD)
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_USE_STATIC_ZSTD=ON")
+  endif()
+
   # Building Flang is very memory-intensive on systems with many cores. Allow
   # users to specify the level of concurrency for these tasks so they can
   # reduce the risk of running out of memory.

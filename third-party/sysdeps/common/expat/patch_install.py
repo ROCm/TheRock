@@ -11,7 +11,8 @@ import sys
 repo_root = Path(__file__).resolve().parents[4]
 build_tools_path = repo_root / "build_tools"
 sys.path.insert(0, str(build_tools_path))
-from patch_linux_so import update_library_links, relativize_pc_file
+from patch_linux_so import update_library_links
+from relativize_pc_files import relativize_pc_files
 
 
 # Fetch an environment variable or exit if it is not found.
@@ -32,9 +33,9 @@ if not prefix:
 # 1st argument is the installation prefix.
 install_prefix = sys.argv[1]
 
-patchelf_exe = get_env_or_exit("PATCHELF")
-
 if platform.system() == "Linux":
+    patchelf_exe = get_env_or_exit("PATCHELF")
+
     # Specify the directory containing the libraries.
     lib_dir = Path(install_prefix) / "lib"
 
@@ -47,11 +48,12 @@ if platform.system() == "Linux":
     source = lib_dir / "librocm_sysdeps_expat.so"
     update_library_links(source, "libexpat.so")
     # Fix .pc files to use relocatable paths.
-    pkgconfig_dir = lib_dir / "pkgconfig"
-    if pkgconfig_dir.exists():
-        for pc_file in pkgconfig_dir.glob("*.pc"):
-            relativize_pc_file(pc_file)
+    relativize_pc_files(install_prefix)
 
 elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
+    # The library is static and keeps its name.  Its libtool descriptor (*.la)
+    # holds the build tree's absolute paths and nothing that ships needs it, so
+    # remove it as Linux does, and fix the .pc file.
+    for file_path in (Path(install_prefix) / "lib").glob("*.la"):
+        file_path.unlink()
+    relativize_pc_files(install_prefix)
