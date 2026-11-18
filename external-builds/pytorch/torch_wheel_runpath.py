@@ -155,7 +155,7 @@ def extract_wheel(wheel: Path, dest: Path) -> Path:
             extracted = Path(zf.extract(info, root))
             mode = info.external_attr >> 16
             if mode and not info.is_dir():
-                extracted.chmod(mode & 0o7777)
+                extracted.chmod(mode & 0o777)
     return root
 
 
