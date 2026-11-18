@@ -886,6 +886,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         for key, value in self._saved_env.items():
             os.environ[key] = value
 
+    @unittest.skip("Temporarily disabled pending fix for ROCm/TheRock#9790")
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_workflow_run_by_id(self):
         """Test querying a workflow run by its ID."""

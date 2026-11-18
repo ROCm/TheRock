@@ -23,8 +23,6 @@ if(THEROCK_ENABLE_RPP)
     CMAKE_ARGS
       -DROCM_PATH=
       -DBACKEND=HIP
-      # TODO: bundle FFTS as a sysdep to enable audio augmentations.
-      -DRPP_AUDIO_SUPPORT=OFF
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
