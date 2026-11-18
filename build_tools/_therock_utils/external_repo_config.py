@@ -45,12 +45,18 @@ This module parses both shapes:
 
 Repository-to-path resolution happens during CI setup; consumers decide how to
 use the parsed configuration.
+
+Separately, load_repos_config()/subtree_prefixes() parse the calling repo's own
+repos-config.json, the registry of subtrees it syncs from upstream repositories.
+Those prefixes are what a diff is attributed to when scoping a run to projects;
+see configure_ci_path_filters.determine_changed_projects().
 """
 
 import json
 import logging
 import typing
 from dataclasses import dataclass, fields
+from pathlib import Path
 
 
 @dataclass
@@ -187,3 +193,50 @@ def parse_and_validate_external_repo_config(raw: str | None) -> dict | None:
                 f"EXTERNAL_REPO_CONFIG '{field}' must be a non-empty string"
             )
     return config
+
+
+# Path of the subtree registry within a calling repository.
+REPOS_CONFIG_PATH = ".github/repos-config.json"
+
+
+@dataclass
+class RepoEntry:
+    """One upstream repository subtree-synced into a calling monorepo."""
+
+    name: str
+    url: str
+    branch: str
+    category: str
+    auto_subtree_pull: bool = False
+    auto_subtree_push: bool = False
+    monorepo_source_of_truth: bool = False
+
+
+def load_repos_config(config_path: str | Path) -> list[RepoEntry]:
+    """Parse a calling repo's repos-config.json into RepoEntry records.
+
+    Returns an empty list when the file is missing or unreadable, which callers
+    must treat as "no subtrees known" rather than "no subtrees changed".
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logger.warning("repos-config.json not found: %s", config_path)
+        return []
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error("Failed to load %s: %s", config_path, e)
+        return []
+
+    # Unknown keys are dropped so a newer config schema stays loadable here.
+    known_fields = {f.name for f in fields(RepoEntry)}
+    return [
+        RepoEntry(**{k: v for k, v in entry.items() if k in known_fields})
+        for entry in data.get("repositories", [])
+    ]
+
+
+def subtree_prefixes(entries: list[RepoEntry]) -> set[str]:
+    """Directory prefixes the configured subtrees occupy, e.g. projects/rocblas."""
+    return {f"{entry.category}/{entry.name}" for entry in entries}

@@ -9,6 +9,7 @@ This module provides utilities to:
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
 - Identify diffs confined to an external repo's TheRock CI plumbing
+- Attribute an external repo's diff to the projects it changed
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -22,6 +23,7 @@ Public API:
     is_ci_run_required() - Check if CI run is required based on modified paths
     get_jobs_for_changes() - Identify job groups directly affected by changed paths
     is_external_repo_ci_only_change() - Check if an external repo diff is confined to TheRock CI plumbing
+    determine_changed_projects() - Scope an external repo run to the projects its diff changed
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -205,7 +207,7 @@ def _get_job_paths() -> dict[str, list[str]]:
 
 
 # Default path where external repo config is checked out in setup_multi_arch.yml
-_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
 
 def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | None:
@@ -231,7 +233,7 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
         could be loaded.
     """
     # The external repo config is checked out to external-repo-config/
-    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
+    full_path = Path(EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
         print(f"  Skip CI config not found: {full_path}")
         # Still load base patterns even if extension config is missing
@@ -719,7 +721,7 @@ def get_changed_files_for_external_repo(
         return changed_files
 
     # Fallback to git diff if SHAs not provided (legacy path)
-    external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+    external_repo_path = Path(EXTERNAL_REPO_CONFIG_DIR)
     base_ref = external_repo.get("base_ref")
     if external_repo_path.exists() and external_repo_path.is_dir():
         if not base_ref:
@@ -744,10 +746,10 @@ def get_changed_files_for_external_repo(
 # calls into TheRock, how a diff is attributed to projects, how CTest
 # categorizes tests -- rather than changing any library source.
 #
-# A change here can alter test selection for every project at once, so the run
-# cannot be narrowed to a subset of projects and instead covers all of them.
-# That breadth is decided separately, by the calling repo's
-# configure_external_repo_ci.py; these patterns only drive test *depth*.
+# A change here can alter test selection for every project at once, so it
+# cannot be attributed to a subset of them. Both external repo decisions read
+# these patterns: test *depth* via is_external_repo_ci_only_change(), and test
+# *breadth* via determine_changed_projects().
 EXTERNAL_REPO_CI_PATTERNS = [
     # Workflows in the calling repo that invoke TheRock's reusable workflows.
     ".github/workflows/therock*",
@@ -804,3 +806,86 @@ def is_external_repo_ci_only_change(
         any(fnmatch.fnmatch(path, pattern) for pattern in EXTERNAL_REPO_CI_PATTERNS)
         for path in relevant_paths
     )
+
+
+# ============================================================================
+# External repo project scoping
+# ============================================================================
+
+
+def find_matched_subtrees(paths: Iterable[str], prefixes: set[str]) -> list[str]:
+    """Attribute each path to the longest registered prefix containing it.
+
+    Longest-prefix-first, rather than a fixed 2-segment truncation, so a nested
+    subtree in repos-config.json (`hipblaslt/tensilelite`) stays distinct from
+    its parent (`hipblaslt`) instead of both collapsing to the same prefix.
+    """
+    # Longest prefixes first, so a nested subtree wins over its parent.
+    by_specificity = sorted(prefixes, key=lambda p: p.count("/"), reverse=True)
+    matched: set[str] = set()
+    for path in paths:
+        segments = path.split("/")
+        for prefix in by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
+
+
+def determine_changed_projects(
+    changed_files: Optional[Iterable[str]],
+    subtree_prefixes: set[str],
+    skip_patterns: Optional[list[str]] = None,
+) -> list[str]:
+    """Projects an external repo's diff changed, scoping which tests run.
+
+    Decides test *breadth*, the companion to is_external_repo_ci_only_change()'s
+    *depth*; both read the same diff and skip patterns, so they agree on which
+    paths are docs-only noise. subtree_prefixes comes from the caller's
+    repos-config.json via external_repo_config.subtree_prefixes().
+
+    Returns the prefixes to scope the run to. Empty means the diff could not be
+    narrowed safely, which downstream means "test every project".
+    """
+    if not changed_files:
+        print("  Project scope: no diff available, testing every project")
+        return []
+
+    relevant_paths = [
+        path
+        for path in changed_files
+        if not _is_path_unrelated_to_ci(path, skip_patterns or [], set())
+    ]
+    if not relevant_paths:
+        print("  Project scope: no CI-relevant paths changed")
+        return []
+
+    # CI plumbing configures how every project builds and tests, so a change
+    # there belongs to no single project.
+    if any(
+        fnmatch.fnmatch(path, pattern)
+        for path in relevant_paths
+        for pattern in EXTERNAL_REPO_CI_PATTERNS
+    ):
+        print("  Project scope: CI plumbing changed, testing every project")
+        return []
+
+    if not subtree_prefixes:
+        print("  Project scope: no configured subtrees, testing every project")
+        return []
+
+    # find_matched_subtrees() silently drops paths it cannot attribute, so
+    # narrowing on the rest would miss their impact. Run everything instead.
+    unclassified = [
+        path
+        for path in relevant_paths
+        if "/".join(path.split("/", 2)[:2]) not in subtree_prefixes
+    ]
+    if unclassified:
+        print(f"  Project scope: unclassified {sorted(unclassified)[:5]}, testing all")
+        return []
+
+    matched = find_matched_subtrees(relevant_paths, subtree_prefixes)
+    print(f"  Project scope: {matched}")
+    return matched

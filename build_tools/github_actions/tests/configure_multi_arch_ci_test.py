@@ -4420,5 +4420,80 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         self.assertIn("test-runs-on-multi-gpu-labels", entry)
 
 
+class TestResolveChangedProjects(unittest.TestCase):
+    """Project scope derived here, from the caller's diff and repos-config.json."""
+
+    EXTERNAL_REPO = '{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+
+    def _resolve(self, *, external_changed_files=None, **input_overrides):
+        """Resolve a scope with repos-config.json staged where setup checks it out."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="release",
+            **input_overrides,
+        )
+        git_context = cm.GitContext.from_external_repo(
+            "rocm-libraries", external_changed_files=external_changed_files
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config = (
+                Path(directory) / cm.EXTERNAL_REPO_CONFIG_DIR / cm.REPOS_CONFIG_PATH
+            )
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                json.dumps(
+                    {
+                        "repositories": [
+                            {
+                                "category": "projects",
+                                "name": name,
+                                "url": f"ROCm/{name}",
+                                "branch": "develop",
+                            }
+                            for name in ("rocblas", "hipblas")
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cwd = os.getcwd()
+            os.chdir(directory)
+            try:
+                return cm.resolve_changed_projects(inputs, git_context, ["*.md"])
+            finally:
+                os.chdir(cwd)
+
+    def test_diff_is_scoped_via_the_checked_out_repos_config(self):
+        """Scoping rules live in determine_changed_projects; this pins the wiring."""
+        self.assertEqual(
+            self._resolve(
+                external_repo=self.EXTERNAL_REPO,
+                external_changed_files=["projects/rocblas/src/rocblas.cpp"],
+            ),
+            ["projects/rocblas"],
+        )
+
+    def test_explicit_input_wins_over_the_derived_scope(self):
+        """TheRock runs have no caller diff, and a caller can still pin the scope."""
+        for case, overrides in {
+            "external repo passing changed_projects": dict(
+                external_repo=self.EXTERNAL_REPO,
+                changed_projects=["projects/hipblas"],
+            ),
+            "TheRock run": dict(changed_projects=["projects/hipblas"]),
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(
+                    self._resolve(
+                        external_changed_files=["projects/rocblas/src/rocblas.cpp"],
+                        **overrides,
+                    ),
+                    ["projects/hipblas"],
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

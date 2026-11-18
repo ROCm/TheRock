@@ -50,6 +50,7 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    changed_projects      : Comma-separated project scope, or "" for every project
 """
 
 import enum
@@ -66,7 +67,12 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.build_topology import get_topology
-from _therock_utils.external_repo_config import parse_external_repo
+from _therock_utils.external_repo_config import (
+    REPOS_CONFIG_PATH,
+    load_repos_config,
+    parse_external_repo,
+    subtree_prefixes,
+)
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
@@ -78,6 +84,8 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    EXTERNAL_REPO_CONFIG_DIR,
+    determine_changed_projects,
     get_changed_files_for_external_repo,
     get_jobs_for_changes,
     get_git_commit_hash,
@@ -936,6 +944,9 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Project paths this run is scoped to, for external repo runs. Empty means
+    # downstream test selection covers every project.
+    changed_projects: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -951,8 +962,9 @@ class CIOutputs:
 def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     """Skip-CI patterns from the calling repo's TOML config, if any.
 
-    Resolved once per run and shared by skip-CI evaluation and test-depth
-    selection, both of which must agree on which paths are docs-only noise.
+    Resolved once per run and shared by skip-CI evaluation, test-depth selection
+    and project scoping, all of which must agree on which paths are docs-only
+    noise.
     """
     if not ci_inputs.external_repo:
         return None
@@ -960,6 +972,31 @@ def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     if not skip_ci_config:
         return None
     return load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+
+def resolve_changed_projects(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    external_skip_patterns: list[str] | None,
+) -> list[str]:
+    """Project scope for this run, derived from the calling repo's diff.
+
+    External repos used to compute this themselves and pass it in. Deriving it
+    here instead keeps breadth and depth decisions on the same diff and the same
+    skip-CI patterns, both already resolved for this run. An explicitly supplied
+    changed_projects input still wins, so a caller can pin the scope.
+    """
+    if not ci_inputs.external_repo or ci_inputs.changed_projects:
+        return ci_inputs.changed_projects
+
+    # setup_multi_arch.yml sparse-checks out the caller's .github directory,
+    # which carries its subtree registry alongside the skip-CI config.
+    prefixes = subtree_prefixes(
+        load_repos_config(Path(EXTERNAL_REPO_CONFIG_DIR) / REPOS_CONFIG_PATH)
+    )
+    return determine_changed_projects(
+        git_context.external_changed_files, prefixes, external_skip_patterns
+    )
 
 
 def should_skip_ci(
@@ -1476,9 +1513,9 @@ def _determine_test_type(
     # library source is not eligible: it falls through to Priority 5 and keeps
     # "standard" depth, because the source change still needs real testing.
     # (Such a diff does widen the run to every project, since the CI edit
-    # cannot be attributed to a subset -- but that breadth is decided by the
-    # calling repo's configure_external_repo_ci.py, and widening breadth is
-    # not a reason to shrink depth.)
+    # cannot be attributed to a subset -- but that breadth is decided by
+    # determine_changed_projects(), and widening breadth is not a reason to
+    # shrink depth.)
     #
     # This check must precede the submodule check below because
     # from_external_repo() synthesizes changed_files=[repo_name] and
@@ -2467,6 +2504,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "changed_projects": ",".join(outputs.changed_projects),
     }
     gha_set_output(output_vars)
 
@@ -2516,6 +2554,14 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
+    print("\n=== Scoping the run to changed projects ===")
+    ci_inputs = replace(
+        ci_inputs,
+        changed_projects=resolve_changed_projects(
+            ci_inputs, git_context, external_skip_patterns
+        ),
+    )
+
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
@@ -2546,6 +2592,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        changed_projects=ci_inputs.changed_projects,
     )
 
 
