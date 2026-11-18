@@ -7,7 +7,7 @@
 import unittest
 from pathlib import Path
 
-from utils import (
+from therock_fingerprint_test_utils import (
     FingerprintTestCase,
     ProjectFingerprints,
     cmake_project_setup,

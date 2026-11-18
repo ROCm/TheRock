@@ -8,7 +8,7 @@ import re
 import unittest
 from pathlib import Path
 
-from utils import THEROCK_ROOT, FingerprintTestCase
+from therock_fingerprint_test_utils import THEROCK_ROOT, FingerprintTestCase
 
 
 class SourceIdentityTest(FingerprintTestCase):
