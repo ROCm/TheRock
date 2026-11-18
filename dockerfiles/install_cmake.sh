@@ -18,6 +18,12 @@ case "${CMAKE_VERSION}:${ARCH}" in
     3.27.9:aarch64)
         CMAKE_SHA256="f6628eee0dc3ca849e662bdfe9b7ca52324ad41e2acd87462e0d782fba5cc5d9"
         ;;
+    3.31.12:x86_64)
+        CMAKE_SHA256="04c85c742484a490ee9deabab70c0af61b2592f99f768e87743f078366c1bbe2"
+        ;;
+    3.31.12:aarch64)
+        CMAKE_SHA256="846017cab38b185fd5050e1c09e081d71e92e517898521dd5b5483c987720074"
+        ;;
     *)
         echo "Unsupported CMake version/architecture: ${CMAKE_VERSION}/${ARCH}" >&2
         exit 1

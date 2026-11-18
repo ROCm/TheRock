@@ -164,7 +164,9 @@ therock_cmake_subproject_declare(hipBLASLt
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
-    -DTENSILELITE_BUILD_TESTING=OFF
+    # TensileLite's C++ gtest suite (tests/) is Linux-only for now (unvalidated
+    # on Windows); mirrors the TENSILELITE_ENABLE_CLIENT guard below.
+    -DTENSILELITE_BUILD_TESTING=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
     -DTENSILELITE_ENABLE_CLIENT=$<IF:$<BOOL:${WIN32}>,OFF,${THEROCK_BUILD_TESTING}>
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS=${THEROCK_BUILD_TESTING}
@@ -172,12 +174,16 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
+    # Lets hipBLASLt label TensileLite wheels with the ROCm package version
+    # ("git" in local builds means a dev identity).
+    -DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    mxDataGenerator
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
@@ -299,7 +305,7 @@ if(THEROCK_ENABLE_SPARSE)
     BUILD_DEPS
       rocm-cmake
       rocBLAS
-      rocPRIM
+      ${_prim_build_dep}
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -343,7 +349,7 @@ if(THEROCK_ENABLE_SPARSE)
   )
   therock_cmake_subproject_provide_package(hipSPARSE hipsparse lib/cmake/hipsparse)
   therock_cmake_subproject_activate(hipSPARSE)
-  list(APPEND _blas_subproject_names hipSPARSE)
+  list(APPEND _sparse_subproject_names hipSPARSE)
 
   ##############################################################################
   # hipSPARSELt
@@ -395,8 +401,20 @@ if(THEROCK_ENABLE_SPARSE)
     )
     therock_cmake_subproject_provide_package(hipSPARSELt hipsparselt lib/cmake/hipsparselt)
     therock_cmake_subproject_activate(hipSPARSELt)
-    list(APPEND _blas_subproject_names hipSPARSELt)
+    list(APPEND _sparse_subproject_names hipSPARSELt)
   endif()
+
+  therock_provide_artifact(sparse
+    DESCRIPTOR artifact-sparse.toml
+    COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+    SUBPROJECT_DEPS ${_sparse_subproject_names}
+  )
 endif(THEROCK_ENABLE_SPARSE)
 
 
@@ -425,7 +443,7 @@ if(THEROCK_ENABLE_SOLVER)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        rocPRIM
+        ${_prim_build_dep}
         therock-fmt
         therock-googletest
       RUNTIME_DEPS
@@ -491,7 +509,18 @@ if(THEROCK_ENABLE_SOLVER)
   )
   therock_cmake_subproject_provide_package(hipSOLVER hipsolver lib/cmake/hipsolver)
   therock_cmake_subproject_activate(hipSOLVER)
-  list(APPEND _blas_subproject_names hipSOLVER)
+  list(APPEND _solver_subproject_names hipSOLVER)
+
+  therock_provide_artifact(solver
+    DESCRIPTOR artifact-solver.toml
+    COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        test
+    SUBPROJECT_DEPS ${_solver_subproject_names}
+  )
 endif(THEROCK_ENABLE_SOLVER)
 
 

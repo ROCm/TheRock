@@ -8,7 +8,13 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
+set(_miopen_enabled OFF)
 if(THEROCK_ENABLE_MIOPEN)
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
+endif()
+set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
   # MIOpen's CK use is gated on both the per-arch CK availability
   # (math-libs/CMakeLists.txt) and the user-facing
   # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
@@ -23,10 +29,31 @@ if(THEROCK_ENABLE_MIOPEN)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
+  # The packaged miopen-dbsync test (projects/miopen/test/gtest/dbsync) runs MIOpen under
+  # rocjitsu/mirage. These are test-time tools, not runtime dependencies of MIOpen: BUILD_DEPS
+  # orders the build and records the edge in the consumer graph, without distributing them
+  # with the miopen artifacts. Both are optional (EMULATION feature, Linux only).
+  if(THEROCK_ENABLE_ROCJITSU)
+    list(APPEND optional_miopen_build_deps rocjitsu)
+  endif()
+  if(THEROCK_ENABLE_MIRAGE)
+    list(APPEND optional_miopen_build_deps mirage)
+  endif()
+
   if(MSVC)
     set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
+  endif()
+
+  # Translate the generic <comp_name>_SANITIZER preset convention (e.g.
+  # amd-llvm_SANITIZER) into hipconv's own HIPCONV_DISABLE_ASAN option (see
+  # projects/miopen/src/hipconv/CMakeLists.txt): hipconv is a subdirectory of
+  # the MIOpen subproject, not a subproject of its own, so it can't use
+  # therock_sanitizer_configure()'s per-subproject override directly.
+  set(_HIPCONV_DISABLE_ASAN OFF)
+  if("${miopen-hipconv_SANITIZER}" STREQUAL "OFF")
+    set(_HIPCONV_DISABLE_ASAN ON)
   endif()
 
   therock_cmake_subproject_declare(MIOpen
@@ -42,6 +69,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
+      "-DHIPCONV_DISABLE_ASAN=${_HIPCONV_DISABLE_ASAN}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -81,7 +109,7 @@ if(THEROCK_ENABLE_MIOPEN)
     SUBPROJECT_DEPS
       MIOpen
   )
-endif(THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
@@ -194,7 +222,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
 endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
 
-if(THEROCK_ENABLE_MIOPENPROVIDER)
+if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
   ##############################################################################
   # hipDNN MIOpen provider
   ##############################################################################
@@ -234,12 +262,13 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
     DESCRIPTOR artifact-miopenprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
       miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPENPROVIDER)
+endif(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
@@ -282,6 +311,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -289,7 +319,12 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   )
 endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
+set(_hipkernelprovider_enabled OFF)
 if(THEROCK_ENABLE_HIPKERNELPROVIDER)
+  therock_check_subproject_targets(_hipkernelprovider_enabled hipkernelprovider)
+endif()
+
+if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   # hipDNN hip kernel provider
   ##############################################################################
@@ -335,9 +370,14 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
     SUBPROJECT_DEPS
       hipkernelprovider
   )
-endif(THEROCK_ENABLE_HIPKERNELPROVIDER)
+endif(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
 
+set(_hipdnn_samples_enabled OFF)
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  therock_check_subproject_targets(_hipdnn_samples_enabled hipDNN_samples)
+endif()
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
   ##############################################################################
   # hipDNN samples
   ##############################################################################
@@ -357,6 +397,7 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       amd-hip
     BUILD_DEPS
       hipDNN
+      therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
@@ -375,4 +416,4 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
     SUBPROJECT_DEPS
       hipDNN_samples
   )
-endif(THEROCK_ENABLE_HIPDNN_SAMPLES)
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)

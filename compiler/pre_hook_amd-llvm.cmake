@@ -18,20 +18,32 @@ if(WIN32)
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  # Disable CIR on Windows. https://github.com/ROCm/llvm-project/pull/5071 enables CIR by default.
+  set(CLANG_ENABLE_CIR OFF)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
+  # MLIR is a dependency of cir/flang. If it is not explicitly on LLVM_ENABLE_PROJECTS then it is added
+  # to LLVM_DEPENDENCY_ONLY_PROJECTS, which causes issues:
+  # 1. MLIR_INCLUDE_TESTS=off, this disables the check-mlir target, which the CI tries to run.
+  # 2. MLIR_ENABLE_PDL_IN_PATTERNMATCH_default=0, which causes some mlir tests to fail because PDL
+  #    support is expected.
+  # 3. Compilation failure: error: no type named ‘type’ in ‘struct std::enable_if.
+  #    This stems from #include "llvm/ADT/TypeSwitch.h" not being located. When PDL is OFF,
+  #    a different header path is taken.
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang;mlir" CACHE STRING "Enable LLVM projects" FORCE)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  # Now that the CIR build is default on, mlir objects get installed and exported in clang config.
+  # TheRock explictly excludes llvm objects in artifact-amd-llvm.toml, which causes a failure
+  # when the clang config is used as those files are not present. Disable their install.
+  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF CACHE BOOL "Disable installation of MLIR aggregate object libraries" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
-    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
+    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib:\$ORIGIN/../../../../lib")
     # There is an issue with finding the zstd config built by TheRock when zstd
     # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
     # found in module mode, which ultimately fails to locate the library.
@@ -51,13 +63,28 @@ else()
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/GPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      set(LLVM_RUNTIME_TARGETS "default;amdgpu-amd-amdhsa")
+      set(RUNTIMES_amdgpu-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
+      # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
+      # into libflang_rt.runtime instead of building libflang_rt.quadmath.
+      #
+      # This must be a typed cache entry, not a normal variable.
+      # flang/cmake/modules/FlangCommon.cmake declares the variable with
+      # set(... CACHE STRING) and LLVM sets cmake_minimum_required(3.20), so
+      # CMP0126 is OLD there and that call would discard a normal variable of
+      # the same name, leaving the flang driver and the flang-rt runtimes build
+      # with different values. An existing typed cache entry makes the
+      # FlangCommon.cmake declaration a no-op, so this selection is
+      # authoritative for both.
+      if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le|riscv64")
+        set(FLANG_RUNTIME_F128_MATH_LIB "" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
+      else()
+        set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath" CACHE STRING "Library implementing REAL(16) math for flang-rt" FORCE)
+      endif()
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
       #set(LIBOMP_USE_HWLOC ON)
@@ -95,7 +122,14 @@ set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 # of the compiler).
 set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
 set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
-set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING "Enable extra projects" FORCE)
+set(LLVM_EXTERNAL_SQTT_MARKER_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/sqtt-marker")
+
+set(EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator")
+if(NOT WIN32)
+    # LLVM plugins do not work on Windows unless LLVM_EXPORT_SYMBOLS_FOR_PLUGINS is set.
+    list(APPEND EXTERNAL_PROJECTS "sqtt-marker")
+endif()
+set(LLVM_EXTERNAL_PROJECTS "${EXTERNAL_PROJECTS}" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.

@@ -20,6 +20,15 @@ skip_tests = {
             # Skipped across all PyTorch versions; the hipblas.h include error
             # persists in the ROCm SDK environment.
             "test_mempool_empty_cache_inactive",
+            # JIT-compiles dummy_allocator, but the wheel test environment is
+            # runtime-only and does not configure a native compiler or install
+            # the ROCm development headers. See #8217.
+            "test_mempool_limited_memory_with_allocator",
+            # JIT-compile throwing_free_allocator, but the wheel test environment
+            # is runtime-only and has no ROCm development files to link against
+            # (/usr/bin/ld: cannot find -lamdhip64). See #8889.
+            "test_custom_mempool_free_exception_does_not_fail_malloc",
+            "test_custom_mempool_free_exception_propagates_from_empty_cache",
             # TestCudaAllocator - FileNotFoundError: flamegraph.pl missing in CI
             "test_memory_snapshot",
             "test_memory_plots",
@@ -270,6 +279,14 @@ skip_tests = {
             # the fault never propagates, so it hangs/fails instead.
             # See https://github.com/ROCm/TheRock/issues/5565
             "test_multinomial_invalid_probs_cuda",
+            # TestAmdSmiImport helpers assume Linux: they read /proc/self/maps
+            # to locate libc.so and symlink it as libamd_smi.so.
+            #   FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/maps'
+            # Added upstream in https://github.com/pytorch/pytorch/pull/197482
+            # See https://github.com/ROCm/TheRock/issues/8779
+            "test_amdsmi_bare_unversioned_path_uses_loader_first",
+            "test_amdsmi_explicit_unversioned_path_is_redirected",
+            "test_amdsmi_versioned_library_path_is_preserved",
         ],
         "nn": [
             # Hangs on some Windows ROCm runners until the job hits the 6h limit.
@@ -299,7 +316,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])

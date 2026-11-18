@@ -20,6 +20,10 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from packaging.metadata import Metadata
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_packages as ptf
 
@@ -159,6 +163,34 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
         finally:
             path.unlink()
 
+    def _apply_version_rewrite(
+        self,
+        body: str,
+        package_name: str,
+        old_version: str,
+        old_rocm_version: str,
+        new_rocm_version: str,
+        *,
+        float_rocm_dependency_patch: bool,
+    ) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dist_info = root / f"{package_name}-{old_version}.dist-info"
+            dist_info.mkdir()
+            metadata = dist_info / "METADATA"
+            metadata.write_text(textwrap.dedent(body), encoding="utf-8")
+            ptf.update_metadata_rocm_requires_dist(
+                root,
+                package_name,
+                old_version,
+                old_rocm_version,
+                new_rocm_version,
+                # Same version keeps these tests on the ROCm-only rewrite.
+                new_version=Version(old_version),
+                float_rocm_dependency_patch=float_rocm_dependency_patch,
+            )
+            return metadata.read_text(encoding="utf-8")
+
     def test_drops_non_kept_extras_and_requires(self):
         # Torch body: multi-arch with no bare `extra == "device"` line — pure
         # drop, no repoint.
@@ -209,6 +241,174 @@ class ApplyKeepListToMetadataTest(unittest.TestCase):
             self.assertIn("no overlap", str(cm.exception))
         finally:
             path.unlink()
+
+    def test_stable_torch_rocm_dependency_floats_patch(self):
+        body = (
+            get_multi_arch_metadata_torch_archs_body()
+            .replace(
+                "Requires-Dist: rocm-bootstrap\n",
+                "Requires-Dist: rocm-bootstrap\n"
+                "Requires-Dist: rocm[libraries]==7.13.0a20260505\n"
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n",
+                1,
+            )
+            .replace(
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n",
+                "Requires-Dist: rocm-sdk-core==7.13.0a20260505\n"
+                'Requires-Dist: ROCm-SDK-Core == 7.13.0a20260505; extra == "core"\n',
+                1,
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "torch-2.8.0+rocm7.13.0"
+            torch_dir = root / "torch"
+            dist_info = root / "torch-2.8.0+rocm7.13.0a20260505.dist-info"
+            torch_dir.mkdir(parents=True)
+            dist_info.mkdir()
+            (torch_dir / "_rocm_init.py").write_text(
+                "check_version='7.13.0a20260505')\n", encoding="utf-8"
+            )
+            (torch_dir / "version.py").write_text(
+                "__version__ = '2.8.0+rocm7.13.0a20260505'\n",
+                encoding="utf-8",
+            )
+            (dist_info / "METADATA").write_text(body, encoding="utf-8")
+
+            ptf.wheel_change_extra_files(
+                root,
+                Version("2.8.0+rocm7.13.0a20260505"),
+                Version("2.8.0+rocm7.13.0"),
+                dest_version="release",
+            )
+
+            result = (dist_info / "METADATA").read_text(encoding="utf-8")
+            self.assertIn(
+                "check_version='7.13.*'",
+                (torch_dir / "_rocm_init.py").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "__version__ = '2.8.0+rocm7.13.0'",
+                (torch_dir / "version.py").read_text(encoding="utf-8"),
+            )
+        self.assertIn("Requires-Dist: rocm-bootstrap", result)
+        self.assertIn(
+            "Requires-Dist: rocm[libraries]~=7.13.0\n"
+            "Requires-Dist: rocm-sdk-core~=7.13.0\n",
+            result,
+        )
+        self.assertIn(
+            'Requires-Dist: ROCm-SDK-Core ~= 7.13.0; extra == "core"',
+            result,
+        )
+        self.assertIn(
+            'Requires-Dist: amd-torch-device-gfx1010 == 2.8.0+rocm7.13.0; extra == "device-gfx1010"',
+            result,
+        )
+        self.assertNotIn("rocm-sdk-core==7.13.0\n", result)
+        Metadata.from_email(result, validate=True)
+
+    def test_stable_patch_compatible_spec_rejects_earlier_patch(self):
+        specifier_text = ptf.stable_patch_compatible_spec("7.13.1")
+        self.assertEqual(specifier_text, "~=7.13.1")
+        assert specifier_text is not None
+        specifier = SpecifierSet(specifier_text)
+        self.assertNotIn(Version("7.13.0"), specifier)
+        self.assertIn(Version("7.13.1"), specifier)
+        self.assertIn(Version("7.13.2"), specifier)
+        self.assertNotIn(Version("7.14.0"), specifier)
+
+    def test_non_rocm_dependency_is_not_rewritten(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: unrelated==7.13.0a20260505
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertEqual(result, textwrap.dedent(body))
+
+    def test_compound_rocm_dependency_specifier_does_not_float(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: rocm-sdk-core==7.13.0a20260505,!=7.13.0.post1
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertIn(
+            "Requires-Dist: rocm-sdk-core==7.13.0,!=7.13.0.post1",
+            result,
+        )
+        self.assertNotIn("==7.13.*", result)
+
+    def test_malformed_requires_dist_raises_when_floating_enabled(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0
+Requires-Dist: rocm-sdk-core (==7.13.0
+"""
+        with self.assertRaises(ValueError):
+            self._apply_version_rewrite(
+                body,
+                "torch",
+                "2.8.0+rocm7.13.0",
+                "7.13.0a20260505",
+                "7.13.0",
+                float_rocm_dependency_patch=True,
+            )
+
+    def test_torch_rocm_dependency_stays_exact_for_prerelease_promotion(self):
+        body = """\
+Metadata-Version: 2.2
+Name: torch
+Version: 2.8.0+rocm7.13.0rc1
+Requires-Dist: rocm-sdk-core==7.13.0a20260505
+"""
+        result = self._apply_version_rewrite(
+            body,
+            "torch",
+            "2.8.0+rocm7.13.0rc1",
+            "7.13.0a20260505",
+            "7.13.0rc1",
+            float_rocm_dependency_patch=True,
+        )
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.0rc1", result)
+        self.assertNotIn("==7.13.*", result)
+        self.assertEqual(
+            ptf.rewrite_rocm_init_check_version(
+                "check_version='7.13.0a20260505')\n",
+                "7.13.0a20260505",
+                "7.13.0rc1",
+            ),
+            "check_version='7.13.0rc1')\n",
+        )
+
+    def test_rocm_package_dependency_stays_exact_when_floating_disabled(self):
+        result = self._apply_version_rewrite(
+            get_multi_arch_metadata_archs_body(),
+            "rocm",
+            "7.13.0",
+            "7.13.0a20260505",
+            "7.13.0",
+            float_rocm_dependency_patch=False,
+        )
+        self.assertIn("Requires-Dist: rocm-sdk-core==7.13.0", result)
+        self.assertNotIn("==7.13.*", result)
 
 
 class ApplyKeepListToRequiresTxtTest(unittest.TestCase):
@@ -380,6 +580,169 @@ class ComputeNewVersionStrTest(unittest.TestCase):
             "rocm7.13.0",
         )
 
+    def test_nothing_to_promote_returns_none(self):
+        for version, src, dest in (
+            ("7.13.0", "rc", "release"),
+            ("7.13.0rc1", "a", "release"),
+            ("7.13.0rc1", "rc", "rc1"),
+        ):
+            with self.subTest(version=version, src=src, dest=dest):
+                self.assertIsNone(ptf.compute_new_version_str(version, src, dest))
+
+
+DEV_SHA = "2a7253fc74e48c0b30163e378833f082a32eb3c9"
+
+
+class DevVersionTest(unittest.TestCase):
+    """`--src-version-type=dev`: version strings, raw file lines, pins and package files."""
+
+    def test_compute_new_version_str(self):
+        # (normalized wheel version, keep_git, expected)
+        cases = [
+            ("2.12.0+git1a2b3c4d.rocm10.0.0rc4", False, "2.12.0+rocm10.0.0"),
+            ("2.12.0+git1a2b3c4d.rocm10.0.0", False, "2.12.0+rocm10.0.0"),
+            (
+                f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}",
+                False,
+                "2.12.0+rocm10.2.0",
+            ),
+            (
+                f"0.29.0a0+gitb7d540b2.devrocm10.2.0.dev0.{DEV_SHA}",
+                False,
+                "0.29.0+rocm10.2.0",
+            ),
+            (
+                f"3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}",
+                True,
+                "3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("1.12.0+rocm10.0.0rc4", False, "1.12.0+rocm10.0.0"),
+            # Nightly ROCm marker on the ROCm version.
+            ("2.12.0+git9ccf2fd0.rocm10.2.0a20261006", False, "2.12.0+rocm10.2.0"),
+            ("0.29.0a0+gitb7d540b2.rocm10.2.0a20260929", False, "0.29.0+rocm10.2.0"),
+            (
+                "3.8.0+git669b31ac.rocm10.2.0a20260929",
+                True,
+                "3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("2.10.0+rocm7.13.0a20260430", False, "2.10.0+rocm7.13.0"),
+            (f"10.2.0.dev0+{DEV_SHA}", False, "10.2.0"),
+            # Nothing to strip: skipped, not an error.
+            ("1.12.0+rocm10.0.0", False, None),
+            ("3.8.0+git669b31ac.rocm10.0.0", True, None),
+        ]
+        for version, keep_git, expected in cases:
+            with self.subTest(version=version):
+                self.assertEqual(
+                    ptf.compute_new_version_str(version, "dev", "release", keep_git),
+                    expected,
+                )
+
+    def test_strip_dev_markers_on_raw_lines(self):
+        # (raw file line, keep_git, expected)
+        cases = [
+            (
+                f"__version__ = '2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-{DEV_SHA}'",
+                False,
+                "__version__ = '2.12.0+rocm10.2.0'",
+            ),
+            (
+                f"triton==3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}",
+                True,
+                "triton==3.8.0+git669b31ac.rocm10.2.0",
+            ),
+            ("git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'", False, None),
+            (
+                'Requires-Dist: amd-torch-device-gfx942; extra == "device-gfx942"',
+                False,
+                None,
+            ),
+            ("check_version='10.0.0rc4')", False, None),
+        ]
+        for line, keep_git, expected in cases:
+            with self.subTest(line=line):
+                self.assertEqual(
+                    ptf.strip_dev_markers(line, keep_git), expected or line
+                )
+
+    def test_metadata_requires_dist_pins(self):
+        old = f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}"
+        new = "2.12.0+rocm10.2.0"
+        body = f"""\
+            Metadata-Version: 2.1
+            Name: torch
+            Version: {old}
+            Requires-Dist: triton==3.8.0+git669b31ac.devrocm10.2.0.dev0.{DEV_SHA}
+            Requires-Dist: rocm[libraries]==10.2.0.dev0+{DEV_SHA}
+            Provides-Extra: device-gfx942
+            Requires-Dist: amd-torch-device-gfx942 == {old}; extra == "device-gfx942"
+            """
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_info = Path(tmp) / f"torch-{old}.dist-info"
+            dist_info.mkdir()
+            metadata = dist_info / "METADATA"
+            metadata.write_text(textwrap.dedent(body), encoding="utf-8")
+            ptf.update_metadata_rocm_requires_dist(
+                Path(tmp), "torch", old, "10.2.0", "10.2.0", new_version=Version(new)
+            )
+            pins = [
+                line
+                for line in metadata.read_text(encoding="utf-8").splitlines()
+                if line.startswith("Requires-Dist:")
+            ]
+        self.assertEqual(
+            pins,
+            [
+                "Requires-Dist: triton==3.8.0+git669b31ac.rocm10.2.0",
+                "Requires-Dist: rocm[libraries]==10.2.0",
+                'Requires-Dist: amd-torch-device-gfx942 == 2.12.0+rocm10.2.0; extra == "device-gfx942"',
+            ],
+        )
+
+    def test_wheel_change_extra_files(self):
+        # (package, old version, new version, {file: (before, after)})
+        cases = [
+            (
+                "torch",
+                f"2.12.0+git9ccf2fd0.devrocm10.2.0.dev0.{DEV_SHA}",
+                "2.12.0+rocm10.2.0",
+                {
+                    "torch/version.py": (
+                        f"__version__ = '2.12.0+git9ccf2fd0.devrocm10.2.0.dev0-{DEV_SHA}'\n"
+                        "git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'\n",
+                        "__version__ = '2.12.0+rocm10.2.0'\n"
+                        "git_version = '9ccf2fd0a1b2c3d4e5f60718293a4b5c6d7e8f90'\n",
+                    ),
+                    "torch/_rocm_init.py": (
+                        f"check_version='10.2.0.dev0+{DEV_SHA}')\n",
+                        "check_version='10.2.*')\n",
+                    ),
+                },
+            ),
+            (
+                "apex",
+                f"1.12.0+devrocm10.2.0.dev0.{DEV_SHA}",
+                "1.12.0+rocm10.2.0",
+                {
+                    "apex/git_version_info_installed.py": (
+                        f"version='1.12.0+devrocm10.2.0.dev0-{DEV_SHA}+ad1376f'\n",
+                        "version='1.12.0+rocm10.2.0+ad1376f'\n",
+                    ),
+                },
+            ),
+        ]
+        for package, old, new, files in cases:
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as tmp:
+                new_dir = Path(tmp) / f"{package}-{new}"
+                for rel, (before, _) in files.items():
+                    (new_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+                    (new_dir / rel).write_text(before, encoding="utf-8")
+                ptf.wheel_change_extra_files(
+                    new_dir, Version(old), Version(new), "release"
+                )
+                for rel, (_, after) in files.items():
+                    self.assertEqual((new_dir / rel).read_text(encoding="utf-8"), after)
+
 
 class ParseArgumentsMutexTest(unittest.TestCase):
     """`--skip-version-promotion` is mutex with the version flags; sentinel
@@ -389,20 +752,20 @@ class ParseArgumentsMutexTest(unittest.TestCase):
         return ptf.parse_arguments(argv)
 
     def test_defaults_resolve_after_mutex_check(self):
-        ns = self._parse(["--input-dir", "/tmp"])
+        ns = self._parse(["--input-dir", "/fake"])
         self.assertEqual(ns.dest_version, "release")
         self.assertEqual(ns.src_version_type, "rc")
 
     def test_skip_version_promotion_requires_multi_arch_targets(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--skip-version-promotion"])
+            self._parse(["--input-dir", "/fake", "--skip-version-promotion"])
 
     def test_skip_version_promotion_rejects_dest_version(self):
         with self.assertRaises(SystemExit):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fake",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -416,7 +779,7 @@ class ParseArgumentsMutexTest(unittest.TestCase):
             self._parse(
                 [
                     "--input-dir",
-                    "/tmp",
+                    "/fake",
                     "--skip-version-promotion",
                     "--multi-arch-targets",
                     "gfx950",
@@ -427,16 +790,16 @@ class ParseArgumentsMutexTest(unittest.TestCase):
 
     def test_dest_version_must_be_recognised(self):
         with self.assertRaises(SystemExit):
-            self._parse(["--input-dir", "/tmp", "--dest-version", "garbage"])
+            self._parse(["--input-dir", "/fake", "--dest-version", "garbage"])
 
     def test_dest_version_a_must_be_valid_calendar_date(self):
         with self.assertRaises(SystemExit):
             # Feb 30 doesn't exist.
-            self._parse(["--input-dir", "/tmp", "--dest-version", "a20260230"])
+            self._parse(["--input-dir", "/fake", "--dest-version", "a20260230"])
 
     def test_multi_arch_targets_passthrough(self):
         ns = self._parse(
-            ["--input-dir", "/tmp", "--multi-arch-targets", "gfx1010,gfx1201"]
+            ["--input-dir", "/fake", "--multi-arch-targets", "gfx1010,gfx1201"]
         )
         self.assertEqual(ns.multi_arch_targets, "gfx1010,gfx1201")
 

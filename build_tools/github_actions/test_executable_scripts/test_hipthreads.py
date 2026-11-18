@@ -68,13 +68,6 @@ environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
 # after this many seconds, so one stuck test can't burn the whole job timeout.
 # Honored by the vendored test executor (test/utils/run.py).
 environ_vars["HIPTHREADS_TEST_TIMEOUT"] = "20"
-# hipThreads' persistent scheduler kernel spawns numVcores = CU_count *
-# HIPTHREADS_VCORES_PER_WGP workgroups; the default (16) occupies the whole GPU
-# and can deadlock the suite under shared/over-subscribed CI runners. This is a
-# RUNTIME setting (read via getenv in thread.cxx), so we dial it to 1 here for the
-# test run only — the shipped library keeps its default. lit.cfg forwards this var
-# to each spawned test via run.py's --env.
-environ_vars["HIPTHREADS_VCORES_PER_WGP"] = "1"
 
 # Add ROCm binaries to PATH (also the hipcc location).
 prepend_env_path(environ_vars, "PATH", str(THEROCK_BIN_PATH))

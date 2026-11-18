@@ -14,19 +14,26 @@ Instead of Jenkins and Groovy pipelines, TheRock uses **GitHub Actions** workflo
 
 ## CI Architecture
 
-TheRock uses a multi-stage CI pipeline that splits the build into stages (compiler-runtime → runtime-tests/math-libs, etc.) with dependency chaining. Below is a general diagram of the CI flow
+TheRock uses a multi-stage CI pipeline that splits the build into stages with
+dependency chaining. The Linux pipeline builds emulation separately from the
+compiler and runtime, while communication libraries wait for emulation because
+RCCL consumes rocjitsu-generated artifacts.
 
 ```mermaid
 graph TD
-    A[generic build] --> B1[arch build - gfx94X-dcgpu]
-    A[generic build] --> B2[arch build - gfx110X-dgpu]
-    B1 --> C[test - gfx94X-dcgpu]
-    B2 --> D[test - gfx110X-dgpu]
+    compilerRuntime[Compiler and runtime] --> emulation[Emulation]
+    compilerRuntime --> mathGfx94X[Math libraries - gfx94X]
+    compilerRuntime --> mathGfx110X[Math libraries - gfx110X]
+    compilerRuntime --> runtimeTests[Runtime tests]
+    emulation --> commLibraries[Communication libraries]
+    mathGfx94X --> testGfx94X[Tests - gfx94X]
+    mathGfx110X --> testGfx110X[Tests - gfx110X]
 ```
 
 Each stage runs as a separate job, uploads its artifacts and logs to S3, then downstream stages download and build on top of them. This allows for:
 
-- **Parallelization:** Multiple GPU families can build math-libs simultaneously once compiler-runtime completes
+- **Parallelization:** Emulation, runtime tests, and multiple GPU-family math
+  library builds can run as separate jobs once compiler-runtime completes
 - **Incremental builds:** Test-only runs can skip build stages by downloading pre-built artifacts
 - **Flexibility:** Different stages can run on different runner types (e.g., CPU-only for build, GPU for tests)
 
@@ -144,6 +151,28 @@ See [test_environment_reproduction.md](test_environment_reproduction.md) for det
 Build logs are uploaded to S3 and organized by stage and GPU family.
 
 See [workflow_outputs.md](workflow_outputs.md) for the S3 layout structure and [github_actions_debugging.md](github_actions_debugging.md) for debugging techniques.
+
+## Skipping ROCm builds for Framework-only CI runs
+
+The CI workflows normally build ROCm and its Python packages before building
+framework packages such as PyTorch and JAX. These python packages are uploaded
+to a run-scoped folder usable with `pip install --find-links`.
+
+When only framework-specific code is modified or an explicit `ci:skip-rocm`
+label is added to a pull request, ROCm builds can be skipped. CI setup resolves
+a ROCm package version from
+`https://nightly.repo.amd.com/rocm/whl-next/`. Framework builds and tests then
+install that version from the index.
+
+Automatic selection uses the `[job_paths]` lists in
+[`build_tools/github_actions/skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml)
+to identify affected job groups.
+
+> [!IMPORTANT]
+> Published ROCm dependencies give framework packages a `+rocm...` suffix
+> rather than a `+devrocm...` suffix. These packages should
+> not be published outside of their workflow run-scoped folders to release
+> indexes.
 
 ## Further Reading
 

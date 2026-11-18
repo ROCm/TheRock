@@ -20,6 +20,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LIBLZMA_VERSION "${CMAKE_MATCH_1}")
 
     therock_cmake_subproject_declare(therock-liblzma
+      HARDENING_DEFERRED "liblzma (CMake)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -46,6 +47,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
+    therock_cmake_subproject_provide_package(therock-liblzma LibLZMA lib/rocm_sysdeps/lib/cmake/LIBLZMA)
     therock_cmake_subproject_provide_package(therock-liblzma liblzma lib/rocm_sysdeps/lib/cmake/liblzma)
     therock_cmake_subproject_activate(therock-liblzma)
 
@@ -123,7 +125,7 @@ add_custom_target(
 # on windows vs linux.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LIBLZMA_TYPE "SHARED")
-  set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.so.5")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/liblzma.so")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(LIBLZMA_TYPE "STATIC")
   set(LIBLZMA_IMPORTED_LOCATION "lib/liblzmastatic.lib")

@@ -17,6 +17,7 @@ include = [
   # Tests
   "bin/*_test*",
   "bin/*-validate*",
+  "bin/*-bench*",
   "bin/rocwmma/CTestTestfile.cmake",
   "bin/rocwmma/*/CTestTestfile.cmake",
 ]

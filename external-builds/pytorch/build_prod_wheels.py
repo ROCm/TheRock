@@ -160,6 +160,8 @@ import tempfile
 import textwrap
 import urllib.request
 
+import setup_pytorch_sanitizer
+
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
@@ -188,7 +190,6 @@ LINUX_LIBRARY_PRELOADS = [
     "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
-    "rocm_smi64",
     # Linux only.
     "rocprofiler-sdk",  # Needed by torch since kineto uses rocprofiler-sdk.
     "rocprofiler-sdk-roctx",
@@ -229,12 +230,17 @@ def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = 
     subprocess.check_call(args, cwd=str(cwd), env=full_env)
 
 
-def capture(args: list[str | Path], cwd: Path) -> str:
+def capture(
+    args: list[str | Path], cwd: Path, env: dict[str, str] | None = None
+) -> str:
     args = [str(arg) for arg in args]
+    full_env = dict(os.environ)
+    if env:
+        full_env.update(env)
     print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
     try:
         return subprocess.check_output(
-            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True, env=full_env
         ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
@@ -319,22 +325,47 @@ def get_source_commit_short(source_dir: Path, length: int = 8) -> str:
 
 
 def compute_build_version(
-    source_dir: Path, version_suffix: str, release_type: str
+    source_dir: Path,
+    version_suffix: str,
+    release_type: str,
+    *,
+    strip_legacy_a0: bool = False,
 ) -> str:
     """Compute a wheel version, tagging dev release types with the source commit.
 
     Reads `<source_dir>/version.txt` as the base version and appends
-    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`). For `dev`
-    and `dev-bkc` builds, the 8-char source commit is merged into that single
-    local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
+    `version_suffix` (a PEP 440 local identifier like `+rocm7.10.0`).
+
+    For `dev` and `dev-bkc` builds, the 8-char source commit is merged into that
+    single local segment, e.g. `2.12.0a0+git1a2b3c4d.rocm7.10.0`, so each wheel
     (torch, torchaudio, torchvision) records exactly which source commit
     produced it. PyTorch's setup.py validates the version as PEP 440, which only
     allows a commit hash in the local segment (after `+`).
+
+    `strip_legacy_a0` removes torch/torchaudio/torchvision's trailing `a0` for
+    release-source builds, independently of the ROCm release type. Upstream
+    release branches can retain `a0` in version.txt; their release tooling
+    removes it so pip treats the resulting package as a final release.
+    ROCm nightly builds can also build these PyTorch release branches.
+    Raise ValueError if a prerelease marker remains after stripping `a0`.
+    Builds of PyTorch nightly retain `a0` to preserve our existing version scheme.
+
     TODO(#5110): reconcile with generate_pytorch_source_manifest.py once
     upfront, manifest-based version computation lands so the built version
     always matches what the manifest records.
     """
     base_version = (source_dir / "version.txt").read_text().strip()
+    if strip_legacy_a0:
+        # Match pytorch/test-infra's get_base_version for release builds.
+        # Other prerelease markers are intentionally preserved, not made final.
+        # https://github.com/pytorch/test-infra/blob/341df9bfb588e3d25d4124f39115b7115ddec58c/tools/pkg-helpers/pytorch_pkg_helpers/version.py#L53-L62
+        base_version = base_version.removesuffix("a0")
+        # is_prerelease includes alpha, beta, RC, and dev releases.
+        if parse(base_version).is_prerelease:
+            raise ValueError(
+                f"{source_dir / 'version.txt'}: expected a final release version "
+                f"after stripping a0, got {base_version!r}"
+            )
     build_version = base_version + version_suffix
     if release_type in ("dev", "dev-bkc"):
         commit = get_source_commit_short(source_dir)
@@ -388,7 +419,11 @@ def download_llvm_for_triton_windows(triton_dir: Path) -> Path:
 
         print("  Downloading (this may take a few minutes, ~500MB)...")
         try:
-            urllib.request.urlretrieve(download_url, download_path)
+            urllib.request.urlretrieve(
+                download_url,
+                download_path,
+                # Fixed HTTPS LLVM endpoint.
+            )  # nosec B310
         except Exception as e:
             raise RuntimeError(
                 f"Failed to download LLVM from {download_url}: {e}\n"
@@ -515,6 +550,8 @@ def validate_build_args(
     parser: argparse.ArgumentParser, args: argparse.Namespace
 ) -> None:
     """Resolve automatic project selections and validate build arguments."""
+    setup_pytorch_sanitizer.apply_sanitizer_companion_policy(parser, args)
+
     # If a project dir exists, enable that project --build-* option by default.
     if args.build_triton is None:
         args.build_triton = args.triton_dir is not None
@@ -633,8 +670,15 @@ def _setup_common_build_env(
     pytorch_rocm_arch: str,
     triton_dir: Path | None,
     is_windows: bool,
+    use_rocm_clang: bool = False,
 ) -> dict[str, str]:
     """Construct the common environment dict shared by all wheel builds."""
+    # A sanitizer build needs the ROCm Clang that matches its runtime ahead of
+    # gcc-toolset. Write PATH once here.
+    path_prefix = str(bin_dir)
+    if use_rocm_clang and not is_windows:
+        llvm_bin = rocm_dir / "lib" / "llvm" / "bin"
+        path_prefix = str(llvm_bin) + os.path.pathsep + path_prefix
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
@@ -644,7 +688,7 @@ def _setup_common_build_env(
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
         # Make ROCm tools discoverable on all platforms and ROCm DLLs
         # discoverable by the Windows loader.
-        "PATH": str(bin_dir) + os.path.pathsep + os.environ.get("PATH", ""),
+        "PATH": path_prefix + os.path.pathsep + os.environ.get("PATH", ""),
     }
 
     env["USE_GLOO"] = "ON"
@@ -677,10 +721,11 @@ def _setup_common_build_env(
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
-    else:
+    elif not use_rocm_clang:
         env.update(
             {
-                # Workaround GCC12 compiler flags.
+                # Workaround GCC12 compiler flags. ROCm Clang rejects these, so
+                # a sanitizer build does not add them.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
                 "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
@@ -815,7 +860,13 @@ def do_build(args: argparse.Namespace):
     pytorch_rocm_arch = pytorch_rocm_arch.replace(",", ";")
 
     env = _setup_common_build_env(
-        cmake_prefix, bin_dir, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+        cmake_prefix,
+        bin_dir,
+        rocm_dir,
+        pytorch_rocm_arch,
+        triton_dir,
+        is_windows,
+        use_rocm_clang=setup_pytorch_sanitizer.selected_sanitizer(args) is not None,
     )
     print(f"  PATH = {env['PATH']}")
 
@@ -869,6 +920,10 @@ def do_build(args: argparse.Namespace):
                 pass  # Server may already be running
 
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+        if sanitizer is not None:
+            setup_pytorch_sanitizer.apply_sanitizer_build_env(env, rocm_dir, sanitizer)
 
         _do_build_wheels_core(
             args,
@@ -1094,7 +1149,10 @@ def do_build_pytorch(
 ):
     # Compute version (dev builds are tagged with the torch source commit).
     pytorch_build_version = compute_build_version(
-        pytorch_dir, args.version_suffix, args.release_type
+        pytorch_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
@@ -1191,7 +1249,8 @@ def do_build_pytorch(
         # libdrm/drm.h.
         rocm_dir = get_rocm_path("root")
         sysdeps_dir = rocm_dir / "lib" / "rocm_sysdeps"
-        assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
+        if not sysdeps_dir.exists():
+            raise FileNotFoundError(f"No sysdeps directory found: {sysdeps_dir}")
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
         # Add correct include path for roctracer.h (for Kineto)
         add_env_compiler_flags(
@@ -1242,47 +1301,17 @@ def do_build_pytorch(
     run_command(build_backend_install + pip_install_args, cwd=pytorch_dir)
 
     build_command = [sys.executable, "-m", "build", "--wheel", "--no-isolation"]
-    pytorch_pyproject_text = (pytorch_dir / "pyproject.toml").read_text()
-    if "scikit_build_core.build" in pytorch_pyproject_text:
-        # scikit-build-core applies Git ignore rules when constructing the wheel,
-        # dropping generated, gitignored runtime files. This workaround can be
-        # removed once these fixes are merged and commonly available:
-        # https://github.com/pytorch/pytorch/pull/191625
-        # https://github.com/pytorch/pytorch/pull/191629
-        build_command.append(
-            "-Cwheel.force-include.torch/_rocm_init.py=torch/_rocm_init.py"
-        )
-        if is_windows:
-            build_command.append(
-                "-Cwheel.force-include.torch/lib/libomp140.x86_64.dll="
-                "torch/lib/libomp140.x86_64.dll"
-            )
-            if use_flash_attention:
-                # TODO: similar upstream fix for these and then drop here
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/aotriton_v2.dll="
-                    "torch/lib/aotriton_v2.dll"
-                )
-                build_command.append(
-                    "-Cwheel.force-include.torch/lib/liblzma.dll="
-                    "torch/lib/liblzma.dll"
-                )
 
     if is_windows:
-        # The PyPI `ninja` package is unusable on Windows: 1.11.1 loops without
+        # PyPI `ninja` before 1.13.2 is unusable on Windows: 1.11.1 loops without
         # making progress and 1.13.0 has an MSVC link.exe RSP-file regression
-        # (LNK1104/LNK1181), and no fixed version has been published
-        # (scikit-build/ninja-python-distributions#308). requirements-build.txt
-        # just pulled it in, so remove it; the runner provides a good system
-        # ninja (>=1.13.1) on PATH that CMake uses instead.
+        # (ninja-build/ninja#2616). Some PyTorch branches still pin
+        # ninja==1.13.0 in requirements-build.txt, so upgrade past it.
         run_command(
-            [sys.executable, "-m", "pip", "uninstall", "ninja", "-y"],
+            [sys.executable, "-m", "pip", "install", "ninja>=1.13.2"]
+            + pip_install_args,
             cwd=pytorch_dir,
         )
-        # With the PyPI ninja gone, `python -m build`'s PEP 517 dependency check
-        # would abort with "Missing dependencies: ninja". Skip that check: the
-        # backend drives CMake, which finds the system ninja on PATH.
-        build_command.append("--skip-dependency-check")
 
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")
@@ -1305,14 +1334,20 @@ def do_build_pytorch(
     )
 
     print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    sanitizer = setup_pytorch_sanitizer.selected_sanitizer(args)
+    sanity_env = (
+        setup_pytorch_sanitizer.import_sanity_env(env, sanitizer)
+        if sanitizer is not None
+        else None
+    )
     sanity_check_output = capture(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
         cwd=tempfile.gettempdir(),
+        env=sanity_env,
     )
     if not sanity_check_output:
         raise RuntimeError("torch package sanity check failed (see output above)")
-    else:
-        print(f"Sanity check output:\n{sanity_check_output}")
+    print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_audio(
@@ -1320,7 +1355,10 @@ def do_build_pytorch_audio(
 ):
     # Compute version (dev builds are tagged with the audio source commit).
     build_version = compute_build_version(
-        pytorch_audio_dir, args.version_suffix, args.release_type
+        pytorch_audio_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
@@ -1360,12 +1398,17 @@ def do_build_pytorch_vision(
 ):
     # Compute version (dev builds are tagged with the vision source commit).
     build_version = compute_build_version(
-        pytorch_vision_dir, args.version_suffix, args.release_type
+        pytorch_vision_dir,
+        args.version_suffix,
+        args.release_type,
+        strip_legacy_a0=args.pytorch_git_ref.startswith("release/"),
     )
     print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
+    # Pin the wheel's torch requirement to the exact torch it compiles against.
+    env["PYTORCH_VERSION"] = get_installed_package_version("torch")
 
     env.update(
         {
@@ -1522,6 +1565,11 @@ def main(argv: list[str]):
         help="PyTorch source directory",
     )
     build_p.add_argument(
+        "--pytorch-git-ref",
+        default="",
+        help="PyTorch source ref; release/* refs strip torch/torchaudio/torchvision's legacy a0 suffix",
+    )
+    build_p.add_argument(
         "--pytorch-audio-dir",
         default=None,
         type=Path,
@@ -1544,6 +1592,15 @@ def main(argv: list[str]):
         default=None,
         type=Path,
         help="apex source directory",
+    )
+    build_p.add_argument(
+        "--build-variant",
+        default="release",
+        help="Build variant passed by the release workflow. release is a normal "
+        "build. A variant containing asan, such as asan, asan-debug, "
+        "host-asan, or host-asan-debug, builds the torch wheel with "
+        "AddressSanitizer. Any other name is an error. Triton, torchaudio, "
+        "torchvision, and apex are not built.",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

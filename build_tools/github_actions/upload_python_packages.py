@@ -3,17 +3,15 @@
 # SPDX-License-Identifier: MIT
 
 """
-This script uploads built Python packages (wheels, sdists) along with an index
-page to S3 or a local directory for testing. Once packages are uploaded, they
-can be downloaded directly or via `pip install --find-links {url}` by
+This script uploads built Python packages (wheels, sdists) to S3 or a local
+directory for testing. Package indexes are generated server-side. Once uploaded,
+packages can be downloaded directly or via `pip install --find-links {url}` by
 developers, users, and test workflows.
 
 Usage:
   upload_python_packages.py
     --input-packages-dir PACKAGES_DIR
     --run-id RUN_ID
-    [--artifact-group ARTIFACT_GROUP]  # Required for single-arch; omit with --multiarch
-    [--multiarch]              # Multi-arch mode: omits artifact_group from upload path
     [--output-dir OUTPUT_DIR]  # Local output instead of S3
     [--bucket BUCKET]          # Override bucket selection (defaults to auto-select)
     [--dry-run]                # Print what would happen without taking action
@@ -24,15 +22,9 @@ Modes:
   3. Dry run: With --dry-run, prints plan without uploading or copying
 
 Output Layout:
-  {bucket}/{external_repo}{run_id}-{platform}/python/{artifact_group}/
-    *.whl, *.tar.gz   # Wheel and sdist files
-    index.html        # File listing for pip --find-links
-
-  For multi-arch builds (--multiarch), artifact_group is omitted:
   {bucket}/{external_repo}{run_id}-{platform}/python/
-    {family}/         # Per-family subdirectory (gfx94X-dcgpu, etc.)
-      index.html
-    *.whl, *.tar.gz
+    *.whl, *.tar.gz   # Host and per-target wheels and sdists
+    index.html        # Generated server-side for pip --find-links
 
 Installation:
   pip install rocm[libraries,devel] --pre \\
@@ -42,23 +34,18 @@ Installation:
 import argparse
 from pathlib import Path
 import platform
-import shlex
-import subprocess
 import sys
 
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
-sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from generate_local_index import generate_multiarch_indexes
 from github_actions_api import (
     gha_append_step_summary,
     gha_set_output,
 )
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
 LINE_CONTINUATION_CHAR = "^" if PLATFORM == "windows" else "\\"
 
@@ -66,11 +53,6 @@ LINE_CONTINUATION_CHAR = "^" if PLATFORM == "windows" else "\\"
 def log(*args):
     print(*args)
     sys.stdout.flush()
-
-
-def run_command(cmd: list[str], cwd: Path = Path.cwd()):
-    log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, check=True)
 
 
 def _make_output_root(
@@ -81,63 +63,6 @@ def _make_output_root(
             bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
         )
     return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
-
-
-def detect_family_subdirs(dist_dir: Path) -> list[str]:
-    """Return GPU-family subdirectory names in dist_dir.
-
-    Ignores dot-directories (e.g. ".kpack_staging") which are build staging
-    artifacts, not GPU families. Their presence must not flip a multi-arch
-    upload into the legacy per-family layout/summary.
-    """
-    return sorted(
-        d.name for d in dist_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
-    )
-
-
-def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = False):
-    """Generates an index.html file listing packages for pip --find-links.
-
-    Args:
-        dist_dir: Directory containing packages to index
-        multiarch: If True, generate per-family indexes for multi-arch builds
-        dry_run: If True, print command without executing
-    """
-    if dry_run:
-        log(f"[DRY RUN] Would generate index in {dist_dir} (multiarch={multiarch})")
-        return
-
-    if multiarch:
-        has_subdirs = bool(detect_family_subdirs(dist_dir))
-        if has_subdirs:
-            log("[INFO] Multi-arch legacy mode: generating per-family indexes")
-            generate_multiarch_indexes(dist_dir)
-        else:
-            # kpack-split flat mode: multiple jobs may append to the same
-            # prefix (ROCm wheels + pytorch wheels). therock-ci-artifacts
-            # generates index.html server-side, so a client-side flat index
-            # would just race with (and briefly shadow) the server view.
-            log(
-                "[INFO] kpack-split flat mode: skipping client-side index "
-                "generation (server-side indexing handles it)"
-            )
-    else:
-        # Single-arch mode: use existing indexer.py for top-level
-        log("[INFO] Single-arch mode: using indexer.py")
-        indexer_script = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
-        if not indexer_script.is_file():
-            raise FileNotFoundError(f"Indexer script not found: {indexer_script}")
-
-        cmd = [
-            sys.executable,
-            str(indexer_script),
-            str(dist_dir),
-            "--filter",
-            "*.whl",
-            "*.tar.gz",
-        ]
-
-        run_command(cmd)
 
 
 def find_package_files(dist_dir: Path) -> list[Path]:
@@ -173,53 +98,13 @@ def upload_packages(
     log(f"[INFO] Uploaded {count} files")
 
 
-def write_gha_upload_summary(
-    packages_loc: StorageLocation, families: list[str] | None = None
-):
-    """Write GitHub Actions summary with pip install instructions.
-
-    Args:
-        packages_loc: Storage location for packages
-        families: Controls the summary format:
-            - None: single-arch mode — single index URL
-            - [] (empty list): kpack-split flat mode — single index URL covering
-              all per-target wheels
-            - [...] non-empty: legacy per-family mode — per-family install links
-    """
-    if families:
-        # Legacy per-family multi-arch
-        base_url = packages_loc.https_url
-        family_links = "\n".join(
-            f"- [{family}]({base_url}/{family}/index.html)" for family in families
-        )
-        family_installs = "\n\n".join(
-            f"```bash\npip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}\n"
-            f"    --find-links={base_url}/{family}/index.html\n```"
-            for family in families
-        )
-        install_instructions_markdown = f"""ROCm Python packages (multi-arch build)
-
-Per-family indexes:
-{family_links}
-
-{family_installs}
-"""
-    elif families is not None:
-        # kpack-split flat build — single index covers all per-target wheels
-        index_url = f"{packages_loc.https_url}/index.html"
-        install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
+def write_gha_upload_summary(packages_loc: StorageLocation):
+    """Write install instructions using one index for all per-target wheels."""
+    index_url = f"{packages_loc.https_url}/index.html"
+    install_instructions_markdown = f"""[ROCm Python packages (kpack-split)]({index_url})
 Replace `<YOUR_TARGET>` with your GPU target (e.g. `gfx942`, `gfx1201`):
 ```bash
 pip install rocm[libraries,devel,device-<YOUR_TARGET>] --pre {LINE_CONTINUATION_CHAR}
-    --find-links={index_url}
-```
-"""
-    else:
-        # Single-arch: traditional index URL
-        index_url = f"{packages_loc.https_url}/index.html"
-        install_instructions_markdown = f"""[ROCm Python packages]({index_url})
-```bash
-pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
     --find-links={index_url}
 ```
 """
@@ -239,7 +124,6 @@ def run(args: argparse.Namespace):
 
     log(f"[INFO] Packages directory  : {packages_dir}")
     log(f"[INFO] Dist [sub]directory : {dist_dir}")
-    log(f"[INFO] Artifact group      : {args.artifact_group}")
     log(f"[INFO] Run ID              : {args.run_id}")
     log(f"[INFO] Platform            : {PLATFORM}")
     if args.dry_run:
@@ -249,19 +133,11 @@ def run(args: argparse.Namespace):
     else:
         log(f"[INFO] Mode              : S3 upload")
 
-    log("")
-    log("Generating index.html")
-    log("---------------------")
-    log(f"[INFO] Multi-arch indexing: {args.multiarch}")
-    generate_index(dist_dir, multiarch=args.multiarch, dry_run=args.dry_run)
-
     output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
-    # Multi-arch builds don't need an artifact_group subdirectory: the run_id
-    # already uniquely identifies the build, and there is only one Python build
-    # job per multi-arch run.
-    packages_loc = output_root.python_packages(
-        "" if args.multiarch else args.artifact_group
-    )
+    # ROCm, PyTorch, and JAX jobs upload packages to the same run's python/
+    # directory. The server generates a combined index; uploading an index
+    # from one job could hide packages uploaded by another.
+    packages_loc = output_root.python_packages()
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("")
@@ -270,40 +146,16 @@ def run(args: argparse.Namespace):
     upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
 
     if not args.output_dir:
-        if args.multiarch:
-            # Detect flat (kpack-split) vs legacy per-family layout from dist/.
-            # Dot-directories (e.g. .kpack_staging) are staging artifacts, not
-            # GPU families, and must not trigger the per-family layout.
-            family_subdirs = detect_family_subdirs(dist_dir)
-            if family_subdirs:
-                # Legacy per-family: return base URL; downstream appends /{family}/index.html
-                index_url = packages_loc.https_url
-                kpack_split = "false"
-                log(
-                    f"[INFO] Multi-arch legacy URL (tests append /{{family}}/index.html): {index_url}"
-                )
-            else:
-                # kpack-split flat: all wheels at top level; return full /index.html URL
-                index_url = f"{packages_loc.https_url}/index.html"
-                kpack_split = "true"
-                log(f"[INFO] kpack-split flat URL: {index_url}")
-        else:
-            family_subdirs = None
-            index_url = f"{packages_loc.https_url}/index.html"
-            kpack_split = "false"
-            log(f"[INFO] Single-arch index URL: {index_url}")
+        index_url = f"{packages_loc.https_url}/index.html"
+        log(f"[INFO] Package index URL: {index_url}")
 
         log("Set github actions output")
         log("-------------------------")
-        gha_set_output(
-            {"package_find_links_url": index_url, "kpack_split": kpack_split}
-        )
+        gha_set_output({"package_find_links_url": index_url})
 
         log("Write github actions build summary")
         log("----------------------------------")
-        # families: None=single-arch, []=kpack-split flat, [...]=legacy per-family
-        families = family_subdirs if args.multiarch else None
-        write_gha_upload_summary(packages_loc, families=families)
+        write_gha_upload_summary(packages_loc)
 
     log("")
     log("[INFO] Done!")
@@ -318,12 +170,6 @@ def main():
         type=Path,
         required=True,
         help="Directory containing built packages (with dist/ subdirectory)",
-    )
-    parser.add_argument(
-        "--artifact-group",
-        type=str,
-        default="",
-        help="Artifact group (e.g., gfx94X-dcgpu). Omit for multi-arch builds.",
     )
     parser.add_argument(
         "--run-id",
@@ -344,11 +190,6 @@ def main():
         help="Override S3 bucket (default: auto-select from workflow run)",
     )
     parser.add_argument(
-        "--multiarch",
-        action="store_true",
-        help="Multi-arch mode: generate per-family indexes (required for multi-arch builds with family-specific wheels)",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would happen without uploading or copying",
@@ -358,8 +199,6 @@ def main():
 
     if args.output_dir and args.bucket:
         parser.error("--output-dir and --bucket are mutually exclusive")
-    if not args.multiarch and not args.artifact_group:
-        parser.error("--artifact-group is required for single-arch builds")
 
     run(args)
 

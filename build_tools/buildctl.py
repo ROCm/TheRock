@@ -86,7 +86,11 @@ import subprocess
 import sys
 from typing import Optional, Set
 
-from _therock_utils.artifacts import ArtifactPopulator, ArtifactName
+from _therock_utils.artifacts import (
+    ArtifactPopulator,
+    ArtifactName,
+    prebuilt_marker_relpath,
+)
 
 
 def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
@@ -262,11 +266,12 @@ class BootstrappingPopulator(ArtifactPopulator):
         if full_path.exists():
             print(f"CLEANING: {full_path}")
             shutil.rmtree(full_path)
-        # Write the ".prebuilt" marker file
-        prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+        # Write the ".prebuilt" marker file where the build looks for it.
+        prebuilt_path = self.output_path / prebuilt_marker_relpath(relpath)
         prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
         prebuilt_path.touch()
-        self.created_markers.append(prebuilt_path)
+        if prebuilt_path not in self.created_markers:
+            self.created_markers.append(prebuilt_path)
 
     def on_artifact_dir(self, artifact_dir: Path):
         print(f"FLATTENING {artifact_dir.name}")

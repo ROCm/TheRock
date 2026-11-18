@@ -38,4 +38,7 @@ include = [
 
 # rocprof-trace-decoder
 [components.lib."profiler/rocprof-trace-decoder/stage"]
+include = [
+  "lib/python*/**",
+]
 [components.dev."profiler/rocprof-trace-decoder/stage"]

@@ -38,9 +38,12 @@ PACKAGE TYPES TESTED:
   - Distribution tarballs: therock-dist-{platform}-gfx{arch}-{version}.tar.gz
 
 PREREQUISITES:
-  - pip install -r ./build_tools/packaging/requirements.txt
+  - pip install pytest -r ./build_tools/packaging/requirements.txt
 
 USAGE:
+  # Run explicitly through pytest (excluded from default unit-test runs):
+  python -m pytest -m manual build_tools/packaging/tests/promote_packages_test.py
+
   # Test on current platform (auto-detected):
   python ./build_tools/packaging/tests/promote_packages_test.py
 
@@ -58,6 +61,7 @@ from pathlib import Path
 import tempfile
 from packaging.version import Version
 from pkginfo import Wheel
+import pytest
 import subprocess
 import urllib
 import platform as platform_module
@@ -456,10 +460,8 @@ def _make_sdist_ownership_source(path: Path) -> None:
 class PromoteSdistOwnershipTest(unittest.TestCase):
     """Runs without network access and completes in well under a second.
 
-    Unlike the rest of this file (a standalone script invoked directly, see
-    `if __name__ == "__main__"` below), this is a plain unittest.TestCase so
-    it can be picked up by `python -m unittest promote_packages_test`
-    alongside the other lightweight tests in this directory.
+    Unlike `test_promote_packages` below, which downloads real RC packages and
+    is marked `manual`, this test runs in default pytest collection.
     """
 
     def test_promoted_sdist_has_no_local_identity_or_permissive_modes(self):
@@ -492,7 +494,7 @@ class PromoteSdistOwnershipTest(unittest.TestCase):
                     self.assertFalse(member.mode & 0o022)
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> bool:
     parser = argparse.ArgumentParser(
         description="""Tests promotion of packages from release candidate to final release (e.g. 7.10.0rc1 --> 7.10.0).
 """
@@ -508,7 +510,7 @@ if __name__ == "__main__":
         type=Path,
         default=None,
     )
-    p = parser.parse_args(sys.argv[1:])
+    p = parser.parse_args(argv)
     platform = p.platform
     cache_dir = p.cache_dir
 
@@ -555,3 +557,13 @@ if __name__ == "__main__":
         print(
             "================================================================================="
         )
+        return res_everything and res_rocm and res_torch
+
+
+@pytest.mark.manual
+def test_promote_packages():
+    assert main([]), "Package promotion checks failed; see captured output for details"
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main() else 1)

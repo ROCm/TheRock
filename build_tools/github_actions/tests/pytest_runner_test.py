@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -28,11 +29,69 @@ class ExtractGpuArchTest(unittest.TestCase):
         # First gfx token is returned, suffixes/families included in the token.
         self.assertEqual(pytest_runner.extract_gpu_arch("gfx94X-dcgpu"), "gfx94X")
 
+    def test_strict_stepping_kept(self):
+        self.assertEqual(
+            pytest_runner.extract_gpu_arch("gfx1250-strict"), "gfx1250-strict"
+        )
+
     def test_first_of_multiple(self):
         self.assertEqual(pytest_runner.extract_gpu_arch("gfx1250,gfx942"), "gfx1250")
 
     def test_unparseable(self):
         self.assertIsNone(pytest_runner.extract_gpu_arch("no-arch-here"))
+
+
+class ResolveSkipArchTest(unittest.TestCase):
+    def test_single_target_keeps_stepping(self):
+        # Strict configs carry skip-gfx1250.
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx1250", "gfx1250-strict"),
+            "gfx1250-strict",
+        )
+
+    def test_single_target_over_family(self):
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx125X", "gfx1250"), "gfx1250"
+        )
+
+    def test_multiple_targets_keep_family(self):
+        # The runner may be any listed target.
+        self.assertEqual(
+            pytest_runner.resolve_skip_arch("gfx120X", "gfx1200,gfx1201"), "gfx120X"
+        )
+
+    def test_no_targets_keeps_family(self):
+        self.assertEqual(pytest_runner.resolve_skip_arch("gfx942", None), "gfx942")
+        self.assertEqual(pytest_runner.resolve_skip_arch("gfx942", ""), "gfx942")
+
+    def test_no_family_emits_nothing(self):
+        self.assertIsNone(pytest_runner.resolve_skip_arch(None, "gfx1250"))
+
+
+class FamilyToSkipArchTest(unittest.TestCase):
+    """AMDGPU_FAMILIES and AMDGPU_TARGETS as CI sets them -> the skip-<arch> arch."""
+
+    def _skip_arch(self, families, targets):
+        return pytest_runner.resolve_skip_arch(
+            pytest_runner.extract_gpu_arch(families), targets
+        )
+
+    def test_gfx94x_dcgpu(self):
+        self.assertEqual(self._skip_arch("gfx94X-dcgpu", "gfx942"), "gfx942")
+
+    def test_gfx1151(self):
+        self.assertEqual(self._skip_arch("gfx1151", "gfx1151"), "gfx1151")
+
+    def test_gfx120x_all_keeps_family(self):
+        self.assertEqual(self._skip_arch("gfx120X-all", "gfx1200,gfx1201"), "gfx120X")
+
+    def test_gfx125x_dcgpu(self):
+        self.assertEqual(self._skip_arch("gfx125X-dcgpu", "gfx1250"), "gfx1250")
+
+    def test_gfx1250_strict(self):
+        self.assertEqual(
+            self._skip_arch("gfx125X-dcgpu", "gfx1250-strict"), "gfx1250-strict"
+        )
 
 
 class BuildMarkerExpressionTest(unittest.TestCase):
@@ -118,6 +177,62 @@ class ResolveComponentPathTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pytest_runner.resolve_component_path("bogus", Path("/opt/rocm"))
 
+    def test_tensilelite_common_shares_tensilelite_install_tree(self):
+        rocm = Path("/opt/rocm")
+        self.assertEqual(
+            pytest_runner.resolve_component_path("tensilelite-common", rocm),
+            pytest_runner.resolve_component_path("tensilelite", rocm),
+        )
+
+
+class ResolveTestCategoryTest(unittest.TestCase):
+    def test_test_category_overrides_test_type(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "hw-common")
+
+    def test_falls_back_to_test_type(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "standard")
+
+    def test_blank_test_category_falls_back_to_test_type(self):
+        env = {"TEST_CATEGORY": "", "TEST_TYPE": "comprehensive"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "comprehensive")
+
+    def test_defaults_to_quick(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(pytest_runner.resolve_test_category(), "quick")
+
+
+class LookupCategoryTest(unittest.TestCase):
+    CATEGORIES = {"quick": {"test_paths": ["unit"]}}
+
+    def test_returns_defined_category(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "quick"}, clear=True):
+            self.assertEqual(
+                pytest_runner.lookup_category(self.CATEGORIES, "quick"),
+                {"test_paths": ["unit"]},
+            )
+
+    def test_pinned_category_missing_skips_with_warning(self):
+        env = {"TEST_CATEGORY": "hw-common", "TEST_TYPE": "standard"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch(
+            "builtins.print"
+        ) as fake_print:
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "hw-common")
+        self.assertEqual(ctx.exception.code, 0)
+        printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
+        self.assertIn("::warning", printed)
+        self.assertIn("hw-common", printed)
+
+    def test_missing_tier_still_fails(self):
+        with mock.patch.dict(os.environ, {"TEST_TYPE": "standard"}, clear=True):
+            with self.assertRaises(SystemExit) as ctx:
+                pytest_runner.lookup_category(self.CATEGORIES, "standard")
+        self.assertNotEqual(ctx.exception.code, 0)
+
 
 class GetEnvIntOverrideTest(unittest.TestCase):
     def test_unset_returns_zero(self):
@@ -143,15 +258,11 @@ class GetEnvIntOverrideTest(unittest.TestCase):
 
 class LoadTestCategoriesYamlTest(unittest.TestCase):
     def setUp(self):
-        self._tmp = (
-            Path(os.environ.get("PYTEST_RUNNER_TMP", "/tmp")) / f"pr_yaml_{os.getpid()}"
+        temporary_dir = tempfile.TemporaryDirectory(
+            dir=os.environ.get("PYTEST_RUNNER_TMP"), ignore_cleanup_errors=True
         )
-        self._tmp.mkdir(parents=True, exist_ok=True)
-
-    def tearDown(self):
-        for p in self._tmp.glob("*"):
-            p.unlink()
-        self._tmp.rmdir()
+        self.addCleanup(temporary_dir.cleanup)
+        self._tmp = Path(temporary_dir.name)
 
     def test_valid_yaml(self):
         path = self._tmp / "ok.yaml"
@@ -204,23 +315,59 @@ class BuildEnvironmentTest(unittest.TestCase):
     def test_prepends_to_existing_values(self):
         os.environ["PYTHONPATH"] = "/pre/existing"
         os.environ["LD_LIBRARY_PATH"] = "/pre/ld"
+        os.environ["LD_PRELOAD"] = "/pre/preload"
         rocm = Path("/opt/rocm")
 
-        env = pytest_runner.build_environment(rocm, "tensilelite")
+        with (
+            mock.patch.object(pytest_runner, "is_asan", return_value=True),
+            mock.patch.object(
+                pytest_runner, "get_asan_runtime_path", return_value=Path("/asan.so")
+            ),
+        ):
+            env = pytest_runner.build_environment(rocm, "tensilelite")
 
         self.assertTrue(env["PYTHONPATH"].endswith("/pre/existing"))
         self.assertIn("/pre/ld", env["LD_LIBRARY_PATH"].split(os.pathsep))
+        self.assertEqual(env["LD_PRELOAD"], f"{Path('/asan.so')}:/pre/preload")
+        self.assertEqual(os.environ["LD_PRELOAD"], "/pre/preload")
+
+    def test_ld_library_path_includes_all_llvm_triple_dirs(self):
+        # All triple subdirs must be on LD_LIBRARY_PATH in a deterministic order —
+        # not an arbitrary glob[0] that breaks when a new triple is added.
+        for var in ("PYTHONPATH", "LD_LIBRARY_PATH", "PATH"):
+            os.environ.pop(var, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            rocm = Path(tmp)
+            llvm_lib = rocm / "lib" / "llvm" / "lib"
+            triple_aarch64 = llvm_lib / "aarch64-unknown-linux-gnu"
+            triple_x86 = llvm_lib / "x86_64-unknown-linux-gnu"
+            sysdeps = rocm / "lib" / "rocm_sysdeps" / "lib"
+            for d in (triple_aarch64, triple_x86, sysdeps):
+                d.mkdir(parents=True)
+
+            env = pytest_runner.build_environment(rocm, "tensilelite")
+            ld = env["LD_LIBRARY_PATH"].split(os.pathsep)
+
+            # All triple dirs present (not just one), in sorted order regardless
+            # of filesystem glob order.
+            self.assertIn(str(triple_aarch64), ld)
+            self.assertIn(str(triple_x86), ld)
+            self.assertLess(ld.index(str(triple_aarch64)), ld.index(str(triple_x86)))
+            # rocm_sysdeps and the base lib dirs are included too.
+            self.assertIn(str(sysdeps), ld)
+            self.assertIn(str(rocm / "lib"), ld)
+            self.assertIn(str(llvm_lib), ld)
 
 
 class RunPytestTest(unittest.TestCase):
     def setUp(self):
         # A cwd with one existing and one missing test path.
-        self._cwd = Path("/tmp") / f"pr_run_{os.getpid()}"
-        (self._cwd / "exists").mkdir(parents=True, exist_ok=True)
-
-    def tearDown(self):
-        (self._cwd / "exists").rmdir()
-        self._cwd.rmdir()
+        temporary_dir = tempfile.TemporaryDirectory(
+            dir=os.environ.get("PYTEST_RUNNER_TMP"), ignore_cleanup_errors=True
+        )
+        self.addCleanup(temporary_dir.cleanup)
+        self._cwd = Path(temporary_dir.name)
+        (self._cwd / "exists").mkdir()
 
     def _run(self, **kwargs):
         """Invoke run_pytest with subprocess.run mocked; return (rc, cmd)."""

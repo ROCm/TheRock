@@ -70,6 +70,13 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
     set(EXTRA_DEBUG_TOOLS_CMAKE_ARGS "-DBUILD_SHARED_LIBS=OFF")
   endif()
 
+  # Only build and link against GoogleTest when tests are requested, so
+  # the dependency isn't pulled in for non-testing configurations.
+  set(EXTRA_AMD_DBGAPI_BUILD_DEPS)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND EXTRA_AMD_DBGAPI_BUILD_DEPS therock-googletest)
+  endif()
+
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_AMD_DBGAPI_SOURCE_DIR}"
@@ -78,9 +85,11 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       amd-llvm
     CMAKE_ARGS
       -DTHE_ROCK_BUILD=ON
+      "-DENABLE_TESTS=${THEROCK_BUILD_TESTING}"
       ${EXTRA_DEBUG_TOOLS_CMAKE_ARGS}
     BUILD_DEPS
       ${THEROCK_BUNDLED_LIBBACKTRACE}
+      ${EXTRA_AMD_DBGAPI_BUILD_DEPS}
     RUNTIME_DEPS
       amd-comgr
     INTERFACE_LINK_DIRS
@@ -119,6 +128,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       amd-comgr
       amd-dbgapi
@@ -213,6 +223,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
         "-DHIP_PLATFORM=amd"
       COMPILER_TOOLCHAIN
         amd-hip
+      BUILD_DEPS
+        therock-googletest
       RUNTIME_DEPS
         amd-dbgapi
         hip-clr
@@ -279,13 +291,14 @@ if(THEROCK_ENABLE_ROCGDB)
     "Build rocgdb against upstream GDB master (skips AMD-specific files like NOTICES.txt, roccoremerge)"
     OFF)
 
-  # When ON, download the test_rocgdb.py CI wrapper script from ROCm/ROCgdb
-  # amd-staging if it is not already present in the rocgdb source tree, and
-  # install it into tests/rocgdb. Required by TheRock CI when building a
-  # rocgdb source tree that is not part of the branches exercised by CI.
+  # When ON, download the test_rocgdb.py CI wrapper script, its
+  # rocjitsu_emulator.py module and rocgdb_emulate.py from ROCm/ROCgdb
+  # amd-staging if any is missing from the rocgdb source tree, and install
+  # them. Required by TheRock CI when building a rocgdb source tree that is
+  # not part of the branches exercised by CI.
   # Off by default to avoid a network fetch at configure time.
   option(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
-    "Download test_rocgdb.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
+    "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
     OFF)
 
   therock_cmake_subproject_declare(rocgdb

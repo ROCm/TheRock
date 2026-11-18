@@ -9,6 +9,10 @@ FROM ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
 # forcing a specific MPI onto users), so it is provided at the system level here.
 # The corresponding published image is:
 #   ghcr.io/rocm/no_rocm_image_ubuntu24_04_openmpi:latest
-RUN sudo apt-get install -y --no-install-recommends \
-    libopenmpi-dev \
-    openmpi-bin
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libopenmpi-dev \
+        openmpi-bin \
+    && rm -rf /var/lib/apt/lists/*
+USER tester

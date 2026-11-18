@@ -67,15 +67,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
 
-# The nested configure below does not otherwise inherit compile flags, and zlib
-# links statically into shipped binaries.
-set(driver_build_flag_args)
+# Driver builds link zlib into comgr, which uses the static MSVC runtime.
+set(driver_msvc_runtime_args)
 if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-  list(APPEND driver_build_flag_args
-    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
-    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
-    "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
-    "-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}"
+  list(APPEND driver_msvc_runtime_args
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
   )
 endif()
 
@@ -106,12 +103,19 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
-      ${driver_build_flag_args}
+      "-DTHEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+      "-DTHEROCK_HARDENING_POLICY=${THEROCK_HARDENING_POLICY}"
+      "-DTHEROCK_HARDENING_EXCLUDED=${THEROCK_HARDENING_EXCLUDED}"
+      # Do not forward THEROCK_SANITIZER until this nested build also receives
+      # the sanitizer compile and link options from its wrapper.
+      -DTHEROCK_COMPILER_HARDENING_PROJECT_INCLUDE=ON
+      "-DCMAKE_PROJECT_INCLUDE=${THEROCK_SOURCE_DIR}/cmake/therock_compiler_hardening.cmake"
       # Force lib/ to match the hardcoded paths throughout this file.
       -DCMAKE_INSTALL_LIBDIR=lib
       # On Windows we only use the static library; skip the shared build
       # to avoid having to track the DLL alongside the static artifact.
       "$<$<BOOL:${WIN32}>:-DZLIB_BUILD_SHARED=OFF>"
+      ${driver_msvc_runtime_args}
       # zlib 1.3.2 dropped SKIP_INSTALL_FILES, so it always installs its own
       # zlib.pc. patch_install.py removes it; we install our own below.
 

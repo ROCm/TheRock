@@ -136,6 +136,9 @@ Pip installs must use the aggregate index, such as
 https://nightly.repo.amd.com/rocm/whl-next/. Product-local Python indexes are
 publication and indexer inputs, not self-contained install entry points.
 
+For local and automated third-party Python dependency publication, see
+[Mirroring Third-Party Python Dependencies](../packaging/python_packaging.md#mirroring-third-party-python-dependencies).
+
 Stable releases are manually promoted and served from
 https://stable.repo.amd.com/rocm/. The new layout begins with ROCm 10.1
 nightlies and ROCm 10.0 stable releases. Older releases remain in the
@@ -152,6 +155,7 @@ directly when consuming intermediate build outputs.
 
 | Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`therock-bkc-artifacts`](https://therock-bkc-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-bkc`        | —                                                                                                                                                                                       |
 | [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-dev`        | —                                                                                                                                                                                       |
 | [`therock-dev-packages`](https://therock-dev-packages.s3.amazonaws.com/)                 | Native packages | `therock-dev`        | [`rocm.devreleases.amd.com/packages-multi-arch/deb/`](https://rocm.devreleases.amd.com/packages-multi-arch/deb/), [`…/rpm/`](https://rocm.devreleases.amd.com/packages-multi-arch/rpm/) |
 | [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)                     | Python packages | `therock-dev`        | [`rocm.devreleases.amd.com/whl-multi-arch/`](https://rocm.devreleases.amd.com/whl-multi-arch/)                                                                                          |

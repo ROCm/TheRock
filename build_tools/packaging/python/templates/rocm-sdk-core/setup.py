@@ -73,13 +73,11 @@ setup(
             "amdclang-cl=rocm_sdk_core._cli:amdclang_cl",
             "amdflang=rocm_sdk_core._cli:amdflang",
             "amdlld=rocm_sdk_core._cli:amdlld",
+            "clang-offload-bundler=rocm_sdk_core._cli:clang_offload_bundler",
             "hipcc=rocm_sdk_core._cli:hipcc",
             "hipconfig=rocm_sdk_core._cli:hipconfig",
             "hipify-clang=rocm_sdk_core._cli:hipify_clang",
             "offload-arch=rocm_sdk_core._cli:offload_arch",
-            "roc-obj=rocm_sdk_core._cli:roc_obj",
-            "roc-obj-extract=rocm_sdk_core._cli:roc_obj_extract",
-            "roc-obj-ls=rocm_sdk_core._cli:roc_obj_ls",
         ]
         + (
             [
@@ -97,7 +95,7 @@ setup(
                 "rocpd2pftrace=rocm_sdk_core._cli:rocpd2pftrace",
                 "rocpd2summary=rocm_sdk_core._cli:rocpd2summary",
                 "rocprofv3=rocm_sdk_core._cli:rocprofv3",
-                "rocprofv3-attach=rocm_sdk_core._cli:rocprofv3_attach",
+                "rocprof-attach=rocm_sdk_core._cli:rocprof_attach",
                 "rocprofv3-avail=rocm_sdk_core._cli:rocprofv3_avail",
             ]
             if platform.system() != "Windows"

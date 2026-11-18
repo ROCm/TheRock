@@ -128,17 +128,19 @@ def git_config_ignore_submodules(repo_path: Path):
                 .decode()
                 .splitlines()
             )
-            for config_name in config_names:
-                ignore_name = config_name.removesuffix(".path") + ".ignore"
-                run_command(["git", "config", ignore_name, "all"], cwd=repo_path)
-            submodule_paths = list_submodules(repo_path, relative=True, recursive=False)
-            run_command(
-                ["git", "update-index", "--skip-worktree"] + submodule_paths,
-                cwd=repo_path,
-            )
-        except Exception as e:
-            # pytorch audio has empty .gitmodules file which can cause exception
-            pass
+        except subprocess.CalledProcessError as e:
+            # git config returns 1 when no submodule paths match (e.g. an empty file).
+            if e.returncode != 1:
+                raise
+            return
+        for config_name in config_names:
+            ignore_name = config_name.removesuffix(".path") + ".ignore"
+            run_command(["git", "config", ignore_name, "all"], cwd=repo_path)
+        submodule_paths = list_submodules(repo_path, relative=True, recursive=False)
+        run_command(
+            ["git", "update-index", "--skip-worktree"] + submodule_paths,
+            cwd=repo_path,
+        )
 
 
 def do_hipify(args: argparse.Namespace):

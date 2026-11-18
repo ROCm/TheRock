@@ -16,8 +16,8 @@
 #   VERSION          - Full version string (e.g., 7.13.0a20260322, 7.11.0)
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110x, gfx94x, gfx110X-all)
 #                      Special value: 'multi-arch' installs the meta-package from
-#                      AMD's packages-multi-arch repository, which supports all
-#                      GPU families in a single image.
+#                      AMD's multi-arch repository, which supports all GPU
+#                      families in a single image.
 #   RELEASE_TYPE     - Release type: nightlies (default), prereleases, stable
 #
 # Examples:
@@ -35,12 +35,30 @@ AMDGPU_FAMILY="${2:?Error: AMDGPU_FAMILY is required}"
 RELEASE_TYPE="${3:-nightlies}"
 
 # Multi-arch mode: AMDGPU_FAMILY=multi-arch picks the meta-package that supports
-# all GPU families, sourced from AMD's packages-multi-arch repositories.
+# all GPU families, sourced from AMD's multi-arch repositories.
 if [ "$AMDGPU_FAMILY" = "multi-arch" ]; then
     MULTI_ARCH=1
 else
     MULTI_ARCH=0
 fi
+
+# Roots of the nightly package repositories.
+NIGHTLY_MULTI_ARCH_BASE_URL="https://nightly.repo.amd.com/rocm/core/packages"
+# Per-family nightlies are the legacy layout and were never migrated off the
+# retired host, which stopped publishing in 2026.
+NIGHTLY_PER_FAMILY_BASE_URL="https://rocm.nightlies.amd.com"
+
+# Roots of the prerelease and stable package repositories. Releases predating a
+# channel's switchover were never copied across, so both hosts stay in use.
+PRERELEASE_PRODUCT_BASE_URL="https://rc.repo.amd.com/rocm/core/packages"
+PRERELEASE_PRODUCT_MIN_VERSION="10.1"
+PRERELEASE_LEGACY_BASE_URL="https://rocm.prereleases.amd.com"
+STABLE_PRODUCT_BASE_URL="https://stable.repo.amd.com/rocm/core/packages"
+STABLE_PRODUCT_MIN_VERSION="10.0"
+STABLE_LEGACY_BASE_URL="https://repo.amd.com/rocm"
+
+# One key signs every prerelease and stable stream, old hosts included.
+PRODUCT_GPG_KEY_URL="https://stable.repo.amd.com/rocm/gpg/packages.gpg"
 
 # ---------------------------------------------------------------------------
 # Helper: extract MAJOR.MINOR from VERSION (e.g., 7.13.0a20260322 → 7.13)
@@ -149,8 +167,8 @@ resolve_nightly_build_dir() {
         exit 1
     fi
 
-    local listing_url="https://rocm.nightlies.amd.com/${repo_type}/"
-    [ "$multi_arch" = "1" ] && listing_url="https://rocm.nightlies.amd.com/packages-multi-arch/${repo_type}/"
+    local listing_url="${NIGHTLY_PER_FAMILY_BASE_URL}/${repo_type}/"
+    [ "$multi_arch" = "1" ] && listing_url="${NIGHTLY_MULTI_ARCH_BASE_URL}/${repo_type}/"
     echo "Searching for nightly build directory matching date ${date_str}..." >&2
 
     local build_dir
@@ -160,6 +178,8 @@ resolve_nightly_build_dir() {
     if [ -z "$build_dir" ]; then
         echo "Error: No nightly build found for date ${date_str}" >&2
         echo "Check available builds at: ${listing_url}" >&2
+        echo "Nightly runs are pruned after a few days, so an older date may" >&2
+        echo "simply have aged off." >&2
         exit 1
     fi
 
@@ -169,11 +189,32 @@ resolve_nightly_build_dir() {
 }
 
 # ---------------------------------------------------------------------------
+# Helper: report whether this release uses the ROCm Core product layout
+#
+# sort -VC exits 0 only when its input is already in version order, so this
+# reads as threshold <= release. Version order puts 7.14 below 10.0; a string
+# compare would get that backwards.
+# ---------------------------------------------------------------------------
+uses_product_layout() {
+    local release_type="$1"
+    local major_minor="$2"
+    local threshold
+
+    case "$release_type" in
+        prereleases) threshold="$PRERELEASE_PRODUCT_MIN_VERSION" ;;
+        stable)      threshold="$STABLE_PRODUCT_MIN_VERSION" ;;
+        *)           return 1 ;;
+    esac
+
+    printf '%s\n%s\n' "$threshold" "$major_minor" | sort -VC
+}
+
+# ---------------------------------------------------------------------------
 # Helper: build the repo base URL
 #
-# Multi-arch repos live under a 'packages-multi-arch/' path segment that:
-#   - PREFIXES the deb/rpm dir for nightlies (single-family has no such prefix)
-#   - REPLACES the 'packages/' segment for prereleases and stable
+# The product layout is flat — <base>/<distro> — one repo serving both install
+# modes, so pkg_segment applies only to the legacy hosts, which give each mode
+# its own tree.
 # ---------------------------------------------------------------------------
 build_repo_url() {
     local release_type="$1"
@@ -181,14 +222,15 @@ build_repo_url() {
     local repo_distro="$3"
     local nightly_build_dir="$4"
     local multi_arch="${5:-0}"
+    local major_minor="${6:-}"
 
     local pkg_segment="packages"
     [ "$multi_arch" = "1" ] && pkg_segment="packages-multi-arch"
 
     case "$release_type" in
         nightlies)
-            local nightly_root="https://rocm.nightlies.amd.com"
-            [ "$multi_arch" = "1" ] && nightly_root="${nightly_root}/${pkg_segment}"
+            local nightly_root="${NIGHTLY_PER_FAMILY_BASE_URL}"
+            [ "$multi_arch" = "1" ] && nightly_root="${NIGHTLY_MULTI_ARCH_BASE_URL}"
             if [ "$pkg_type" = "deb" ]; then
                 echo "${nightly_root}/deb/${nightly_build_dir}"
             else
@@ -196,17 +238,25 @@ build_repo_url() {
             fi
             ;;
         prereleases)
+            local prerelease_root="${PRERELEASE_LEGACY_BASE_URL}/${pkg_segment}"
+            if uses_product_layout prereleases "$major_minor"; then
+                prerelease_root="${PRERELEASE_PRODUCT_BASE_URL}"
+            fi
             if [ "$pkg_type" = "deb" ]; then
-                echo "https://rocm.prereleases.amd.com/${pkg_segment}/${repo_distro}"
+                echo "${prerelease_root}/${repo_distro}"
             else
-                echo "https://rocm.prereleases.amd.com/${pkg_segment}/${repo_distro}/x86_64"
+                echo "${prerelease_root}/${repo_distro}/x86_64"
             fi
             ;;
         stable)
+            local stable_root="${STABLE_LEGACY_BASE_URL}/${pkg_segment}"
+            if uses_product_layout stable "$major_minor"; then
+                stable_root="${STABLE_PRODUCT_BASE_URL}"
+            fi
             if [ "$pkg_type" = "deb" ]; then
-                echo "https://repo.amd.com/rocm/${pkg_segment}/${repo_distro}"
+                echo "${stable_root}/${repo_distro}"
             else
-                echo "https://repo.amd.com/rocm/${pkg_segment}/${repo_distro}/x86_64"
+                echo "${stable_root}/${repo_distro}/x86_64"
             fi
             ;;
         *)
@@ -220,24 +270,13 @@ build_repo_url() {
 # ---------------------------------------------------------------------------
 # Helper: get GPG key URL for signed repos
 #
-# The same AMD signing key is used for both `packages/` and
-# `packages-multi-arch/` repositories, so the key URL is always sourced from
-# `packages/gpg/` regardless of install mode. (The mirror file under
-# `packages-multi-arch/gpg/` currently returns 403 on direct GET.)
+# One AMD key signs every prerelease and stable stream, legacy hosts included,
+# so they all read it from the stable host. Nightlies are unsigned.
 # ---------------------------------------------------------------------------
 get_gpg_key_url() {
-    local release_type="$1"
-
-    case "$release_type" in
-        prereleases)
-            echo "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
-            ;;
-        stable)
-            echo "https://repo.amd.com/rocm/packages/gpg/rocm.gpg"
-            ;;
-        *)
-            echo ""
-            ;;
+    case "$1" in
+        prereleases|stable) echo "$PRODUCT_GPG_KEY_URL" ;;
+        *)                  echo "" ;;
     esac
 }
 
@@ -411,7 +450,7 @@ if [ "$RELEASE_TYPE" = "nightlies" ]; then
 fi
 
 # Build repo URL
-REPO_URL=$(build_repo_url "$RELEASE_TYPE" "$PKG_TYPE" "$REPO_DISTRO" "$NIGHTLY_BUILD_DIR" "$MULTI_ARCH")
+REPO_URL=$(build_repo_url "$RELEASE_TYPE" "$PKG_TYPE" "$REPO_DISTRO" "$NIGHTLY_BUILD_DIR" "$MULTI_ARCH" "$MAJOR_MINOR")
 GPG_KEY_URL=$(get_gpg_key_url "$RELEASE_TYPE")
 
 echo "Repo URL:        ${REPO_URL}"

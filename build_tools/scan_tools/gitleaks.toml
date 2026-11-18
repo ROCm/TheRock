@@ -1,0 +1,106 @@
+# gitleaks.toml
+# Reference: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+#
+# Allowlist policy for TheRock: every suppression lives in this file, so
+# `gitleaks detect --config` reproduces CI exactly and one review covers
+# the whole policy. Prefer a structural allowlist (a path, a value shape)
+# that stays correct as the tree moves. Reach for a commit-scoped entry
+# only for a finding that a structural rule cannot express without
+# hiding real credentials, and say so in its description.
+#
+# Allowlists apply to every rule unless narrowed with `targetRules`.
+# Multiple criteria in one block are OR'd by default; set
+# `condition = "AND"` to require all of them.
+
+title = "TheRock gitleaks config"
+
+[extend]
+# Inherit gitleaks' built-in ruleset (rotations, AWS, GCP, Slack, ...).
+# Setting this to false would mean rolling our own detections, which
+# is almost never what you want.
+useDefault = true
+
+
+
+# Allowlist field-vs-target reference:
+#   stopwords         -> always matched against the SECRET value.
+#   regexes           -> matched against `regexTarget` (default: "secret").
+#   regexTarget       -> "secret" | "match" | "line".
+# Use "match" or "line" when the "tell" is the variable name or
+# surrounding syntax, not the value itself.
+
+[[allowlists]]
+# Allowlist by location only where a real first-party secret structurally
+# can't live: vendored third-party trees and dependency lock files.
+description = "Vendored and generated paths"
+paths = [
+  '''.*\.lock$''',
+]
+
+[[allowlists]]
+description = "Test fixtures using well-known dummy variable names"
+# The "tell" here is the variable name on the same line, not the value
+# (the value is a random-looking string by design). Match against the
+# full rule match (variable + value) so we anchor on the identifier.
+regexTarget = "match"
+regexes = [
+  '''(?i)\bINVALID_TOKEN\s*=''',
+  '''(?i)\bwrong_secret\s*=''',
+  '''\bFormat\.Graphics\.PixelValueAccessMode\s*=''',
+]
+
+[[allowlists]]
+description = "Public artifact digests (variable names ending in SHA256/512/MD5)"
+# SHA-256/512/MD5 hashes of public artifacts (tarballs, GPG keys,
+# mirrored binaries) are not secrets - they're one-way digests used
+# for integrity verification. Match by variable name (against the
+# whole line) so we don't broadly allowlist every 64-char hex string.
+regexTarget = "line"
+regexes = [
+  '''[A-Z][A-Z0-9_]*SHA256\s*[=:]''',
+  '''[A-Z][A-Z0-9_]*SHA512\s*[=:]''',
+  '''[A-Z][A-Z0-9_]*MD5\s*[=:]''',
+]
+
+[[allowlists]]
+description = "Lowercase word-shaped identifiers in patches and test files"
+# `generic-api-key` fires on any `*key*`/`*secret*` assignment whose value
+# clears an entropy floor, which catches two benign shapes: build
+# identifiers in vendored source (`catalog_key = "gfx1250-strict"` selects
+# a Tensile catalog directory) and package-name fixtures in tests
+# (`key = "pkg1_2.0_amd64"` is a Debian NEVRA).
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^patches/.*\.patch$''',
+  '''(^|/)[^/]*_test\.py$''',
+]
+regexes = [
+  '''^[a-z][a-z0-9]{0,15}(?:[-_.][a-z0-9]{1,15}){1,4}$''',
+]
+
+[[allowlists]]
+description = "Signing infrastructure docs and server, by commit"
+# Three findings in a tree that no longer exists on main, reachable only
+# by the full-history scan (`scan_mode: all` in
+# .github/workflows/security_scan_weekly.yml). None is key material:
+#
+#   * server/signing-server.py -- a docstring naming the armor header of
+#     the key the function expects to receive, and a string literal the
+#     code compares against to validate what Secrets Manager returned.
+#   * docs/operations-runbook.md -- `# Expected:` lines documenting the
+#     output of `head -1` on an exported key.
+#   * SIGNING_FLOW.md -- a code sample whose argument is named `token`.
+targetRules = ["private-key", "generic-api-key"]
+condition = "AND"
+commits = [
+  "63aeae51786da6edff22218f33173ebb749e07c7",
+  "f0c948dd767968f61a9fd2f9b7f15cd221d421f3",
+  "d39ff62622d1aa9e31523a56adc5d17abe591a6d",
+  "54f7aae054d5b92dd1a316cfb6e2754b5a8897e1",
+  "7965d8d5c8b52c7843e68531adca3ac19d2523ad",
+  "2172539736bbbaf662684550259b4bd5f1970e06",
+]
+paths = [
+  '''^build_tools/packaging/linux/signing_infrastructure/''',
+]

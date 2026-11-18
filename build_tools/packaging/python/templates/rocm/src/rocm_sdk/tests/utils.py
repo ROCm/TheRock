@@ -29,10 +29,12 @@ def run_command(args: list[str | Path], cwd: Path | None = None, capture: bool =
 def assert_is_physical_package(mod):
     """Asserts that the given module is a non namespace module on disk defined
     by an __init__.py file."""
-    assert (
+    # Test helper invariant.
+    assert (  # nosec B101
         mod.__file__ is not None
     ), f"The `{mod.__name__}` module does not exist as a physical directory (__file__ is None)"
-    assert (
+    # Test helper invariant.
+    assert (  # nosec B101
         Path(mod.__file__).name == "__init__.py"
     ), f"Expected `{mod.__name__}` to be a non-namespace package"
 
@@ -50,13 +52,18 @@ def get_module_shared_libraries(mod) -> list[Path]:
 
 
 def find_console_script(script_name: str) -> Path | None:
-    scripts_paths = [sysconfig.get_path("scripts")]
+    scripts_paths = [
+        Path(sys.executable).parent,
+        sysconfig.get_path("scripts"),
+    ]
     if is_windows:
         scripts_paths.append(sysconfig.get_path("scripts", "nt_user"))
     else:
         scripts_paths.append(sysconfig.get_path("scripts", "posix_user"))
     for scripts_path in scripts_paths:
+        if scripts_path is None:
+            continue
         script_path = (Path(scripts_path) / script_name).with_suffix(exe_suffix)
-        if script_path.exists():
+        if script_path.is_file():
             return script_path
     return None

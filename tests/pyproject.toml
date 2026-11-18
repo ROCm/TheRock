@@ -1,0 +1,8 @@
+# This file isolates these integration tests from the root pyproject.toml
+# which limits patterns to only `*_test.py` (also enforced by pre-commit).
+# Keep the existing test_*.py names for artifact and ROCm sanity integration
+# tests, which run against built packages in their own CI jobs.
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra"

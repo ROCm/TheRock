@@ -20,6 +20,8 @@ from download_python_packages import (
     PackageEntry,
     categorize_package,
     core_tarball_prefix,
+    filter_by_git_sha,
+    filter_by_pytorch_version,
     is_allowed_multi_arch_package,
     list_packages_structured,
     list_tarball_for_package,
@@ -466,6 +468,106 @@ class StructuredDownloadTest(unittest.TestCase):
                 )
             ],
         )
+
+
+DEV_PYTORCH_FILES = [
+    "torch-2.12.0+gita924f282.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "torch-2.12.0+gitb97872d5.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "torch-2.13.0+gitc0691f32.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "amd_torch_device_gfx1100-2.12.0+gitb97872d5.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "amd_torch_device_gfx1100-2.13.0+gitc0691f32.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "torchvision-0.27.0+gitb3d5b111.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "triton-3.8.0+git669b31ac.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "triton-3.8.0+git66b3f9ff.rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+    "apex-1.12.0+rocm10.0.0rc4-cp312-cp312-linux_x86_64.whl",
+]
+
+
+def dev_entries(filenames):
+    return [
+        PackageEntry(
+            StorageLocation(
+                "therock-repo-amd-dev-pytorch", f"v5/rocm/pytorch/whl-next/x/{f}"
+            ),
+            1,
+        )
+        for f in filenames
+    ]
+
+
+def entry_names(entries):
+    return [e.key.split("/")[-1] for e in entries]
+
+
+# torch, its device wheel, torchvision and triton of the b97872d5 build, plus apex.
+B97872D5_BUILD = [DEV_PYTORCH_FILES[i] for i in (1, 3, 5, 6, 8)]
+
+
+def parse_structured(*extra):
+    return parse_arguments(
+        ["--version=10.0.0rc4", "--structured", "--list-multi-arch-packages", *extra]
+    )
+
+
+class DevBuildFilterTest(unittest.TestCase):
+    def test_git_sha_keeps_matching_and_untagged_wheels(self):
+        kept = filter_by_git_sha(
+            dev_entries(DEV_PYTORCH_FILES), ["b97872d5", "b3d5b111", "669b31ac"]
+        )
+        self.assertEqual(entry_names(kept), B97872D5_BUILD)
+
+    def test_git_sha_accepts_full_sha(self):
+        kept = filter_by_git_sha(
+            dev_entries(DEV_PYTORCH_FILES[:2]),
+            ["b97872d55cf78ed4a8dd9f71ce7767e35b39f2fc"],
+        )
+        self.assertEqual(entry_names(kept), [DEV_PYTORCH_FILES[1]])
+
+    def test_pytorch_version_alone_keeps_every_build_of_that_version(self):
+        names = entry_names(
+            filter_by_pytorch_version(dev_entries(DEV_PYTORCH_FILES), "2.12")
+        )
+        # Only the 2.13 torch and device wheels (2, 4) go; non-torch packages are kept.
+        self.assertEqual(names, [DEV_PYTORCH_FILES[i] for i in (0, 1, 3, 5, 6, 7, 8)])
+        self.assertNotIn(
+            DEV_PYTORCH_FILES[0],
+            entry_names(
+                filter_by_pytorch_version(dev_entries(DEV_PYTORCH_FILES), "2.1")
+            ),
+        )
+
+    def test_pytorch_version_parses_sdists(self):
+        sdists = ["torch-2.12.0.tar.gz", "torch-2.13.0+gitc0691f32.rocm10.0.0rc4.zip"]
+        self.assertEqual(
+            entry_names(filter_by_pytorch_version(dev_entries(sdists), "2.12")),
+            ["torch-2.12.0.tar.gz"],
+        )
+
+    def test_git_sha_and_pytorch_version_combine(self):
+        kept = filter_by_pytorch_version(
+            filter_by_git_sha(
+                dev_entries(DEV_PYTORCH_FILES),
+                ["b97872d5", "c0691f32", "b3d5b111", "669b31ac"],
+            ),
+            "2.12",
+        )
+        self.assertEqual(entry_names(kept), B97872D5_BUILD)
+
+    def test_dev_filters_require_structured(self):
+        for flag in ("--git-sha=b97872d5", "--pytorch-version=2.12"):
+            with self.subTest(flag=flag), self.assertRaises(SystemExit):
+                parse_arguments(["--version=10.0.0rc4", flag, "--list-archs"])
+
+    def test_dev_filter_args_are_validated(self):
+        args = parse_structured("--git-sha=B97872D5,b3d5b111", "--git-sha=669b31ac")
+        self.assertEqual(args.git_sha, ["b97872d5", "b3d5b111", "669b31ac"])
+        for bad in (
+            "--git-sha=not-a-sha",
+            "--git-sha=b97872d",
+            "--pytorch-version=2.12x",
+        ):
+            with self.subTest(bad=bad), self.assertRaises(SystemExit):
+                parse_structured(bad)
 
 
 if __name__ == "__main__":

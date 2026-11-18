@@ -211,9 +211,9 @@ tags may be used for test packages.
 ### Automated image publishing
 
 Images are automatically built and published to GitHub Packages (`ghcr.io`) by
-GitHub Actions after pushes to the associated `.Dockerfile` on the `main` or
-`stage/docker/**` branches. These actions can also be triggered manually from
-other branches
+GitHub Actions after pushes to the associated `.Dockerfile` on the `main`
+branch. To publish test images from any other branch, run the workflow manually
+against that branch
 [using workflow_dispatch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 The common
@@ -225,13 +225,15 @@ workflow is used by other `publish_*.yml` workflows:
 | [`.github/workflows/publish_build_manylinux_x86_64.yml`](/.github/workflows/publish_build_manylinux_x86_64.yml)       | [actions/workflows/publish_build_manylinux_x86_64.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_build_manylinux_x86_64.yml)       |
 | [`.github/workflows/publish_no_rocm_image_ubuntu24_04.yml`](/.github/workflows/publish_no_rocm_image_ubuntu24_04.yml) | [actions/workflows/publish_no_rocm_image_ubuntu24_04.yml](https://github.com/ROCm/TheRock/actions/workflows/publish_no_rocm_image_ubuntu24_04.yml) |
 
-Tags for built docker images are set based on the branch name pattern:
+Tags for built docker images are set based on the branch name:
 
-| Branch name pattern   | Tag pattern    |
-| --------------------- | -------------- |
-| `main`                | `latest`       |
-| `stage/docker/SUFFIX` | `stage-SUFFIX` |
-| `OTHER_NAME`          | `OTHER_NAME`   |
+| Branch name  | Tag          |
+| ------------ | ------------ |
+| `main`       | `latest`     |
+| `OTHER_NAME` | `OTHER_NAME` |
+
+Characters that are not valid in a tag are replaced with `-`, so a branch named
+`users/me/my-change` publishes as `users-me-my-change`.
 
 ### Updating images used by GitHub Actions workflows
 
@@ -241,15 +243,19 @@ The general sequence for updating an image is this:
 1. Build and test images locally
    (see [Testing and debugging](#testing-and-debugging))
 1. Build and test images on CI
-   1. Push the Dockerfile changes to a shared branch and build test packages
+   1. Push the Dockerfile changes to your working branch, then run each
+      relevant `publish_*.yml` workflow manually against that branch to build
+      test packages
       (see [Automated image publishing](#automated-image-publishing))
 
-   1. Edit sha256 pins across the project to use the staging packages, like so:
+   1. Edit the image pins across the project to use the test packages. These are
+      tagged with the branch name rather than `latest`, so they can be
+      referenced by tag:
 
       ```diff
           container:
       -     image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
-      +     image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      +     image: ghcr.io/rocm/therock_build_manylinux_x86_64:users-me-my-change
       ```
 
    1. Trigger test CI/CD jobs (e.g. by creating a draft PR with those changes)

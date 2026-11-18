@@ -12,6 +12,8 @@ SAFETY FEATURES:
   - DRY-RUN by default: Shows what would be uploaded without actually uploading
   - Requires --execute flag to perform actual S3 uploads
   - Testing buckets by default (you can use --use-release-buckets for production)
+  - Checks every file against the bucket, also in dry-run (so AWS read credentials
+    are needed); existing files are skipped, or replaced with --allow-overwrite
 
 PREREQUISITES:
   - pip install -r ./build_tools/packaging/requirements.txt
@@ -150,6 +152,24 @@ STRUCTURED_INDEXES = INDEX_NAMES
 STRUCTURED_DEFAULT_INDEX = DEFAULT_INDEX
 
 
+def object_exists(s3_client, bucket: str, key: str) -> bool:
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as e:
+        # HEAD responses have no body, so the HTTP status is the only reliable signal.
+        status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status == 404:
+            return False
+        if status == 403:
+            # Without s3:ListBucket a missing key is a 403 too, so it can't be treated as missing.
+            print(
+                f"\n[ERROR]: Could not check s3://{bucket}/{key} "
+                "(needs s3:GetObject and s3:ListBucket)"
+            )
+        raise
+
+
 def upload_python_files(
     input_dir: Path,
     bucket_name: str,
@@ -159,6 +179,7 @@ def upload_python_files(
     structured: bool = False,
     python_index: str = STRUCTURED_DEFAULT_INDEX,
     repo_stream: str = "rc",
+    skip_existing: bool = False,
 ) -> int:
     """Upload Python package files to S3 bucket.
 
@@ -178,7 +199,7 @@ def upload_python_files(
         print("DRY-RUN MODE: No actual uploads will be performed")
         print("=" * 80)
 
-    s3_client = boto3.client("s3") if execute else None
+    s3_client = boto3.client("s3")
     upload_count = 0
 
     if structured or multi_arch:
@@ -248,9 +269,15 @@ def upload_python_files(
                 upload_bucket = bucket_name
                 s3_key = f"{bucket_prefix}{arch}/{file_path.name}"
 
+            exists = object_exists(s3_client, upload_bucket, s3_key)
+            if exists and skip_existing:
+                print(f"    [SKIP] Already exists: s3://{upload_bucket}/{s3_key}")
+                continue
+
             if execute:
                 try:
-                    print(f"    Uploading {file_path.name} ...", end="", flush=True)
+                    action = "Overwriting" if exists else "Uploading"
+                    print(f"    {action} {file_path.name} ...", end="", flush=True)
                     s3_client.upload_file(str(file_path), upload_bucket, s3_key)
                     print(" done")
                     upload_count += 1
@@ -259,8 +286,9 @@ def upload_python_files(
                         f"\n    [ERROR]: Could not upload {file_path.name} to s3://{upload_bucket}/{s3_key}: {e}"
                     )
             else:
+                action = "overwrite" if exists else "upload"
                 print(
-                    f"    [DRY-RUN] Would upload: {file_path.name} -> s3://{upload_bucket}/{s3_key}"
+                    f"    [DRY-RUN] Would {action}: {file_path.name} -> s3://{upload_bucket}/{s3_key}"
                 )
                 upload_count += 1
 
@@ -275,6 +303,7 @@ def upload_tarball_files(
     multi_arch: bool = False,
     structured: bool = False,
     tarball_variant: str = "release",
+    skip_existing: bool = False,
 ) -> int:
     """Upload tarball files to S3 bucket.
 
@@ -305,7 +334,7 @@ def upload_tarball_files(
         print(f"  No tarball directory found at {tarball_dir}")
         return 0
 
-    s3_client = boto3.client("s3") if execute else None
+    s3_client = boto3.client("s3")
     upload_count = 0
 
     # Find all tar.gz files
@@ -320,9 +349,15 @@ def upload_tarball_files(
     for file_path in sorted(tarball_files):
         s3_key = f"{bucket_prefix}{file_path.name}"
 
+        exists = object_exists(s3_client, bucket_name, s3_key)
+        if exists and skip_existing:
+            print(f"    [SKIP] Already exists: s3://{bucket_name}/{s3_key}")
+            continue
+
         if execute:
             try:
-                print(f"    Uploading {file_path.name} ...", end="", flush=True)
+                action = "Overwriting" if exists else "Uploading"
+                print(f"    {action} {file_path.name} ...", end="", flush=True)
                 s3_client.upload_file(str(file_path), bucket_name, s3_key)
                 print(" done")
                 upload_count += 1
@@ -331,8 +366,9 @@ def upload_tarball_files(
                     f"\n    [ERROR]: Could not upload {file_path.name} to s3://{bucket_name}/{s3_key}: {e}"
                 )
         else:
+            action = "overwrite" if exists else "upload"
             print(
-                f"    [DRY-RUN] Would upload: {file_path.name} -> s3://{bucket_name}/{s3_key}"
+                f"    [DRY-RUN] Would {action}: {file_path.name} -> s3://{bucket_name}/{s3_key}"
             )
             upload_count += 1
 
@@ -471,6 +507,16 @@ Safety Features:
     )
 
     parser.add_argument(
+        "--allow-overwrite",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Replace files that already exist in the bucket "
+            "(default: skip them and leave the published file untouched)"
+        ),
+    )
+
+    parser.add_argument(
         "--use-release-buckets",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -550,6 +596,7 @@ def upload_release_packages(
     python_index: str = STRUCTURED_DEFAULT_INDEX,
     repo_stream: str = "rc",
     tarball_variant: str = "release",
+    allow_overwrite: bool = False,
 ) -> tuple[int, int]:
     """Upload promoted packages to S3 release bucket.
 
@@ -562,6 +609,7 @@ def upload_release_packages(
         tarball_bucket_name: S3 bucket name for tarball packages (default: therock-testing-bucket)
         tarball_bucket_prefix: S3 bucket prefix for tarball packages (default: release-upload-testing/tarball/)
         execute: If True, perform actual uploads; if False, dry-run mode (default: False)
+        allow_overwrite: If True, replace files already in the bucket instead of skipping them (default: False)
 
     Returns:
         Tuple of (python_packages_uploaded, tarballs_uploaded)
@@ -635,6 +683,7 @@ def upload_release_packages(
                 structured=structured,
                 python_index=python_index,
                 repo_stream=repo_stream,
+                skip_existing=not allow_overwrite,
             )
 
         if upload_tarballs:
@@ -646,6 +695,7 @@ def upload_release_packages(
                 multi_arch=multi_arch,
                 structured=structured,
                 tarball_variant=tarball_variant,
+                skip_existing=not allow_overwrite,
             )
 
     except NoCredentialsError:
@@ -715,4 +765,5 @@ if __name__ == "__main__":
         python_index=args.python_index,
         repo_stream=args.repo_stream,
         tarball_variant=args.tarball_variant,
+        allow_overwrite=args.allow_overwrite,
     )

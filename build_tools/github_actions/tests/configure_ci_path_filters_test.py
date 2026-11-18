@@ -11,15 +11,17 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
-    _GITHUB_WORKFLOWS_CI_FILENAMES,
+    get_ci_workflow_filenames,
+    get_jobs_for_changes,
     get_git_commit_hash,
     get_git_modified_paths,
     is_ci_run_required,
+    is_external_repo_ci_only_change,
 )
 from workflow_utils import get_transitive_workflow_uses
 
 
-class ConfigureCIPathFiltersTest(unittest.TestCase):
+class TestIsCIRunRequired(unittest.TestCase):
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
         run_ci = is_ci_run_required(paths)
@@ -35,10 +37,24 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
+    def test_dont_run_ci_if_only_uccl_files_edited(self):
+        self.assertFalse(
+            is_ci_run_required(["external-builds/uccl/build_prod_wheels.py"])
+        )
+
     def test_dont_run_ci_if_only_skipped_files_edited(self):
-        paths = ["gitleaks.toml", "build_tools/scan_tools/script.py"]
+        paths = [
+            "build_tools/scan_tools/gitleaks.toml",
+            "build_tools/scan_tools/bandit.yaml",
+            "build_tools/scan_tools/trivy.yaml",
+            "build_tools/scan_tools/zizmor.yaml",
+        ]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
+
+    def test_dont_run_ci_for_path_filter_only_changes(self):
+        paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
+        self.assertFalse(is_ci_run_required(paths))
 
     def test_run_ci_if_related_workflow_file_edited(self):
         paths = [".github/workflows/multi_arch_ci.yml"]
@@ -58,10 +74,6 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
-        paths = [".github/workflows/test_jax_dockerfile.yml"]
-        run_ci = is_ci_run_required(paths)
-        self.assertFalse(run_ci)
-
     def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
@@ -72,10 +84,13 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         unit_test_paths = [
             "build_tools/tests/example_test.py",
             "build_tools/github_actions/tests/example_test.py",
+            "build_tools/packaging/tests/example_test.py",
+            "build_tools/packaging/archives/tests/example_test.py",
             "build_tools/packaging/linux/tests/example_test.py",
             "build_tools/packaging/python/tests/example_test.py",
+            "build_tools/packaging/windows/tests/example_test.py",
             "build_tools/third_party/s3_management/tests/example_test.py",
-            "build_tools/scan_tools/github_actions/tests/example_test.py",
+            "external-builds/pytorch/tests/example_test.py",
             "test_tools/tests/example_test.py",
         ]
 
@@ -83,9 +98,14 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(is_ci_run_required([path]))
 
-    def test_dont_run_ci_for_path_filter_only_changes(self):
-        paths = ["build_tools/github_actions/configure_ci_path_filters.py"]
-        self.assertFalse(is_ci_run_required(paths))
+    def test_run_ci_for_source_and_unit_test_changes(self):
+        # Exclusions for skipping unit tests do not take priority over
+        # inclusions for modifying script files.
+        paths = [
+            "build_tools/packaging/archives/build_tarballs.py",
+            "build_tools/packaging/archives/tests/build_tarballs_test.py",
+        ]
+        self.assertTrue(is_ci_run_required(paths))
 
     def test_run_ci_for_tests_exercising_built_packages(self):
         integration_test_paths = [
@@ -102,15 +122,117 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(is_ci_run_required([path]))
 
-    def test_run_ci_for_source_and_unit_test_changes(self):
-        # Exclusions for skipping unit tests do not take priority over
-        # inclusions for modifying script files.
-        paths = [
-            "build_tools/build_tarballs.py",
-            "build_tools/tests/build_tarballs_test.py",
-        ]
-        self.assertTrue(is_ci_run_required(paths))
+    def test_external_repo_patterns_do_not_apply_therock_workflow_allowlist(self):
+        self.assertTrue(
+            is_ci_run_required(
+                [".github/workflows/pre-commit.yml"],
+                skip_patterns=["*.md"],
+                repo_name="rocm-libraries",
+            )
+        )
 
+
+class TestGetJobsForChanges(unittest.TestCase):
+    def test_pytorch_changes_select_pytorch(self):
+        paths = [
+            "external-builds/pytorch/skip_tests/generic.py",
+            ".github/workflows/multi_arch_build_windows_pytorch_wheels_ci.yml",
+            "build_tools/github_actions/write_pytorch_versions.py",
+        ]
+        self.assertEqual(get_jobs_for_changes(paths), {"pytorch"})
+
+    def test_jax_changes_select_jax(self):
+        paths = [
+            "external-builds/jax/install_jax_wheels.py",
+            ".github/workflows/test_multi_arch_linux_jax_wheels.yml",
+            "build_tools/github_actions/configure_jax_release_matrix.py",
+        ]
+        self.assertEqual(get_jobs_for_changes(paths), {"jax"})
+
+    def test_pytorch_and_jax_changes_select_both_frameworks(self):
+        paths = [
+            "external-builds/pytorch/skip_tests/generic.py",
+            "external-builds/jax/install_jax_wheels.py",
+        ]
+        self.assertEqual(get_jobs_for_changes(paths), {"pytorch", "jax"})
+
+    def test_unmapped_changes_affect_rocm_without_losing_other_matches(self):
+        paths = [
+            "external-builds/pytorch/build_prod_wheels.py",
+            "build_tools/github_actions/amdgpu_family_matrix.py",
+        ]
+        self.assertEqual(get_jobs_for_changes(paths), {"pytorch", "rocm"})
+
+    def test_skippable_changes_do_not_add_affected_jobs(self):
+        paths = [
+            "external-builds/pytorch/build_prod_wheels.py",
+            "docs/development/ci_overview.md",
+            "external-builds/uccl/build_prod_wheels.py",
+            "external-builds/pytorch/tests/repo_management_test.py",
+            "build_tools/github_actions/tests/configure_pytorch_release_matrix_test.py",
+            "build_tools/github_actions/tests/configure_jax_release_matrix_test.py",
+            ".github/workflows/pre-commit.yml",
+        ]
+        self.assertEqual(get_jobs_for_changes(paths), {"pytorch"})
+
+    def test_release_only_workflows_do_not_select_frameworks(self):
+        self.assertEqual(
+            get_jobs_for_changes(
+                [".github/workflows/multi_arch_build_windows_pytorch_wheels.yml"]
+            ),
+            set(),
+        )
+
+    def test_no_relevant_changes_affect_no_jobs(self):
+        for paths in ([], ["README.md"]):
+            with self.subTest(paths=paths):
+                self.assertEqual(get_jobs_for_changes(paths), set())
+
+    def test_unavailable_diff_affects_all_job_groups(self):
+        self.assertEqual(
+            get_jobs_for_changes(None),
+            {
+                "rocm",
+                "rocm_python",
+                "rocm_native_linux",
+                "rocm_native_windows",
+                "pytorch",
+                "jax",
+            },
+        )
+
+    def test_python_packaging_changes_select_rocm_python(self):
+        paths = ["build_tools/packaging/python/templates/rocm/setup.py"]
+        self.assertEqual(get_jobs_for_changes(paths), {"rocm_python"})
+
+    def test_native_linux_packaging_changes_select_rocm_native_linux(self):
+        paths = ["build_tools/packaging/linux/build_package.py"]
+        self.assertEqual(get_jobs_for_changes(paths), {"rocm_native_linux"})
+
+    def test_native_windows_packaging_changes_select_rocm_native_windows(self):
+        paths = ["build_tools/packaging/windows/generate_msi_wxs.py"]
+        self.assertEqual(get_jobs_for_changes(paths), {"rocm_native_windows"})
+
+    def test_packaging_workflow_changes_accumulate_with_framework_changes(self):
+        paths = [
+            "external-builds/pytorch/build_prod_wheels.py",
+            ".github/workflows/build_windows_python_packages.yml",
+            ".github/workflows/multi_arch_build_native_linux_packages.yml",
+            ".github/workflows/multi_arch_build_native_windows_packages.yml",
+        ]
+        self.assertEqual(
+            get_jobs_for_changes(paths),
+            {"pytorch", "rocm_python", "rocm_native_linux", "rocm_native_windows"},
+        )
+
+    def test_shared_packaging_code_affects_rocm(self):
+        self.assertEqual(
+            get_jobs_for_changes(["build_tools/packaging/archives/compress.py"]),
+            {"rocm"},
+        )
+
+
+class TestGetGitModifiedPaths(unittest.TestCase):
     @patch("configure_ci_path_filters.subprocess.run")
     def test_missing_base_sha_is_fetched_before_diffing(self, mock_run):
         base_sha = "f5c168058a7ceaa0f179cc36784b491a11a3adc7"
@@ -162,6 +284,8 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             get_git_modified_paths(base_sha)
 
+
+class TestGetGitCommitHash(unittest.TestCase):
     @patch("configure_ci_path_filters.subprocess.run")
     def test_get_git_commit_hash_resolves_ref(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
@@ -212,33 +336,89 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
 
         self.assertEqual(get_git_commit_hash(base_sha), base_sha)
 
+
+class TestGetCIWorkflowFilenames(unittest.TestCase):
     def test_ci_workflow_filenames_cover_all_transitive_uses(self):
-        """_GITHUB_WORKFLOWS_CI_FILENAMES must exactly match the set of
-        workflows transitively called by multi_arch_ci.yml.
+        """CI workflow filenames in skip-ci-config.toml must exactly match
+        the set of workflows transitively called by multi_arch_ci.yml.
 
         This is a change-detector test that can be removed if
-        _GITHUB_WORKFLOWS_CI_FILENAMES is computed dynamically instead of
+        ci_workflows.filenames is computed dynamically instead of
         maintained by hand.
 
-        If this test fails, update _GITHUB_WORKFLOWS_CI_FILENAMES in
-        configure_ci_path_filters.py to match the actual workflow tree.
+        If this test fails, update ci_workflows.filenames in
+        build_tools/github_actions/skip-ci-config.toml to match the actual
+        workflow tree.
         """
+        ci_workflow_filenames = get_ci_workflow_filenames()
         all_used = get_transitive_workflow_uses(["multi_arch_ci.yml"])
-        missing = all_used - _GITHUB_WORKFLOWS_CI_FILENAMES
-        stale = _GITHUB_WORKFLOWS_CI_FILENAMES - all_used
+        missing = all_used - ci_workflow_filenames
+        stale = ci_workflow_filenames - all_used
         errors = []
         if missing:
             errors.append(
-                "Missing (add to _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Missing (add to ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(missing))
             )
         if stale:
             errors.append(
-                "Stale (remove from _GITHUB_WORKFLOWS_CI_FILENAMES):\n"
+                "Stale (remove from ci_workflows.filenames in skip-ci-config.toml):\n"
                 + "\n".join(f"  - {f}" for f in sorted(stale))
             )
         if errors:
             self.fail("\n".join(errors))
+
+
+class IsExternalRepoCIOnlyChangeTest(unittest.TestCase):
+    def test_diffs_confined_to_ci_plumbing(self):
+        """One path per EXTERNAL_REPO_CI_PATTERNS family, each alone."""
+        for path in (
+            ".github/workflows/therock-multi-arch-ci.yml",
+            ".github/scripts/therock_ref.py",
+            ".github/scripts/get_changed_projects.py",
+            ".github/repos-config.json",
+            "shared/ctest/TestCategories.cmake",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(is_external_repo_ci_only_change([path]))
+
+    def test_diffs_that_are_not_ci_only(self):
+        """Source, unrelated workflows, and CI-affecting-but-not-CI-only mixes.
+
+        The mixed cases are what the all() quantifier buys: matching one CI
+        pattern is not license to drop a source edit to quick depth. The
+        shared/ctest pair is modeled on ROCm/rocm-libraries@10dc0c5.
+        """
+        for case, paths in {
+            "library source": ["projects/rocblas/src/rocblas.cpp"],
+            "workflow not calling TheRock": [".github/workflows/close-stale-prs.yml"],
+            "caller workflow mixed with source": [
+                "projects/rocblas/src/rocblas.cpp",
+                ".github/workflows/therock-ci.yml",
+            ],
+            "shared/ctest mixed with project cmake": [
+                "projects/hipdnn/cmake/Tests.cmake",
+                "shared/ctest/tests/CMakeLists.txt",
+            ],
+        }.items():
+            with self.subTest(case=case):
+                self.assertFalse(is_external_repo_ci_only_change(paths))
+
+    def test_skippable_paths_are_ignored(self):
+        """Docs are noise: they neither defeat nor constitute a CI-only change."""
+        self.assertTrue(
+            is_external_repo_ci_only_change(
+                [".github/workflows/therock-ci.yml", "README.md"],
+                skip_patterns=["*.md"],
+            )
+        )
+        self.assertFalse(
+            is_external_repo_ci_only_change(["README.md"], skip_patterns=["*.md"])
+        )
+
+    def test_missing_or_empty_diff_is_not_a_ci_only_change(self):
+        self.assertFalse(is_external_repo_ci_only_change(None))
+        self.assertFalse(is_external_repo_ci_only_change([]))
 
 
 if __name__ == "__main__":

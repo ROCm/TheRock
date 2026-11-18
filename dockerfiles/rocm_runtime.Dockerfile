@@ -243,3 +243,8 @@ RUN chmod +x /tmp/install_rocm_tarball.sh /tmp/install_rocm_packages.sh && \
 # Configure environment variables
 ENV ROCM_PATH=/opt/rocm
 ENV PATH="/opt/rocm/bin:${PATH}"
+
+# The runtime supports base images without a common user-management package and
+# relies on root for direct access to host-provided GPU device nodes.
+# trivy:ignore:DS-0002
+USER root

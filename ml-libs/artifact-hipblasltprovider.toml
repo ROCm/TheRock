@@ -4,6 +4,7 @@ exclude = [
   "lib/*.a",
 ]
 [components.dbg."ml-libs/hipblasltprovider/stage"]
+[components.doc."ml-libs/hipblasltprovider/stage"]
 [components.test."ml-libs/hipblasltprovider/stage"]
 include = [
   "bin/hipblaslt_*_test*",

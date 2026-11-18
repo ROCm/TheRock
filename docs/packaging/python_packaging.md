@@ -32,14 +32,15 @@ We generate the following types of packages:
   `Requires-Dist` on the matching version of `rocm-sdk-libraries`. Users install
   only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
-  For any file already populated in a runtime package, it will include it as
-  a relative symlink in the tarball. During extraction, file symlinks are
-  converted to hardlinks to improve compatibility, while directory symlinks
-  remain as symlinks. Shared library soname links are also rewritten as needed.
-  Since symlinks/hardlinks and non-standard attributes cannot be included in a
-  wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
-  file. The installed package is extended in response to requesting a path to it
-  via the `rocm-sdk` tool.
+  Files that do not require link setup are stored directly in the wheel. For
+  any file already populated in a runtime package, it records a relative link
+  instead; source symlinks are recorded as links as well. These links are
+  stored in `.devel_links/devel.json` because wheel archives do not portably
+  represent symlinks. During initialization, file links are created as
+  hardlinks to improve compatibility, while directory symlinks remain as
+  symlinks. Shared library soname links are also rewritten as needed. The
+  installed package is initialized in response to requesting a path to it via
+  the `rocm-sdk` tool.
 
 ### Kpack-split packaging
 
@@ -58,7 +59,7 @@ files. Each installed `rocm-sdk-device-{target}` wheel ships a manifest, and
 `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries` into the
 devel tree, recording them in the device wheel's `RECORD` so `pip uninstall`
 removes them. Because the compiler trampolines only trigger this on the first
-expansion, after installing or removing a `rocm-sdk-device-*` wheel in an
+initialization, after installing or removing a `rocm-sdk-device-*` wheel in an
 already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test` to
 refresh the device files in the devel tree.
 
@@ -185,9 +186,63 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > [!TIP]
 > For CI-style testing with the same directory layout used by workflows, use
 > [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
-> with `--output-dir` instead of directly calling the indexer. This generates
-> the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
-> structure used by CI uploads.
+> with `--output-dir`. This stages packages locally under
+> `{run_id}-{platform}/python/` but does not generate an index. To create
+> `index.html`, run the indexer command above against the staged directory.
+
+## Mirroring Third-Party Python Dependencies
+
+[`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
+resolves configured third-party wheels from PyPI and publishes them to the
+structured core `whl-next` prefix. It is usable from CI or locally.
+
+Resolve and download an immutable snapshot without AWS access:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py resolve \
+  --output-dir /tmp/rocm-dependency-snapshot
+```
+
+After configuring normal boto3/AWS credentials with `HeadBucket` (`ListBucket`),
+`HeadObject`, `GetObject`, `PutObject`, and same-key `CopyObject` access to one
+destination bucket, publish the same local snapshot:
+
+```bash
+python build_tools/packaging/python/mirror_python_dependencies.py publish \
+  --snapshot-dir /tmp/rocm-dependency-snapshot \
+  --bucket therock-repo-amd-dev-core \
+  --refresh-existing
+```
+
+Use `mirror` for a convenient one-bucket resolve and publish. Add `--dry-run`
+to `publish` or `mirror` to inspect the required S3 operations without writing.
+Existing objects are skipped by default. `--refresh-existing` performs a
+conditional same-key copy, which updates `LastModified` so retained-stream
+lifecycle rules do not expire the current dependency version. Older versions
+are not refreshed. Run
+`python build_tools/packaging/python/mirror_python_dependencies.py --help` and
+the subcommand help for project and individual dependency selection.
+
+The tool publishes to the core product-local index under
+`v5/rocm/core/whl-next/`; see the
+[nightly core index](https://nightly.repo.amd.com/rocm/core/whl-next/) for a
+user-visible example. The aggregate `/rocm/whl-next/` index does not duplicate
+these wheels. Instead,
+[`rocm_whl_next_ownership.yaml`](/build_tools/packaging/python/rocm_whl_next_ownership.yaml)
+separately controls which product-local package page the aggregate index routes
+to. Publishing only to the product-local path is sufficient to populate the
+core index without implicitly changing that routing. If a mirrored dependency
+should also be available through the aggregate index used by pip, add its core
+ownership mapping and redeploy the aggregate index.
+
+The rockrel
+[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
+workflow runs weekly and can also be run manually. It resolves one snapshot and
+publishes it with `--refresh-existing` to the core bucket of each selected
+release stream. Both scheduled and manual runs currently publish to `dev` only;
+other release streams are enabled in the workflow one at a time. If
+a run fails, rerun the workflow. Each run is idempotent, and older versions
+remain subject to their normal retention policy.
 
 ## rocm-profiler
 
@@ -241,6 +296,7 @@ ROCm Python packaging separates profiling functionality as follows:
 
   - `rocprof-compute`
   - `rocprof-sys-*`
+  - `rocsys`
   - profiler runtime libraries (from `rocprofiler-systems` and `rocprofiler-compute`)
 
 This separation allows you to install profiling tools only when needed.

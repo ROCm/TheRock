@@ -220,26 +220,36 @@ therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl # https://github.com/ROCm/TheRock/issues/150
     rccl-tests
-    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+)
+
+# gfx117X family
+therock_add_amdgpu_target(gfx1170 "AMD gfx1170 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
+)
+therock_add_amdgpu_target(gfx1171 "AMD gfx1171 iGPU" FAMILY igpu-all gfx117X-all gfx117X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests
 )
 
 # gfx120X family
@@ -255,7 +265,47 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 )
 
 # gfx125X family
+therock_add_amdgpu_target(gfx1250-strict "AMD Instinct gfx1250 strict" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
 therock_add_amdgpu_target(gfx1250 "AMD Instinct MI450/MI450X/MI455X CDNA" FAMILY dcgpu-all gfx125X-all gfx125X-dcgpu)
+
+# amdgcnspirv architecture-independent portable SPIR-V target
+# Note: some projects with GPU-specific components do not yet support SPIR-V so they are disabled here.
+therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generic
+  EXCLUDE_TARGET_PROJECTS
+    MIOpen # https://github.com/ROCm/TheRock/issues/6918
+    composable_kernel # https://github.com/ROCm/TheRock/issues/6918
+    hip-clr # https://github.com/ROCm/TheRock/issues/6918
+    hip-tests # https://github.com/ROCm/TheRock/issues/6918
+    hipDNN_samples # https://github.com/ROCm/TheRock/issues/6918
+    hipFFT # https://github.com/ROCm/TheRock/issues/6918
+    hipRAND # https://github.com/ROCm/TheRock/issues/6918
+    hipSOLVER # https://github.com/ROCm/TheRock/issues/6918
+    hipSPARSE # https://github.com/ROCm/TheRock/issues/6918
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/6918
+    hipTensor # https://github.com/ROCm/TheRock/issues/6918
+    hipdnn_integration_tests # https://github.com/ROCm/TheRock/issues/6918
+    hipkernelprovider # https://github.com/ROCm/TheRock/issues/6918
+    libhipcxx # https://github.com/ROCm/TheRock/issues/6918
+    mxDataGenerator # https://github.com/ROCm/TheRock/issues/6918
+    ocl-clr # https://github.com/ROCm/TheRock/issues/6918
+    rccl # https://github.com/ROCm/TheRock/issues/6918
+    rccl-tests # https://github.com/ROCm/TheRock/issues/6918
+    rocALUTION # https://github.com/ROCm/TheRock/issues/6918
+    rocFFT # https://github.com/ROCm/TheRock/issues/6918
+    rocRoller # https://github.com/ROCm/TheRock/issues/6918
+    rocSOLVER # https://github.com/ROCm/TheRock/issues/6918
+    rocSPARSE # https://github.com/ROCm/TheRock/issues/6918
+    rocWMMA # https://github.com/ROCm/TheRock/issues/6918
+    roctracer # https://github.com/ROCm/TheRock/issues/6918
+    rocBLAS # https://github.com/ROCm/TheRock/issues/6918
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/6918
+    aqlprofile # https://github.com/ROCm/TheRock/issues/6918
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/6918
+    rocprofiler-sdk # https://github.com/ROCm/TheRock/issues/6918
+    rocrtst # https://github.com/ROCm/TheRock/issues/6918
+    rocshmem  # https://github.com/ROCm/TheRock/issues/6918
+    rocprofiler-systems-examples  # https://github.com/ROCm/TheRock/issues/6918
+)
 
 # Optional extension targets (used for out of tree target development).
 include(therock_custom_amdgpu_targets OPTIONAL)

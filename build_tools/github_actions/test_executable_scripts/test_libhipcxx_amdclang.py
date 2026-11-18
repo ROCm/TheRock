@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shlex
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -69,6 +70,8 @@ logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
 logging.info(f"PATH: {environ_vars['PATH']}")
 
 LIBHIPCXX_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "libhipcxx"
+# Matches the LIBCUDACXX_TEST_TIMEOUT default in libhipcxx's test CMakeLists.
+LIBHIPCXX_TEST_TIMEOUT = 200
 
 try:
     os.chdir(LIBHIPCXX_BUILD_DIR)
@@ -113,24 +116,61 @@ if gpu_arch is not None:
 else:
     cmd.append("-DCMAKE_HIP_ARCHITECTURES=native")
 
-# Add rc compiler for windows
+# Add rc compiler for windows. Release matches the Linux CI preset; the default
+# Debug build pulls the debug CRT's host-only _CrtDbgReport into device asserts.
 if is_windows:
     cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
+    cmd.append("-DCMAKE_BUILD_TYPE=Release")
+
+# On Windows, run tests through ArtifactBinExecutor so they load the artifact
+# amdhip64_7.dll instead of the one in System32 (see
+# libhipcxx_artifact_executor.py). lit evals LIBCUDACXX_EXECUTOR inside a
+# double-quoted string, so only single quotes may be used here.
+if is_windows:
+    prepend_env_path(environ_vars, "PYTHONPATH", str(SCRIPT_DIR))
+    cmd.append(
+        "-DLIBCUDACXX_EXECUTOR="
+        "__import__('libhipcxx_artifact_executor').ArtifactBinExecutor("
+        f"'{THEROCK_BIN_PATH.as_posix()}', {LIBHIPCXX_TEST_TIMEOUT})"
+    )
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
-# Run the tests using lit
+
 if is_windows:
-    cmd = [
-        "ninja",
-        "check-hipcxx",
+    # Mirror ci/test_libhipcxx.sh without bash: build the c2h executables, run
+    # the CTest tests, then the lit suite. The lit CTest entry runs lit without
+    # -s, so every test result is printed as it finishes.
+    LIT_CTEST_NAME = r"^libcudacxx\.test\.lit$"
+    build_cmd = ["cmake", "--build", ".", "--target", "libcudacxx.test.c2h_all"]
+    logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(build_cmd)}")
+    failed_steps = []
+    if subprocess.run(build_cmd, env=environ_vars).returncode != 0:
+        failed_steps.append(shlex.join(build_cmd))
+    # CTest runs the c2h executables directly, so place the artifact
+    # DLLs next to them; otherwise System32's amdhip64_7.dll wins.
+    for dll in THEROCK_BIN_PATH.glob("*.dll"):
+        target = Path("bin") / dll.name
+        target.unlink(missing_ok=True)
+        try:
+            os.link(dll, target)
+        except OSError:
+            shutil.copy2(dll, target)
+    steps = [
+        ["ctest", "--output-on-failure", "--timeout", "300", "-E", LIT_CTEST_NAME],
+        ["ctest", "-V", "-R", LIT_CTEST_NAME],
     ]
+    for cmd in steps:
+        logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
+        if subprocess.run(cmd, env=environ_vars).returncode != 0:
+            failed_steps.append(shlex.join(cmd))
+    if failed_steps:
+        logging.error("Failed steps:\n  " + "\n  ".join(failed_steps))
+        sys.exit(1)
 else:
     cmd = [
         "bash",
         "../ci/test_libhipcxx.sh",
     ]
-
-logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-
-subprocess.run(cmd, check=True, env=environ_vars)
+    logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, check=True, env=environ_vars)

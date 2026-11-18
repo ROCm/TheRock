@@ -5,8 +5,11 @@ with TheRock ROCm-specific skip-test integration and sharding support.
 For the "default" and "distributed" configs, mirrors how PyTorch CI's
 test.sh invokes test_python_shard():
     python test/run_test.py \\
-        --exclude-jit-executor --exclude-distributed-tests \\
+        --exclude-distributed-tests \\
         --exclude-quantization-tests --shard N M --verbose
+
+Older PyTorch sources also get ``--exclude-jit-executor``; see
+``run_test_supports_exclude_jit_executor()``.
 
 For the "inductor" config, mirrors test_inductor_shard() from test.sh
 with two separate run_test.py invocations:
@@ -55,11 +58,10 @@ import argparse
 import os
 import platform
 import subprocess
+import sysconfig
 import sys
 import tempfile
 from pathlib import Path
-
-from skip_tests.create_skip_tests import get_tests
 
 from pytorch_utils import (
     check_pytorch_source_version,
@@ -69,6 +71,11 @@ from pytorch_utils import (
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
+# Qualified import: JAX also publishes a top-level skip_tests package.
+sys.path.insert(0, str(THIS_SCRIPT_DIR.parent))
+from pytorch.skip_tests.create_skip_tests import get_tests
+
 
 # Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT, which run_test.py uses to look up
 # historical test durations in test-times.json for balanced shard splitting.
@@ -89,6 +96,7 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
+IS_WINDOWS = platform.system() == "Windows"
 
 THEROCK_ENV_VARS = [
     "CI",
@@ -97,6 +105,7 @@ THEROCK_ENV_VARS = [
     "PYTORCH_TESTING_DEVICE_ONLY_FOR",
     "PYTORCH_PRINT_REPRO_ON_FAILURE",
     "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
+    "TORCH_SERIALIZATION_DEBUG",
     "MIOPEN_CUSTOM_CACHE_DIR",
     "TEST_CONFIG",
     "PYTHONPATH",
@@ -114,12 +123,9 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
-    "nn/test_convolution",  # hangs for 5+ hours, see run 53 shards 7 & 10
     "inductor/test_max_autotune",
     "inductor/test_torchinductor_opinfo_properties",
     "inductor/test_compiled_autograd",
-    "dynamo/test_dynamic_shapes",
-    "functorch/test_control_flow",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
@@ -140,8 +146,21 @@ INDUCTOR_UNIT_TESTS = [
 ]
 
 
+def config_libpython_ld_path() -> None:
+    libpython_dir = sysconfig.get_config_var("LIBDIR") or os.path.join(
+        sys.prefix, "lib"
+    )
+    if libpython_dir and os.path.isdir(libpython_dir):
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = (
+            f"{libpython_dir}:{existing}" if existing else libpython_dir
+        )
+
+
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     reconcile_agent_visibility_env()
+    if not IS_WINDOWS:
+        config_libpython_ld_path()
 
     os.environ.setdefault("CI", "1")
     build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
@@ -151,6 +170,9 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
     os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
+    # Upstream exports this in .ci/pytorch/test.sh, and test_serialization.py
+    # asserts it is set whenever CI is set.
+    os.environ.setdefault("TORCH_SERIALIZATION_DEBUG", "1")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
 
     if test_config:
@@ -268,7 +290,8 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Pass --exclude-jit-executor to run_test.py (default: enabled). "
-        "Use --no-exclude-jit-executor to include JIT executor tests.",
+        "Use --no-exclude-jit-executor to include JIT executor tests. "
+        "Ignored for PyTorch sources whose run_test.py no longer has the flag.",
     )
     parser.add_argument(
         "--exclude-distributed",
@@ -371,6 +394,17 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     return args, passthrough_args
 
 
+def run_test_supports_exclude_jit_executor(pytorch_dir: Path) -> bool:
+    """Whether this PyTorch source's run_test.py accepts --exclude-jit-executor.
+
+    pytorch/pytorch#203621 removed the flag together with the test_jit_profiling,
+    test_jit_legacy and test_jit_fuser_legacy files it excluded. Nightlies on
+    either side of that change share version 2.16.0a0, so check the source.
+    """
+    run_test_path = pytorch_dir / "test" / "run_test.py"
+    return "--exclude-jit-executor" in run_test_path.read_text(encoding="utf-8")
+
+
 def build_run_test_cmd(
     args: argparse.Namespace,
     tests_to_skip: str,
@@ -385,7 +419,13 @@ def build_run_test_cmd(
     cmd = [sys.executable, run_test_path]
 
     if args.exclude_jit_executor:
-        cmd.append("--exclude-jit-executor")
+        if run_test_supports_exclude_jit_executor(args.pytorch_dir):
+            cmd.append("--exclude-jit-executor")
+        else:
+            print(
+                "run_test.py has no --exclude-jit-executor (removed upstream "
+                "with the JIT executor tests); not passing it."
+            )
     if args.exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
     if args.test_config == "distributed":

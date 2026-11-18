@@ -229,6 +229,21 @@ class WorkflowOutputRoot:
         """
         return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
 
+    def native_windows_packages(self, pkg_type: str = "msi") -> StorageLocation:
+        """Location for the native Windows package directory.
+
+        Returns ``StorageLocation`` at ``{run_id}-windows/packages/{pkg_type}``
+        (e.g. ``12345678901-windows/packages/msi``).
+
+        Unlike the Linux deb/rpm repositories, the contents are loose installer
+        files (one ``.msi`` per package). See ``upload_package_repo.py`` for the
+        upload side.
+
+        Args:
+            pkg_type: Package type (currently only 'msi').
+        """
+        return StorageLocation(self.bucket, f"{self.prefix}/packages/{pkg_type}")
+
     def native_linux_packages_log_dir(self, pkg_type: str) -> StorageLocation:
         """Location for native Linux packaging logs directory.
 
@@ -255,17 +270,9 @@ class WorkflowOutputRoot:
 
     # -- Python packages --------------------------------------------------------
 
-    def python_packages(self, artifact_group: str = "") -> StorageLocation:
-        """Location for the Python packages directory.
-
-        Args:
-            artifact_group: Build variant (e.g., 'gfx110X-all'). If empty,
-                packages are stored directly under python/ (used for
-                multi-arch builds where run_id already uniquely identifies
-                the build).
-        """
-        suffix = f"/{artifact_group}" if artifact_group else ""
-        return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
+    def python_packages(self) -> StorageLocation:
+        """Location for the shared Python packages directory."""
+        return StorageLocation(self.bucket, f"{self.prefix}/python")
 
     # -- Tarballs ---------------------------------------------------------------
 

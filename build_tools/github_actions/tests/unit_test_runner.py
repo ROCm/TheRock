@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import importlib
 import os
 import sys
 import tempfile
@@ -191,6 +192,44 @@ class BuildCtestCommandTest(unittest.TestCase):
         idx = cmd.index("-L")
         self.assertEqual(cmd[idx + 1], "^full$")
 
+    def test_multi_gpu_component_uses_namespaced_label(self):
+        # Multi-GPU split jobs must query the "multigpu_<category>" label so they
+        # run only the multi-GPU subset defined in the component's yaml.
+        original = test_runner.test_component_job_name
+        try:
+            for component in ("hipfft-multi-gpu", "rocfft-multi-gpu"):
+                test_runner.test_component_job_name = component
+                cmd = self._build("full", "", set())
+                idx = cmd.index("-L")
+                self.assertEqual(
+                    cmd[idx + 1], "^multigpu_full$", f"failed for {component}"
+                )
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_multi_gpu_component_namespaces_exclude_labels(self):
+        # Exclude labels are derived from the namespaced primary label too.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "hipfft-multi-gpu"
+            cmd = self._build("full", "", set(), {"multigpu_full_exclude"})
+            le_indices = [i for i, v in enumerate(cmd) if v == "-LE"]
+            le_patterns = [p for i in le_indices for p in cmd[i + 1].split("|")]
+            self.assertIn("multigpu_full_exclude", le_patterns)
+        finally:
+            test_runner.test_component_job_name = original
+
+    def test_single_gpu_component_uses_base_label(self):
+        # Non multi-GPU components keep the base "<category>" label.
+        original = test_runner.test_component_job_name
+        try:
+            test_runner.test_component_job_name = "hipfft"
+            cmd = self._build("full", "", set())
+            idx = cmd.index("-L")
+            self.assertEqual(cmd[idx + 1], "^full$")
+        finally:
+            test_runner.test_component_job_name = original
+
     def test_include_labels_are_anchored(self):
         # ctest -L is a partial regex match, so include labels must be anchored
         # (^...$) to avoid e.g. "full" matching "multigpu_full" or "ffm-full".
@@ -231,6 +270,40 @@ class ApplyComponentOverridesTest(unittest.TestCase):
         _, parallel = self._apply("rocwmma", 4)
         self.assertEqual(parallel, 4)
 
+    def _apply_env(self, job_name, runner_os):
+        env = {}
+        runner_env = {}
+        if runner_os is not None:
+            runner_env["RUNNER_OS"] = runner_os
+        with patch.dict(os.environ, runner_env, clear=False):
+            if runner_os is None:
+                os.environ.pop("RUNNER_OS", None)
+            test_runner.apply_component_overrides(
+                job_name,
+                "quick",
+                Path("/rocm"),
+                Path("/therock"),
+                "/rocm/bin/default",
+                env,
+                1,
+            )
+        return env
+
+    def test_sparse_solver_pool_workaround_is_linux_only(self):
+        for job_name in ("rocsparse", "hipsparse", "rocalution"):
+            self.assertEqual(
+                self._apply_env(job_name, "Linux")["HIP_MEM_POOL_USE_VM"], "0"
+            )
+            self.assertNotIn(
+                "HIP_MEM_POOL_USE_VM", self._apply_env(job_name, "Windows")
+            )
+            self.assertNotIn("HIP_MEM_POOL_USE_VM", self._apply_env(job_name, None))
+
+    def test_literal_env_still_applies_on_windows(self):
+        env = self._apply_env("rocprofiler-systems", "Windows")
+        self.assertEqual(env["OPAL_PREFIX"], "/rocm")
+        self.assertNotIn("HIP_MEM_POOL_USE_VM", env)
+
 
 class ValidTestCategoriesTest(unittest.TestCase):
     """Tests for VALID_TEST_CATEGORIES and category validation."""
@@ -247,6 +320,8 @@ class ValidTestCategoriesTest(unittest.TestCase):
                 "ffm-standard",
                 "ffm-comprehensive",
                 "ffm-full",
+                "emu-fast",
+                "emu-full",
             },
         )
 
@@ -257,6 +332,44 @@ class ValidTestCategoriesTest(unittest.TestCase):
     def test_invalid_category_not_accepted(self):
         self.assertNotIn("smoke", test_runner.VALID_TEST_CATEGORIES)
         self.assertNotIn("", test_runner.VALID_TEST_CATEGORIES)
+
+
+class CiDebugEnvTest(unittest.TestCase):
+    """Tests for the THEROCK_CI_DEBUG -> ROCM_KPACK_DEBUG force-on behavior.
+
+    This runs at module import time, so each case re-imports test_runner with a
+    controlled environment and inspects the resulting environ_vars.
+    """
+
+    def _reload_environ(self, env):
+        base = {"THEROCK_BIN_DIR": _tmpdir, "TEST_COMPONENT": "rocblas"}
+        with patch.dict(os.environ, {**base, **env}, clear=True):
+            return importlib.reload(test_runner).environ_vars
+
+    def test_ci_debug_forces_kpack_debug_on(self):
+        # THEROCK_CI_DEBUG=1 overrides a component's ROCM_KPACK_DEBUG=0 opt-out.
+        environ_vars = self._reload_environ(
+            {"THEROCK_CI_DEBUG": "1", "ROCM_KPACK_DEBUG": "0"}
+        )
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "1")
+
+    def test_ci_debug_off_preserves_kpack_opt_out(self):
+        # Without THEROCK_CI_DEBUG the component's opt-out is left untouched.
+        environ_vars = self._reload_environ(
+            {"THEROCK_CI_DEBUG": "0", "ROCM_KPACK_DEBUG": "0"}
+        )
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "0")
+
+    def test_ci_debug_absent_preserves_kpack_opt_out(self):
+        # THEROCK_CI_DEBUG unset behaves the same as "0".
+        environ_vars = self._reload_environ({"ROCM_KPACK_DEBUG": "0"})
+        self.assertEqual(environ_vars["ROCM_KPACK_DEBUG"], "0")
+
+
+def tearDownModule():
+    # Restore the module to the import-time environment so other test modules
+    # in the same process see the original test_runner state.
+    importlib.reload(test_runner)
 
 
 if __name__ == "__main__":

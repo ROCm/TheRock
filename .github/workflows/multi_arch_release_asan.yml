@@ -5,6 +5,10 @@
 #
 # Modeled on multi_arch_release.yml but uses the ASAN build variant.
 
+# Notes on security:
+#   * Higher-trust entry points: manual runs and automation from https://github.com/ROCm/rockrel.
+#   * Inherit Quartz credentials through nested workflows without repeating mappings.
+
 name: Multi-Arch Release ASAN
 
 on:
@@ -64,7 +68,7 @@ on:
       build_pytorch:
         description: "Build PyTorch wheels"
         type: boolean
-        default: false
+        default: true
       python_version:
         description: "Single Python version for wheel builds (empty for full matrix)"
         type: string
@@ -87,19 +91,19 @@ jobs:
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
-      build_pytorch: false
+      build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: false
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref }}
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   linux_release:
     name: Linux::${{ fromJSON(needs.setup.outputs.linux_build_config || '{}').build_variant_label || 'skip' }}
     needs: setup
     if: ${{ needs.setup.outputs.linux_build_config != '' }}
     uses: ./.github/workflows/multi_arch_release_linux.yml
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       build_config: ${{ needs.setup.outputs.linux_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
