@@ -48,6 +48,7 @@ CLI:
 import argparse
 import concurrent.futures
 import configparser
+import errno
 import hashlib
 import json
 import logging
@@ -351,6 +352,24 @@ def _materialize_from_cache(cache_file: Path, dest: Path) -> None:
         shutil.copy2(cache_file, dest)
 
 
+# os.link errors meaning that this link cannot be created, although a copy of
+# the content could still be published: a source on another volume, a cache
+# filesystem without hardlinks, or a file at its link limit. Windows reports
+# unsupported hardlinks and its link limit as EINVAL. Other errors, such as an
+# unwritable or full cache directory, would also prevent publishing a copy.
+_LINK_UNAVAILABLE_ERRNOS = frozenset(
+    {
+        errno.EXDEV,
+        errno.EPERM,
+        errno.ENOTSUP,
+        errno.EOPNOTSUPP,
+        errno.ENOSYS,
+        errno.EMLINK,
+        errno.EINVAL,
+    }
+)
+
+
 def _store_in_cache(src: Path, cache_file: Path) -> None:
     """Publish verified src, leaving existing entries for readers to validate."""
     cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -365,9 +384,11 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
         return
     except FileExistsError:
         return
-    except OSError:
+    except OSError as e:
         if cache_file.exists():
             return
+        if e.errno not in _LINK_UNAVAILABLE_ERRNOS:
+            raise
         # Cross-filesystem source, or a cache volume without hardlinks.
 
     tmp = cache_file.with_suffix(f"{cache_file.suffix}.{uuid.uuid4().hex}.tmp")
@@ -379,9 +400,11 @@ def _store_in_cache(src: Path, cache_file: Path) -> None:
             os.link(tmp, cache_file)
         except FileExistsError:
             return
-        except OSError:
+        except OSError as e:
             if cache_file.exists():
                 return
+            if e.errno not in _LINK_UNAVAILABLE_ERRNOS:
+                raise
             # Filesystems without hardlinks need a rename. Windows refuses to
             # replace an existing entry; POSIX replaces it atomically. In-process
             # readers and publishers are serialized by _cache_lock.

@@ -821,7 +821,8 @@ class TestDirectCachePublication(unittest.TestCase):
     def test_no_hardlink_filesystem_retains_copy_fallback(self):
         # EPERM is a PermissionError, unlike ENOTSUP. Both can mean that the
         # filesystem does not support hardlinks, rather than a competing writer.
-        for error in (errno.ENOTSUP, errno.EPERM):
+        # Windows reports unsupported hardlinks as EINVAL.
+        for error in (errno.ENOTSUP, errno.EPERM, errno.EINVAL):
             with self.subTest(error=error), tempfile.TemporaryDirectory() as t:
                 tmp = Path(t)
                 source, cache = tmp / "source", tmp / "cache/key"
@@ -833,6 +834,46 @@ class TestDirectCachePublication(unittest.TestCase):
                 self.assertEqual(cache.read_bytes(), b"tiny")
                 self.assertEqual(source.read_bytes(), b"tiny")
                 self.assertEqual(list(cache.parent.glob("*.tmp")), [])
+
+    def test_unwritable_cache_reports_link_error_without_copying(self):
+        for error in (errno.EACCES, errno.ENOSPC):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                source, cache = tmp / "source", tmp / "cache/key"
+                source.write_bytes(b"tiny")
+                link_error = OSError(
+                    error, "cannot link", str(source), None, str(cache)
+                )
+                messages = []
+                with mock.patch.object(
+                    fda.os, "link", side_effect=link_error
+                ), mock.patch.object(
+                    fda.shutil, "copy2", side_effect=AssertionError("copied")
+                ):
+                    fda._try_store_in_cache(source, cache, messages.append)
+                self.assertFalse(cache.exists())
+                self.assertEqual(list(cache.parent.iterdir()), [])
+                self.assertEqual(len(messages), 1)
+                self.assertIn(f"[Errno {error}] cannot link", messages[0])
+
+    def test_staged_link_error_is_reported_without_rename(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            source, cache = tmp / "source", tmp / "cache/key"
+            source.write_bytes(b"tiny")
+
+            def link(src, dest):
+                if Path(src) == source:
+                    raise OSError(errno.EXDEV, "different volume")
+                raise OSError(errno.EACCES, "cannot link staged copy")
+
+            with mock.patch.object(fda.os, "link", side_effect=link), mock.patch.object(
+                fda.os, "rename", side_effect=AssertionError("renamed")
+            ):
+                with self.assertRaises(PermissionError):
+                    fda._store_in_cache(source, cache)
+            self.assertFalse(cache.exists())
+            self.assertEqual(list(cache.parent.iterdir()), [])
 
     def test_manifest_publication_does_not_rename_cache_path(self):
         for corrupt in (False, True):
