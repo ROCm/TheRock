@@ -222,7 +222,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ROCm/therock-ci-config
-          ref: users/kkhalasi/asan-prod-2-routing
+          ref: main
           path: ci-config
         continue-on-error: true
 
