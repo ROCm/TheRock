@@ -73,20 +73,19 @@ def gh_api_json(path: str):
         return None
 
 
-def gh_api_pages(path: str) -> list:
-    """Fetch every page of a list endpoint via gh (100 per page)."""
+def gh_api_pages(path: str) -> list | None:
+    """Fetch every page of a list endpoint via gh (100 per page); None if any page fails."""
     items: list = []
     page = 1
     sep = "&" if "?" in path else "?"
     while True:
         data = gh_api_json(f"{path}{sep}per_page=100&page={page}")
-        if not isinstance(data, list) or not data:
-            break
+        if not isinstance(data, list):
+            return None
         items.extend(data)
         if len(data) < 100:
-            break
+            return items
         page += 1
-    return items
 
 
 def repo_from_pr_url(url: str) -> str | None:
@@ -145,6 +144,7 @@ LABEL_RACE_SECONDS = 60
 BUILD_TEST_JOB_RE = re.compile(r"::\S+ / (Build|Test)\b")
 JOBS_PAGE_SIZE = 30  # larger pages of a big run's jobs can time out (HTTP 502)
 JOBS_MAX_PAGES = 10
+JOBS_MAX_RUNS = 10  # passing runs to check, newest first, for build or test evidence
 # The commits API paginates a commit's files and stops listing at 3000.
 COMMIT_FILES_PAGE_SIZE = 100
 COMMIT_FILES_LIMIT = 3000
@@ -259,44 +259,55 @@ def uncertain_labels(events: list[dict], when: str | None) -> list[str]:
 
 
 def is_coverage_baseline(ci_run: dict) -> bool:
-    """A passing run that built or tested something.
+    """A passing run with job evidence that it built or tested something.
 
     Under `ci:skip`, or when every path is auto-skipped, the setup and summary jobs still
-    succeed, so a passing conclusion alone is not evidence of coverage.
+    succeed, so a passing conclusion alone is not evidence of coverage, and neither is a run
+    whose jobs could not be read.
     """
     return (
         ci_run.get("conclusion") == "success"
         and "ci:skip" not in ci_run.get("labels", [])
-        and ci_run.get("tested") is not False
+        and ci_run.get("tested") is True
     )
 
 
 def analyze_ci_labels(
     runs: list[dict],
-    events: list[dict],
+    events: list[dict] | None,
     commits: list[dict],
     commit_files: dict[str, list[str] | None],
     patterns: list[str] | None,
+    current_labels: list[str] | None = None,
 ) -> dict:
     """Which labels each CI run used, and whether anything since the last tested pass escaped CI.
 
     `runs` are the PR's main-CI runs (id, name, head_sha, created_at, status, conclusion, url,
-    and optionally `tested`: True or False from job evidence, None when unknown). `events` are
-    label events (see labels_at). `commits` are the PR's commits, oldest first. `commit_files`
-    maps a commit to its changed paths (None when unknown) for commits after the baseline.
+    and `tested`: True or False from job evidence, None or absent when unknown). `events` are
+    label events (see labels_at), or None when the label history could not be read; then
+    `current_labels` (the PR's labels now) stands in and no run's labels are known.
+    `commits` are the PR's commits, oldest first. `commit_files` maps a commit to its changed
+    paths (None when unknown) for commits after the baseline.
     The verdict is go, caution, or hold (reference.md, "The ci_labels.py report").
     """
+    history = events is not None
+    events = events or []
     timeline = [
         {
             **r,
             "labels": labels_at(events, r.get("created_at")),
             "uncertain_labels": uncertain_labels(events, r.get("created_at")),
+            "labels_unknown": not history,
         }
         for r in sorted(runs, key=lambda r: r.get("created_at") or "")
     ]
-    current = labels_at(events, None)
+    if history:
+        current = labels_at(events, None)
+    else:
+        current = sorted(lbl for lbl in current_labels or [] if is_ci_label(lbl))
     report = {
         "current_labels": current,
+        "label_history_known": history,
         "runs": timeline,
         "last_passing_run": None,
         "commits_since": [],
@@ -307,13 +318,22 @@ def analyze_ci_labels(
     baselines = [r for r in timeline if is_coverage_baseline(r)]
     last = baselines[-1] if baselines else None
     report["last_passing_run"] = last
+    unverified = [
+        r
+        for r in timeline
+        if r.get("conclusion") == "success"
+        and "ci:skip" not in r["labels"]
+        and r.get("tested") is not True
+        and r.get("tested") is not False
+        and (not last or (r.get("created_at") or "") > (last.get("created_at") or ""))
+    ]
     oids = [c.get("oid", "") for c in commits]
     if last and last.get("head_sha") not in oids:
         report["reason"] = (
             "The last passing run's commit is not in the PR's current history (rebased or "
             "force-pushed). Judge the diff since that run by hand."
         )
-        return report
+        return _note_gaps(report, history, unverified)
 
     start = oids.index(last["head_sha"]) + 1 if last else 0
     later = []
@@ -348,7 +368,7 @@ def analyze_ci_labels(
             report["reason"] = "No CI runs found for this PR's commits."
         else:
             report["reason"] = "No passing CI run built or tested this PR's code."
-        return report
+        return _note_gaps(report, history, unverified)
 
     started = _parse_timestamp(last.get("created_at"))
     report["label_changes_since"] = [
@@ -366,17 +386,14 @@ def analyze_ci_labels(
         for lbl in current
         if not is_narrowing_label(lbl) and lbl not in last["labels"]
     ]
-    if not later:
-        if other_added:
-            report["reason"] = (
-                f"Label(s) {', '.join(other_added)} were added after the last passing run, "
-                "and no run has used them. Re-run CI if they add coverage the change needs."
-            )
-        else:
-            report["verdict"] = "go"
-            report["reason"] = (
-                "The PR's head commit passed a run that built or tested it."
-            )
+    if not code_commits and other_added and history:
+        report["reason"] = (
+            f"Label(s) {', '.join(other_added)} were added after the last passing run, "
+            "and no run has used them. Re-run CI if they add coverage the change needs."
+        )
+    elif not later:
+        report["verdict"] = "go"
+        report["reason"] = "The PR's head commit passed a run that built or tested it."
     elif not code_commits:
         report["verdict"] = "go"
         report["reason"] = (
@@ -409,6 +426,27 @@ def analyze_ci_labels(
             f" But {', '.join(unsure)} changed within {LABEL_RACE_SECONDS} seconds of that "
             "run being created, so it may not have used them. Check the run's setup log for "
             "the matching \"Label '...'\" line, or re-run CI."
+        )
+    return _note_gaps(report, history, unverified)
+
+
+def _note_gaps(report: dict, history: bool, unverified: list[dict]) -> dict:
+    """Say what evidence was missing.
+
+    Without the label history, a go that rests on a run's labels is only a caution. A go for
+    a fully CI-skipped PR does not depend on labels, so it stands.
+    """
+    if not history:
+        if report["verdict"] == "go" and report["last_passing_run"]:
+            report["verdict"] = "caution"
+        report["reason"] += (
+            " The PR's label history could not be read, so the labels each run used are "
+            "unknown; the current labels were used instead."
+        )
+    if unverified and report["verdict"] != "go":
+        report["reason"] += (
+            f" {len(unverified)} newer passing run(s) could not be checked for build or test "
+            "jobs, so they were not counted as coverage."
         )
     return report
 
@@ -473,15 +511,21 @@ def fetch_ci_label_report(
             "runs": [],
         }
     number = data.get("number")
-    events = [
-        {
-            "event": ev.get("event"),
-            "label": (ev.get("label") or {}).get("name", ""),
-            "created_at": ev.get("created_at"),
-        }
-        for ev in gh_api_pages(f"repos/{repo}/issues/{number}/events")
-        if ev.get("event") in ("labeled", "unlabeled")
-    ]
+    current_labels = [lbl.get("name", "") for lbl in data.get("labels") or []]
+    raw_events = gh_api_pages(f"repos/{repo}/issues/{number}/events")
+    events = (
+        None
+        if raw_events is None
+        else [
+            {
+                "event": ev.get("event"),
+                "label": (ev.get("label") or {}).get("name", ""),
+                "created_at": ev.get("created_at"),
+            }
+            for ev in raw_events
+            if ev.get("event") in ("labeled", "unlabeled")
+        ]
+    )
     commits = data.get("commits") or []
     runs = []
     for c in commits[-CI_LABELS_MAX_COMMITS:]:
@@ -505,21 +549,26 @@ def fetch_ci_label_report(
                 }
             )
     # Job evidence for passing runs, newest first, until one that built or tested is found.
+    # Runs whose jobs cannot be read are skipped, never counted as coverage.
+    checked = 0
     for r in sorted(runs, key=lambda r: r.get("created_at") or "", reverse=True):
         if r["conclusion"] != "success":
             continue
-        if "ci:skip" in labels_at(events, r["created_at"]):
+        if events is not None and "ci:skip" in labels_at(events, r["created_at"]):
             continue
+        if checked >= JOBS_MAX_RUNS:
+            break
+        checked += 1
         r["tested"] = run_built_or_tested(repo, r["id"])
-        if r["tested"] is not False:
+        if r["tested"] is True:
             break
     patterns, method = load_skip_patterns(repo, data.get("baseRefName"), repo_path)
-    first = analyze_ci_labels(runs, events, commits, {}, patterns)
+    first = analyze_ci_labels(runs, events, commits, {}, patterns, current_labels)
     files = {
         c["oid"]: fetch_commit_files(repo, c["oid"])
         for c in first.get("commits_since", [])
     }
-    report = analyze_ci_labels(runs, events, commits, files, patterns)
+    report = analyze_ci_labels(runs, events, commits, files, patterns, current_labels)
     report["skip_method"] = method
     report["commits_checked"] = min(len(commits), CI_LABELS_MAX_COMMITS)
     report["commits_total"] = len(commits)
@@ -537,7 +586,12 @@ def print_ci_label_report(report: dict) -> None:
             state = "success (ci:skip)"
         elif state == "success" and r.get("tested") is False:
             state = "success (built and tested nothing)"
-        labels = ", ".join(r.get("labels") or []) or "no labels"
+        elif state == "success" and "tested" in r and r["tested"] is None:
+            state = "success (jobs unreadable)"
+        if r.get("labels_unknown"):
+            labels = "labels unknown"
+        else:
+            labels = ", ".join(r.get("labels") or []) or "no labels"
         unsure = r.get("uncertain_labels") or []
         note = f" (uncertain: {', '.join(unsure)})" if unsure else ""
         print(

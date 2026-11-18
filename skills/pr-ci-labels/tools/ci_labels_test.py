@@ -30,7 +30,8 @@ def _label(event, label, when):
     return {"event": event, "label": label, "created_at": when}
 
 
-def _ci_run(sha, when, conclusion="success"):
+def _ci_run(sha, when, conclusion="success", tested=True):
+    """A CI run; `tested` is the job evidence (True built or tested, False not, None unknown)."""
     return {
         "id": 1,
         "name": "TheRock Multi-Arch CI",
@@ -39,6 +40,7 @@ def _ci_run(sha, when, conclusion="success"):
         "status": "completed",
         "conclusion": conclusion,
         "url": "https://example.invalid/run",
+        "tested": tested,
     }
 
 
@@ -260,6 +262,82 @@ class CiLabelAnalysisTest(unittest.TestCase):
         )
         self.assertEqual(report["verdict"], "hold")
 
+    def test_pass_with_unreadable_jobs_is_not_coverage(self):
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=None)],
+            [],
+            _commits(SHA_A),
+            {SHA_A: ["src/scan.cpp"]},
+            SKIP_PATTERNS,
+        )
+        self.assertIsNone(report["last_passing_run"])
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("could not be checked", report["reason"])
+
+    def test_unreadable_newer_pass_falls_back_to_older_verified_pass(self):
+        report = cl.analyze_ci_labels(
+            [
+                _ci_run(SHA_A, "2026-11-01T10:00:00Z"),
+                _ci_run(SHA_B, "2026-11-01T12:00:00Z", tested=None),
+            ],
+            [],
+            _commits(SHA_A, SHA_B),
+            {SHA_B: ["src/scan.cpp"]},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["last_passing_run"]["head_sha"], SHA_A)
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("could not be checked", report["reason"])
+
+    def test_docs_commit_does_not_clear_an_unused_coverage_label(self):
+        # Pass on A, add ci:gfx950, push docs-only B: gfx950 has still never run.
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z")],
+            [_label("labeled", "ci:gfx950", "2026-11-01T11:00:00Z")],
+            _commits(SHA_A, SHA_B),
+            {SHA_B: ["docs/guide.md"]},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("ci:gfx950", report["reason"])
+
+    def test_unknown_label_history_keeps_current_labels_and_holds(self):
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z")],
+            None,
+            _commits(SHA_A, SHA_B),
+            {SHA_B: ["src/scan.cpp"]},
+            SKIP_PATTERNS,
+            current_labels=["ci:skip", "project: hipblaslt"],
+        )
+        self.assertFalse(report["label_history_known"])
+        self.assertEqual(report["current_labels"], ["ci:skip"])
+        self.assertEqual(report["verdict"], "hold")
+        self.assertIn("label history could not be read", report["reason"])
+
+    def test_unknown_label_history_never_gives_go_from_a_run(self):
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z")],
+            None,
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+            current_labels=[],
+        )
+        self.assertEqual(report["verdict"], "caution")
+        self.assertTrue(report["runs"][0]["labels_unknown"])
+
+    def test_unknown_label_history_still_allows_a_fully_skipped_pr(self):
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=False)],
+            None,
+            _commits(SHA_A),
+            {SHA_A: ["docs/guide.md"]},
+            SKIP_PATTERNS,
+            current_labels=[],
+        )
+        self.assertEqual(report["verdict"], "go")
+
     def test_coverage_label_near_run_creation_downgrades_go(self):
         report = cl.analyze_ci_labels(
             [{**_ci_run(SHA_A, "2026-11-01T10:00:30Z"), "tested": True}],
@@ -284,8 +362,57 @@ class CiLabelAnalysisTest(unittest.TestCase):
         self.assertEqual(report["verdict"], "go")
 
 
+class GhApiPagesTest(unittest.TestCase):
+    def test_failed_page_is_none_not_empty(self):
+        with mock.patch.object(cl, "gh_api_json", return_value=None):
+            self.assertIsNone(cl.gh_api_pages("repos/o/r/issues/5/events"))
+
+    def test_empty_list_is_a_real_empty_result(self):
+        with mock.patch.object(cl, "gh_api_json", return_value=[]):
+            self.assertEqual(cl.gh_api_pages("repos/o/r/issues/5/events"), [])
+
+
 class CiLabelFetchTest(unittest.TestCase):
     """The gh wiring, with gh replaced by canned API responses."""
+
+    def test_unreadable_label_history_uses_the_prs_current_labels(self):
+        sha_run = (
+            f"repos/o/r/actions/runs?head_sha={SHA_A}&event=pull_request&per_page=100"
+        )
+        api = {
+            sha_run: {
+                "workflow_runs": [
+                    {
+                        "id": 7,
+                        "name": "TheRock Multi-Arch CI",
+                        "head_sha": SHA_A,
+                        "created_at": "2026-11-01T10:00:00Z",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "html_url": "https://example.invalid/7",
+                    }
+                ]
+            },
+            "repos/o/r/actions/runs/7/jobs?filter=latest&per_page=30&page=1": _jobs(
+                ("Linux::release / Build Multi-Arch Stages / math-libs", "success")
+            ),
+        }
+        data = {
+            "number": 5,
+            "url": "https://github.com/o/r/pull/5",
+            "baseRefName": "develop",
+            "commits": _commits(SHA_A),
+            "labels": [{"name": "ci:skip"}],
+        }
+        with mock.patch.object(
+            cl, "gh_api_json", side_effect=api.get
+        ), mock.patch.object(cl, "gh_api_pages", return_value=None), mock.patch.object(
+            cl, "load_skip_patterns", return_value=(SKIP_PATTERNS, "skip-ci patterns")
+        ):
+            report = cl.fetch_ci_label_report(data, None, None)
+        self.assertEqual(report["current_labels"], ["ci:skip"])
+        self.assertFalse(report["label_history_known"])
+        self.assertEqual(report["verdict"], "caution")
 
     def test_report_from_mocked_gh(self):
         api = {

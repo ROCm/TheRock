@@ -127,19 +127,24 @@ the PR's main CI workflow (`Multi-Arch CI` in TheRock, `TheRock Multi-Arch CI` i
 call it). It:
 
 1. Replays the PR's label events to give each run the labels it used, and flags labels that changed
-   within 60 seconds of a run's creation as uncertain.
-1. Reads the jobs of passing runs, newest first, to find the last one that built or tested
-   (`ci:skip` runs never count).
+   within 60 seconds of a run's creation as uncertain. If the label history cannot be read, it uses
+   the PR's current labels, marks every run's labels as unknown, and never gives a go that depends
+   on them.
+1. Reads the jobs of passing runs, newest first (up to 10), to find the last one with a successful
+   build or test job. `ci:skip` runs never count, and neither does a run whose jobs cannot be read;
+   the report says how many it could not check.
 1. Lists every commit after that run with its changed files (all pages), classified with the
    repository's skip patterns. A commit whose files cannot be read counts as code.
 1. Gives a verdict:
    - **go:** the head commit passed a run that built or tested it; or every later commit touches
      only CI-skippable paths; or no run built anything and every commit in the PR is CI-skippable.
+     Coverage labels added since the last tested pass block a go even when the later commits are
+     docs-only, because no run has used them.
    - **hold:** code changed after a narrowing label was added (for example `ci:skip`), and no tested
      run covers it.
    - **caution:** anything else, such as code that no tested run covers yet, coverage labels added
-     after the last run, a go that rests on an uncertain coverage label, or history rewritten since
-     the last tested pass.
+     after the last run, a go that rests on an uncertain coverage label or an unreadable label
+     history, or history rewritten since the last tested pass.
 
 The repository comes from the PR URL when one is given, then the current checkout. The report is
 advisory; whether a label set was safe for the diff is a judgment the tool does not make.
