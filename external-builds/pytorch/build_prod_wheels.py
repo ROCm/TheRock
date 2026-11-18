@@ -459,7 +459,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
     )
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
-    return textwrap.dedent(
+    contents = textwrap.dedent(
         f"""
         def initialize():
             import rocm_sdk
@@ -468,6 +468,30 @@ def get_rocm_init_contents(args: argparse.Namespace):
                 check_version='{sdk_version}')
         """
     )
+    if is_windows:
+        # Windows DLLs have no RUNPATH, so native programs started from this
+        # process (cpp_extension, AOTInductor) only find ROCm through PATH.
+        contents += textwrap.dedent(
+            f"""
+                _prepend_rocm_dll_dirs_to_path(rocm_sdk, [{library_preloads_formatted}])
+
+
+            def _prepend_rocm_dll_dirs_to_path(rocm_sdk, shortnames):
+                import os
+
+                dll_dirs = []
+                for lib in rocm_sdk.find_libraries(*shortnames):
+                    for d in (lib.parent, lib.parents[1] / "lib" / "rocm_sysdeps" / "bin"):
+                        if d.is_dir() and str(d) not in dll_dirs:
+                            dll_dirs.append(str(d))
+                path = os.environ.get("PATH", "")
+                on_path = set(path.split(os.pathsep))
+                new_dirs = [d for d in dll_dirs if d not in on_path]
+                if new_dirs:
+                    os.environ["PATH"] = os.pathsep.join(new_dirs + ([path] if path else []))
+            """
+        )
+    return contents
 
 
 def remove_dir_if_exists(dir: Path):
