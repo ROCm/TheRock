@@ -29,6 +29,17 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
+  # The packaged miopen-dbsync test (projects/miopen/test/gtest/dbsync) runs MIOpen under
+  # rocjitsu/mirage. These are test-time tools, not runtime dependencies of MIOpen: BUILD_DEPS
+  # orders the build and records the edge in the consumer graph, without distributing them
+  # with the miopen artifacts. Both are optional (EMULATION feature, Linux only).
+  if(THEROCK_ENABLE_ROCJITSU)
+    list(APPEND optional_miopen_build_deps rocjitsu)
+  endif()
+  if(THEROCK_ENABLE_MIRAGE)
+    list(APPEND optional_miopen_build_deps mirage)
+  endif()
+
   if(MSVC)
     set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
