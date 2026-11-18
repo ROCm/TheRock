@@ -165,8 +165,10 @@ def select_build_runner(
 
     platform_config = build_runner_labels[platform]
 
-    # Sanitizer builds are memory-intensive; keep them on dedicated runners
-    if "san" in build_variant:
+    # Sanitizer builds are memory-intensive; large stages use a dedicated
+    # sanitizer runner pool. Small/medium stages use their normal pools since
+    # they don't require the extra memory headroom.
+    if "san" in build_variant and size not in ("small", "medium"):
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
     elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
