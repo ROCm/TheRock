@@ -146,6 +146,13 @@ _APPTAINER_UNSUPPORTED_OPTIONS = [
     "--cap-add=SYS_PTRACE",
     "--cap-add=PERFMON",
 ]
+# A 1-GPU job on these labels cannot see the node's other GPUs, so components
+# that need them run on the same cluster's whole-node label instead.
+_APPTAINER_WHOLE_NODE_LABELS = {
+    "test-linux-gfx950-1gpu-crusoe-rocm": "test-linux-gfx950-8gpu-crusoe-rocm",
+}
+# The debugger and profiler tests read every GPU's KFD topology in /sys.
+_APPTAINER_WHOLE_NODE_JOBS = ["rocgdb-gpu", "rocprofiler-sdk"]
 
 
 def _build_container_options(
@@ -1795,6 +1802,15 @@ def run():
                     f"  Excluding {job_name}: GPU runner required but none configured"
                 )
                 continue
+
+        whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(test_runs_on_default)
+        if whole_node_runner and (
+            "multi_gpu_runner" in component or job_name in _APPTAINER_WHOLE_NODE_JOBS
+        ):
+            component["multi_gpu_runner"] = whole_node_runner
+            # Tells test_artifacts.yml not to replace it with the test_runs_on input.
+            component["whole_node"] = True
+            logging.info(f"  {job_name}: whole node, using runner: {whole_node_runner}")
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)

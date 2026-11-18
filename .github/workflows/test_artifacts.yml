@@ -304,6 +304,7 @@ jobs:
       #      Only applies to workflow_dispatch events (not PR/workflow_call chains).
       #      Bot-triggered runs (e.g., nightly from rockrel) skip this and use rules below.
       #      CPU-only components skip it too; test_runs_on is a GPU runner.
+      #      So do whole_node components: test_runs_on hides GPUs they need.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
       #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
       test_runs_on: >-
@@ -311,6 +312,7 @@ jobs:
           (github.event_name == 'workflow_dispatch' &&
             !contains(github.actor, 'github-actions') &&
             !matrix.components.linux_cpu_runner &&
+            !matrix.components.whole_node &&
             inputs.test_runs_on != '' &&
             inputs.test_runs_on) ||
           (matrix.components.multi_gpu_runner != '' &&

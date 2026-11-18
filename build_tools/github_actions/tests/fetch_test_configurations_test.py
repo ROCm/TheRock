@@ -1156,10 +1156,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertNotIn("--user 0:0", out["container_options"])
 
-    def _run_gfx950_with_pool(self, test_runs_on):
+    def _run_gfx950_with_pool(self, test_runs_on, labels=("test:hip-tests",)):
         os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
         os.environ["TEST_RUNS_ON"] = test_runs_on
-        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
+        os.environ["TEST_LABELS"] = json.dumps(list(labels))
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
             "gfx950": {
                 "linux": {
@@ -1186,6 +1186,27 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         ]
         self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
         self.assertIn("--user 0:0", hip["container_options"])
+
+    def test_whole_node_jobs_move_to_apptainer_whole_node_label(self):
+        jobs = self._run_gfx950_with_pool(
+            "test-linux-gfx950-1gpu-crusoe-rocm",
+            ["test:hip-tests", "test:rocgdb-gpu", "test:rocprofiler-sdk"],
+        )
+        for name in ("rocgdb-gpu", "rocprofiler-sdk"):
+            self.assertEqual(
+                jobs[name]["multi_gpu_runner"], "test-linux-gfx950-8gpu-crusoe-rocm"
+            )
+            self.assertTrue(jobs[name]["whole_node"])
+            self.assertNotIn("--cap-add", jobs[name]["container_options"])
+        self.assertNotIn("whole_node", jobs["hip-tests"])
+        self.assertNotIn("multi_gpu_runner", jobs["hip-tests"])
+
+    def test_whole_node_jobs_stay_on_docker_label(self):
+        jobs = self._run_gfx950_with_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm", ["test:rocgdb-gpu"]
+        )
+        self.assertNotIn("whole_node", jobs["rocgdb-gpu"])
+        self.assertNotIn("multi_gpu_runner", jobs["rocgdb-gpu"])
 
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
