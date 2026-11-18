@@ -4,6 +4,7 @@
 
 from pathlib import Path
 import os
+import shlex
 import sys
 import json
 import unittest
@@ -11,8 +12,11 @@ from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+# install_rocm_from_artifacts.py lives in build_tools/.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 import fetch_test_configurations
+import install_rocm_from_artifacts
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -417,6 +421,19 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._inject_job("plain")
         self.assertIn("plain", self._selected_names())
 
+    def test_fetch_artifact_args_are_accepted_by_installer(self):
+        # test_component.yml passes fetch_artifact_args to install_rocm_from_artifacts.py. A flag
+        # it does not know (a typo, or an artifact flag that was removed) is an argparse error
+        # that fails the job at runtime, after the build was already paid for.
+        for name, component in fetch_test_configurations.test_matrix.items():
+            with self.subTest(component=name):
+                args = shlex.split(component.get("fetch_artifact_args", ""))
+                with patch.object(install_rocm_from_artifacts, "run") as run:
+                    install_rocm_from_artifacts.main(
+                        ["--run-id", "1", "--amdgpu-family", "gfx94X-dcgpu", *args]
+                    )
+                run.assert_called_once()
+
     def test_include_and_exclude_both_match_excludes_wins(self):
         self._inject_job(
             "inc-exc",
@@ -555,13 +572,25 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
         return jobs[0] if jobs else None
 
-    def test_miopen_dbsync_include_family_covers_gfx942_and_gfx950(self):
+    def test_miopen_dbsync_include_family_covers_gfx942_gfx950_and_gfx90a(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["include_family"]["linux"], ["gfx942", "gfx950"])
+        self.assertEqual(
+            config["include_family"]["linux"], ["gfx942", "gfx950", "gfx90a"]
+        )
 
-    def test_miopen_dbsync_declares_no_advisory_families(self):
+    def test_miopen_dbsync_declares_only_gfx90a_advisory(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertNotIn("expect_failure", config)
+        self.assertEqual(config["expect_failure"], {"linux": ["gfx90a"]})
+
+    def test_miopen_dbsync_gfx90a_scheduled_on_cpu_runner_when_gpu_gated(self):
+        job = self._dbsync_job("gfx90a", True, "gfx90a")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_gfx90a_is_advisory(self):
+        job = self._dbsync_job("gfx90a", True, "gfx90a")
+        self.assertTrue(job["expect_failure"])
 
     def test_miopen_dbsync_gfx950_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx950-dcgpu", True, "gfx950")
