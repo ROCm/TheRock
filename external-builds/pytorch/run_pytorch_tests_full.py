@@ -316,8 +316,9 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     )
     parser.add_argument(
         "-k",
-        default="",
-        help="Override the pytest -k expression (bypasses TheRock skip-test generation).",
+        default=os.getenv("PYTEST_K", ""),
+        help="Override the pytest -k expression (bypasses TheRock skip-test generation). "
+        "Also read from PYTEST_K so CI can pass a dispatch input without shell interpolation.",
     )
     parser.add_argument(
         "--cache",

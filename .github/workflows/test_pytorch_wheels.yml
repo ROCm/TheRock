@@ -58,6 +58,14 @@ on:
           - "single"
           - "all"
         default: "single"
+      pytest_k:
+        description: >-
+          Pytest -k expression. When set, only matching tests run and the
+          TheRock skip list is not applied. Leave empty for the normal suite.
+          Use this for a short signal, such as rechecking unskip candidates
+          against the latest nightly.
+        type: string
+        default: ""
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -106,6 +114,12 @@ on:
           GPUs visible at once.
         type: string
         default: "single"
+      pytest_k:
+        description: >-
+          Pytest -k expression. When set, only matching tests run and the
+          TheRock skip list is not applied. Leave empty for the normal suite.
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -288,6 +302,10 @@ jobs:
       # test_pytorch_wheels_full.yml.
       - name: Run PyTorch tests
         timeout-minutes: 120
+        env:
+          # Passed via the environment so a dispatch-time expression cannot
+          # be parsed as shell. Empty keeps the normal skip list.
+          PYTEST_K: ${{ inputs.pytest_k }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config default \
@@ -306,7 +324,9 @@ jobs:
       # Keep this separate from the core invocation because bypassing upstream's
       # Windows blocklist would also re-enable blocklisted core modules.
       - name: Run PyTorch transformer tests
-        if: ${{ !cancelled() }}
+        # A targeted -k run is a short signal for the standard modules.
+        # test_transformers is a separate suite and is not part of that signal.
+        if: ${{ !cancelled() && inputs.pytest_k == '' }}
         timeout-minutes: 60
         env:
           # Opt Navi into AOTriton kernels that are disabled by default so the
