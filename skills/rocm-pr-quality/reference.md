@@ -354,15 +354,20 @@ can act on it in the next PR.
 A PR can pass review with a good label set and still reach the merge button on a run that skipped
 what mattered. Run `skills/pr-ci-labels/tools/ci_labels.py --pr <url>` and apply:
 
-1. Find the last CI run that passed, actually built or tested (not a `ci:skip` or auto-skipped
-   run), and used a label set that is safe for the diff it tested (the set the review accepted, or
-   one that meets the bar above now).
+1. **Go** first if CI skips every path the PR changes (by its own path rules): no tested run is
+   needed, and the rest of this procedure does not apply.
+1. Otherwise, find the last CI run that passed, actually built or tested (not a `ci:skip` or
+   auto-skipped run), and used a label set that is safe for the diff it tested (the set the review
+   accepted, or one that meets the bar above now).
 1. List the commits pushed after that run's head commit, and the label changes after it started.
 1. **Go** when the PR's head is that run's commit, or when every later commit touches only paths CI
-   skips on its own, or paths that the later, narrower labels cover safely. For example, a good run,
-   then a docs-only commit with `ci:skip` added, is fine.
-1. **Caution** when later commits change code and ran only under narrower labels that the review
-   did not see, or when the report flags the labels it relies on as uncertain. Check before merging.
+   skips on its own, and no coverage label was added that no run has used. For example, a good run,
+   then a docs-only commit with `ci:skip` added, is fine. A later code change always needs its own
+   passing, tested run under a safe label set, even when the narrower labels would be safe for it.
+1. **Caution** when a later code change has no passing tested run yet but no narrowing label was
+   added (re-run CI), when the last tested pass used labels the review did not see (check them
+   against the diff), when a coverage label was added after the last run, or when the report flags
+   the labels it relies on as uncertain or the label history as unreadable.
 1. **Hold** when code changed after a narrowing label (such as `ci:skip`) and no tested run with a
    safe label set covers it. Recommend removing the label and re-running CI.
 

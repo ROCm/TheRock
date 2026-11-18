@@ -88,7 +88,7 @@ ______________________________________________________________________
 
 - Overall assessment `CHANGES REQUESTED`.
 - `BLOCKING`: `ci:no-downstream-test` drops coverage the change can reach (code generation changes the kernels hipBLASLt ships, which rocBLAS and MIOpen consume).
-- `BLOCKING` or `IMPORTANT` for `ci:platform:linux`: the code is compiled on Windows too.
+- `BLOCKING`: `ci:platform:linux` drops the Windows build of code compiled on both platforms.
 - The review names the labels to remove and asks for a re-run.
 
 **Must not.** Accept the labels because CI is green. Treat unsafe narrowing as a `SUGGESTION`.

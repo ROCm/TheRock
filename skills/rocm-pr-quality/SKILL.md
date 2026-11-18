@@ -388,12 +388,13 @@ merge queue, and it does not force a CI rerun by default.
   force a rerun. Also confirm the green is *real*, not just a passing rollup summary (see
   "Evidence-based review" under Action 2): every required lane actually ran and passed, with no
   skipped/cancelled required check hiding under the green.
-- **CI not bypassed since review.** Run `skills/pr-ci-labels/tools/ci_labels.py --pr <url>`. It
-  finds the last run that passed and actually built or tested (a `ci:skip` run also concludes
-  `success`), and lists the commits and label changes since. Later commits that touch only paths CI
-  skips on its own, or paths the narrower labels cover safely, are fine: a docs-only commit plus
-  `ci:skip` after a good run is a go. A code change after a narrowing label, with no tested run
-  covering it, is a hold. See "CI labels (quality policy)" in `reference.md`.
+- **CI not bypassed since review.** Run `skills/pr-ci-labels/tools/ci_labels.py --pr <url>`. A PR
+  whose every changed path CI skips on its own needs no tested run. Otherwise the report finds the
+  last run that passed and actually built or tested (a `ci:skip` run also concludes `success`), and
+  lists the commits and label changes since. Later commits that touch only paths CI skips on its
+  own are fine: a docs-only commit plus `ci:skip` after a good run is a go. A later code change
+  needs its own passing, tested run; without one it is a caution, or a hold if a narrowing label
+  was added. See "CI labels (quality policy)" in `reference.md`.
 - **Adjacent-file / stale-base check on develop.** Compare the PR's changed files against the
   files the base branch changed since the PR diverged. No overlap → do not tax velocity, merge is
   fine. Overlap on high-coupling files (shared generators, register/lifetime code, shared
