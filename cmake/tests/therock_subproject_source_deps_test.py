@@ -2,17 +2,19 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Configure-only ADDITIONAL_SOURCE_INPUTS tests for seven Git sub-projects."""
+"""Configure-only ADDITIONAL_SOURCE_INPUTS tests using Git source fixtures."""
 
-import os
-import shutil
-import subprocess
-import tempfile
-import textwrap
 import unittest
+from collections.abc import Collection
 from pathlib import Path
 
-THEROCK_ROOT = Path(__file__).resolve().parents[2]
+from utils import (
+    FingerprintTestCase,
+    ProjectFingerprints,
+    cmake_project_setup,
+    write,
+)
+
 SCOPES = {
     "rocm-cmake": "base/rocm-cmake",
     "rocm-half": "base/half",
@@ -38,40 +40,17 @@ LLVM_USERS = {
 PROJECTS = (*SCOPES, "control")
 
 
-def write(path, contents):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(textwrap.dedent(contents), encoding="utf-8")
+class SourceDependencyFingerprintTest(FingerprintTestCase):
+    required_tools = ("git", "cmake", "ninja")
 
-
-class SourceDependencyFingerprintTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        missing = [name for name in ("git", "cmake", "ninja") if not shutil.which(name)]
-        if missing:
-            raise RuntimeError(
-                f"Required tools unavailable: {', '.join(missing)}; tests were not run"
-            )
-
-    def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="therock-source-deps-")
-        self.addCleanup(temporary.cleanup)
-        # Use the long path when Windows provides an 8.3 temporary path.
-        self.root = Path(temporary.name).resolve()
+    def setUp(self) -> None:
+        super().setUp()
         self.source = self.root / "harness"
         self.sources = self.root / "sources with spaces"
         self.build = self.root / "build"
         self.spirv = self.sources / "compiler/spirv-llvm-translator"
         self.systems = self.sources / "rocm-systems"
         self.hsa = self.systems / "projects/rocr-runtime/runtime/hsa-runtime/inc"
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        self.env.update(
-            GIT_CONFIG_NOSYSTEM="1",
-            GIT_CONFIG_GLOBAL=os.devnull,
-            GIT_AUTHOR_NAME="Source dependency test",
-            GIT_AUTHOR_EMAIL="test@example.invalid",
-            GIT_COMMITTER_NAME="Source dependency test",
-            GIT_COMMITTER_EMAIL="test@example.invalid",
-        )
         for relative in ROOTS:
             repository = self.sources / relative
             repository.mkdir(parents=True)
@@ -96,37 +75,14 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             self.commit(self.sources / relative, "initial")
         self.write_harness()
 
-    def run_command(self, *args):
-        result = subprocess.run(
-            [str(arg) for arg in args],
-            env=self.env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=180,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return result.stdout.strip()
+    def git(self, repository: str | Path, *args: str) -> str:
+        return self.run_command("git", "-C", repository, *args).stdout.strip()
 
-    def git(self, repository, *args):
-        return self.run_command("git", "-C", repository, *args)
-
-    def commit(self, repository, message):
+    def commit(self, repository: str | Path, message: str) -> None:
         self.git(repository, "add", "--all")
         self.git(repository, "commit", "-qm", message)
 
-    def write_harness(self):
-        includes = "\n".join(
-            f"include({name})"
-            for name in (
-                "therock_globals",
-                "therock_sanitizers",
-                "therock_flag_utils",
-                "therock_default_targets",
-                "therock_subproject",
-            )
-        )
+    def write_harness(self) -> None:
         declarations = []
         for name, relative in SCOPES.items():
             directory = (self.sources / relative).as_posix()
@@ -163,15 +119,7 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         write(
             self.source / "CMakeLists.txt",
             f"""
-            cmake_minimum_required(VERSION 3.25)
-            project(source_dependencies NONE)
-            set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
-            set(THEROCK_BINARY_DIR "${{CMAKE_BINARY_DIR}}")
-            list(APPEND CMAKE_MODULE_PATH "${{THEROCK_SOURCE_DIR}}/cmake")
-            find_package(Python3 COMPONENTS Interpreter REQUIRED)
-            set(ROCM_BUILD_FLAGS_STATE_FILE "${{CMAKE_BINARY_DIR}}/flags.cmake")
-            file(WRITE "${{ROCM_BUILD_FLAGS_STATE_FILE}}" "# no flags\\n")
-            {includes}
+            {cmake_project_setup("source_dependencies")}
             set(_main_hash_option)
             if(HASH_PRIMARY_SOURCE)
               set(_main_hash_option FPRINT_SOURCE_HASH)
@@ -192,7 +140,13 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         """,
         )
 
-    def configure(self, deps=None, *, prebuilt=False, hash_primary=False):
+    def configure(
+        self,
+        deps: tuple[str, ...] | None = None,
+        *,
+        prebuilt: bool = False,
+        hash_primary: bool = False,
+    ) -> ProjectFingerprints:
         if deps is None:
             deps = (self.spirv.as_posix(), self.hsa.as_posix())
         self.run_command(
@@ -210,41 +164,51 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             "-DHASH_PRIMARY_SOURCE:BOOL=" + ("ON" if hash_primary else "OFF"),
         )
         return {
-            name: (self.build / f"{name}.fprint").read_text().strip()
+            name: (self.build / f"{name}.fprint").read_text(encoding="utf-8").strip()
             for name in PROJECTS
         }
 
-    def assert_valid(self, values, invalid=()):
-        for name, value in values.items():
+    def assert_valid(
+        self, fingerprints: ProjectFingerprints, invalid: Collection[str] = ()
+    ) -> None:
+        for name, fingerprint in fingerprints.items():
             if name in invalid:
-                self.assertEqual(value, "", name)
+                self.assertEqual(fingerprint, "", name)
             else:
-                self.assertRegex(value, r"^[0-9a-f]{64}$", name)
+                self.assertRegex(fingerprint, r"^[0-9a-f]{64}$", name)
 
-    def assert_changed(self, before, after, expected):
+    def assert_changed(
+        self,
+        before: ProjectFingerprints,
+        after: ProjectFingerprints,
+        expected: Collection[str],
+    ) -> None:
         self.assert_valid(before)
         self.assert_valid(after)
         self.assertEqual(
             {name for name in PROJECTS if before[name] != after[name]}, set(expected)
         )
 
-    def test_repeat_and_relative_source_dependencies(self):
+    def test_repeat_and_relative_source_dependencies(self) -> None:
         baseline = self.configure()
         self.assert_valid(baseline)
         self.assertEqual(baseline, self.configure())
+        # The harness and source directories share the same temporary parent.
         relative = tuple(
-            Path(os.path.relpath(p, self.source)).as_posix()
-            for p in (self.spirv, self.hsa)
+            (Path("..") / directory.relative_to(self.source.parent)).as_posix()
+            for directory in (self.spirv, self.hsa)
         )
         self.assertEqual(baseline, self.configure(relative))
         # CMake may expand Windows short paths; compare resolved paths.
-        recorded = (self.build / "source-deps.txt").read_text().split(";")
+        recorded = (
+            (self.build / "source-deps.txt").read_text(encoding="utf-8").split(";")
+        )
         self.assertEqual(
             [Path(path).resolve() for path in recorded],
             [self.spirv.resolve(), self.hsa.resolve()],
         )
 
-    def test_source_changes_and_restoration_for_all_seven_projects(self):
+    def test_source_changes_and_restoration_for_all_projects(self) -> None:
         baseline = self.configure()
         for name, relative in SCOPES.items():
             with self.subTest(project=name):
@@ -262,7 +226,9 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
                 self.git(repository, "revert", "--no-edit", "HEAD")
                 self.assertEqual(baseline, self.configure())
 
-    def test_each_llvm_external_source_changes_only_llvm_users_and_restores(self):
+    def test_each_llvm_external_source_changes_only_llvm_users_and_restores(
+        self,
+    ) -> None:
         baseline = self.configure()
         for directory in (self.spirv, self.hsa):
             with self.subTest(directory=directory):
@@ -275,14 +241,14 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
                 self.git(repository, "revert", "--no-edit", "HEAD")
                 self.assertEqual(baseline, self.configure())
 
-    def test_llvm_root_already_includes_clang(self):
+    def test_llvm_root_already_includes_clang(self) -> None:
         baseline = self.configure()
         llvm = self.sources / "compiler/amd-llvm"
         write(llvm / "clang/input.txt", "changed\n")
         self.commit(llvm, "Clang edit")
         self.assert_changed(baseline, self.configure(), LLVM_USERS)
 
-    def test_optional_hsa_source_dependency_can_be_omitted(self):
+    def test_optional_hsa_source_dependency_can_be_omitted(self) -> None:
         deps = (self.spirv.as_posix(),)
         baseline = self.configure(deps)
         self.assert_valid(baseline)
@@ -290,14 +256,16 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         self.commit(self.systems, "HSA edit")
         self.assertEqual(baseline, self.configure(deps))
 
-    def test_unrelated_dirty_and_committed_changes_leave_fingerprints_stable(self):
+    def test_unrelated_dirty_and_committed_changes_leave_fingerprints_stable(
+        self,
+    ) -> None:
         baseline = self.configure()
         write(self.systems / "unrelated/input.txt", "unrelated edit\n")
         self.assertEqual(baseline, self.configure())
         self.commit(self.systems, "unrelated edit")
         self.assertEqual(baseline, self.configure())
 
-    def test_dirty_and_staged_external_sources_invalidate_consumers(self):
+    def test_dirty_and_staged_external_sources_invalidate_consumers(self) -> None:
         baseline = self.configure()
         write(self.spirv / "input.txt", "dirty\n")
         self.assert_valid(self.configure(), invalid=LLVM_USERS)
@@ -313,7 +281,7 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         )
         self.assertEqual(baseline, self.configure())
 
-    def test_missing_directory_is_invalid_even_with_a_stale_marker(self):
+    def test_missing_directory_is_invalid_even_with_a_stale_marker(self) -> None:
         self.configure()
         # Make the declared path absent without deleting read-only Git objects
         # on Windows. TemporaryDirectory cleanup owns the moved repository.
@@ -322,7 +290,7 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
         write(self.spirv.with_name(".spirv-llvm-translator.smrev"), "stale\n")
         self.assert_valid(self.configure(), invalid=LLVM_USERS)
 
-    def test_non_git_directory_requires_a_marker(self):
+    def test_non_git_directory_requires_a_marker(self) -> None:
         directory = self.root / "unversioned"
         directory.mkdir()
         self.assert_valid(self.configure((directory.as_posix(),)), invalid=LLVM_USERS)
@@ -334,18 +302,18 @@ class SourceDependencyFingerprintTest(unittest.TestCase):
             baseline, self.configure((directory.as_posix(),)), LLVM_USERS
         )
 
-    def test_file_dependency_is_rejected_as_not_a_directory(self):
+    def test_file_dependency_is_rejected_as_not_a_directory(self) -> None:
         self.assert_valid(
             self.configure(((self.spirv / "input.txt").as_posix(),)), invalid=LLVM_USERS
         )
 
-    def test_dependencies_apply_when_primary_source_is_file_hashed(self):
+    def test_dependencies_apply_when_primary_source_is_file_hashed(self) -> None:
         baseline = self.configure(hash_primary=True)
         write(self.spirv / "input.txt", "changed\n")
         self.commit(self.spirv, "source edit")
         self.assert_changed(baseline, self.configure(hash_primary=True), LLVM_USERS)
 
-    def test_dependencies_apply_to_prebuilt_fingerprints(self):
+    def test_dependencies_apply_to_prebuilt_fingerprints(self) -> None:
         baseline = self.configure(prebuilt=True)
         write(self.spirv / "input.txt", "changed\n")
         self.commit(self.spirv, "source edit")
