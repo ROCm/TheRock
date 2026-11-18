@@ -90,6 +90,9 @@ jobs:
     outputs:
       branch_name: ${{ steps.create-branch.outputs.branch_name }}
       rocm_system_ref: ${{ steps.rocm-systems-ref.outputs.sha }}
+      llvm_sha: ${{ steps.update-submodules.outputs.llvm_sha }}
+      hipify_sha: ${{ steps.update-submodules.outputs.hipify_sha }}
+      spirv_sha: ${{ steps.update-submodules.outputs.spirv_sha }}
     steps:
       - name: Generate branch name
         id: branch-name
@@ -138,6 +141,7 @@ jobs:
           git fetch origin "${LLVM_REF}"
           git checkout FETCH_HEAD
           LLVM_SHA=$(git rev-parse HEAD)
+          echo "llvm_sha=${LLVM_SHA}" >> "$GITHUB_OUTPUT"
           echo "| llvm-project | ${LLVM_REF} | \`${LLVM_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -146,6 +150,7 @@ jobs:
           git fetch origin "${HIPIFY_REF}"
           git checkout FETCH_HEAD
           HIPIFY_SHA=$(git rev-parse HEAD)
+          echo "hipify_sha=${HIPIFY_SHA}" >> "$GITHUB_OUTPUT"
           echo "| HIPIFY | ${HIPIFY_REF} | \`${HIPIFY_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -154,6 +159,7 @@ jobs:
           git fetch origin "${SPIRV_REF}"
           git checkout FETCH_HEAD
           SPIRV_SHA=$(git rev-parse HEAD)
+          echo "spirv_sha=${SPIRV_SHA}" >> "$GITHUB_OUTPUT"
           echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -478,12 +484,13 @@ jobs:
       runtime_artifact_url: ${{ steps.upload-runtime.outputs.artifact-url }}
       logs_artifact_url: ${{ steps.upload-logs.outputs.artifact-url }}
     steps:
-      - name: Checkout compiler bump branch
+      # Keep build scripts at the workflow revision; only compiler gitlinks vary.
+      - name: Checkout workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
           persist-credentials: false
-          ref: ${{ needs.setup-windows.outputs.ref }}
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -520,6 +527,16 @@ jobs:
             --dir "$(dirname "$CCACHE_CONFIGPATH")" \
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
+
+      - name: Apply bumped compiler revisions
+        env:
+          LLVM_SHA: ${{ needs.create-branch.outputs.llvm_sha }}
+          HIPIFY_SHA: ${{ needs.create-branch.outputs.hipify_sha }}
+          SPIRV_SHA: ${{ needs.create-branch.outputs.spirv_sha }}
+        run: |
+          git update-index --cacheinfo "160000,${LLVM_SHA},compiler/amd-llvm"
+          git update-index --cacheinfo "160000,${HIPIFY_SHA},compiler/hipify"
+          git update-index --cacheinfo "160000,${SPIRV_SHA},compiler/spirv-llvm-translator"
 
       - name: Fetch compiler and runtime sources
         timeout-minutes: 30
