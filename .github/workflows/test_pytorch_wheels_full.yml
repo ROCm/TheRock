@@ -402,6 +402,7 @@ jobs:
       - name: (Windows) Run selected PyTorch tests
         env:
           STRIP_ROCM_PATH: "1"
+          INJECT_ROCM_INIT_FROM: ee687e942795f55aea0ec87112a19f408319e441
         if: ${{ runner.os == 'Windows' && inputs.tests_to_include != '' }}
         continue-on-error: true
         working-directory: external-builds/pytorch/pytorch/test
@@ -411,6 +412,11 @@ jobs:
           # CXX=clang++ from the Linux-style env step breaks MSVC-flag JIT builds.
           unset CC CXX
           where cl
+          if [[ -n "${INJECT_ROCM_INIT_FROM:-}" ]]; then
+            curl -sSfL "https://raw.githubusercontent.com/ROCm/TheRock/${INJECT_ROCM_INIT_FROM}/external-builds/pytorch/build_prod_wheels.py" -o /tmp/build_prod_wheels.py
+            curl -sSfL "https://raw.githubusercontent.com/ROCm/TheRock/${INJECT_ROCM_INIT_FROM}/external-builds/pytorch/setup_pytorch_sanitizer.py" -o /tmp/setup_pytorch_sanitizer.py
+            (cd /tmp && python -c "import pathlib, build_prod_wheels as b, torch; p = pathlib.Path(torch.__file__).parent / '_rocm_init.py'; p.write_text(b.get_rocm_init_contents(None)); print(p.read_text())" 2>&1) || true
+          fi
           if [[ "${STRIP_ROCM_PATH:-}" == 1 ]]; then
             PATH="$(echo "${PATH}" | tr ':' '\n' | grep -v _rocm_sdk | paste -sd: -)"
           fi
