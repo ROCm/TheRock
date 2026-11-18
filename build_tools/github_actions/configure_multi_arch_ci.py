@@ -304,10 +304,10 @@ class CIInputs:
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or one of the supported release types
     built_rocm_version: str = ""  # ROCM_PACKAGE_VERSION computed during setup
+    run_rocm_tests: bool = True
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
-    run_rocm_tests: bool = True
     build_native_linux: bool = True
     build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
@@ -453,13 +453,13 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        # str2bool("") is False, so an unset variable must default to "true".
+        run_rocm_tests = str2bool(os.environ.get("RUN_ROCM_TESTS", "true"))
         build_python_packages = (
             os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
         )
         build_pytorch = os.environ.get("BUILD_PYTORCH", "true").lower() != "false"
         build_jax = os.environ.get("BUILD_JAX", "false").lower() != "false"
-        # str2bool("") is False, so an unset variable must default to "true".
-        run_rocm_tests = str2bool(os.environ.get("RUN_ROCM_TESTS", "true"))
         build_native_linux = (
             os.environ.get("BUILD_NATIVE_LINUX", "true").lower() != "false"
         )
@@ -525,10 +525,10 @@ class CIInputs:
             build_variant=build_variant,
             release_type=release_type,
             built_rocm_version=os.environ.get("ROCM_PACKAGE_VERSION", ""),
+            run_rocm_tests=run_rocm_tests,
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
-            run_rocm_tests=run_rocm_tests,
             build_native_linux=build_native_linux,
             build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],

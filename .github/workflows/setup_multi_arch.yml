@@ -89,6 +89,10 @@ on:
           Automatic stage reuse: number of recent branch commits to fetch for ancestry. default: "50"
         type: string
         default: "50"
+      run_rocm_tests:
+        description: "Run test_rocm jobs. Set false to build without running ROCm tests."
+        type: boolean
+        default: true
       build_python_packages:
         description: "Build ROCm Python packages (rocm-sdk, rocm-profiler, etc.)."
         type: boolean
@@ -101,10 +105,6 @@ on:
         description: "Build JAX wheels."
         type: boolean
         default: false
-      run_rocm_tests:
-        description: "Run test_rocm jobs. Set false to build without running ROCm tests."
-        type: boolean
-        default: true
       build_native_linux:
         description: "Build native Linux packages (deb/rpm) and run their install tests."
         type: boolean
@@ -293,10 +293,10 @@ jobs:
           ROCM_PACKAGE_VERSION: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           RELEASE_TYPE: ${{ inputs.release_type }}
+          RUN_ROCM_TESTS: ${{ inputs.run_rocm_tests }}
           BUILD_PYTHON_PACKAGES: ${{ inputs.build_python_packages }}
           BUILD_PYTORCH: ${{ inputs.build_pytorch }}
           BUILD_JAX: ${{ inputs.build_jax }}
-          RUN_ROCM_TESTS: ${{ inputs.run_rocm_tests }}
           BUILD_NATIVE_LINUX: ${{ inputs.build_native_linux }}
           BUILD_NATIVE_WINDOWS: ${{ inputs.build_native_windows }}
           PYTHON_VERSION: ${{ inputs.python_version }}

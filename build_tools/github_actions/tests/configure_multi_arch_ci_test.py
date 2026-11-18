@@ -78,6 +78,7 @@ def _jobs(
     baseline_run_id: str = "",
     build_pytorch: bool = True,
     build_jax: bool = False,
+    test_rocm_action: cm.JobAction = cm.JobAction.RUN,
 ) -> cm.JobDecisions:
     """Construct default job decisions for tests that exercise later stages."""
     prebuilt_stages = prebuilt_stages or []
@@ -88,7 +89,7 @@ def _jobs(
             baseline_run_id=baseline_run_id,
         ),
         test_rocm=cm.TestRocmDecision(
-            action=cm.JobAction.RUN,
+            action=test_rocm_action,
             test_type=test_type,
         ),
         build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
@@ -308,6 +309,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.prebuilt_stages, "")
         self.assertEqual(inputs.baseline_run_id, "")
         self.assertEqual(inputs.release_type, "ci")
+        self.assertTrue(inputs.run_rocm_tests)
         self.assertTrue(inputs.build_python_packages)
         self.assertTrue(inputs.build_pytorch)
         self.assertTrue(inputs.build_native_linux)
@@ -326,6 +328,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BASELINE_RUN_ID": "12345",
                 "BUILD_PYTORCH": "false",
                 "BUILD_JAX": "true",
+                "RUN_ROCM_TESTS": "false",
                 "PYTHON_VERSION": "3.12",
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
                 "THEROCK_CHECKOUT_REF": "main",
@@ -356,6 +359,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.baseline_run_id, "12345")
         self.assertFalse(inputs.build_pytorch)
         self.assertTrue(inputs.build_jax)
+        self.assertFalse(inputs.run_rocm_tests)
         self.assertEqual(inputs.python_versions, ["3.12"])
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
         self.assertEqual(inputs.checkout_ref, "main")
@@ -803,6 +807,24 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
+
+    def test_run_rocm_tests_true_runs_test_rocm(self):
+        jobs = cm.decide_jobs(
+            self._inputs(run_rocm_tests=True),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.test_rocm.action, cm.JobAction.RUN)
+
+    def test_run_rocm_tests_false_skips_test_rocm_only(self):
+        jobs = cm.decide_jobs(
+            self._inputs(run_rocm_tests=False),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.test_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.test_rocm.test_type_reason, "run_rocm_tests is false")
 
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
     def test_skip_rocm_uses_published_packages_without_baseline_lookup(self, reuse):
@@ -3191,6 +3213,82 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertTrue(result.linux.build_python_packages)
         self.assertTrue(result.linux.build_jax)
 
+    def _expand_mock_family(
+        self,
+        variant,
+        *,
+        test_rocm_action=cm.JobAction.RUN,
+        sandbox="absent",
+        targets=None,
+    ):
+        """Expands a mock family; returns its per-family info entry."""
+        platform_info = {
+            "test-runs-on": "linux-regular-runner",
+            "family": "mock-fam",
+            "fetch-gfx-targets": ["gfx0000"],
+            "build_variants": [variant],
+            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+            "tests_on_trigger": ["presubmit", "postsubmit", "nightly"],
+        }
+        if sandbox != "absent":
+            platform_info["test-runs-on-sandbox"] = sandbox
+        with (
+            patch(
+                "configure_multi_arch_ci.get_all_families_for_trigger_types",
+                return_value={"mock-fam": {"linux": platform_info}},
+            ),
+            patch(
+                "configure_multi_arch_ci.get_cpu_test_runner",
+                return_value="linux-cpu-runner",
+            ),
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(
+                    event_name="pull_request", build_variant=variant
+                ),
+                git_context=cm.GitContext(),
+                targets=targets or cm.TargetSelection(linux_families=["mock-fam"]),
+                jobs=_jobs(build_pytorch=False, test_rocm_action=test_rocm_action),
+            )
+        return result.linux.per_family_info[0]
+
+    def test_asan_variant_uses_sandbox_runner_when_configured(self):
+        entry = self._expand_mock_family("asan-debug", sandbox="linux-sandbox-runner")
+        self.assertEqual(entry["test-runs-on"], "linux-sandbox-runner")
+        self.assertTrue(entry["tests_enabled"])
+
+    def test_asan_variant_falls_back_to_regular_runner(self):
+        """A blank ("") or absent sandbox runner uses the regular runner."""
+        for sandbox in ["", "absent"]:
+            with self.subTest(sandbox=sandbox):
+                entry = self._expand_mock_family("asan-debug", sandbox=sandbox)
+                self.assertEqual(entry["test-runs-on"], "linux-regular-runner")
+
+    def test_non_asan_variant_ignores_sandbox_runner(self):
+        entry = self._expand_mock_family("tsan", sandbox="linux-sandbox-runner")
+        self.assertEqual(entry["test-runs-on"], "linux-regular-runner")
+
+    def test_test_rocm_skip_disables_tests(self):
+        entry = self._expand_mock_family(
+            "asan-debug",
+            test_rocm_action=cm.JobAction.SKIP,
+            sandbox="linux-sandbox-runner",
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertEqual(entry["test-runs-on-cpu"], "")
+        self.assertFalse(entry["tests_enabled"])
+
+    def test_test_rocm_skip_is_not_overridden_by_test_label(self):
+        entry = self._expand_mock_family(
+            "release",
+            test_rocm_action=cm.JobAction.SKIP,
+            targets=cm.TargetSelection(
+                linux_families=["mock-fam"], linux_test_only_families=["mock-fam"]
+            ),
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertFalse(entry["tests_enabled"])
+
 
 # ---------------------------------------------------------------------------
 # Step 6: Format Outputs
@@ -3375,6 +3473,22 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertIsNone(outputs.builds.linux)
         self.assertIsNone(outputs.builds.windows)
         self.assertIsNone(outputs.jobs)
+
+    def test_pipeline_run_rocm_tests_false_disables_tests(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
+            run_rocm_tests=False,
+            build_pytorch=False,
+            linux_amdgpu_families=["gfx94x"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext())
+        self.assertEqual(outputs.jobs.test_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(outputs.builds.linux.per_family_info[0]["test-runs-on"], "")
 
     @patch("configure_multi_arch_ci.should_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):
@@ -4483,146 +4597,6 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         # The pools must be distinct, otherwise the split buys nothing.
         self.assertNotEqual(entry["test-runs-on-2gpu"], entry["test-runs-on-multi-gpu"])
         self.assertNotEqual(entry["test-runs-on-4gpu"], entry["test-runs-on-multi-gpu"])
-
-
-class TestRunRocmTests(unittest.TestCase):
-    """run_rocm_tests drives test_rocm and the per-family test runners."""
-
-    ASAN_VARIANTS = ["asan", "host-asan", "asan-debug", "host-asan-debug"]
-    OTHER_VARIANTS = ["release", "tsan"]
-    SANDBOX = "linux-sandbox-runner"
-    REGULAR = "linux-regular-runner"
-    CPU = "linux-cpu-runner"
-    EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"]
-
-    def _families(self, sandbox="absent", tests_on_trigger=None):
-        platform_info = {
-            "test-runs-on": self.REGULAR,
-            "family": "mock-fam",
-            "fetch-gfx-targets": ["gfx0000"],
-            "build_variants": self.ASAN_VARIANTS + self.OTHER_VARIANTS,
-            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
-            "tests_on_trigger": tests_on_trigger
-            or ["presubmit", "postsubmit", "nightly"],
-        }
-        if sandbox != "absent":
-            platform_info["test-runs-on-sandbox"] = sandbox
-        return {"mock-fam": {"linux": platform_info}}
-
-    def _expand(
-        self,
-        variant,
-        event,
-        run_rocm_tests=True,
-        *,
-        sandbox="absent",
-        targets=None,
-        tests_on_trigger=None,
-    ):
-        """Runs decide_jobs + expand; returns (test_rocm action, family entry)."""
-        ci_inputs = cm.CIInputs(
-            run_id="12345",
-            event_name=event,
-            commit_ref="feature",
-            base_ref="HEAD^",
-            build_variant=variant,
-            run_rocm_tests=run_rocm_tests,
-            build_pytorch=False,
-        )
-        targets = targets or cm.TargetSelection(linux_families=["mock-fam"])
-        families = self._families(sandbox, tests_on_trigger)
-        with (
-            patch(
-                "configure_multi_arch_ci.get_all_families_for_trigger_types",
-                return_value=families,
-            ),
-            patch("configure_multi_arch_ci.get_cpu_test_runner", return_value=self.CPU),
-        ):
-            jobs = cm.decide_jobs(
-                ci_inputs, git_context=cm.GitContext(), targets=targets
-            )
-            result = cm.expand_build_configs(
-                ci_inputs=ci_inputs,
-                git_context=cm.GitContext(),
-                targets=targets,
-                jobs=jobs,
-            )
-        return jobs.test_rocm.action, result.linux.per_family_info[0]
-
-    def _runner(self, *args, **kwargs):
-        return self._expand(*args, **kwargs)[1]["test-runs-on"]
-
-    def test_asan_variants_run_tests_with_sandbox_runner(self):
-        for variant in self.ASAN_VARIANTS:
-            for event in self.EVENTS:
-                with self.subTest(variant=variant, event=event):
-                    action, entry = self._expand(variant, event, sandbox=self.SANDBOX)
-                    self.assertEqual(action, cm.JobAction.RUN)
-                    self.assertEqual(entry["test-runs-on"], self.SANDBOX)
-                    self.assertTrue(entry["tests_enabled"])
-
-    def test_asan_variants_fall_back_to_regular_runner(self):
-        """A blank ("") or absent sandbox runner uses the regular runner."""
-        for variant in self.ASAN_VARIANTS:
-            for sandbox in ["", "absent"]:
-                with self.subTest(variant=variant, sandbox=sandbox):
-                    runner = self._runner(variant, "pull_request", sandbox=sandbox)
-                    self.assertEqual(runner, self.REGULAR)
-
-    def test_other_variants_use_regular_runner(self):
-        for variant in self.OTHER_VARIANTS:
-            for event in self.EVENTS:
-                with self.subTest(variant=variant, event=event):
-                    runner = self._runner(variant, event, sandbox=self.SANDBOX)
-                    self.assertEqual(runner, self.REGULAR)
-
-    def test_false_skips_tests_for_all_variants(self):
-        for variant in self.ASAN_VARIANTS + self.OTHER_VARIANTS:
-            for event in self.EVENTS:
-                with self.subTest(variant=variant, event=event):
-                    action, entry = self._expand(
-                        variant, event, False, sandbox=self.SANDBOX
-                    )
-                    self.assertEqual(action, cm.JobAction.SKIP)
-                    self.assertEqual(entry["test-runs-on"], "")
-                    self.assertEqual(entry["test-runs-on-cpu"], "")
-                    self.assertFalse(entry["tests_enabled"])
-
-    def test_false_is_not_overridden_by_test_label(self):
-        action, entry = self._expand(
-            "release",
-            "pull_request",
-            False,
-            targets=cm.TargetSelection(
-                linux_families=["mock-fam"], linux_test_only_families=["mock-fam"]
-            ),
-        )
-        self.assertEqual(action, cm.JobAction.SKIP)
-        self.assertFalse(entry["tests_enabled"])
-
-    def test_true_still_respects_tests_on_trigger(self):
-        for variant in self.ASAN_VARIANTS + self.OTHER_VARIANTS:
-            with self.subTest(variant=variant):
-                runner = self._runner(
-                    variant,
-                    "pull_request",
-                    sandbox=self.SANDBOX,
-                    tests_on_trigger=["nightly"],
-                )
-                self.assertEqual(runner, "")
-
-    def test_environ_parsing(self):
-        for value, expected in [
-            (None, True),
-            ("false", False),
-        ]:
-            with self.subTest(value=value):
-                inputs = _run_from_environ(
-                    event_name="workflow_dispatch",
-                    event_payload={},
-                    extra_env={} if value is None else {"RUN_ROCM_TESTS": value},
-                )
-                self.assertIs(inputs.run_rocm_tests, expected)
 
 
 if __name__ == "__main__":
