@@ -479,6 +479,12 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 
+[artifacts.fftz]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_group = "HOST_MATH"
+
 [artifacts.flatbuffers]
 artifact_group = "third-party-libs"
 type = "target-neutral"

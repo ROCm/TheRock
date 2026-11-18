@@ -1,0 +1,5 @@
+[components.lib."third-party/fftz/stage"]
+[components.dbg."third-party/fftz/stage"]
+[components.dev."third-party/fftz/stage"]
+[components.doc."third-party/fftz/stage"]
+include = ["lib/host-math/fftz/share/licenses/**"]

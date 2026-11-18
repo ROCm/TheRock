@@ -1,0 +1,42 @@
+Subject: [PATCH] Support Clang's GNU frontend on Windows
+
+TheRock builds FFTZ with its amd-llvm clang.exe toolchain. Select instruction
+and optimization flags by compiler frontend rather than operating system,
+so the GNU frontend receives its supported flags on Windows too. Use Clang's
+portable -Werror spelling for the existing Windows strict-warning policy.
+Keep platform-specific library and runtime handling unchanged.
+
+Generated with Codex.
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -204,7 +204,7 @@
+     message(STATUS "FMA instructions: Enabled")
+ endif()
+ 
+-if(WIN32)
++if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+     if(ENABLE_AVX512)
+         set(AVX512_FLAG /arch:AVX512)
+     endif()
+@@ -217,7 +217,7 @@
+     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${USER_DEBUG_ON} /O2 /DNDEBUG /Oy")
+     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${USER_DEBUG_ON} /O2 /DNDEBUG /Oy")
+ 
+-elseif(UNIX)
++else()
+     if(ENABLE_FMA)
+         if(ENABLE_AVX512)
+             set(AVX512_FLAG "-mavx512f -mavx512dq -ffp-contract=fast") # avx512dq for xor, insert and extract instructions
+@@ -449,8 +449,8 @@
+ #Enabling strict warnings
+ if(ENABLE_STRICT_WARNINGS)
+     if(WIN32)
+-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
+-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
++        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
++        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+         set_property(SOURCE ${SRC_FILES} APPEND PROPERTY COMPILE_OPTIONS "-DENABLE_STRICT_WARNINGS")
+     else()
+         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -Wpedantic")
