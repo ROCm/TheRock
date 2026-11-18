@@ -400,6 +400,8 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: (Windows) Run selected PyTorch tests
+        env:
+          STRIP_ROCM_PATH: "1"
         if: ${{ runner.os == 'Windows' && inputs.tests_to_include != '' }}
         continue-on-error: true
         working-directory: external-builds/pytorch/pytorch/test
@@ -409,6 +411,9 @@ jobs:
           # CXX=clang++ from the Linux-style env step breaks MSVC-flag JIT builds.
           unset CC CXX
           where cl
+          if [[ "${STRIP_ROCM_PATH:-}" == 1 ]]; then
+            PATH="$(echo "${PATH}" | tr ':' '\n' | grep -v _rocm_sdk | paste -sd: -)"
+          fi
           echo "PATH=${PATH}"
           python -m pytest -v -rA -p no:cacheprovider ${TESTS_TO_INCLUDE}
           echo $? > "${GITHUB_WORKSPACE}/run_pytorch_tests_exit_code.txt"
