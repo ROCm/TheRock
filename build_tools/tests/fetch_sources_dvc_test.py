@@ -2,20 +2,17 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for DVC support in fetch_sources.py.
-
-Tests the fix for https://github.com/ROCm/rocm-systems/actions/runs/28359613355/job/84014838210
-"""
+"""Tests for DVC source selection and pulls in fetch_sources.py."""
 
 import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import patch
 
 
-# Mock PullResult before importing fetch_sources
+# Result returned by mocked DVC pulls.
 @dataclass
 class MockPullResult:
     fetched: int = 0
@@ -23,343 +20,156 @@ class MockPullResult:
     skipped: int = 0
 
 
-# Mock fetch_dvc_artifacts before import to avoid boto3 dependency
-fetch_dvc_mock = Mock()
-fetch_dvc_mock.DEFAULT_JOBS = 4
-fetch_dvc_mock.PullResult = MockPullResult
-sys.modules["fetch_dvc_artifacts"] = fetch_dvc_mock
-
 # Add parent directory to path to import the module
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import fetch_sources
 
 
-class TestPullLargeFilesExternalRepo(unittest.TestCase):
-    """Tests for pull_large_files() with external repositories."""
-
+class TestPullLargeFiles(unittest.TestCase):
     def setUp(self):
-        """Set up test fixtures."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.therock_dir = Path(self.temp_dir)
-
-        # Create mock directory structure
-        self.external_rocm_systems = self.therock_dir / "external-rocm-systems"
-        self.external_rocm_systems.mkdir()
-
-        # Create .dvc/config for external-rocm-systems
-        dvc_dir = self.external_rocm_systems / ".dvc"
-        dvc_dir.mkdir()
-        dvc_config = dvc_dir / "config"
-        dvc_config.write_text("[core]\n    remote = origin\n")
-
-        # Create submodule directory for comparison
-        self.rocm_systems_submodule = self.therock_dir / "base" / "rocm-systems"
-        self.rocm_systems_submodule.mkdir(parents=True)
-        submodule_dvc_dir = self.rocm_systems_submodule / ".dvc"
-        submodule_dvc_dir.mkdir()
-        submodule_dvc_config = submodule_dvc_dir / "config"
-        submodule_dvc_config.write_text("[core]\n    remote = origin\n")
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        import shutil
-
-        if Path(self.temp_dir).exists():
-            shutil.rmtree(self.temp_dir)
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_external_repo_uses_direct_path(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test that external repos use direct path instead of get_submodule_path."""
-        mock_therock_dir.__truediv__ = lambda self, other: self.therock_dir / other
-        mock_therock_dir.return_value = self.therock_dir
-        fetch_sources.THEROCK_DIR = self.therock_dir
-
-        # get_submodule_path should only be called for submodules, not external repos
-        mock_get_submodule_path.return_value = "base/rocm-systems"
-        mock_dvc_pull.return_value = MockPullResult()
-
-        # List of DVC projects (external repo + submodule)
-        dvc_projects = ["external-rocm-systems", "rocm-systems"]
-        # List of known submodules (only rocm-systems)
-        projects = ["rocm-systems"]
-
-        fetch_sources.pull_large_files(dvc_projects, projects, jobs=4)
-
-        # Verify get_submodule_path was only called for submodule, not external repo
-        mock_get_submodule_path.assert_called_once_with("rocm-systems")
-
-        # Verify DVC pull was called for both paths
-        self.assertEqual(mock_dvc_pull.call_count, 2)
-
-        # Extract the paths passed to dvc pull
-        call_args = [call_obj[0][0] for call_obj in mock_dvc_pull.call_args_list]
-
-        # External repo should use direct path
-        self.assertIn(self.external_rocm_systems, call_args)
-        # Submodule should use get_submodule_path result
-        self.assertIn(self.rocm_systems_submodule, call_args)
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_external_repo_only(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test DVC pull with only external repos (no submodules)."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-        mock_dvc_pull.return_value = MockPullResult()
-
-        # Only external repos, no submodules
-        dvc_projects = ["external-rocm-systems"]
-        projects = []  # Empty list of submodules
-
-        fetch_sources.pull_large_files(dvc_projects, projects, jobs=4)
-
-        # get_submodule_path should not be called
-        mock_get_submodule_path.assert_not_called()
-
-        # DVC pull should be called once for external repo
-        mock_dvc_pull.assert_called_once()
-        call_args = mock_dvc_pull.call_args[0]
-        self.assertEqual(call_args[0], self.external_rocm_systems)
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_submodule_only(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test DVC pull with only submodules (no external repos)."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-        mock_get_submodule_path.return_value = "base/rocm-systems"
-        mock_dvc_pull.return_value = MockPullResult()
-
-        # Only submodules, no external repos
-        dvc_projects = ["rocm-systems"]
-        projects = ["rocm-systems"]
-
-        fetch_sources.pull_large_files(dvc_projects, projects, jobs=4)
-
-        # get_submodule_path should be called once
-        mock_get_submodule_path.assert_called_once_with("rocm-systems")
-
-        # DVC pull should be called once
-        mock_dvc_pull.assert_called_once()
-        call_args = mock_dvc_pull.call_args[0]
-        self.assertEqual(call_args[0], self.rocm_systems_submodule)
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_missing_dvc_config_warning(self, mock_dvc_pull, mock_therock_dir):
-        """Test warning when .dvc/config is missing."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-
-        # Create directory without .dvc/config
-        no_dvc_dir = self.therock_dir / "external-no-dvc"
-        no_dvc_dir.mkdir()
-
-        dvc_projects = ["external-no-dvc"]
-        projects = []
-
-        with patch("builtins.print") as mock_print:
-            fetch_sources.pull_large_files(dvc_projects, projects)
-
-            # Check that warning was printed
-            warning_calls = [
-                call_obj
-                for call_obj in mock_print.call_args_list
-                if len(call_obj[0]) > 0 and "WARNING" in str(call_obj[0][0])
-            ]
-            self.assertGreater(len(warning_calls), 0, "Should print warning")
-
-        # DVC pull should not be called for directory without config
-        mock_dvc_pull.assert_not_called()
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_jobs_parameter_passed(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test that jobs parameter is passed to dvc pull."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-        mock_dvc_pull.return_value = MockPullResult()
-
-        dvc_projects = ["external-rocm-systems"]
-        projects = []
-
-        # Call with custom jobs parameter
-        fetch_sources.pull_large_files(dvc_projects, projects, jobs=8)
-
-        # Verify jobs parameter was passed
-        mock_dvc_pull.assert_called_once()
-        self.assertEqual(mock_dvc_pull.call_args[1]["jobs"], 8)
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_empty_dvc_projects(self, mock_dvc_pull, mock_therock_dir):
-        """Test behavior with empty dvc_projects list."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-
-        with patch("builtins.print") as mock_print:
-            fetch_sources.pull_large_files([], [], jobs=4)
-
-            # Should print skip message
-            skip_calls = [
-                call_obj
-                for call_obj in mock_print.call_args_list
-                if len(call_obj[0]) > 0 and "No DVC projects" in str(call_obj[0][0])
-            ]
-            self.assertGreater(len(skip_calls), 0, "Should print skip message")
-
-        # DVC pull should not be called
-        mock_dvc_pull.assert_not_called()
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_none_jobs_uses_default(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test that None jobs parameter uses DEFAULT_JOBS."""
-        fetch_sources.THEROCK_DIR = self.therock_dir
-        mock_dvc_pull.return_value = MockPullResult()
-
-        dvc_projects = ["external-rocm-systems"]
-        projects = []
-
-        # Call with jobs=None (default)
-        fetch_sources.pull_large_files(dvc_projects, projects, jobs=None)
-
-        # Verify DEFAULT_JOBS was used
-        mock_dvc_pull.assert_called_once()
-        self.assertEqual(mock_dvc_pull.call_args[1]["jobs"], 4)  # DEFAULT_JOBS
-
-
-class TestPullLargeFilesIntegration(unittest.TestCase):
-    """Integration tests simulating real-world usage."""
-
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_wsl_rocdxg_scenario(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test the exact scenario from wsl-rocdxg CI failure.
-
-        This simulates the fix for:
-        https://github.com/ROCm/rocm-systems/actions/runs/28359613355/job/84014838210
-        """
-        temp_dir = tempfile.mkdtemp()
-        try:
-            therock_dir = Path(temp_dir)
-            fetch_sources.THEROCK_DIR = therock_dir
-
-            # Set up external-rocm-systems with DVC config
-            external_repo = therock_dir / "external-rocm-systems"
-            external_repo.mkdir()
-            dvc_dir = external_repo / ".dvc"
-            dvc_dir.mkdir()
-            (dvc_dir / "config").write_text("[core]\n    remote = origin\n")
-
-            # Create libwkmi.a.dvc file to simulate real scenario
-            wkmi_dir = (
-                external_repo
-                / "shared"
-                / "amdgpu-windows-interop"
-                / "wkmi"
-                / "lnx"
-                / "lib"
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.therock_dir = Path(self.temp_dir.name)
+        self.project_dir = self.therock_dir / "base" / "rocm-systems"
+        dvc_dir = self.project_dir / ".dvc"
+        dvc_dir.mkdir(parents=True)
+        (dvc_dir / "config").write_text("[core]\nremote = origin\n")
+        self.enterContext(patch("fetch_sources.THEROCK_DIR", self.therock_dir))
+        self.get_submodule_path = self.enterContext(
+            patch("fetch_sources.get_submodule_path", return_value="base/rocm-systems")
+        )
+        self.pull = self.enterContext(
+            patch(
+                "fetch_sources.fetch_dvc_artifacts.pull", return_value=MockPullResult()
             )
-            wkmi_dir.mkdir(parents=True)
-            (wkmi_dir / "libwkmi.a.dvc").write_text(
-                "md5: 5c48f0f50d868cd048400223df6115bc\nsize: 337200\n"
-            )
+        )
 
-            mock_get_submodule_path.return_value = "base/rocm-systems"
-            mock_dvc_pull.return_value = MockPullResult()
+    def test_submodule_path_and_jobs(self):
+        fetch_sources.pull_large_files(["rocm-systems"], jobs=4)
 
-            # These are the arguments from detect_external_repo_config.py
-            dvc_projects = ["external-rocm-systems"]
-            projects = []  # rocm-systems is skipped, so not in projects list
+        self.get_submodule_path.assert_called_once_with("rocm-systems")
+        self.pull.assert_called_once_with(self.project_dir, jobs=4)
 
-            fetch_sources.pull_large_files(dvc_projects, projects)
+    def test_none_jobs_uses_default(self):
+        fetch_sources.pull_large_files(["rocm-systems"])
 
-            # Verify DVC pull was called for external-rocm-systems
-            mock_dvc_pull.assert_called_once()
-            call_path = mock_dvc_pull.call_args[0][0]
-            self.assertEqual(call_path, external_repo)
+        self.pull.assert_called_once_with(
+            self.project_dir, jobs=fetch_sources.fetch_dvc_artifacts.DEFAULT_JOBS
+        )
 
-            # Verify get_submodule_path was NOT called (external repo only)
-            mock_get_submodule_path.assert_not_called()
+    def test_missing_dvc_config_warning(self):
+        (self.project_dir / ".dvc" / "config").unlink()
 
-        finally:
-            import shutil
+        with patch("fetch_sources.log") as log:
+            fetch_sources.pull_large_files(["rocm-systems"])
 
-            if Path(temp_dir).exists():
-                shutil.rmtree(temp_dir)
+        log.assert_called_once_with(
+            f"WARNING: dvc config not found in {self.project_dir}, when expected."
+        )
+        self.pull.assert_not_called()
 
-    @patch("fetch_sources.THEROCK_DIR")
-    @patch("fetch_sources.get_submodule_path")
-    @patch("fetch_dvc_artifacts.pull")
-    def test_rocm_libraries_scenario_pulls_rocm_systems_wkmi(
-        self, mock_dvc_pull, mock_get_submodule_path, mock_therock_dir
-    ):
-        """Test that a rocm-libraries-triggered build also pulls rocm-systems DVC data (wkmi)."""
-        temp_dir = tempfile.mkdtemp()
-        try:
-            therock_dir = Path(temp_dir)
-            fetch_sources.THEROCK_DIR = therock_dir
+    def test_empty_dvc_projects(self):
+        fetch_sources.pull_large_files([])
 
-            # External checkout, with its own DVC-tracked hipdnn golden data.
-            external_repo = therock_dir / "external-rocm-libraries"
-            external_repo.mkdir()
-            ext_dvc_dir = external_repo / ".dvc"
-            ext_dvc_dir.mkdir()
-            (ext_dvc_dir / "config").write_text("[core]\n    remote = origin\n")
+        self.pull.assert_not_called()
+        self.get_submodule_path.assert_not_called()
 
-            # TheRock's own rocm-systems submodule, hosting the DVC-tracked
-            # wkmi libs that CLR/rocdxg link against.
-            rocm_systems_submodule = therock_dir / "rocm-systems"
-            rocm_systems_submodule.mkdir()
-            sub_dvc_dir = rocm_systems_submodule / ".dvc"
-            sub_dvc_dir.mkdir()
-            (sub_dvc_dir / "config").write_text("[core]\n    remote = origin\n")
-            wkmi_dir = (
-                rocm_systems_submodule
-                / "shared"
-                / "amdgpu-windows-interop"
-                / "wkmi"
-                / "win"
-                / "lib"
-            )
-            wkmi_dir.mkdir(parents=True)
-            (wkmi_dir / "wkmi.lib.dvc").write_text(
-                "md5: 049e4861d0a50c6e33c24f2ebc25c3ba\nsize: 444338\n"
-            )
 
-            mock_get_submodule_path.return_value = "rocm-systems"
-            mock_dvc_pull.return_value = MockPullResult()
+class GetDvcProjectsTest(unittest.TestCase):
+    def test_defaults_exclude_unselected_sources(self):
+        # Selecting only systems must exclude libraries DVC, even on Windows.
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertNotIn(
+                    "rocm-libraries",
+                    fetch_sources.get_dvc_projects(
+                        ["rocm-systems"], ["auto"], is_windows=is_windows
+                    ),
+                )
 
-            dvc_projects = ["external-rocm-libraries", "rocm-systems"]
-            projects = ["rocm-systems"]
+    def test_selected_libraries_use_dvc_on_both_platforms(self):
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocgdb", "rocm-libraries"], ["auto"], is_windows=is_windows
+                    ),
+                    ["rocm-libraries"],
+                )
 
-            fetch_sources.pull_large_files(dvc_projects, projects)
+    def test_no_selected_dvc_sources(self):
+        # rocGDB has no DVC files on either platform.
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocgdb"], ["auto"], is_windows=is_windows
+                    ),
+                    [],
+                )
 
-            self.assertEqual(mock_dvc_pull.call_count, 2)
-            call_paths = [c[0][0] for c in mock_dvc_pull.call_args_list]
-            self.assertIn(external_repo, call_paths)
-            self.assertIn(rocm_systems_submodule, call_paths)
-        finally:
-            import shutil
+    def test_requested_projects_override_platform_defaults(self):
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocm-libraries", "rocm-systems"],
+                        ["rocm-systems"],
+                        is_windows=is_windows,
+                    ),
+                    ["rocm-systems"],
+                )
 
-            if Path(temp_dir).exists():
-                shutil.rmtree(temp_dir)
+    def test_requested_projects_exclude_unselected_sources(self):
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocm-systems"], ["rocm-libraries"], is_windows=is_windows
+                    ),
+                    [],
+                )
+
+    def test_empty_request_disables_default_pulls(self):
+        for is_windows in (False, True):
+            with self.subTest(is_windows=is_windows):
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocm-libraries"], [], is_windows=is_windows
+                    ),
+                    [],
+                )
+                self.assertEqual(
+                    fetch_sources.get_dvc_projects(
+                        ["rocm-libraries"], [""], is_windows=is_windows
+                    ),
+                    [],
+                )
+
+    def test_empty_cli_value_disables_pulls(self):
+        with patch("fetch_sources.run") as run:
+            fetch_sources.main(["--dvc-projects="])
+
+        self.assertEqual(run.call_args.args[0].dvc_projects, [""])
+
+    def test_freeform_cli_value_is_rejected(self):
+        with patch("fetch_sources.run") as run:
+            with self.assertRaises(SystemExit) as error:
+                fetch_sources.main(["--dvc-projects", "custom-dvc-source"])
+
+        self.assertEqual(error.exception.code, 2)
+        run.assert_not_called()
+
+    def test_auto_cannot_be_combined_with_projects(self):
+        for project in ("rocm-libraries", "rocm-systems"):
+            with self.subTest(project=project):
+                with patch("fetch_sources.run") as run:
+                    with self.assertRaises(SystemExit) as error:
+                        fetch_sources.main(["--dvc-projects", "auto", project])
+
+                self.assertEqual(error.exception.code, 2)
+                run.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -101,11 +101,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          # Kpack splits family builds into per-target archives; validate those too.
           python ./build_tools/artifact_manager.py fetch \
             --run-id="${ARTIFACT_RUN_ID}" \
             --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --expand-family-to-targets \
             --platform="${PLATFORM}" \
             --output-dir="${OUTPUT_ROOT}" \
             --no-extract
