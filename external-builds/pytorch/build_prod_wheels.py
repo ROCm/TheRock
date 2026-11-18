@@ -1326,6 +1326,12 @@ def do_build_pytorch(
     run_command(build_command, cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
+    if not is_windows:
+        print("+++ Pointing torch RUNPATH at the ROCm runtime packages:")
+        run_command(
+            [sys.executable, script_dir / "torch_wheel_runpath.py", built_wheel],
+            cwd=pytorch_dir,
+        )
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")

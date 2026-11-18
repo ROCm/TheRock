@@ -4,3 +4,6 @@
 # of dvc[s3] as in TheRock/requirements.txt
 boto3>1.42.0
 packaging>=26.0
+# Used by torch_wheel_runpath.py to rewrite and repack the Linux torch wheel.
+patchelf>=0.17; sys_platform == "linux"
+wheel>=0.43
