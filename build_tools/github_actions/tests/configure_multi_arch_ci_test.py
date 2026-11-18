@@ -2859,6 +2859,54 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotIn("gfx110X-all", family_names)
         self.assertEqual(len(result.linux.per_family_info), 1)
 
+    def test_host_asan_variant_from_matrix_is_plumbed_through(self):
+        """A family listing host-asan in build_variants builds it; others are skipped.
+
+        Uses a synthetic matrix so the test exercises the configure logic
+        without depending on the concrete values in amdgpu_family_matrix.py.
+        """
+
+        def _family(name, build_variants):
+            return {
+                "linux": {
+                    "test-runs-on": "mock-runner",
+                    "family": name,
+                    "fetch-gfx-targets": ["gfx0000"],
+                    "build_variants": build_variants,
+                    "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+                    "tests_on_trigger": ["presubmit", "postsubmit", "nightly"],
+                }
+            }
+
+        mock_families = {
+            "mock-host-asan": _family("mock-host-asan", ["release", "host-asan"]),
+            "mock-release-only": _family("mock-release-only", ["release"]),
+        }
+        targets = cm.TargetSelection(linux_families=list(mock_families))
+        ci_inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="push",  # push remaps asan -> host-asan
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="asan",
+            built_rocm_version="10.2.0.dev0+abcdef",
+        )
+        with patch(
+            "configure_multi_arch_ci.get_all_families_for_trigger_types",
+            return_value=mock_families,
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=ci_inputs,
+                git_context=cm.GitContext(),
+                targets=targets,
+                jobs=_jobs(),
+            )
+        self.assertEqual(
+            result.linux.build_variant_cmake_preset, "linux-release-host-asan"
+        )
+        family_names = [info["amdgpu_family"] for info in result.linux.per_family_info]
+        self.assertEqual(family_names, ["mock-host-asan"])
+
     def test_test_runner_kernel_overrides_runner_label(self):
         """test_runner:oem label swaps in kernel-specific runner for gfx1151."""
         targets = cm.TargetSelection(linux_families=["gfx1151"])

@@ -236,6 +236,48 @@ class TestTriggerFiltering(unittest.TestCase):
         self.assertIn("gfx900", all_families)  # nightly-only family
 
 
+class TestBuildVariantDataFlow(unittest.TestCase):
+    """Tests that build_variants flow through family parsing unchanged."""
+
+    VARIANTS = ["release", "asan-debug", "host-asan"]
+
+    def test_variants_survive_external_runner_overlay(self):
+        """An external runner overlay must not clobber build_variants."""
+        fake_families = {
+            "mock-family": {
+                "linux": {
+                    "test-runs-on": "local-runner",
+                    "family": "mock-family",
+                    "fetch-gfx-targets": ["gfx0000"],
+                    "build_variants": list(self.VARIANTS),
+                    "builds_on_trigger": ["presubmit"],
+                    "tests_on_trigger": ["presubmit"],
+                }
+            }
+        }
+        fake_external = {
+            "runner_labels": {
+                "mock-family": {"linux": {"test-runs-on": "external-runner"}}
+            }
+        }
+        with (
+            mock.patch.object(
+                amdgpu_family_matrix,
+                "_get_local_families_for_trigger_types",
+                return_value=fake_families,
+            ),
+            mock.patch.object(
+                amdgpu_family_matrix,
+                "load_external_runner_config",
+                return_value=fake_external,
+            ),
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
+        self.assertEqual(
+            result["mock-family"]["linux"]["build_variants"], self.VARIANTS
+        )
+
+
 class TestExternalConfig(unittest.TestCase):
     """Tests for external config loading functionality."""
 
