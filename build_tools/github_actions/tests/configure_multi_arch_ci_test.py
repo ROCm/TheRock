@@ -4495,5 +4495,97 @@ class TestResolveChangedProjects(unittest.TestCase):
                 )
 
 
+class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
+    """A caller's static prebuilt_stages list, narrowed by what this run changed."""
+
+    # rocm-libraries' list: every stage it is assumed never to affect.
+    PREBUILT = [
+        "runtime-tests",
+        "comm-libs",
+        "cv-libs",
+        "storage-libs",
+        "debug-tools",
+        "dctools-core",
+        "profiler-apps",
+        "media-libs",
+        "wsl-rocdxg",
+    ]
+
+    def test_a_changed_project_rebuilds_the_stage_that_compiles_it(self):
+        """RPP lives in cv-libs, so a baseline cv-libs would not contain this RPP."""
+        self.assertNotIn(
+            "cv-libs",
+            cm._drop_stages_owned_by_changed_projects(
+                list(self.PREBUILT), ["projects/rpp"]
+            ),
+        )
+
+    def test_only_the_owning_stage_is_dropped(self):
+        """Not the dependency closure: compiler-runtime is unaffected by RPP."""
+        self.assertEqual(
+            cm._drop_stages_owned_by_changed_projects(
+                list(self.PREBUILT), ["projects/rpp"]
+            ),
+            [stage for stage in self.PREBUILT if stage != "cv-libs"],
+        )
+
+    def test_projects_outside_the_prebuilt_list_leave_it_intact(self):
+        """rocPRIM builds in math-libs, which the caller already rebuilds."""
+        self.assertEqual(
+            cm._drop_stages_owned_by_changed_projects(
+                list(self.PREBUILT), ["projects/rocprim"]
+            ),
+            self.PREBUILT,
+        )
+
+    def test_an_unnarrowed_scope_leaves_the_callers_list_alone(self):
+        """Empty means "could not narrow", and dropping everything would end reuse."""
+        self.assertEqual(
+            cm._drop_stages_owned_by_changed_projects(list(self.PREBUILT), []),
+            self.PREBUILT,
+        )
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_decide_jobs_applies_the_rule_to_the_callers_list(self, reuse):
+        """The caller passes its list verbatim; the narrowing happens here."""
+        reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=[],
+            rebuild_stages=[],
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=[],
+            unavailable_stages=[],
+            applied_reuse_stages=[],
+            reasons=[],
+        )
+        jobs = cm.decide_jobs(
+            cm.CIInputs(
+                run_id="1",
+                event_name="pull_request",
+                commit_ref="main",
+                base_ref="develop",
+                build_variant="release",
+                prebuilt_stages=",".join(self.PREBUILT),
+                changed_projects=["projects/rpp"],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+        )
+        self.assertNotIn("cv-libs", jobs.build_rocm.prebuilt_stages)
+        self.assertIn("media-libs", jobs.build_rocm.prebuilt_stages)
+
+    def test_the_rule_is_not_special_cased_to_rpp(self):
+        """The YAML conditional this replaces only ever knew about RPP."""
+        self.assertNotIn(
+            "media-libs",
+            cm._drop_stages_owned_by_changed_projects(
+                list(self.PREBUILT), ["projects/rocdecode"]
+            ),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

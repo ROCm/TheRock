@@ -104,7 +104,7 @@ from github_actions_api import (
     gha_set_output,
 )
 from get_latest_python_package_version import get_latest_python_package_version
-from stage_impact import analyze_artifact_impact_from_projects
+from stage_impact import analyze_artifact_impact_from_projects, stages_owned_by_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -151,6 +151,41 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     if "all" in stages:
         return _get_all_build_stages()
     return stages
+
+
+def _drop_stages_owned_by_changed_projects(
+    prebuilt_stages: list[str], changed_projects: list[str]
+) -> list[str]:
+    """Remove prebuilt stages that a changed project compiles into.
+
+    A caller's prebuilt_stages list names the stages its repository never
+    affects, so copying them from a baseline is safe. That premise breaks for a
+    monorepo whose projects span several stages: rocm-libraries owns RPP in
+    cv-libs and everything else in math-libs/ml-libs, so a run that changes RPP
+    must not copy cv-libs or it ships an RPP that does not match the run.
+
+    Callers used to special-case this in their own workflow YAML, keyed on a
+    changed_projects value they computed themselves. Deciding it here puts it on
+    the same changed_projects every other scoping decision reads, and keeps the
+    caller's prebuilt_stages a plain static list.
+
+    An empty changed_projects means the scope could not be narrowed, not that
+    nothing changed, so nothing is dropped and the caller's list stands. That is
+    the pre-existing behavior of the YAML conditional this replaces, and the gap
+    closes once stage reuse keys on a content fingerprint (TheRock#3399).
+    """
+    if not changed_projects:
+        return prebuilt_stages
+
+    owned = stages_owned_by_projects(changed_projects)
+    dropped = [stage for stage in prebuilt_stages if stage in owned]
+    if dropped:
+        logging.info(
+            "[STAGE-REUSE] rebuilding %s: owned by changed projects %s",
+            ", ".join(dropped),
+            ", ".join(changed_projects),
+        )
+    return [stage for stage in prebuilt_stages if stage not in owned]
 
 
 def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
@@ -1700,7 +1735,10 @@ def decide_jobs(
         stage_decisions = {}
         explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            explicit_prebuilt_stages = _drop_stages_owned_by_changed_projects(
+                _parse_prebuilt_stages(ci_inputs.prebuilt_stages),
+                ci_inputs.changed_projects,
+            )
             for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
 
