@@ -1,0 +1,144 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Posts RCCL CoCo results from Compiler Daily Bump runs onto the TheRock PRs
+# that ship the same compiler, matched by submodule source tree (see
+# build_tools/github_actions/post_coco_compiler_bump_report.py).
+#
+#   publish  Called by compiler_bump.yml after its CoCo jobs, or dispatched
+#            with bump_run_id/bump_branch to publish an earlier run. Uploads
+#            the report artifact and posts it on matching open PRs.
+#   pr       On a PR that changes a compiler submodule, or dispatched with
+#            pr: posts the newest matching report, or a "no results yet"
+#            status comment.
+
+name: RCCL Coco Compiler Bump Report
+
+on:
+  # SECURITY: pull_request_target runs in the BASE-repo context with a write
+  # token, even for PRs opened from forks. This is safe ONLY because the `pr`
+  # job checks out the trusted base commit, never the PR head, and reads all
+  # PR data through the GitHub API. Do NOT check out or run PR head code here.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, synchronize, reopened]
+    paths:
+      - compiler/amd-llvm
+      - compiler/hipify
+      - compiler/spirv-llvm-translator
+  workflow_call:
+    inputs:
+      bump_run_id:
+        description: 'Compiler Daily Bump run ID whose CoCo results to publish.'
+        type: string
+        required: true
+      bump_branch:
+        description: 'TheRock branch that run created (amd-compiler-...).'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      bump_run_id:
+        description: 'Compiler Daily Bump run ID to publish (CoCo artifacts last 14 days). Requires bump_branch.'
+        type: string
+        default: ''
+      bump_branch:
+        description: 'TheRock branch that bump run created (amd-compiler-...).'
+        type: string
+        default: ''
+      pr:
+        description: 'TheRock PR number to re-check against published reports.'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish CoCo report
+    if: ${{ github.event_name != 'pull_request_target' && inputs.bump_run_id != '' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      actions: read # Download the bump run's CoCo artifacts.
+      pull-requests: write # Post reports on matching PRs.
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      BUMP_RUN_ID: ${{ inputs.bump_run_id }}
+      BUMP_BRANCH: ${{ inputs.bump_branch }}
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Download CoCo output artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coco-run-*-output
+          path: coco-output
+          run-id: ${{ inputs.bump_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Collect CoCo reports
+        id: collect
+        run: |
+          python build_tools/github_actions/post_coco_compiler_bump_report.py collect \
+            --run_id "${BUMP_RUN_ID}" \
+            --branch "${BUMP_BRANCH}" \
+            --coco_output_dir coco-output \
+            --out_dir coco-report
+
+      # Named by the amd-llvm source tree so PRs can look reports up by name.
+      - name: Upload CoCo report
+        if: ${{ steps.collect.outputs.artifact_name != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.collect.outputs.artifact_name }}
+          path: coco-report
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Post to matching open PRs
+        if: ${{ steps.collect.outputs.artifact_name != '' }}
+        run: |
+          python build_tools/github_actions/post_coco_compiler_bump_report.py \
+            post-open-prs --report_dir coco-report
+
+  pr:
+    name: Post CoCo report
+    if: ${{ github.event_name == 'pull_request_target' || inputs.pr != '' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      actions: read # Find and download report artifacts.
+      pull-requests: write # Post the report comments.
+    concurrency:
+      group: coco-compiler-bump-report-${{ github.event.pull_request.number || inputs.pr }}
+      cancel-in-progress: true
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # SECURITY: the trusted base commit, never the PR head.
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Post CoCo report
+        run: |
+          python build_tools/github_actions/post_coco_compiler_bump_report.py \
+            post-pr --pr "${PR_NUMBER}" --head_sha "${HEAD_SHA}"

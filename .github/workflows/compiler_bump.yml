@@ -825,6 +825,21 @@ jobs:
       rocm_system_ref: ${{ needs.create-branch.outputs.rocm_system_ref }}
       trigger_kind: ci
 
+  # Posts the CoCo results onto open PRs that ship this compiler; PRs opened
+  # later pick them up from the uploaded report artifact.
+  rccl-coco-report:
+    name: RCCL Coco Report
+    needs: [create-branch, rccl-coco]
+    if: ${{ always() && (needs.rccl-coco.result == 'success' || needs.rccl-coco.result == 'failure') }}
+    permissions:
+      contents: read
+      actions: read # Download this run's CoCo artifacts.
+      pull-requests: write # Post reports on matching PRs.
+    uses: ./.github/workflows/coco_compiler_bump_report.yml
+    with:
+      bump_run_id: ${{ github.run_id }}
+      bump_branch: ${{ needs.create-branch.outputs.branch_name }}
+
   # ==========================================================================
   # Summary
   # ==========================================================================
