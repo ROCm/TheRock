@@ -22,6 +22,11 @@ Each skill exposes four actions you invoke in one sentence:
 - **Pre-merge gate** — "is it actually safe to press merge right now?"
 - **Check attestation** — "has this PR been reviewed by the skill?"
 
+The author, review, and pre-merge actions also cover CI labels: choosing the smallest label set
+that safely tests the change, checking that choice in review, and confirming before merge that CI
+was not bypassed since review. The label list itself stays in TheRock's
+[`ci_behavior_manipulation.md`](../docs/development/ci_behavior_manipulation.md).
+
 Component repositories add their own thin overlays on top (for example, `hipblaslt-pr-quality` in
 `rocm-libraries`). Overlays may tighten but never weaken the base rules.
 

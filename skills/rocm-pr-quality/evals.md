@@ -77,3 +77,72 @@ ______________________________________________________________________
 - The review does not claim CI is green or that the test was seen to fail. A request to re-run CI or link a current run is an `IMPORTANT` finding.
 
 **Must not.** State that the test passes or fails without evidence. Omit the limits note.
+
+______________________________________________________________________
+
+## Case 6: author assist, docs-only change needs no CI labels
+
+**Input.** Author assist on a rocm-libraries branch that changes only `projects/rocsparse/README.md` (+12/-3) and `docs/install.rst` (+4/-1). The repository's `.github/skip-ci-config.toml` lists `*.md`, `*.rst`, and `docs/*`. No labels on the PR.
+
+**Expected.**
+
+- The proposed label set is empty: every changed path matches an auto-skip pattern, so CI does not build or test.
+- The Testing Summary says no CI labels are needed and why (auto-skip), not "default CI."
+
+**Must not.** Propose `ci:skip` as if it were needed, or add GPU-family or `test_filter:` labels.
+
+______________________________________________________________________
+
+## Case 7: author assist, clients-only change narrows downstream tests
+
+**Input.** Author assist on a rocm-libraries branch that changes four files, all under `projects/hipblaslt/clients/` (the `hipblaslt-test` and `hipblaslt-bench` CPU-verification code). No library, header, kernel, or TensileLite file changes. Default CI for a hipBLASLt change runs hipBLASLt's tests plus its consumers' (rocBLAS, MIOpen, hipBLAS, hipSPARSELt).
+
+**Expected.**
+
+- Proposes `ci:no-downstream-test`, with a reason: only client code changed, so consumers cannot see it.
+- Says what the label drops (the rocBLAS, MIOpen, hipBLAS, and hipSPARSELt test jobs) and records the label in the Testing Summary.
+- Drafts the `gh pr edit --add-label` command but does not run it without approval, and says to apply it before the PR is marked ready.
+
+**Must not.** Propose `ci:skip` or `ci:cpu-test-only` (the client code runs GPU tests). Apply the label on its own.
+
+______________________________________________________________________
+
+## Case 8: review, unsafe narrowing on a code-generation change
+
+**Input.** Review of a rocm-libraries PR "[AIHPBLAS-1234] Reorder wait insertion in the gfx1250 scheduler". Files: `shared/stinkytofu/src/passes/WaitInsertion.cpp` (+40/-12) and its unit test. Labels: `ci:no-downstream-test`, `ci:platform:linux`. The description gives no reason for either label. The passing run used both labels. Tracker present, tests present.
+
+**Expected.**
+
+- Overall assessment `CHANGES REQUESTED`.
+- `BLOCKING`: `ci:no-downstream-test` drops coverage the change can reach. Code generation changes the kernels that hipBLASLt ships, and rocBLAS and MIOpen consume them.
+- `BLOCKING` or `IMPORTANT` for `ci:platform:linux`: the code is compiled on Windows too.
+- The review names the labels to remove and asks for a re-run.
+
+**Must not.** Accept the labels because CI is green. Treat unsafe narrowing as a `SUGGESTION`.
+
+______________________________________________________________________
+
+## Case 9: review, more CI than the change needs
+
+**Input.** Review of a TheRock PR "[ROCM-5678] Fix a typo in an error message in `build_tools/fetch_sources.py`" with a unit test update. Labels: `ci:run-all-archs`, `test_filter:comprehensive`. CI green. Tracker present.
+
+**Expected.**
+
+- Overall assessment `APPROVED`.
+- A `SUGGESTION` that the labels run far more than the change can reach, naming the labels to drop (both), and noting that host-only Python tooling does not need a full GPU sweep.
+
+**Must not.** Mark the extra CI `BLOCKING` or `IMPORTANT`. Withhold approval because of it.
+
+______________________________________________________________________
+
+## Case 10: pre-merge, CI not bypassed since review
+
+**Input.** Pre-merge gate on an approved rocm-libraries PR. The review accepted the label set `ci:no-downstream-test` for a clients-only change, and `TheRock Multi-Arch CI` passed on commit `a1` with that set. After approval, the author pushed commit `b2`, which changes only `projects/hipblaslt/clients/README.md`, and added `ci:skip`. No CI run happened after `b2`. Timing and stale-base checks are clean.
+
+**Expected.**
+
+- Verdict go: the only change since the last passing run is a CI-skippable docs file, so `ci:skip` bypassed nothing.
+
+**Variant.** Same, but `b2` also changes `projects/hipblaslt/clients/common/include/testing_matmul.hpp`. **Expected:** verdict hold. Code changed after `ci:skip` was added, and no passing run covers it; recommend removing `ci:skip` and re-running CI.
+
+**Must not.** Call the first case a hold because `ci:skip` is present. Call the variant a go because an earlier run passed.

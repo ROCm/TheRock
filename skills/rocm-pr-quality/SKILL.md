@@ -141,6 +141,17 @@ not. Discover the supported architecture/label set from the repo's CI config; do
 it. Do not over-escalate: an arch-independent change covered by passing CI needs no sweep, and
 saying so is a valid outcome.
 
+### CI labels: minimal safe CI
+
+CI labels turn the blast-radius judgment into what CI actually runs. Choose the smallest label set
+that still covers everything the diff can reach (including `ci:skip` or `ci:no-downstream-test`
+when they are safe), then add GPU-family labels where the blast radius needs them. When unsure,
+test more. Labels select coverage only: they never satisfy M2, and narrowing CI so a red run turns
+green violates M3. Read TheRock's live label docs rather than keeping a copy here; the sources,
+the narrowing ladder, the combination hazards, and the review and pre-merge rules are in
+"Choosing CI labels" in `reference.md`. Narrowed CI moves risk to the author, who owns the revert
+if a break reaches the base branch or a downstream bump.
+
 ### Risk level (1–5)
 
 Take any user-provided hint, then independently evaluate the diff. 1 = docs/comments/metadata
@@ -240,6 +251,12 @@ not render empty `N/A` fields in the body.
    manual run (command, devices, log/run link) in the Testing Checklist. If no `TESTING.md`
    exists for the touched component yet, fall back to the risk-dimension lens and CI-config
    discovery, and note the gap as a `SUGGESTION`.
+1. Choose the CI labels (see "Choosing CI labels" in `reference.md`). Read TheRock's live label
+   docs and this repository's skip patterns and label list. Walk the narrowing ladder, then the
+   widening list, and propose the smallest safe set with a one-line reason per label. Say what
+   default CI would run that the set drops, and record the labels in the Testing Summary. Draft
+   the `gh pr edit --add-label` commands; apply them only after the user approves, and before the
+   PR is marked ready, so the first full run uses them.
 1. Scan branch name, commit messages, and diff for tracker keys, issue numbers, and referenced
    PRs; pre-fill the Related section; prompt for anything obviously missing (e.g. "this fixes a
    defect — link the defect ticket").
@@ -255,7 +272,8 @@ not render empty `N/A` fields in the body.
    behavior, and adjacent tests ("what else exercises this code path that you should run?").
 
 **Output:** a suggested PR title + body (Markdown), a per-step checklist (pass / warn / fail),
-CI labels to consider, and open questions for the author — all before the push. Do not create
+the proposed CI labels with their reasons and the drafted label commands, and open questions for
+the author — all before the push. Do not create
 or edit the PR on GitHub unless the user explicitly approves the exact text. Never include a
 review attestation in the description or a comment on the author's own PR (see "Review
 attestation").
@@ -294,6 +312,10 @@ web diff alone has lower confidence). Do not modify files during review.
    row should be updated (closed, tightened, or left with a note) alongside the code change.
 1. Assess blast radius and device/arch coverage; reconcile what the content warrants against what
    the PR actually tested/claimed. Flag gaps; do not over-escalate.
+1. Check the CI labels (see "Reviewing the labels" in `reference.md`). Compare the PR's labels
+   against what the diff can reach, and confirm a run actually used the current set
+   (`tools/pr_quality_check.py --ci-labels`). A narrowing label that drops reachable coverage is
+   `BLOCKING`. Too much CI is only a `SUGGESTION` that names the labels to add or drop.
 1. Answer the four review questions explicitly: (1) what new/changed functionality lands,
    (2) what test level is appropriate, (3) if tests/flags are omitted, is that acceptable
    (waiver?), (4) what adjacent tests should have been considered.
@@ -363,6 +385,13 @@ merge queue, and it does not force a CI rerun by default.
   force a rerun. Also confirm the green is *real*, not just a passing rollup summary (see
   "Evidence-based review" under Action 2): every required lane actually ran and passed, with no
   skipped/cancelled required check hiding under the green.
+- **CI not bypassed since review.** Find the last run that passed with a safe label set, then look
+  at what came after it: commits, and label changes such as an added `ci:skip`. Later commits that
+  touch only paths CI skips on its own, or paths the narrower labels cover safely, are fine (a
+  docs-only commit plus `ci:skip` after a good run is a go). A code change after a narrowing label,
+  with no safe-set run covering it, is a hold. `tools/pr_quality_check.py --ci-labels` lists the
+  runs, the labels each one used, and the commits since the last passing run. See "Pre-merge: was
+  CI bypassed since review?" in `reference.md`.
 - **Adjacent-file / stale-base check on develop.** Compare the PR's changed files against the
   files the base branch changed since the PR diverged. No overlap → do not tax velocity, merge is
   fine. Overlap on high-coupling files (shared generators, register/lifetime code, shared
@@ -416,7 +445,8 @@ ______________________________________________________________________
 - The optional shared checker `tools/pr_quality_check.py` performs the deterministic subset of
   the MUST checks (description sections, work-tracking presence, resolution of bare `#refs` only
   (full URLs are reported as unchecked), test-file-touched heuristic, CI currency, adjacent-file
-  overlap). Pass `--profile` for an overlay's settings (`therock`, `hipblaslt`); the default `base`
+  overlap). With `--ci-labels` it also reports the PR's label timeline, the labels each CI run
+  used, and the commits since the last passing run, for the review and pre-merge label checks. Pass `--profile` for an overlay's settings (`therock`, `hipblaslt`); the default `base`
   profile has no high-coupling file list. It is advisory; semantic judgments (test
   substance, M3) stay with the agent and the human. It also generates and verifies the review
   attestation digest (`--check-attestation`, Action 4).

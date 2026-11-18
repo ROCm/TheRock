@@ -15,10 +15,14 @@ Advisory by default (always exits 0). Pass --enforce to exit non-zero on blocker
 With --check-attestation it instead reports whether the PR carries a valid review attestation
 (see reference.md); there the exit status is the answer (0 verified, 4 none, 5 invalid).
 
+With --ci-labels it also reports the PR's CI-label timeline: the labels each CI run used, the
+last passing run, and the commits and label changes since then (reference.md, "Choosing CI
+labels"). Whether a label set was safe for the diff stays a judgment for the agent and human.
+
 Usage:
     python pr_quality_check.py --pr <number|url> [--repo owner/name] [--profile hipblaslt]
                                [--repo-path .] [--check-links] [--enforce] [--json]
-                               [--check-attestation]
+                               [--check-attestation] [--ci-labels]
 
 Requires: gh (authenticated). The stale-base check uses local git when --repo-path is given
 (exact), otherwise falls back to the GitHub compare API (no clone needed; the API caps the file
@@ -30,12 +34,22 @@ incidental cross-reference or timeline mention, which it surfaces as a soft note
 from __future__ import annotations
 
 import argparse
+import base64
+import fnmatch
 import hashlib
 import json
 import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+try:
+    import tomllib
+except (
+    ModuleNotFoundError
+):  # Python < 3.11: skip-pattern loading falls back to a heuristic
+    tomllib = None
 
 # --- Profiles: generic defaults plus component overlays ------------------------------------
 
@@ -52,11 +66,16 @@ TEST_GLOBS = [
     r"(^|/)conftest\.py$",
 ]
 
+# Main PR CI workflows whose runs the --ci-labels report follows: "Multi-Arch CI" in TheRock,
+# "TheRock Multi-Arch CI" in repositories that call it. The ASAN and nightly variants differ.
+CI_WORKFLOWS = [r"\bMulti-Arch CI$"]
+
 PROFILES = {
     "base": {
         "product_globs": [r"src/", r"library/", r"include/"],
         "test_globs": TEST_GLOBS + [r"(^|/)clients/"],
         "high_coupling": [],
+        "ci_workflows": CI_WORKFLOWS,
         # Strong work-tracking signals (a real ticket/issue), vs. incidental cross-references.
         "tracker_regexes": [r"\b[A-Z][A-Z0-9]+-\d+\b"],
         "issue_link_regexes": [r"https?://\S+/issues/\d+"],
@@ -77,6 +96,7 @@ PROFILES = {
         ],
         "tracker_regexes": [r"\b[A-Z][A-Z0-9]+-\d+\b"],
         "issue_link_regexes": [r"https?://\S+/issues/\d+"],
+        "ci_workflows": CI_WORKFLOWS,
     },
     "hipblaslt": {
         "product_globs": [r"projects/hipblaslt/", r"tensilelite/"],
@@ -90,6 +110,7 @@ PROFILES = {
         ],
         "tracker_regexes": [r"\bAIHPBLAS-\d+\b", r"\bROCM-\d+\b"],
         "issue_link_regexes": [r"https?://\S+/issues/\d+"],
+        "ci_workflows": CI_WORKFLOWS,
     },
 }
 
@@ -317,7 +338,7 @@ def run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
 def gh_pr_json(pr: str, repo: str | None) -> dict:
     fields = (
         "title,body,files,baseRefName,headRefName,headRefOid,url,statusCheckRollup,"
-        "commits,number,closingIssuesReferences"
+        "commits,number,closingIssuesReferences,labels"
     )
     cmd = ["gh", "pr", "view", pr, "--json", fields]
     if repo:
@@ -767,6 +788,325 @@ def check_stale_base(
     _report_overlap(pr_files & base_changed, prof, findings, "git")
 
 
+# --- CI labels (reference.md, "Choosing CI labels") -----------------------------------------
+
+# Labels that make CI run less than its default selection.
+NARROWING_LABELS = {
+    "ci:skip",
+    "ci:no-downstream-test",
+    "ci:cpu-test-only",
+    "ci:exactly",
+    "test_filter:quick",
+}
+NARROWING_PREFIXES = ("ci:platform:", "test:")
+# Labels that change what CI runs; others (for example "project: hipblaslt") are ignored.
+CI_LABEL_PREFIXES = ("ci:", "test:", "test_filter:")
+# The report looks up CI runs for at most this many of the PR's newest commits.
+CI_LABELS_MAX_COMMITS = 30
+THEROCK_REPO = "ROCm/TheRock"
+SKIP_CI_BASE = "build_tools/github_actions/skip-ci-base.toml"
+SKIP_CI_THEROCK = "build_tools/github_actions/skip-ci-config.toml"
+SKIP_CI_EXTERNAL = ".github/skip-ci-config.toml"
+# Used only when no skip-ci config can be read.
+HEURISTIC_SKIP_SUFFIXES = (".md", ".rst")
+
+
+def is_narrowing_label(label: str) -> bool:
+    return label in NARROWING_LABELS or label.startswith(NARROWING_PREFIXES)
+
+
+def is_ci_label(label: str) -> bool:
+    return label.startswith(CI_LABEL_PREFIXES)
+
+
+def labels_at(events: list[dict], when: str | None) -> list[str]:
+    """CI labels on the PR at time `when` (all events when None), replayed from label events.
+
+    `events` are dicts with event ("labeled" or "unlabeled"), label, and created_at. Labels
+    that do not affect CI are ignored.
+    """
+    cutoff = _parse_ci_timestamp(when)
+    labels: set[str] = set()
+    ci_events = [e for e in events if is_ci_label(e.get("label", ""))]
+    for ev in sorted(ci_events, key=lambda e: e.get("created_at") or ""):
+        ts = _parse_ci_timestamp(ev.get("created_at"))
+        if cutoff and ts and ts > cutoff:
+            break
+        if ev.get("event") == "labeled":
+            labels.add(ev.get("label", ""))
+        elif ev.get("event") == "unlabeled":
+            labels.discard(ev.get("label", ""))
+    return sorted(labels)
+
+
+def parse_skip_patterns(toml_text: str) -> list[str]:
+    """The `[skip_ci] common` patterns of a skip-ci config: paths that skip CI everywhere."""
+    if tomllib is None or not toml_text:
+        return []
+    data = tomllib.loads(toml_text)
+    return list((data.get("skip_ci") or {}).get("common") or [])
+
+
+def is_ci_skippable(path: str, patterns: list[str] | None) -> bool:
+    """Whether CI ignores `path`. Matches CI's own rule (fnmatch, where `*` crosses `/`)."""
+    if patterns:
+        return any(fnmatch.fnmatch(path, p) for p in patterns)
+    return (
+        path.endswith(HEURISTIC_SKIP_SUFFIXES)
+        or path.startswith("docs/")
+        or "/docs/" in path
+    )
+
+
+def _read_repo_file(
+    repo: str | None, path: str, ref: str | None, repo_path: str | None
+) -> str | None:
+    if repo_path:
+        local = Path(repo_path) / path
+        if local.is_file():
+            return local.read_text(encoding="utf-8")
+    if not repo:
+        return None
+    data = gh_api_json(f"repos/{repo}/contents/{path}" + (f"?ref={ref}" if ref else ""))
+    if isinstance(data, dict) and data.get("content"):
+        return base64.b64decode(data["content"]).decode("utf-8", "replace")
+    return None
+
+
+def load_skip_patterns(
+    repo: str | None, base_ref: str | None, repo_path: str | None
+) -> tuple[list[str] | None, str]:
+    """(patterns, method): TheRock's base skip list plus the repository's own extension.
+
+    Patterns are None when no config could be read; callers then use a docs heuristic.
+    """
+    if tomllib is None:
+        return None, "docs heuristic (this Python has no tomllib)"
+    is_therock = (repo or "").lower() == THEROCK_REPO.lower()
+    base = _read_repo_file(
+        THEROCK_REPO, SKIP_CI_BASE, None, repo_path if is_therock else None
+    )
+    extension = _read_repo_file(
+        repo, SKIP_CI_THEROCK if is_therock else SKIP_CI_EXTERNAL, base_ref, repo_path
+    )
+    if base is None and extension is None:
+        return None, "docs heuristic (no skip-ci config found)"
+    return (
+        parse_skip_patterns(base or "") + parse_skip_patterns(extension or ""),
+        "skip-ci patterns",
+    )
+
+
+def analyze_ci_labels(
+    runs: list[dict],
+    events: list[dict],
+    commits: list[dict],
+    commit_files: dict[str, list[str]],
+    patterns: list[str] | None,
+) -> dict:
+    """Which labels each CI run used, and whether anything since the last passing run escaped CI.
+
+    `runs` are the PR's main-CI runs (id, name, head_sha, created_at, status, conclusion, url).
+    `events` are label events (see labels_at). `commits` are the PR's commits, oldest first.
+    `commit_files` maps a commit to its changed paths, for commits after the last passing run.
+    The verdict is go, caution, or hold (reference.md, "Pre-merge: was CI bypassed since review?").
+    """
+    timeline = [
+        {**r, "labels": labels_at(events, r.get("created_at"))}
+        for r in sorted(runs, key=lambda r: r.get("created_at") or "")
+    ]
+    report = {
+        "current_labels": labels_at(events, None),
+        "runs": timeline,
+        "last_passing_run": None,
+        "commits_since": [],
+        "label_changes_since": [],
+        "verdict": "caution",
+        "reason": "",
+    }
+    passing = [r for r in timeline if r.get("conclusion") == "success"]
+    if not timeline:
+        report["reason"] = "No CI runs found for this PR's commits."
+        return report
+    if not passing:
+        report["reason"] = "No passing CI run found."
+        return report
+    last = passing[-1]
+    report["last_passing_run"] = last
+    oids = [c.get("oid", "") for c in commits]
+    if last.get("head_sha") not in oids:
+        report["reason"] = (
+            "The last passing run's commit is not in the PR's current history (rebased or "
+            "force-pushed). Judge the diff since that run by hand."
+        )
+        return report
+
+    later = []
+    for oid in oids[oids.index(last["head_sha"]) + 1 :]:
+        files = commit_files.get(oid)
+        unknown = files is None
+        code = [] if unknown else [f for f in files if not is_ci_skippable(f, patterns)]
+        later.append(
+            {
+                "oid": oid,
+                "files": files or [],
+                "non_skippable": code,
+                "files_unknown": unknown,
+            }
+        )
+    report["commits_since"] = later
+    started = _parse_ci_timestamp(last.get("created_at"))
+    report["label_changes_since"] = [
+        e
+        for e in sorted(events, key=lambda e: e.get("created_at") or "")
+        if is_ci_label(e.get("label", ""))
+        and started
+        and (_parse_ci_timestamp(e.get("created_at")) or started) > started
+    ]
+
+    current = report["current_labels"]
+    narrowing_added = [
+        lbl for lbl in current if is_narrowing_label(lbl) and lbl not in last["labels"]
+    ]
+    other_added = [
+        lbl
+        for lbl in current
+        if not is_narrowing_label(lbl) and lbl not in last["labels"]
+    ]
+    code_commits = [c for c in later if c["non_skippable"] or c["files_unknown"]]
+    if not later:
+        if other_added:
+            report["reason"] = (
+                f"Label(s) {', '.join(other_added)} were added after the last passing run, "
+                "and no run has used them. Re-run CI if they add coverage the change needs."
+            )
+        else:
+            report["verdict"] = "go"
+            report["reason"] = "The PR's head commit passed CI."
+    elif not code_commits:
+        report["verdict"] = "go"
+        report["reason"] = (
+            f"Only CI-skippable changes in the {len(later)} commit(s) since the last passing "
+            "run."
+        )
+    elif narrowing_added:
+        report["verdict"] = "hold"
+        report["reason"] = (
+            f"{len(code_commits)} commit(s) since the last passing run change code, and "
+            f"narrowing label(s) {', '.join(narrowing_added)} were added since. No passing "
+            "run covers that code. Remove the label(s) and re-run, or confirm they are safe "
+            "for the later diff."
+        )
+    else:
+        report["reason"] = (
+            f"{len(code_commits)} commit(s) since the last passing run change code, and no "
+            "passing run covers them yet."
+        )
+    return report
+
+
+def fetch_ci_label_report(
+    data: dict, repo: str | None, prof: dict, repo_path: str | None
+) -> dict:
+    """Gather label events, CI runs, and later commits' files via gh, then analyze them."""
+    repo = resolve_repo(repo)
+    if not repo:
+        return {
+            "verdict": "caution",
+            "reason": "CI-label report skipped (repository unknown).",
+            "current_labels": sorted(
+                lbl.get("name", "")
+                for lbl in data.get("labels") or []
+                if is_ci_label(lbl.get("name", ""))
+            ),
+            "runs": [],
+        }
+    number = data.get("number")
+    events = [
+        {
+            "event": ev.get("event"),
+            "label": (ev.get("label") or {}).get("name", ""),
+            "created_at": ev.get("created_at"),
+        }
+        for ev in gh_api_pages(f"repos/{repo}/issues/{number}/events")
+        if ev.get("event") in ("labeled", "unlabeled")
+    ]
+    commits = data.get("commits") or []
+    runs = []
+    for c in commits[-CI_LABELS_MAX_COMMITS:]:
+        result = gh_api_json(
+            f"repos/{repo}/actions/runs?head_sha={c.get('oid')}&event=pull_request&per_page=100"
+        )
+        for r in (result or {}).get("workflow_runs", []):
+            if not matches_any(
+                r.get("name", ""), prof.get("ci_workflows", CI_WORKFLOWS)
+            ):
+                continue
+            runs.append(
+                {
+                    "id": r.get("id"),
+                    "name": r.get("name"),
+                    "head_sha": r.get("head_sha"),
+                    # A re-run reuses its original event payload, so the labels it used are
+                    # the ones present when the run was created, not when it was re-run.
+                    "created_at": r.get("created_at"),
+                    "status": r.get("status"),
+                    "conclusion": r.get("conclusion"),
+                    "url": r.get("html_url"),
+                }
+            )
+    patterns, method = load_skip_patterns(repo, data.get("baseRefName"), repo_path)
+    first = analyze_ci_labels(runs, events, commits, {}, patterns)
+    files = {}
+    for c in first.get("commits_since", []):
+        detail = gh_api_json(f"repos/{repo}/commits/{c['oid']}")
+        if isinstance(detail, dict):
+            files[c["oid"]] = [f.get("filename", "") for f in detail.get("files") or []]
+    report = analyze_ci_labels(runs, events, commits, files, patterns)
+    report["skip_method"] = method
+    report["commits_checked"] = min(len(commits), CI_LABELS_MAX_COMMITS)
+    report["commits_total"] = len(commits)
+    return report
+
+
+def ci_label_finding(report: dict) -> Finding:
+    severity = "INFO" if report.get("verdict") == "go" else "IMPORTANT"
+    return Finding(
+        "CI-LABELS",
+        severity,
+        f"{report.get('verdict', '').upper()}: {report.get('reason')}",
+    )
+
+
+def print_ci_label_report(report: dict) -> None:
+    print(
+        f"CI labels now: {', '.join(report.get('current_labels') or []) or 'none'} "
+        f"(skip classification: {report.get('skip_method', 'n/a')})"
+    )
+    for r in report.get("runs", []):
+        state = r.get("conclusion") or r.get("status")
+        labels = ", ".join(r.get("labels") or []) or "no labels"
+        print(
+            f"  run {r.get('created_at')} {str(r.get('head_sha'))[:9]} {state}: {labels}"
+            f"  {r.get('url')}"
+        )
+    for c in report.get("commits_since", []):
+        if c["files_unknown"]:
+            what = "files unknown"
+        elif c["non_skippable"]:
+            what = f"{len(c['non_skippable'])} non-skippable file(s)"
+        else:
+            what = "CI-skippable only"
+        print(f"  since last pass: commit {c['oid'][:9]} ({what})")
+    for e in report.get("label_changes_since", []):
+        print(f"  since last pass: {e['event']} {e['label']} at {e['created_at']}")
+    if report.get("commits_total", 0) > report.get("commits_checked", 0):
+        print(
+            f"  Only the newest {report['commits_checked']} of {report['commits_total']} "
+            "commits were checked for CI runs."
+        )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="ROCm PR quality deterministic checks (advisory)."
@@ -790,6 +1130,12 @@ def main() -> None:
         help="only report whether the PR carries a valid skill attestation (skips the "
         "quality checks); exit 0 if verified, 4 if none found, 5 if invalid",
     )
+    ap.add_argument(
+        "--ci-labels",
+        action="store_true",
+        help="also report the labels each CI run used and what changed since the last "
+        "passing run (pre-merge 'CI not bypassed' check; network)",
+    )
     args = ap.parse_args()
 
     prof = PROFILES[args.profile]
@@ -805,30 +1151,34 @@ def main() -> None:
     check_tests(data, prof, findings)
     check_ci_currency(data, findings)
     check_stale_base(data, prof, args.repo_path, args.repo, findings)
+    ci_labels = None
+    if args.ci_labels:
+        ci_labels = fetch_ci_label_report(data, args.repo, prof, args.repo_path)
+        findings.append(ci_label_finding(ci_labels))
 
     blockers = [f for f in findings if f.severity == "BLOCKING"]
     warns = [f for f in findings if f.severity == "IMPORTANT"]
 
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "pr": data.get("number"),
-                    "url": data.get("url"),
-                    "profile": args.profile,
-                    "attestation": attestation_digest(data.get("url", "")),
-                    "blockers": len(blockers),
-                    "warnings": len(warns),
-                    "findings": [f.as_dict() for f in findings],
-                },
-                indent=2,
-            )
-        )
+        result = {
+            "pr": data.get("number"),
+            "url": data.get("url"),
+            "profile": args.profile,
+            "attestation": attestation_digest(data.get("url", "")),
+            "blockers": len(blockers),
+            "warnings": len(warns),
+            "findings": [f.as_dict() for f in findings],
+        }
+        if ci_labels is not None:
+            result["ci_labels"] = ci_labels
+        print(json.dumps(result, indent=2))
     else:
         print(f"PR #{data.get('number')} [{args.profile}] - {data.get('url')}")
         order = {"BLOCKING": 0, "IMPORTANT": 1, "INFO": 2}
         for f in sorted(findings, key=lambda x: order[x.severity]):
             print(f"  [{f.severity:9}] {f.rule:11} {f.message}")
+        if ci_labels is not None:
+            print_ci_label_report(ci_labels)
         print(
             f"Summary: {len(blockers)} blocking, {len(warns)} important. "
             "Substance/M3 judged separately by the agent + human reviewer."

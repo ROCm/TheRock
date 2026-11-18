@@ -12,6 +12,7 @@ or tighten these; they never relax a MUST.
 - [Test-substance smell scan](#test-substance-smell-scan-a-hit-is-a-prompt-to-inspect-not-a-verdict) and [agent anti-patterns](#agent--ai-generated-change-anti-patterns-a-hit-warrants-a-closer-read)
 - [PR-hygiene checklist](#pr-hygiene-checklist-author--reviewer) and [self-evident changes](#self-evident-changes-reduced-justification-exemptions)
 - [Finding tiers](#finding-tiers-individual-findings), [overall assessment](#overall-assessment-pr-level), [risk levels](#risk-levels-15)
+- [Choosing CI labels](#choosing-ci-labels-minimal-safe-ci): [reviewing them](#reviewing-the-labels), [which labels a run used](#which-labels-did-a-run-use), [pre-merge bypass check](#pre-merge-was-ci-bypassed-since-review)
 - [Waiver codes](#waiver-codes)
 - [PR description template](#pr-description-template) and [two-PR known-bug flow](#two-pr-known-bug-flow-satisfies-m1-without-a-same-pr-fix)
 - [Worked review output](#worked-review-output-hypothetical-fixture) (evaluation fixtures: [`evals.md`](evals.md))
@@ -314,6 +315,131 @@ touches.
 
 ______________________________________________________________________
 
+## Choosing CI labels (minimal safe CI)
+
+CI labels let a PR author change what CI runs: skip it, narrow it to the changed projects or one
+platform, or widen it to more GPU families and a deeper test tier. Most PRs carry none, so they
+run whatever CI selects by default, which is often far more than the change can reach. The author
+knows best what a change can break, and author assist is when the skill can read the diff closely
+enough to help choose. All three actions use the rules below.
+
+**Read the live docs; do not copy them.** Labels and their behavior change. Before choosing or
+checking labels, read:
+
+- TheRock's label list:
+  [`ci_behavior_manipulation.md`](https://github.com/ROCm/TheRock/blob/main/docs/development/ci_behavior_manipulation.md)
+  (the "Pull request" table and its subsections), and
+  [`test_filtering.md`](https://github.com/ROCm/TheRock/blob/main/docs/development/test_filtering.md)
+  for `test_filter:` values. Repositories that call TheRock's CI, such as rocm-libraries and
+  rocm-systems, use the same labels.
+- The auto-skip patterns: TheRock's
+  [`skip-ci-base.toml`](https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/skip-ci-base.toml)
+  applies to every repository, and each repository extends it with its own
+  `skip-ci-config.toml` (TheRock's is in `build_tools/github_actions/`; rocm-libraries' is
+  `.github/skip-ci-config.toml`). When every changed path matches one of these `fnmatch` patterns
+  (where `*` also matches `/`), CI does not build or test at all.
+- The labels this repository has created: `gh label list -R <owner/repo> --search "ci:"` (and
+  `--search "test:"`). A documented label that the repository has not created cannot be applied.
+- Any repository-specific label docs an overlay names, such as component CI or Math CI labels.
+- What the default selection would run, when you need to know what a narrowing label drops. In a
+  TheRock checkout, `python test_tools/determine_rocm_test_dependencies.py --changed-projects <path>`
+  prints the test jobs a changed project selects, and `--explain <component>` shows why.
+
+**The rule.** Choose the smallest label set that still covers everything the diff can reach, then
+widen it where the blast radius needs more. When unsure, test more. Labels select coverage only:
+they never satisfy M2, and dropping coverage so a red run turns green is an M3 violation.
+
+**Narrowing ladder.** Take the first step that applies, then check the widening list.
+
+| Step | Question                                                                           | Label                                          | Example                                                                                                                                                                             |
+| ---- | ---------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Does every changed path match an auto-skip pattern?                                | None. CI already skips; `ci:skip` adds nothing | A docs typo; a skill change in TheRock                                                                                                                                              |
+| 2    | Can the change affect no build and no test, though CI will not skip it on its own? | `ci:skip`                                      | A comment-only edit in a source file, where the diff is its own proof                                                                                                               |
+| 3    | Can the change reach only the changed projects, and none of their consumers?       | `ci:no-downstream-test`                        | Test or benchmark client code (for example `projects/hipblaslt/clients/`). Never library code, public headers, kernels, code generation, or build files that consumers link against |
+| 4    | Can nothing in the change affect code that runs on a GPU?                          | `ci:cpu-test-only`                             | Host-only tooling whose tests run on the CPU                                                                                                                                        |
+| 5    | Is the change confined to one platform?                                            | `ci:platform:linux` or `ci:platform:windows`   | A Linux-only script. Never code that is compiled on both platforms                                                                                                                  |
+| 6    | Do only some projects' tests matter?                                               | `test:<project>`                               | A change whose effect is confined to one project's tests                                                                                                                            |
+
+Steps 3 to 6 can combine; step 2 replaces everything else.
+
+**Widening list.** Add these where the diff needs them, even on a narrowed run:
+
+- Code specific to a GPU family that default PR CI does not test (the defaults are in the docs'
+  trigger table; do not hardcode them): add that family's `ci:gfx...` label, or the
+  `ci:build:gfx...` and `ci:test:gfx...` pair. Add `ci:exactly` when only the labeled families
+  matter.
+- A change to a default path or to which devices are supported: `ci:run-all-archs`.
+- Tests that live only in a deeper tier: `test_filter:comprehensive` (or the tier that holds them).
+- Memory-ownership or lifetime changes, where the repository runs ASAN on request: `ci:asan`.
+
+**Combination hazards.**
+
+- `test:` labels intersect with the changed-project selection, so they can only narrow it. With
+  `ci:no-downstream-test` the intersection can be empty: on a nested project such as TensileLite,
+  "changed project only" may not include the project named by the `test:` label.
+- `ci:exactly` needs at least one `ci:gfx...` or `ci:build:gfx...` label; a `ci:test:gfx...` label
+  alone is an error.
+- `ci:skip` wins over `ci:run-on-draft`.
+- Draft PRs skip CI. Iterate in draft, and add `ci:run-on-draft` only when a run is wanted.
+- Adding or removing a label starts a new run, and a run uses the labels present when it started.
+  Apply labels before marking the PR ready (or before the push that should be tested), so the
+  first full run is the right one.
+
+**Ownership.** Narrowing CI moves risk from CI to the author. If a narrowed PR breaks the base
+branch, a downstream project, or a TheRock submodule bump, the author owns the revert: revert
+first, then fix. That is a fair trade, because the author understands the change better than any
+automated selection. Reviewers check the label choice as part of every review.
+
+**Record the choice in the PR.** List the labels in the Testing Summary with a one-line reason for
+each, and say what default CI would have run that the labels drop. For example: "`ci:no-downstream-test`:
+only hipBLASLt client code changed (no library, header, or kernel code), so the rocBLAS, MIOpen,
+hipBLAS, and hipSPARSELt test jobs cannot see it." With no labels, say "default CI," or, when
+every changed path is auto-skipped, "no CI labels needed: CI skips these paths."
+
+**Applying a label writes to GitHub.** Draft the `gh pr edit <n> --add-label <label>` (or
+`--remove-label`) commands and run them only after the user approves (operating principle 2).
+
+### Reviewing the labels
+
+Check the labels against what the diff can reach, and against the runs that actually used them.
+Choosing too much CI is never blocking.
+
+| Situation                                                                                                                                                                                                                                                                                                               | Severity     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| A narrowing label drops coverage the diff can reach (for example `ci:no-downstream-test` on library or code-generation changes, `ci:skip` on code, `ci:platform:*` on code built on both platforms, `ci:cpu-test-only` on code that runs on a GPU), or drops a lane the component's `TESTING.md` says gates this change | `BLOCKING`   |
+| A change specific to one GPU family with no label adding that family and no other evidence it was tested there                                                                                                                                                                                                          | `IMPORTANT`  |
+| Narrowing labels with no recorded reason                                                                                                                                                                                                                                                                                | `IMPORTANT`  |
+| The labels changed after the last run, so no run used the current set                                                                                                                                                                                                                                                   | `IMPORTANT`  |
+| More CI than the diff needs (for example `ci:run-all-archs` on a host-only change, or no `ci:no-downstream-test` on a clients-only change)                                                                                                                                                                              | `SUGGESTION` |
+
+A `SUGGESTION` to reduce CI names the labels to add or drop and what they would save, so the
+author can act on it in the next PR.
+
+### Which labels did a run use?
+
+CI reads labels from the pull-request event when a run starts. Compare the PR's label events
+(`gh api repos/<owner>/<repo>/issues/<n>/events --paginate`, the `labeled` and `unlabeled` entries
+with their timestamps) against each CI run's start time and head commit (the Actions runs API,
+filtered by `head_sha`). `tools/pr_quality_check.py --ci-labels` does this and reports the result.
+
+### Pre-merge: was CI bypassed since review?
+
+A PR can pass review with a good label set and still reach the merge button on a run that skipped
+what mattered. Check:
+
+1. Find the last CI run that passed with a label set that is safe for the diff it tested (the set
+   the review accepted, or one that passes the rules above now).
+1. List the commits pushed after that run's head commit, and the label changes after it started.
+1. **Go** when the PR's head is that run's commit, or when every later commit touches only paths
+   CI skips on its own, or paths that the later, narrower labels cover safely. For example, a good
+   run, then a docs-only commit with `ci:skip` added, is fine.
+1. **Caution** when later commits change code and ran only under narrower labels that the review
+   did not see. Check those labels against the later diff before merging.
+1. **Hold** when code changed after a narrowing label (such as `ci:skip`) and no run with a safe
+   label set covers it. Recommend removing the label and re-running CI.
+
+______________________________________________________________________
+
 ## Waiver codes
 
 Base set (overlays may add component-specific codes and may tighten who can approve them):
@@ -361,6 +487,8 @@ only for docs/comments/skill-only changes with no device impact.>
 ## Testing Summary
 
 - <Testing category and what it covers.>
+- CI labels: <each label with a one-line reason, and what default CI would have run that they
+  drop; or "default CI".>
 
 ## Testing Checklist
 

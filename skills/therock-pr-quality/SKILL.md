@@ -148,6 +148,20 @@ On top of the base classes, tag TheRock PRs with:
   `build_tools/` (per the GitHub Actions style guide), where it is testable and lintable.
 - Any script a workflow calls has its runtime dependencies declared/available on the runner.
 
+### Adds — CI labels for TheRock PRs
+
+Apply the base "Choosing CI labels" rules (`reference.md`) with these TheRock specifics:
+
+- The label docs are local: [`ci_behavior_manipulation.md`](../../docs/development/ci_behavior_manipulation.md)
+  and [`test_filtering.md`](../../docs/development/test_filtering.md). The auto-skip patterns are
+  `build_tools/github_actions/skip-ci-base.toml` plus `skip-ci-config.toml` in the same directory.
+  Changes confined to framework files (PyTorch, JAX) can skip the ROCm build automatically; see
+  "Building frameworks with published ROCm" in the label doc before reaching for `ci:skip-rocm`.
+- Submodule-bump PRs carry `ci:run-all-archs` and `ci:asan` by convention, because a bump is the
+  first place many GPU families see the new code. Never narrow them.
+- A `reusable-ci` change must not be narrowed past the workflows it changes: the run has to
+  exercise the edited workflow on the platforms and families that call it.
+
 ### Adds — dependency / subproject additions
 
 A `dependency-add` PR must state: the **build-time and binary-size** impact (with a before/after
