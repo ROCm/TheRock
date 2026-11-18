@@ -417,18 +417,31 @@ author can act on it in the next PR.
 
 ### Which labels did a run use?
 
-CI reads labels from the pull-request event when a run starts. Compare the PR's label events
+CI reads labels from the pull-request event that triggered a run, and a re-run reuses that event.
+The API does not expose the event, so reconstruct it: compare the PR's label events
 (`gh api repos/<owner>/<repo>/issues/<n>/events --paginate`, the `labeled` and `unlabeled` entries
-with their timestamps) against each CI run's start time and head commit (the Actions runs API,
-filtered by `head_sha`). `tools/pr_quality_check.py --ci-labels` does this and reports the result.
+with their timestamps) against each CI run's creation time and head commit (the Actions runs API,
+filtered by `head_sha`). The result is exact only when no label changed within about a minute of
+the run being created; otherwise treat it as uncertain and confirm in the run's setup log, which
+prints a `Label '...'` line for each label it acted on.
+
+**A passing run is not always a tested run.** Under `ci:skip`, or when every changed path is
+auto-skipped, the setup and summary jobs still succeed and the run concludes `success` with nothing
+built or tested. Count a run as coverage only when a build or test job actually succeeded (in
+TheRock's Multi-Arch CI, a job named `<platform>::<variant> / Build ...` or `... / Test ...`).
+
+`tools/pr_quality_check.py --ci-labels` does all of this: it reconstructs each run's labels, flags
+the uncertain ones, reads the jobs of passing runs, and reports the commits since the last passing
+run that built or tested.
 
 ### Pre-merge: was CI bypassed since review?
 
 A PR can pass review with a good label set and still reach the merge button on a run that skipped
 what mattered. Check:
 
-1. Find the last CI run that passed with a label set that is safe for the diff it tested (the set
-   the review accepted, or one that passes the rules above now).
+1. Find the last CI run that passed, actually built or tested (not a `ci:skip` or auto-skipped
+   run), and used a label set that is safe for the diff it tested (the set the review accepted, or
+   one that passes the rules above now).
 1. List the commits pushed after that run's head commit, and the label changes after it started.
 1. **Go** when the PR's head is that run's commit, or when every later commit touches only paths
    CI skips on its own, or paths that the later, narrower labels cover safely. For example, a good

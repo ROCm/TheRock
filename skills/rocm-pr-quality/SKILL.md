@@ -385,8 +385,9 @@ merge queue, and it does not force a CI rerun by default.
   force a rerun. Also confirm the green is *real*, not just a passing rollup summary (see
   "Evidence-based review" under Action 2): every required lane actually ran and passed, with no
   skipped/cancelled required check hiding under the green.
-- **CI not bypassed since review.** Find the last run that passed with a safe label set, then look
-  at what came after it: commits, and label changes such as an added `ci:skip`. Later commits that
+- **CI not bypassed since review.** Find the last run that passed with a safe label set and
+  actually built or tested (a `ci:skip` run also concludes `success`), then look at what came
+  after it: commits, and label changes such as an added `ci:skip`. Later commits that
   touch only paths CI skips on its own, or paths the narrower labels cover safely, are fine (a
   docs-only commit plus `ci:skip` after a good run is a go). A code change after a narrowing label,
   with no safe-set run covering it, is a hold. `tools/pr_quality_check.py --ci-labels` lists the

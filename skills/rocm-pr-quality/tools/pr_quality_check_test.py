@@ -724,6 +724,76 @@ class CiLabelAnalysisTest(unittest.TestCase):
         self.assertEqual(report["verdict"], "caution")
         self.assertIn("not in the PR's current history", report["reason"])
 
+    def test_skip_only_pass_after_ci_skip_is_not_a_baseline(self):
+        # Pass on A, add ci:skip, push code commit B: B's run "passes" without building or
+        # testing anything, so A stays the baseline and B's code is uncovered.
+        runs = [
+            {**_ci_run(SHA_A, "2026-11-01T10:00:00Z"), "tested": True},
+            _ci_run(SHA_B, "2026-11-01T12:00:00Z"),
+        ]
+        report = pq.analyze_ci_labels(
+            runs,
+            [_label("labeled", "ci:skip", "2026-11-01T11:00:00Z")],
+            _commits(SHA_A, SHA_B),
+            {SHA_B: ["src/scan.cpp"]},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["last_passing_run"]["head_sha"], SHA_A)
+        self.assertEqual(report["verdict"], "hold")
+
+    def test_pass_that_built_and_tested_nothing_is_not_a_baseline(self):
+        runs = [
+            {**_ci_run(SHA_A, "2026-11-01T10:00:00Z"), "tested": True},
+            {**_ci_run(SHA_B, "2026-11-01T12:00:00Z"), "tested": False},
+        ]
+        report = pq.analyze_ci_labels(
+            runs, [], _commits(SHA_A, SHA_B), {SHA_B: ["src/scan.cpp"]}, SKIP_PATTERNS
+        )
+        self.assertEqual(report["last_passing_run"]["head_sha"], SHA_A)
+        self.assertEqual(report["verdict"], "caution")
+
+    def test_docs_only_pr_with_no_tested_run_is_go(self):
+        runs = [{**_ci_run(SHA_A, "2026-11-01T10:00:00Z"), "tested": False}]
+        report = pq.analyze_ci_labels(
+            runs, [], _commits(SHA_A), {SHA_A: ["docs/guide.md"]}, SKIP_PATTERNS
+        )
+        self.assertIsNone(report["last_passing_run"])
+        self.assertEqual(report["verdict"], "go")
+
+    def test_code_with_no_tested_run_and_ci_skip_is_hold(self):
+        runs = [_ci_run(SHA_A, "2026-11-01T10:00:00Z")]
+        report = pq.analyze_ci_labels(
+            runs,
+            [_label("labeled", "ci:skip", "2026-11-01T09:00:00Z")],
+            _commits(SHA_A),
+            {SHA_A: ["src/scan.cpp"]},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["verdict"], "hold")
+
+    def test_coverage_label_near_run_creation_downgrades_go(self):
+        report = pq.analyze_ci_labels(
+            [{**_ci_run(SHA_A, "2026-11-01T10:00:30Z"), "tested": True}],
+            [_label("labeled", "ci:gfx950", "2026-11-01T10:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["runs"][0]["uncertain_labels"], ["ci:gfx950"])
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("may not have used", report["reason"])
+
+    def test_narrowing_label_near_run_creation_keeps_go(self):
+        # If the run missed a narrowing label it tested more, not less.
+        report = pq.analyze_ci_labels(
+            [{**_ci_run(SHA_A, "2026-11-01T10:00:30Z"), "tested": True}],
+            [_label("labeled", "ci:no-downstream-test", "2026-11-01T10:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["verdict"], "go")
+
     def test_finding_severity_follows_the_verdict(self):
         self.assertEqual(
             pq.ci_label_finding({"verdict": "go", "reason": "ok"}).severity, "INFO"
@@ -766,7 +836,18 @@ class CiLabelFetchTest(unittest.TestCase):
             f"repos/o/r/actions/runs?head_sha={SHA_B}&event=pull_request&per_page=100": {
                 "workflow_runs": []
             },
-            f"repos/o/r/commits/{SHA_B}": {"files": [{"filename": "docs/guide.md"}]},
+            "repos/o/r/actions/runs/7/jobs?filter=latest&per_page=30&page=1": {
+                "jobs": [
+                    {"name": "setup / setup", "conclusion": "success"},
+                    {
+                        "name": "Linux::release / Build Multi-Arch Stages / math-libs",
+                        "conclusion": "success",
+                    },
+                ]
+            },
+            f"repos/o/r/commits/{SHA_B}?per_page=100&page=1": {
+                "files": [{"filename": "docs/guide.md"}]
+            },
         }
         events = [
             {
@@ -778,6 +859,7 @@ class CiLabelFetchTest(unittest.TestCase):
         ]
         data = {
             "number": 5,
+            "url": "https://github.com/o/r/pull/5",
             "baseRefName": "develop",
             "commits": _commits(SHA_A, SHA_B),
         }
@@ -785,14 +867,89 @@ class CiLabelFetchTest(unittest.TestCase):
             pq, "gh_api_json", side_effect=api.get
         ), mock.patch.object(
             pq, "gh_api_pages", return_value=events
-        ), mock.patch.object(
+        ) as pages, mock.patch.object(
             pq, "load_skip_patterns", return_value=(SKIP_PATTERNS, "skip-ci patterns")
+        ), mock.patch.object(
+            pq, "resolve_repo", return_value="wrong/checkout"
         ):
-            report = pq.fetch_ci_label_report(data, "o/r", pq.PROFILES["base"], None)
+            # No --repo: the repository must come from the PR URL, not the checkout.
+            report = pq.fetch_ci_label_report(data, None, pq.PROFILES["base"], None)
+        pages.assert_called_once_with("repos/o/r/issues/5/events")
         self.assertEqual([r["id"] for r in report["runs"]], [7])
         self.assertEqual(report["runs"][0]["labels"], [])
+        self.assertTrue(report["runs"][0]["tested"])
         self.assertEqual(report["verdict"], "go")
         self.assertEqual(report["skip_method"], "skip-ci patterns")
+
+    def test_repo_from_pr_url(self):
+        self.assertEqual(
+            pq.repo_from_pr_url("https://github.com/ROCm/rocm-libraries/pull/15973"),
+            "ROCm/rocm-libraries",
+        )
+        self.assertIsNone(pq.repo_from_pr_url("15973"))
+
+
+def _jobs(*pairs):
+    return {"jobs": [{"name": n, "conclusion": c} for n, c in pairs]}
+
+
+class RunBuiltOrTestedTest(unittest.TestCase):
+    def _call(self, pages):
+        responses = {
+            f"repos/o/r/actions/runs/1/jobs?filter=latest&per_page=30&page={i}": p
+            for i, p in enumerate(pages, start=1)
+        }
+        with mock.patch.object(pq, "gh_api_json", side_effect=responses.get):
+            return pq.run_built_or_tested("o/r", 1)
+
+    def test_skip_only_run_built_nothing(self):
+        page = _jobs(
+            ("setup / setup", "success"),
+            ("Linux::skip", "skipped"),
+            ("Windows::skip", "skipped"),
+            ("CI Summary", "success"),
+        )
+        self.assertIs(self._call([page]), False)
+
+    def test_build_job_on_a_later_page_counts(self):
+        filler = _jobs(*[("setup / setup", "success")] * 30)
+        page2 = _jobs(("Linux::release / Test gfx94X-dcgpu / hipblaslt", "success"))
+        self.assertIs(self._call([filler, page2]), True)
+
+    def test_skipped_build_job_does_not_count(self):
+        page = _jobs(
+            ("Linux::release / Build Multi-Arch Stages / math-libs", "skipped")
+        )
+        self.assertIs(self._call([page]), False)
+
+    def test_unreadable_jobs_are_unknown(self):
+        self.assertIsNone(self._call([None]))
+
+
+class FetchCommitFilesTest(unittest.TestCase):
+    def _call(self, pages):
+        responses = {
+            f"repos/o/r/commits/{SHA_B}?per_page=100&page={i}": p
+            for i, p in enumerate(pages, start=1)
+        }
+        with mock.patch.object(pq, "gh_api_json", side_effect=responses.get):
+            return pq.fetch_commit_files("o/r", SHA_B)
+
+    def test_reads_every_page(self):
+        docs = {"files": [{"filename": f"docs/{i}.md"} for i in range(100)]}
+        code = {"files": [{"filename": "src/scan.cpp"}]}
+        files = self._call([docs, code])
+        self.assertEqual(len(files), 101)
+        self.assertIn("src/scan.cpp", files)
+
+    def test_failed_page_is_unknown(self):
+        docs = {"files": [{"filename": f"docs/{i}.md"} for i in range(100)]}
+        self.assertIsNone(self._call([docs, None]))
+
+    def test_api_file_limit_is_unknown(self):
+        full = {"files": [{"filename": f"docs/{i}.md"} for i in range(100)]}
+        with mock.patch.object(pq, "COMMIT_FILES_LIMIT", 200):
+            self.assertIsNone(self._call([full, full, full]))
 
 
 if __name__ == "__main__":
