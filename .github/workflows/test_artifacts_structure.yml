@@ -64,7 +64,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "aws-linux-scale-rocm-small"
 
 permissions:
   contents: read
