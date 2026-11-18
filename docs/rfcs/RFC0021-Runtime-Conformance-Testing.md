@@ -1,7 +1,7 @@
 ---
 author: Zachary Garvey (zjgarvey)
 created: 2026-11-06
-modified: 2026-11-09
+modified: 2026-11-18
 status: draft
 ---
 
@@ -10,10 +10,21 @@ status: draft
 ## Summary
 
 This RFC proposes developing a conformance test suite (CTS) in rocm-systems and
-adding a TheRock CI job that applies it to the implementations in `runtimes/`
-and the KFD driver environment they use. The CTS has three peer families: KFD
-driver/firmware contracts, the direct rocddi interface, and the public AMDF/HSA
-APIs.
+adding a TheRock CI job that applies it to the implementations in
+[rocm-systems/runtimes/][runtime-build] and the KFD driver environment they use.
+
+These components include [rocddi], the private Rust device-interface
+layer that owns hardware discovery, driver contexts, and GPU memory and queue
+resources. [libamdf] and [libhsa] implement the AMDF and HSA C
+APIs over rocddi. KFD supplies the Linux kernel interface for GPU memory and
+queues.
+
+The CTS groups contracts into three independently selectable test families:
+
+- **KFD:** driver/firmware contracts relied upon by the runtime, evaluated
+  against production or simulated KFD.
+- **Direct DDI:** rocddi's Rust interface consumed by the API frontends.
+- **Runtime API:** the public AMDF/HSA C API and ABI contracts.
 
 The job should report conformance whenever these components or their test
 dependencies change. The recommended first delivery is a bounded set of host and
@@ -55,6 +66,12 @@ A CTS run evaluates a selected implementation and device or execution
 environment against a defined set of interface contracts. It returns per-test
 pass, fail, or skipped results. The CTS revision, contract versions, and
 selected test set establish what those results mean.
+
+A small readiness subset can serve as a sanity check of the selected runtime
+and execution environment through initialization, discovery, and a checked
+device workload. Broader selections evaluate memory, queue, resource-lifetime,
+and API guarantees. TheRock should select these cases using its
+[existing test tiers](#test-tiers-and-runner-budget).
 
 Each case identifies its requirement and authority, preconditions, actions,
 expected results, and cleanup obligations. Authority can come from a versioned
@@ -136,11 +153,35 @@ setup, and cleanup. The CTS owns assertions and execution requirements.
 Execution consumes prepared artifacts with a separate writable results location,
 allowing reproduction against the same inputs.
 
+### Test tiers and runner budget
+
+The CTS integration should use TheRock's [test-filtering policy][test-filtering]
+and its cumulative selections:
+
+| Tier            | CTS selection and intended use                                                          | Test execution budget per shard |
+| --------------- | --------------------------------------------------------------------------------------- | ------------------------------- |
+| `quick`         | Readiness and critical-path checks for build/CI changes.                                | Less than 5 minutes             |
+| `standard`      | The agreed core contract baseline for runtime component changes.                        | Less than 30 minutes            |
+| `comprehensive` | Deeper contract cases and additional combinations for nightly or scheduled runs.        | Less than 2 hours               |
+| `full`          | The broadest contract, stress, and configuration sets for prerelease or on-demand runs. | 2 hours or more                 |
+
+These budgets count total serial test execution on one shard and exclude
+environment setup, following that policy. Measure setup cost and GPU occupancy
+when sizing the lane. Run host-only cases on CPU runners and reserve GPU
+capacity for device-required cases assigned to native execution.
+
+CTS owners should maintain the case categories and CTest wrappers so TheRock's
+`TEST_TYPE` selects these tiers through the existing test infrastructure. The
+initial per-change component baseline should fit `standard`; broader coverage
+belongs in the scheduled and on-demand selections.
+
 ### Change-driven execution
 
-The objective is conformance feedback on every relevant candidate change. Start
-by running the whole agreed initial test set for affected components; later
-selection can use explicit contract/dependency mappings.
+The objective is conformance feedback on every relevant candidate change. For
+runtime component changes, start by running the whole agreed initial `standard`
+set for affected components; later selection can use explicit contract/dependency
+mappings. Build/CI changes use the applicable `quick` checks under the
+[test-filtering policy][test-filtering].
 
 | Change                                                                                      | Required CTS execution                                                                                                        |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -228,10 +269,10 @@ Completion requires:
    that an environment update selects the corresponding KFD checks.
 1. A reproducible failure using retained artifacts and configuration.
 
-Per-change execution of this bounded set is the recommendation. Native merge
-enforcement and expansion of the required matrix depend on agreed capacity and
-ownership. Simulated configurations receive their own applicable contract sets
-and retained environment identities when added.
+Per-change execution of this bounded set within the `standard` tier is the
+recommendation. Native merge enforcement and expansion of the required matrix
+depend on agreed capacity and ownership. Simulated configurations receive their
+own applicable contract sets and retained environment identities when added.
 
 ## Coverage roadmap
 
@@ -272,16 +313,20 @@ execution. Four decisions shape the initial integration:
 1. **Ownership and resources.** Who maintains the CTS/interface contracts and
    TheRock integration, and who supplies native capacity and operates
    preparation, reservation, health checks, and recovery?
-1. **Execution policy.** What per-change time/capacity budget and runner access
-   policy should the initial job use? Which disruptive or expensive contract
-   sets need separate scheduling and isolation as coverage grows?
+1. **Execution policy.** Which initial cases and runner configurations fit the
+   published test-tier budgets, and what runner access policy should the job
+   use? Which disruptive or expensive contract sets need separate scheduling and
+   isolation as coverage grows?
 
 Detailed CTS layout, result schema, retention, and exact CI stage can follow
 these decisions using the owning repositories' conventions.
 
 [amdf-contract]: https://github.com/ROCm/rocm-systems/blob/b21309d8249bacf94ebb2d8c1ebc51316314432c/runtimes/api-headers/include/amdf/api.h
+[libamdf]: https://github.com/ROCm/rocm-systems/blob/b21309d8249bacf94ebb2d8c1ebc51316314432c/runtimes/ddi/libamdf/README.md
+[libhsa]: https://github.com/ROCm/rocm-systems/blob/b21309d8249bacf94ebb2d8c1ebc51316314432c/runtimes/ddi/libhsa/README.md
 [rocddi]: https://github.com/ROCm/rocm-systems/blob/b21309d8249bacf94ebb2d8c1ebc51316314432c/runtimes/ddi/rocddi/README.md
 [runtime-build]: https://github.com/ROCm/rocm-systems/blob/b21309d8249bacf94ebb2d8c1ebc51316314432c/runtimes/README.md
+[test-filtering]: ../development/test_filtering.md
 [test-ownership]: https://github.com/ROCm/TheRock/blob/4e484fa197f342e5d1e1495a0fbdb0947b5507ed/docs/rfcs/RFC0010-Test-Scripts-Migration.md
 [test-selection]: https://github.com/ROCm/TheRock/blob/4e484fa197f342e5d1e1495a0fbdb0947b5507ed/docs/rfcs/RFC0013-Consumer-Based-Test-Selection.md
 [testing]: https://github.com/ROCm/TheRock/blob/4e484fa197f342e5d1e1495a0fbdb0947b5507ed/TESTING.md
