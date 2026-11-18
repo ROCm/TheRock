@@ -96,12 +96,11 @@ MANIFEST_SCHEMA_VERSION = 3
 ROUTES_SCHEMA_VERSION = 2
 VALIDATION_SCHEMA_VERSION = 2
 SUPPORTED_PUBLIC_BASES = frozenset({"/rocm/whl-next", "/rocm/whl-next-asan"})
-RESTRICTED_OWNER_PATHS = {
-    "/rocm/whl-next-asan": frozenset(
-        {"core/whl-next-asan", "pytorch/whl-next-asan", "third-party/whl-next"}
-    ),
-}
-ASAN_OWNER_PATH_SUFFIX = "-asan"
+# An owner path's last segment must name the same layout as its index's
+# public_base: /rocm/whl-next accepts "pytorch/whl-next" and /rocm/whl-next-asan
+# accepts "pytorch/whl-next-asan". Shared owner paths are accepted by every
+# index, so third-party dependencies are not republished per build variant.
+SHARED_OWNER_PATHS = frozenset({"third-party/whl-next"})
 VALIDATION_FILENAME = "validation.json"
 
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -907,7 +906,7 @@ def _parse_python_index(
         raise ManifestError(
             f"{context}.public_base must be one of {supported}, got {public_base!r}"
         )
-    allowed_owner_paths = RESTRICTED_OWNER_PATHS.get(public_base)
+    index_layout = public_base.rsplit("/", 1)[1]
 
     package_items = _require_mapping(index["packages"], f"{context}.packages")
     if not package_items:
@@ -946,17 +945,14 @@ def _parse_python_index(
         _validate_owner_path(
             owner_path, f"{context}.packages.{package_name}.owner_path"
         )
-        if allowed_owner_paths is not None:
-            if owner_path not in allowed_owner_paths:
-                allowed = ", ".join(sorted(allowed_owner_paths))
-                raise ManifestError(
-                    f"{context}.packages.{package_name}.owner_path {owner_path!r} "
-                    f"is not allowed for {public_base}; expected one of: {allowed}"
-                )
-        elif owner_path.endswith(ASAN_OWNER_PATH_SUFFIX):
+        if (
+            owner_path not in SHARED_OWNER_PATHS
+            and owner_path.rsplit("/", 1)[-1] != index_layout
+        ):
             raise ManifestError(
                 f"{context}.packages.{package_name}.owner_path {owner_path!r} "
-                f"is an ASAN build and is not allowed for {public_base}"
+                f"is not allowed for {public_base}; owner paths must end in "
+                f"/{index_layout} or be one of: {', '.join(sorted(SHARED_OWNER_PATHS))}"
             )
         streams = _parse_package_streams(
             package_config,

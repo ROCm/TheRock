@@ -6,6 +6,7 @@
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -588,24 +589,46 @@ def test_asan_strict_skips_standard_roots(
 
 
 @pytest.mark.parametrize(
-    "owner_path", ["core/whl-next", "pytorch/whl-next", "jax/whl-next-asan"]
+    "manifest_factory, owner_path",
+    [
+        (_valid_manifest, "pytorch/whl-next"),
+        (_valid_manifest, "jax/whl-next"),
+        (_valid_manifest, "third-party/whl-next"),
+        (_valid_asan_manifest, "pytorch/whl-next-asan"),
+        (_valid_asan_manifest, "jax/whl-next-asan"),
+        (_valid_asan_manifest, "third-party/whl-next"),
+    ],
 )
-def test_asan_index_rejects_non_asan_owner_path(owner_path: str) -> None:
-    data = _valid_asan_manifest()
+def test_accepts_owner_paths_matching_index_layout(
+    manifest_factory: Callable[[], dict[str, object]], owner_path: str
+) -> None:
+    data = manifest_factory()
     data["python_indexes"][0]["packages"]["torch"] = {"owner_path": owner_path}
 
-    with pytest.raises(ManifestError, match="is not allowed for /rocm/whl-next-asan"):
-        parse_ownership_manifest(data)
+    manifest = parse_ownership_manifest(data)
+
+    assert manifest.python_indexes[0].packages["torch"].owner_path == owner_path
 
 
-@pytest.mark.parametrize("owner_path", ["core/whl-next-asan", "pytorch/whl-next-asan"])
-def test_standard_index_rejects_asan_owner_path(owner_path: str) -> None:
-    data = _valid_manifest()
+@pytest.mark.parametrize(
+    "manifest_factory, owner_path, public_base",
+    [
+        (_valid_manifest, "core/whl-next-asan", "/rocm/whl-next"),
+        (_valid_manifest, "pytorch/whl-next-asan", "/rocm/whl-next"),
+        (_valid_manifest, "pytorch/whl", "/rocm/whl-next"),
+        (_valid_asan_manifest, "core/whl-next", "/rocm/whl-next-asan"),
+        (_valid_asan_manifest, "pytorch/whl-next", "/rocm/whl-next-asan"),
+    ],
+)
+def test_rejects_owner_paths_from_another_index_layout(
+    manifest_factory: Callable[[], dict[str, object]],
+    owner_path: str,
+    public_base: str,
+) -> None:
+    data = manifest_factory()
     data["python_indexes"][0]["packages"]["torch"] = {"owner_path": owner_path}
 
-    with pytest.raises(
-        ManifestError, match="is an ASAN build and is not allowed for /rocm/whl-next"
-    ):
+    with pytest.raises(ManifestError, match=f"is not allowed for {public_base};"):
         parse_ownership_manifest(data)
 
 
