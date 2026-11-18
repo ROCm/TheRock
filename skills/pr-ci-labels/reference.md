@@ -18,6 +18,10 @@ ______________________________________________________________________
 
 ## Sources (read these; do not copy them)
 
+`tools/pr_facts.py` reads most of these for you in one call (skip patterns, the repository's
+labels, and the default test selection). Go to the sources below directly when a label's behavior
+is in question or the tool cannot reach them.
+
 - **TheRock's label list:**
   [`ci_behavior_manipulation.md`](https://github.com/ROCm/TheRock/blob/main/docs/development/ci_behavior_manipulation.md)
   (the "Pull request" table and its subsections), and
@@ -63,15 +67,23 @@ substitute for tests the change needs.
 
 Add these where the diff needs them, even on a narrowed run:
 
-- Code specific to a GPU family that default PR CI does not test (the defaults are in the docs'
-  trigger table; do not hardcode them): add that family's `ci:gfx...` label. A `ci:gfx...` label
-  adds the family's build, but its tests still follow the family's trigger rules, so a family whose
-  tests run only nightly stays untested on the PR. To force tests there, add `ci:test:gfx...` with
-  a build label (`ci:gfx...` or `ci:build:gfx...`); tests run only where the family has runners.
-  Add `ci:exactly` when only the labeled families matter.
+- Code specific to a GPU family that default PR CI does not test (`pr_facts.py` lists which
+  families PR CI builds and tests by default, from `amdgpu_family_matrix.py`; do not hardcode
+  them): add that family's `ci:gfx...` label. In current code
+  (`_apply_arch_labels` in `build_tools/github_actions/configure_multi_arch_ci.py`) a `ci:gfx...`
+  label builds and tests the family, bypassing trigger-based gating. The docs' build/test table
+  still pairs it with `ci:test:gfx...` to force tests. Until the two agree, add both when a family
+  that otherwise tests only nightly must be tested on the PR; the pair is correct under either
+  reading. Tests run only where the family has runners. Add `ci:exactly` when only the labeled
+  families matter.
 - A change to a default path or to which devices are supported: `ci:run-all-archs`.
 - Tests that live only in a deeper tier: `test_filter:comprehensive` (or the tier that holds them).
-- Memory-ownership or lifetime changes, where the repository runs ASAN on request: `ci:asan`.
+- Memory safety: `ci:asan` (ASAN build plus its tests on the PR) when the diff fixes or could
+  introduce a double free, use-after-free, leak, buffer overrun, or uninitialized read, or changes
+  who owns or frees memory (allocation pools, caches, smart-pointer or RAII changes, early
+  release). A fix for one of these is the strongest signal: it should be tested under ASAN.
+- Opt-in features such as `ci:run-wsl` or `ci:run-multi-gpu`: only when the diff touches that
+  feature (its code or the workflow that runs it), and say which file needs it.
 
 ## Combination hazards
 
@@ -81,7 +93,9 @@ Add these where the diff needs them, even on a narrowed run:
 - `ci:exactly` needs at least one `ci:gfx...` or `ci:build:gfx...` label; a `ci:test:gfx...` label
   alone is an error.
 - `ci:skip` wins over `ci:run-on-draft`.
-- Draft PRs skip CI. Iterate in draft, and add `ci:run-on-draft` only when a run is wanted.
+- Draft PRs skip CI. Iterate in draft, and add `ci:run-on-draft` only when a run is wanted. When a
+  PR is a draft, report that CI is not running yet; `ci:run-on-draft` is about when CI runs, not
+  what it covers, so do not suggest it as coverage.
 - Adding or removing a label starts a new run, and a run uses the labels present when it was
   triggered. Apply labels before marking the PR ready (or before the push that should be tested),
   so the first full run is the right one. Adding several labels one at a time starts one run per

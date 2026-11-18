@@ -53,6 +53,8 @@ common = [
     "cmake/tests/*",
     "external-builds/pytorch/tests/*",
     "test_tools/tests/*",
+    # pytest and coverage settings for the unit tests above; nothing else reads it.
+    "pyproject.toml",
 ]
 
 # Additional patterns for Linux-only skip

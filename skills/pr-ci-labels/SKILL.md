@@ -45,14 +45,19 @@ ______________________________________________________________________
 
 **Workflow:**
 
-1. Get the changed files (`gh pr diff --name-only`, or `git diff --name-only <base>...HEAD`).
-1. Read the sources in `reference.md`: TheRock's label docs, the repository's skip patterns, and
-   `gh label list` for this repository.
-1. Walk the narrowing ladder in `reference.md`, then the widening list, and apply the repository
-   specifics.
-1. Check the combination hazards for the set you chose.
-1. Work out what default CI would run that the set drops (in a TheRock checkout,
-   `test_tools/determine_rocm_test_dependencies.py --changed-projects <path>`).
+1. Run `tools/pr_facts.py --pr <number|url>` (or `--local [--base <ref>]` for a branch without a
+   PR). In one call it prints the draft state and current CI labels, the changed files with their
+   auto-skip classification, the touched projects and the test jobs default CI would select, the
+   GPU families PR CI builds and tests by default, and the CI labels this repository has created.
+1. **Fast path:** if every changed file is auto-skipped, the answer is "no labels needed: CI skips
+   these paths." Stop there.
+1. Otherwise walk the narrowing ladder in `reference.md`, then the widening list (including its
+   `ci:asan` triggers), and apply the repository specifics. Use only labels the report lists as
+   existing in the repository.
+1. Check the combination hazards for the set you chose. Read the rest of `reference.md` or the
+   label docs only when a label's behavior is in question.
+1. If the PR is a draft, say so: CI does not run on drafts until the PR is marked ready or carries
+   `ci:run-on-draft`. That is a fact about when CI runs, not a coverage label to recommend.
 
 **Output:**
 
@@ -73,7 +78,7 @@ ______________________________________________________________________
 
 **Workflow:**
 
-1. Get the PR's current labels and changed files.
+1. Run `tools/pr_facts.py --pr <number|url>` for the PR's current labels and changed files.
 1. Judge each label against the diff with the same rules as Suggest. Report labels that drop
    coverage the diff can reach, coverage the diff needs that no label adds, and labels that run more
    than the diff needs.
@@ -92,7 +97,12 @@ ______________________________________________________________________
 
 ## Operational notes
 
-- Use `gh` for PR data, labels, runs, and jobs. `tools/ci_labels.py` needs only `gh` (authenticated)
-  and Python 3.11 or later (for `tomllib`; older versions fall back to a docs heuristic).
-- Run the tool's tests with `python -m pytest skills/pr-ci-labels/tools/ci_labels_test.py`. CI does
-  not run them, because `skills/*` is auto-skipped.
+- Use `gh` for PR data, labels, runs, and jobs. `tools/pr_facts.py` and `tools/ci_labels.py` need
+  only `gh` (authenticated) and Python 3.11 or later (for `tomllib`; older versions fall back to a
+  docs heuristic). `pr_facts.py` takes the default test selection from TheRock's
+  `test_tools/determine_rocm_test_dependencies.py`, next to this skill.
+- Speed matters: the skill is meant to answer in tens of seconds, and to be cheap enough to run on
+  every PR eventually. Start from `pr_facts.py`, take the fast path when it applies, and read
+  further only when a decision needs it.
+- The tools' tests (`tools/*_test.py`) run in TheRock's `Unit Tests` workflow, which picks up every
+  `*_test.py` under `skills/`. Run them locally with `python -m pytest skills/pr-ci-labels`.
