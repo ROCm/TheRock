@@ -287,15 +287,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("test_runner.py", tensilelite["test_script"])
         self.assertEqual(tensilelite["timeout_minutes"], 30)
 
-    def test_libhipcxx_amdclang_suite_timeout_is_one_hour(self):
-        """The whole libhipcxx_amdclang job is capped at 60 minutes."""
+    def test_libhipcxx_amdclang_suite_timeout_is_three_hours(self):
+        """The whole libhipcxx_amdclang job is capped at 180 minutes."""
         os.environ["PROJECTS_TO_TEST"] = "libhipcxx_amdclang"
 
         fetch_test_configurations.run()
         components = self._get_components()
 
         job = next(j for j in components if j["job_name"] == "libhipcxx_amdclang")
-        self.assertEqual(job["timeout_minutes"], 60)
+        self.assertEqual(job["timeout_minutes"], 180)
 
     def test_tensilelite_quick_omits_ctest_stage(self):
         """TEST_TYPE=quick should not append the ctest stage or extend the timeout."""
