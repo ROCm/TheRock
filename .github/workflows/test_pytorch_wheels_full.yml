@@ -406,7 +406,10 @@ jobs:
         run: |
           # Probe only: run pytest node ids from tests_to_include on Windows.
           set +e
+          # CXX=clang++ from the Linux-style env step breaks MSVC-flag JIT builds.
+          unset CC CXX
           where cl
+          echo "PATH=${PATH}"
           python -m pytest -v -rA -p no:cacheprovider ${TESTS_TO_INCLUDE}
           echo $? > "${GITHUB_WORKSPACE}/run_pytorch_tests_exit_code.txt"
 
