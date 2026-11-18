@@ -74,12 +74,6 @@ on:
           time, with the whole end-to-end set.
         type: string
         default: "medium"
-      trigger_xla_tests:
-        description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
-          the caller for exactly one representative matrix cell.
-        type: boolean
-        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -169,11 +163,6 @@ on:
           - medium
           - large
         default: medium
-      trigger_xla_tests:
-        description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests.
-        type: boolean
-        default: false
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -371,7 +360,6 @@ jobs:
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
-      single_gpu_matrix: ${{ steps.configure.outputs.single_gpu_matrix }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
       TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
@@ -413,27 +401,18 @@ jobs:
 
   test_xla:
     name: Test XLA
-    needs: [build_jax_wheels, configure_jax_tests]
-    if: >-
-      ${{
-        !cancelled() &&
-        inputs.trigger_xla_tests &&
-        needs.configure_jax_tests.outputs.enabled == 'true'
-      }}
+    needs: [build_jax_wheels]
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.single_gpu_matrix) }}
     with:
-      test_amdgpu_family: 'gfx950-dcgpu'
+      test_amdgpu_family: "gfx950-dcgpu"
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       therock_repo: ${{ inputs.repository || github.repository }}
       therock_ref: ${{ inputs.ref || '' }}
       # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
       xla_ref: ${{ inputs.jax_ref }}
-      test_runs_on: ${{ matrix.test_runs_on }}
+      test_runs_on: "linux-gfx950-1gpu-ccs-ossci-rocm"
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
     permissions:
       contents: read

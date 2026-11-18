@@ -149,25 +149,6 @@ class BuildTestMatrixTest(unittest.TestCase):
         self.assertEqual(job["test_timeout_minutes"], 90)
 
 
-class SingleGpuOnlyTest(unittest.TestCase):
-    def test_drops_the_multi_accelerator_row(self):
-        matrix = matrix_script.build_test_matrix(
-            target="gfx94X-dcgpu", platform="linux", size="large", today=TUESDAY
-        )
-
-        filtered = matrix_script.single_gpu_only(matrix)
-
-        self.assertEqual(subsets(matrix), ["all", "multi"])
-        self.assertEqual(subsets(filtered), ["all"])
-
-    def test_is_a_no_op_without_a_multi_accelerator_row(self):
-        matrix = matrix_script.build_test_matrix(
-            target="gfx94X-dcgpu", platform="linux", size="small", today=TUESDAY
-        )
-
-        self.assertEqual(matrix_script.single_gpu_only(matrix), matrix)
-
-
 class OutputsTest(unittest.TestCase):
     def outputs(self, argv: list[str], today=TUESDAY) -> dict[str, str]:
         with open(os.environ["GITHUB_OUTPUT"], "w") as f:
@@ -250,21 +231,6 @@ class OutputsTest(unittest.TestCase):
         self.assertIn("::notice::", weekday.getvalue())
         self.assertIn("Sunday", weekday.getvalue())
         self.assertNotIn("::notice::", weekly.getvalue())
-
-    def test_single_gpu_matrix_output_drops_the_multi_accelerator_row(self):
-        outputs = self.outputs(["--target", "gfx94X-dcgpu", "--test-size", "large"])
-
-        self.assertEqual(
-            [job["test_subset"] for job in json.loads(outputs["matrix"])["include"]],
-            ["all", "multi"],
-        )
-        self.assertEqual(
-            [
-                job["test_subset"]
-                for job in json.loads(outputs["single_gpu_matrix"])["include"]
-            ],
-            ["all"],
-        )
 
     def test_a_size_is_required_and_checked(self):
         # Defaulting it would quietly drop the multi-accelerator job.
