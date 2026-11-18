@@ -13,6 +13,7 @@
 # - Builds ALL architectures (release + ASAN)
 # - Tests gfx90a, gfx94x, gfx950, gfx1151 (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
+# - Separate Windows driver Comgr and runtime artifacts attached to this run
 
 # Notes on security:
 #   * Higher-trust entry point: manually triggered by maintainers.
@@ -452,6 +453,141 @@ jobs:
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
 
+  # Driver DLLs use a separate build and GitHub artifacts so they cannot replace
+  # the normal Windows artifacts consumed by packaging and downstream tests.
+  build-windows-driver:
+    name: Build Windows Driver Comgr and Runtime
+    needs: [create-branch, setup-windows]
+    if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
+    runs-on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
+    timeout-minutes: 480
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_DIR: B:/build
+      DIST_AMDGPU_FAMILIES: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
+      ROCM_PACKAGE_VERSION: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CACHE_DIR: ${{ github.workspace }}/.cache
+      TEATIME_FORCE_INTERACTIVE: 0
+    outputs:
+      comgr_artifact_url: ${{ steps.upload-comgr.outputs.artifact-url }}
+      runtime_artifact_url: ${{ steps.upload-runtime.outputs.artifact-url }}
+      logs_artifact_url: ${{ steps.upload-logs.outputs.artifact-url }}
+    steps:
+      - name: Checkout compiler bump branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          ref: ${{ needs.setup-windows.outputs.ref }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install build tools
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y ccache
+          choco install --no-progress -y ninja --version 1.13.2
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> "$GITHUB_PATH"
+
+      # Configure MSVC after installing tools so it takes priority in PATH.
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: python build_tools/health_status.py
+
+      - name: Setup ccache
+        run: |
+          python build_tools/setup_ccache.py \
+            --release-type dev \
+            --dir "$(dirname "$CCACHE_CONFIGPATH")" \
+            --local-path "$CACHE_DIR/ccache" \
+            --log-dir "${BUILD_DIR}/logs/ccache"
+
+      - name: Fetch compiler and runtime sources
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          python build_tools/fetch_sources.py --stage compiler-runtime --jobs 12 --depth 1
+
+      # Kpack links the driver's static zstd, so its preset uses the same CRT.
+      - name: Configure Windows driver build
+        run: |
+          cmake -B "${BUILD_DIR}" -S . --preset windows-release-driver \
+            -DTHEROCK_DIST_AMDGPU_FAMILIES="${DIST_AMDGPU_FAMILIES}" \
+            -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache
+
+      - name: Build Comgr and runtimes
+        run: |
+          cmake --build "${BUILD_DIR}" \
+            --target amd-comgr+stage hip-clr+stage ocl-clr+stage -- -k 0
+
+      - name: Validate driver artifacts
+        run: |
+          test -s "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr.dll"
+          test -s "${BUILD_DIR}/compiler/amd-comgr/stage/bin/amd_comgr.pdb"
+          test -s "${BUILD_DIR}"/core/clr/stage/bin/amdhip64_*.dll
+          test -s "${BUILD_DIR}"/core/clr/stage/bin/hiprtc[0-9]*.dll
+          test -s "${BUILD_DIR}"/core/clr/stage/bin/hiprtc-builtins*.dll
+          test -s "${BUILD_DIR}/core/ocl-clr/stage/bin/amdocl64.dll"
+          test -s "${BUILD_DIR}/core/ocl-icd/stage/bin/OpenCL.dll"
+          test -s "${BUILD_DIR}/core/rocm-kpack/stage/bin/rocm_kpack.dll"
+
+      - name: Upload driver Comgr
+        id: upload-comgr
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-comgr
+          path: ${{ env.BUILD_DIR }}/compiler/amd-comgr/stage/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload driver runtimes
+        id: upload-runtime
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-runtime
+          path: |
+            ${{ env.BUILD_DIR }}/core/clr/stage/
+            ${{ env.BUILD_DIR }}/core/ocl-clr/stage/
+            ${{ env.BUILD_DIR }}/core/ocl-icd/stage/
+            ${{ env.BUILD_DIR }}/core/rocm-kpack/stage/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload driver build logs
+        id: upload-logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-logs
+          path: |
+            ${{ env.BUILD_DIR }}/logs/
+            ${{ env.BUILD_DIR }}/CMakeCache.txt
+            ${{ env.BUILD_DIR }}/flag_settings.json
+
   build-windows-tarballs:
     permissions:
       contents: read
@@ -843,6 +979,7 @@ jobs:
       - trigger-linux-jax-wheels
       - setup-windows
       - build-windows
+      - build-windows-driver
       - build-windows-tarballs
       - build-windows-python-packages
       - build-windows-msi
@@ -909,6 +1046,9 @@ jobs:
           WINDOWS_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.windows_artifact_url }}
           WINDOWS_LOG_URL: ${{ steps.artifact-urls.outputs.windows_log_url }}
           WINDOWS_MANIFEST_URL: ${{ steps.artifact-urls.outputs.windows_manifest_url }}
+          WINDOWS_DRIVER_COMGR_URL: ${{ needs.build-windows-driver.outputs.comgr_artifact_url }}
+          WINDOWS_DRIVER_RUNTIME_URL: ${{ needs.build-windows-driver.outputs.runtime_artifact_url }}
+          WINDOWS_DRIVER_LOGS_URL: ${{ needs.build-windows-driver.outputs.logs_artifact_url }}
         run: |
           echo "## Workflow Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -990,6 +1130,18 @@ jobs:
             echo "- :x: Build failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.build-windows.result }}" == "skipped" ]; then
             echo "- :fast_forward: Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows driver artifacts are downloaded directly from this run.
+          if [ "${{ needs.build-windows-driver.result }}" == "success" ]; then
+            echo "- :white_check_mark: Driver artifacts: [Comgr](${WINDOWS_DRIVER_COMGR_URL}) | [Runtime](${WINDOWS_DRIVER_RUNTIME_URL})" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-driver.result }}" == "failure" ]; then
+            echo "- :x: Driver build failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-driver.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Driver build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "${WINDOWS_DRIVER_LOGS_URL}" ]; then
+            echo "- [Driver build logs](${WINDOWS_DRIVER_LOGS_URL})" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Windows packaging
