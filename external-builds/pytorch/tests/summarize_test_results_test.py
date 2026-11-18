@@ -364,5 +364,95 @@ class StandardSummaryTest(TestCaseBase):
         self.assertIn("| a\\|b |", summary_file.read_text())
 
 
+class CombinedSummaryTest(TestCaseBase):
+    def add_shard(self, shard: int, *, completed: bool = True) -> ReportSet:
+        reports = ReportSet(self.temp / "artifacts" / f"test-reports-default-{shard}-2")
+        reports.add_report(
+            "test_nn",
+            junit_xml(case(f"test_fail_{shard}", body=FAILURE), case("test_ok")),
+        )
+        reports.add_module_log("test_nn")
+        reports.record_run("full", completed=completed)
+        return reports
+
+    def write(self, expected: int | None) -> dict:
+        return summarize.write_combined_summary(
+            self.temp / "artifacts",
+            "gfx94X",
+            str(self.temp / "summary.md"),
+            expected_report_count=expected,
+            github_output=str(self.temp / "github_output"),
+        )
+
+    def test_all_expected_shards_complete(self):
+        self.add_shard(1)
+        self.add_shard(2)
+
+        outputs = self.write(expected=2)
+
+        self.assertEqual(
+            outputs,
+            {
+                "failed_test_count": 2,
+                "observed_report_count": 2,
+                "expected_report_count": 2,
+                "results_complete": True,
+            },
+        )
+        self.assertIn(
+            "results_complete=true",
+            (self.temp / "github_output").read_text().splitlines(),
+        )
+
+    def test_retry_pass_is_not_a_failure(self):
+        reports = self.add_shard(1)
+        reports.add_report("test_nn", junit_xml(case("test_fail_1")), attempt="retry")
+
+        self.assertEqual(self.write(expected=1)["failed_test_count"], 0)
+
+    def test_missing_shard_is_incomplete(self):
+        self.add_shard(1)
+
+        outputs = self.write(expected=2)
+
+        self.assertEqual(outputs["observed_report_count"], 1)
+        self.assertFalse(outputs["results_complete"])
+
+    def test_incomplete_shard_is_incomplete(self):
+        self.add_shard(1)
+        self.add_shard(2, completed=False)
+
+        outputs = self.write(expected=2)
+
+        self.assertFalse(outputs["results_complete"])
+        self.assertIn(
+            "Incomplete shard default 2/2: the full test runner did not exit",
+            (self.temp / "summary.md").read_text(),
+        )
+
+    def test_unknown_expected_count_is_incomplete(self):
+        self.add_shard(1)
+
+        self.assertFalse(self.write(expected=None)["results_complete"])
+
+    def test_missing_artifacts_directory_writes_outputs(self):
+        outputs = summarize.write_combined_summary(
+            self.temp / "missing",
+            "gfx94X",
+            "",
+            expected_report_count=2,
+            github_output=str(self.temp / "github_output"),
+        )
+
+        self.assertEqual(outputs["observed_report_count"], 0)
+        self.assertFalse(outputs["results_complete"])
+
+    def test_count_expected_reports_from_matrix(self):
+        matrix = {"include": [{"shard": 1}, {"shard": 2}, {"shard": 3}]}
+
+        self.assertEqual(summarize.count_expected_reports(matrix), 3)
+        self.assertIsNone(summarize.count_expected_reports(None))
+
+
 if __name__ == "__main__":
     unittest.main()

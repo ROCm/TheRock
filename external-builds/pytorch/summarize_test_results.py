@@ -13,7 +13,9 @@ Two modes of operation:
    multiple downloaded artifact directories named
    ``test-reports-<config>-<shard>-<num_shards>``.  Produces one unified
    table with a *Config* and *Shard* column so all failures are visible in
-   one place.  Called from a post-matrix summary job.
+   one place.  Called from a post-matrix summary job.  Also writes
+   ``failed_test_count``, ``observed_report_count``, ``expected_report_count``,
+   and ``results_complete`` to ``$GITHUB_OUTPUT``.
 
 3. **Standard** (``--standard-dir``) — scans artifact directories named
    ``test-reports-<os>-<amdgpu_family>`` from test_pytorch_wheels.yml and
@@ -25,10 +27,10 @@ Two modes of operation:
    ``results_complete`` for one test-reports directory to ``$GITHUB_OUTPUT``
    so the job's Quartz notification carries them.
 
-The standard and counts modes count a test's final outcome: a test that passed
-on a retry is flaky, not failed. ``results_complete`` uses `check_report_set`,
-so a timed-out runner or a module killed by a signal never certifies a partial
-count.
+Every mode except the single-shard summary counts a test's final outcome: a
+test that passed on a retry is flaky, not failed. ``results_complete`` uses
+`check_report_set`, so a timed-out runner or a module killed by a signal never
+certifies a partial count.
 
 Usage:
     # Per-shard (inside matrix job):
@@ -341,12 +343,20 @@ def write_combined_summary(
     combined_dir: Path,
     amdgpu_family: str,
     summary_file: str,
+    expected_report_count: int | None = None,
+    github_output: str = "",
     torch_version: str = "",
     python_version: str = "",
     package_index_url: str = "",
     pytorch_git_ref: str = "",
-) -> None:
-    """Scan all artifact directories and write one combined table."""
+) -> dict[str, object]:
+    """Scan all shard artifact directories and write one combined table.
+
+    ``failed_test_count`` counts tests whose final outcome failed or errored;
+    a test that passed on a retry is not a failure. ``results_complete`` is
+    true only when every expected shard reported and each is complete (see
+    `check_report_set`).
+    """
     lines: list[str] = []
 
     if torch_version and amdgpu_family:
@@ -361,39 +371,64 @@ def write_combined_summary(
         )
 
     rows: list[tuple[str, int, str]] = []
-    shard_dirs = sorted(combined_dir.iterdir())
+    observed_report_count = 0
+    incomplete: list[str] = []
+    shard_dirs = sorted(combined_dir.iterdir()) if combined_dir.is_dir() else []
 
     for artifact_dir in shard_dirs:
-        if not artifact_dir.is_dir():
+        m = _ARTIFACT_RE.fullmatch(artifact_dir.name)
+        if not artifact_dir.is_dir() or not m:
             continue
-        m = _ARTIFACT_RE.match(artifact_dir.name)
-        if not m:
-            continue
+        observed_report_count += 1
         config = m.group("config")
         shard = m.group("shard")
-        num = m.group("num")
-        shard_label = f"{shard}/{num}"
+        shard_label = f"{shard}/{m.group('num')}"
 
-        failures = collect_results(artifact_dir)
-        seen = set()
-        for f in failures:
-            test_file = derive_test_file(f["report_file"])
-            key = (config, shard_label, test_file, f["class"], f["test"])
-            if key in seen:
+        problems = check_report_set(artifact_dir)
+        if problems:
+            incomplete.append(f"{config} {shard_label}: {'; '.join(problems)}")
+        for (test_file, cls, test), outcome in sorted(
+            collect_outcomes(artifact_dir).items()
+        ):
+            if outcome["status"] not in ("FAILED", "ERROR"):
                 continue
-            seen.add(key)
-            msg = f["message"].replace("|", "\\|").replace("\n", " ")[:100]
             rows.append(
                 (
                     config,
                     int(shard),
-                    f"| {config} | {shard_label} | {test_file} "
-                    f"| {f['class']} | {f['test']} | {f['status']} | {msg} |",
+                    f"| {config} | {shard_label} | {test_file} | {cls} | {test} "
+                    f"| {outcome['status']} | {_escape(outcome['message'])} |",
                 )
             )
 
-    if not rows:
+    results_complete = (
+        expected_report_count is not None
+        and expected_report_count > 0
+        and observed_report_count == expected_report_count
+        and not incomplete
+    )
+    expected_display = (
+        str(expected_report_count) if expected_report_count is not None else "unknown"
+    )
+    completeness = "complete" if results_complete else "incomplete"
+    lines.append(
+        f"**Reports:** {observed_report_count} observed / {expected_display} "
+        f"expected ({completeness})"
+    )
+    lines.append("")
+    for reason in incomplete:
+        lines.append(f"- Incomplete shard {reason}")
+    if incomplete:
+        lines.append("")
+
+    if not rows and results_complete:
         lines.append(f"### All tests passed — {amdgpu_family} :white_check_mark:")
+        lines.append("")
+    elif not rows:
+        lines.append(
+            f"### No failed tests found in available reports — {amdgpu_family} "
+            ":warning:"
+        )
         lines.append("")
     else:
         rows.sort(key=lambda r: (r[0], r[1]))
@@ -410,6 +445,14 @@ def write_combined_summary(
         lines.append("")
 
     _emit(lines, summary_file)
+    outputs: dict[str, object] = {
+        "failed_test_count": len(rows),
+        "observed_report_count": observed_report_count,
+        "expected_report_count": expected_report_count or 0,
+        "results_complete": results_complete,
+    }
+    _write_github_outputs(outputs, github_output)
+    return outputs
 
 
 # ---------------------------------------------------------------------------
@@ -631,6 +674,13 @@ def write_standard_summary(standard_dir: Path, summary_file: str) -> int:
 # ---------------------------------------------------------------------------
 
 
+def count_expected_reports(test_matrix: dict | None) -> int | None:
+    """One shard report is expected per prepared matrix entry."""
+    if test_matrix is None:
+        return None
+    return len(test_matrix.get("include", []))
+
+
 def _output_value(value: object) -> str:
     return str(value).lower() if isinstance(value, bool) else str(value)
 
@@ -703,6 +753,13 @@ def main() -> int:
         "--pytorch-git-ref",
         default=os.getenv("PYTORCH_GIT_REF", ""),
     )
+    parser.add_argument(
+        "--test-matrix",
+        type=lambda text: json.loads(text) if text.strip() else None,
+        default=None,
+        help='Prepared test matrix JSON ({"include": [...]}); one shard '
+        "report is expected per entry. Used by combined mode.",
+    )
     args = parser.parse_args()
 
     summary_file = os.getenv("GITHUB_STEP_SUMMARY", "")
@@ -719,13 +776,14 @@ def main() -> int:
         return 0
 
     if args.combined_dir:
-        if not args.combined_dir.is_dir():
-            print(f"Combined directory not found: {args.combined_dir}")
-            return 0
+        # A missing directory still writes outputs (incomplete), so absent
+        # artifacts are never read as zero failures.
         write_combined_summary(
             args.combined_dir,
             args.amdgpu_family,
             summary_file,
+            expected_report_count=count_expected_reports(args.test_matrix),
+            github_output=os.getenv("GITHUB_OUTPUT", ""),
             torch_version=args.torch_version,
             python_version=args.python_version,
             package_index_url=args.package_index_url,
