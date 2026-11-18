@@ -174,6 +174,9 @@ jobs:
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
       pr_labels: ${{ inputs.pr_labels || '' }}
+      # No opt-in label (always runs) and no opt-out label (only ci:skip skips).
+      pull_request_opt_in_label: ""
+      pull_request_opt_out_label: ""
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
       stage_reuse_mode: ${{ inputs.stage_reuse_mode || 'dry-run' }}

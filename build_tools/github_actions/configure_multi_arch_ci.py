@@ -312,6 +312,8 @@ class CIInputs:
 
     # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
+    pull_request_opt_in_label: str = ""  # Skip PRs lacking this label; "" disables
+    pull_request_opt_out_label: str = ""  # Skip PRs with this label; "" disables
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
     checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
@@ -526,6 +528,8 @@ class CIInputs:
             build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
+            pull_request_opt_in_label=os.environ.get("PULL_REQUEST_OPT_IN_LABEL", ""),
+            pull_request_opt_out_label=os.environ.get("PULL_REQUEST_OPT_OUT_LABEL", ""),
             pr_base_ref=pr_base_ref,
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
             checkout_commit=os.environ.get("THEROCK_CHECKOUT_COMMIT", ""),
@@ -973,6 +977,8 @@ def should_skip_ci(
     Returns True for:
     - 'ci:skip' PR label
     - Draft PRs without the 'ci:run-on-draft' label
+    - Pull requests missing the workflow's opt-in label, or carrying its
+      opt-out label (pull_request_opt_in_label / pull_request_opt_out_label)
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     - ASAN builds on PRs without ci:asan or ci:host-asan labels
@@ -996,6 +1002,19 @@ def should_skip_ci(
             "the pull request ready for review to run CI)"
         )
         return True
+
+    # 1c. Per-workflow label policy (pull_request events only). Checked before
+    #     the path filters so a label skip never needs the changed-file lookup.
+    #     The opt-out label wins when the PR has both labels.
+    if ci_inputs.is_pull_request:
+        opt_in = ci_inputs.pull_request_opt_in_label
+        if opt_in and opt_in not in ci_inputs.pr_labels:
+            print(f"  Skipping: pull request lacks the opt-in label '{opt_in}'")
+            return True
+        opt_out = ci_inputs.pull_request_opt_out_label
+        if opt_out and opt_out in ci_inputs.pr_labels:
+            print(f"  Skipping: pull request has the opt-out label '{opt_out}'")
+            return True
 
     # 2. Path filter skipping - check before ASAN label logic so we don't print
     #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
