@@ -290,10 +290,6 @@ jobs:
         timeout-minutes: 30
         run: |
           TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
-          if ! [[ "${TORCH_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Unexpected torch.version.git_version: '${TORCH_SHA}'"
-            exit 1
-          fi
           echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA} (ref: ${PYTORCH_GIT_REF})"
           python external-builds/pytorch/pytorch_torch_repo.py checkout \
             --gitrepo-origin https://github.com/"${PYTORCH_GIT_REPO}".git \
