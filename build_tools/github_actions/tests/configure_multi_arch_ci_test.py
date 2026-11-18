@@ -78,6 +78,7 @@ def _jobs(
     baseline_run_id: str = "",
     build_pytorch: bool = True,
     build_jax: bool = False,
+    test_rocm_action: cm.JobAction = cm.JobAction.RUN,
 ) -> cm.JobDecisions:
     """Construct default job decisions for tests that exercise later stages."""
     prebuilt_stages = prebuilt_stages or []
@@ -88,7 +89,7 @@ def _jobs(
             baseline_run_id=baseline_run_id,
         ),
         test_rocm=cm.TestRocmDecision(
-            action=cm.JobAction.RUN,
+            action=test_rocm_action,
             test_type=test_type,
         ),
         build_rocm_python=cm.JobGroupDecision(action=cm.JobAction.RUN),
@@ -308,6 +309,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.prebuilt_stages, "")
         self.assertEqual(inputs.baseline_run_id, "")
         self.assertEqual(inputs.release_type, "ci")
+        self.assertTrue(inputs.run_rocm_tests)
         self.assertTrue(inputs.build_python_packages)
         self.assertTrue(inputs.build_pytorch)
         self.assertTrue(inputs.build_native_linux)
@@ -326,6 +328,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 "BASELINE_RUN_ID": "12345",
                 "BUILD_PYTORCH": "false",
                 "BUILD_JAX": "true",
+                "RUN_ROCM_TESTS": "false",
                 "PYTHON_VERSION": "3.12",
                 "ROCM_PACKAGE_VERSION": "10.2.0.dev0+abcdef",
                 "THEROCK_CHECKOUT_REF": "main",
@@ -356,6 +359,7 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         self.assertEqual(inputs.baseline_run_id, "12345")
         self.assertFalse(inputs.build_pytorch)
         self.assertTrue(inputs.build_jax)
+        self.assertFalse(inputs.run_rocm_tests)
         self.assertEqual(inputs.python_versions, ["3.12"])
         self.assertEqual(inputs.built_rocm_version, "10.2.0.dev0+abcdef")
         self.assertEqual(inputs.checkout_ref, "main")
@@ -803,6 +807,24 @@ class TestDecideJobs(unittest.TestCase):
         self.assertEqual(result.build_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.test_pytorch.action, cm.JobAction.RUN)
         self.assertEqual(result.build_jax.action, cm.JobAction.SKIP)
+
+    def test_run_rocm_tests_true_runs_test_rocm(self):
+        jobs = cm.decide_jobs(
+            self._inputs(run_rocm_tests=True),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.test_rocm.action, cm.JobAction.RUN)
+
+    def test_run_rocm_tests_false_skips_test_rocm_only(self):
+        jobs = cm.decide_jobs(
+            self._inputs(run_rocm_tests=False),
+            git_context=cm.GitContext(),
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(jobs.build_rocm.action, cm.JobAction.RUN)
+        self.assertEqual(jobs.test_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(jobs.test_rocm.test_type_reason, "run_rocm_tests is false")
 
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
     def test_skip_rocm_uses_published_packages_without_baseline_lookup(self, reuse):
@@ -1309,45 +1331,6 @@ class TestDecideJobs(unittest.TestCase):
             cm._get_allowed_test_labels_for_stages(["debug-tools"]),
             ["rocgdb", "rocr-debug-agent"],
         )
-
-    # TODO(#3433): Remove ASAN tests once ASAN tests are passing
-    def test_asan_tests_only_run_on_nightly_triggers(self):
-        """ASAN tests only run on schedule/workflow_dispatch, skip on PR/push."""
-        git_context = cm.GitContext()
-
-        # PR and push should skip ASAN tests
-        for event in ["pull_request", "push"]:
-            result = cm.decide_jobs(
-                self._inputs(event_name=event, build_variant="asan"),
-                git_context=git_context,
-                targets=cm.TargetSelection(),
-            )
-            self.assertEqual(
-                result.test_rocm.action,
-                cm.JobAction.SKIP,
-                f"ASAN tests should skip on {event}",
-            )
-
-        # Schedule and workflow_dispatch should run ASAN tests
-        for event in ["schedule", "workflow_dispatch"]:
-            result = cm.decide_jobs(
-                self._inputs(event_name=event, build_variant="asan"),
-                git_context=git_context,
-                targets=cm.TargetSelection(),
-            )
-            self.assertEqual(
-                result.test_rocm.action,
-                cm.JobAction.RUN,
-                f"ASAN tests should run on {event}",
-            )
-
-        # Release builds should always run tests (contrast with ASAN)
-        result = cm.decide_jobs(
-            self._inputs(event_name="pull_request", build_variant="release"),
-            git_context=git_context,
-            targets=cm.TargetSelection(),
-        )
-        self.assertEqual(result.test_rocm.action, cm.JobAction.RUN)
 
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
     def test_external_repo_stage_reuse_uses_repo_as_changed_file(self, mock_reuse):
@@ -3046,57 +3029,6 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertNotEqual(entry["test-runs-on"], "linux-gfx1151-gpu-rocm")
         self.assertNotIn("oem", entry["test-runs-on"])
 
-    # TODO(#3433): Remove sandbox tests once ASAN tests are passing
-    def test_asan_runner_selection(self):
-        """Sandbox runners stay disabled for TheRock nightly and PR builds."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-
-        # Schedule: sandbox pools are reserved for rocm-systems PRs.
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-        # PR: disables tests (empty runner)
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="pull_request", build_variant="asan"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_asan_debug_nightly_has_no_sandbox_runner(self):
-        """asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(event_name="schedule", build_variant="asan-debug"),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
-    def test_host_asan_debug_nightly_has_no_sandbox_runner(self):
-        """host-asan-debug nightly cannot use the rocm-systems PR sandbox pools."""
-        targets = cm.TargetSelection(linux_families=["gfx94x"])
-        result = cm.expand_build_configs(
-            ci_inputs=self._inputs(
-                event_name="schedule", build_variant="host-asan-debug"
-            ),
-            git_context=cm.GitContext(),
-            targets=targets,
-            jobs=_jobs(),
-        )
-        entry = result.linux.per_family_info[0]
-        self.assertEqual(entry["test-runs-on"], "")
-
     def test_explicit_strict_linux_dev_build(self):
         """Explicit selection creates a build config without GPU tests."""
         result = cm.expand_build_configs(
@@ -3280,6 +3212,82 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertIsNotNone(result.linux)
         self.assertTrue(result.linux.build_python_packages)
         self.assertTrue(result.linux.build_jax)
+
+    def _expand_mock_family(
+        self,
+        variant,
+        *,
+        test_rocm_action=cm.JobAction.RUN,
+        sandbox="absent",
+        targets=None,
+    ):
+        """Expands a mock family; returns its per-family info entry."""
+        platform_info = {
+            "test-runs-on": "linux-regular-runner",
+            "family": "mock-fam",
+            "fetch-gfx-targets": ["gfx0000"],
+            "build_variants": [variant],
+            "builds_on_trigger": ["presubmit", "postsubmit", "nightly"],
+            "tests_on_trigger": ["presubmit", "postsubmit", "nightly"],
+        }
+        if sandbox != "absent":
+            platform_info["test-runs-on-sandbox"] = sandbox
+        with (
+            patch(
+                "configure_multi_arch_ci.get_all_families_for_trigger_types",
+                return_value={"mock-fam": {"linux": platform_info}},
+            ),
+            patch(
+                "configure_multi_arch_ci.get_cpu_test_runner",
+                return_value="linux-cpu-runner",
+            ),
+        ):
+            result = cm.expand_build_configs(
+                ci_inputs=self._inputs(
+                    event_name="pull_request", build_variant=variant
+                ),
+                git_context=cm.GitContext(),
+                targets=targets or cm.TargetSelection(linux_families=["mock-fam"]),
+                jobs=_jobs(build_pytorch=False, test_rocm_action=test_rocm_action),
+            )
+        return result.linux.per_family_info[0]
+
+    def test_asan_variant_uses_sandbox_runner_when_configured(self):
+        entry = self._expand_mock_family("asan-debug", sandbox="linux-sandbox-runner")
+        self.assertEqual(entry["test-runs-on"], "linux-sandbox-runner")
+        self.assertTrue(entry["tests_enabled"])
+
+    def test_asan_variant_falls_back_to_regular_runner(self):
+        """A blank ("") or absent sandbox runner uses the regular runner."""
+        for sandbox in ["", "absent"]:
+            with self.subTest(sandbox=sandbox):
+                entry = self._expand_mock_family("asan-debug", sandbox=sandbox)
+                self.assertEqual(entry["test-runs-on"], "linux-regular-runner")
+
+    def test_non_asan_variant_ignores_sandbox_runner(self):
+        entry = self._expand_mock_family("tsan", sandbox="linux-sandbox-runner")
+        self.assertEqual(entry["test-runs-on"], "linux-regular-runner")
+
+    def test_test_rocm_skip_disables_tests(self):
+        entry = self._expand_mock_family(
+            "asan-debug",
+            test_rocm_action=cm.JobAction.SKIP,
+            sandbox="linux-sandbox-runner",
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertEqual(entry["test-runs-on-cpu"], "")
+        self.assertFalse(entry["tests_enabled"])
+
+    def test_test_rocm_skip_is_not_overridden_by_test_label(self):
+        entry = self._expand_mock_family(
+            "release",
+            test_rocm_action=cm.JobAction.SKIP,
+            targets=cm.TargetSelection(
+                linux_families=["mock-fam"], linux_test_only_families=["mock-fam"]
+            ),
+        )
+        self.assertEqual(entry["test-runs-on"], "")
+        self.assertFalse(entry["tests_enabled"])
 
 
 # ---------------------------------------------------------------------------
@@ -3465,6 +3473,22 @@ class TestConfigurePipeline(unittest.TestCase):
         self.assertIsNone(outputs.builds.linux)
         self.assertIsNone(outputs.builds.windows)
         self.assertIsNone(outputs.jobs)
+
+    def test_pipeline_run_rocm_tests_false_disables_tests(self):
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="workflow_dispatch",
+            commit_ref="main",
+            base_ref="HEAD^1",
+            build_variant="release",
+            built_rocm_version="10.2.0.dev0+abcdef",
+            run_rocm_tests=False,
+            build_pytorch=False,
+            linux_amdgpu_families=["gfx94x"],
+        )
+        outputs = cm.configure(inputs, cm.GitContext())
+        self.assertEqual(outputs.jobs.test_rocm.action, cm.JobAction.SKIP)
+        self.assertEqual(outputs.builds.linux.per_family_info[0]["test-runs-on"], "")
 
     @patch("configure_multi_arch_ci.should_skip_ci")
     def test_pipeline_skips_when_gate_says_skip(self, mock_skip):

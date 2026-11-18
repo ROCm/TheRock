@@ -302,7 +302,8 @@ amdgpu_family_info_matrix = {
                     "count": 28,
                 },  # ccs-csp
             ],
-            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            # Sandbox runner for ASAN test jobs. Blank or absent falls back to
+            # the regular runner.
             "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
