@@ -116,6 +116,39 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 endif(THEROCK_ENABLE_CORE_AMDSMI)
 
 
+if(THEROCK_ENABLE_ROCDDI_RUNTIMES)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "rocm-systems/runtimes currently requires Linux")
+  endif()
+  if(NOT EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/CMakeLists.txt")
+    message(FATAL_ERROR "THEROCK_ENABLE_ROCDDI_RUNTIMES requires a rocm-systems source revision containing runtimes/")
+  endif()
+  include("${CMAKE_CURRENT_SOURCE_DIR}/rocm-runtimes/RuntimeInputs.cmake")
+  therock_prepare_runtime_inputs(
+    _runtimes_cmake_args _runtimes_state _runtimes_input_depends _runtimes_sources)
+  therock_cmake_subproject_declare(rocm-runtimes
+    HARDENING_DEFERRED "runtime Cargo build including native AddrLib"
+    DISABLE_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-runtimes"
+    FPRINT_FILE_GLOBS
+      "${CMAKE_CURRENT_SOURCE_DIR}/rocm-runtimes/RuntimeInputs.cmake"
+      "${_runtimes_state}"
+    EXTRA_DEPENDS ${_runtimes_input_depends}
+    COMPILER_TOOLCHAIN "${_system_toolchain}"
+    CMAKE_ARGS
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      ${_runtimes_cmake_args}
+    BUILD_DEPS amd-llvm
+  )
+  target_sources(rocm-runtimes PRIVATE ${_runtimes_sources})
+  therock_cmake_subproject_activate(rocm-runtimes)
+  therock_cmake_subproject_build_test(rocm-runtimes
+    COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure --no-tests=error -L host
+      --output-junit rocm-runtimes-host-tests.xml
+  )
+endif()
+
 set(_therock_enable_hsa_runtime "${THEROCK_ENABLE_CORE_RUNTIME}")
 if(WIN32)
   set(_therock_enable_hsa_runtime OFF)

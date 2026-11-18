@@ -272,6 +272,15 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 
 # Additional manual features that don't map to artifacts
 
+if(THEROCK_RESET_FEATURES)
+  unset(THEROCK_ENABLE_ROCDDI_RUNTIMES CACHE)
+endif()
+option(THEROCK_ENABLE_ROCDDI_RUNTIMES "Build rocm-systems low-level runtimes and host tests" OFF)
+if(THEROCK_ENABLE_ROCDDI_RUNTIMES)
+  set(THEROCK_ENABLE_BASE ON)
+  set(THEROCK_ENABLE_COMPILER ON)
+endif()
+
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
