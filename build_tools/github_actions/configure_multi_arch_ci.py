@@ -104,7 +104,7 @@ from github_actions_api import (
     gha_set_output,
 )
 from get_latest_python_package_version import get_latest_python_package_version
-from stage_impact import analyze_artifact_impact_from_projects, stages_owned_by_projects
+from stage_impact import stages_owned_by_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -1794,23 +1794,19 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # For external repos, use changed_projects to determine artifact-level reuse.
-    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
-    # changed-file analysis.
+    # Artifact-level reuse keys on the changed files alone. changed_projects
+    # names the projects a run is *scoped* to, which is a test-selection answer:
+    # it says nothing about the artifacts that consume them, so narrowing the
+    # rebuild set to it marks every consumer reusable. A rocPRIM-only scope
+    # would rebuild prim and copy rocBLAS, shipping a rocBLAS built against the
+    # old rocPRIM. Stage-level reuse is coarse enough to stay safe here; making
+    # it artifact-granular is TheRock#3399.
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if (
-        stage_reuse_mode is not StageReuseMode.OFF
-        and ci_inputs.changed_projects
-        and not rebuild_artifacts
-    ):
-        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
-            ci_inputs.changed_projects
-        )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,

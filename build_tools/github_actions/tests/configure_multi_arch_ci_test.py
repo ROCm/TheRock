@@ -1106,11 +1106,6 @@ class TestDecideJobs(unittest.TestCase):
                         },
                     ),
                     patch.object(cm, "compute_auto_stage_reuse") as auto_reuse,
-                    patch.object(
-                        cm,
-                        "analyze_artifact_impact_from_projects",
-                        return_value=(["blas"], ["fft"]),
-                    ) as artifact_impact,
                 ):
                     inputs = _run_from_environ(event_name, **event_args)
                     result = cm.decide_jobs(
@@ -1120,7 +1115,6 @@ class TestDecideJobs(unittest.TestCase):
                     )
 
                 auto_reuse.assert_not_called()
-                artifact_impact.assert_not_called()
                 self.assertEqual(result.build_rocm.stage_decisions, {})
                 self.assertEqual(result.build_rocm.baseline_run_id, "")
                 self.assertEqual(result.build_rocm.baseline_repository, "")
@@ -4607,6 +4601,42 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
         self.assertEqual(
             jobs.build_rocm.prebuilt_stages, self._yaml_rule(["projects/rpp"])
         )
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_the_scope_does_not_narrow_the_artifact_rebuild_set(self, reuse):
+        """Stage granularity only. changed_projects answers which projects a run
+        is scoped to, not which artifacts consume them: scoping to rocPRIM and
+        rebuilding only `prim` would copy a rocBLAS built against the old
+        rocPRIM. The artifact sets stay whatever the changed-file analysis said.
+        """
+        reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=[],
+            rebuild_stages=[],
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=[],
+            unavailable_stages=[],
+            applied_reuse_stages=[],
+            reasons=[],
+        )
+        jobs = cm.decide_jobs(
+            cm.CIInputs(
+                run_id="1",
+                event_name="pull_request",
+                commit_ref="main",
+                base_ref="develop",
+                build_variant="release",
+                prebuilt_stages=",".join(self.PREBUILT),
+                changed_projects=["projects/rocprim"],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+        )
+        self.assertEqual(jobs.build_rocm.rebuild_artifacts, [])
+        self.assertEqual(jobs.build_rocm.reusable_artifacts, [])
 
 
 if __name__ == "__main__":
