@@ -1121,25 +1121,30 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_container_options_drop_root_on_apptainer_label(self):
         job = {
             "test_runner": "test-linux-gfx950-1gpu-crusoe-rocm",
-            "container_options": ["--cap-add SYS_MODULE"],
+            "container_options": [
+                "--cap-add SYS_MODULE",
+                "--cap-add=SYS_PTRACE",
+                "--cap-add=PERFMON",
+            ],
         }
         out = fetch_test_configurations._build_container_options(
             job, "linux", "gfx950-dcgpu"
         )
         self.assertNotIn("--user 0:0", out["container_options"])
-        self.assertNotIn("--cap-add SYS_MODULE", out["container_options"])
+        self.assertNotIn("--cap-add", out["container_options"])
         self.assertIn("--device /dev/kfd", out["container_options"])
 
     def test_container_options_keep_root_on_docker_label_same_family(self):
         job = {
             "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
-            "container_options": ["--cap-add SYS_MODULE"],
+            "container_options": ["--cap-add SYS_MODULE", "--cap-add=SYS_PTRACE"],
         }
         out = fetch_test_configurations._build_container_options(
             job, "linux", "gfx950-dcgpu"
         )
         self.assertIn("--user 0:0", out["container_options"])
         self.assertIn("--cap-add SYS_MODULE", out["container_options"])
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
     def test_container_options_use_multi_gpu_runner_label(self):
         job = {

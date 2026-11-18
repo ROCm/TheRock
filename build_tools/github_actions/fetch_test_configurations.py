@@ -140,7 +140,12 @@ _APPTAINER_RUNNER_LABELS = [
     "test-linux-gfx950-1gpu-crusoe-rocm",
     "test-linux-gfx950-8gpu-crusoe-rocm",
 ]
-_APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
+_APPTAINER_UNSUPPORTED_OPTIONS = [
+    "--user 0:0",
+    "--cap-add SYS_MODULE",
+    "--cap-add=SYS_PTRACE",
+    "--cap-add=PERFMON",
+]
 
 
 def _build_container_options(
