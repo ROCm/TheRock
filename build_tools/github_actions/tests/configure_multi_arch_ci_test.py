@@ -4511,38 +4511,68 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
         "wsl-rocdxg",
     ]
 
-    def test_a_changed_project_rebuilds_the_stage_that_compiles_it(self):
-        """RPP lives in cv-libs, so a baseline cv-libs would not contain this RPP."""
-        self.assertNotIn(
-            "cv-libs",
-            cm._drop_stages_owned_by_changed_projects(
-                list(self.PREBUILT), ["projects/rpp"]
-            ),
+    @classmethod
+    def _yaml_rule(cls, changed_projects: list[str]) -> list[str]:
+        """The hand-written conditional this replaces, as it stood in
+        therock-multi-arch-ci.yml:
+
+            contains(format(',{0},', changed_projects), ',projects/rpp,')
+              && '<PREBUILT without cv-libs>'
+              || '<PREBUILT>'
+        """
+        if "projects/rpp" in changed_projects:
+            return [stage for stage in cls.PREBUILT if stage != "cv-libs"]
+        return list(cls.PREBUILT)
+
+    def _drop(self, changed_projects, prebuilt=None):
+        return cm._drop_stages_owned_by_changed_projects(
+            list(self.PREBUILT if prebuilt is None else prebuilt), changed_projects
         )
+
+    def test_matches_the_yaml_conditional_it_replaces(self):
+        """Same answer as rocm-libraries' rule, across the shapes a scope takes."""
+        for changed_projects in (
+            [],  # scope could not be narrowed; dropping all would end reuse
+            ["projects/rpp"],  # the one case the rule existed for
+            ["projects/rpp", "projects/rocblas"],  # owning plus non-owning
+            ["projects/rocprim"],  # math-libs, which is never prebuilt
+            ["projects/miopen"],
+            ["shared/tensile"],  # shared/* subtree
+            ["dnn-providers/miopen-provider"],
+            ["projects/hipblaslt/tensilelite"],  # nested subtree, owns no artifact
+        ):
+            with self.subTest(changed_projects=changed_projects):
+                self.assertEqual(
+                    self._drop(changed_projects),
+                    self._yaml_rule(changed_projects),
+                )
+
+    def test_every_prebuilt_stage_is_reachable(self):
+        """The YAML conditional only knew cv-libs; the same hazard exists for
+        every stage a caller prebuilds, and other repos change these projects."""
+        for project, stage in {
+            "projects/hip-tests": "runtime-tests",
+            "projects/rccl": "comm-libs",
+            "projects/rpp": "cv-libs",
+            "projects/hipfile": "storage-libs",
+            "projects/rocgdb": "debug-tools",
+            "projects/rdc": "dctools-core",
+            "projects/rocprofiler-compute": "profiler-apps",
+            "projects/rocdecode": "media-libs",
+            "projects/wsl-rocdxg": "wsl-rocdxg",
+        }.items():
+            with self.subTest(project=project):
+                self.assertEqual(
+                    self._drop([project]),
+                    [kept for kept in self.PREBUILT if kept != stage],
+                )
 
     def test_only_the_owning_stage_is_dropped(self):
-        """Not the dependency closure: compiler-runtime is unaffected by RPP."""
+        """Not the dependency closure: RPP needs compiler-runtime but does not
+        invalidate it, so a baseline copy of that stage stays valid."""
         self.assertEqual(
-            cm._drop_stages_owned_by_changed_projects(
-                list(self.PREBUILT), ["projects/rpp"]
-            ),
-            [stage for stage in self.PREBUILT if stage != "cv-libs"],
-        )
-
-    def test_projects_outside_the_prebuilt_list_leave_it_intact(self):
-        """rocPRIM builds in math-libs, which the caller already rebuilds."""
-        self.assertEqual(
-            cm._drop_stages_owned_by_changed_projects(
-                list(self.PREBUILT), ["projects/rocprim"]
-            ),
-            self.PREBUILT,
-        )
-
-    def test_an_unnarrowed_scope_leaves_the_callers_list_alone(self):
-        """Empty means "could not narrow", and dropping everything would end reuse."""
-        self.assertEqual(
-            cm._drop_stages_owned_by_changed_projects(list(self.PREBUILT), []),
-            self.PREBUILT,
+            self._drop(["projects/rpp"], prebuilt=["compiler-runtime", "cv-libs"]),
+            ["compiler-runtime"],
         )
 
     @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
@@ -4574,16 +4604,8 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
             git_context=cm.GitContext.from_external_repo("rocm-libraries"),
             targets=cm.TargetSelection(linux_families=["gfx94x"]),
         )
-        self.assertNotIn("cv-libs", jobs.build_rocm.prebuilt_stages)
-        self.assertIn("media-libs", jobs.build_rocm.prebuilt_stages)
-
-    def test_the_rule_is_not_special_cased_to_rpp(self):
-        """The YAML conditional this replaces only ever knew about RPP."""
-        self.assertNotIn(
-            "media-libs",
-            cm._drop_stages_owned_by_changed_projects(
-                list(self.PREBUILT), ["projects/rocdecode"]
-            ),
+        self.assertEqual(
+            jobs.build_rocm.prebuilt_stages, self._yaml_rule(["projects/rpp"])
         )
 
 
