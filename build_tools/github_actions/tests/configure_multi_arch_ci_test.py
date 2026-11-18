@@ -889,6 +889,71 @@ class TestDecideJobs(unittest.TestCase):
         )
         self.assertEqual(result.test_rocm.test_type, "quick")
 
+    def test_external_repo_ci_only_change_is_quick(self):
+        """An external repo diff confined to TheRock CI plumbing → quick tests.
+
+        from_external_repo() makes has_submodule_changes unconditionally True,
+        so this must win over the submodule rule to take effect at all.
+        """
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[".github/workflows/therock-multi-arch-ci.yml"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "quick")
+        self.assertIn("CI plumbing", result.test_rocm.test_type_reason)
+
+    def test_external_repo_source_change_stays_standard(self):
+        """Library source obeys the ruleset, even when mixed with CI plumbing.
+
+        The mixed case is modeled on ROCm/rocm-libraries@10dc0c5: the
+        shared/ctest edit widens the run to every project, but the hipdnn CMake
+        edit is real source, so Priority 4 must decline and let the submodule
+        rule answer rather than riding that breadth down to quick depth.
+        """
+        for case, files in {
+            "source only": ["projects/rocblas/src/rocblas.cpp"],
+            "source mixed with shared/ctest": [
+                "projects/hipdnn/cmake/Tests.cmake",
+                "shared/ctest/tests/CMakeLists.txt",
+            ],
+        }.items():
+            with self.subTest(case=case):
+                git = cm.GitContext.from_external_repo(
+                    "rocm-libraries", external_changed_files=files
+                )
+                result = cm.decide_jobs(
+                    self._inputs(
+                        external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+                    ),
+                    git_context=git,
+                    targets=cm.TargetSelection(),
+                )
+                self.assertEqual(result.test_rocm.test_type, "standard")
+                self.assertIn("submodule", result.test_rocm.test_type_reason)
+
+    def test_external_repo_ci_change_yields_to_test_filter_label(self):
+        """The quick downgrade is still overridable by an explicit label."""
+        git = cm.GitContext.from_external_repo(
+            "rocm-libraries",
+            external_changed_files=[".github/workflows/therock-ci.yml"],
+        )
+        result = cm.decide_jobs(
+            self._inputs(
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc123"}',
+                pr_labels=["test_filter:comprehensive"],
+            ),
+            git_context=git,
+            targets=cm.TargetSelection(),
+        )
+        self.assertEqual(result.test_rocm.test_type, "comprehensive")
+
     def test_nightly_release_is_comprehensive(self):
         """Nightly release → comprehensive tests."""
         result = cm.decide_jobs(
@@ -2564,7 +2629,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
             row["pytorch_git_ref"]: row["exclude_implicit_targets"]
             for row in result.linux.pytorch_build_matrix
         }
-        self.assertEqual(exclusions["release/2.15"], "gfx1250-strict")
+        self.assertEqual(exclusions["nightly"], "gfx1250-strict")
 
     def test_build_config_uses_requested_pytorch_python_versions(self):
         targets = cm.TargetSelection(
