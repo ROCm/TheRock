@@ -52,9 +52,20 @@ configurations, all BF16:
 - EFFICIENT_ATTENTION, Q/K/V `[54, 12, 196, 64]`, additive bias (a larger
   vision-transformer-shaped input)
 
-Not covered: the MATH backend, other dtypes, backward passes, performance, and
-comprehensive attention configurations. Broader coverage is planned by running
-pytorch's own `test_transformers.py`
+`test_large_head_dim` covers head dims above 256 (Q/K/V `[1, 1, 256, hd]`,
+hd 288, 320, 384 and 512, FP16 and BF16), where AOTriton ships no kernels for
+some targets (e.g. gfx11). Without a check in PyTorch, these returned
+uninitialized output on gfx1151 instead of falling back to MATH
+([#6561](https://github.com/ROCm/TheRock/issues/6561)). The default case runs
+`scaled_dot_product_attention` without forcing a backend, so whichever backend
+the dispatcher selects must be correct. The FLASH_ATTENTION and
+EFFICIENT_ATTENTION cases force the backend only where `can_use_*` accepts the
+inputs, and skip otherwise. Both are compared with the same CPU FP32 reference
+and tolerance as above.
+
+Not covered: forcing the MATH backend, other dtypes in the fixed-shape cases,
+backward passes, performance, and comprehensive attention configurations.
+Broader coverage is planned by running pytorch's own `test_transformers.py`
 ([#9641](https://github.com/ROCm/TheRock/issues/9641)).
 
 Run against an installed ROCm torch wheel with the standard runner (see
