@@ -2076,8 +2076,6 @@ def _expand_build_config_for_platform(
         # Include multi-GPU runner info only when GPU tests are enabled.
         # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
         # should also be gated to respect the same trigger policy.
-        # Covers both the default pool ("test-runs-on-multi-gpu") and per-GPU-count
-        # tiers ("test-runs-on-2gpu"); see amdgpu_family_matrix.py for the keys.
         if test_runs_on:
             for key in MULTI_GPU_RUNNER_KEYS:
                 if key in platform_info:
