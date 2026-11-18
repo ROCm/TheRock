@@ -373,6 +373,11 @@ jobs:
             --log-cli-level=INFO \
             -v
 
+      - name: (Linux) Install make for AOTI package tests (probe)
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          apt-get update -qq && apt-get install -y -qq make
+
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
