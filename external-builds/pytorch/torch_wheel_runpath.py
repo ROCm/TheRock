@@ -115,6 +115,41 @@ def compute_runpath(
     return ":".join(entries)
 
 
+def find_unplaced_libraries(
+    old_runpath: str,
+    needed: list[str],
+    bundled_names: set[str],
+    runtime_index: dict[str, str],
+    system_names: set[str],
+) -> list[tuple[str, str]]:
+    """Returns (library, directory) pairs that only a dropped entry provided.
+
+    A DT_NEEDED library that is not bundled in the wheel, not in a runtime package,
+    and not a system library, but exists under an absolute RUNPATH entry that
+    `compute_runpath` drops, would no longer resolve after the rewrite.
+    """
+    dropped = [e for e in old_runpath.split(":") if e and os.path.isabs(e)]
+    unplaced: list[tuple[str, str]] = []
+    for name in needed:
+        if name in bundled_names or name in runtime_index or name in system_names:
+            continue
+        for entry in dropped:
+            if (Path(entry) / name).exists():
+                unplaced.append((name, entry))
+                break
+    return unplaced
+
+
+def system_library_names() -> set[str]:
+    """Returns sonames known to the system loader cache (glibc, libstdc++, ...)."""
+    ldconfig = shutil.which("ldconfig") or "/sbin/ldconfig"
+    try:
+        output = subprocess.check_output([ldconfig, "-p"], text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return set()
+    return {line.split()[0] for line in output.splitlines()[1:] if line.strip()}
+
+
 def _patchelf(patchelf: str, *args: str) -> str:
     return subprocess.check_output([patchelf, *args], text=True).strip()
 
@@ -122,18 +157,39 @@ def _patchelf(patchelf: str, *args: str) -> str:
 def rewrite_tree(
     root: Path, runtime_index: dict[str, str], patchelf: str = "patchelf"
 ) -> list[RunpathChange]:
-    """Rewrites RUNPATH on every ELF file under `root` (an unpacked wheel)."""
-    changes: list[RunpathChange] = []
-    for path in sorted(root.rglob("*")):
-        if not is_elf(path):
-            continue
+    """Rewrites RUNPATH on every ELF file under `root` (an unpacked wheel).
+
+    Raises:
+        RuntimeError if any file needs a library that only a dropped absolute
+        RUNPATH entry provided. No file is modified in that case.
+    """
+    elf_files = [p for p in sorted(root.rglob("*")) if is_elf(p)]
+    bundled_names = {p.name for p in root.rglob("*")}
+    system_names = system_library_names()
+    planned: list[tuple[Path, str, str]] = []
+    errors: list[str] = []
+    for path in elf_files:
         old = _patchelf(patchelf, "--print-rpath", str(path))
         needed = _patchelf(patchelf, "--print-needed", str(path)).split()
         local_names = {p.name for p in path.parent.iterdir()}
         elf_rel_dir = path.parent.relative_to(root).as_posix()
+        relpath = path.relative_to(root).as_posix()
+        for name, entry in find_unplaced_libraries(
+            old, needed, bundled_names, runtime_index, system_names
+        ):
+            errors.append(f"  {relpath}: {name} (resolved from {entry})")
         new = compute_runpath(elf_rel_dir, old, needed, local_names, runtime_index)
-        if new == old:
-            continue
+        if new != old:
+            planned.append((path, old, new))
+    if errors:
+        raise RuntimeError(
+            "These libraries resolved only through absolute RUNPATH entries that "
+            "the rewrite drops, and are not in the wheel, the ROCm runtime packages "
+            f"({', '.join(RUNTIME_PACKAGES)}), or the system loader cache:\n"
+            + "\n".join(errors)
+        )
+    changes: list[RunpathChange] = []
+    for path, old, new in planned:
         if new:
             _patchelf(patchelf, "--set-rpath", new, str(path))
         else:
