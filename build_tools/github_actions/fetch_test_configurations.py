@@ -151,8 +151,8 @@ _APPTAINER_UNSUPPORTED_OPTIONS = [
 _APPTAINER_WHOLE_NODE_LABELS = {
     "test-linux-gfx950-1gpu-crusoe-rocm": "test-linux-gfx950-8gpu-crusoe-rocm",
 }
-# The debugger and profiler tests read every GPU's KFD topology in /sys.
-_APPTAINER_WHOLE_NODE_JOBS = ["rocgdb-gpu", "rocprofiler-sdk"]
+# The profiler tests read every GPU's KFD topology in /sys.
+_APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 
 
 def _build_container_options(
