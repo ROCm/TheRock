@@ -12,6 +12,7 @@ or tighten these; they never relax a MUST.
 - [Test-substance smell scan](#test-substance-smell-scan-a-hit-is-a-prompt-to-inspect-not-a-verdict) and [agent anti-patterns](#agent--ai-generated-change-anti-patterns-a-hit-warrants-a-closer-read)
 - [PR-hygiene checklist](#pr-hygiene-checklist-author--reviewer) and [self-evident changes](#self-evident-changes-reduced-justification-exemptions)
 - [Finding tiers](#finding-tiers-individual-findings), [overall assessment](#overall-assessment-pr-level), [risk levels](#risk-levels-15)
+- [CI labels (quality policy)](#ci-labels-quality-policy): [review severities](#review-severities), [pre-merge bypass check](#pre-merge-was-ci-bypassed-since-review)
 - [Waiver codes](#waiver-codes)
 - [PR description template](#pr-description-template) and [two-PR known-bug flow](#two-pr-known-bug-flow-satisfies-m1-without-a-same-pr-fix)
 - [Worked review output](#worked-review-output-hypothetical-fixture) (evaluation fixtures: [`evals.md`](evals.md))
@@ -314,6 +315,62 @@ touches.
 
 ______________________________________________________________________
 
+## CI labels (quality policy)
+
+The [`pr-ci-labels`](../pr-ci-labels/SKILL.md) skill chooses and checks CI labels: where the label
+list lives, the narrowing and widening rules, and how to tell which labels a run used and whether
+it built or tested anything. This section is the quality bar the three actions apply to its
+results.
+
+**Acceptable choices.** The smallest label set that still covers everything the diff can reach,
+plus the GPU families it needs. Labels never satisfy M2, and narrowing CI so a red run turns green
+violates M3. A narrowed PR moves risk to its author: if a break reaches the base branch, a
+downstream project, or a downstream submodule bump, the author owns the revert (revert first, then
+fix). That is a fair trade, because the author understands the change better than any automated
+selection.
+
+**Record the choice.** The Testing Summary lists the labels, each with a one-line reason, and what
+default CI would have run that they drop; or "default CI"; or "no CI labels needed" when CI skips
+every changed path. A reviewer can then check the reasoning, not just the label names.
+
+### Review severities
+
+Grade what `pr-ci-labels` reports against what the diff can reach. Choosing too much CI is never
+blocking.
+
+| Situation                                                                                                                                                                                                                                                                                                               | Severity     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| A narrowing label drops coverage the diff can reach (for example `ci:no-downstream-test` on library or code-generation changes, `ci:skip` on code, `ci:platform:*` on code built on both platforms, `ci:cpu-test-only` on code that runs on a GPU), or drops a lane the component's `TESTING.md` says gates this change | `BLOCKING`   |
+| A change specific to one GPU family with no label adding that family and no other evidence it was tested there                                                                                                                                                                                                          | `IMPORTANT`  |
+| Narrowing labels with no recorded reason                                                                                                                                                                                                                                                                                | `IMPORTANT`  |
+| The labels changed after the last run, so no run used the current set                                                                                                                                                                                                                                                   | `IMPORTANT`  |
+| More CI than the diff needs (for example `ci:run-all-archs` on a host-only change, or no `ci:no-downstream-test` on a clients-only change)                                                                                                                                                                              | `SUGGESTION` |
+
+A `SUGGESTION` to reduce CI names the labels to add or drop and what they would save, so the author
+can act on it in the next PR.
+
+### Pre-merge: was CI bypassed since review?
+
+A PR can pass review with a good label set and still reach the merge button on a run that skipped
+what mattered. Run `skills/pr-ci-labels/tools/ci_labels.py --pr <url>` and apply:
+
+1. Find the last CI run that passed, actually built or tested (not a `ci:skip` or auto-skipped
+   run), and used a label set that is safe for the diff it tested (the set the review accepted, or
+   one that meets the bar above now).
+1. List the commits pushed after that run's head commit, and the label changes after it started.
+1. **Go** when the PR's head is that run's commit, or when every later commit touches only paths CI
+   skips on its own, or paths that the later, narrower labels cover safely. For example, a good run,
+   then a docs-only commit with `ci:skip` added, is fine.
+1. **Caution** when later commits change code and ran only under narrower labels that the review
+   did not see, or when the report flags the labels it relies on as uncertain. Check before merging.
+1. **Hold** when code changed after a narrowing label (such as `ci:skip`) and no tested run with a
+   safe label set covers it. Recommend removing the label and re-running CI.
+
+The report's own go, caution, or hold verdict is mechanical; this procedure adds the judgment of
+whether the label set was safe for the diff.
+
+______________________________________________________________________
+
 ## Waiver codes
 
 Base set (overlays may add component-specific codes and may tighten who can approve them):
@@ -361,6 +418,8 @@ only for docs/comments/skill-only changes with no device impact.>
 ## Testing Summary
 
 - <Testing category and what it covers.>
+- CI labels: <each label with a one-line reason, and what default CI would have run that they
+  drop; or "default CI"; or "no CI labels needed: CI skips these paths".>
 
 ## Testing Checklist
 

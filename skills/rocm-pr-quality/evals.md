@@ -77,3 +77,45 @@ ______________________________________________________________________
 - The review does not claim CI is green or that the test was seen to fail. A request to re-run CI or link a current run is an `IMPORTANT` finding.
 
 **Must not.** State that the test passes or fails without evidence. Omit the limits note.
+
+______________________________________________________________________
+
+## Case 6: review, unsafe CI-label narrowing on a code-generation change
+
+**Input.** Review of a rocm-libraries PR "[AIHPBLAS-1234] Reorder wait insertion in the gfx1250 scheduler". Files: `shared/stinkytofu/src/passes/WaitInsertion.cpp` (+40/-12) and its unit test. Labels: `ci:no-downstream-test`, `ci:platform:linux`. The description gives no reason for either label. The passing run used both labels. Tracker present, tests present. (StinkyTofu is linked into TensileLite's kernel generation for hipBLASLt and is built on Linux and Windows.)
+
+**Expected.**
+
+- Overall assessment `CHANGES REQUESTED`.
+- `BLOCKING`: `ci:no-downstream-test` drops coverage the change can reach (code generation changes the kernels hipBLASLt ships, which rocBLAS and MIOpen consume).
+- `BLOCKING` or `IMPORTANT` for `ci:platform:linux`: the code is compiled on Windows too.
+- The review names the labels to remove and asks for a re-run.
+
+**Must not.** Accept the labels because CI is green. Treat unsafe narrowing as a `SUGGESTION`.
+
+______________________________________________________________________
+
+## Case 7: review, more CI than the change needs
+
+**Input.** Review of a TheRock PR "[ROCM-5678] Fix a typo in an error message in `build_tools/fetch_sources.py`" with a unit test update. Labels: `ci:run-all-archs`, `test_filter:comprehensive`. CI green. Tracker present.
+
+**Expected.**
+
+- Overall assessment `APPROVED`.
+- A `SUGGESTION` that the labels run far more than the change can reach, naming the labels to drop.
+
+**Must not.** Mark the extra CI `BLOCKING` or `IMPORTANT`. Withhold approval because of it.
+
+______________________________________________________________________
+
+## Case 8: pre-merge, CI not bypassed since review
+
+**Input.** Pre-merge gate on an approved rocm-libraries PR. The review accepted the label set `ci:no-downstream-test` for a clients-only change, and `TheRock Multi-Arch CI` passed on commit `a1` with that set, building and testing hipBLASLt. After approval, the author pushed commit `b2`, which changes only `projects/hipblaslt/clients/README.md`, and added `ci:skip`. The `ci:skip` run on `b2` concluded `success` without building or testing. Timing and stale-base checks are clean.
+
+**Expected.**
+
+- Verdict go: the only change since the last tested pass is a CI-skippable docs file, so `ci:skip` bypassed nothing.
+
+**Variant.** Same, but `b2` also changes `projects/hipblaslt/clients/common/include/testing_matmul.hpp`. **Expected:** verdict hold. Code changed after `ci:skip` was added, and the `b2` run's `success` built and tested nothing; recommend removing `ci:skip` and re-running CI.
+
+**Must not.** Call the first case a hold because `ci:skip` is present. Treat the `ci:skip` run's `success` as coverage in the variant.
