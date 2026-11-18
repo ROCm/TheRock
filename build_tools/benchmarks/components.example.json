@@ -1,0 +1,6 @@
+[
+  {"name": "amd-llvm",  "source_dir": "compiler/amd-llvm",        "source_file": "README.md"},
+  {"name": "hip",       "source_dir": "core/clr",                "source_file": "README.md"},
+  {"name": "rocblas",   "source_dir": "math-libs/BLAS/rocblas",  "source_file": "README.md"},
+  {"name": "rocfft",    "source_dir": "math-libs/rocFFT",        "source_file": "README.md"}
+]
