@@ -107,12 +107,6 @@ on:
           set it manually.
         type: string
         default: ""
-  # Validates the pipeline itself whenever it changes, with literal defaults
-  # standing in for what a future caller would pass — pull_request has no `inputs` context,
-  # so every `inputs.x` below is null here and falls back to these defaults.
-  pull_request:
-    paths:
-      - ".github/workflows/test_multi_arch_linux_xla.yml"
 
 permissions:
   contents: read
@@ -152,10 +146,10 @@ jobs:
     env:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
-      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family || 'gfx950-dcgpu' }}
+      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
-      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       # Negative gtest filter, colon-separated:
       #   StreamExecutorGpuClientTest.NumaNode — Numa test doesn't work on DO nodes, rbe
@@ -195,7 +189,7 @@ jobs:
         with:
           persist-credentials: false
           repository: ${{ inputs.therock_repo || github.repository }}
-          ref: ${{ inputs.therock_ref || '' }}
+          ref: ${{ inputs.therock_ref }}
 
       - name: Checkout XLA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -203,7 +197,7 @@ jobs:
         with:
           persist-credentials: false
           path: xla
-          repository: ${{ inputs.xla_repository || 'ROCm/xla' }}
+          repository: ${{ inputs.xla_repository }}
           ref: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
 
       # The device serial numbers it prints identify a recurring bad device

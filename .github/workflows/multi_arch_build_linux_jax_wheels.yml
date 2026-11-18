@@ -418,8 +418,7 @@ jobs:
       ${{
         !cancelled() &&
         inputs.trigger_xla_tests &&
-        needs.configure_jax_tests.outputs.enabled == 'true' &&
-        contains(inputs.test_amdgpu_family, 'gfx950')
+        needs.configure_jax_tests.outputs.enabled == 'true'
       }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
@@ -427,7 +426,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.single_gpu_matrix) }}
     with:
-      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      test_amdgpu_family: 'gfx950-dcgpu'
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       therock_repo: ${{ inputs.repository || github.repository }}

@@ -29,7 +29,7 @@ on:
       rocm_package_index_url:
         description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
-        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+        default: ""
       release_type:
         description: "Release type"
         type: string
@@ -140,7 +140,7 @@ on:
       rocm_package_index_url:
         description: "URL for pip --index-url to install ROCm packages for testing."
         type: string
-        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+        default: ""
       release_type:
         description: 'Release type; developer-triggered jobs should use "dev".'
         type: choice
