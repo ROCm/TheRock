@@ -231,6 +231,7 @@ jobs:
             --index-url="${ROCM_PACKAGE_INDEX_URL}" \
             --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
+          pip show rocm-sdk-device-gfx950 >/dev/null || {echo "::error::This rocm build doesn't have gfx950 package;exit1;}
 
       - name: Resolve ROCM_PATH from installed wheels
         run: |
