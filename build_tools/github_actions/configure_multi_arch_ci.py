@@ -88,6 +88,7 @@ from configure_ci_path_filters import (
 from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
+from fetch_test_configurations import compute_test_configurations
 from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
@@ -332,6 +333,10 @@ class CIInputs:
     baseline_repository: str = ""
     # Changed projects from external repos (e.g., "projects/rocprim,projects/hipcub")
     changed_projects: list[str] = field(default_factory=list)
+    # Test components reachable from changed_projects, as computed by
+    # test_tools/determine_rocm_test_dependencies.py in the setup workflow.
+    # "*" (the default) selects every component.
+    projects_to_test: str = "*"
 
     # External repo JSON (e.g., '{"repository":"ROCm/rocm-libraries","ref":"..."}')
     # Non-empty when an external repo calls TheRock workflows
@@ -542,6 +547,7 @@ class CIInputs:
             baseline_repository=os.environ.get("BASELINE_REPOSITORY")
             or os.environ.get("THEROCK_REPOSITORY", ""),
             changed_projects=_parse_comma_list(os.environ.get("CHANGED_PROJECTS", "")),
+            projects_to_test=os.environ.get("PROJECTS_TO_TEST") or "*",
             external_repo=os.environ.get("EXTERNAL_REPO", ""),
         )
         inputs.validate()
@@ -922,6 +928,10 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Precomputed test matrices, keyed by "<platform>" -> "<family>" -> config,
+    # so test_artifacts.yml does not need its own configure job. Emitted as one
+    # output per platform to keep them out of the build config payload.
+    test_configs: dict[str, dict[str, dict]] = field(default_factory=dict)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -2405,6 +2415,89 @@ def expand_build_configs(
 
 
 # ---------------------------------------------------------------------------
+# Step 5c: Precompute Test Configurations
+# ---------------------------------------------------------------------------
+#
+# The per-family metadata produced above is everything fetch_test_configurations
+# needs, so the test matrix is resolved here instead of in a configure job per
+# family inside test_artifacts.yml. The heavy lifting stays in
+# fetch_test_configurations.compute_test_configurations; this is only the glue
+# that maps family_info fields onto its parameters.
+
+
+def _test_config_for_family(
+    family_info: dict,
+    *,
+    platform: str,
+    build_config: BuildConfig,
+    projects_to_test: str,
+    default_test_type: str,
+    default_test_labels: list[str],
+) -> dict:
+    """Resolve the test matrix for a single family on a single platform."""
+    # Per-family overrides win over the platform-wide defaults, matching the
+    # precedence test_artifacts.yml used when it passed these as inputs.
+    family_labels = family_info.get("test_labels_for_family")
+    return compute_test_configurations(
+        platform=platform,
+        amdgpu_families=family_info["amdgpu_family"],
+        amdgpu_targets=_parse_comma_list(family_info.get("amdgpu_targets", "")),
+        test_type=family_info.get("test_type") or default_test_type,
+        test_labels=list(family_labels) if family_labels else list(default_test_labels),
+        projects_to_test=projects_to_test,
+        skip_stages=list(build_config.skip_stages),
+        build_variant=build_config.build_variant_label,
+        # "" means GPU tests are gated for this family; None would instead fall
+        # back to the static family matrix, so pass the value through as-is.
+        test_runs_on=family_info.get("test-runs-on"),
+        test_runs_on_cpu=family_info.get("test-runs-on-cpu"),
+    )
+
+
+def build_test_configs(
+    builds: BuildConfigs,
+    ci_inputs: CIInputs,
+    jobs: JobDecisions,
+) -> dict[str, dict[str, dict]]:
+    """Precompute every per-family test matrix, keyed by platform then family.
+
+    WSL reuses the Linux build but runs on a WSL-hosted runner, so it gets its
+    own platform key rather than overwriting the Linux entry for that family.
+    """
+    if jobs.test_rocm.action != JobAction.RUN:
+        return {}
+
+    default_test_type = jobs.test_rocm.test_type
+    configs: dict[str, dict[str, dict]] = {}
+    for platform, build_config, labels in (
+        ("linux", builds.linux, ci_inputs.linux_test_labels),
+        ("windows", builds.windows, ci_inputs.windows_test_labels),
+    ):
+        if build_config is None:
+            continue
+        for key, families in (
+            (platform, build_config.per_family_info),
+            ("wsl", build_config.wsl_per_family_info),
+        ):
+            for family_info in families:
+                # Every family in per_family_info gets an entry, even when its
+                # runners are gated, so the workflows can look up a family
+                # unconditionally. A gated family simply resolves to no
+                # components.
+                configs.setdefault(key, {})[family_info["amdgpu_family"]] = (
+                    _test_config_for_family(
+                        family_info,
+                        platform=key,
+                        build_config=build_config,
+                        projects_to_test=ci_inputs.projects_to_test,
+                        default_test_type=default_test_type,
+                        default_test_labels=labels,
+                    )
+                )
+    return configs
+
+
+# ---------------------------------------------------------------------------
 # Step 6: Format and Write Outputs
 # ---------------------------------------------------------------------------
 
@@ -2428,6 +2521,11 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        # One output per platform so a large matrix does not have to fit in a
+        # single value alongside the build configs.
+        "linux_test_configs": json.dumps(outputs.test_configs.get("linux", {})),
+        "windows_test_configs": json.dumps(outputs.test_configs.get("windows", {})),
+        "wsl_test_configs": json.dumps(outputs.test_configs.get("wsl", {})),
     }
     gha_set_output(output_vars)
 
@@ -2488,12 +2586,21 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    print("\n=== Precomputing test configurations ===")
+    test_configs = build_test_configs(builds=builds, ci_inputs=ci_inputs, jobs=jobs)
+    for platform, families in sorted(test_configs.items()):
+        for family, config in sorted(families.items()):
+            print(f"  {platform}/{family}: {len(config['components'])} component(s)")
+    if not test_configs:
+        print("  none (test-rocm is not running)")
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        test_configs=test_configs,
     )
 
 

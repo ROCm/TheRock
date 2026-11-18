@@ -161,6 +161,14 @@ on:
         description: "Build variant (e.g., release, asan)."
         type: string
         default: "release"
+      test_config:
+        description: >-
+          Precomputed test matrix for this family, as JSON with
+          "sanity_component", "components" and "platform" keys. Produced by
+          configure_multi_arch_ci.py during CI setup. When empty, this workflow
+          computes the matrix itself via the configure_test_matrix job.
+        type: string
+        default: ""
       quartz_tracking_id:
         type: string
         default: ""
@@ -174,15 +182,16 @@ permissions:
 run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 
 jobs:
+  # Fallback matrix configuration. Multi-Arch CI precomputes the matrix in
+  # configure_multi_arch_ci.py and passes it as inputs.test_config, which skips
+  # this job. It still runs for manual dispatch and for the release and
+  # compiler-bump workflows, which dispatch this workflow with scalar inputs.
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }}${{ contains(inputs.test_runs_on, 'wsl') && ', WSL' || '' }})"
-    if: ${{ inputs.tests_enabled }}
+    if: ${{ inputs.tests_enabled && inputs.test_config == '' }}
     runs-on: ubuntu-26.04
     outputs:
-      sanity_component: ${{ steps.configure.outputs.sanity_component }}
-      components: ${{ steps.configure.outputs.components }}
-      platform: ${{ steps.configure.outputs.platform }}
-      shard_arr: ${{ steps.configure.outputs.shard_arr }}
+      test_config: ${{ steps.configure.outputs.test_config }}
     steps:
       - name: "Quartz - started - test ROCm artifacts"
         continue-on-error: true
@@ -254,7 +263,14 @@ jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
-    if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
+    # The test config comes from the caller when Multi-Arch CI precomputed it,
+    # otherwise from the fallback job above. The literal keeps fromJSON valid
+    # when tests are disabled and neither source is populated.
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config || '{"sanity_component":{"test_runner":""}}').sanity_component.test_runner != ''
+      }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -264,9 +280,9 @@ jobs:
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # For workflow_dispatch, honor the explicit test_runs_on input if provided.
       # Otherwise, use the runner selected by fetch_test_configurations.py.
-      test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
-      platform: ${{ needs.configure_test_matrix.outputs.platform }}
-      component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
+      test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config).sanity_component.test_runner }}
+      platform: ${{ fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config).platform }}
+      component: ${{ toJSON(fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config).sanity_component) }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -284,14 +300,13 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
-        needs.configure_test_matrix.outputs.components != '' &&
-        needs.configure_test_matrix.outputs.components != '[]' &&
-        !inputs.sanity_check_only_for_family
+        !inputs.sanity_check_only_for_family &&
+        join(fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config || '{"components":[]}').components.*.job_name, '') != ''
       }}
     strategy:
       fail-fast: false
       matrix:
-        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
+        components: ${{ fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config || '{"components":[]}').components }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -315,7 +330,7 @@ jobs:
             matrix.components.multi_gpu_runner) ||
           matrix.components.test_runner
         }}
-      platform: ${{ needs.configure_test_matrix.outputs.platform }}
+      platform: ${{ fromJSON(inputs.test_config || needs.configure_test_matrix.outputs.test_config).platform }}
       component: ${{ toJSON(matrix.components) }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}

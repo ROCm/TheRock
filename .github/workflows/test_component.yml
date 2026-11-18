@@ -4,6 +4,78 @@
 name: Test component
 
 on:
+  # Manual entry point for testing a single component. The component config is
+  # resolved by the 'resolve' job below, since container/runner/shard settings
+  # are needed before any step in test_component runs.
+  workflow_dispatch:
+    inputs:
+      component_name:
+        description: >-
+          Test matrix key to run, e.g. "rocblas", "hip-tests" or "sanity".
+          See build_tools/github_actions/fetch_test_configurations.py.
+        type: string
+        required: true
+      artifact_run_id:
+        description: Workflow run ID to fetch build artifacts from.
+        type: string
+        required: true
+      amdgpu_families:
+        description: GPU family to test (e.g. "gfx94X-dcgpu").
+        type: string
+        required: true
+      amdgpu_targets:
+        description: Specific GPU targets. Leave empty for the family default.
+        type: string
+        default: ""
+      test_runs_on:
+        description: >-
+          Runner label override. Leave empty to use the runner that
+          fetch_test_configurations.py selects for the component.
+        type: string
+        default: ""
+      platform:
+        description: Platform to resolve the component config for.
+        type: choice
+        options:
+          - linux
+          - windows
+          - wsl
+        default: linux
+      test_type:
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: standard
+      changed_projects:
+        description: >-
+          Comma-separated changed projects for dependency scoping. Leave empty
+          to ignore the consumer graph.
+        type: string
+        default: ""
+      build_variant:
+        type: choice
+        options:
+          - release
+          - asan
+          - asan-debug
+          - host-asan
+          - host-asan-debug
+        default: release
+      release_type:
+        type: choice
+        options:
+          - ci
+          - dev
+        default: ci
+      default_container_image:
+        description: >-
+          Keep in sync with the workflow_call default below. Duplicated because
+          workflow_call defaults do not apply to workflow_dispatch runs.
+        type: string
+        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39"
   workflow_call:
     inputs:
       artifact_run_id:
@@ -47,14 +119,81 @@ permissions:
   contents: read
 
 jobs:
+  # Only runs for workflow_dispatch. Callers using workflow_call already pass a
+  # resolved 'component', so this job is skipped and test_component falls back
+  # to the input. It cannot be a step of test_component: the container image,
+  # runner and shard matrix are evaluated before any step runs.
+  resolve:
+    name: "Resolve ${{ inputs.component_name }}"
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-26.04
+    outputs:
+      component: ${{ steps.configure.outputs.component }}
+      test_runs_on: ${{ steps.configure.outputs.test_runs_on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Checkout CI config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ROCm/therock-ci-config
+          ref: main
+          path: ci-config
+        continue-on-error: true
+
+      - name: Setting up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: 3.12
+
+      - name: Determine test dependencies
+        id: test_deps
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./test_tools/determine_rocm_test_dependencies.py \
+            --changed-projects "$CHANGED_PROJECTS" \
+            --gha-output
+
+      - name: Configure test matrix
+        id: configure
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          # Select just the requested component.
+          TEST_LABELS: "test:${{ inputs.component_name }}"
+          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+          CI_CONFIG_PATH: ci-config
+          COMPONENT_NAME: ${{ inputs.component_name }}
+          RESOLVE_PLATFORM: ${{ inputs.platform }}
+        run: |
+          python ./build_tools/github_actions/fetch_test_configurations.py \
+            --platform="${RESOLVE_PLATFORM}" \
+            --component="${COMPONENT_NAME}"
+
   test_component:
     name: >-
-      Test ${{ fromJSON(inputs.component).job_name }}
-      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+      Test ${{ fromJSON(inputs.component || needs.resolve.outputs.component).job_name }}
+      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component || needs.resolve.outputs.component).total_shards }})
       (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
-    runs-on: ${{ inputs.test_runs_on }}
-    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
+      ${{ fromJSON(inputs.component || needs.resolve.outputs.component).expect_failure == true && '(xfail)' || '' }}
+    needs: resolve
+    # 'resolve' is skipped on the workflow_call path, so this must not inherit
+    # the skip.
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ${{ inputs.test_runs_on || needs.resolve.outputs.test_runs_on }}
+    continue-on-error: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).expect_failure == true }}
     timeout-minutes: 210
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
@@ -64,19 +203,19 @@ jobs:
       # Callers must supply digest-pinned images; fetch_test_configurations.py pins overrides.
       image: >- # zizmor: ignore[unpinned-images]
         ${{ inputs.platform != 'windows' &&
-            (fromJSON(inputs.component).container_image || inputs.default_container_image)
+            (fromJSON(inputs.component || needs.resolve.outputs.component).container_image || inputs.default_container_image)
             || null
         }}
       # Container options are configured in build_tools/github_actions/fetch_test_configurations.py
       # and include base options (ipc, user, ulimit, seccomp), GPU options (devices, groups),
       # and any job-specific options
-      options: ${{ fromJSON(inputs.component).container_options }}
+      options: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:
         # The shard array is based on "total_shards" from "fetch_test_configurations.py"
         # The test executable will shard based on the array. (ex: [1, 2, 3, 4] = four test shards)
-        shard: ${{ fromJSON(inputs.component).shard_arr }}
+        shard: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).shard_arr }}
     defaults:
       run:
         shell: bash
@@ -143,7 +282,7 @@ jobs:
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).fetch_artifact_args }}
           RELEASE_TYPE: ${{ inputs.release_type }}
 
       # safe.directory must be set before Runner Health Status
@@ -169,7 +308,7 @@ jobs:
               --artifacts-dir "${{ env.OUTPUT_ARTIFACTS_DIR }}"
 
       - name: Driver / GPU sanity check
-        if: ${{ !fromJSON(inputs.component).linux_cpu_runner }}
+        if: ${{ !fromJSON(inputs.component || needs.resolve.outputs.component).linux_cpu_runner }}
         timeout-minutes: 3
         env:
           # Preload ASAN runtime so Python can load ASAN-instrumented libraries
@@ -186,7 +325,7 @@ jobs:
 
       - name: Setup Additional Requirements
         env:
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component || needs.resolve.outputs.component).additional_requirements_files, ',') }}
         run: |
           python ./build_tools/install_additional_requirements.py \
             --requirements-files "${REQUIREMENTS_FILES}"
@@ -207,12 +346,12 @@ jobs:
 
       - name: Test
         id: test
-        timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
+        timeout-minutes: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
-          TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
+          TOTAL_SHARDS: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).total_shards }}
+          TEST_TYPE: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).test_type }}
+          TEST_COMPONENT: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).job_name }}
           # General CI debug mode. runner.debug == '1' when a job is re-run with
           # GitHub's "Enable debug logging" checkbox. Used to force turning debug
           # options on.
@@ -221,38 +360,38 @@ jobs:
           # Most components enable it (default "1"); a few opt out via their
           # test_matrix "rocm_kpack_debug": "0" to keep -V ctest logs readable.
           # test_runner.py forces this on when THEROCK_CI_DEBUG is set.
-          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component).rocm_kpack_debug || '1' }}
+          ROCM_KPACK_DEBUG: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).rocm_kpack_debug || '1' }}
           # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
           # leave it empty. #3587
           # An empty GPU_ENABLE_PAL is misread as ROCr on Windows (atoi("")==0),
           # whose Windows memory path OOMs some tests (e.g. rocsparse bsr*0 graph_test).
           # Default unset components to the platform backend, mirroring the runtime fix
           # in ROCm/rocm-systems#8050 (Windows -> PAL, Linux -> ROCr).
-          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).gpu_enable_pal || (inputs.platform == 'windows' && '1' || '0') }}
           RETRY_THIS_STEP: "true"
           RETRY_COUNT: "1"
           RETRY_DELAY: "7"
-          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component).timeout_minutes }}
+          STEP_TIMEOUT_MINUTES: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).timeout_minutes }}
           STEP_NAME: >-
-            Test ${{ fromJSON(inputs.component).job_name }}
-            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+            Test ${{ fromJSON(inputs.component || needs.resolve.outputs.component).job_name }}
+            (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component || needs.resolve.outputs.component).total_shards }})
             (${{ inputs.amdgpu_families }}${{ inputs.platform == 'wsl' && ', WSL' || '' }})
-            ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
+            ${{ fromJSON(inputs.component || needs.resolve.outputs.component).expect_failure == true && '(xfail)' || '' }}
         # This input is intentionally a shell program from fetch_test_configurations.py,
         # including command chains and per-command environment assignments. Callers
         # must be trusted to select code, just as they select repository/ref above.
         run: | # zizmor: ignore[template-injection]
-          ${{ fromJSON(inputs.component).test_script }}
+          ${{ fromJSON(inputs.component || needs.resolve.outputs.component).test_script }}
 
       - name: Print test reproduction command
         if: ${{ failure() && steps.test.outcome == 'failure' }}
         env:
           MATRIX_SHARD: ${{ matrix.shard }}
-          COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
-          COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
-          COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          COMPONENT_TEST_SCRIPT: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).test_script }}
+          COMPONENT_TOTAL_SHARDS: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).total_shards }}
+          COMPONENT_TEST_TYPE: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).test_type }}
+          REQUIREMENTS_FILES: ${{ join(fromJSON(inputs.component || needs.resolve.outputs.component).additional_requirements_files, ',') }}
+          COMPONENT_FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component || needs.resolve.outputs.component).fetch_artifact_args }}
         run: |
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${ARTIFACT_RUN_ID}" \

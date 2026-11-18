@@ -145,6 +145,19 @@ on:
       windows_test_labels:
         description: ROCm projects to run Windows tests on. Optional filter.
         value: ${{ jobs.setup.outputs.windows_test_labels }}
+      linux_test_configs:
+        description: >-
+          Precomputed Linux test matrices, as a JSON object keyed by GPU family.
+          Passed to test_artifacts.yml so it does not need its own configure job.
+        value: ${{ jobs.setup.outputs.linux_test_configs }}
+      windows_test_configs:
+        description: Precomputed Windows test matrices, keyed by GPU family.
+        value: ${{ jobs.setup.outputs.windows_test_configs }}
+      wsl_test_configs:
+        description: >-
+          Precomputed test matrices for the Linux build running on WSL runners,
+          keyed by GPU family.
+        value: ${{ jobs.setup.outputs.wsl_test_configs }}
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
@@ -181,6 +194,9 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      linux_test_configs: ${{ steps.configure.outputs.linux_test_configs }}
+      windows_test_configs: ${{ steps.configure.outputs.windows_test_configs }}
+      wsl_test_configs: ${{ steps.configure.outputs.wsl_test_configs }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
@@ -265,6 +281,18 @@ jobs:
             --override-git-sha="${CHECKOUT_COMMIT}" \
             --build-variant="${BUILD_VARIANT}"
 
+      - name: Determine test dependencies
+        id: test_deps
+        # Reads the committed consumer graph directly (no fetch/configure); kept
+        # in sync by test_consumer_graph_drift.yml. Resolved once here and
+        # reused for every family's test matrix below.
+        env:
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+        run: |
+          python ./test_tools/determine_rocm_test_dependencies.py \
+            --changed-projects "$CHANGED_PROJECTS" \
+            --gha-output
+
       # Note: the script reads PR labels, the base ref, etc. from the event
       # payload (GITHUB_EVENT_PATH). That is the original event that started
       # the workflow run, which may not directly map to the "inputs" on
@@ -308,6 +336,9 @@ jobs:
           EXTERNAL_FAMILY_OVERRIDES: ${{ inputs.external_repo != '' && toJSON(fromJSON(inputs.external_repo).family_overrides) || '' }}
           # Changed projects from external repos for granular artifact-level reuse
           CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          # Test components reachable from CHANGED_PROJECTS, used to scope the
+          # precomputed per-family test matrices.
+          PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
         run: python ./build_tools/github_actions/configure_multi_arch_ci.py
 
       - name: Detect external repo config

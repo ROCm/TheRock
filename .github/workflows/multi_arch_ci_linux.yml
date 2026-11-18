@@ -19,6 +19,17 @@ on:
           prebuilt_stages, baseline_run_id.
       test_labels:
         type: string
+      test_configs:
+        description: >-
+          Precomputed test matrices keyed by GPU family, from
+          configure_multi_arch_ci.py. Passed through to test_artifacts.yml so it
+          can skip its own configure job.
+        type: string
+        default: ""
+      wsl_test_configs:
+        description: Same as test_configs, for the WSL-hosted test runs.
+        type: string
+        default: ""
       rocm_package_version:
         type: string
       rocm_deb_package_version:
@@ -185,6 +196,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}
+      test_config: ${{ inputs.test_configs != '' && toJSON(fromJSON(inputs.test_configs)[matrix.family_info.amdgpu_family]) || '' }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
@@ -216,6 +228,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}
+      test_config: ${{ inputs.wsl_test_configs != '' && toJSON(fromJSON(inputs.wsl_test_configs)[matrix.family_info.amdgpu_family]) || '' }}
       release_type: ${{ inputs.release_type }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}

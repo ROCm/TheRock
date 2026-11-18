@@ -60,6 +60,28 @@ TEST_LABEL_GROUPS: dict[str, list[str]] = {
 }
 
 
+# Keys on a test_matrix entry that only drive the filtering in
+# compute_test_configurations(). Nothing downstream reads them, and they are
+# repeated for every component, so they are dropped before the configs are
+# handed back to the workflows. "platform" is deliberately kept: it is cheap
+# and makes a serialized config self-describing when debugging a run.
+_INTERNAL_ONLY_KEYS = frozenset(
+    {
+        "exclude_family",
+        "include_family",
+        "multi_gpu",
+        "skip_build_variant",
+        "skip_stages",
+        "test_types",
+        "total_shards_dict",
+    }
+)
+
+
+def _strip_internal_keys(component: dict) -> dict:
+    return {k: v for k, v in component.items() if k not in _INTERNAL_ONLY_KEYS}
+
+
 def _parse_test_labels(raw: str) -> list[str]:
     """Parse the TEST_LABELS environment variable into a list of strings.
 
@@ -1382,27 +1404,34 @@ test_matrix = {
 }
 
 
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--platform",
-        type=str,
-        default=platform_module.system().lower(),
-        help=(
-            "Platform to configure tests for: linux, windows, or wsl (the Linux"
-            " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
-        ),
-    )
-    args, _ = parser.parse_known_args()
-    platform = args.platform
-    projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
-    amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
-    test_type = os.getenv("TEST_TYPE", "standard")
-    test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
-    build_variant = os.getenv("BUILD_VARIANT", "release")
-    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
+def compute_test_configurations(
+    *,
+    platform: str,
+    amdgpu_families: str | None = None,
+    amdgpu_targets: list[str] | None = None,
+    test_type: str = "standard",
+    test_labels: list[str] | None = None,
+    projects_to_test: str = "*",
+    skip_stages: list[str] | None = None,
+    build_variant: str = "release",
+    test_runs_on: str | None = None,
+    test_runs_on_cpu: str | None = None,
+) -> dict:
+    """Compute the test configurations for one GPU family on one platform.
+
+    This is the library entry point. configure_multi_arch_ci.py calls it once
+    per family at setup time so the test matrix is precomputed; run() wraps it
+    for the standalone script path used by test_artifacts.yml.
+
+    ``test_runs_on`` distinguishes None (not supplied, so fall back to the
+    static family matrix) from "" (supplied but gated, so GPU tests are
+    suppressed and only CPU-only components run).
+
+    Returns a dict with "sanity_component", "components" and "platform".
+    """
+    amdgpu_targets = amdgpu_targets or []
+    test_labels = test_labels or []
+    skip_stages = skip_stages or []
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
@@ -1418,12 +1447,12 @@ def run():
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
 
-    # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
-    # This carries the policy decision (e.g., trigger gating). When set to empty,
-    # GPU tests are gated but CPU-only tests (linux_cpu_runner: True) can still run.
-    test_runs_on_from_workflow = os.getenv("TEST_RUNS_ON")
-    # CPU runner: prefer workflow input, fall back to get_cpu_test_runner()
-    test_runs_on_cpu = os.getenv("TEST_RUNS_ON_CPU") or get_cpu_test_runner(platform)
+    # The caller's GPU runner carries the policy decision (e.g., trigger gating).
+    # When set to empty, GPU tests are gated but CPU-only tests
+    # (linux_cpu_runner: True) can still run.
+    test_runs_on_from_workflow = test_runs_on
+    # CPU runner: prefer the caller's value, fall back to get_cpu_test_runner()
+    test_runs_on_cpu = test_runs_on_cpu or get_cpu_test_runner(platform)
     gpu_tests_gated = test_runs_on_from_workflow == ""
     if gpu_tests_gated:
         logging.info(
@@ -1779,19 +1808,96 @@ def run():
         for c in components_with_runners
     ]
 
+    all_components = [_strip_internal_keys(c) for c in all_components]
+
     # Separate sanity from the regular component matrix.
     sanity_component = next(
         (c for c in all_components if c.get("job_name") == "sanity"), None
     )
     output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 
-    gha_set_output(
-        {
-            "sanity_component": json.dumps(sanity_component),
-            "components": json.dumps(output_matrix),
-            "platform": platform,
-        }
+    return {
+        "sanity_component": sanity_component,
+        "components": output_matrix,
+        "platform": platform,
+    }
+
+
+def _select_single_component(result: dict, name: str) -> dict:
+    """Pick one component out of a computed matrix, for manual single runs."""
+    candidates = result["components"]
+    if result["sanity_component"]:
+        candidates = candidates + [result["sanity_component"]]
+
+    exact = [c for c in candidates if c.get("job_name") == name]
+    if exact:
+        return exact[0]
+    # A label can expand to a differently named job (e.g. the Windows PAL/ROCr
+    # hip-tests variants), so an unambiguous single match is good enough.
+    if len(candidates) == 1:
+        return candidates[0]
+
+    available = sorted(c.get("job_name", "?") for c in candidates)
+    raise SystemExit(
+        f"Could not resolve component {name!r} to a single job. "
+        f"Selected jobs: {available or '(none)'}. "
+        "Check the component name and that it is enabled for this family, "
+        "platform, test type and build variant."
     )
+
+
+def run():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help=(
+            "Platform to configure tests for: linux, windows, or wsl (the Linux"
+            " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
+        ),
+    )
+    parser.add_argument(
+        "--component",
+        type=str,
+        default="",
+        help=(
+            "Emit a single selected component as the 'component' output, plus"
+            " its runner as 'test_runs_on'. Used by the manual test_component.yml"
+            " dispatch, which needs one config rather than a matrix."
+        ),
+    )
+    args, _ = parser.parse_known_args()
+    result = compute_test_configurations(
+        platform=args.platform,
+        amdgpu_families=os.getenv("AMDGPU_FAMILIES"),
+        # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
+        amdgpu_targets=[t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t],
+        test_type=os.getenv("TEST_TYPE", "standard"),
+        test_labels=_parse_test_labels(os.getenv("TEST_LABELS") or "[]"),
+        projects_to_test=os.getenv("PROJECTS_TO_TEST", "*"),
+        skip_stages=os.getenv("SKIP_STAGES", "").split(","),
+        build_variant=os.getenv("BUILD_VARIANT", "release"),
+        test_runs_on=os.getenv("TEST_RUNS_ON"),
+        test_runs_on_cpu=os.getenv("TEST_RUNS_ON_CPU"),
+    )
+    outputs = {
+        "sanity_component": json.dumps(result["sanity_component"]),
+        "components": json.dumps(result["components"]),
+        "platform": result["platform"],
+        # The whole bundle, in the same shape configure_multi_arch_ci.py
+        # precomputes, so consumers can read either source through a single
+        # expression.
+        "test_config": json.dumps(result),
+    }
+    if args.component:
+        selected = _select_single_component(result, args.component)
+        outputs["component"] = json.dumps(selected)
+        # Multi-GPU components must run on the multi-GPU runner.
+        outputs["test_runs_on"] = selected.get("multi_gpu_runner") or selected.get(
+            "test_runner", ""
+        )
+    gha_set_output(outputs)
 
 
 if __name__ == "__main__":
