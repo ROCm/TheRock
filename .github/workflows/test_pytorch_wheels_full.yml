@@ -395,8 +395,23 @@ jobs:
       # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
       # After killing the process we read the return code to signal it normally.
       # See https://github.com/ROCm/TheRock/issues/999.
+      - name: (Windows) Set up MSVC for cpp_extension
+        if: ${{ runner.os == 'Windows' && inputs.tests_to_include != '' }}
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: (Windows) Run selected PyTorch tests
+        if: ${{ runner.os == 'Windows' && inputs.tests_to_include != '' }}
+        continue-on-error: true
+        working-directory: external-builds/pytorch/pytorch/test
+        run: |
+          # Probe only: run pytest node ids from tests_to_include on Windows.
+          set +e
+          where cl
+          python -m pytest -v -rA -p no:cacheprovider ${TESTS_TO_INCLUDE}
+          echo $? > "${GITHUB_WORKSPACE}/run_pytorch_tests_exit_code.txt"
+
       - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows'}}
+        if: ${{ runner.os == 'Windows' && inputs.tests_to_include == '' }}
         continue-on-error: true
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
