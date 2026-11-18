@@ -8,16 +8,14 @@
 schema_version: 3
 
 streams:
-  # ASAN wheels are published to dev, nightly, and rc only.
+  # Streams that publish core/whl-next-asan and pytorch/whl-next-asan.
   known:
     - dev
     - nightly
-    - rc
   groups:
     all:
       - dev
       - nightly
-      - rc
   default: all
 
 python_indexes:
@@ -58,10 +56,6 @@ python_indexes:
       mpmath:
         owner_path: third-party/whl-next
       networkx:
-        owner_path: third-party/whl-next
-      numpy:
-        owner_path: third-party/whl-next
-      pillow:
         owner_path: third-party/whl-next
       pyelftools:
         owner_path: third-party/whl-next

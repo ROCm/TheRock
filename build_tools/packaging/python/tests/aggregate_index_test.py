@@ -193,7 +193,7 @@ def test_checked_in_asan_manifest_loads() -> None:
     index = manifest.python_indexes[0]
 
     assert index.public_base == "/rocm/whl-next-asan"
-    assert manifest.streams.known == ("dev", "nightly", "rc")
+    assert manifest.streams.known == ("dev", "nightly")
     assert {package.owner_path for package in index.packages.values()} == {
         "core/whl-next-asan",
         "pytorch/whl-next-asan",
