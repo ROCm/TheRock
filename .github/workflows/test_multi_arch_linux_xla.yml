@@ -17,7 +17,7 @@ on:
       rocm_package_index_url:
         description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+        default: ""
       rocm_version:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
@@ -39,7 +39,7 @@ on:
         type: string
         default: "ROCm/xla"
       test_runs_on:
-        description: Runner label to execute tests on
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_target
         type: string
         default: "linux-gfx950-1gpu-ccs-ossci-rocm"
       test_timeout_minutes:
@@ -71,7 +71,7 @@ on:
       rocm_package_index_url:
         description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+        default: ""
       rocm_version:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
         type: string
@@ -93,7 +93,7 @@ on:
         type: string
         default: "ROCm/xla"
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_family
+        description: Runner label to use. The selected runner should have a GPU supported by test_amdgpu_target
         type: string
         default: "linux-gfx950-1gpu-ccs-ossci-rocm"
       test_timeout_minutes:
@@ -113,8 +113,8 @@ permissions:
 
 jobs:
   test_xla:
-    name: Test XLA | ${{ inputs.test_amdgpu_family || 'gfx950-dcgpu' }}
-    runs-on: ${{ inputs.test_runs_on || 'linux-gfx950-1gpu-ccs-ossci-rocm' }}
+    name: Test XLA | ${{ inputs.test_amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
     # fromJSON turns the string input into the number timeout-minutes needs. The
     # fallback covers pull_request, where there is no inputs context at all.
     timeout-minutes: ${{ fromJSON(inputs.test_timeout_minutes || '240') }}
@@ -198,7 +198,7 @@ jobs:
           persist-credentials: false
           path: xla
           repository: ${{ inputs.xla_repository }}
-          ref: ${{ inputs.xla_ref || 'rocm-jaxlib-v0.11.2' }}
+          ref: ${{ inputs.xla_ref }}
 
       # The device serial numbers it prints identify a recurring bad device
       # across runs, since the runner and the device index change every time.
@@ -231,7 +231,10 @@ jobs:
             --index-url="${ROCM_PACKAGE_INDEX_URL}" \
             --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
-          pip show rocm-sdk-device-gfx950 >/dev/null || {echo "::error::This rocm build doesn't have gfx950 package;exit1;}
+
+      - name: Ensure gfx950 arch is installed
+        run: |
+          pip show rocm-sdk-device-gfx950 >/dev/null || $(echo "This rocm build doesn't have gfx950 package" && exit 1)
 
       - name: Resolve ROCM_PATH from installed wheels
         run: |
