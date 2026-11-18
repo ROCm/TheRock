@@ -34,7 +34,12 @@ def _get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
 
 
 def _rccl_test_env() -> dict[str, str]:
-    """Returns the environment for RCCL tests, pinned to a fixed pair of GPUs.
+    """Returns the environment for RCCL tests, inheriting the container's GPU isolation.
+
+    The CI container already exports a matched pair for the GPUs the job was
+    allocated (e.g. ROCR_VISIBLE_DEVICES=6,7 alongside HIP_VISIBLE_DEVICES=0,1,
+    since HIP indexes into the devices ROCr exposes). Both are passed through
+    untouched so the tests stay on the job's own GPUs.
 
     Skips the calling test if fewer than 2 GPUs are visible, since RCCL
     collectives need at least two ranks.
@@ -43,11 +48,14 @@ def _rccl_test_env() -> dict[str, str]:
     gpu_count = _get_visible_gpu_count(
         env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR
     )
-    logging.info(f"Visible GPU count: {gpu_count}")
+    logging.info(
+        f"ROCR_VISIBLE_DEVICES={environ_vars.get('ROCR_VISIBLE_DEVICES', '<unset>')}, "
+        f"HIP_VISIBLE_DEVICES={environ_vars.get('HIP_VISIBLE_DEVICES', '<unset>')}, "
+        f"visible GPU count: {gpu_count}"
+    )
 
     if gpu_count < 2:
         pytest.skip("Skipping RCCL tests: <2 GPUs visible")
-    environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
     return environ_vars
 
 
@@ -85,8 +93,8 @@ class TestRCCL:
     def test_rccl_correctness_tests(self, executable):
         environ_vars = _rccl_test_env()
         # -g sets the number of GPUs per thread. It defaults to 1, which would
-        # make each collective a single-rank no-op, so pass 2 to match the pair
-        # pinned by HIP_VISIBLE_DEVICES.
+        # make each collective a single-rank no-op, so pass 2 for a real
+        # multi-rank run.
         cmd = [f"{THEROCK_BIN_DIR}/{executable}", "-g", "2"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(

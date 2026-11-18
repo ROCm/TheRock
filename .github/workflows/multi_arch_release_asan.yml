@@ -87,6 +87,9 @@ jobs:
     uses: ./.github/workflows/setup_multi_arch.yml
     with:
       build_variant: "asan-debug"
+      # Keep nightly sanitizer runs build-only until a sanitizer test runner
+      # policy is decided.
+      run_rocm_tests: false
       release_type: ${{ inputs.release_type || 'dev' }}
       prerelease_version: ${{ inputs.prerelease_version }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
