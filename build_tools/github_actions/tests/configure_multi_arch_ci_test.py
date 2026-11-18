@@ -2525,16 +2525,32 @@ class TestExpandBuildConfigs(unittest.TestCase):
                 jobs=_jobs(),
             )
 
-        self.assertEqual(len(result.linux.pytorch_build_matrix), 1)
-        self.assertEqual(len(result.windows.pytorch_build_matrix), 1)
-        linux_row = result.linux.pytorch_build_matrix[0]
-        windows_row = result.windows.pytorch_build_matrix[0]
-        self.assertEqual(linux_row["pytorch_git_ref"], "release/fake-ci-linux")
-        self.assertEqual(windows_row["pytorch_git_ref"], "release/fake-ci-windows")
-        self.assertEqual(linux_row["amdgpu_families"], "gfx94X-dcgpu")
-        self.assertEqual(windows_row["amdgpu_families"], "gfx110X-all")
-        self.assertEqual(linux_row["python_version"], "3.12")
-        self.assertEqual(windows_row["python_version"], "3.12")
+        self.assertEqual(
+            result.linux.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/fake-ci-linux",
+                    "amdgpu_families": "gfx94X-dcgpu",
+                    "exclude_implicit_targets": "",
+                    "test_level": "standard",
+                    "test_amdgpu_families": "auto",
+                }
+            ],
+        )
+        self.assertEqual(
+            result.windows.pytorch_build_matrix,
+            [
+                {
+                    "python_version": "3.12",
+                    "pytorch_git_ref": "release/fake-ci-windows",
+                    "amdgpu_families": "gfx110X-all",
+                    "exclude_implicit_targets": "",
+                    "test_level": "standard",
+                    "test_amdgpu_families": "auto",
+                }
+            ],
+        )
 
     def test_build_config_propagates_pytorch_implicit_target_exclusions(self):
         targets = cm.TargetSelection(

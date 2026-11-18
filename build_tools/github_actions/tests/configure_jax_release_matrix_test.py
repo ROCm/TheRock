@@ -6,15 +6,16 @@
 Synthetic release configs exercise generation, Python-version filtering, and
 release-type selection without tying expectations to the changing support
 tables. Separate unmocked tests check that real default build configurations
-resolve their refs and generate nonempty matrices without duplicate rows. BKC
-release types intentionally produce empty matrices and are tested separately.
+resolve their refs, generate nonempty matrices without duplicate rows, and use
+release wheels for CI and prerelease builds. BKC release types intentionally
+produce empty matrices and are tested separately.
 """
 
 import os
 import sys
 import unittest
-from pathlib import Path
 from itertools import product
+from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
@@ -370,11 +371,22 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
 
 
 class ConfiguredJaxReleaseMatrixTest(unittest.TestCase):
+    def test_ci_and_prerelease_only_build_pinned_refs(self):
+        for platform in m.CI_JAX_REFS:
+            refs = [*m.CI_JAX_REFS[platform], *m.RELEASE_STABLE_JAX_REFS[platform]]
+            for ref in refs:
+                with self.subTest(platform=platform, ref=ref):
+                    self.assertEqual(
+                        m.JAX_REF_CONFIGS[ref].get("wheel_type", "release"), "release"
+                    )
+
     def test_current_policy_generates_nonempty_matrices_without_duplicate_rows(self):
         # Keep dangling refs and duplicate entries detectable when the live
         # configuration changes, without maintaining a second release list.
         for platform in m.CI_JAX_REFS:
-            for release_type in ("ci", "dev", "nightly", "prerelease"):
+            for release_type in m.RELEASE_TYPES:
+                if release_type.endswith("-bkc"):
+                    continue
                 with self.subTest(platform=platform, release_type=release_type):
                     matrix = m.generate_jax_matrix_for_release_type(
                         release_type=release_type, platform=platform

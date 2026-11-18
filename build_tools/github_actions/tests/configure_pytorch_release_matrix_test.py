@@ -6,7 +6,8 @@
 Synthetic release refs, GPU families, targets, and Python versions exercise
 generation, filtering, and release-type selection without tying expectations to
 the changing support tables. Separate unmocked tests check that the real default
-configuration generates nonempty matrices without duplicate rows.
+configuration generates nonempty matrices without duplicate rows, references
+known GPU names, and keeps its support and test policies consistent.
 """
 
 import os
@@ -21,6 +22,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import configure_pytorch_release_matrix as m
+from _therock_utils.cmake_amdgpu_targets import amdgpu_family_map
 from workflow_utils import (
     WORKFLOWS_DIR,
     get_matrix_references,
@@ -66,7 +68,8 @@ FAKE_PRIMARY_TEST_PYTHON_VERSIONS = {
     "release/fake-old": "3.11",
     "release/fake-new": "3.12",
     "release/fake-latest": "3.13",
-    "nightly": "3.11",
+    # Distinct from the oldest ref and first Python version to expose fallback bugs.
+    "nightly": "3.13",
 }
 
 
@@ -161,7 +164,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
                     "pytorch_git_ref": "nightly",
                     "amdgpu_families": "fake-family-stable",
                     "exclude_implicit_targets": "",
-                    "test_level": "none",
+                    "test_level": "standard",
                     "test_amdgpu_families": "auto",
                 }
             ],
@@ -219,7 +222,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
             [("release/fake-new", "fake-family-new")],
         )
 
-    def test_family_filtering_matches_exact_names_case_insensitively(self):
+    def test_family_filtering_is_case_insensitive_and_matches_exact_names(self):
         matrix = m.generate_pytorch_matrix_for_release_type(
             release_type="dev",
             python_versions=["3.12"],
@@ -300,7 +303,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
         )
         self.assertEqual(
             [(row["python_version"], row["test_level"]) for row in matrix],
-            [("3.11", "standard"), ("3.12", "none"), ("3.13", "none")],
+            [("3.11", "none"), ("3.12", "none"), ("3.13", "standard")],
         )
 
     def test_ci_keeps_standard_tests_for_non_primary_python_version(self):
@@ -352,7 +355,7 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
         self.assertIn("| Generated rows | 2 (`none`: 2) |", summary)
         self.assertIn("`release/fake-old`: `3.11`", summary)
-        self.assertIn("`nightly`: `3.11`", summary)
+        self.assertIn("`nightly`: `3.13`", summary)
         self.assertIn("All generated rows use `none`", summary)
         self.assertIn(
             "| `3.12` | `release/fake-old` | `fake-family-stable` | `none` |",
@@ -505,6 +508,53 @@ class ConfigurePytorchReleaseMatrixTest(unittest.TestCase):
 
 
 class ConfiguredPytorchReleaseMatrixTest(unittest.TestCase):
+    def test_current_policy_tables_are_consistent(self):
+        for platform, refs in m.RELEASE_PYTORCH_REFS.items():
+            with self.subTest(platform=platform):
+                # Support policies must refer to releases that are built.
+                self.assertLessEqual(
+                    set(m.UNSUPPORTED_AMDGPU_FAMILIES[platform]), set(refs)
+                )
+                self.assertLessEqual(
+                    set(m.EXCLUDED_IMPLICIT_TARGETS[platform]), set(refs)
+                )
+                self.assertLessEqual(set(m.CI_PYTORCH_REFS[platform]), set(refs))
+                self.assertLessEqual(
+                    set(m.RELEASE_STABLE_PYTORCH_REFS[platform]), set(refs)
+                )
+                self.assertNotIn("nightly", m.CI_PYTORCH_REFS[platform])
+                self.assertNotIn("nightly", m.RELEASE_STABLE_PYTORCH_REFS[platform])
+            for ref in refs:
+                with self.subTest(platform=platform, ref=ref):
+                    # Every default ref retains a Python version for GPU tests.
+                    self.assertIn(ref, m.PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS)
+                    self.assertIn(
+                        m.PYTORCH_PRIMARY_TEST_PYTHON_VERSIONS[ref],
+                        m.RELEASE_PYTHON_VERSIONS,
+                    )
+
+    def test_current_policy_exclusions_use_known_gpu_names(self):
+        # Parse the same CMake definitions used for actual family expansion.
+        family_map = amdgpu_family_map()
+        known_families = set(family_map)
+        known_targets = {
+            target for targets in family_map.values() for target in targets
+        }
+        self.assertTrue(known_families)
+        self.assertTrue(known_targets)
+        for platform, refs in m.UNSUPPORTED_AMDGPU_FAMILIES.items():
+            for ref, families in refs.items():
+                with self.subTest(
+                    platform=platform, ref=ref, policy="unsupported_families"
+                ):
+                    self.assertLessEqual(families, known_families)
+        for platform, refs in m.EXCLUDED_IMPLICIT_TARGETS.items():
+            for ref, targets in refs.items():
+                with self.subTest(
+                    platform=platform, ref=ref, policy="excluded_targets"
+                ):
+                    self.assertLessEqual(targets, known_targets)
+
     def test_current_policy_generates_nonempty_matrices_without_duplicate_rows(self):
         # Exercise the real configuration without pinning its entries. Logic
         # and filtering expectations belong to the synthetic scenarios above.
