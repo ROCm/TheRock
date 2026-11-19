@@ -17,6 +17,10 @@ on:
           build_rocm, rocm_package_find_links_url, rocm_package_index_url,
           pytorch_build_matrix,
           prebuilt_stages, baseline_run_id.
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
+        type: boolean
+        default: false
       test_labels:
         type: string
       rocm_package_version:
@@ -50,6 +54,19 @@ permissions:
   contents: read
 
 jobs:
+  windows-driver:
+    name: Windows Driver Artifacts
+    if: ${{ inputs.build_windows_driver }}
+    uses: ./.github/workflows/build_windows_driver.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
     if: >-

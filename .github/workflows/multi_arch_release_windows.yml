@@ -29,6 +29,10 @@ on:
       ref:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
+        type: boolean
+        default: false
       build_pytorch:
         description: "Build PyTorch wheels (defaults to true for workflow_call)"
         type: boolean
@@ -49,6 +53,18 @@ permissions:
   contents: read
 
 jobs:
+  windows-driver:
+    name: Windows Driver Artifacts
+    if: ${{ inputs.build_windows_driver }}
+    uses: ./.github/workflows/build_windows_driver.yml
+    with:
+      dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   notify_quartz_start:
     if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
     name: "Quartz - started - release Windows"
@@ -265,7 +281,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_msi_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels, trigger_test_native_windows_install]
+    needs: [windows-driver, build_artifacts, build_tarballs, build_python_packages, build_native_msi_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_release_pytorch_wheels, trigger_test_native_windows_install]
     name: "Quartz - completed - release Windows"
     runs-on: ubuntu-26.04
     timeout-minutes: 10

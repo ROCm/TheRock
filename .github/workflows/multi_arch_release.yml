@@ -51,6 +51,10 @@ on:
         description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
         type: boolean
         default: false
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
+        type: boolean
+        default: false
       build_pytorch:
         description: "Build PyTorch wheels"
         type: boolean
@@ -98,6 +102,10 @@ on:
         default: "gfx110x"
       run_full_pytorch_tests:
         description: Run full PyTorch tests after scheduled nightly Linux PyTorch wheel builds complete.
+        type: boolean
+        default: false
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
         type: boolean
         default: false
       build_pytorch:
@@ -197,6 +205,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_release_windows.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      build_windows_driver: ${{ inputs.build_windows_driver == true }}
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       rocm_msi_package_version: ${{ needs.setup.outputs.rocm_msi_package_version }}
