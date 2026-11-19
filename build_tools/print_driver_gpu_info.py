@@ -46,6 +46,11 @@ _KFD_VERSION_MAX = (2, 0)  # exclusive
 # TODO(#7659): Re-enable once rocminfo is fixed for gfx125X-dcgpu
 _ROCMINFO_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
 
+# amd-smi does ESMI CPU discovery during init and exits 196 printing nothing when
+# it finds none, which is always the case in a non-root Apptainer container with no
+# access to /dev/hsmp or /dev/cpu/*/msr -- the GPU itself is fine and reachable.
+_AMDSMI_EXCLUDED_FAMILIES = ["gfx125X-dcgpu"]
+
 
 def _get_kfd_version() -> Tuple[int, int]:
     # fcntl is a Unix-only stdlib module and is only needed for this Linux
@@ -144,14 +149,24 @@ def run_sanity(os_name: str) -> int:
         )
     else:
         # Linux: amd-smi static + rocminfo
-        run_command_with_search(
-            label="amd-smi static",
-            command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
-        )
-        # Check if rocminfo should be skipped for this GPU family
         amdgpu_families = os.getenv("AMDGPU_FAMILIES", "")
+        skip_amdsmi = any(
+            family in amdgpu_families for family in _AMDSMI_EXCLUDED_FAMILIES
+        )
+        if skip_amdsmi:
+            log(f"\n=== amd-smi static ===")
+            log(
+                f"Skipping amd-smi: disabled for {amdgpu_families} "
+                f"(excluded families: {_AMDSMI_EXCLUDED_FAMILIES})"
+            )
+        else:
+            run_command_with_search(
+                label="amd-smi static",
+                command="amd-smi",
+                args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
+        # Check if rocminfo should be skipped for this GPU family
         skip_rocminfo = any(
             family in amdgpu_families for family in _ROCMINFO_EXCLUDED_FAMILIES
         )
