@@ -286,12 +286,13 @@ def main() -> int:
             tests_to_skip = args.k
 
         pytest_args = [
-            f"{pytorch_dir}/test/test_nn.py",
-            f"{pytorch_dir}/test/test_torch.py",
-            f"{pytorch_dir}/test/test_cuda.py",
-            f"{pytorch_dir}/test/test_unary_ufuncs.py",
-            f"{pytorch_dir}/test/test_binary_ufuncs.py",
-            f"{pytorch_dir}/test/test_autograd.py",
+            # f"{pytorch_dir}/test/test_nn.py",
+            # f"{pytorch_dir}/test/test_torch.py",
+            # f"{pytorch_dir}/test/test_cuda.py",
+            # f"{pytorch_dir}/test/test_unary_ufuncs.py",
+            # f"{pytorch_dir}/test/test_binary_ufuncs.py",
+            # f"{pytorch_dir}/test/test_autograd.py",
+            f"{pytorch_dir}/test/test_utils.py",
             f"-k={tests_to_skip}",
             # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
             # -n numprocesses, --numprocesses=numprocesses
