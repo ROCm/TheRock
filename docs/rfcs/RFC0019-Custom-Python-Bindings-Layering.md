@@ -18,7 +18,7 @@ This RFC defines where custom Python bindings for ROCm components live, how they
 - **How it ships.** TheRock builds the wheel in a separate job after the SDK wheels, from the same source revision, and publishes it to the SDK's Python index. Each wheel depends on the SDK build it was tested with, relaxed to a patch-compatible range once promoted to stable. Users install the published wheel; source builds are for developers and system ROCm installs.
 - **How it is validated.** TheRock installs the wheel into a fresh environment as a consumer would and checks that it calls the shipped SDK libraries. Each run records the SDK build, package versions, source revisions, and test inputs.
 - **Python versions.** New native extensions use the CPython Stable ABI. Builds per Python minor version are exceptions, agreed before they are added.
-- **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN and TensileLite independently.
+- **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN, rocSHMEM, and TensileLite independently.
 
 ## Background
 
@@ -146,8 +146,8 @@ super-repo revision + patches
 
 ### Build
 
-- Binding wheel jobs consume SDK wheels built from the same super-repo revision, or reused from a prior run whose native inputs are unchanged; reuse records both revisions. A binding job can be rerun without rerunning the native build.
-- There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed, reusing cached native artifacts ([TheRock#7782](https://github.com/ROCm/TheRock/issues/7782), [TheRock#8651](https://github.com/ROCm/TheRock/issues/8651)).
+- Binding wheel jobs use the SDK wheels built in the same run, from native artifacts of the same revision or reused ones whose native inputs are unchanged ([TheRock#7782](https://github.com/ROCm/TheRock/issues/7782), [TheRock#8651](https://github.com/ROCm/TheRock/issues/8651)); reuse records both revisions. A binding job can be rerun without rerunning the native build.
+- There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed.
 - A feature flag ([`flags.md`](../development/flags.md)), off by default, gates the jobs during rollout. Once it is on, super-repo pull request CI runs the binding jobs for changed components, and a failure blocks the merge.
 
 ### Validate
@@ -190,7 +190,7 @@ After the pilot, these proceed independently:
 
 - **hipDNN** moves `projects/hipdnn/python/` to `bindings/python/hipdnn-frontend/` as one project and retires its custom packer.
 - **TensileLite** adopts the packaging and validation rules; its location is an open question.
-- **rocSHMEM** moves `python/rocshmem/` to `bindings/python/`, and its TheRock packaging ([TheRock#5638](https://github.com/ROCm/TheRock/pull/5638)) follows this RFC's build and release model.
+- **rocSHMEM** moves `python/rocshmem/` to `bindings/python/rocshmem4py/`, and [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) moves its wheel build out of the native build into the binding job.
 - **Other components** adopt the layout as they add bindings. Maintainers review the first layouts closely in code review.
 - A **developer guide** under `docs/packaging/` links back to this RFC.
 
@@ -200,7 +200,7 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 
 ## Open questions
 
-- **Python 3.10 and 3.11.** nanobind's Stable ABI needs Python 3.12, but the SDK supports 3.10 and 3.11 ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)) and Origami's consumers include 3.11 environments. The Origami pilot either needs a per-minor build exception or accepts a 3.12 floor. rocSHMEM's existing per-minor wheels need the same decision.
+- **Python 3.10 and 3.11.** nanobind's Stable ABI needs Python 3.12, but ROCm and PyTorch, which uses Origami's Python package, still require 3.10 and 3.11 ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)). The Origami pilot either needs a per-minor build exception or accepts a 3.12 floor. rocSHMEM's existing per-minor wheels need the same decision.
 - **TensileLite.** The native hipBLASLt build uses TensileLite, and `rocisa` is built with hipBLASLt. Whether the package moves to `bindings/python/`, and whether `rocisa` leaves the native build, is settled with the hipBLASLt maintainers.
 - **Import namespace.** Whether custom bindings use their own top-level import packages or the shared `rocm.*` namespace that `hip-python` keeps open is settled with the `hip-python` owners.
 
