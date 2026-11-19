@@ -1,6 +1,6 @@
 ---
 name: therock-pr-quality
-description: TheRock supplements to the ROCm PR quality base skill. Use when authoring, reviewing, or merge-gating. Build-repo rules apply a PR touching the superbuild, submodules, artifact descriptors, or reusable CI. Review mode (review.md) applies to every TheRock PR, including self-review before requesting review; use it when asked to "review PR", "review this PR", "code review PR #N", or given a TheRock PR URL or number to review. Adds and tightens base rules.
+description: TheRock supplements to the ROCm PR quality base skill. Build-repo rules apply to PRs touching the superbuild, submodules, artifact descriptors, or reusable CI. Review mode (review.md) applies to every TheRock PR, including self-review; use it for "review PR #N" or a TheRock PR URL. Adds and tightens base rules.
 argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local]'
 extends: rocm-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch

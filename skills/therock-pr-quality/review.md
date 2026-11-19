@@ -44,7 +44,8 @@ check status.
 
 If the author is the invoking user, this is a self-review. Run the same review, phrase findings as
 changes to make rather than comments to relay, and in "Already raised" mark each existing thread as
-addressed by the current code or still open.
+addressed by the current code or still open. Do not produce a review attestation for a self-review;
+say so at the end of the review (base "Review attestation").
 
 ### 2. Read all prior discussion
 
@@ -62,20 +63,22 @@ replies that explain a non-obvious choice, so the review does not re-ask a settl
 
 Start from `gh pr diff`. For small, self-contained changes the diff is enough. Pull source only when
 the diff cannot answer a question, for example a function the diff calls but does not define. When
-the review relied on the diff alone, say so in the Summary; the base rates a diff-only review as
+the review relied on the diff alone, say so under Limits; the base rates a diff-only review as
 lower confidence.
 
 Never switch branches or otherwise modify the user's working tree without asking; they may have
-work in progress. Prefer reading files at the PR head without touching the tree (for example
-`git show` on a fetched PR ref).
+work in progress. Read files at the PR head, not from whatever branch is checked out.
 
 ### 4. Apply the style guides for touched languages only
 
 Of the style guides listed under "Canonical TheRock references" in `SKILL.md`, read only those for
 languages present in the diff. For Python, run the guide's "Code review checklist".
 
-Cite the specific guide section in each style finding. Do not invent rules the guides do not contain;
-a personal preference is at most a `SUGGESTION` and must be labelled as preference.
+Cite the specific guide section when a finding rests on a style guide rule, and do not claim a rule
+the guides do not contain. A finding not backed by a written rule is still valid; say what it rests
+on (readability, consistency with the surrounding code, a heuristic from the Reviewer's take) so the
+author can weigh it. Such a finding is not `BLOCKING` unless it is also a correctness or
+maintainability problem.
 
 ### 5. Check the title and description against the code
 
@@ -101,6 +104,9 @@ applied**. If a requested change alters behavior, scope, interfaces, or the appr
 explains, name the sentences or sections that will become wrong and what they should say instead. A
 description that is accurate today but will be wrong after the requested fixes still needs updating
 before merge.
+
+Also apply the base prose gate from `rocm-pr-quality/prose-style-context.md`. Report its failed items
+and the suggested rewrite in the same "Title and description" section, not as separate findings.
 
 Tier: a description or title that misstates what the code does is `IMPORTANT`. Missing mention of a
 behavior or default change is `IMPORTANT`. Wording and polish are `SUGGESTION`.
@@ -181,7 +187,7 @@ not the sort key.>
 ### Title and description
 <Accuracy against the current diff: mismatches, unmentioned changes, title scope. Then:
 "After requested changes: no rework needed" or the specific sentences/sections to update and
-the suggested replacement text.>
+the suggested replacement text. Then the prose-gate result and rewrite, if any.>
 
 ### Already raised
 <Points other reviewers (or the user's pending draft) already covered.>
@@ -189,8 +195,16 @@ the suggested replacement text.>
 ### Questions for the author
 <Things the diff alone cannot answer. Ask; do not guess.>
 
+### Limits
+<Reviewed commit SHA. Files or scope not reviewed. Validation not run (diff-only,
+CI evidence unavailable, no local build).>
+
 ### Reviewer's take
 <See below.>
+
+### Attestation
+<Only when APPROVED and the PR is not the user's own: the block from
+`tools/pr_quality_check.py`. Never hand-computed.>
 ```
 
 Use the base finding tiers (`BLOCKING` / `IMPORTANT` / `SUGGESTION` / `FUTURE WORK`) and overall
