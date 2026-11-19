@@ -130,7 +130,7 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
         self.assertEqual(msi_source.relative_path, "99-windows/packages/msi")
         self.assertEqual(msi_dest.bucket, "therock-repo-amd-nightly-core")
         self.assertRegex(
-            msi_dest.relative_path, r"^v5/rocm/core/windows-installers/\d{8}-99$"
+            msi_dest.relative_path, r"^v5/rocm/core/windows-installers/win11/\d{8}-99$"
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
