@@ -591,7 +591,12 @@ Multi-Arch CI and Multi-Arch Release accept `build_windows_driver: true` to
 add this build when Windows is selected. The option defaults to `false`,
 including for scheduled releases. The reusable
 [`build_windows_driver.yml`](../../.github/workflows/build_windows_driver.yml)
-workflow can also be called independently.
+workflow can also be called independently. Driver builds use the triggering
+repository and commit for TheRock's build scripts. Dispatch the workflow in
+TheRock (or a source fork) at the desired revision; a conflicting `repository`
+or `ref` input is rejected. Cross-repository callers must dispatch into TheRock
+instead of enabling this option in their own workflow run. The compiler bumper
+supplies its three compiler SHAs separately, changing only their submodule pins.
 
 The workflow attaches `windows-driver-comgr` (including the Comgr PDB),
 `windows-driver-runtime`, and `windows-driver-logs` to its GitHub Actions run.
