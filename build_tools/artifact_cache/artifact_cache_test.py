@@ -2,648 +2,752 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Static LLVM lookup tests; no build, network, or AWS credentials required."""
+"""Artifact cache tests; no build, network, or AWS credentials required.
 
-import copy
+CI runs are simulated with the local directory backend, which reads the same
+layout as S3: {staging}/{run_id}-{platform}/{artifact files}.
+"""
+
 from contextlib import redirect_stderr, redirect_stdout
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
-import re
-import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
-from urllib.error import HTTPError
+from unittest import mock
 
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent))
+sys.path.insert(0, os.fspath(Path(__file__).parent))
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
+
 import artifact_cache
+from artifact_cache import (
+    CacheError,
+    CacheIndex,
+    LocalDirectoryBackend,
+    S3Backend,
+    lookup_artifacts_by_fingerprint,
+    main,
+)
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+LLVM = [f"amd-llvm_{c}_generic" for c in ("dbg", "dev", "doc", "lib", "run")]
+BASE = [f"base_{c}_generic" for c in ("dev", "lib")]
+RUN_ID = "43936062480"
 
 
-class StaticCacheTest(unittest.TestCase):
-    def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory(prefix="therock-static-cache-")
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        self.metadata = self.root / "metadata with spaces"
-        self.metadata.mkdir()
+def sha(seed: str) -> str:
+    return hashlib.sha256(seed.encode()).hexdigest()
+
+
+def make_run(
+    staging: Path,
+    run_id: str = RUN_ID,
+    platform: str = "linux",
+    fingerprints: dict[str, str | None] | None = None,
+    suffix: str = ".tar.zst",
+) -> Path:
+    """Create a fake CI run. A None fingerprint means no .fprint file."""
+    if fingerprints is None:
+        fingerprints = {stem: sha("fingerprint-" + stem[:3]) for stem in LLVM}
+    run_dir = staging / f"{run_id}-{platform}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    for stem, fingerprint in fingerprints.items():
+        archive = stem + suffix
+        (run_dir / archive).write_bytes(b"archive")
+        (run_dir / (archive + ".sha256sum")).write_text(f"{sha(archive)}  {archive}\n")
+        if fingerprint is not None:
+            (run_dir / (stem + ".fprint")).write_text(fingerprint + "\n")
+    return run_dir
+
+
+class CacheTestCase(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.staging = self.root / "staging"
         self.index_path = self.root / "index.json"
-        self.plan_path = self.root / "plan.json"
-        self.fingerprint = "a" * 64
-        # Deliberately different from the fingerprint: these are archive hashes.
-        self.checksums = {}
-        for position, artifact in enumerate(artifact_cache.LLVM_ARTIFACTS):
-            (self.metadata / f"{artifact}.fprint").write_text(self.fingerprint + "\n")
-            checksum = str(position + 1) * 64
-            self.checksums[artifact] = checksum
-            (self.metadata / f"{artifact}.tar.zst.sha256sum").write_text(
-                checksum + "\n"
-            )
-        self.empty = artifact_cache.CacheIndex(schema_version=1, entries=[])
-        self.index = self.record_artifacts_from_ci_run()
-
-    def record_artifacts_from_ci_run(
-        self, index: artifact_cache.CacheIndex | None = None, suffix: str = ".tar.zst"
-    ) -> artifact_cache.CacheIndex:
-        return artifact_cache.record_artifacts_from_ci_run(
-            index=self.empty if index is None else index,
-            metadata_dir=self.metadata,
-            platform="linux",
-            repository="ROCm/TheRock",
-            run_id="12345",
-            root="s3://test-bucket/12345-linux",
-            archive_suffix=suffix,
+        self.index_path.write_text('{"schema_version": 1, "entries": []}\n')
+        env = mock.patch.dict(
+            os.environ, {"THEROCK_LOCAL_STAGING_DIR": str(self.staging)}
         )
+        env.start()
+        self.addCleanup(env.stop)
 
-    def lookup_artifacts_by_fingerprint(
-        self,
-        index: artifact_cache.CacheIndex | None = None,
-        platform: str = "linux",
-    ) -> artifact_cache.LookupPlan:
-        return artifact_cache.lookup_artifacts_by_fingerprint(
-            index=self.index if index is None else index,
-            fingerprints_dir=self.metadata,
-            platform=platform,
-        )
+    def run_cli(self, *argv: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main([str(a) for a in argv])
+        return code, out.getvalue(), err.getvalue()
 
-    def assert_build(self, plan: artifact_cache.LookupPlan) -> None:
-        self.assertEqual(plan.status, "miss")
-        self.assertEqual(plan.action, "build")
-        self.assertEqual(plan.copy_requests, [])
+    def record(self, *extra: str, run_id: str = RUN_ID, platform: str = "linux"):
+        return self.run_cli(
+            "record", "--index", self.index_path, "--run-id", run_id,
+            "--platform", platform, *extra,
+        )  # fmt: skip
 
-    def cli(self, *args: str | Path) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, artifact_cache.__file__, *map(str, args)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+    def lookup(self, fingerprints_dir: Path, *extra: str, platform: str = "linux"):
+        output = self.root / "plan.json"
+        code, out, err = self.run_cli(
+            "lookup", "--index", self.index_path, "--fingerprints-dir", fingerprints_dir,
+            "--platform", platform, "--output", output, *extra,
+        )  # fmt: skip
+        plan = json.loads(output.read_text()) if output.exists() else None
+        return code, plan
 
-    def lookup_cli(self) -> subprocess.CompletedProcess[str]:
-        return self.cli(
-            "lookup",
-            "--index",
-            self.index_path,
-            "--fingerprints-dir",
-            self.metadata,
-            "--platform",
-            "linux",
-            "--output",
-            self.plan_path,
-        )
+    def index(self) -> dict:
+        return json.loads(self.index_path.read_text())
 
-    def record_cli(self, run_id: str = "12345") -> subprocess.CompletedProcess[str]:
-        return self.cli(
-            "record",
-            "--index",
-            self.index_path,
-            "--metadata-dir",
-            self.metadata,
-            "--platform",
-            "linux",
-            "--repository",
-            "ROCm/TheRock",
-            "--run-id",
-            run_id,
-            "--source-root",
-            f"s3://test-bucket/{run_id}-linux",
-        )
+    def local_fingerprints(self, fingerprints: dict[str, str | None]) -> Path:
+        directory = self.root / f"local-{len(list(self.root.glob('local-*')))}"
+        directory.mkdir()
+        for stem, fingerprint in fingerprints.items():
+            if fingerprint is not None:
+                (directory / (stem + ".fprint")).write_text(fingerprint + "\n")
+        return directory
 
-    def test_complete_hit_selects_matching_entries_and_preserves_producers(
-        self,
-    ) -> None:
-        index = copy.deepcopy(self.index)
-        index.entries[0].producer.run_id = "99999"
-        index.entries[0].source.root = "s3://another-bucket/99999-linux"
-        expected = {entry.artifact: entry for entry in index.entries}
-        historical = copy.deepcopy(self.index.entries)
-        for entry in historical:
-            entry.fingerprint = "b" * 64
-        index.entries = historical + index.entries
-        plan = self.lookup_artifacts_by_fingerprint(index)
-        self.assertEqual(plan.status, "hit")
-        self.assertEqual(plan.action, "populate")
-        self.assertEqual(len(plan.copy_requests), len(artifact_cache.LLVM_ARTIFACTS))
-        for request in plan.copy_requests:
-            artifact = request.artifact
-            self.assertEqual(request.fingerprint, self.fingerprint)
-            self.assertEqual(request.source.sha256, self.checksums[artifact])
-            self.assertEqual(request.source, expected[artifact].source)
-            self.assertEqual(request.producer, expected[artifact].producer)
-            self.assertEqual(request.fingerprint_file, artifact + ".fprint")
-            self.assertEqual(request.checksum_file, artifact + ".tar.zst.sha256sum")
-        self.assertEqual(plan, self.lookup_artifacts_by_fingerprint(index))
-
-    def test_required_components_match_the_actual_cmake_artifact_declaration(
-        self,
-    ) -> None:
-        source = (
-            Path(artifact_cache.__file__).resolve().parents[2]
-            / "compiler/CMakeLists.txt"
-        )
-        declaration = re.search(
-            r"therock_provide_artifact\(amd-llvm\b(.*?)\)",
-            source.read_text(),
-            flags=re.S,
-        )
-        self.assertIsNotNone(declaration)
-        components = (
-            declaration.group(1)
-            .split("COMPONENTS", 1)[1]
-            .split("SUBPROJECT_DEPS", 1)[0]
-            .split()
-        )
-        self.assertEqual(set(components), set(artifact_cache.LLVM_COMPONENTS))
-
-    def test_unmatched_requests_miss(self) -> None:
-        for case, arguments in (
-            ("empty index", {"index": self.empty}),
-            ("different platform", {"platform": "windows"}),
-        ):
-            with self.subTest(case=case):
-                self.assert_build(self.lookup_artifacts_by_fingerprint(**arguments))
-        for artifact in artifact_cache.LLVM_ARTIFACTS:
-            (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
-        with self.subTest(case="changed fingerprints"):
-            self.assert_build(self.lookup_artifacts_by_fingerprint())
-
-    def test_incomplete_bundles_prevent_partial_copy(self) -> None:
-        for position, artifact in enumerate(artifact_cache.LLVM_ARTIFACTS):
-            with self.subTest(missing="index entry", artifact=artifact):
-                index = copy.deepcopy(self.index)
-                index.entries.pop(position)
-                plan = self.lookup_artifacts_by_fingerprint(index)
-                self.assert_build(plan)
-                self.assertEqual(
-                    sum(row.status == "hit" for row in plan.artifacts),
-                    len(artifact_cache.LLVM_ARTIFACTS) - 1,
-                )
-            with self.subTest(missing="expected fingerprint", artifact=artifact):
-                path = self.metadata / f"{artifact}.fprint"
-                original = path.read_bytes()
-                path.unlink()
-                try:
-                    plan = self.lookup_artifacts_by_fingerprint()
-                    self.assert_build(plan)
-                    self.assertIn(
-                        "missing_expected_fingerprint",
-                        [row.reason for row in plan.artifacts],
-                    )
-                finally:
-                    path.write_bytes(original)
-
-    def test_empty_invalid_and_non_utf8_expected_fingerprints_miss(self) -> None:
-        path = self.metadata / "amd-llvm_lib_generic.fprint"
-        for value in (b"", b" \n", b"not-a-hash", b"a" * 63, b"\xff"):
-            with self.subTest(value=value):
-                path.write_bytes(value)
-                self.assert_build(self.lookup_artifacts_by_fingerprint())
-
-    def test_inconsistent_component_fingerprints_prevent_mixed_bundle(self) -> None:
-        (self.metadata / "amd-llvm_lib_generic.fprint").write_text("b" * 64)
-        index = copy.deepcopy(self.index)
-        next(
-            entry for entry in index.entries if entry.artifact == "amd-llvm_lib_generic"
-        ).fingerprint = ("b" * 64)
-        plan = self.lookup_artifacts_by_fingerprint(index)
-        self.assert_build(plan)
-        self.assertTrue(
-            all(
-                row.reason == "inconsistent_expected_bundle_fingerprints"
-                for row in plan.artifacts
-            )
-        )
-
-    def test_duplicate_matches_are_rejected(self) -> None:
-        index = copy.deepcopy(self.index)
-        index.entries.append(copy.deepcopy(index.entries[0]))
-        artifact_cache.write_json(self.index_path, index)
-        with self.assertRaisesRegex(ValueError, "duplicate"):
-            artifact_cache.load_index(self.index_path)
-
-    def test_invalid_index_entries_are_rejected(self) -> None:
-        cases = [
-            ("entry", "fingerprint", "not-a-hash"),
-            ("entry", "platform", ""),
-            ("entry", "artifact", "hipify_run_generic"),
-            ("source", "root", "s3://"),
-            ("source", "root", "https://user:password@example.invalid/path"),
-            ("source", "root", "https://example.invalid/path?token=value"),
-            ("source", "root", "ftp://example.invalid/prefix"),
-            ("source", "archive", "amd-llvm_lib_generic.tar.zst"),
-            ("source", "archive", "../amd-llvm_dbg_generic.tar.zst"),
-            ("source", "archive", "amd-llvm_dbg_generic.zip"),
-        ]
-        for section, field, value in cases:
-            with self.subTest(section=section, field=field, value=value):
-                index = artifact_cache.to_json(self.index)
-                entry = index["entries"][0]
-                target = entry if section == "entry" else entry[section]
-                target[field] = value
-                self.index_path.write_text(json.dumps(index))
-                with self.assertRaises(ValueError):
-                    artifact_cache.load_index(self.index_path)
-
-    def test_record_accepts_supported_archive_and_checksum_formats(self) -> None:
-        for suffix in (".tar.zst", ".tar.xz"):
-            for include_filename in (False, True):
-                with self.subTest(suffix=suffix, include_filename=include_filename):
-                    for artifact in artifact_cache.LLVM_ARTIFACTS:
-                        archive = artifact + suffix
-                        value = self.checksums[artifact]
-                        if include_filename:
-                            value += "  " + archive
-                        (self.metadata / f"{archive}.sha256sum").write_text(
-                            value + "\n"
-                        )
-                    plan = self.lookup_artifacts_by_fingerprint(
-                        self.record_artifacts_from_ci_run(suffix=suffix)
-                    )
-                    self.assertEqual(plan.status, "hit")
-                    for request in plan.copy_requests:
-                        self.assertEqual(
-                            request.source.archive, request.artifact + suffix
-                        )
-                        self.assertEqual(
-                            request.source.sha256, self.checksums[request.artifact]
-                        )
-
-    def test_cli_hit_and_miss_both_succeed_with_explicit_plan_actions(self) -> None:
-        metadata_before = {
-            path.name: path.read_bytes() for path in self.metadata.iterdir()
+    def statuses(self, plan: dict) -> dict[str, tuple[str, str]]:
+        return {
+            f"{a['name']}_{a['component']}_{a['target']}": (a["status"], a["reason"])
+            for a in plan["artifacts"]
         }
-        for index, status in ((self.index, "hit"), (self.empty, "miss")):
-            with self.subTest(status=status):
-                artifact_cache.write_json(self.index_path, index)
-                index_before = self.index_path.read_bytes()
-                result = self.lookup_cli()
-                self.assertEqual(result.returncode, 0, result.stderr)
-                plan_json = json.loads(self.plan_path.read_text())
-                self.assertEqual(plan_json["status"], status)
-                self.assertEqual(
-                    plan_json["action"], "populate" if status == "hit" else "build"
-                )
-                for match in plan_json["artifacts"]:
-                    self.assertEqual("producer" in match, status == "hit")
-                    self.assertEqual("source" in match, status == "hit")
-                self.assertIn(status.upper(), result.stdout)
-                self.assertEqual(self.index_path.read_bytes(), index_before)
-                self.assertEqual(
-                    metadata_before,
-                    {path.name: path.read_bytes() for path in self.metadata.iterdir()},
-                )
 
-    def test_cli_input_errors_remove_a_previous_hit_plan(self) -> None:
-        for invalid in (
-            None,
-            "broken JSON",
-            '{"schema_version":2,"entries":[]}',
-            "[]",
-            "{}",
-            '{"schema_version":1,"entries":{}}',
-            '{"schema_version":1,"entries":[null]}',
-            '{"schema_version":1,"entries":[{}]}',
-        ):
-            with self.subTest(invalid=invalid):
-                self.plan_path.write_text('{"status":"hit","action":"populate"}')
-                if invalid is None:
-                    self.index_path.unlink(missing_ok=True)
-                else:
-                    self.index_path.write_text(invalid)
-                result = self.lookup_cli()
-                self.assertEqual(result.returncode, 2)
-                self.assertFalse(self.plan_path.exists())
 
-        # A directory triggers a real read error, even when running as root.
-        with self.subTest(invalid="fingerprint is a directory"):
-            artifact_cache.write_json(self.index_path, self.index)
-            self.plan_path.write_text('{"status":"hit","action":"populate"}')
-            path = self.metadata / f"{artifact_cache.LLVM_ARTIFACTS[0]}.fprint"
-            path.unlink()
-            path.mkdir()
-            with self.assertRaises(OSError):
-                self.lookup_artifacts_by_fingerprint()
-            result = self.lookup_cli()
-            self.assertEqual(result.returncode, 2, result.stderr)
-            self.assertIn(repr(str(path)), result.stderr)
-            self.assertFalse(self.plan_path.exists())
-
-    def test_cli_plan_output_cannot_overwrite_the_index(self) -> None:
-        artifact_cache.write_json(self.index_path, self.index)
-        before = self.index_path.read_bytes()
-        self.plan_path = self.index_path
-        result = self.lookup_cli()
-        self.assertEqual(result.returncode, 2)
-        self.assertEqual(self.index_path.read_bytes(), before)
-
-    def test_cli_record_failure_preserves_existing_index(self) -> None:
-        artifact_cache.write_json(self.index_path, self.index)
-        before = self.index_path.read_bytes()
-        for artifact in artifact_cache.LLVM_ARTIFACTS:
-            (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
-        cases = (
-            ("amd-llvm_run_generic.fprint", None),
-            ("amd-llvm_doc_generic.tar.zst.sha256sum", None),
-            (
-                "amd-llvm_lib_generic.tar.zst.sha256sum",
-                "a" * 64 + "  wrong-file.tar.zst\n",
-            ),
+class RecordTest(CacheTestCase):
+    def test_default_records_only_amd_llvm(self):
+        make_run(
+            self.staging,
+            fingerprints={
+                **dict.fromkeys(LLVM, sha("a")),
+                **dict.fromkeys(BASE, sha("b")),
+            },
         )
-        for name, contents in cases:
-            with self.subTest(file=name, contents=contents):
-                path = self.metadata / name
-                original = path.read_bytes()
-                try:
-                    if contents is None:
-                        path.unlink()
-                    else:
-                        path.write_text(contents)
-                    result = self.record_cli()
-                    self.assertEqual(result.returncode, 2, result.stderr)
-                    self.assertEqual(self.index_path.read_bytes(), before)
-                finally:
-                    path.write_bytes(original)
-
-    def test_cli_record_then_lookup(self) -> None:
-        artifact_cache.write_json(self.index_path, self.empty)
-        result = self.record_cli()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(artifact_cache.load_index(self.index_path), self.index)
-        self.assertEqual(self.lookup_cli().returncode, 0)
-        self.assertEqual(json.loads(self.plan_path.read_text())["action"], "populate")
-
-    def test_extra_index_fields_are_ignored_by_lookup_and_record(self) -> None:
-        legacy_index = artifact_cache.to_json(self.index)
-        legacy_index["note"] = "Unused index field"
-        for entry in legacy_index["entries"]:
-            entry["note"] = "Unused entry field"
-            entry["source"]["note"] = "Unused source field"
-            entry["producer"].update(
-                job_id="67890",
-                head_sha="c" * 40,
-                url="https://github.com/ROCm/TheRock/actions/runs/12345",
-            )
-        self.index_path.write_text(json.dumps(legacy_index))
-        self.assertEqual(artifact_cache.load_index(self.index_path), self.index)
-        original_json = self.index_path.read_bytes()
-        self.assertEqual(self.record_cli().returncode, 0)
-        self.assertEqual(self.index_path.read_bytes(), original_json)
-
-        result = self.lookup_cli()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        plan = json.loads(self.plan_path.read_text())
-        self.assertEqual(plan["status"], "hit")
-        for entry in plan["artifacts"] + plan["copy_requests"]:
-            self.assertEqual(set(entry["producer"]), {"repository", "run_id"})
-            self.assertNotIn("note", entry)
-            self.assertNotIn("note", entry["source"])
-
-        # Replacing a fingerprint writes the selected bundle in the minimal form.
-        for artifact in artifact_cache.LLVM_ARTIFACTS:
-            (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
-        result = self.record_cli(run_id="67890")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        updated = json.loads(self.index_path.read_text())
-        self.assertNotIn("note", updated)
+        code, out, _ = self.record()
+        self.assertEqual(code, 0)
+        self.assertIn("5 added", out)
+        entries = self.index()["entries"]
+        self.assertEqual({e["name"] for e in entries}, {"amd-llvm"})
         self.assertEqual(
-            len(updated["entries"]),
-            len(artifact_cache.LLVM_ARTIFACTS),
+            {e["component"] for e in entries}, {"dbg", "dev", "doc", "lib", "run"}
         )
-        for entry in updated["entries"]:
-            self.assertEqual(entry["fingerprint"], "b" * 64)
-            self.assertEqual(set(entry["producer"]), {"repository", "run_id"})
-            self.assertNotIn("note", entry)
-            self.assertNotIn("note", entry["source"])
+        entry = next(e for e in entries if e["component"] == "lib")
+        archive = "amd-llvm_lib_generic.tar.zst"
+        self.assertEqual(entry["platform"], "linux")
+        self.assertEqual(entry["target"], "generic")
+        self.assertEqual(entry["fingerprint"], sha("a"))
+        self.assertEqual(
+            entry["provenance"], {"repository": "ROCm/TheRock", "run_id": RUN_ID}
+        )
+        self.assertEqual(entry["outputs"][0]["key"], archive)
+        self.assertEqual(entry["outputs"][0]["digest"], sha(archive))
+        self.assertTrue(entry["outputs"][0]["uri"].startswith("file://"))
+        self.assertTrue(entry["outputs"][0]["uri"].endswith("/" + archive))
+        self.assertEqual(self.index()["status"], "prototype")
 
-    def test_cli_record_existing_keys_succeeds_without_rewriting_index(self) -> None:
-        artifact_cache.write_json(self.index_path, self.index)
+    def test_include_and_exclude_patterns_select_other_artifacts(self):
+        make_run(
+            self.staging,
+            fingerprints={
+                **dict.fromkeys(LLVM, sha("a")),
+                **dict.fromkeys(BASE, sha("b")),
+            },
+        )
+        code, _, _ = self.record("base")
+        self.assertEqual(code, 0)
+        self.assertEqual({e["name"] for e in self.index()["entries"]}, {"base"})
+        code, _, _ = self.record(".", "--exclude", "_dbg_", "_doc_")
+        self.assertEqual(code, 0)
+        recorded = {(e["name"], e["component"]) for e in self.index()["entries"]}
+        self.assertIn(("amd-llvm", "lib"), recorded)
+        self.assertIn(("base", "dev"), recorded)
+        self.assertNotIn(("amd-llvm", "dbg"), recorded)
+        self.assertNotIn(("amd-llvm", "doc"), recorded)
+
+    def test_repeating_a_record_leaves_the_index_unchanged(self):
+        make_run(self.staging)
+        self.record()
         before = self.index_path.read_bytes()
-        modified = self.index_path.stat().st_mtime_ns
-        for run_id in ("12345", "67890"):
-            with self.subTest(run_id=run_id):
-                if run_id == "67890":
-                    # A matching key retains the original archive and checksum,
-                    # even if another producer's compressed bytes differ.
-                    for artifact in artifact_cache.LLVM_ARTIFACTS:
-                        (self.metadata / f"{artifact}.tar.zst.sha256sum").write_text(
-                            "f" * 64
-                        )
-                result = self.record_cli(run_id=run_id)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("Already indexed:", result.stdout)
-                self.assertIn("Index unchanged.", result.stdout)
-                self.assertEqual(self.index_path.read_bytes(), before)
-                self.assertEqual(self.index_path.stat().st_mtime_ns, modified)
-
-        # Skipping an existing key must not bypass input validation.
-        (self.metadata / f"{artifact_cache.LLVM_ARTIFACTS[-1]}.fprint").unlink()
-        result = self.record_cli()
-        self.assertEqual(result.returncode, 2)
+        code, out, _ = self.record(run_id=RUN_ID)
+        self.assertEqual(code, 0)
+        self.assertIn("5 already indexed; index unchanged", out)
         self.assertEqual(self.index_path.read_bytes(), before)
 
-    def test_cli_record_adds_only_missing_keys_and_preserves_existing_producers(
-        self,
-    ) -> None:
-        partial = copy.deepcopy(self.index)
-        partial.entries.pop()
-        artifact_cache.write_json(self.index_path, partial)
-        result = self.record_cli(run_id="67890")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        updated = artifact_cache.load_index(self.index_path)
-        self.assertEqual(len(updated.entries), len(artifact_cache.LLVM_ARTIFACTS))
-        self.assertEqual(updated.entries[:-1], partial.entries)
-        self.assertEqual(updated.entries[-1].producer.run_id, "67890")
-        self.assertIn("Recorded 1 LLVM", result.stdout)
-        self.assertIn(f"Already indexed: {len(partial.entries)}", result.stdout)
-        self.assertEqual(self.lookup_artifacts_by_fingerprint(updated).status, "hit")
+    def test_matching_fingerprints_keep_the_original_run(self):
+        make_run(self.staging)
+        self.record()
+        make_run(self.staging, run_id="43936062999")
+        code, out, _ = self.record(run_id="43936062999")
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            {e["provenance"]["run_id"] for e in self.index()["entries"]}, {RUN_ID}
+        )
 
-    def test_cli_record_replaces_history_only_for_selected_platform(self) -> None:
-        windows_entries = copy.deepcopy(self.index.entries)
-        for entry in windows_entries:
-            entry.platform = "windows"
-            entry.source.root = "s3://test-bucket/12345-windows"
-        selected_entries = copy.deepcopy(self.index.entries)
-        for entry in selected_entries:
-            entry.fingerprint = "b" * 64
-            entry.producer.run_id = "67890"
-            entry.source.root = "s3://test-bucket/67890-linux"
+    def test_changed_fingerprint_replaces_only_that_artifact_and_platform(self):
+        make_run(
+            self.staging,
+            fingerprints={
+                **dict.fromkeys(LLVM, sha("a")),
+                **dict.fromkeys(BASE, sha("b")),
+            },
+        )
+        make_run(
+            self.staging, platform="windows", fingerprints=dict.fromkeys(LLVM, sha("w"))
+        )
+        self.record(".")
+        self.record(platform="windows")
+        make_run(
+            self.staging,
+            run_id="43936062999",
+            fingerprints=dict.fromkeys(LLVM, sha("new")),
+        )
+        code, out, _ = self.record(run_id="43936062999")
+        self.assertEqual(code, 0)
+        self.assertIn("5 replaced", out)
+        by_key = {
+            (e["platform"], e["name"], e["component"]): e
+            for e in self.index()["entries"]
+        }
+        self.assertEqual(len(by_key), 12)
+        for component in ("dbg", "dev", "doc", "lib", "run"):
+            replaced = by_key["linux", "amd-llvm", component]
+            self.assertEqual(replaced["fingerprint"], sha("new"))
+            self.assertEqual(replaced["provenance"]["run_id"], "43936062999")
+            self.assertEqual(
+                by_key["windows", "amd-llvm", component]["fingerprint"], sha("w")
+            )
+        self.assertEqual(by_key["linux", "base", "lib"]["fingerprint"], sha("b"))
+        self.assertEqual(by_key["linux", "base", "lib"]["provenance"]["run_id"], RUN_ID)
 
-        for already_recorded in (False, True):
-            with self.subTest(already_recorded=already_recorded):
-                index = copy.deepcopy(self.index)
-                index.entries.extend(windows_entries)
-                if already_recorded:
-                    index.entries.extend(selected_entries)
-                artifact_cache.write_json(self.index_path, index)
-                for artifact in artifact_cache.LLVM_ARTIFACTS:
-                    (self.metadata / f"{artifact}.fprint").write_text("b" * 64)
+    def test_epoch_is_recorded_when_given(self):
+        make_run(self.staging)
+        self.record("--epoch", "7")
+        self.assertEqual({e["epoch"] for e in self.index()["entries"]}, {"7"})
 
-                result = self.record_cli(run_id="67890")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                updated = artifact_cache.load_index(self.index_path)
-                self.assertEqual(
-                    [entry for entry in updated.entries if entry.platform == "windows"],
-                    windows_entries,
-                )
-                self.assertEqual(
-                    [entry for entry in updated.entries if entry.platform == "linux"],
-                    selected_entries,
-                )
-                self.assertIn(
-                    f"Removed {len(artifact_cache.LLVM_ARTIFACTS)} older LLVM",
-                    result.stdout,
-                )
-                self.assertNotIn("Index unchanged.", result.stdout)
-                self.assertEqual("Recorded " in result.stdout, not already_recorded)
-                self.assertEqual(
-                    self.lookup_artifacts_by_fingerprint(updated).status, "hit"
-                )
-                for artifact in artifact_cache.LLVM_ARTIFACTS:
-                    (self.metadata / f"{artifact}.fprint").write_text(self.fingerprint)
-                self.assert_build(self.lookup_artifacts_by_fingerprint(updated))
+    def test_artifacts_without_fingerprints_are_skipped_and_reported(self):
+        make_run(
+            self.staging,
+            fingerprints={**dict.fromkeys(LLVM, sha("a")), **dict.fromkeys(BASE, None)},
+        )
+        code, out, _ = self.record(".")
+        self.assertEqual(code, 0)
+        self.assertIn("Skipped base_dev_generic: no_fingerprint", out)
+        self.assertEqual({e["name"] for e in self.index()["entries"]}, {"amd-llvm"})
 
-    def test_record_downloads_metadata_and_preserves_producer_location(self) -> None:
-        for platform, repository, root in (
-            ("linux", "ROCm/TheRock", None),
-            ("windows", "ROCm/TheRock", None),
-            ("linux", "example/TheRock", "https://example.invalid/custom/prefix"),
-            ("linux", "example/TheRock", "https://example.invalid/cache%20runs"),
-            ("linux", "ROCm/TheRock", "s3://test-bucket/custom/prefix"),
-        ):
-            with self.subTest(platform=platform, root=root):
-                artifact_cache.write_json(self.index_path, self.empty)
-                args = [
-                    "record",
-                    "--index",
-                    str(self.index_path),
-                    "--platform",
-                    platform,
-                    "--run-id",
-                    "12345",
-                ]
-                if root is not None:
-                    args.extend(["--source-root", root, "--repository", repository])
-                expected_root = (
-                    root
-                    or f"https://therock-ci-artifacts.s3.amazonaws.com/12345-{platform}"
-                )
-                download_root = (
-                    "https://test-bucket.s3.amazonaws.com/custom/prefix"
-                    if root and root.startswith("s3://")
-                    else expected_root
-                )
-                expected_urls = [
-                    f"{download_root}/{artifact}{suffix}"
-                    for artifact in artifact_cache.LLVM_ARTIFACTS
-                    for suffix in (".fprint", ".tar.zst.sha256sum")
-                ]
-
-                def response(url: str, *, timeout: int) -> io.BytesIO:
-                    self.assertIn(url, expected_urls)
-                    return io.BytesIO(
-                        (self.metadata / url.rsplit("/", 1)[1]).read_bytes()
-                    )
-
-                with patch.object(
-                    artifact_cache, "urlopen", side_effect=response
-                ) as fetch:
-                    with redirect_stdout(io.StringIO()):
-                        self.assertEqual(artifact_cache.main(args), 0)
-                self.assertEqual(
-                    [call.args[0] for call in fetch.call_args_list], expected_urls
-                )
-                index = artifact_cache.load_index(self.index_path)
-                self.assertEqual(
-                    self.lookup_artifacts_by_fingerprint(
-                        index, platform=platform
-                    ).status,
-                    "hit",
-                )
-                for entry in index.entries:
-                    self.assertEqual(entry.source.root, expected_root)
-                    self.assertEqual(
-                        entry.source.sha256, self.checksums[entry.artifact]
-                    )
-                    self.assertEqual(
-                        entry.producer,
-                        artifact_cache.Producer(repository=repository, run_id="12345"),
-                    )
-
-    def test_failed_download_or_invalid_metadata_preserves_index(self) -> None:
-        for failure in (
-            "missing sidecar",
-            "timeout",
-            "invalid checksum",
-            "inconsistent fingerprint",
-        ):
-            with self.subTest(failure=failure):
-                artifact_cache.write_json(self.index_path, self.empty)
-                before = self.index_path.read_bytes()
-
-                def response(url: str, *, timeout: int) -> io.BytesIO:
-                    name = url.rsplit("/", 1)[1]
-                    if name == artifact_cache.LLVM_ARTIFACTS[-1] + ".tar.zst.sha256sum":
-                        if failure == "missing sidecar":
-                            raise HTTPError(url, 404, "Not Found", None, None)
-                        if failure == "timeout":
-                            raise TimeoutError("Download timed out")
-                        if failure == "invalid checksum":
-                            return io.BytesIO(b"not a checksum")
-                    if (
-                        failure == "inconsistent fingerprint"
-                        and name == artifact_cache.LLVM_ARTIFACTS[-1] + ".fprint"
-                    ):
-                        return io.BytesIO(b"b" * 64)
-                    return io.BytesIO((self.metadata / name).read_bytes())
-
-                with patch.object(artifact_cache, "urlopen", side_effect=response):
-                    with redirect_stdout(io.StringIO()), redirect_stderr(
-                        io.StringIO()
-                    ) as errors:
-                        result = artifact_cache.main(
-                            [
-                                "record",
-                                "--index",
-                                str(self.index_path),
-                                "--platform",
-                                "linux",
-                                "--run-id",
-                                "12345",
-                            ]
-                        )
-                self.assertEqual(result, 2)
-                self.assertIn("ERROR:", errors.getvalue())
-                self.assertEqual(self.index_path.read_bytes(), before)
-
-    def test_record_rejects_ambiguous_or_invalid_download_locations(self) -> None:
-        artifact_cache.write_json(self.index_path, self.empty)
+    def test_fingerprint_without_a_checksum_is_an_error(self):
+        run_dir = make_run(self.staging)
+        (run_dir / "amd-llvm_dbg_generic.tar.zst.sha256sum").unlink()
         before = self.index_path.read_bytes()
-        for overrides in (
-            ["--repository", "example/TheRock"],
-            ["--platform", "unknown"],
-            ["--run-id", "../invalid"],
-            ["--source-root", "https://example.invalid/path?query=value"],
-        ):
-            with self.subTest(overrides=overrides):
-                with patch.object(artifact_cache, "urlopen") as fetch:
-                    with redirect_stderr(io.StringIO()):
-                        result = artifact_cache.main(
-                            [
-                                "record",
-                                "--index",
-                                str(self.index_path),
-                                "--platform",
-                                "linux",
-                                "--run-id",
-                                "12345",
-                                *overrides,
-                            ]
-                        )
-                self.assertEqual(result, 2)
-                fetch.assert_not_called()
-                self.assertEqual(self.index_path.read_bytes(), before)
+        code, _, err = self.record()
+        self.assertEqual(code, 2)
+        self.assertIn("amd-llvm_dbg_generic has a fingerprint but no checksum", err)
+        self.assertEqual(self.index_path.read_bytes(), before)
+
+    def test_run_without_any_fingerprints_is_an_error(self):
+        make_run(self.staging, fingerprints=dict.fromkeys(LLVM, None))
+        code, _, err = self.record()
+        self.assertEqual(code, 2)
+        self.assertIn("No artifacts with fingerprints", err)
+
+    def test_components_must_share_a_fingerprint_and_the_index_is_kept(self):
+        fingerprints = dict.fromkeys(LLVM, sha("a"))
+        fingerprints["amd-llvm_lib_generic"] = sha("different")
+        make_run(self.staging, fingerprints=fingerprints)
+        before = self.index_path.read_bytes()
+        code, _, err = self.record()
+        self.assertEqual(code, 2)
+        self.assertIn("record all components together", err)
+        self.assertEqual(self.index_path.read_bytes(), before)
+
+    def test_updating_part_of_a_group_is_rejected(self):
+        make_run(self.staging)
+        self.record()
+        make_run(
+            self.staging,
+            run_id="43936062999",
+            fingerprints=dict.fromkeys(LLVM, sha("new")),
+        )
+        before = self.index_path.read_bytes()
+        code, _, err = self.record("amd-llvm_lib", run_id="43936062999")
+        self.assertEqual(code, 2)
+        self.assertIn("record all components together", err)
+        self.assertEqual(self.index_path.read_bytes(), before)
+
+    def test_invalid_fingerprint_is_an_error(self):
+        make_run(
+            self.staging,
+            fingerprints={
+                **dict.fromkeys(LLVM, sha("a")),
+                "amd-llvm_lib_generic": "not-a-hash",
+            },
+        )
+        code, _, err = self.record()
+        self.assertEqual(code, 2)
+        self.assertIn("lowercase SHA-256", err)
+
+    def read_checksum(self, text: str) -> str:
+        archive = "amd-llvm_lib_generic.tar.zst"
+        path = self.root / (archive + ".sha256sum")
+        path.write_text(text)
+        return artifact_cache.read_checksum(path, archive)
+
+    def test_checksum_file_may_hold_only_the_digest(self):
+        self.assertEqual(self.read_checksum(sha("x") + "\n"), sha("x"))
+
+    def test_checksum_file_may_name_the_archive(self):
+        archive = "amd-llvm_lib_generic.tar.zst"
+        self.assertEqual(self.read_checksum(f"{sha('x')} *{archive}\n"), sha("x"))
+        self.assertEqual(self.read_checksum(f"{sha('x')}  {archive}\n"), sha("x"))
+
+    def test_checksum_file_for_another_archive_is_rejected(self):
+        with self.assertRaisesRegex(CacheError, "Checksum filename mismatch"):
+            self.read_checksum(f"{sha('x')}  other.tar.zst\n")
+
+    def test_malformed_checksum_files_are_rejected(self):
+        with self.assertRaisesRegex(CacheError, "Invalid checksum file"):
+            self.read_checksum("a b c\n")
+        with self.assertRaisesRegex(CacheError, "Empty checksum file"):
+            self.read_checksum("\n")
+        with self.assertRaisesRegex(CacheError, "lowercase SHA-256"):
+            self.read_checksum("XYZ\n")
+
+    def test_xz_archives_are_supported(self):
+        make_run(self.staging, suffix=".tar.xz")
+        self.record()
+        self.assertEqual(
+            {e["outputs"][0]["key"] for e in self.index()["entries"]},
+            {stem + ".tar.xz" for stem in LLVM},
+        )
+
+    def test_a_missing_index_is_created(self):
+        make_run(self.staging)
+        self.index_path.unlink()
+        code, _, _ = self.record()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.index()["entries"]), 5)
+
+    def test_run_id_must_be_numeric(self):
+        code, _, err = self.record(run_id="abc")
+        self.assertEqual(code, 2)
+        self.assertIn("run-id must be numeric", err)
+
+    def test_repository_comes_from_the_flag_then_the_environment(self):
+        make_run(self.staging)
+        with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "env-owner/env-repo"}):
+            self.record()
+            self.assertEqual(
+                {e["provenance"]["repository"] for e in self.index()["entries"]},
+                {"env-owner/env-repo"},
+            )
+            self.index_path.write_text('{"schema_version": 1, "entries": []}\n')
+            self.record("--run-github-repo", "flag-owner/flag-repo")
+            self.assertEqual(
+                {e["provenance"]["repository"] for e in self.index()["entries"]},
+                {"flag-owner/flag-repo"},
+            )
+
+    def test_invalid_repository_is_an_error(self):
+        make_run(self.staging)
+        code, _, err = self.record("--run-github-repo", "not-a-repository")
+        self.assertEqual(code, 2)
+        self.assertIn("owner/repository", err)
+
+    def test_local_staging_dir_selects_the_local_backend(self):
+        backend = artifact_cache.create_source_backend(RUN_ID, "linux", "o/r")
+        self.assertIsInstance(backend, LocalDirectoryBackend)
+
+    def test_s3_backend_looks_up_the_workflow_run(self):
+        root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=RUN_ID,
+            platform="linux",
+        )
+        with mock.patch.dict(os.environ):
+            del os.environ["THEROCK_LOCAL_STAGING_DIR"]
+            with mock.patch.object(
+                WorkflowOutputRoot, "from_workflow_run", return_value=root
+            ) as from_workflow_run:
+                backend = artifact_cache.create_source_backend(RUN_ID, "linux", "o/r")
+        self.assertIsInstance(backend, S3Backend)
+        from_workflow_run.assert_called_once_with(
+            run_id=RUN_ID,
+            platform="linux",
+            github_repository="o/r",
+            lookup_workflow_run=True,
+        )
+
+    def test_s3_locations_are_public_https_urls(self):
+        root = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id=RUN_ID,
+            platform="linux",
+        )
+        self.assertEqual(
+            artifact_cache.archive_uri(S3Backend(root), "amd-llvm_lib_generic.tar.zst"),
+            "https://therock-ci-artifacts.s3.amazonaws.com/43936062480-linux/amd-llvm_lib_generic.tar.zst",
+        )
+
+
+class LookupTest(CacheTestCase):
+    def setUp(self):
+        super().setUp()
+        make_run(
+            self.staging,
+            fingerprints={
+                **dict.fromkeys(LLVM, sha("a")),
+                **dict.fromkeys(BASE, sha("b")),
+            },
+        )
+        self.record(".")
+
+    def test_hit_requires_every_component(self):
+        code, plan = self.lookup(self.local_fingerprints(dict.fromkeys(LLVM, sha("a"))))
+        self.assertEqual(code, 0)
+        self.assertEqual((plan["status"], plan["action"]), ("hit", "populate"))
+        self.assertEqual(plan["plan_version"], 1)
+        self.assertEqual(len(plan["artifacts"]), 5)
+        for artifact in plan["artifacts"]:
+            self.assertEqual(artifact["status"], "hit")
+            self.assertEqual(artifact["provenance"]["run_id"], RUN_ID)
+            self.assertEqual(len(artifact["outputs"]), 1)
+
+    def test_empty_fingerprints_directory_is_a_miss(self):
+        code, plan = self.lookup(self.local_fingerprints({}))
+        self.assertEqual(code, 0)
+        self.assertEqual((plan["status"], plan["action"]), ("miss", "build"))
+        self.assertEqual(plan["reason"], "no_local_fingerprints")
+        self.assertEqual(plan["artifacts"], [])
+
+    def test_empty_fingerprints_directory_is_named_in_the_output(self):
+        directory = self.local_fingerprints({})
+        output = self.root / "plan.json"
+        _, out, _ = self.run_cli(
+            "lookup", "--index", self.index_path, "--fingerprints-dir", directory,
+            "--platform", "linux", "--output", output,
+        )  # fmt: skip
+        self.assertIn(f"No selected fingerprints in {directory}", out)
+
+    def test_indexed_components_missing_locally_are_misses(self):
+        fingerprints = dict.fromkeys(LLVM[:3], sha("a"))
+        _, plan = self.lookup(self.local_fingerprints(fingerprints))
+        statuses = self.statuses(plan)
+        self.assertEqual(len(statuses), 5)
+        self.assertEqual(
+            statuses["amd-llvm_run_generic"], ("miss", "missing_expected_fingerprint")
+        )
+        self.assertEqual(statuses["amd-llvm_dbg_generic"], ("miss", "incomplete_group"))
+
+    def test_artifacts_the_build_does_not_produce_are_not_checked(self):
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("a")))
+        _, plan = self.lookup(directory, ".")  # The index also holds base.
+        self.assertEqual({a["name"] for a in plan["artifacts"]}, {"amd-llvm"})
+        self.assertEqual((plan["status"], plan["action"]), ("hit", "populate"))
+
+    def test_incomplete_group_is_still_detected_with_a_broad_pattern(self):
+        fingerprints = dict.fromkeys(LLVM, sha("a"))
+        fingerprints["amd-llvm_dbg_generic"] = None
+        _, plan = self.lookup(self.local_fingerprints(fingerprints), ".")
+        self.assertEqual({a["name"] for a in plan["artifacts"]}, {"amd-llvm"})
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            self.statuses(plan)["amd-llvm_dbg_generic"],
+            ("miss", "missing_expected_fingerprint"),
+        )
+
+    def test_a_group_found_only_through_excluded_files_is_not_checked(self):
+        directory = self.local_fingerprints({"amd-llvm_dbg_generic": sha("a")})
+        _, plan = self.lookup(directory, "--exclude", "_dbg_")
+        self.assertEqual(plan["artifacts"], [])
+        self.assertEqual(plan["reason"], "no_artifacts_selected")
+
+    def test_changed_fingerprints_miss(self):
+        _, plan = self.lookup(
+            self.local_fingerprints(dict.fromkeys(LLVM, sha("other")))
+        )
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            set(self.statuses(plan).values()), {("miss", "no_matching_index_entry")}
+        )
+        self.assertNotIn("outputs", plan["artifacts"][0])
+
+    def test_incomplete_group_never_allows_partial_reuse(self):
+        fingerprints = dict.fromkeys(LLVM, sha("a"))
+        fingerprints["amd-llvm_dbg_generic"] = None
+        _, plan = self.lookup(self.local_fingerprints(fingerprints))
+        statuses = self.statuses(plan)
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            statuses["amd-llvm_dbg_generic"], ("miss", "missing_expected_fingerprint")
+        )
+        for stem in LLVM[1:]:
+            self.assertEqual(statuses[stem], ("miss", "incomplete_group"))
+            self.assertNotIn(
+                "outputs",
+                next(
+                    a for a in plan["artifacts"] if a["component"] == stem.split("_")[1]
+                ),
+            )
+
+    def test_extra_local_component_that_is_not_indexed_misses(self):
+        fingerprints = {
+            **dict.fromkeys(LLVM, sha("a")),
+            "amd-llvm_sys_generic": sha("a"),
+        }
+        _, plan = self.lookup(self.local_fingerprints(fingerprints))
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            self.statuses(plan)["amd-llvm_lib_generic"], ("miss", "incomplete_group")
+        )
+
+    def test_inconsistent_fingerprints_in_one_group_miss(self):
+        fingerprints = dict.fromkeys(LLVM, sha("a"))
+        fingerprints["amd-llvm_run_generic"] = sha("stale")
+        _, plan = self.lookup(self.local_fingerprints(fingerprints))
+        statuses = self.statuses(plan)
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            statuses["amd-llvm_lib_generic"],
+            ("miss", "inconsistent_group_fingerprints"),
+        )
+        self.assertEqual(
+            statuses["amd-llvm_run_generic"], ("miss", "no_matching_index_entry")
+        )
+
+    def test_invalid_fingerprint_file_is_a_miss(self):
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("a")))
+        (directory / "amd-llvm_lib_generic.fprint").write_text("garbage\n")
+        _, plan = self.lookup(directory)
+        self.assertEqual(
+            self.statuses(plan)["amd-llvm_lib_generic"],
+            ("miss", "invalid_expected_fingerprint"),
+        )
+        self.assertEqual(plan["status"], "miss")
+
+    def test_other_artifacts_need_include_patterns(self):
+        directory = self.local_fingerprints(
+            {**dict.fromkeys(LLVM, sha("a")), **dict.fromkeys(BASE, sha("b"))}
+        )
+        _, plan = self.lookup(directory)
+        self.assertEqual({a["name"] for a in plan["artifacts"]}, {"amd-llvm"})
+        self.assertEqual(plan["includes"], ["amd-llvm"])
+        _, plan = self.lookup(directory, "base")
+        self.assertEqual({a["name"] for a in plan["artifacts"]}, {"base"})
+        self.assertEqual(plan["status"], "hit")
+        _, plan = self.lookup(directory, ".")
+        self.assertEqual(len(plan["artifacts"]), 7)
+        self.assertEqual(plan["status"], "hit")
+
+    def test_exclude_removes_artifacts_from_the_plan(self):
+        directory = self.local_fingerprints(
+            {s: sha("a") for s in LLVM if "_dbg_" not in s}
+        )
+        _, plan = self.lookup(directory)
+        self.assertEqual(plan["status"], "miss")  # The index still has dbg.
+        _, plan = self.lookup(directory, "--exclude", "_dbg_")
+        self.assertEqual(plan["status"], "hit")
+        self.assertEqual(plan["excludes"], ["_dbg_"])
+        self.assertEqual(len(plan["artifacts"]), 4)
+
+    def test_groups_are_independent(self):
+        directory = self.local_fingerprints(
+            {**dict.fromkeys(LLVM, sha("a")), **dict.fromkeys(BASE, sha("changed"))}
+        )
+        _, plan = self.lookup(directory, ".")
+        statuses = self.statuses(plan)
+        self.assertEqual(plan["status"], "miss")
+        self.assertEqual(
+            statuses["amd-llvm_lib_generic"], ("hit", "matching_index_entry")
+        )
+        self.assertEqual(
+            statuses["base_lib_generic"], ("miss", "no_matching_index_entry")
+        )
+
+    def test_entries_for_other_platforms_do_not_match(self):
+        make_run(
+            self.staging, platform="windows", fingerprints=dict.fromkeys(LLVM, sha("w"))
+        )
+        self.record(platform="windows")
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("w")))
+        _, plan = self.lookup(directory, platform="linux")
+        self.assertEqual(plan["status"], "miss")
+        _, plan = self.lookup(directory, platform="windows")
+        self.assertEqual(plan["status"], "hit")
+
+    def test_no_selected_artifacts_is_a_miss(self):
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("a")))
+        _, plan = self.lookup(directory, "nothing-matches-this")
+        self.assertEqual(
+            (plan["status"], plan["reason"]), ("miss", "no_artifacts_selected")
+        )
+        self.assertEqual(plan["artifacts"], [])
+
+    def test_epoch_is_checked_only_when_both_sides_have_one(self):
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("a")))
+        _, plan = self.lookup(directory, "--epoch", "3")  # Index has no epoch.
+        self.assertEqual(plan["status"], "hit")
+        make_run(
+            self.staging,
+            run_id="43936062999",
+            fingerprints=dict.fromkeys(LLVM, sha("e")),
+        )
+        self.record("--epoch", "2", run_id="43936062999")
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("e")))
+        _, plan = self.lookup(directory, "--epoch", "2")
+        self.assertEqual(plan["status"], "hit")
+        _, plan = self.lookup(directory, "--epoch", "3")
+        self.assertEqual(
+            set(self.statuses(plan).values()), {("miss", "epoch_mismatch")}
+        )
+        _, plan = self.lookup(directory)
+        self.assertEqual(plan["status"], "hit")
+
+    def test_unsuccessful_lookup_removes_an_old_plan(self):
+        directory = self.local_fingerprints(dict.fromkeys(LLVM, sha("a")))
+        _, plan = self.lookup(directory)
+        self.assertEqual(plan["status"], "hit")
+        self.index_path.write_text("not json")
+        code, plan = self.lookup(directory)
+        self.assertEqual(code, 2)
+        self.assertIsNone(plan)
+
+    def test_plan_may_not_overwrite_the_index(self):
+        code, _, err = self.run_cli(
+            "lookup", "--index", self.index_path, "--fingerprints-dir", self.root,
+            "--platform", "linux", "--output", self.index_path,
+        )  # fmt: skip
+        self.assertEqual(code, 2)
+        self.assertIn("must not overwrite the index", err)
+
+    def test_lookup_function_leaves_the_index_unchanged(self):
+        index = artifact_cache.load_index(self.index_path)
+        before = json.dumps(artifact_cache.to_json(index))
+        lookup_artifacts_by_fingerprint(
+            index, self.local_fingerprints({}), "linux", ["."], []
+        )
+        self.assertEqual(json.dumps(artifact_cache.to_json(index)), before)
+
+
+class IndexTest(CacheTestCase):
+    def entry(self, **overrides) -> dict:
+        archive = "amd-llvm_lib_generic.tar.zst"
+        entry = {
+            "platform": "linux",
+            "name": "amd-llvm",
+            "component": "lib",
+            "target": "generic",
+            "fingerprint": sha("a"),
+            "provenance": {"repository": "ROCm/TheRock", "run_id": RUN_ID},
+            "outputs": [
+                {
+                    "key": archive,
+                    "uri": "https://example.com/" + RUN_ID + "-linux/" + archive,
+                    "digest": sha("d"),
+                }
+            ],
+        }
+        entry.update(overrides)
+        return entry
+
+    def load(self, *entries: dict, schema_version: int = 1) -> CacheIndex:
+        self.index_path.write_text(
+            json.dumps({"schema_version": schema_version, "entries": list(entries)})
+        )
+        return artifact_cache.load_index(self.index_path)
+
+    def test_valid_entries_load(self):
+        index = self.load(self.entry(), self.entry(component="dev", outputs=[{
+            "key": "amd-llvm_dev_generic.tar.xz",
+            "uri": "file:///cache/amd-llvm_dev_generic.tar.xz",
+            "digest": sha("d"),
+        }]))  # fmt: skip
+        self.assertEqual(len(index.entries), 2)
+        self.assertEqual(index.status, "prototype")
+
+    def test_invalid_entries_are_rejected(self):
+        archive = "amd-llvm_lib_generic.tar.zst"
+        output = {
+            "key": archive,
+            "uri": "https://example.com/" + archive,
+            "digest": sha("d"),
+        }
+
+        def with_output(**changes: str) -> list[dict]:
+            return [self.entry(outputs=[{**output, **changes}])]
+
+        missing_provenance = self.entry()
+        del missing_provenance["provenance"]
+        cases = {
+            "fingerprint": [self.entry(fingerprint="ABC")],
+            "digest": with_output(digest="abc"),
+            "scheme": with_output(uri="ftp://example.com/" + archive),
+            "credentials": with_output(uri="https://user:pw@example.com/" + archive),
+            "query": with_output(uri="https://example.com/" + archive + "?x=1"),
+            "relative file": with_output(uri="file://relative/" + archive),
+            "uri/key mismatch": with_output(uri="https://example.com/other.tar.zst"),
+            "key/artifact mismatch": with_output(key="base_lib_generic.tar.zst"),
+            "no outputs": [self.entry(outputs=[])],
+            "underscore in name": [self.entry(name="amd_llvm")],
+            "missing field": [missing_provenance],
+            "duplicate": [self.entry(), self.entry()],
+        }
+        for label, entries in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(CacheError):
+                    self.load(*entries)
+
+    def test_unsupported_schema_version_is_rejected(self):
+        with self.assertRaisesRegex(CacheError, "Unsupported index schema_version"):
+            self.load(self.entry(), schema_version=2)
+
+    def test_invalid_index_gives_exit_code_2(self):
+        self.index_path.write_text(
+            json.dumps(
+                {"schema_version": 1, "entries": [self.entry(fingerprint="bad")]}
+            )
+        )
+        code, plan = self.lookup(self.root)
+        self.assertEqual(code, 2)
+        self.assertIsNone(plan)
+
+    def test_json_output_omits_unset_fields_and_leaves_no_temporary_files(self):
+        entry = artifact_cache.CacheEntry(
+            platform="linux",
+            name="amd-llvm",
+            component="lib",
+            target="generic",
+            fingerprint=sha("a"),
+            provenance=artifact_cache.Provenance(
+                repository="ROCm/TheRock", run_id=RUN_ID
+            ),
+            outputs=[
+                artifact_cache.Output(
+                    key="amd-llvm_lib_generic.tar.zst",
+                    uri="s3://b/amd-llvm_lib_generic.tar.zst",
+                    digest=sha("d"),
+                )
+            ],
+        )
+        index = CacheIndex(schema_version=1, status="prototype", entries=[entry])
+        path = self.root / "out" / "index.json"
+        artifact_cache.write_json(path, index)
+        self.assertNotIn("epoch", json.loads(path.read_text())["entries"][0])
+        self.assertEqual([p.name for p in path.parent.iterdir()], ["index.json"])
+
+    def test_checked_in_index_is_valid(self):
+        index = artifact_cache.load_index(artifact_cache.DEFAULT_INDEX)
+        self.assertEqual(index.status, "prototype")
+        for platform in ("linux", "windows"):
+            with self.subTest(platform):
+                entries = [e for e in index.entries if e.platform == platform]
+                self.assertEqual(
+                    {e.component for e in entries}, {"dbg", "dev", "doc", "lib", "run"}
+                )
+                self.assertEqual({e.name for e in entries}, {"amd-llvm"})
+                self.assertEqual(len({e.fingerprint for e in entries}), 1)
 
 
 if __name__ == "__main__":
