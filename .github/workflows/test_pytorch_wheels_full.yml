@@ -17,9 +17,11 @@ on:
         type: string
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       test_runs_on_multi_gpu:
-        description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-multi-gpu in amdgpu_family_matrix.py
+        description: Runner label for multi-GPU test configs (e.g. distributed). Corresponds to test-runs-on-4gpu in amdgpu_family_matrix.py
         type: string
-        default: "linux-gfx942-8gpu-ossci-rocm"
+        # Distributed tests assume world_size <= 4, so they take a 4-GPU slice
+        # rather than a whole 8-GPU host (ROCm/TheRock#5623).
+        default: "linux-gfx942-4gpu-ossci-rocm"
       package_index_url:
         description: Python package index URL to test, typically a repo.amd.com aggregate whl-next index
         required: true
@@ -98,7 +100,7 @@ on:
         default: "linux-gfx942-1gpu-ccs-csp-ossci-rocm"
       test_runs_on_multi_gpu:
         type: string
-        default: "linux-gfx942-8gpu-ossci-rocm"
+        default: "linux-gfx942-4gpu-ossci-rocm"
       package_index_url:
         required: true
         type: string
