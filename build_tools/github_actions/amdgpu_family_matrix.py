@@ -278,6 +278,13 @@ amdgpu_family_info_matrix dictionary fields:
     "multi_gpu_pool" in fetch_test_configurations.py. Pools never fall back to one another: a
     family without the named pool skips those components, so 2-GPU-capable jobs stay off the
     scarce 8-GPU nodes and jobs needing 8 GPUs never land on a 2-GPU node.
+- test-runs-on-apptainer-labels / test-runs-on-multi-gpu-apptainer-labels: (optional) Apptainer
+    runner pools (e.g. Crusoe), same format as test-runs-on-labels. Only component tests draw
+    them, joined to test-runs-on-labels / test-runs-on-multi-gpu-labels; they get Apptainer
+    container options. Python and package tests, and older TheRock, ignore them.
+- onboarding-runners: (optional) {"labels": [...], "repositories": [...]}: runners still being
+    onboarded. For jobs of other repositories, those labels are removed from every *-labels pool.
+    Delete it to open the runners to every repository.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
     ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
@@ -921,8 +928,14 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
                 runners["test-runs-on-sandbox"] = ""
                 runners["test-runs-on-sandbox-labels"] = []
 
-    repository = os.environ.get("GITHUB_REPOSITORY")
-    for family_config in result.values():
+    _withhold_onboarding_runners(result, os.environ.get("GITHUB_REPOSITORY"))
+    return result
+
+
+def _withhold_onboarding_runners(families: dict, repository: str | None) -> None:
+    """Drop each platform's onboarding-runners labels from its pools, in place,
+    unless `repository` is one that may use them."""
+    for family_config in families.values():
         for runners in family_config.values():
             if not isinstance(runners, dict):
                 continue
@@ -937,8 +950,6 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
                         runners[key] = kept
                     else:
                         del runners[key]
-
-    return result
 
 
 def pool_with_apptainer(runners: dict, pool_key: str) -> list[dict] | None:

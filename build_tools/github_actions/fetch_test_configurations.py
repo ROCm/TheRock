@@ -22,10 +22,12 @@ import json
 import logging
 import os
 import platform as platform_module
+from collections.abc import Collection
 from pathlib import Path
 
 from github_actions_api import *
 from amdgpu_family_matrix import (
+    APPTAINER_POOL_KEYS,
     MULTI_GPU_POOL_NAMES,
     MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
@@ -161,10 +163,16 @@ _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
+# Jobs that pool draws keep off Apptainer labels; a manual run can still pick
+# one. libhipcxx_amdclang faults on Crusoe's amdgpu 6.16.13 (OSSCI: 6.19.14).
+_APPTAINER_EXCLUDED_POOL_JOBS = ["libhipcxx_amdclang"]
 
 
 def _build_container_options(
-    job_config: dict, platform: str, amdgpu_families: str = ""
+    job_config: dict,
+    platform: str,
+    amdgpu_families: str = "",
+    apptainer_labels: Collection[str] = _APPTAINER_RUNNER_LABELS,
 ) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
@@ -174,6 +182,7 @@ def _build_container_options(
             test_runner label also decides whether Apptainer options apply.
         platform: The platform (e.g., "linux", "windows", "wsl")
         amdgpu_families: The AMDGPU family string being tested
+        apptainer_labels: Runner labels backed by Apptainer
 
     Returns:
         The modified job_config with updated container_options
@@ -204,12 +213,12 @@ def _build_container_options(
     # Drop options the Apptainer runners for this family or label cannot honor
     if (
         any(family in amdgpu_families for family in _APPTAINER_FAMILIES)
-        or runner in _APPTAINER_RUNNER_LABELS
+        or runner in apptainer_labels
     ):
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]
-    if runner in _APPTAINER_RUNNER_LABELS:
+    if runner in apptainer_labels:
         options_parts.extend(_APPTAINER_JOB_OPTIONS.get(job_config.get("job_name"), []))
 
     # Concatenate all parts with a space separator
@@ -230,6 +239,20 @@ def _family_matches(
     return amdgpu_families in family_list or any(
         t in family_list for t in family_gfx_targets
     )
+
+
+def _manual_test_runs_on(job_name: str) -> str:
+    """The runner test_artifacts.yml forces on a GPU job of a manual run, or "".
+
+    Mirrors its test_runs_on rules: a user's workflow_dispatch with test_runs_on
+    set runs every GPU job there (the sanity job even for bot actors), whatever
+    this script picked. Container options and whole-node routing must follow it.
+    """
+    if os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch":
+        return ""
+    if job_name != "sanity" and "github-actions" in os.getenv("GITHUB_ACTOR", ""):
+        return ""
+    return os.getenv("TEST_RUNS_ON", "")
 
 
 def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) -> str:
@@ -292,6 +315,11 @@ _rocgdb_common = {
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
+#
+# "whole_node" is set by the loop below, not in test_matrix: on a 1-GPU
+# Apptainer label (see _APPTAINER_WHOLE_NODE_LABELS), multi-GPU components and
+# _APPTAINER_WHOLE_NODE_JOBS move to the same cluster's whole-node label, and
+# test_artifacts.yml keeps them there even when a manual test_runs_on is set.
 #
 # A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
 # pool by default. Add "multi_gpu_pool": "2gpu" to use the family's 2-GPU pool
@@ -1482,6 +1510,9 @@ def run():
     multi_gpu_pools = {}
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+    # Labels whose jobs get Apptainer container options: the known ones plus
+    # every label in the family's Apptainer pools.
+    apptainer_labels = set(_APPTAINER_RUNNER_LABELS)
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1512,9 +1543,12 @@ def run():
             else:
                 if test_runs_on_from_workflow is not None:
                     # Workflow provided a non-empty runner. Spread over the label
-                    # pool only for the family's default runner; any other runner
-                    # (a pool member, a kernel or test label) is used as-is.
-                    if test_runs_on_from_workflow == platform_info.get("test-runs-on"):
+                    # pool only for the family's default runner, and not when a
+                    # manual run pins GPU jobs to it; any other runner (a pool
+                    # member, a kernel or test label) is used as-is.
+                    if test_runs_on_from_workflow == platform_info.get(
+                        "test-runs-on"
+                    ) and not _manual_test_runs_on(""):
                         test_runs_on_labels = pool_with_apptainer(
                             platform_info, "test-runs-on-labels"
                         )
@@ -1526,9 +1560,18 @@ def run():
                     )
                     test_runs_on_default = platform_info.get("test-runs-on", "")
                 multi_gpu_pools = {
-                    key: pool_with_apptainer(platform_info, key)
+                    key: (
+                        pool_with_apptainer(platform_info, key)
+                        if key in APPTAINER_POOL_KEYS
+                        else platform_info[key]
+                    )
                     for key in MULTI_GPU_RUNNER_KEYS
                     if key in platform_info
+                }
+                apptainer_labels |= {
+                    entry["label"]
+                    for key in APPTAINER_POOL_KEYS.values()
+                    for entry in platform_info.get(key, [])
                 }
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
@@ -1828,8 +1871,13 @@ def run():
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
                 )
             elif test_runs_on_labels:
-                component["test_runner"] = select_weighted_label(
-                    test_runs_on_labels, job_name
+                pool = test_runs_on_labels
+                if job_name in _APPTAINER_EXCLUDED_POOL_JOBS:
+                    pool = [e for e in pool if e["label"] not in apptainer_labels]
+                component["test_runner"] = (
+                    select_weighted_label(pool, job_name)
+                    if pool
+                    else test_runs_on_default
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
@@ -1840,9 +1888,19 @@ def run():
                 )
                 continue
 
-        # The drawn runner, so a pool pick of the 1-GPU Apptainer label counts too.
+        manual_runner = (
+            "" if component.get("linux_cpu_runner") else _manual_test_runs_on(job_name)
+        )
+        if manual_runner:
+            # test_artifacts.yml runs the job there, whatever was picked above.
+            runner_key = (
+                "multi_gpu_runner" if "multi_gpu_runner" in component else "test_runner"
+            )
+            component[runner_key] = manual_runner
+        # The runner the job gets, so a pool pick of the 1-GPU Apptainer label
+        # counts too.
         whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(
-            component.get("test_runner") or test_runs_on_default
+            manual_runner or component.get("test_runner") or test_runs_on_default
         )
         if whole_node_runner and (
             "multi_gpu_runner" in component or job_name in _APPTAINER_WHOLE_NODE_JOBS
@@ -1855,7 +1913,7 @@ def run():
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform, amdgpu_families)
+        _build_container_options(c, platform, amdgpu_families, apptainer_labels)
         for c in components_with_runners
     ]
 

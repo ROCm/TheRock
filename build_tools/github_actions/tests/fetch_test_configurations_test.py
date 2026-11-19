@@ -51,6 +51,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
         os.environ.pop("AMDGPU_TARGETS", None)
+        # Not a manual run unless a test says so (see _manual_test_runs_on).
+        os.environ.pop("GITHUB_EVENT_NAME", None)
+        os.environ.pop("GITHUB_ACTOR", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -1238,12 +1241,30 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-crusoe-rocm")
         self.assertNotIn("--user 0:0", hip["container_options"])
 
-    def test_workflow_runner_in_label_pool_keeps_pool(self):
+    def test_default_workflow_runner_keeps_docker_options(self):
         hip = self._run_gfx950_with_pool("linux-gfx950-1gpu-ccs-ossci-rocm")[
             "hip-tests"
         ]
         self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
         self.assertIn("--user 0:0", hip["container_options"])
+
+    def test_kernel_runner_outside_label_pool_is_not_replaced(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx1151"
+        os.environ["TEST_RUNS_ON"] = "linux-strix-halo-gpu-rocm-oem"
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx1151": {
+                "linux": {
+                    "test-runs-on": "linux-gfx1151-gpu-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx1151-gpu-rocm", "count": 8}
+                    ],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        hip = {job["job_name"]: job for job in self._get_components()}["hip-tests"]
+        self.assertEqual(hip["test_runner"], "linux-strix-halo-gpu-rocm-oem")
 
     def test_whole_node_jobs_move_to_apptainer_whole_node_label(self):
         jobs = self._run_gfx950_with_pool(
@@ -1272,10 +1293,24 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs["rocprofiler-sdk"]["container_options"]
         )
 
-    def _run_gfx950_with_crusoe_in_pool(self, test_runs_on, labels, drawn):
+    def _run_gfx950_with_crusoe_in_pool(
+        self,
+        test_runs_on,
+        labels,
+        drawn,
+        *,
+        manual_actor=None,
+        test_type=None,
+        apptainer_label="linux-gfx950-1gpu-crusoe-rocm",
+    ):
         os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
         os.environ["TEST_RUNS_ON"] = test_runs_on
         os.environ["TEST_LABELS"] = json.dumps(labels)
+        if test_type:
+            os.environ["TEST_TYPE"] = test_type
+        if manual_actor:
+            os.environ["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+            os.environ["GITHUB_ACTOR"] = manual_actor
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
             "gfx950": {
                 "linux": {
@@ -1284,7 +1319,14 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                         {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "count": 9},
                     ],
                     "test-runs-on-apptainer-labels": [
-                        {"label": "linux-gfx950-1gpu-crusoe-rocm", "count": 3},
+                        {"label": apptainer_label, "count": 3},
+                    ],
+                    "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+                    "test-runs-on-multi-gpu-labels": [
+                        {"label": "linux-gfx950-8gpu-ccs-ossci-rocm", "count": 2},
+                    ],
+                    "test-runs-on-multi-gpu-apptainer-labels": [
+                        {"label": "linux-gfx950-8gpu-crusoe-rocm", "count": 4},
                     ],
                 }
             }
@@ -1300,6 +1342,98 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         ):
             fetch_test_configurations.run()
         return {job["job_name"]: job for job in self._get_components()}
+
+    def test_manual_run_on_the_default_runner_keeps_every_gpu_job_on_it(self):
+        # test_artifacts.yml runs these jobs on test_runs_on, so no pool draw.
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests", "test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+            manual_actor="someone",
+        )
+        self.assertEqual(self.drawn_from, [])
+        for name in ("hip-tests", "rocprofiler-sdk"):
+            self.assertEqual(
+                jobs[name]["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm"
+            )
+            self.assertIn("--user 0:0", jobs[name]["container_options"])
+            self.assertNotIn("whole_node", jobs[name])
+
+    def test_manual_run_on_the_apptainer_8gpu_label_sets_its_options(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-8gpu-crusoe-rocm",
+            ["test:rocshmem"],
+            drawn="linux-gfx950-8gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+            test_type="standard",
+        )
+        rocshmem = jobs["rocshmem"]
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertNotIn("--user 0:0", rocshmem["container_options"])
+
+    def test_manual_run_on_the_apptainer_1gpu_label_moves_multi_gpu_to_whole_node(
+        self,
+    ):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:rocshmem"],
+            drawn="linux-gfx950-8gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+            test_type="standard",
+        )
+        rocshmem = jobs["rocshmem"]
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(rocshmem["whole_node"])
+        self.assertNotIn("--user 0:0", rocshmem["container_options"])
+
+    def test_bot_dispatch_still_draws_from_the_pool(self):
+        # test_artifacts.yml rule 1 skips github-actions actors.
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+            manual_actor="github-actions[bot]",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
+        self.assertEqual(
+            jobs["hip-tests"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+        self.assertNotIn("--user 0:0", jobs["hip-tests"]["container_options"])
+
+    def test_excluded_job_is_drawn_without_the_apptainer_labels(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests", "test:libhipcxx_amdclang"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertIn(["linux-gfx950-1gpu-ccs-ossci-rocm"], self.drawn_from)
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
+
+    def test_manual_run_keeps_an_excluded_job_on_the_apptainer_label(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:libhipcxx_amdclang"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+        )
+        self.assertEqual(
+            jobs["libhipcxx_amdclang"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+
+    def test_labels_of_the_config_apptainer_pool_get_apptainer_options(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests"],
+            drawn="linux-gfx950-1gpu-newcsp-rocm",
+            apptainer_label="linux-gfx950-1gpu-newcsp-rocm",
+        )
+        self.assertNotIn("--user 0:0", jobs["hip-tests"]["container_options"])
 
     def test_apptainer_pool_widens_the_component_label_pool(self):
         self._run_gfx950_with_crusoe_in_pool(
