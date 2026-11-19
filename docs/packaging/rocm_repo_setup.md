@@ -79,10 +79,10 @@ under the repository base: packages live under `<stream-root>/core/packages/`
 while the key sits beside `core/`, so the two are supplied separately when
 building the package.
 
-> **Nightly and dev are currently unsigned, and they expire.** Their
-> repositories publish no signatures today, so their `amd-repo-setup` packages
-> disable signature verification (`gpgcheck=0` / apt `Trusted: yes`) and ship no
-> key.
+> **Nightly and dev packages don't check signatures yet, and they expire.** Dev
+> repositories are unsigned. Nightly repositories are now signed, but the
+> `amd-repo-setup` package for both still disables signature verification
+> (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
 >
 > More importantly, a nightly or dev repo file names **one specific build**.
 > Retention prunes old builds, so the package stops resolving once the build it
@@ -205,7 +205,7 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
 ```
 
 The nightly stream is pinned to a single build; pass its identifier. No key is
-needed, since the nightly repository is unsigned:
+needed, since the nightly package doesn't check signatures yet:
 
 ```bash
 python3 build_tools/packaging/linux/build_repo_setup_package.py \

@@ -63,7 +63,7 @@ python build_repo_setup_package.py \
 ```
 
 The same build for a per-build stream, which pins the repository to one build
-folder and ships no signing key (those repositories are unsigned):
+folder and ships no signing key (its package doesn't check signatures):
 
 ```
 python build_repo_setup_package.py \
