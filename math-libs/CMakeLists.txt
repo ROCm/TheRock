@@ -183,6 +183,13 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_DIR=
         -DHIPCCL_BUILD_ALL=ON
         -DHIPCCL_BUILD_LIBHIPCXX=OFF
+        # Until the rocm-libraries pin has the hipccl3 3.1 changes (where libhipcxx
+        # is a hard requirement and rocThrust exports it), keep rocThrust off the
+        # optional libhipcxx backend. libhipcxx is now built before hipCCL, so
+        # without this rocThrust would link libhipcxx::libhipcxx but its installed
+        # package config would not find_package(libhipcxx), breaking consumers.
+        # Ignored (unused variable) by pins where the option no longer exists.
+        -DROCTHRUST_USE_LIBHIPCXX=OFF
         -DBUILD_TEST=OFF
       COMPILER_TOOLCHAIN
         amd-hip
@@ -217,6 +224,13 @@ if(THEROCK_ENABLE_PRIM)
           -DROCM_DIR=
           -DHIPCCL_BUILD_ALL=ON
           -DHIPCCL_BUILD_LIBHIPCXX=OFF
+          # Until the rocm-libraries pin has the hipccl3 3.1 changes (where libhipcxx
+          # is a hard requirement and rocThrust exports it), keep rocThrust off the
+          # optional libhipcxx backend. libhipcxx is now built before hipCCL, so
+          # without this rocThrust would link libhipcxx::libhipcxx but its installed
+          # package config would not find_package(libhipcxx), breaking consumers.
+          # Ignored (unused variable) by pins where the option no longer exists.
+          -DROCTHRUST_USE_LIBHIPCXX=OFF
           -DBUILD_TEST=ON
           -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
           -DUSE_SYSTEM_LIB=ON
