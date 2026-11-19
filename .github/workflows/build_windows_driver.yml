@@ -19,11 +19,16 @@ on:
       release_type:
         type: string
         default: ci
+      quartz_tracking_id:
+        description: "Internal Quartz release lineage, forwarded by the orchestrator."
+        type: string
+        default: ""
       repository:
+        description: "Optional source assertion; must match the repository running this workflow."
         type: string
         default: ""
       ref:
-        description: "TheRock revision containing the build scripts and source pins."
+        description: "Optional source assertion; must match github.sha. Dispatch at the desired TheRock revision."
         type: string
         default: ""
       external_repo_config:
@@ -79,13 +84,24 @@ jobs:
       runtime_artifact_url: ${{ steps.upload-runtime.outputs.artifact-url }}
       logs_artifact_url: ${{ steps.upload-logs.outputs.artifact-url }}
     steps:
+      # Build scripts always come from the revision that launched the workflow.
+      # Reject overrides instead of silently building a different source tree.
+      - name: Validate checkout identity
+        if: >-
+          ${{
+            (inputs.repository != '' && inputs.repository != github.repository) ||
+            (inputs.ref != '' && inputs.ref != github.sha)
+          }}
+        run: |
+          echo "::error::Driver builds require the triggering repository and commit. Dispatch in TheRock at the desired revision; use compiler SHA inputs for compiler overrides."
+          exit 1
+
       - name: Checkout TheRock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
           persist-credentials: false
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -123,7 +139,7 @@ jobs:
             --local-path "$CACHE_DIR/ccache" \
             --log-dir "${BUILD_DIR}/logs/ccache"
 
-      # Callers can pin build scripts separately from the compiler revisions.
+      # Compiler overrides change only gitlinks, preserving the checked-out scripts.
       - name: Apply compiler revisions
         if: ${{ inputs.llvm_sha != '' || inputs.hipify_sha != '' || inputs.spirv_sha != '' }}
         env:
