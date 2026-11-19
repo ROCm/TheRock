@@ -854,7 +854,7 @@ class TestDirectCachePublication(unittest.TestCase):
                 self.assertFalse(cache.exists())
                 self.assertEqual(list(cache.parent.iterdir()), [])
                 self.assertEqual(len(messages), 1)
-                self.assertIn(f"[Errno {error}] cannot link", messages[0])
+                self.assertIn(str(link_error), messages[0])
 
     def test_staged_link_error_is_reported_without_rename(self):
         with tempfile.TemporaryDirectory() as t:
