@@ -19,8 +19,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.fspath(Path(__file__).parent))
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent.parent))
 
 import artifact_cache
 from artifact_cache import (

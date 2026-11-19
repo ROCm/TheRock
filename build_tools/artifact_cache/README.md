@@ -272,7 +272,7 @@ fingerprint and checksum files, never artifact archives.
 Check the script's behavior using temporary local data and simulated CI runs.
 
 ```bash
-python build_tools/artifact_cache/artifact_cache_test.py -v
+python build_tools/artifact_cache/tests/artifact_cache_test.py -v
 ```
 
 Expected: `OK`. These tests include replacement of older fingerprints,
