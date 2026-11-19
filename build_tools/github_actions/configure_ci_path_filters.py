@@ -643,6 +643,11 @@ def _get_pr_files_via_api(
 # ============================================================================
 
 
+def _matches_pattern(path: str, patterns: Iterable[str]) -> bool:
+    """Whether a path matches any of the given glob patterns."""
+    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+
+
 def _is_path_unrelated_to_ci(
     path: str, skip_patterns: list[str], ci_workflow_filenames: set[str]
 ) -> bool:
@@ -741,19 +746,20 @@ def get_changed_files_for_external_repo(
 # External repo CI-plumbing detection
 # ============================================================================
 
-# TheRock CI plumbing inside a calling repository (rocm-libraries,
-# rocm-systems). These paths configure *how* a run happens -- which workflow
-# calls into TheRock, how a diff is attributed to projects, how CTest
-# categorizes tests -- rather than changing any library source.
-#
-# A change here can alter test selection for every project at once, so it
-# cannot be attributed to a subset of them. Both external repo decisions read
-# these patterns: test *depth* via is_external_repo_ci_only_change(), and test
-# *breadth* via determine_changed_projects().
-EXTERNAL_REPO_CI_PATTERNS = [
-    # Workflows in the calling repo that invoke TheRock's reusable workflows.
+# Workflows in a calling repository (rocm-libraries, rocm-systems) that invoke
+# TheRock's reusable workflows. They configure *how* a run happens rather than
+# changing any library source, and they belong to no single project, so a diff
+# confined to them covers every project.
+EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS = [
     ".github/workflows/therock*",
-    # Project discovery and shared CI helper scripts.
+]
+
+# CI plumbing that decides *which* tests run: project discovery, the subtree
+# registry, and the CTest categorization every project's tests consume. A change
+# here can alter test selection for every project at once, so unlike a caller
+# workflow it keeps full coverage even alongside component changes -- the
+# component scope it would narrow to is itself what the change rewrites.
+EXTERNAL_REPO_TEST_SELECTION_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -761,10 +767,15 @@ EXTERNAL_REPO_CI_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
-    # shared/ctest holds the CTest categorization logic that every project's
-    # tests consume, so a change there can alter selection everywhere.
     "shared/ctest/*",
 ]
+
+# Every path that is TheRock CI plumbing rather than library source. Test
+# *depth* reads this whole set via is_external_repo_ci_only_change(); test
+# *breadth* distinguishes the two halves in determine_changed_projects().
+EXTERNAL_REPO_CI_PATTERNS = (
+    EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS + EXTERNAL_REPO_TEST_SELECTION_PATTERNS
+)
 
 
 def is_external_repo_ci_only_change(
@@ -803,8 +814,7 @@ def is_external_repo_ci_only_change(
     if not relevant_paths:
         return False
     return all(
-        any(fnmatch.fnmatch(path, pattern) for pattern in EXTERNAL_REPO_CI_PATTERNS)
-        for path in relevant_paths
+        _matches_pattern(path, EXTERNAL_REPO_CI_PATTERNS) for path in relevant_paths
     )
 
 
@@ -842,8 +852,12 @@ def determine_changed_projects(
 
     Decides test *breadth*, the companion to is_external_repo_ci_only_change()'s
     *depth*; both read the same diff and skip patterns, so they agree on which
-    paths are docs-only noise. subtree_prefixes comes from the caller's
-    repos-config.json via external_repo_config.subtree_prefixes().
+    paths are docs-only noise. Breadth also defers to depth: a caller workflow
+    buys full coverage only while it is the whole diff and the run is therefore
+    quick, so the two compose into "every project, quick" or "the changed
+    projects, standard" rather than the prohibitive "every project, standard".
+    subtree_prefixes comes from the caller's repos-config.json via
+    external_repo_config.subtree_prefixes().
 
     Returns the prefixes to scope the run to. Empty means the diff could not be
     narrowed safely, which downstream means "test every project".
@@ -861,14 +875,29 @@ def determine_changed_projects(
         print("  Project scope: no CI-relevant paths changed")
         return []
 
-    # CI plumbing configures how every project builds and tests, so a change
-    # there belongs to no single project.
+    # A change to test-selection plumbing rewrites the project scope itself, so
+    # the scope it would narrow to cannot be trusted.
     if any(
-        fnmatch.fnmatch(path, pattern)
+        _matches_pattern(path, EXTERNAL_REPO_TEST_SELECTION_PATTERNS)
         for path in relevant_paths
-        for pattern in EXTERNAL_REPO_CI_PATTERNS
     ):
-        print("  Project scope: CI plumbing changed, testing every project")
+        print("  Project scope: test-selection plumbing changed, testing every project")
+        return []
+
+    # A caller workflow belongs to no single project, so on its own it covers
+    # every one of them -- affordably, since is_external_repo_ci_only_change()
+    # drops such a run to quick depth. Riding along with component changes it
+    # does not: those changes restore standard depth, and paying standard depth
+    # across every project to cover a workflow edit costs far more than the edit
+    # is worth. The component scope wins, and a workflow-only PR still gets the
+    # broad run.
+    component_paths = [
+        path
+        for path in relevant_paths
+        if not _matches_pattern(path, EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS)
+    ]
+    if not component_paths:
+        print("  Project scope: caller workflow changed, testing every project")
         return []
 
     if not subtree_prefixes:
@@ -879,13 +908,13 @@ def determine_changed_projects(
     # narrowing on the rest would miss their impact. Run everything instead.
     unclassified = [
         path
-        for path in relevant_paths
+        for path in component_paths
         if "/".join(path.split("/", 2)[:2]) not in subtree_prefixes
     ]
     if unclassified:
         print(f"  Project scope: unclassified {sorted(unclassified)[:5]}, testing all")
         return []
 
-    matched = find_matched_subtrees(relevant_paths, subtree_prefixes)
+    matched = find_matched_subtrees(component_paths, subtree_prefixes)
     print(f"  Project scope: {matched}")
     return matched

@@ -1547,10 +1547,10 @@ def _determine_test_type(
     # Confined is the operative word. A diff that edits CI plumbing *and*
     # library source is not eligible: it falls through to Priority 5 and keeps
     # "standard" depth, because the source change still needs real testing.
-    # (Such a diff does widen the run to every project, since the CI edit
-    # cannot be attributed to a subset -- but that breadth is decided by
-    # determine_changed_projects(), and widening breadth is not a reason to
-    # shrink depth.)
+    # determine_changed_projects() reads the same diff and narrows such a run to
+    # the projects that source belongs to, so the two decisions compose into
+    # "every project, quick" or "the changed projects, standard" -- never the
+    # prohibitive "every project, standard".
     #
     # This check must precede the submodule check below because
     # from_external_repo() synthesizes changed_files=[repo_name] and
