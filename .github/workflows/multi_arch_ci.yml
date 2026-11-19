@@ -56,6 +56,10 @@ on:
         type: boolean
         default: true
         description: "Build native Linux packages and run install tests"
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
+        type: boolean
+        default: false
       build_native_windows:
         type: boolean
         default: true
@@ -124,6 +128,10 @@ on:
       build_native_linux:
         type: boolean
         default: true
+      build_windows_driver:
+        description: "Also build separate Windows driver Comgr and runtime artifacts."
+        type: boolean
+        default: false
       build_native_windows:
         type: boolean
         default: true
@@ -228,6 +236,7 @@ jobs:
       }}
     uses: ./.github/workflows/multi_arch_ci_windows.yml
     with:
+      build_windows_driver: ${{ inputs.build_windows_driver == true }}
       build_config: ${{ needs.setup.outputs.windows_build_config }}
       test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}

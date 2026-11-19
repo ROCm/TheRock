@@ -1,0 +1,213 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Build Windows Driver Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      dist_amdgpu_families:
+        description: "Semicolon-separated GPU families for the driver runtimes."
+        type: string
+        required: true
+      rocm_package_version:
+        type: string
+        required: true
+      build_runs_on:
+        type: string
+        default: "aws-windows-scale-rocm-prod-mix"
+      release_type:
+        type: string
+        default: ci
+      quartz_tracking_id:
+        description: "Internal Quartz release lineage, forwarded by the orchestrator."
+        type: string
+        default: ""
+      repository:
+        description: "Optional source assertion; must match the repository running this workflow."
+        type: string
+        default: ""
+      ref:
+        description: "Optional source assertion; must match github.sha. Dispatch at the desired TheRock revision."
+        type: string
+        default: ""
+      external_repo_config:
+        description: "JSON source identity and build options for an external source override."
+        type: string
+        default: ""
+      llvm_sha:
+        description: "Optional compiler gitlink override; supply all three compiler SHAs together."
+        type: string
+        default: ""
+      hipify_sha:
+        type: string
+        default: ""
+      spirv_sha:
+        type: string
+        default: ""
+    outputs:
+      comgr_artifact_url:
+        description: "Driver Comgr download."
+        value: ${{ jobs.build.outputs.comgr_artifact_url }}
+      runtime_artifact_url:
+        description: "Driver HIP/OpenCL runtime download."
+        value: ${{ jobs.build.outputs.runtime_artifact_url }}
+      logs_artifact_url:
+        description: "Driver build logs."
+        value: ${{ jobs.build.outputs.logs_artifact_url }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Separate GitHub artifacts avoid collisions with the standard stage artifacts.
+  build:
+    name: Build Windows Driver Comgr and Runtime
+    runs-on: ${{ inputs.build_runs_on }}
+    timeout-minutes: 480
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      BUILD_DIR: B:/build
+      DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
+      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CACHE_DIR: ${{ github.workspace }}/.cache
+      TEATIME_FORCE_INTERACTIVE: 0
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+    outputs:
+      comgr_artifact_url: ${{ steps.upload-comgr.outputs.artifact-url }}
+      runtime_artifact_url: ${{ steps.upload-runtime.outputs.artifact-url }}
+      logs_artifact_url: ${{ steps.upload-logs.outputs.artifact-url }}
+    steps:
+      # Build scripts always come from the revision that launched the workflow.
+      # Reject overrides instead of silently building a different source tree.
+      - name: Validate checkout identity
+        if: >-
+          ${{
+            (inputs.repository != '' && inputs.repository != github.repository) ||
+            (inputs.ref != '' && inputs.ref != github.sha)
+          }}
+        run: |
+          echo "::error::Driver builds require the triggering repository and commit. Dispatch in TheRock at the desired revision; use compiler SHA inputs for compiler overrides."
+          exit 1
+
+      - name: Checkout TheRock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install build tools
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://nexus-service.nexus-ns.svc.cluster.local:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y ccache
+          choco install --no-progress -y ninja --version 1.13.2
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> "$GITHUB_PATH"
+
+      # Configure MSVC after installing tools so it takes priority in PATH.
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: python build_tools/health_status.py
+
+      - name: Setup ccache
+        run: |
+          python build_tools/setup_ccache.py \
+            --release-type "${RELEASE_TYPE}" \
+            --dir "$(dirname "$CCACHE_CONFIGPATH")" \
+            --local-path "$CACHE_DIR/ccache" \
+            --log-dir "${BUILD_DIR}/logs/ccache"
+
+      # Compiler overrides change only gitlinks, preserving the checked-out scripts.
+      - name: Apply compiler revisions
+        if: ${{ inputs.llvm_sha != '' || inputs.hipify_sha != '' || inputs.spirv_sha != '' }}
+        env:
+          LLVM_SHA: ${{ inputs.llvm_sha }}
+          HIPIFY_SHA: ${{ inputs.hipify_sha }}
+          SPIRV_SHA: ${{ inputs.spirv_sha }}
+        run: |
+          git update-index --cacheinfo "160000,${LLVM_SHA},compiler/amd-llvm"
+          git update-index --cacheinfo "160000,${HIPIFY_SHA},compiler/hipify"
+          git update-index --cacheinfo "160000,${SPIRV_SHA},compiler/spirv-llvm-translator"
+
+      - name: Fetch compiler and runtime sources
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          python build_tools/fetch_sources.py --stage compiler-runtime --jobs 12 --depth 1
+
+      # Kpack links the driver's static zstd, so its preset uses the same CRT.
+      - name: Configure Windows driver build
+        # External source options are caller-supplied build configuration.
+        run: | # zizmor: ignore[template-injection]
+          cmake -B "${BUILD_DIR}" -S . --preset windows-release-driver \
+            -DTHEROCK_DIST_AMDGPU_FAMILIES="${DIST_AMDGPU_FAMILIES}" \
+            -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }}
+
+      - name: Build Comgr and runtimes
+        run: |
+          cmake --build "${BUILD_DIR}" \
+            --target amd-comgr+stage hip-clr+stage ocl-clr+stage -- -k 0
+
+      - name: Validate driver artifacts
+        run: python build_tools/validate_windows_driver.py --build-dir "${BUILD_DIR}"
+
+      - name: Upload driver Comgr
+        id: upload-comgr
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-comgr
+          path: ${{ env.BUILD_DIR }}/compiler/amd-comgr/stage/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload driver runtimes
+        id: upload-runtime
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-runtime
+          path: |
+            ${{ env.BUILD_DIR }}/core/clr/stage/
+            ${{ env.BUILD_DIR }}/core/ocl-clr/stage/
+            ${{ env.BUILD_DIR }}/core/ocl-icd/stage/
+            ${{ env.BUILD_DIR }}/core/rocm-kpack/stage/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload driver build logs
+        id: upload-logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-driver-logs
+          path: |
+            ${{ env.BUILD_DIR }}/logs/
+            ${{ env.BUILD_DIR }}/CMakeCache.txt
+            ${{ env.BUILD_DIR }}/flag_settings.json

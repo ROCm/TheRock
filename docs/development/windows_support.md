@@ -572,3 +572,34 @@ features should be turned off:
 -DTHEROCK_ENABLE_MATH_LIBS=OFF \
 -DTHEROCK_ENABLE_ML_LIBS=OFF \
 ```
+
+### Windows driver Comgr and runtimes
+
+The `windows-release-driver` preset builds Comgr and the HIP/OpenCL runtimes
+with `THEROCK_FLAG_WINDOWS_DRIVER_BUILD=ON`. It includes kpack and the OpenCL
+loader required by those runtimes. From a configured Windows build environment:
+
+```bash
+python build_tools/fetch_sources.py --stage compiler-runtime --depth 1
+cmake -B build-driver -S . --preset windows-release-driver \
+  -DTHEROCK_DIST_AMDGPU_FAMILIES=gfx110X-all
+cmake --build build-driver --target amd-comgr+stage hip-clr+stage ocl-clr+stage
+python build_tools/validate_windows_driver.py --build-dir build-driver
+```
+
+Multi-Arch CI and Multi-Arch Release accept `build_windows_driver: true` to
+add this build when Windows is selected. The option defaults to `false`,
+including for scheduled releases. The reusable
+[`build_windows_driver.yml`](../../.github/workflows/build_windows_driver.yml)
+workflow can also be called independently. Driver builds use the triggering
+repository and commit for TheRock's build scripts. Dispatch the workflow in
+TheRock (or a source fork) at the desired revision; a conflicting `repository`
+or `ref` input is rejected. Cross-repository callers must dispatch into TheRock
+instead of enabling this option in their own workflow run. The compiler bumper
+supplies its three compiler SHAs separately, changing only their submodule pins.
+
+The workflow attaches `windows-driver-comgr` (including the Comgr PDB),
+`windows-driver-runtime`, and `windows-driver-logs` to its GitHub Actions run.
+These downloads have separate names and storage from the standard Windows
+stage artifacts. Driver builds use a fresh build tree and do not reuse the
+standard compiler/runtime artifacts.
