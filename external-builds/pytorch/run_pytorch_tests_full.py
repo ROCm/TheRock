@@ -16,6 +16,10 @@ with two separate run_test.py invocations:
     1. Generic tests (test_modules, test_ops, …) with ``--inductor``
     2. Inductor unit tests without ``--inductor`` (avoids nested dynamo)
 
+For the "slow" config, mirrors test.sh's TEST_CONFIG=slow: the "default"
+invocation with PYTORCH_TEST_WITH_SLOW=1 and PYTORCH_TEST_SKIP_FAST=1, so only
+@slowTest tests and tests listed in the checkout's test/slow_tests.json run.
+
 Usage examples:
 
     # Run all tests (no sharding):
@@ -32,6 +36,9 @@ Usage examples:
 
     # Run with the "inductor" config:
     python run_pytorch_tests_full.py --test-config inductor --shard 1 --num-shards 2
+
+    # Run only the slow tests:
+    python run_pytorch_tests_full.py --test-config slow --shard 1 --num-shards 4
 
     # Run with the "distributed" config on a multi-GPU runner:
     python run_pytorch_tests_full.py --test-config distributed
@@ -96,6 +103,10 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
+# The "slow" config is only recorded in test-times.json for the upstream mi350
+# slow job, so every family uses that key for slow shard balancing. Without it,
+# run_test.py falls back to the CUDA-derived "default" key's slow timings.
+SLOW_BUILD_ENVIRONMENT = "linux-noble-rocm-py3.11-mi350"
 IS_WINDOWS = platform.system() == "Windows"
 
 THEROCK_ENV_VARS = [
@@ -105,6 +116,8 @@ THEROCK_ENV_VARS = [
     "PYTORCH_TESTING_DEVICE_ONLY_FOR",
     "PYTORCH_PRINT_REPRO_ON_FAILURE",
     "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
+    "PYTORCH_TEST_WITH_SLOW",
+    "PYTORCH_TEST_SKIP_FAST",
     "TORCH_SERIALIZATION_DEBUG",
     "MIOPEN_CUSTOM_CACHE_DIR",
     "TEST_CONFIG",
@@ -117,6 +130,8 @@ THEROCK_ENV_VARS = [
 
 
 PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
+# Several test/slow_tests.json entries average over 900s on upstream CI.
+SLOW_PYTEST_TIMEOUT_SECONDS = 1800
 
 # Test modules excluded at the run_test.py level (--exclude).  These are
 # modules that hang or crash the subprocess in ways that pytest-timeout
@@ -163,9 +178,12 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
         config_libpython_ld_path()
 
     os.environ.setdefault("CI", "1")
-    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
-        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
-    )
+    if test_config == "slow":
+        build_env = SLOW_BUILD_ENVIRONMENT
+    else:
+        build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+            amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+        )
     os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
@@ -177,6 +195,11 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
 
     if test_config:
         os.environ.setdefault("TEST_CONFIG", test_config)
+
+    # Upstream .ci/pytorch/test.sh exports these for TEST_CONFIG=slow.
+    if test_config == "slow":
+        os.environ.setdefault("PYTORCH_TEST_WITH_SLOW", "1")
+        os.environ.setdefault("PYTORCH_TEST_SKIP_FAST", "1")
 
     # On 1-GPU runners, rocminfo reports all physical GPUs (e.g. 3) but only one
     # is visible via HIP_VISIBLE_DEVICES.  This causes NUM_PROCS=3 inside
@@ -458,10 +481,18 @@ def build_run_test_cmd(
         passthrough_args.append("-p")
         passthrough_args.append("no:cacheprovider")
 
-    passthrough_args.extend(["--timeout", str(PYTEST_TIMEOUT_SECONDS)])
+    passthrough_args.extend(
+        ["--timeout", str(pytest_timeout_seconds(args.test_config))]
+    )
 
     cmd.extend(passthrough_args)
     return cmd
+
+
+def pytest_timeout_seconds(test_config: str) -> int:
+    if test_config == "slow":
+        return SLOW_PYTEST_TIMEOUT_SECONDS
+    return PYTEST_TIMEOUT_SECONDS
 
 
 def build_inductor_cmds(
