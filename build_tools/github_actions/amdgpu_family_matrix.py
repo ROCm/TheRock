@@ -192,6 +192,13 @@ def select_build_runner(
     elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
         labels_config = platform_config["bump"]
         context_name = f"build-runner-bump ({platform})"
+    elif size == "native_package":
+        # Native package jobs (deb/rpm) need medium runners for sanitizer builds
+        # due to artifact extraction disk pressure (see TheRock#10095). All other
+        # variants use small.
+        resolved = "medium" if "san" in build_variant else "small"
+        labels_config = platform_config.get(resolved, platform_config["default"])
+        context_name = f"build-runner-native-package ({platform}, →{resolved})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"
