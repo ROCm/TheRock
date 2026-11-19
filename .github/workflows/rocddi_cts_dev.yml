@@ -1,0 +1,108 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Rocddi CTS and HIP development
+run-name: >-
+  Rocddi ${{ inputs.rocm_systems_ref || 'shared/rocddi-cts-dev' }} |
+  ${{ github.event_name == 'push' && 'cts' || inputs.suites }} |
+  ${{ fromJSON(inputs.arch_matrix || '[]')[0].amdgpu_family || fromJSON(inputs.arch_matrix || '[]')[0] || 'host' }}${{ fromJSON(inputs.arch_matrix || '[]')[1] && ' + more' || '' }}
+
+on:
+  push:
+    branches: [shared/rocddi-cts-dev]
+  workflow_dispatch:
+    inputs:
+      rocm_systems_ref:
+        description: "ROCm/rocm-systems branch, tag or commit"
+        type: string
+        default: shared/rocddi-cts-dev
+      arch_matrix:
+        description: 'JSON array of GPU families or objects with amdgpu_family, amdgpu_targets, test_runs_on; [] runs host CTS only'
+        type: string
+        required: true
+      suites:
+        description: "Test suites; HIP requires a nonempty architecture matrix"
+        type: choice
+        options: [both, cts, hip]
+        default: both
+      hip_test_label:
+        description: "Upstream HIP CTest label regex; all disables label filtering"
+        type: string
+        default: smoke
+      hip_test_filter:
+        description: "Optional upstream HIP CTest test-name regex"
+        type: string
+        default: ''
+      hip_test_level:
+        description: "Upstream HIP workload parameter level"
+        type: choice
+        options: [level_0, level_1, level_2, level_3, level_4]
+        default: level_0
+      baseline_run_id:
+        description: "Prebuilt LLVM/base/sysdeps run"
+        type: string
+        default: '43537534946'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  configure:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.configure.outputs.matrix }}
+      external_repo_config: ${{ steps.configure.outputs.external_repo_config }}
+      run_cts: ${{ steps.configure.outputs.run_cts }}
+      run_hip: ${{ steps.configure.outputs.run_hip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - name: Checkout runner configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          repository: ROCm/therock-ci-config
+          path: .ci-config
+          persist-credentials: false
+      - name: Resolve runtime revision and architecture matrix
+        id: configure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI_CONFIG_PATH: ${{ github.workspace }}/.ci-config
+          ROCM_SYSTEMS_REF: ${{ inputs.rocm_systems_ref || 'shared/rocddi-cts-dev' }}
+          ARCH_MATRIX: ${{ inputs.arch_matrix || '[]' }}
+          SUITES: ${{ github.event_name == 'push' && 'cts' || inputs.suites }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 build_tools/github_actions/configure_rocddi_dev.py \
+            --rocm-systems-ref "$ROCM_SYSTEMS_REF" \
+            --arch-matrix "$ARCH_MATRIX" --suites "$SUITES"
+
+  test:
+    name: ${{ matrix.profile }}
+    needs: configure
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.configure.outputs.matrix) }}
+    uses: ./.github/workflows/rocddi_dev_test.yml
+    with:
+      profile: ${{ matrix.profile }}
+      amdgpu_family: ${{ matrix.amdgpu_family }}
+      amdgpu_targets: ${{ matrix.amdgpu_targets }}
+      test_runs_on: ${{ matrix.test_runs_on }}
+      container_options: ${{ matrix.container_options }}
+      external_repo_config: ${{ needs.configure.outputs.external_repo_config }}
+      rocm_systems_ref: ${{ inputs.rocm_systems_ref || 'shared/rocddi-cts-dev' }}
+      run_cts: ${{ needs.configure.outputs.run_cts == 'true' }}
+      run_hip: ${{ needs.configure.outputs.run_hip == 'true' }}
+      hip_test_label: ${{ inputs.hip_test_label }}
+      hip_test_filter: ${{ inputs.hip_test_filter }}
+      hip_test_level: ${{ inputs.hip_test_level || 'level_0' }}
+      baseline_run_id: ${{ inputs.baseline_run_id || '43537534946' }}

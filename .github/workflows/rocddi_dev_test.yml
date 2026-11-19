@@ -1,0 +1,263 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Build and test a rocddi development profile
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        required: true
+      amdgpu_family:
+        type: string
+        required: true
+      amdgpu_targets:
+        type: string
+        required: true
+      test_runs_on:
+        type: string
+        required: true
+      container_options:
+        type: string
+        required: true
+      external_repo_config:
+        type: string
+        required: true
+      rocm_systems_ref:
+        type: string
+        required: true
+      baseline_run_id:
+        type: string
+        required: true
+      run_cts:
+        type: boolean
+        required: true
+      run_hip:
+        type: boolean
+        required: true
+      hip_test_label:
+        type: string
+        default: smoke
+      hip_test_filter:
+        type: string
+        default: ''
+      hip_test_level:
+        type: string
+        default: level_0
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: >-
+      ${{
+        github.repository == 'ROCm/TheRock' &&
+        (github.event_name == 'workflow_dispatch' ||
+         (github.event_name == 'push' && github.ref == 'refs/heads/shared/rocddi-cts-dev'))
+      }}
+    runs-on: aws-linux-scale-rocm-medium
+    timeout-minutes: 180
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce
+    env:
+      RELEASE_TYPE: ci
+      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
+      ROCM_SYSTEMS_REF: ${{ inputs.rocm_systems_ref }}
+      BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+      PROFILE: ${{ inputs.profile }}
+      TEST_RUNS_ON: ${{ inputs.test_runs_on }}
+      RUN_HIP: ${{ inputs.run_hip }}
+      HIP_TEST_LABEL: ${{ inputs.hip_test_label }}
+      HIP_TEST_FILTER: ${{ inputs.hip_test_filter }}
+      HIP_TEST_LEVEL: ${{ inputs.hip_test_level }}
+      TEATIME_FORCE_INTERACTIVE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+    outputs:
+      cts_ready: ${{ steps.upload_cts.outcome == 'success' }}
+      hip_ready: ${{ steps.upload_hip.outcome == 'success' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 15
+        with:
+          persist-credentials: false
+      - name: Install build tooling
+        run: python -m pip install -r requirements.txt
+      - name: Fetch selected ROCm sources
+        timeout-minutes: 15
+        run: python build_tools/fetch_sources.py --stage runtime-tests --jobs 12 --depth 1
+      - name: Prepare selected runtime's Rust dependencies
+        run: |
+          toolchain=$(python -c 'import tomllib; print(tomllib.load(open("rocm-systems/runtimes/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$toolchain" --profile minimal --component rustfmt,clippy
+          echo "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}" >> "$GITHUB_ENV"
+          (cd rocm-systems/runtimes && cargo fetch --locked)
+      - name: Assemble compiler distribution
+        run: bash build_tools/github_actions/rocddi_dev_build.sh compiler
+      - name: Build selected runtime
+        id: runtime
+        run: bash build_tools/github_actions/rocddi_dev_build.sh runtime
+      - name: Build independent runtime CTS
+        id: cts
+        if: ${{ inputs.run_cts }}
+        run: bash build_tools/github_actions/rocddi_dev_build.sh cts
+      - name: Upload CTS and selected runtime
+        id: upload_cts
+        if: ${{ !cancelled() && steps.cts.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocddi-cts-${{ inputs.profile }}
+          path: rocddi-cts.tar.gz
+          retention-days: 7
+      - name: Build upstream HIP tests with rocddi HSA
+        id: hip
+        if: ${{ !cancelled() && inputs.run_hip && steps.runtime.outcome == 'success' }}
+        run: bash build_tools/github_actions/rocddi_dev_build.sh hip
+      - name: Upload upstream HIP tests and candidate SDK
+        id: upload_hip
+        if: ${{ !cancelled() && steps.hip.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocddi-hip-tests-${{ inputs.profile }}
+          path: rocddi-hip-tests.tar.gz
+          retention-days: 7
+      - name: Run upstream runtime host tests
+        if: ${{ !cancelled() && inputs.run_cts && steps.runtime.outcome == 'success' }}
+        run: bash build_tools/github_actions/rocddi_dev_build.sh host-tests
+      - name: Run installed host CTS
+        if: ${{ !cancelled() && steps.cts.outcome == 'success' }}
+        run: |
+          status=0
+          for suite in amdf-host ddi-host; do
+            args=()
+            if [[ "$suite" == amdf-host ]]; then
+              args+=("-DRUNTIME_PREFIX:PATH=$PWD/build/core/rocm-runtimes/build")
+            fi
+            ctest -S build/cts-prefix/cmake/RunTests.cmake -V \
+              "-DTEST_SUITE:STRING=$suite" "${args[@]}" \
+              "-DRESULTS_DIRECTORY:PATH=$PWD/diagnostics/$suite" || status=1
+          done
+          exit "$status"
+      - name: Preserve build and host diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocddi-build-diagnostics-${{ inputs.profile }}
+          path: |
+            SOURCE.json
+            build/logs/
+            build/CMakeCache.txt
+            build/core/rocm-runtimes/build/rocm-runtimes-host-tests.xml
+            diagnostics/
+          retention-days: 7
+
+  cts:
+    needs: build
+    if: >-
+      ${{
+        github.repository == 'ROCm/TheRock' &&
+        (github.event_name == 'workflow_dispatch' ||
+         (github.event_name == 'push' && github.ref == 'refs/heads/shared/rocddi-cts-dev')) &&
+        !cancelled() && inputs.test_runs_on != '""' && needs.build.outputs.cts_ready == 'true'
+      }}
+    runs-on: ${{ fromJSON(inputs.test_runs_on) }}
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+      options: ${{ inputs.container_options }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rocddi-cts-${{ inputs.profile }}
+      - name: Run installed runtime CTS on selected profile
+        run: |
+          tar -xzf rocddi-cts.tar.gz
+          cat SOURCE.json
+          status=0
+          for suite in amdf-host ddi-host kfd; do
+            args=()
+            if [[ "$suite" == amdf-host ]]; then
+              args+=("-DRUNTIME_PREFIX:PATH=$PWD/cts-runtime")
+            fi
+            ctest -S cts-prefix/cmake/RunTests.cmake -V \
+              "-DTEST_SUITE:STRING=$suite" "${args[@]}" \
+              "-DRESULTS_DIRECTORY:PATH=$PWD/diagnostics/$suite" || status=1
+          done
+          exit "$status"
+      - name: Preserve native CTS diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocddi-cts-diagnostics-${{ inputs.profile }}
+          path: |
+            SOURCE.json
+            diagnostics/
+          retention-days: 7
+
+  hip:
+    needs: build
+    if: >-
+      ${{
+        github.repository == 'ROCm/TheRock' &&
+        (github.event_name == 'workflow_dispatch' ||
+         (github.event_name == 'push' && github.ref == 'refs/heads/shared/rocddi-cts-dev')) &&
+        !cancelled() && needs.build.outputs.hip_ready == 'true'
+      }}
+    runs-on: ${{ fromJSON(inputs.test_runs_on) }}
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
+      options: ${{ inputs.container_options }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rocddi-hip-tests-${{ inputs.profile }}
+      - name: Verify candidate HSA dependency
+        run: |
+          mkdir candidate diagnostics
+          tar -xzf rocddi-hip-tests.tar.gz -C candidate
+          cat candidate/SOURCE.json
+          (cd candidate && sha256sum -c HSA.sha256)
+          ldd candidate/lib/libamdhip64.so | tee diagnostics/hip-dependencies.txt
+          resolved_hsa=$(awk '$1 == "libhsa-runtime64.so.1" {print $3}' diagnostics/hip-dependencies.txt)
+          test -n "$resolved_hsa"
+          cmp "$resolved_hsa" candidate/lib/libhsa-runtime64.so.1
+      - name: Run selected upstream HIP tests
+        env:
+          THEROCK_BIN_DIR: ${{ github.workspace }}/candidate/bin
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
+          HIP_TEST_LEVEL: ${{ inputs.hip_test_level }}
+          HIP_TEST_LABEL: ${{ inputs.hip_test_label }}
+          HIP_TEST_FILTER: ${{ inputs.hip_test_filter }}
+          AMD_LOG_LEVEL: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          export PATH="$PWD/candidate/bin:$PWD/candidate/lib/llvm/bin:$PATH"
+          if [[ "$HIP_TEST_LABEL" == all ]]; then
+            HIP_TEST_LABEL=''
+          fi
+          python3 build_tools/github_actions/test_executable_scripts/test_hiptests.py \
+            --label-regex "$HIP_TEST_LABEL" --test-regex "$HIP_TEST_FILTER" \
+            --junit "$PWD/diagnostics/hip-tests.xml" \
+            2>&1 | tee diagnostics/hip-tests.txt
+      - name: Preserve upstream HIP test diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rocddi-hip-diagnostics-${{ inputs.profile }}
+          path: |
+            candidate/SOURCE.json
+            diagnostics/
+            candidate/share/hip/catch_tests/Testing/
+          retention-days: 7
