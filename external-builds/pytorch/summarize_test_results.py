@@ -13,9 +13,10 @@ Two modes of operation:
    multiple downloaded artifact directories named
    ``test-reports-<config>-<shard>-<num_shards>``.  Produces one unified
    table with a *Config* and *Shard* column so all failures are visible in
-   one place.  Called from a post-matrix summary job.  Also writes
-   ``failed_test_count``, ``observed_report_count``, ``expected_report_count``,
-   and ``results_complete`` to ``$GITHUB_OUTPUT``.
+   one place, plus a per-config count table.  Called from a post-matrix
+   summary job.  Also writes ``failed_test_count``, ``observed_report_count``,
+   ``expected_report_count``, ``results_complete``, and ``test_counts`` (JSON,
+   counts per config) to ``$GITHUB_OUTPUT``.
 
 3. **Standard** (``--standard-dir``) — scans artifact directories named
    ``test-reports-<os>-<amdgpu_family>`` from test_pytorch_wheels.yml and
@@ -23,8 +24,9 @@ Two modes of operation:
    platform and family, then lists failures and skip reasons.
 
 4. **Counts** (``--counts-output``) — writes ``run_test_count``,
-   ``passed_test_count``, ``failed_test_count``, ``skipped_test_count``, and
-   ``results_complete`` for one test-reports directory to ``$GITHUB_OUTPUT``
+   ``passed_test_count``, ``failed_test_count``, ``skipped_test_count``,
+   ``not_selected_test_count``, and ``results_complete`` for one test-reports
+   directory to ``$GITHUB_OUTPUT``
    so the job's Quartz notification carries them.
 
 Every mode except the single-shard summary counts a test's final outcome: a
@@ -299,6 +301,15 @@ def write_shard_summary(
 # ---------------------------------------------------------------------------
 
 _ARTIFACT_RE = re.compile(r"test-reports-(?P<config>.+)-(?P<shard>\d+)-(?P<num>\d+)")
+_CONFIG_COUNT_COLUMNS = (
+    "RUN",
+    "PASSED",
+    "FAILED",
+    "ERROR",
+    "SKIPPED",
+    "NOT_SELECTED",
+    "FLAKY",
+)
 
 
 def _build_report_header(
@@ -373,6 +384,7 @@ def write_combined_summary(
     rows: list[tuple[str, int, str]] = []
     observed_report_count = 0
     incomplete: list[str] = []
+    counts_by_config: dict[str, dict[str, int]] = {}
     shard_dirs = sorted(combined_dir.iterdir()) if combined_dir.is_dir() else []
 
     for artifact_dir in shard_dirs:
@@ -387,9 +399,11 @@ def write_combined_summary(
         problems = check_report_set(artifact_dir)
         if problems:
             incomplete.append(f"{config} {shard_label}: {'; '.join(problems)}")
-        for (test_file, cls, test), outcome in sorted(
-            collect_outcomes(artifact_dir).items()
-        ):
+        outcomes = collect_outcomes(artifact_dir)
+        config_counts = counts_by_config.setdefault(config, {})
+        for column, count in count_outcomes(outcomes).items():
+            config_counts[column] = config_counts.get(column, 0) + count
+        for (test_file, cls, test), outcome in sorted(outcomes.items()):
             if outcome["status"] not in ("FAILED", "ERROR"):
                 continue
             rows.append(
@@ -421,6 +435,17 @@ def write_combined_summary(
     if incomplete:
         lines.append("")
 
+    if counts_by_config:
+        lines.append(
+            "| Config | Tests run | Passed | Failed | Errors | Skipped "
+            "| Not selected | Flaky |"
+        )
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for config, counts in sorted(counts_by_config.items()):
+            cells = " | ".join(str(counts[col]) for col in _CONFIG_COUNT_COLUMNS)
+            lines.append(f"| {config} | {cells} |")
+        lines.append("")
+
     if not rows and results_complete:
         lines.append(f"### All tests passed — {amdgpu_family} :white_check_mark:")
         lines.append("")
@@ -450,6 +475,13 @@ def write_combined_summary(
         "observed_report_count": observed_report_count,
         "expected_report_count": expected_report_count or 0,
         "results_complete": results_complete,
+        "test_counts": json.dumps(
+            {
+                config: {col.lower(): counts[col] for col in _CONFIG_COUNT_COLUMNS}
+                for config, counts in sorted(counts_by_config.items())
+            },
+            separators=(",", ":"),
+        ),
     }
     _write_github_outputs(outputs, github_output)
     return outputs
@@ -469,6 +501,9 @@ REPORT_METADATA = "therock-test-report.json"
 # Keep the step summary well under GitHub's 1 MiB limit.
 _MAX_FAILURE_ROWS = 200
 _MAX_SKIP_REASONS = 50
+# PyTorch's skip reason for tests PYTORCH_TEST_SKIP_FAST excludes:
+# "test is fast; we disabled it with PYTORCH_TEST_SKIP_FAST".
+_SKIP_FAST_MARKER = "PYTORCH_TEST_SKIP_FAST"
 
 
 def collect_outcomes(reports_dir: Path) -> dict[tuple[str, str, str], dict]:
@@ -499,9 +534,24 @@ def collect_outcomes(reports_dir: Path) -> dict[tuple[str, str, str], dict]:
 
 
 def count_outcomes(outcomes: dict) -> dict[str, int]:
-    counts = {"PASSED": 0, "FAILED": 0, "ERROR": 0, "SKIPPED": 0, "FLAKY": 0}
+    """Counts final outcomes.
+
+    Tests skipped by PYTORCH_TEST_SKIP_FAST (the "slow" config skips every
+    non-slow test) count as NOT_SELECTED rather than SKIPPED.
+    """
+    counts = {
+        "PASSED": 0,
+        "FAILED": 0,
+        "ERROR": 0,
+        "SKIPPED": 0,
+        "NOT_SELECTED": 0,
+        "FLAKY": 0,
+    }
     for outcome in outcomes.values():
-        counts[outcome["status"]] += 1
+        status = outcome["status"]
+        if status == "SKIPPED" and _SKIP_FAST_MARKER in outcome["message"]:
+            status = "NOT_SELECTED"
+        counts[status] += 1
         counts["FLAKY"] += outcome["flaky"]
     counts["RUN"] = counts["PASSED"] + counts["FAILED"] + counts["ERROR"]
     return counts
@@ -527,6 +577,7 @@ def write_count_outputs(reports_dir: Path, output_file: str) -> dict[str, object
             "passed_test_count": counts["PASSED"],
             "failed_test_count": counts["FAILED"] + counts["ERROR"],
             "skipped_test_count": counts["SKIPPED"],
+            "not_selected_test_count": counts["NOT_SELECTED"],
         }
     else:
         print(f"No test cases found under {reports_dir}; writing no counts")
