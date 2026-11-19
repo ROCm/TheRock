@@ -72,9 +72,10 @@ under the repository base: packages live under `<stream-root>/core/packages/`
 while the key sits beside `core/`, so the two are supplied separately when
 building the package.
 
-> **Nightly and dev are unsigned and expire.** Their repositories publish no
-> signatures, so their `amd-repo-setup` packages disable signature verification
-> (`gpgcheck=0` / apt `Trusted: yes`) and ship no key.
+> **Nightly and dev are currently unsigned, and they expire.** Their
+> repositories publish no signatures today, so their `amd-repo-setup` packages
+> disable signature verification (`gpgcheck=0` / apt `Trusted: yes`) and ship no
+> key.
 >
 > More importantly, a nightly or dev repo file names **one specific build**.
 > Retention prunes old builds, so the package stops resolving once the build it
@@ -82,9 +83,6 @@ building the package.
 > and the package must be rebuilt to follow the stream. Use `stable` for anything
 > beyond short-lived testing. `dev` is intended for developer testing rather than
 > end users.
-
-One further stream exists on `repo.amd.com`, `weekly`, but no `amd-repo-setup` is
-built for it because it is not yet serving content.
 
 ## Relationship to `amdgpu-install`
 
@@ -226,9 +224,9 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --verify-repo-url
 ```
 
-`--verify-repo-url` has no effect for the nightly and dev streams: their build
-folder is published by the same run that builds the package, so it does not
-exist yet.
+`--verify-repo-url` checks that the repository is reachable before building. It
+is skipped for nightly and dev: their package points at the build folder of the
+release run that builds it, and that run publishes the folder only afterwards.
 
 ### Package naming
 
@@ -273,9 +271,10 @@ See `build_repo_setup_package.py --help` for the full option list.
 
 ## Installing and using the repository
 
-`amd-repo-setup` is not yet published to a public download URL, so build it for
-your distro first using the previous section. Then install the resulting file,
-refresh the package manager's metadata, and install ROCm packages.
+Release runs can build and publish `amd-repo-setup`, but there is no public
+download URL for it yet, so build it for your distro first using the previous
+section. Then install the resulting file, refresh the package manager's
+metadata, and install ROCm packages.
 
 The examples below assume `--dest-dir ./repo-setup-package-out`. The built filename
 carries the package version, so the glob below is what selects it.
@@ -341,13 +340,17 @@ moving from a signed stream to `nightly`, `apt-get update` can no longer
 refresh the old repository, whose signing key was removed.
 
 On RHEL, `dnf install` switches directly, reporting a move to a lower-versioned
-stream as a downgrade. On SLES, pass `--oldpackage`: without it, `zypper` skips a
-lower-versioned package with "Nothing to do" and still exits 0.
+stream as a downgrade. On SLES, pass `--oldpackage` (without it, `zypper` skips a
+lower-versioned package with "Nothing to do" and exits 0) and `--no-gpg-checks`,
+since the package file is unsigned.
 
 ```bash
 sudo dnf install ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
-sudo zypper install --oldpackage --allow-unsigned-rpm ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
+sudo zypper --no-gpg-checks install --oldpackage ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
 ```
+
+Same-day `dev` builds can sort in either order on rpm, since the version carries
+the git hash after the date, so moving to a newer one may need the commands above.
 
 Refresh the package manager metadata afterwards, exactly as after a first
 install. Switching changes where packages are installed from; ROCm packages that
