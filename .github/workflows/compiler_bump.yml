@@ -13,6 +13,7 @@
 # - Builds ALL architectures (release + ASAN)
 # - Tests gfx90a, gfx94x, gfx950, gfx1151 (Linux) and gfx110x (Windows) with quick/standard test type
 # - No ASAN tests (build only for downstream consumption)
+# - Separate Windows driver Comgr and runtime artifacts attached to this run
 
 # Notes on security:
 #   * Higher-trust entry point: manually triggered by maintainers.
@@ -89,6 +90,9 @@ jobs:
     outputs:
       branch_name: ${{ steps.create-branch.outputs.branch_name }}
       rocm_system_ref: ${{ steps.rocm-systems-ref.outputs.sha }}
+      llvm_sha: ${{ steps.update-submodules.outputs.llvm_sha }}
+      hipify_sha: ${{ steps.update-submodules.outputs.hipify_sha }}
+      spirv_sha: ${{ steps.update-submodules.outputs.spirv_sha }}
     steps:
       - name: Generate branch name
         id: branch-name
@@ -137,6 +141,7 @@ jobs:
           git fetch origin "${LLVM_REF}"
           git checkout FETCH_HEAD
           LLVM_SHA=$(git rev-parse HEAD)
+          echo "llvm_sha=${LLVM_SHA}" >> "$GITHUB_OUTPUT"
           echo "| llvm-project | ${LLVM_REF} | \`${LLVM_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -145,6 +150,7 @@ jobs:
           git fetch origin "${HIPIFY_REF}"
           git checkout FETCH_HEAD
           HIPIFY_SHA=$(git rev-parse HEAD)
+          echo "hipify_sha=${HIPIFY_SHA}" >> "$GITHUB_OUTPUT"
           echo "| HIPIFY | ${HIPIFY_REF} | \`${HIPIFY_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -153,6 +159,7 @@ jobs:
           git fetch origin "${SPIRV_REF}"
           git checkout FETCH_HEAD
           SPIRV_SHA=$(git rev-parse HEAD)
+          echo "spirv_sha=${SPIRV_SHA}" >> "$GITHUB_OUTPUT"
           echo "| SPIRV-LLVM-Translator | ${SPIRV_REF} | \`${SPIRV_SHA:0:12}\` |" >> "$GITHUB_STEP_SUMMARY"
           cd ../..
 
@@ -453,6 +460,25 @@ jobs:
       release_type: dev
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
+
+  # Keep build scripts at the workflow revision and apply only compiler bumps.
+  build-windows-driver:
+    name: Build Windows Driver Comgr and Runtime
+    needs: [create-branch, setup-windows]
+    if: ${{ inputs.dry_run != true && needs.setup-windows.outputs.windows_build_config != '' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build_windows_driver.yml
+    with:
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
+      dist_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
+      rocm_package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
+      release_type: dev
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      llvm_sha: ${{ needs.create-branch.outputs.llvm_sha }}
+      hipify_sha: ${{ needs.create-branch.outputs.hipify_sha }}
+      spirv_sha: ${{ needs.create-branch.outputs.spirv_sha }}
 
   build-windows-tarballs:
     permissions:
@@ -845,6 +871,7 @@ jobs:
       - trigger-linux-jax-wheels
       - setup-windows
       - build-windows
+      - build-windows-driver
       - build-windows-tarballs
       - build-windows-python-packages
       - build-windows-msi
@@ -911,6 +938,9 @@ jobs:
           WINDOWS_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.windows_artifact_url }}
           WINDOWS_LOG_URL: ${{ steps.artifact-urls.outputs.windows_log_url }}
           WINDOWS_MANIFEST_URL: ${{ steps.artifact-urls.outputs.windows_manifest_url }}
+          WINDOWS_DRIVER_COMGR_URL: ${{ needs.build-windows-driver.outputs.comgr_artifact_url }}
+          WINDOWS_DRIVER_RUNTIME_URL: ${{ needs.build-windows-driver.outputs.runtime_artifact_url }}
+          WINDOWS_DRIVER_LOGS_URL: ${{ needs.build-windows-driver.outputs.logs_artifact_url }}
         run: |
           echo "## Workflow Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -992,6 +1022,18 @@ jobs:
             echo "- :x: Build failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.build-windows.result }}" == "skipped" ]; then
             echo "- :fast_forward: Build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # Windows driver artifacts are downloaded directly from this run.
+          if [ "${{ needs.build-windows-driver.result }}" == "success" ]; then
+            echo "- :white_check_mark: Driver artifacts: [Comgr](${WINDOWS_DRIVER_COMGR_URL}) | [Runtime](${WINDOWS_DRIVER_RUNTIME_URL})" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-driver.result }}" == "failure" ]; then
+            echo "- :x: Driver build failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ needs.build-windows-driver.result }}" == "skipped" ]; then
+            echo "- :fast_forward: Driver build skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "${WINDOWS_DRIVER_LOGS_URL}" ]; then
+            echo "- [Driver build logs](${WINDOWS_DRIVER_LOGS_URL})" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Windows packaging
