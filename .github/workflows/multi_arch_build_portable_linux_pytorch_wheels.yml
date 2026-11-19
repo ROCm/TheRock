@@ -50,8 +50,10 @@ on:
         default: "auto"
       test_level:
         description: >-
-          PyTorch test coverage: 'none' stops after build-time wheel validation
-          and 'standard' runs the selected GPU suite.
+          PyTorch test coverage: 'none' stops after build-time wheel validation,
+          'standard' runs the selected GPU suite, 'full' also dispatches the
+          full suite, and 'slow' also adds the slow test config to it. 'full'
+          and 'slow' need a gfx94X-dcgpu Python 3.12 build.
         type: string
         default: "standard"
       python_version:
@@ -146,6 +148,8 @@ on:
         options:
           - none
           - standard
+          - full
+          - slow
         default: standard
       python_version:
         description: Python version to build wheels for (for example, "3.12").
@@ -589,6 +593,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEST_AMDGPU_FAMILIES: ${{ inputs.test_amdgpu_families }}
       TEST_LEVEL: ${{ inputs.test_level }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
 
     steps:
       - name: Checkout
@@ -616,6 +621,7 @@ jobs:
             --build-amdgpu-families "${AMDGPU_FAMILIES}" \
             --test-amdgpu-families "${TEST_AMDGPU_FAMILIES}" \
             --test-level "${TEST_LEVEL}" \
+            --python-version "${PYTHON_VERSION}" \
             --platform linux
 
       - name: Capture job summary
@@ -654,13 +660,16 @@ jobs:
   # workflow builds a single (python_version, pytorch_git_ref), the build job's
   # torch_version output is unambiguous and only this build's success gates the
   # dispatch -- a failure for one ref no longer skips testing the others (#5777).
-  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests.
+  # Scoped to gfx94X-dcgpu Python 3.12 builds; opt in via run_full_pytorch_tests
+  # or test_level full/slow. test_level slow also runs the slow test config.
   dispatch_pytorch_wheels_full_test:
     # Keep this name static so it remains readable when the job is skipped.
     name: Dispatch PyTorch Full Tests
     if: >-
       ${{
-        inputs.run_full_pytorch_tests &&
+        (inputs.run_full_pytorch_tests ||
+          inputs.test_level == 'full' ||
+          inputs.test_level == 'slow') &&
         inputs.python_version == '3.12' &&
         contains(inputs.amdgpu_families, 'gfx94X-dcgpu')
       }}
@@ -683,7 +692,7 @@ jobs:
               "torch_version": "${{ needs.build_pytorch_wheels.outputs.torch_version }}",
               "pytorch_git_ref": "${{ inputs.pytorch_git_ref }}",
               "pytorch_git_repo": "${{ inputs.pytorch_git_ref == 'nightly' && 'pytorch/pytorch' || 'ROCm/pytorch' }}",
-              "test_configs": "${{ inputs.pytorch_git_ref == 'nightly' && 'default inductor' || 'default distributed inductor' }}",
+              "test_configs": "${{ format('{0}{1}', inputs.pytorch_git_ref == 'nightly' && 'default inductor' || 'default distributed inductor', inputs.test_level == 'slow' && ' slow' || '') }}",
               "tests_to_include": "",
               "repository": "${{ inputs.repository || github.repository }}",
               "ref": "${{ inputs.ref }}",

@@ -267,6 +267,55 @@ class ConfigurePyTorchTestMatrixTest(unittest.TestCase):
         # gfx125X-dcgpu has pytorch in disabled_framework_tests
         self.assertEqual(matrix, {"include": []})
 
+    def test_full_and_slow_levels_keep_the_standard_matrix(self) -> None:
+        with mock.patch.object(
+            m, "get_all_families_for_trigger_types", side_effect=_fake_family_matrix
+        ):
+            matrices = [
+                m.build_test_matrix(
+                    amdgpu_families=["gfxalpha-all"],
+                    platform="linux",
+                    test_level=level,
+                )
+                for level in ("standard", "full", "slow")
+            ]
+        self.assertEqual(matrices[1], matrices[0])
+        self.assertEqual(matrices[2], matrices[0])
+
+    def test_full_and_slow_require_linux_python_312(self) -> None:
+        for level in ("full", "slow"):
+            m.validate_full_test_level(
+                test_level=level, platform="linux", python_version="3.12"
+            )
+            with self.assertRaisesRegex(ValueError, "Linux-only"):
+                m.validate_full_test_level(
+                    test_level=level, platform="windows", python_version="3.12"
+                )
+            with self.assertRaisesRegex(ValueError, "not Python 3.11"):
+                m.validate_full_test_level(
+                    test_level=level, platform="linux", python_version="3.11"
+                )
+
+    def test_standard_level_accepts_any_python(self) -> None:
+        m.validate_full_test_level(
+            test_level="standard", platform="windows", python_version="3.11"
+        )
+
+    def test_main_rejects_slow_on_non_312_build(self) -> None:
+        with self.assertRaisesRegex(ValueError, "only tests Python 3.12"):
+            m.main(
+                [
+                    "--build-amdgpu-families",
+                    "gfx94X-dcgpu",
+                    "--test-level",
+                    "slow",
+                    "--platform",
+                    "linux",
+                    "--python-version",
+                    "3.11",
+                ]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

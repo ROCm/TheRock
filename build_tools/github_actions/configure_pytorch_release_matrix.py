@@ -95,7 +95,18 @@ EXCLUDED_IMPLICIT_TARGETS = {
 # * none schedules no self-hosted GPU tests. The wheel build job still runs
 #   its build-time wheel validation.
 # * standard also runs test_pytorch_wheels.yml on each selected AMDGPU family.
-PYTORCH_TEST_LEVELS = ["none", "standard"]
+# * full also dispatches test_pytorch_wheels_full.yml for gfx94X-dcgpu Python
+#   3.12 builds (Linux only).
+# * slow also adds the "slow" test config to that dispatch. The slow config
+#   alone skips every fast test, so slow keeps everything full runs.
+#
+# Release matrices emit only none and standard; nightly full-suite coverage
+# still comes from run_full_pytorch_tests, and slow coverage from the
+# scheduled test_pytorch_wheels_slow.yml.
+PYTORCH_TEST_LEVELS = ["none", "standard", "full", "slow"]
+# Levels that dispatch the full suite, and the only Python version they test.
+PYTORCH_FULL_TEST_LEVELS = ("full", "slow")
+PYTORCH_FULL_TEST_PYTHON_VERSION = "3.12"
 
 # Release workflows limit standard GPU testing to one primary Python version
 # per PyTorch ref. Use Python 3.11 to align with upstream's ROCm trunk testing.

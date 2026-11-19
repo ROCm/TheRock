@@ -26,7 +26,11 @@ from github_actions.amdgpu_family_matrix import (
     is_framework_test_disabled_for_family,
 )
 from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
-from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
+from configure_pytorch_release_matrix import (
+    PYTORCH_FULL_TEST_LEVELS,
+    PYTORCH_FULL_TEST_PYTHON_VERSION,
+    PYTORCH_TEST_LEVELS,
+)
 
 
 def split_families(value: str) -> list[str]:
@@ -45,6 +49,28 @@ def find_test_runs_on(*, amdgpu_family: str, platform: str) -> str:
             return platform_info["test-runs-on"]
 
     raise ValueError(f"No {platform} AMDGPU family entry found for {amdgpu_family!r}")
+
+
+def validate_full_test_level(
+    *, test_level: str, platform: str, python_version: str
+) -> None:
+    """Rejects full/slow where the full-suite dispatch would not run.
+
+    The dispatch only covers Linux Python 3.12 builds, so anywhere else these
+    levels would silently run only the standard suite.
+    """
+    if test_level not in PYTORCH_FULL_TEST_LEVELS:
+        return
+    if platform != "linux":
+        raise ValueError(
+            f"Test level {test_level!r} is Linux-only; use 'standard' on {platform}"
+        )
+    if python_version != PYTORCH_FULL_TEST_PYTHON_VERSION:
+        raise ValueError(
+            f"Test level {test_level!r} only tests Python "
+            f"{PYTORCH_FULL_TEST_PYTHON_VERSION} builds, not Python "
+            f"{python_version or '(unset)'}"
+        )
 
 
 def build_test_matrix(
@@ -196,8 +222,15 @@ def main(argv: list[str]) -> None:
         default="standard",
         help=(
             "Test coverage level. 'none' stops after build-time wheel "
-            "validation; 'standard' runs the GPU test matrix."
+            "validation; 'standard' runs the GPU test matrix; 'full' and "
+            "'slow' also dispatch the full suite (Linux Python 3.12 only), "
+            "and 'slow' adds the slow test config to it."
         ),
+    )
+    parser.add_argument(
+        "--python-version",
+        default="",
+        help="Python version of the build. Required for 'full' and 'slow'.",
     )
     parser.add_argument(
         "--platform",
@@ -222,6 +255,11 @@ def main(argv: list[str]) -> None:
                     "with explicit AMDGPU families"
                 )
 
+    validate_full_test_level(
+        test_level=args.test_level,
+        platform=args.platform,
+        python_version=args.python_version,
+    )
     matrix = build_test_matrix(
         amdgpu_families=test_amdgpu_families,
         platform=args.platform,
