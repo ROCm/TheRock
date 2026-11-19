@@ -709,8 +709,17 @@ def _order_by_fingerprint_yield(repo_root, repos, build_dir):
         matches = sum(
             1 for n in names if norm(n).startswith(base) or base.startswith(norm(n))
         )
-        monorepo = 5 if repo.name in ("rocm-libraries", "rocm-systems") else 0
-        return matches + monorepo
+        is_monorepo = repo.name in ("rocm-libraries", "rocm-systems")
+        # Bucket: clean per-component subprojects that produce a fingerprint
+        # first (fast, single-component signal), the coarse+slow monorepos next,
+        # and components that map to nothing last.
+        if not is_monorepo and matches:
+            bucket = 2
+        elif is_monorepo:
+            bucket = 1
+        else:
+            bucket = 0
+        return (bucket, matches)
 
     ranked = sorted(repos, key=score, reverse=True)
     return [
@@ -728,9 +737,14 @@ def run_build(args) -> None:
     families = args.families
     local = LocalIndex(Path(args.local_index), args.platform, args.build_variant)
     cloud = _maybe_cloud(args)
-    components = (
-        json.loads(Path(args.components).read_text()) if args.components else []
-    )
+    if args.components:
+        components = json.loads(Path(args.components).read_text())
+    else:
+        repos = discover_source_repos(repo_root, 0)
+        components = _order_by_fingerprint_yield(repo_root, repos, build_dir)
+        if args.max_components:
+            components = components[: args.max_components]
+    print(f"[benchmark] sweeping {len(components)} components", flush=True)
 
     configure_cmd = [
         "cmake",
