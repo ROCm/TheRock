@@ -64,7 +64,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     RUNTIME_DEPS
       hip-clr
       amd-llvm
-      ROCR-Runtime
+      ${THEROCK_HSA_RUNTIME_TARGET}
   )
   therock_cmake_subproject_glob_c_sources(aqlprofile
     SUBDIRS .
@@ -205,7 +205,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       lib
     RUNTIME_DEPS
       hip-clr
-      ROCR-Runtime
+      ${THEROCK_HSA_RUNTIME_TARGET}
   )
   therock_cmake_subproject_glob_c_sources(roctracer
     SUBDIRS .

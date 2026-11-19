@@ -15,6 +15,12 @@ include(therock_flag_utils)
 # Flag declarations
 ###############################################################################
 
+therock_declare_flag(
+  NAME USE_ROCDDI_FOR_HSA_RUNTIME
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Use the rocddi HSA runtime and omit the ROCr HSA runtime build"
+)
+
 # Build flag infrastructure conformance canaries. These are consumed by the
 # unconditional aux-overlay compile check. They deliberately exercise both
 # BOOL values and INTEGER serialization. Do not remove or repurpose them.

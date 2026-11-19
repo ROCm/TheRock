@@ -284,6 +284,8 @@ endif()
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
+include(therock_runtime_provider)
+
 
 ################################################################################
 # GPU target selection

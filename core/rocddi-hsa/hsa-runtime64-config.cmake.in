@@ -1,0 +1,17 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+@PACKAGE_INIT@
+
+set(hsa-runtime64_VERSION "@HSA_VERSION@")
+set_and_check(hsa-runtime64_INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/include")
+set_and_check(hsa-runtime64_LIBRARY "${PACKAGE_PREFIX_DIR}/lib/@HSA_SONAME@")
+if(NOT TARGET hsa-runtime64::hsa-runtime64)
+  add_library(hsa-runtime64::hsa-runtime64 SHARED IMPORTED)
+  set_target_properties(hsa-runtime64::hsa-runtime64 PROPERTIES
+    IMPORTED_LOCATION "${hsa-runtime64_LIBRARY}"
+    IMPORTED_SONAME "@HSA_SONAME@"
+    INTERFACE_INCLUDE_DIRECTORIES "${hsa-runtime64_INCLUDE_DIR}"
+  )
+endif()
+check_required_components(hsa-runtime64)

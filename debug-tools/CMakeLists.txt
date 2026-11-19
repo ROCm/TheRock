@@ -160,7 +160,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
       amd-llvm
     RUNTIME_DEPS
       amd-dbgapi
-      ROCR-Runtime
+      ${THEROCK_HSA_RUNTIME_TARGET}
       ${THEROCK_BUNDLED_ELFUTILS}
     INTERFACE_LINK_DIRS
       "lib"
@@ -195,7 +195,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
       ${THEROCK_BUNDLED_ELFUTILS}
       amd-dbgapi
       rocr-debug-agent
-      ROCR-Runtime
+      ${THEROCK_HSA_RUNTIME_TARGET}
   )
 endif()
 
@@ -229,7 +229,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
         amd-dbgapi
         hip-clr
         rocr-debug-agent
-        ROCR-Runtime
+        ${THEROCK_HSA_RUNTIME_TARGET}
         ${THEROCK_BUNDLED_ELFUTILS}
     )
 
@@ -254,7 +254,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
         hip-clr
         rocr-debug-agent
         rocr-debug-agent-tests
-        ROCR-Runtime
+        ${THEROCK_HSA_RUNTIME_TARGET}
     )
   endif()
 endif()

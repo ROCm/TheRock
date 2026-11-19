@@ -38,7 +38,7 @@ if(THEROCK_ENABLE_RDC)
       therock-grpc
 
     RUNTIME_DEPS
-      ROCR-Runtime
+      ${THEROCK_HSA_RUNTIME_TARGET}
       amdsmi
       rocprofiler-sdk
       ${THEROCK_BUNDLED_LIBCAP}
