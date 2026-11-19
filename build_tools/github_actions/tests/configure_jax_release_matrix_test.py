@@ -370,6 +370,27 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
             [("3.12", "rocm-jaxlib-vFAKE-new")],
         )
 
+    def test_asan_releases_build_only_the_ci_ref_and_python(self):
+        for build_variant in m.ASAN_BUILD_VARIANTS:
+            with self.subTest(build_variant=build_variant):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type="nightly",
+                    platform="linux",
+                    build_variant=build_variant,
+                )
+                self.assertEqual(
+                    [(row["python_version"], row["jax_ref"]) for row in matrix],
+                    [("3.12", "rocm-jaxlib-vFAKE-new")],
+                )
+
+    def test_unknown_build_variant_raises(self):
+        with self.assertRaises(ValueError):
+            m.generate_jax_matrix_for_release_type(
+                release_type="nightly",
+                platform="linux",
+                build_variant="tsan",
+            )
+
     def test_unknown_release_type_raises(self):
         with self.assertRaises(ValueError):
             m.generate_jax_matrix_for_release_type(

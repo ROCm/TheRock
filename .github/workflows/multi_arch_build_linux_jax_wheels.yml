@@ -70,6 +70,10 @@ on:
         description: "Release type."
         type: string
         required: true
+      build_variant:
+        description: "Build variant of the ROCm release. A variant containing asan builds host-ASAN wheels and publishes them to whl-next-asan."
+        type: string
+        default: "release"
       test_size:
         description: >-
           "small" is the PR-sized selection on one GPU, "medium" is the whole
@@ -159,6 +163,10 @@ on:
         description: "Release type."
         type: string
         required: true
+      build_variant:
+        description: "Build variant of the ROCm release. A variant containing asan builds host-ASAN wheels and publishes them to whl-next-asan."
+        type: string
+        default: "release"
       test_size:
         description: >-
           "small" is the PR-sized selection on one GPU, "medium" is the whole
@@ -261,11 +269,13 @@ jobs:
         id: resolve_jax_version
         env:
           WHEEL_TYPE: ${{ inputs.wheel_type }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python build_tools/github_actions/resolve_jax_version.py \
             --wheel-type "${WHEEL_TYPE}" \
             --rocm-version "${ROCM_VERSION}" \
-            --jax-source-dir jax-source
+            --jax-source-dir jax-source \
+            --build-variant "${BUILD_VARIANT}"
 
       - name: Build JAX wheels
         working-directory: jax-source
@@ -276,6 +286,7 @@ jobs:
           JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
           GFX_ARCH: ${{ inputs.gfx_arch }}
           ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+          VARIANT_BAZEL_OPTIONS: ${{ steps.resolve_jax_version.outputs.bazel_options }}
         run: |
           docker run --rm \
             --user root \
@@ -284,6 +295,7 @@ jobs:
             --env JAX_WHEELS \
             --env GFX_ARCH \
             --env ROCM_PACKAGE_FIND_LINKS_URL \
+            --env VARIANT_BAZEL_OPTIONS \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
@@ -306,6 +318,7 @@ jobs:
                 --python_version="${PYTHON_VERSION}" \
                 --bazel_startup_options=--bazelrc=build/rocm/rocm.bazelrc \
                 --bazel_options=--config=rocm_release_wheel \
+                ${VARIANT_BAZEL_OPTIONS} \
                 --bazel_options=--repo_env=ROCM_PATH="${ROCM_ROOT}" \
                 --bazel_options=--repo_env=ML_WHEEL_TYPE=release \
                 --bazel_options=--repo_env=ML_WHEEL_VERSION_SUFFIX="${ML_WHEEL_VERSION_SUFFIX}" \
@@ -331,10 +344,13 @@ jobs:
       - name: Upload JAX wheels to release bucket
         id: publish_jax_wheels
         if: ${{ inputs.publish }}
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: |
           python build_tools/github_actions/publish_jax_to_release_bucket.py \
             --source-dir="${PACKAGE_DIST_DIR}" \
             --release-type="${BUILD_RELEASE_TYPE}" \
+            --build-variant="${BUILD_VARIANT}" \
             --structured
 
 

@@ -110,8 +110,42 @@ class ResolveJaxVersionTest(unittest.TestCase):
                 [
                     "ml_wheel_version_suffix=.dev20261002+rocm7.14.0a20261002",
                     "wheels=jax,jaxlib,jax-rocm-plugin,jax-rocm-pjrt",
+                    "bazel_options=",
                 ],
             )
+
+    def test_asan_variants_add_host_asan_bazel_options(self):
+        for build_variant in ("asan", "asan-debug", "host-asan", "host-asan-debug"):
+            with (
+                self.subTest(build_variant=build_variant),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                output = Path(tmp) / "github_output"
+                with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": os.fspath(output)}):
+                    m.main(
+                        [
+                            "--wheel-type",
+                            "release",
+                            "--rocm-version",
+                            "10.3.0a20261119+asandebug",
+                            "--jax-source-dir",
+                            os.fspath(self.checkout),
+                            "--build-variant",
+                            build_variant,
+                        ]
+                    )
+                lines = output.read_text().splitlines()
+                # The ASAN ROCm version already labels the wheel, as for PyTorch.
+                self.assertIn(
+                    "ml_wheel_version_suffix=+rocm10.3.0a20261119-asandebug", lines
+                )
+                self.assertIn(
+                    "bazel_options=--bazel_options=--config=asan_shared"
+                    " --bazel_options=--copt=-fsanitize=address"
+                    " --bazel_options=--copt=-fno-gpu-sanitize"
+                    " --bazel_options=--linkopt=-fsanitize=address",
+                    lines,
+                )
 
 
 if __name__ == "__main__":
