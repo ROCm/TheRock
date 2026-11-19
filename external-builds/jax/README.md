@@ -151,7 +151,7 @@ For more detailed build options, see the `ROCm/jax` repository and the
 
 ## Bazel remote cache
 
-The Linux JAX wheel job compiles with Bazel inside a fresh rocmless build container,
+The Linux JAX wheel job compiles with Bazel inside a fresh build container,
 so it cannot use the ccache setup that covers TheRock's CMake stages (see
 [CCache Troubleshooting](/docs/development/ccache_troubleshooting.md)). PyTorch
 wheels use sccache and S3 instead ([cache buckets](/docs/development/s3_buckets.md#cache-buckets)).
