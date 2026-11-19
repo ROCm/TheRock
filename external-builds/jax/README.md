@@ -4,11 +4,13 @@ This directory provides tooling for building JAX with ROCm Python wheels.
 
 > [!TIP]
 > If you want to install our prebuilt JAX packages instead of building them
-> from source, see [RELEASES.md](/RELEASES.md#installing-jax-python-packages) instead.
+> from source, see [Installing](#installing) below, or the short version in
+> [RELEASES.md](/RELEASES.md#installing-multi-arch-jax-python-packages).
 
 Table of contents:
 
 - [Support status](#support-status)
+- [Installing](#installing)
 - [Build instructions](#build-instructions)
 - [Bazel remote cache](#bazel-remote-cache)
 - [Test instructions](#test-instructions)
@@ -54,6 +56,7 @@ Support for JAX is provided via stable release branches from
 
 | JAX version | Linux                                                                                                   | Windows          |
 | ----------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.12.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.12.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.12.1) | ❌ Not supported |
 | 0.12.0      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.12.0`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.12.0) | ❌ Not supported |
 | 0.11.2      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.2`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.2) | ❌ Not supported |
 | 0.11.1      | ✅ Supported via [ROCm/jax `rocm-jaxlib-v0.11.1`](https://github.com/ROCm/jax/tree/rocm-jaxlib-v0.11.1) | ❌ Not supported |
@@ -67,6 +70,59 @@ See also:
 
 - Workflow source code:
   [`multi_arch_build_linux_jax_wheels.yml`](/.github/workflows/multi_arch_build_linux_jax_wheels.yml)
+
+## Installing
+
+JAX 0.12.1 added pip extras that install the ROCm plugin together with the
+TheRock `rocm` wheels. `jax` and `jaxlib` still come from PyPI. The plugin and
+the `rocm` wheels are not on PyPI, so leave PyPI as the main index and pass
+AMD's index as `--extra-index-url`.
+
+| Extra                                                                                      | Installs                                                                                                         |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `jax[rocm]`, `jax[rocm7]`                                                                  | `jax-rocm7-plugin[with-rocm,device-all]` at the same JAX version. Device code for every ROCm 7 target.           |
+| `jax[rocm10]`                                                                              | The same, for ROCm 10.                                                                                           |
+| `jax[rocm7-device-gfx950]`, `jax[rocm10-device-gfx942]`, and the other `device-gfx*` names | One GPU target instead of all of them.                                                                           |
+| `jax[rocm7-local]`                                                                         | The ROCm 7 plugin and its PJRT wheel only. For a ROCm that is already on the machine, usually under `/opt/rocm`. |
+
+On a plugin wheel built with these extras, `with-rocm` depends on
+`rocm[libraries]` for that ROCm major (`>=7.14,<8`, or `>=10,<11`) and each
+`device-*` extra depends on the matching `rocm[device-...]` extra. The plugin's
+only unconditional dependency is the matching PJRT wheel, so installing the
+plugin by name does not install ROCm.
+
+```bash
+# ROCm 10, one GPU.
+pip install "jax[rocm10-device-gfx942]" \
+    --extra-index-url https://stable.repo.amd.com/rocm/whl-next/
+
+# ROCm 7, one GPU. jax[rocm] is the same extra as jax[rocm7].
+pip install "jax[rocm7-device-gfx950]" \
+    --extra-index-url https://repo.amd.com/rocm/whl-multi-arch/
+```
+
+A nightly ROCm uses `https://nightly.repo.amd.com/rocm/whl-next/` as that
+extra index.
+
+JAX 0.10.2 through 0.12.0 predate the extras. On those branches `with-rocm`
+still depends on the older `amd_*_instinct` packages, and there is no
+`device-*` extra, so install them by name:
+
+```bash
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+    "rocm[libraries,device-gfx942]"
+
+pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
+    "jax_rocm10_plugin==0.12.0" \
+    "jax_rocm10_pjrt==0.12.0"
+
+pip install "jax==0.12.0"
+```
+
+Pin `jax`, the plugin, and PJRT to the same version. Use `jax_rocm7_*` for a
+ROCm 7.x wheel, and replace `device-gfx942` with your GPU. The short form of
+both installs is in
+[RELEASES.md](/RELEASES.md#installing-multi-arch-jax-python-packages).
 
 ## Build instructions
 
@@ -104,13 +160,13 @@ from the TheRock multi-arch Python package index.
    git clone https://github.com/ROCm/jax.git
 
    pushd jax
-   git checkout rocm-jaxlib-v0.12.0
+   git checkout rocm-jaxlib-v0.12.1
    popd
    ```
 
 1. Choose your configuration:
 
-   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, `0.11.2`, or `0.12.0`
+   - **JAX version**: e.g. `0.10.2`, `0.11.0`, `0.11.1`, `0.11.2`, `0.12.0`, or `0.12.1`
    - **Python version**: e.g. `3.12`
    - **Package index**: the TheRock multi-arch Python package index.
 
@@ -202,6 +258,9 @@ cache itself on postsubmit.
 - Access to the JAX wheel package index
 
 ### Testing JAX wheels
+
+These steps install the plugin and PJRT by name, which is what CI does. The
+pip extras are in [Installing](#installing).
 
 1. Checkout the JAX test repo:
 
