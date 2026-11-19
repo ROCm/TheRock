@@ -53,6 +53,19 @@ MULTI_GPU_RUNNER_KEYS = [
     "test-runs-on-4gpu-labels",
 ]
 
+# Apptainer runner pools (e.g. Crusoe), joined to the pool on the left only by
+# component tests (fetch_test_configurations.py), which set Apptainer container
+# options. Callers pinned to older TheRock read the same config but ignore
+# these keys.
+APPTAINER_POOL_KEYS = {
+    "test-runs-on-labels": "test-runs-on-apptainer-labels",
+    "test-runs-on-multi-gpu-labels": "test-runs-on-multi-gpu-apptainer-labels",
+}
+# Optional {"labels": [...], "repositories": [...]}: runners still being
+# onboarded (e.g. a new CSP), drawn only by jobs of these repositories, where
+# their runner manager watches for jobs. Absent means no restriction.
+ONBOARDING_RUNNERS_KEY = "onboarding-runners"
+
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -908,7 +921,37 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
                 runners["test-runs-on-sandbox"] = ""
                 runners["test-runs-on-sandbox-labels"] = []
 
+    repository = os.environ.get("GITHUB_REPOSITORY")
+    for family_config in result.values():
+        for runners in family_config.values():
+            if not isinstance(runners, dict):
+                continue
+            onboarding = runners.get(ONBOARDING_RUNNERS_KEY)
+            if not onboarding or repository in onboarding.get("repositories", []):
+                continue
+            withheld = set(onboarding.get("labels", []))
+            for key, pool in list(runners.items()):
+                if key.endswith("-labels") and isinstance(pool, list):
+                    kept = [e for e in pool if e.get("label") not in withheld]
+                    if kept:
+                        runners[key] = kept
+                    else:
+                        del runners[key]
+
     return result
+
+
+def pool_with_apptainer(runners: dict, pool_key: str) -> list[dict] | None:
+    """The `pool_key` label pool, widened by its Apptainer pool when present.
+
+    Only an existing pool is widened: an Apptainer pool alone would replace the
+    family's default runner.
+    """
+    pool = runners.get(pool_key)
+    extra = runners.get(APPTAINER_POOL_KEYS.get(pool_key, ""))
+    if pool and extra:
+        return [*pool, *extra]
+    return pool
 
 
 def get_build_runner_labels():

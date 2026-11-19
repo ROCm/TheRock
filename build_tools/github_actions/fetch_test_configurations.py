@@ -30,6 +30,7 @@ from amdgpu_family_matrix import (
     MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    pool_with_apptainer,
     select_weighted_label,
 )
 
@@ -1514,14 +1515,18 @@ def run():
                     # pool only for the family's default runner; any other runner
                     # (a pool member, a kernel or test label) is used as-is.
                     if test_runs_on_from_workflow == platform_info.get("test-runs-on"):
-                        test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                        test_runs_on_labels = pool_with_apptainer(
+                            platform_info, "test-runs-on-labels"
+                        )
                     test_runs_on_default = test_runs_on_from_workflow
                 else:
                     # Fallback to static matrix (backward compatibility)
-                    test_runs_on_labels = platform_info.get("test-runs-on-labels")
+                    test_runs_on_labels = pool_with_apptainer(
+                        platform_info, "test-runs-on-labels"
+                    )
                     test_runs_on_default = platform_info.get("test-runs-on", "")
                 multi_gpu_pools = {
-                    key: platform_info[key]
+                    key: pool_with_apptainer(platform_info, key)
                     for key in MULTI_GPU_RUNNER_KEYS
                     if key in platform_info
                 }

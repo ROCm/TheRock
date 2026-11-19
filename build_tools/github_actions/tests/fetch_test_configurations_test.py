@@ -1282,18 +1282,35 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                     "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
                     "test-runs-on-labels": [
                         {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "count": 9},
+                    ],
+                    "test-runs-on-apptainer-labels": [
                         {"label": "linux-gfx950-1gpu-crusoe-rocm", "count": 3},
                     ],
                 }
             }
         }
+        self.drawn_from = []
+
+        def draw(pool, _name):
+            self.drawn_from.append([entry["label"] for entry in pool])
+            return drawn
+
         with patch.object(
-            fetch_test_configurations,
-            "select_weighted_label",
-            side_effect=lambda pool, _name: drawn,
+            fetch_test_configurations, "select_weighted_label", side_effect=draw
         ):
             fetch_test_configurations.run()
         return {job["job_name"]: job for job in self._get_components()}
+
+    def test_apptainer_pool_widens_the_component_label_pool(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
 
     def test_pool_member_that_is_not_the_default_is_used_as_is(self):
         jobs = self._run_gfx950_with_crusoe_in_pool(
