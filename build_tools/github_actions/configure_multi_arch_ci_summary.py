@@ -132,6 +132,9 @@ def _non_default_highlights(ci_inputs: CIInputs) -> list[str]:
         if parts:
             highlights.append(f"Explicit family selection — {', '.join(parts)}")
 
+    if not ci_inputs.run_rocm_tests:
+        highlights.append("ROCm tests disabled by the `run_rocm_tests` input")
+
     # PR labels that affect behavior
     for label in ci_inputs.pr_labels:
         if label.startswith("gfx"):

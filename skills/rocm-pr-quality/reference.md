@@ -364,6 +364,7 @@ only for docs/comments/skill-only changes with no device impact.>
 
 ## Testing Checklist
 
+- [x] <New tests> - Wall time: <seconds> s - Status: Passed
 - [x] <Test group> - `<command>` - Status: Passed
 - [x] <Hardware test group> - `<command>` - Devices: <list> - Status: Passed
 - [ ] <Sweep, only if blast radius requires it> - Devices: <families> - Status: Pending
@@ -390,6 +391,9 @@ only for docs/comments/skill-only changes with no device impact.>
 
 - `[x]` only for passed/completed validation; `[ ]` for pending/not-run/failed/unknown.
 - Include the command after the test group in backticks when known; omit if no useful command.
+- Report the wall time of newly added tests in appropriate units. Where possible, also report it as a
+  fraction of the time of the relevant existing test suite, measured under comparable
+  conditions.
 - Include `Devices: ...` only for hardware tests; include `Link: ...` only when a real link exists.
 - Do **not** render empty placeholder fields (`Devices: N/A`, `Link: N/A`). Omit the field.
 - Do not include unverified testing claims or file-by-file changelogs for large PRs.
