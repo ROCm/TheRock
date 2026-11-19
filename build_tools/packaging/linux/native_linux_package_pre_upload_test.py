@@ -11,20 +11,23 @@ After ``packaging_summary.write_build_manifest``:
 2. **Control fields** — for each present package, re-read control/tags from the
    artifact and compare to the claim in ``built_packages.json`` (Version,
    Depends/Requires, and related fields written at build time).
-
-Does not re-derive expectations from ``package.json``.
+3. **package.json fidelity** — claim Version / Package|Name / Depends|Requires
+   match what packaging helpers derive from ``package.json`` (same
+   ``update_package_name`` / ``process_*_dependencies`` used at build time).
 
 Example::
 
     ./build_tools/packaging/linux/native_linux_package_pre_upload_test.py \\
         --packages-dir output/packages \\
-        --pkg-type deb
+        --pkg-type deb \\
+        --artifacts-dir output/artifacts
 """
 
 import argparse
 import json
+import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # Allow ``python build_tools/packaging/linux/native_linux_package_pre_upload_test.py`` from repo root.
@@ -37,8 +40,21 @@ for _path in (_BUILD_TOOLS_DIR, _SCRIPT_DIR):
 
 from _therock_utils.log_utils import TheRockLogger, configure_logging
 import packaging_summary as summary
+from packaging_utils import (
+    GFX_HOST,
+    GFX_META,
+    PackageConfig,
+    get_package_info,
+    process_nonversioned_dependencies,
+    process_versioned_dependencies,
+    read_package_json_file,
+    update_package_name,
+)
 
 logger = TheRockLogger(__name__)
+
+# Bare package name from a Depends/Requires token (drop version constraints).
+_DEP_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9+.\-]*)")
 
 # Same filenames as packaging_summary.write_build_manifest output.
 MANIFEST_NAME = summary.MANIFEST_TXT_NAME
@@ -119,6 +135,36 @@ class ControlVerifyResult:
             and not self.missing_claims
             and not self.live_read_errors
         )
+
+
+@dataclass
+class PackageJsonMismatch:
+    """One claim vs ``package.json`` expectation difference."""
+
+    filename: str
+    field: str
+    claimed: str
+    expected: str
+
+
+@dataclass
+class PackageJsonVerifyResult:
+    """Outcome of comparing the JSON claim to ``package.json`` expectations.
+
+    Attributes:
+        checked: Filenames that completed fidelity checks.
+        mismatches: Version / Depends / Requires differences.
+        unresolved: Claim packages whose Package/Name did not match any
+            ``update_package_name`` result from ``package.json``.
+    """
+
+    checked: list[str] = field(default_factory=list)
+    mismatches: list[PackageJsonMismatch] = field(default_factory=list)
+    unresolved: list[str] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.checked) and not self.mismatches and not self.unresolved
 
 
 def parse_built_package_names(
@@ -223,19 +269,8 @@ def verify_manifest_packages(
     return result
 
 
-def load_package_claims(claim_path: Path) -> dict[str, dict[str, object]]:
-    """Load ``built_packages.json`` and index package entries by filename.
-
-    Validates ``schema_version`` against
-    ``packaging_summary.MANIFEST_SCHEMA_VERSION``. Does not re-probe packages;
-    that happens in :func:`verify_control_fields`.
-
-    Parameters:
-        claim_path: Path to the JSON claim document from
-            ``packaging_summary.write_build_manifest``.
-
-    Returns:
-        Mapping of filename → package claim dict (``control`` and/or ``error``).
+def load_claim_document(claim_path: Path) -> dict[str, object]:
+    """Load and validate ``built_packages.json`` (full document).
 
     Raises:
         FileNotFoundError: When the claim file is missing.
@@ -260,7 +295,17 @@ def load_package_claims(claim_path: Path) -> dict[str, dict[str, object]]:
     packages = doc.get("packages")
     if not isinstance(packages, list):
         raise ValueError(f"built packages claim missing packages list: {claim_path}")
+    return doc
+
+
+def index_claims_by_filename(
+    claim_doc: dict[str, object],
+) -> dict[str, dict[str, object]]:
+    """Index ``claim_doc["packages"]`` by filename."""
     by_name: dict[str, dict[str, object]] = {}
+    packages = claim_doc.get("packages")
+    if not isinstance(packages, list):
+        return by_name
     for entry in packages:
         if not isinstance(entry, dict):
             continue
@@ -268,6 +313,240 @@ def load_package_claims(claim_path: Path) -> dict[str, dict[str, object]]:
         if isinstance(filename, str) and filename:
             by_name[filename] = entry
     return by_name
+
+
+def load_package_claims(claim_path: Path) -> dict[str, dict[str, object]]:
+    """Load ``built_packages.json`` and index package entries by filename."""
+    return index_claims_by_filename(load_claim_document(claim_path))
+
+
+def expected_control_version(
+    rocm_version: str,
+    version_suffix: str,
+    *,
+    pkg_type: str,
+) -> str:
+    """Expected control Version (deb) or Version string (rpm Version field only).
+
+    Mirrors ``deb_package`` / ``rpm_package`` version construction.
+    """
+    normalized = pkg_type.strip().lower()
+    if normalized == "deb":
+        if version_suffix:
+            return f"{rocm_version}-{version_suffix}"
+        return rocm_version
+    if normalized == "rpm":
+        return rocm_version
+    raise ValueError(f"Unsupported pkg_type {pkg_type!r}; expected deb or rpm")
+
+
+def parse_dependency_names(dep_string: str) -> set[str]:
+    """Extract bare package names from a Depends/Requires field string."""
+    names: set[str] = set()
+    for raw in (dep_string or "").split(","):
+        token = raw.strip()
+        if not token:
+            continue
+        # DEB alternatives: take each side of |.
+        for alt in token.split("|"):
+            match = _DEP_NAME_RE.match(alt.strip())
+            if match:
+                name = match.group(1)
+                if not name.startswith("rpmlib("):
+                    names.add(name)
+    return names
+
+
+def _candidate_gfx_archs(claim_gfx_arch: str) -> list[str]:
+    archs: list[str] = []
+    if claim_gfx_arch and claim_gfx_arch not in archs:
+        archs.append(claim_gfx_arch)
+    for extra in (GFX_META, GFX_HOST):
+        if extra not in archs:
+            archs.append(extra)
+    return archs
+
+
+def match_claim_name_to_package_json(
+    installed_name: str,
+    *,
+    pkg_type: str,
+    rocm_version: str,
+    version_suffix: str,
+    claim_gfx_arch: str,
+    artifacts_dir: Path | None,
+) -> tuple[str, PackageConfig] | tuple[None, None]:
+    """Find ``package.json`` base + ``PackageConfig`` that yields ``installed_name``.
+
+    Tries versioned/non-versioned × claim gfx arch / GFX_META / GFX_HOST using
+    the same ``update_package_name`` as packaging.
+    """
+    try:
+        entries = read_package_json_file()
+    except OSError as exc:
+        raise ValueError(f"unable to read package.json: {exc}") from exc
+
+    artifacts = artifacts_dir if artifacts_dir is not None else Path(".")
+    gfx_list = tuple(
+        a
+        for a in _candidate_gfx_archs(claim_gfx_arch)
+        if a not in (GFX_HOST, GFX_META, "")
+    )
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        base = entry.get("Package")
+        if not isinstance(base, str) or not base:
+            continue
+        for versioned in (True, False):
+            for gfx_arch in _candidate_gfx_archs(claim_gfx_arch):
+                config = PackageConfig(
+                    artifacts_dir=artifacts,
+                    dest_dir=artifacts,
+                    pkg_type=pkg_type,
+                    rocm_version=rocm_version,
+                    version_suffix=version_suffix or "",
+                    install_prefix="/opt/rocm",
+                    gfx_arch=gfx_arch,
+                    versioned_pkg=versioned,
+                    gfxarch_list=gfx_list,
+                )
+                try:
+                    if update_package_name(base, config) == installed_name:
+                        return base, config
+                except (ValueError, TypeError):
+                    continue
+    return None, None
+
+
+def _expected_depends_string(pkg_info: dict, config: PackageConfig) -> str:
+    """Reuse build-time dependency helpers for the matched variant."""
+    if config.versioned_pkg:
+        field_key = (
+            "DEBDepends" if str(config.pkg_type).lower() == "deb" else "RPMRequires"
+        )
+        return process_versioned_dependencies(pkg_info, field_key, config)
+    return process_nonversioned_dependencies(pkg_info, config)
+
+
+def verify_claim_against_package_json(
+    package_names: list[str],
+    claims_by_filename: dict[str, dict[str, object]],
+    claim_doc: dict[str, object],
+    *,
+    pkg_type: str,
+    artifacts_dir: Path | None = None,
+) -> PackageJsonVerifyResult:
+    """Compare claim control fields to ``package.json``-derived expectations.
+
+    For each present package with a control claim:
+    - Version must match ``rocm_version`` / ``version_suffix`` from the claim doc
+      (same construction as ``deb_package`` / ``rpm_package``).
+    - Package/Name must match ``update_package_name`` for some ``package.json``
+      entry under claim gfx settings.
+    - Depends/Requires name-set must include every name expected from
+      ``process_versioned_dependencies`` / ``process_nonversioned_dependencies``
+      (claim may list extra system deps such as ``libc6``).
+
+    RPM Release is checked against ``version_suffix`` when present.
+    """
+    result = PackageJsonVerifyResult()
+    rocm_version = str(claim_doc.get("rocm_version") or "")
+    version_suffix = str(claim_doc.get("version_suffix") or "")
+    claim_gfx_arch = str(claim_doc.get("gfx_arch") or "")
+    if not rocm_version:
+        raise ValueError("built packages claim missing rocm_version")
+
+    expected_version = expected_control_version(
+        rocm_version, version_suffix, pkg_type=pkg_type
+    )
+    dep_field = "Depends" if pkg_type == "deb" else "Requires"
+    name_field = "Package" if pkg_type == "deb" else "Name"
+
+    for filename in package_names:
+        claim = claims_by_filename.get(filename)
+        if claim is None or claim.get("error"):
+            continue
+        control_obj = claim.get("control")
+        if not isinstance(control_obj, dict):
+            continue
+
+        claimed_version = _normalize_field_value(control_obj.get("Version", ""))
+        if claimed_version != expected_version:
+            result.mismatches.append(
+                PackageJsonMismatch(
+                    filename=filename,
+                    field="Version",
+                    claimed=claimed_version,
+                    expected=expected_version,
+                )
+            )
+
+        if pkg_type == "rpm" and version_suffix:
+            claimed_release = _normalize_field_value(control_obj.get("Release", ""))
+            if claimed_release != version_suffix:
+                result.mismatches.append(
+                    PackageJsonMismatch(
+                        filename=filename,
+                        field="Release",
+                        claimed=claimed_release,
+                        expected=version_suffix,
+                    )
+                )
+
+        installed_name = _normalize_field_value(control_obj.get(name_field, ""))
+        if not installed_name:
+            result.unresolved.append(f"{filename}: claim missing {name_field}")
+            result.checked.append(filename)
+            continue
+
+        base, matched_config = match_claim_name_to_package_json(
+            installed_name,
+            pkg_type=pkg_type,
+            rocm_version=rocm_version,
+            version_suffix=version_suffix,
+            claim_gfx_arch=claim_gfx_arch,
+            artifacts_dir=artifacts_dir,
+        )
+        if base is None or matched_config is None:
+            result.unresolved.append(
+                f"{filename}: {name_field}={installed_name!r} "
+                "not produced by package.json + update_package_name"
+            )
+            result.checked.append(filename)
+            continue
+
+        pkg_info = get_package_info(base, raise_if_missing=False)
+        if pkg_info is None:
+            result.unresolved.append(
+                f"{filename}: package.json entry missing for {base!r}"
+            )
+            result.checked.append(filename)
+            continue
+
+        # Prefer claim gfx for dependency expansion when artifacts are available.
+        dep_config = matched_config
+        if artifacts_dir is not None:
+            dep_config = replace(matched_config, artifacts_dir=artifacts_dir)
+
+        expected_deps = _expected_depends_string(pkg_info, dep_config)
+        expected_names = parse_dependency_names(expected_deps)
+        claimed_deps = _normalize_field_value(control_obj.get(dep_field, ""))
+        claimed_names = parse_dependency_names(claimed_deps)
+        missing = sorted(expected_names - claimed_names)
+        if missing:
+            result.mismatches.append(
+                PackageJsonMismatch(
+                    filename=filename,
+                    field=dep_field,
+                    claimed=claimed_deps,
+                    expected=f"missing names: {', '.join(missing)}",
+                )
+            )
+
+        result.checked.append(filename)
+    return result
 
 
 def _compare_fields_for_pkg_type(pkg_type: str) -> tuple[str, ...]:
@@ -359,14 +638,15 @@ def format_report_text(
     manifest_path: Path,
     *,
     control: ControlVerifyResult | None = None,
+    package_json: PackageJsonVerifyResult | None = None,
     claim_path: Path | None = None,
 ) -> str:
-    """Format a human-readable presence + control verification summary for stdout.
-
-    When ``control`` is omitted (e.g. presence already failed), only the
-    presence section is printed.
-    """
-    overall_ok = presence.passed and (control is None or control.passed)
+    """Format a human-readable presence + control + package.json summary."""
+    overall_ok = (
+        presence.passed
+        and (control is None or control.passed)
+        and (package_json is None or package_json.passed)
+    )
     overall = "PASS" if overall_ok else "FAIL"
     lines = [
         "ROCm build package manifest verification",
@@ -417,6 +697,26 @@ def format_report_text(
             for msg in control.live_read_errors:
                 lines.append(f"  - {msg}")
 
+    if package_json is not None:
+        lines.append("")
+        lines.append("package.json fidelity (claim vs packaging helpers)")
+        lines.append(f"Packages checked: {len(package_json.checked)}")
+        lines.append(f"Field mismatches: {len(package_json.mismatches)}")
+        lines.append(f"Unresolved names: {len(package_json.unresolved)}")
+        if package_json.mismatches:
+            lines.append("")
+            lines.append("package.json mismatches:")
+            for m in package_json.mismatches:
+                lines.append(
+                    f"  - {m.filename} {m.field}: "
+                    f"claimed={m.claimed!r} expected={m.expected!r}"
+                )
+        if package_json.unresolved:
+            lines.append("")
+            lines.append("Unresolved claim Package/Name:")
+            for msg in package_json.unresolved:
+                lines.append(f"  - {msg}")
+
     return "\n".join(lines)
 
 
@@ -432,7 +732,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Verify Created Packages from built_packages.txt exist under "
-            "--packages-dir, then compare control fields to built_packages.json."
+            "--packages-dir, compare control fields to built_packages.json, "
+            "then check claim Version/Depends against package.json helpers."
         ),
     )
     parser.add_argument(
@@ -475,19 +776,28 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "(e.g. amdrocm-core-sdk for a smoke subset)"
         ),
     )
+    parser.add_argument(
+        "--artifacts-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Artifact tree used by packaging gfx-arch helpers when matching "
+            "claim Package/Name and Depends to package.json (recommended in CI)"
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute presence + control-field verification.
+    """Execute presence + control-field + package.json fidelity verification.
 
     Parameters:
         args: Parsed command-line arguments from :func:`parse_args`.
 
     Returns:
-        ``0`` on success, ``1`` when presence or control checks fail, ``2`` on
-        configuration errors (missing packages-dir/manifest/claim, empty Created
-        list, bad path).
+        ``0`` on success, ``1`` when presence, control, or package.json checks
+        fail, ``2`` on configuration errors (missing packages-dir/manifest/claim,
+        empty Created list, bad path).
 
     Note:
         To skip this entire gate in CI, disable ``enable_pre_upload_build_verify``
@@ -507,6 +817,11 @@ def run(args: argparse.Namespace) -> int:
         args.claim_json.expanduser().resolve()
         if args.claim_json is not None
         else packages_dir / CLAIM_JSON_NAME
+    )
+    artifacts_dir = (
+        args.artifacts_dir.expanduser().resolve()
+        if args.artifacts_dir is not None
+        else None
     )
 
     pkg_type = (args.pkg_type or "").strip().lower()
@@ -536,7 +851,8 @@ def run(args: argparse.Namespace) -> int:
     # Require the claim file even when presence fails so a missing JSON is
     # reported as a config error (exit 2) rather than a silent skip.
     try:
-        claims = load_package_claims(claim_path)
+        claim_doc = load_claim_document(claim_path)
+        claims = index_claims_by_filename(claim_doc)
     except (FileNotFoundError, ValueError) as exc:
         logger.error(f"{exc}")
         return 2
@@ -560,11 +876,27 @@ def run(args: argparse.Namespace) -> int:
         logger.error(f"{exc}")
         return 2
 
+    # --- Phase 3: claim vs package.json (reuse packaging_utils) ---
+    package_json: PackageJsonVerifyResult | None = None
+    if control.passed:
+        try:
+            package_json = verify_claim_against_package_json(
+                presence.found,
+                claims,
+                claim_doc,
+                pkg_type=pkg_type,
+                artifacts_dir=artifacts_dir,
+            )
+        except ValueError as exc:
+            logger.error(f"{exc}")
+            return 2
+
     print(
         format_report_text(
             presence,
             manifest_path,
             control=control,
+            package_json=package_json,
             claim_path=claim_path,
         )
     )
@@ -579,10 +911,23 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if package_json is not None and not package_json.passed:
+        logger.error(
+            "package.json fidelity failed: "
+            f"{len(package_json.mismatches)} mismatch(es), "
+            f"{len(package_json.unresolved)} unresolved name(s)",
+        )
+        return 1
+
     logger.info("Manifest verification passed.")
     logger.info(
         f"Control-field verification passed ({len(control.checked)} package(s)).",
     )
+    if package_json is not None:
+        logger.info(
+            "package.json fidelity passed "
+            f"({len(package_json.checked)} package(s)).",
+        )
     return 0
 
 

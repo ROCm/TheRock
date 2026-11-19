@@ -58,8 +58,9 @@ on:
       enable_pre_upload_build_verify:
         description: >-
           After build_package.py, verify Created Packages in
-          built_packages.txt exist on disk and control fields match
-          built_packages.json (Version, Depends/Requires, related fields).
+          built_packages.txt exist on disk, control fields match
+          built_packages.json, and claim Version/Depends align with
+          package.json packaging helpers.
         type: boolean
         default: true
       enable_repo_setup_package:
@@ -238,7 +239,7 @@ jobs:
             --version-suffix "${ARTIFACT_RUN_ID}" \
             --build-variant "${BUILD_VARIANT}"
 
-      # Presence + control-field claim check (built_packages.txt / .json).
+      # Presence + control claim + package.json fidelity (built_packages.txt / .json).
       # Blocking — failure skips simulate-install / upload.
       - name: Pre-upload build package verification
         if: ${{ inputs.enable_pre_upload_build_verify }}
@@ -246,7 +247,8 @@ jobs:
         run: |
           python ./build_tools/packaging/linux/native_linux_package_pre_upload_test.py \
             --packages-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --pkg-type "${NATIVE_PACKAGE_TYPE}"
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --artifacts-dir "${{ env.ARTIFACTS_DIR }}"
 
       - name: Simulated install Test
         id: test-packages

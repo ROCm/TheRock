@@ -8,6 +8,7 @@ Covers:
 - Presence checks against ``built_packages.txt``
 - Claim ↔ live control-field checks against ``built_packages.json``
   (Version, Depends/Requires, and related fields)
+- Claim ↔ ``package.json`` fidelity via packaging helpers
 - ``packaging_summary.write_build_manifest`` JSON claim shape
 
 Run::
@@ -228,11 +229,22 @@ class FormatReportTextTest(unittest.TestCase):
         self.assertIn("claimed='libc6'", text)
 
 
+def _passing_pkg_json_result(*_args, **_kwargs) -> verify.PackageJsonVerifyResult:
+    """Stub package.json fidelity so claim↔live CLI tests stay focused."""
+    return verify.PackageJsonVerifyResult(checked=["stub.deb"])
+
+
 class RunCliTest(unittest.TestCase):
     """CLI exit codes for presence + claim loading."""
 
+    @patch(
+        "native_linux_package_pre_upload_test.verify_claim_against_package_json",
+        side_effect=_passing_pkg_json_result,
+    )
     @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
-    def test_pass_when_files_exist(self, mock_read: MagicMock) -> None:
+    def test_pass_when_files_exist(
+        self, mock_read: MagicMock, _mock_pkg_json: MagicMock
+    ) -> None:
         """Exit ``0`` when Created files exist and control fields match the claim."""
         control = _deb_control()
         mock_read.return_value = dict(control)
@@ -280,8 +292,14 @@ class RunCliTest(unittest.TestCase):
 class ControlFieldVerifyTest(unittest.TestCase):
     """Claim ↔ live control-field comparison (Depends, Version, related fields)."""
 
+    @patch(
+        "native_linux_package_pre_upload_test.verify_claim_against_package_json",
+        side_effect=_passing_pkg_json_result,
+    )
     @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
-    def test_cli_pass_when_claim_matches_live(self, mock_read: MagicMock) -> None:
+    def test_cli_pass_when_claim_matches_live(
+        self, mock_read: MagicMock, _mock_pkg_json: MagicMock
+    ) -> None:
         """Exit ``0`` when Depends/Version and related fields match the claim."""
         control = _deb_control()
         mock_read.return_value = dict(control)
@@ -358,6 +376,143 @@ class ControlFieldVerifyTest(unittest.TestCase):
         self.assertEqual(result.mismatches[0].field, "Version")
         self.assertEqual(result.mismatches[0].claimed, "7.15.0-1")
         self.assertEqual(result.mismatches[0].actual, "7.15.0-2")
+
+
+class PackageJsonFidelityTest(unittest.TestCase):
+    """Claim Version / Depends vs package.json packaging helpers."""
+
+    def test_expected_control_version_deb_and_rpm(self) -> None:
+        """DEB uses rocm-suffix; RPM Version is rocm only."""
+        self.assertEqual(
+            verify.expected_control_version("7.15.0", "1", pkg_type="deb"),
+            "7.15.0-1",
+        )
+        self.assertEqual(
+            verify.expected_control_version("7.15.0", "1", pkg_type="rpm"),
+            "7.15.0",
+        )
+
+    def test_parse_dependency_names_strips_constraints(self) -> None:
+        """Version constraints and alternatives yield bare names."""
+        names = verify.parse_dependency_names(
+            "amdrocm-runtime7.15 ( = 7.15.0-1), libc6 | libc6-dev"
+        )
+        self.assertEqual(names, {"amdrocm-runtime7.15", "libc6", "libc6-dev"})
+
+    def test_version_mismatch_against_claim_metadata(self) -> None:
+        """Claim Version must match rocm_version + version_suffix from the doc."""
+        fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
+        claims = {
+            fname: {
+                "filename": fname,
+                "control": _deb_control(Version="7.15.0-9"),
+            }
+        }
+        doc = {
+            "schema_version": summary.MANIFEST_SCHEMA_VERSION,
+            "pkg_type": "deb",
+            "rocm_version": "7.15.0",
+            "version_suffix": "1",
+            "gfx_arch": "gfx1100",
+            "packages": [claims[fname]],
+        }
+        with patch(
+            "native_linux_package_pre_upload_test.match_claim_name_to_package_json",
+            return_value=(None, None),
+        ):
+            result = verify.verify_claim_against_package_json(
+                [fname],
+                claims,
+                doc,
+                pkg_type="deb",
+            )
+        self.assertFalse(result.passed)
+        self.assertTrue(
+            any(m.field == "Version" for m in result.mismatches),
+            result.mismatches,
+        )
+
+    def test_depends_missing_expected_name_fails(self) -> None:
+        """Expected Depends names from helpers must appear in the claim."""
+        fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
+        control = _deb_control(
+            Package="amdrocm-fft7.15",
+            Depends="libc6",
+        )
+        claims = {fname: {"filename": fname, "control": control}}
+        doc = {
+            "schema_version": summary.MANIFEST_SCHEMA_VERSION,
+            "pkg_type": "deb",
+            "rocm_version": "7.15.0",
+            "version_suffix": "1",
+            "gfx_arch": "gfx_meta",
+            "packages": [claims[fname]],
+        }
+        matched_cfg = PackageConfig(
+            artifacts_dir=Path("/tmp"),
+            dest_dir=Path("/tmp"),
+            pkg_type="deb",
+            rocm_version="7.15.0",
+            version_suffix="1",
+            install_prefix="/opt/rocm",
+            gfx_arch="gfx_meta",
+            versioned_pkg=True,
+        )
+        with patch(
+            "native_linux_package_pre_upload_test.match_claim_name_to_package_json",
+            return_value=("amdrocm-fft", matched_cfg),
+        ), patch(
+            "native_linux_package_pre_upload_test.get_package_info",
+            return_value={"Package": "amdrocm-fft", "DEBDepends": ["amdrocm-runtime"]},
+        ), patch(
+            "native_linux_package_pre_upload_test._expected_depends_string",
+            return_value="amdrocm-runtime7.15 ( = 7.15.0-1)",
+        ):
+            result = verify.verify_claim_against_package_json(
+                [fname],
+                claims,
+                doc,
+                pkg_type="deb",
+            )
+        self.assertFalse(result.passed)
+        self.assertTrue(
+            any(m.field == "Depends" for m in result.mismatches),
+            result.mismatches,
+        )
+
+    @patch(
+        "native_linux_package_pre_upload_test.verify_claim_against_package_json",
+        side_effect=_passing_pkg_json_result,
+    )
+    @patch("native_linux_package_pre_upload_test.summary.read_package_control_fields")
+    def test_cli_fails_when_package_json_fidelity_fails(
+        self, mock_read: MagicMock, mock_pkg_json: MagicMock
+    ) -> None:
+        """Exit ``1`` when claim↔live passes but package.json fidelity fails."""
+        mock_pkg_json.side_effect = None
+        mock_pkg_json.return_value = verify.PackageJsonVerifyResult(
+            checked=["x.deb"],
+            mismatches=[
+                verify.PackageJsonMismatch(
+                    filename="x.deb",
+                    field="Version",
+                    claimed="bad",
+                    expected="7.15.0-1",
+                )
+            ],
+        )
+        control = _deb_control()
+        mock_read.return_value = dict(control)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fname = "amdrocm-fft7.15_7.15.0-1_amd64.deb"
+            (root / "built_packages.txt").write_text(
+                f"# Created Packages:\n{fname}\n",
+                encoding="utf-8",
+            )
+            (root / fname).write_bytes(b"x")
+            _write_claim(root, [{"filename": fname, "control": control}])
+            self.assertEqual(verify.main(_cli_args(root)), 1)
 
 
 class EnrichedPackageSummaryClaimTest(unittest.TestCase):
