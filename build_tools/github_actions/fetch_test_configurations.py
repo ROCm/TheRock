@@ -20,6 +20,7 @@ import argparse
 import ast
 import json
 import logging
+import math
 import os
 import platform as platform_module
 from pathlib import Path
@@ -303,6 +304,10 @@ _rocgdb_common = {
 # that is still being qualified without blocking everyone else. For example:
 #   "expect_failure": {"linux": ["gfx950"]}
 #
+# A component's "timeout_multiplier" scales its "timeout_minutes" (rounded up)
+# on just the listed platforms and AMDGPU_FAMILIES groups, e.g.
+# {"linux": {"gfx117X-all": 2}}; unlisted ones are unaffected.
+#
 # A component's "skip_stages" lists build stages whose absence excludes the test.
 # If any listed stage is in SKIP_STAGES, the component is skipped. Reused stages
 # still supply artifacts and do not exclude tests. Omit the field for no stage gate.
@@ -387,6 +392,8 @@ test_matrix = {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
+        # gfx117X runners have limited resources, so this suite runs long there.
+        "timeout_multiplier": {"linux": {"gfx117X-all": 2}},
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
@@ -1223,6 +1230,8 @@ test_matrix = {
         # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 30,
+        # gfx117X runners have limited resources, so this suite runs long there.
+        "timeout_multiplier": {"linux": {"gfx117X-all": 2}},
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
             _get_script_path("requirements-test-ninja.txt"),
@@ -1267,6 +1276,8 @@ test_matrix = {
         "job_name": "hipthreads",
         "fetch_artifact_args": "--hipthreads --tests",
         "timeout_minutes": 30,
+        # gfx117X runners have limited resources, so this suite runs long there.
+        "timeout_multiplier": {"linux": {"gfx117X-all": 2}},
         "additional_requirements_files": [
             _get_artifact_path("hipthreads/test/requirements-test.txt"),
         ],
@@ -1657,6 +1668,13 @@ def run():
 
             job_config_data = {**_common_settings, **test_matrix[key]}
             job_config_data["test_type"] = test_type
+
+            # Scale the GitHub Actions step timeout for slow families (1x default).
+            _multipliers = job_config_data.get("timeout_multiplier", {})
+            job_config_data["timeout_minutes"] = math.ceil(
+                job_config_data["timeout_minutes"]
+                * _multipliers.get(platform, {}).get(amdgpu_families, 1)
+            )
 
             # A component declares the families it is advisory on via
             # "expect_failure" (see the key reference above). Resolve that
