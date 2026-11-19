@@ -281,7 +281,7 @@ amdgpu_family_info_matrix dictionary fields:
 - bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
 - sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
-- test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
+- test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests. CPU-only components can opt out with ignore_test_type_for_family.
 - test_labels_for_family (optional): list of test labels to filter which tests run for this family
 - disabled_framework_tests (optional): list of ML framework tests to skip on architecture
     Valid values: "pytorch", "jax"
