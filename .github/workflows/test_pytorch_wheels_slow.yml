@@ -1,0 +1,102 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Runs the PyTorch slow tests (@slowTest and test/slow_tests.json) every other
+# day against the newest gfx94X nightly torch wheel. The nightly full suite
+# skips slow tests, so this passes test_configs: slow alone rather than
+# repeating it. See https://github.com/ROCm/TheRock/issues/10116.
+
+name: Test PyTorch Wheels (Slow Tests)
+
+on:
+  schedule:
+    # Days 1, 3, ..., 31 at 16:00 UTC, after the nightly wheels are published.
+    # Runs back to back on the 31st and the 1st.
+    - cron: "0 16 */2 * *"
+  workflow_dispatch:
+    inputs:
+      torch_version:
+        description: >-
+          torch version to test (e.g. "2.16.0a0+rocm10.3.0a20261119"). Leave
+          empty to test the newest gfx94X Python 3.12 nightly on the index.
+        type: string
+        default: ""
+      package_index_url:
+        description: Python package index URL holding torch and its device wheels.
+        type: string
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve_wheel:
+    if: ${{ github.repository == 'ROCm/TheRock' }}
+    name: Resolve nightly torch wheel
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    outputs:
+      torch_version: ${{ steps.resolve.outputs.torch_version }}
+    steps:
+      - name: Checkout
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: build_tools
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: python -m pip install packaging==25.0
+
+      - name: Resolve torch version
+        id: resolve
+        env:
+          INPUT_TORCH_VERSION: ${{ inputs.torch_version }}
+          PACKAGE_INDEX_URL: ${{ inputs.package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
+        run: |
+          if [[ -n "${INPUT_TORCH_VERSION}" ]]; then
+            echo "torch_version=${INPUT_TORCH_VERSION}" >> "${GITHUB_OUTPUT}"
+          else
+            python build_tools/github_actions/resolve_latest_pytorch_nightly.py \
+              --index-url "${PACKAGE_INDEX_URL}" \
+              --device-target gfx942 \
+              --python-version 3.12
+          fi
+
+  test_slow:
+    needs: resolve_wheel
+    name: Test PyTorch slow
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test_pytorch_wheels_full.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      amdgpu_family: gfx94X-dcgpu
+      test_runs_on: linux-gfx942-1gpu-ccs-csp-ossci-rocm
+      package_index_url: ${{ inputs.package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
+      python_version: "3.12"
+      torch_version: ${{ needs.resolve_wheel.outputs.torch_version }}
+      pytorch_git_ref: nightly
+      pytorch_git_repo: pytorch/pytorch
+      test_configs: slow
+
+  # A shard that timed out or crashed can leave its job green while tests are
+  # missing, so the run fails unless every expected shard reported complete.
+  check_results:
+    needs: test_slow
+    if: ${{ !cancelled() && needs.test_slow.result != 'skipped' }}
+    name: Check slow test results are complete
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require complete results
+        env:
+          RESULTS_COMPLETE: ${{ needs.test_slow.outputs.results_complete }}
+        run: |
+          echo "results_complete=${RESULTS_COMPLETE}"
+          test "${RESULTS_COMPLETE}" = "true"
