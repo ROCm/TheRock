@@ -8,7 +8,9 @@
 #
 # - ubuntu* / debian* -> apt: debhelper-compat, dpkg-dev, build-essential
 # - sles*             -> zypper: rpm-build
-# - else              -> dnf, or tdnf where dnf is missing: rpm-build
+# - rhel* / azl*      -> dnf, or tdnf where dnf is missing: rpm-build
+#
+# Any other profile is rejected before a package manager runs.
 #
 # The profile names the distro being built for, not the machine running this:
 # CI builds azl3 on UBI 10, which has dnf, while Azure Linux itself has only
@@ -60,6 +62,18 @@ fi
 OS_PROFILE="${OS_PROFILE#"${OS_PROFILE%%[![:space:]]*}"}"
 OS_PROFILE="${OS_PROFILE%"${OS_PROFILE##*[![:space:]]}"}"
 OS_PLC="${OS_PROFILE,,}"
+
+# Reject an unrecognised profile rather than letting it fall through to a
+# package manager. Matched by family so a new release of a supported distro
+# works without editing this script.
+case "$OS_PLC" in
+    ubuntu*|debian*|rhel*|sles*|azl*) ;;
+    *)
+        echo "Error: unrecognised --os-profile '$OS_PROFILE'" >&2
+        echo "Expected an ubuntu*, debian*, rhel*, sles* or azl* profile" >&2
+        exit 1
+        ;;
+esac
 
 # Elevate only when sudo exists and we are not already root. The rpm build
 # images (UBI, BCI) run as root and ship no sudo at all, so calling it there
