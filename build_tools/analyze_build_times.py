@@ -76,10 +76,10 @@ ROCM_COMPONENT_DIRS = {
 # Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz
 # - Group 1: project name (e.g., "rocBLAS", "MIOpen")
 # - Group 2: variant type (dbg=debug, dev=development, doc=documentation,
-#            lib=library, run=runtime, test=test)
+#            lib=library, run=runtime, sys=system config, test=test)
 # - Group 3: optional suffix (e.g., "_gfx90a")
 # Example: "rocBLAS_lib_gfx90a.tar.xz" -> ("rocBLAS", "lib", "_gfx90a")
-ARTIFACT_REGEX = re.compile(r"(.+)_(dbg|dev|doc|lib|run|test)(_.+)?")
+ARTIFACT_REGEX = re.compile(r"(.+)_(dbg|dev|doc|lib|run|sys|test)(_.+)?")
 
 # Phase detection rules: (suffix/pattern, phase_name)
 PHASE_RULES = [

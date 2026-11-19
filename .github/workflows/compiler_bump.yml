@@ -210,6 +210,7 @@ jobs:
       release_type: dev
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
+      run_rocm_tests: true
       build_pytorch: true
       build_jax: true
       repository: ${{ github.repository }}
@@ -272,7 +273,6 @@ jobs:
       amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).dist_amdgpu_families }}
       linux_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).linux_amdgpu_families }}
       windows_amdgpu_families: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).windows_amdgpu_families }}
-      multiarch_index: true
       package_version: ${{ needs.setup-linux.outputs.rocm_package_version }}
       release_type: dev
       build_runs_on: ${{ fromJSON(needs.setup-linux.outputs.linux_build_config).build_runs_on_medium }}
@@ -350,14 +350,11 @@ jobs:
           product: core
 
       - name: Publish to release buckets
-        env:
-          KPACK_SPLIT: ${{ needs.build-linux-python-packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=linux \
             --release-type="dev" \
-            --kpack-split="${KPACK_SPLIT}" \
             --structured \
             --build-variant="release"
 
@@ -426,6 +423,7 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "none"
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || 'all' }}
+      run_rocm_tests: true
       build_pytorch: true
       build_jax: true
       repository: ${{ github.repository }}
@@ -487,7 +485,6 @@ jobs:
       amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).dist_amdgpu_families }}
       linux_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).linux_amdgpu_families }}
       windows_amdgpu_families: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).windows_amdgpu_families }}
-      multiarch_index: true
       package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
       build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
@@ -544,14 +541,11 @@ jobs:
           product: core
 
       - name: Publish to release buckets
-        env:
-          KPACK_SPLIT: ${{ needs.build-windows-python-packages.outputs.kpack_split }}
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
             --run-id="${{ github.run_id }}" \
             --platform=windows \
             --release-type="dev" \
-            --kpack-split="${KPACK_SPLIT}" \
             --structured \
             --build-variant="release"
 

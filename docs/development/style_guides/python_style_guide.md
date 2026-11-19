@@ -19,6 +19,7 @@ Table of Contents
     - [No duplicate code](#no-duplicate-code)
   - [Error handling and reliability](#error-handling-and-reliability)
     - [Distinguish between different error conditions](#distinguish-between-different-error-conditions)
+    - [Keep process exits at the CLI boundary](#keep-process-exits-at-the-cli-boundary)
     - [Validate that operations actually succeeded](#validate-that-operations-actually-succeeded)
     - [Fail-fast behavior](#fail-fast-behavior)
     - [No timeouts on basic binutils](#no-timeouts-on-basic-binutils)
@@ -529,17 +530,8 @@ Benefits:
 - Reduces cognitive load
 - Makes code reviews more effective
 
-Guidelines:
-
-- Classes should be < 200 lines (ideally)
-- Methods should be < 30 lines (ideally)
-- If a class has 7+ responsibilities, split it
-
-When to split:
-
-- God objects doing everything → multiple focused classes
-- 100+ line methods → extract helper methods
-- Duplicate code → extract to shared function
+Split functions or classes when they mix independent responsibilities, repeat
+logic, or contain operations that need to be understood or tested separately.
 
 #### No duplicate code
 
@@ -645,6 +637,62 @@ Key points:
 - Return False only for legitimate "not found" cases
 - Use `from e` to preserve exception chain
 
+#### Keep process exits at the CLI boundary
+
+Reusable functions should raise specific exceptions for failures, not call
+`sys.exit()` or raise `SystemExit`. This includes helpers in scripts: another
+script or a test may import and call them. Let callers decide whether to retry,
+add context, or stop.
+
+[`sys.exit()`](https://docs.python.org/3/library/sys.html#sys.exit) raises
+`SystemExit`, which is not caught by `except Exception` and normally terminates
+the process. Cleanup such as `finally` blocks still runs, but callers should
+not need to catch a process-exit exception to handle an ordinary failure.
+
+At the CLI boundary, let unexpected exceptions propagate with their traceback.
+Catch specific expected errors only when a concise diagnostic is more useful,
+print it to stderr, and return a nonzero status from `main()`. Use
+`sys.exit(main(...))` in the `__main__` guard to convert that status into a
+process exit. `argparse` exits for help and invalid CLI arguments are appropriate
+at this boundary; keep argument parsing out of reusable helpers.
+
+✅ **Preferred:**
+
+```python
+def read_manifest(path: Path) -> dict[str, object]:
+    # FileNotFoundError and JSONDecodeError remain available to callers.
+    with path.open() as f:
+        return json.load(f)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Read an artifact manifest")
+    parser.add_argument("manifest", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        manifest = read_manifest(args.manifest)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Cannot read manifest {args.manifest}: {e}", file=sys.stderr)
+        return 1
+    print(manifest)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+```
+
+❌ **Avoid:**
+
+```python
+def read_manifest(path: Path) -> dict[str, object]:
+    try:
+        with path.open() as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        sys.exit(f"Cannot read manifest {path}: {e}")
+```
+
 #### Validate that operations actually succeeded
 
 **Don't just assume that an operation succeeded, check that it did.**
@@ -688,6 +736,10 @@ What to validate:
 #### Fail-fast behavior
 
 **Always fail immediately on errors. Never silently continue or produce incomplete results.**
+
+Failing fast means reporting a failure where it occurs, usually by raising an
+exception. It does not mean terminating the process from a helper; see
+[Keep process exits at the CLI boundary](#keep-process-exits-at-the-cli-boundary).
 
 Benefits:
 
@@ -975,8 +1027,8 @@ Before submitting code, verify:
 - [ ] Output validation after critical operations
 - [ ] No duplicate code
 - [ ] Specific exception handling (not broad `except Exception`)
-- [ ] Methods < 30 lines (or have a good reason)
-- [ ] Classes < 200 lines (or split into focused components)
+- [ ] Functions and classes have focused responsibilities
+- [ ] Reusable functions raise exceptions; process exits stay at the CLI boundary
 - [ ] Using `pathlib.Path` for filesystem operations
 - [ ] Scripts work from any directory (no CWD assumptions)
 - [ ] CLI scripts use `argparse`
