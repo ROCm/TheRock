@@ -10,11 +10,11 @@ cache, using the cache in a build, testing the cache, and talking to a
 server-side cache. Today it contains only the first step: a prototype that finds
 matching artifacts and writes a reuse plan.
 
-| File                                  | Purpose                                         |
-| ------------------------------------- | ----------------------------------------------- |
-| `artifact_cache.py`                   | The `record` and `lookup` subcommands           |
-| `prototype_artifact_cache_index.json` | Prototype index of known CI artifacts           |
-| `artifact_cache_test.py`              | Unit tests (no network or AWS access required)  |
+| File                                  | Purpose                                        |
+| ------------------------------------- | ---------------------------------------------- |
+| `artifact_cache.py`                   | The `record` and `lookup` subcommands          |
+| `prototype_artifact_cache_index.json` | Prototype index of known CI artifacts          |
+| `artifact_cache_test.py`              | Unit tests (no network or AWS access required) |
 
 ## Experimental LLVM artifact cache
 
@@ -126,14 +126,14 @@ The files are `<name>_<component>_<target>.fprint` and
 `<name>_<component>_<target>.tar.zst.sha256sum` (or `.tar.xz.sha256sum`) for
 each selected artifact, for example `amd-llvm_lib_generic.fprint`.
 
-| Option                       | Purpose                                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| `--run-id`                   | CI workflow run to read (required).                                                                |
-| `--platform`                 | `linux` or `windows` (default: `THEROCK_PLATFORM` or this platform).                               |
-| `--run-github-repo`          | Repository that ran `--run-id`, as `owner/repo` (default: `GITHUB_REPOSITORY`, else `ROCm/TheRock`). |
-| `--epoch`                    | Record this `THEROCK_FPRINT_EPOCH` in each new entry.                                              |
-| `INCLUDE...`, `--exclude`    | Select artifacts, see [Select artifacts](#select-artifacts).                                       |
-| `--index`                    | Index file to update (default: the prototype index). A missing file is created.                    |
+| Option                    | Purpose                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `--run-id`                | CI workflow run to read (required).                                                                  |
+| `--platform`              | `linux` or `windows` (default: `THEROCK_PLATFORM` or this platform).                                 |
+| `--run-github-repo`       | Repository that ran `--run-id`, as `owner/repo` (default: `GITHUB_REPOSITORY`, else `ROCm/TheRock`). |
+| `--epoch`                 | Record this `THEROCK_FPRINT_EPOCH` in each new entry.                                                |
+| `INCLUDE...`, `--exclude` | Select artifacts, see [Select artifacts](#select-artifacts).                                         |
+| `--index`                 | Index file to update (default: the prototype index). A missing file is created.                      |
 
 Set `THEROCK_LOCAL_STAGING_DIR` to read a local directory laid out like the S3
 run (`<staging>/<run-id>-<platform>/`) instead of S3. Review changes to the
