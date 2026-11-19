@@ -36,6 +36,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       release_type:
         description: 'Release type; selects the S3 bucket'
         type: string
@@ -100,6 +104,10 @@ on:
         description: URL for pip --index-url to install ROCm packages (PEP 503 index, e.g. repo.amd.com; use this OR rocm_package_find_links_url)
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds torch only."
+        type: string
+        default: "release"
       release_type:
         description: 'Release type; ordinary developer-triggered jobs should use "dev"'
         type: choice
@@ -176,7 +184,7 @@ jobs:
       - name: "Quartz - started - release PyTorch wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml
@@ -221,8 +229,10 @@ jobs:
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       amdgpu_families: ${{ matrix.amdgpu_families }}
+      exclude_implicit_targets: ${{ matrix.exclude_implicit_targets }}
       test_amdgpu_families: ${{ matrix.test_amdgpu_families }}
-      test_level: ${{ matrix.test_level }}
+      test_level: ${{ contains(inputs.build_variant, 'asan') && 'none' || matrix.test_level }}
+      build_variant: ${{ inputs.build_variant }}
       python_version: ${{ matrix.python_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       rocm_version: ${{ inputs.rocm_version }}
@@ -236,7 +246,7 @@ jobs:
       # The reusable build workflow dispatches the full PyTorch test suite for
       # each successfully built (nightly, gfx94X-dcgpu, py3.12) ref using that
       # build's own torch_version output (#5777).
-      run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
+      run_full_pytorch_tests: ${{ !contains(inputs.build_variant, 'asan') && inputs.run_full_pytorch_tests }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
 
   notify_quartz_completed:
@@ -248,7 +258,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - release PyTorch wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: multi_arch_release_linux_pytorch_wheels.yml

@@ -12,6 +12,10 @@ include = [
 [components.dev."ml-libs/hipDNN/stage"]
 include = [
   "share/hipdnn/test_sdk/AsanDefaultSuppressions.cpp",
+  # Build-time inputs for authoring descriptors: the op-schema registry that
+  # hipdnn_flatbuffers_sdkConfig.cmake names, and the UED JSON Schema.
+  "share/hipdnn_flatbuffers_sdk/op_schema_registry.json",
+  "share/hipdnn_plugin_sdk/schemas/**",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.test."ml-libs/hipDNN/stage"]
@@ -20,4 +24,8 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
   "share/hipdnn/cudnn_samples/**",
+  # TestUedFixtureParity (hipdnn_plugin_sdk_tests) reads the UED fixture corpus and its own
+  # copy of the UED JSON Schema from share/hipdnn_plugin_sdk/test_fixtures next to the test
+  # binary's bin/ directory.
+  "share/hipdnn_plugin_sdk/test_fixtures/**",
 ]

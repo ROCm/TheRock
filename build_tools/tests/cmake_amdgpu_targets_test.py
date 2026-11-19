@@ -116,27 +116,33 @@ class CmakeTargetSelectionTest(unittest.TestCase):
     def test_registration(self):
         infos = parse_amdgpu_targets_cmake(ROOT / "cmake/therock_amdgpu_targets.cmake")
         strict = next(info for info in infos if info.gfx_target == "gfx1250-strict")
-        self.assertEqual(strict.families, [])
+        self.assertEqual(strict.families, ["dcgpu-all", "gfx125X-all", "gfx125X-dcgpu"])
         families = amdgpu_family_map()
         self.assertEqual(families["gfx1250"], ["gfx1250"])
         self.assertEqual(families["gfx1250-strict"], ["gfx1250-strict"])
         for family in ("gfx125X-all", "gfx125X-dcgpu", "dcgpu-all"):
-            self.assertNotIn("gfx1250-strict", families[family])
+            self.assertIn("gfx1250-strict", families[family])
 
     def test_cmake_selection_and_defaults(self):
         cases = [
-            ("set(THEROCK_AMDGPU_FAMILIES gfx1250)", "gfx1250", "gfx1250", "default"),
+            ("set(THEROCK_AMDGPU_FAMILIES gfx1250)", "gfx1250", "gfx1250", "all"),
             (
                 "set(THEROCK_AMDGPU_FAMILIES gfx125X-all)",
-                "gfx1250",
-                "gfx1250",
-                "default",
+                "gfx1250-strict;gfx1250",
+                "gfx1250-strict;gfx1250",
+                "all",
+            ),
+            (
+                "set(THEROCK_AMDGPU_FAMILIES gfx125X-dcgpu)\nset(THEROCK_TEST_AMDGPU_FAMILIES gfx125X-dcgpu)",
+                "gfx1250-strict;gfx1250",
+                "gfx1250-strict;gfx1250",
+                "gfx1250-strict;gfx1250",
             ),
             (
                 "set(THEROCK_AMDGPU_TARGETS gfx1250)",
                 "gfx1250",
                 "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND",
-                "default",
+                "all",
             ),
             (
                 "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_FAMILIES gfx1250-strict)",
@@ -169,12 +175,6 @@ class CmakeTargetSelectionTest(unittest.TestCase):
                 "all",
             ),
             (
-                "set(THEROCK_AMDGPU_FAMILIES gfx125X-all)\nset(THEROCK_AMDGPU_TARGETS gfx1250-strict)\nset(THEROCK_AMDGPU_DIST_BUNDLE_NAME combined)",
-                "gfx1250;gfx1250-strict",
-                "gfx1250",
-                "all",
-            ),
-            (
                 "set(THEROCK_DIST_AMDGPU_FAMILIES gfx1250-strict)",
                 "THEROCK_AMDGPU_TARGETS-NOTFOUND",
                 "gfx1250-strict",
@@ -189,8 +189,8 @@ class CmakeTargetSelectionTest(unittest.TestCase):
             (
                 "set(THEROCK_DIST_AMDGPU_FAMILIES gfx125X-all)",
                 "THEROCK_AMDGPU_TARGETS-NOTFOUND",
-                "gfx1250",
-                "default",
+                "gfx1250-strict;gfx1250",
+                "all",
             ),
             (
                 "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_TARGETS gfx1250)",
@@ -202,7 +202,7 @@ class CmakeTargetSelectionTest(unittest.TestCase):
                 "set(THEROCK_AMDGPU_FAMILIES gfx1250-strict)\nset(THEROCK_TEST_AMDGPU_FAMILIES gfx125X-all)",
                 "gfx1250-strict",
                 "gfx1250-strict",
-                "gfx1250",
+                "gfx1250-strict;gfx1250",
             ),
         ]
         for settings, build, dist, tests in cases:
@@ -222,12 +222,10 @@ endif()
 """
                 )
                 with script.open("a") as f:
-                    if tests in ("default", "all"):
+                    if tests == "all":
                         f.write(
                             "get_property(expected GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)\n"
                         )
-                        if tests == "default":
-                            f.write("list(REMOVE_ITEM expected gfx1250-strict)\n")
                     else:
                         f.write(f'set(expected "{tests}")\n')
                     f.write(
