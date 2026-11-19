@@ -32,14 +32,15 @@ We generate the following types of packages:
   `Requires-Dist` on the matching version of `rocm-sdk-libraries`. Users install
   only the device wheels for their GPU target(s).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
-  For any file already populated in a runtime package, it will include it as
-  a relative symlink in the tarball. During extraction, file symlinks are
-  converted to hardlinks to improve compatibility, while directory symlinks
-  remain as symlinks. Shared library soname links are also rewritten as needed.
-  Since symlinks/hardlinks and non-standard attributes cannot be included in a
-  wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
-  file. The installed package is extended in response to requesting a path to it
-  via the `rocm-sdk` tool.
+  Files that do not require link setup are stored directly in the wheel. For
+  any file already populated in a runtime package, it records a relative link
+  instead; source symlinks are recorded as links as well. These links are
+  stored in `.devel_links/devel.json` because wheel archives do not portably
+  represent symlinks. During initialization, file links are created as
+  hardlinks to improve compatibility, while directory symlinks remain as
+  symlinks. Shared library soname links are also rewritten as needed. The
+  installed package is initialized in response to requesting a path to it via
+  the `rocm-sdk` tool.
 
 ### Kpack-split packaging
 
@@ -58,7 +59,7 @@ files. Each installed `rocm-sdk-device-{target}` wheel ships a manifest, and
 `hipcc` - hardlinks that wheel's device files from `rocm-sdk-libraries` into the
 devel tree, recording them in the device wheel's `RECORD` so `pip uninstall`
 removes them. Because the compiler trampolines only trigger this on the first
-expansion, after installing or removing a `rocm-sdk-device-*` wheel in an
+initialization, after installing or removing a `rocm-sdk-device-*` wheel in an
 already-initialized environment, re-run `rocm-sdk init` or `rocm-sdk test` to
 refresh the device files in the devel tree.
 
@@ -185,9 +186,9 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > [!TIP]
 > For CI-style testing with the same directory layout used by workflows, use
 > [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
-> with `--output-dir` instead of directly calling the indexer. This generates
-> the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
-> structure used by CI uploads.
+> with `--output-dir`. This stages packages locally under
+> `{run_id}-{platform}/python/` but does not generate an index. To create
+> `index.html`, run the indexer command above against the staged directory.
 
 ## Mirroring Third-Party Python Dependencies
 
@@ -234,14 +235,13 @@ core index without implicitly changing that routing. If a mirrored dependency
 should also be available through the aggregate index used by pip, add its core
 ownership mapping and redeploy the aggregate index.
 
-The `Mirror Python Dependencies` workflow will live with the other
-[rockrel workflows](https://github.com/ROCm/rockrel/tree/main/.github/workflows).
-It will resolve one snapshot every Monday and sequentially publish it to `dev`,
-`nightly`, `rc`, and `stable-staging`. Manual dispatch will default to
-resolve-only and allow targeting one stream for diagnostics. Retained streams
-will refresh only the current snapshot's existing objects; stable-staging will
-skip existing objects because it has no lifecycle expiration. If a stream
-fails, rerun the complete workflow. Each run is idempotent, and older versions
+The rockrel
+[`Mirror Python Dependencies`](https://github.com/ROCm/rockrel/actions/workflows/mirror_python_dependencies.yml)
+workflow runs weekly and can also be run manually. It resolves one snapshot and
+publishes it with `--refresh-existing` to the core bucket of each selected
+release stream. Both scheduled and manual runs currently publish to `dev` only;
+other release streams are enabled in the workflow one at a time. If
+a run fails, rerun the workflow. Each run is idempotent, and older versions
 remain subject to their normal retention policy.
 
 ## rocm-profiler

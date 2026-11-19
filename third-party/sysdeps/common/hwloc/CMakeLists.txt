@@ -19,6 +19,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-hwloc
+      HARDENING_DEFERRED "hwloc (autotools)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -64,6 +65,11 @@ endif()
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
 project(HWLOC_BUILD)
+
+# The triplets below are Linux-specific, so guard them in addition to BUILD_TOPOLOGY.
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "The bundled hwloc build is only supported on Linux")
+endif()
 
 if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")

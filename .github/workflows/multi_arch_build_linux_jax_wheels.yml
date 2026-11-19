@@ -34,7 +34,7 @@ on:
         type: string
         required: true
       gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        description: "ROCm device package selector used for the JAX build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
@@ -43,9 +43,13 @@ on:
         type: string
         required: true
       rocm_jax_ref:
-        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        description: "ROCm/rocm-jax ref the JAX tests check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
+      build_image:
+        description: "Image to build the wheels in, with ROCm installed from rocm_package_find_links_url at build time."
+        type: string
+        required: true
       wheel_type:
         description: "release builds the plugin and PJRT wheels for a ref whose jax/jaxlib are on PyPI; nightly also builds jax and jaxlib from the same checkout, dated from its HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: string
@@ -59,7 +63,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       release_type:
@@ -116,7 +120,7 @@ on:
         type: string
         default: "ROCm/jax"
       gfx_arch:
-        description: "ROCm device package selector used for the manylinux build (e.g. device-gfx942, device-gfx950, or device-all)."
+        description: "ROCm device package selector used for the JAX build (e.g. device-gfx942, device-gfx950, or device-all)."
         type: string
         required: false
         default: ""
@@ -125,9 +129,13 @@ on:
         type: string
         required: true
       rocm_jax_ref:
-        description: "ROCm/rocm-jax ref holding the manylinux Dockerfile. Empty uses jax_ref, which release tags share across both repositories."
+        description: "ROCm/rocm-jax ref the JAX tests check out. Empty uses jax_ref, which release tags share across both repositories."
         type: string
         default: ""
+      build_image:
+        description: "Image to build the wheels in, with ROCm installed from rocm_package_find_links_url at build time."
+        type: string
+        required: true
       wheel_type:
         description: "release builds the plugin and PJRT for a ref on PyPI; nightly also builds jax and jaxlib, dated from the HEAD commit (for refs with no PyPI release, such as jax-ml/jax@main)."
         type: choice
@@ -144,7 +152,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       release_type:
@@ -201,14 +209,14 @@ jobs:
     env:
       ROCM_VERSION: ${{ inputs.rocm_version }}
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
-      MANYLINUX_IMAGE_TAG: therock-jax-manylinux:${{ inputs.jax_ref }}-${{ inputs.python_version }}
+      BUILD_IMAGE: ${{ inputs.build_image }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax-source/dist
 
     steps:
       - name: "Quartz - started - build JAX wheels"
         continue-on-error: true
         if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: started
           reporting_workflow: multi_arch_build_linux_jax_wheels.yml
@@ -223,15 +231,6 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref_name }}
-
-      - name: Checkout rocm-jax
-        timeout-minutes: 15
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          path: rocm-jax
-          repository: ROCm/rocm-jax
-          ref: ${{ inputs.rocm_jax_ref || inputs.jax_ref }}
 
       - name: Checkout JAX
         id: checkout_jax
@@ -250,34 +249,13 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ inputs.python_version }}
 
       - name: Install python deps for CI
         run: |
           pip install -r external-builds/jax/requirements-jax.txt
-
-      # TODO: THEROCK_INDEX_URL need to be renamed in the future to
-      # THEROCK_FIND_LINKS_URL to avoid confusion with pip --index-url.
-      - name: Build manylinux image
-        working-directory: jax-source
-        env:
-          THEROCK_VERSION: ""
-          GFX_ARCH: ${{ inputs.gfx_arch }}
-          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
-        run: |
-          cp ../rocm-jax/docker/manylinux/Dockerfile.jax-manylinux_2_28-therock \
-            Dockerfile.jax-manylinux_2_28-therock
-
-          docker build \
-            -t "${MANYLINUX_IMAGE_TAG}" \
-            --file=Dockerfile.jax-manylinux_2_28-therock \
-            --build-arg=THEROCK_INDEX_URL="${ROCM_PACKAGE_FIND_LINKS_URL}" \
-            --build-arg=THEROCK_VERSION="${THEROCK_VERSION}" \
-            --build-arg=GFX_ARCH="${GFX_ARCH}" \
-            --progress=plain \
-            .
 
       - name: Resolve JAX wheel version
         id: resolve_jax_version
@@ -289,26 +267,39 @@ jobs:
             --rocm-version "${ROCM_VERSION}" \
             --jax-source-dir jax-source
 
-      - name: Build JAX Wheels in manylinux container
+      - name: Build JAX wheels
         working-directory: jax-source
         env:
           PYTHON_VERSION: ${{ inputs.python_version }}
           JAX_COMMIT: ${{ steps.checkout_jax.outputs.commit }}
           ML_WHEEL_VERSION_SUFFIX: ${{ steps.resolve_jax_version.outputs.ml_wheel_version_suffix }}
           JAX_WHEELS: ${{ steps.resolve_jax_version.outputs.wheels }}
+          GFX_ARCH: ${{ inputs.gfx_arch }}
+          ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
         run: |
           docker run --rm \
             --user root \
             --env JAX_COMMIT \
             --env ML_WHEEL_VERSION_SUFFIX \
             --env JAX_WHEELS \
+            --env GFX_ARCH \
+            --env ROCM_PACKAGE_FIND_LINKS_URL \
             --env ROCM_VERSION="${ROCM_VERSION}" \
             --env PYTHON_VERSION="${PYTHON_VERSION}" \
             --env PACKAGE_DIST_DIR="/workspace/jax-source/dist" \
             --volume "${GITHUB_WORKSPACE}:/workspace" \
             --workdir /workspace/jax-source \
-            "${MANYLINUX_IMAGE_TAG}" \
+            "${BUILD_IMAGE}" \
             bash -lc '
+              set -euo pipefail
+              case "${ROCM_PACKAGE_FIND_LINKS_URL}" in
+                *.html) PIP_SRC="--find-links" ;;
+                *)      PIP_SRC="--index-url" ;;
+              esac
+              python3 -m pip install --break-system-packages --pre \
+                "${PIP_SRC}" "${ROCM_PACKAGE_FIND_LINKS_URL}" \
+                "rocm[libraries,devel,${GFX_ARCH}]"
+              rocm-sdk init
               ROCM_ROOT="$(rocm-sdk path --root)"
               python build/build.py build \
                 --wheels="${JAX_WHEELS}" \
@@ -443,7 +434,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: "Quartz - completed - build JAX Wheels"
-        uses: ROCm/Quartz/.github/actions/notify_quartz@f386a9756620938616af0b4d5d04b24ae6e0353f # notify_quartz/v1.1.1
+        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
           reporting_workflow: multi_arch_build_linux_jax_wheels.yml

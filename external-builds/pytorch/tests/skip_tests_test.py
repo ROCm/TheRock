@@ -13,6 +13,7 @@ against typos and structural mistakes when a new version skip list (e.g.
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKIP_DIR = Path(__file__).resolve().parent.parent / "skip_tests"
 
@@ -25,10 +26,15 @@ def _skip_list_files():
     return [f for f in files if f.name != "create_skip_tests.py"]
 
 
-def _load_skip_tests(path):
+def _load_module(path):
     spec = importlib.util.spec_from_file_location(path.stem, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def _load_skip_tests(path):
+    module = _load_module(path)
     return getattr(module, "skip_tests", None)
 
 
@@ -60,6 +66,28 @@ class SkipTestsTest(unittest.TestCase):
                                 for name in tests:
                                     self.assertIsInstance(name, str)
                                     self.assertTrue(name, "test name must not be empty")
+
+    def test_platform_gpu_filters_require_both_matches(self):
+        create_skip_tests = _load_module(SKIP_DIR / "create_skip_tests.py")
+        linux_only = "test_linux_gfx1201_only"
+        windows_only = "test_windows_gfx1201_only"
+        fixture = {
+            "fixture": {
+                "linux-gfx1201": {"transformers": [linux_only]},
+                "windows-gfx1201": {"transformers": [windows_only]},
+            }
+        }
+
+        with mock.patch.object(
+            create_skip_tests, "import_skip_tests", return_value=fixture
+        ):
+            linux = create_skip_tests.create_list(["gfx1201"], "2.15", "Linux")
+            windows = create_skip_tests.create_list(["gfx1201"], "2.15", "Windows")
+
+        self.assertIn(linux_only, linux)
+        self.assertNotIn(windows_only, linux)
+        self.assertIn(windows_only, windows)
+        self.assertNotIn(linux_only, windows)
 
 
 if __name__ == "__main__":

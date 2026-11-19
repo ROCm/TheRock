@@ -16,7 +16,3 @@ if platform.system() == "Linux":
     static_lib = Path(PREFIX) / "lib" / "librocm_sysdeps_liblzma.a"
     if static_lib.exists():
         static_lib.unlink()
-elif platform.system() == "Windows":
-    # We don't want the .dll on Windows.
-    (Path(PREFIX) / "bin" / "liblzma.dll").unlink()
-    (Path(PREFIX) / "lib" / "liblzma.lib").unlink()

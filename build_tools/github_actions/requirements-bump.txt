@@ -1,0 +1,8 @@
+# CI dependencies for bump_submodules.yml (bump_automation.py / post_bump_breadcrumbs.py).
+# Pinned to explicit versions (requests matches the repo-wide requests==2.33.0).
+# Regenerate:  pip-compile --output-file=requirements-bump.txt requirements-bump.in
+certifi==2026.10.23
+charset-normalizer==3.5.2
+idna==3.20
+requests==2.33.0
+urllib3==2.8.0

@@ -38,6 +38,7 @@ SCRIPT = Path(__file__).parent.parent / "determine_rocm_test_dependencies.py"
 sys.path.insert(0, str(THEROCK_DIR / "test_tools"))
 
 from determine_rocm_test_dependencies import (  # noqa: E402
+    _normalize_changed_project,
     explain_component,
     get_subprojects_to_test,
     list_subprojects,
@@ -282,6 +283,18 @@ class TestNameNormalization(_FixtureTestCase):
         result = get_subprojects_to_test(["Amd-DbgApi"], self.root, level=4)
         self.assertIn("amd-dbgapi", result)
         self.assertIn("rocgdb", result)
+
+    def test_prim_subtrees_alias_to_hipccl(self) -> None:
+        # rocPRIM/hipCUB/rocThrust are built via the unified hipCCL superbuild,
+        # so their standalone subtrees must resolve to the hipccl graph node
+        # instead of stripping to non-existent rocprim/hipcub/rocthrust keys.
+        for subtree in (
+            "projects/rocprim",
+            "projects/hipcub",
+            "projects/rocthrust",
+            "projects/hipccl",
+        ):
+            self.assertEqual(_normalize_changed_project(subtree), ["hipccl"])
 
 
 class TestCliInputParsing(_FixtureTestCase):
@@ -1083,6 +1096,30 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
             selected = set(json.loads(proc.stdout.strip()))
             self.assertIn("hipdnn-integration-tests", selected)
             self.assertNotIn("hipdnn_integration_tests", selected)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_cli_hipdnn_selects_cudnn_corpus(self) -> None:
+        graph = {"hipdnn": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/hipdnn",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertEqual(selected, {"hipdnn", "hipdnn-cudnn-samples"})
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
