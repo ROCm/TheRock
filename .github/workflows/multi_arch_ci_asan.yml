@@ -20,9 +20,9 @@ on:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
         default: ""
-      linux_test_labels:
+      pr_labels:
         type: string
-        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
+        description: "Comma-separated PR labels (e.g. ci:skip-pytorch,test:rocprim,test_filter:quick)."
         default: ""
       prebuilt_stages:
         type: string
@@ -32,11 +32,31 @@ on:
         type: string
         default: ""
         description: "Workflow run ID to copy prebuilt stage artifacts from; required when prebuilt_stages is set"
+  workflow_call:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        default: ""
+      pr_labels:
+        type: string
+        default: ""
+      prebuilt_stages:
+        type: string
+        default: ""
+      baseline_run_id:
+        type: string
+        default: ""
   pull_request:
     types:
       - labeled
       - opened
       - synchronize
+      # Draft pull requests skip builds and tests, so run CI as soon as one is
+      # marked ready for review instead of waiting for the next push.
+      - ready_for_review
+      # Converting back to draft starts a run that skips the build and test
+      # jobs, which cancels any in-flight run through the concurrency group.
+      - converted_to_draft
 
 permissions:
   contents: read
@@ -60,9 +80,14 @@ jobs:
     with:
       build_variant: "asan"
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
-      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      pr_labels: ${{ inputs.pr_labels || '' }}
+      # PRs run ASAN CI only with the ci:asan label; there is no opt-out label.
+      pull_request_opt_in_label: "ci:asan"
+      pull_request_opt_out_label: ""
       prebuilt_stages: ${{ inputs.prebuilt_stages || '' }}
       baseline_run_id: ${{ inputs.baseline_run_id || '' }}
+      # Build only on pull requests; run tests on workflow_dispatch/nightly.
+      run_rocm_tests: ${{ github.event_name != 'pull_request' }}
       build_python_packages: false
       build_pytorch: false
       build_jax: false
@@ -93,7 +118,7 @@ jobs:
     needs:
       - setup
       - linux_build_and_test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 5

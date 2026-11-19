@@ -35,6 +35,24 @@ from pathlib import Path
 # when manually triggered, so it's not included in the explicit trigger lists.
 VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
+# Pool names a component may request via "multi_gpu_pool" in
+# fetch_test_configurations.py. Omitting the field requests the default 8-GPU
+# pool, which has no name here because it is not opt-in.
+MULTI_GPU_POOL_NAMES = frozenset(["2gpu", "4gpu"])
+
+# Family keys holding a multi-GPU runner pool: the default pool
+# ("test-runs-on-multi-gpu") and each named pool above, each with an optional
+# "-labels" weighted list variant. When adding a pool, add it to both this list
+# and MULTI_GPU_POOL_NAMES or its key will not be forwarded to the test matrix.
+MULTI_GPU_RUNNER_KEYS = [
+    "test-runs-on-multi-gpu",
+    "test-runs-on-multi-gpu-labels",
+    "test-runs-on-2gpu",
+    "test-runs-on-2gpu-labels",
+    "test-runs-on-4gpu",
+    "test-runs-on-4gpu-labels",
+]
+
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -69,10 +87,14 @@ def load_external_runner_config() -> dict | None:
         _log(f"Failed to load CI config from {ci_config_path}: {e}")
         return None
     _log(f"Loaded external runner config from {ci_config_path}")
-    return {
+    result = {
         "runner_labels": config.get_gpu_runner_labels(),
         "build_runners": config.build_runners,
     }
+    # Load CPU test runners if explicitly configured (optional, falls back to build_runners)
+    if hasattr(config, "_raw") and "cpu_test_runners" in config._raw:
+        result["cpu_test_runners"] = config._raw["cpu_test_runners"]
+    return result
 
 
 def is_asan():
@@ -102,7 +124,7 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     # Use count if available, otherwise weight
     weight_key = "count" if "count" in labels_config[0] else "weight"
     weights = [config[weight_key] for config in labels_config]
-    selected = random.choices(labels_config, weights=weights, k=1)[0]
+    selected = random.SystemRandom().choices(labels_config, weights=weights, k=1)[0]
     print(
         f"  {context_name}: selected runner ({weight_key}={selected[weight_key]}): "
         f"{selected['label']}"
@@ -136,7 +158,12 @@ BUILD_RUNNER_LABELS = {
 }
 
 
-def select_build_runner(platform: str, build_variant: str, size: str = "large") -> str:
+def select_build_runner(
+    platform: str,
+    build_variant: str,
+    size: str = "large",
+    triggers: set[str] | None = None,
+) -> str:
     """Select a build runner label based on platform, build variant, and size.
 
     Args:
@@ -145,6 +172,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
         size: runner pool size — "small", "medium", or "large" (default).
               Sanitizer variants always use the sanitizer (large) pool regardless
               of size. Platforms without a size-specific pool fall back to default.
+        triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
+                  When "submodule_bump" is present, uses the "bump" runner pool if
+                  configured, to isolate bump PRs from the weighted Azure/AWS split.
     """
     build_runner_labels = get_build_runner_labels()
     if platform not in build_runner_labels:
@@ -157,6 +187,9 @@ def select_build_runner(platform: str, build_variant: str, size: str = "large") 
     if "san" in build_variant:
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
+    elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
+        labels_config = platform_config["bump"]
+        context_name = f"build-runner-bump ({platform})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"
@@ -223,10 +256,18 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
     Each entry is a dict with "label" and "count" (number of available runners).
     When present, overrides test-runs-on for runner selection.
-- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
+- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture.
+    This is the default (8-GPU) multi-GPU pool.
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
+- test-runs-on-<N>gpu / test-runs-on-<N>gpu-labels: (optional) pool for multi-GPU components that
+    only need N GPUs, e.g. "test-runs-on-2gpu" for rccl. A component opts in with
+    "multi_gpu_pool" in fetch_test_configurations.py. Pools never fall back to one another: a
+    family without the named pool skips those components, so 2-GPU-capable jobs stay off the
+    scarce 8-GPU nodes and jobs needing 8 GPUs never land on a 2-GPU node.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
+    ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
 - family: (required) AMD GPU family name, used for test selection and artifact fetching
 - fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
 - build_variants: (optional) list of build variants to build for this architecture (e.g. ["release", "asan"])
@@ -242,6 +283,8 @@ amdgpu_family_info_matrix dictionary fields:
 - run-full-tests-only: (optional) if enabled, only run full tests for this architecture
 - test_type_for_family (optional): forces the test type for this family (e.g., "quick"), overriding the global test_type. Useful for families with limited hardware that should always run quick tests.
 - test_labels_for_family (optional): list of test labels to filter which tests run for this family
+- disabled_framework_tests (optional): list of ML framework tests to skip on architecture
+    Valid values: "pytorch", "jax"
 """
 # Unified family matrix with explicit trigger-based build/test configuration.
 # Each family specifies exactly when it should build and test via trigger lists.
@@ -259,11 +302,21 @@ amdgpu_family_info_matrix = {
                     "count": 28,
                 },  # ccs-csp
             ],
-            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            # Sandbox runner for ASAN test jobs. Blank or absent falls back to
+            # the regular runner.
             "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
+            ],
+            # 2-GPU and 4-GPU slices of the 8-GPU hosts (ROCm/TheRock#5623).
+            "test-runs-on-2gpu": "linux-gfx942-2gpu-ossci-rocm",
+            "test-runs-on-2gpu-labels": [
+                {"label": "linux-gfx942-2gpu-ossci-rocm", "count": 2},
+            ],
+            "test-runs-on-4gpu": "linux-gfx942-4gpu-ossci-rocm",
+            "test-runs-on-4gpu-labels": [
+                {"label": "linux-gfx942-4gpu-ossci-rocm", "count": 2},
             ],
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
@@ -295,6 +348,9 @@ amdgpu_family_info_matrix = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # WSL-hosted V710 runners (TheRock-Infra wsl-* pools): Linux jobs on a
+            # Windows host whose runner lives in WSL2. Used by ci:run-wsl.
+            "test-runs-on-wsl": "wsl-gfx1101-gpu-rocm",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100", "gfx1101", "gfx1102", "gfx1103"],
             "bypass_tests_for_releases": True,
@@ -392,7 +448,7 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": ["nightly"],
         },
     },
-    # Limited hardware - builds on presubmit, tests only on submodule_bump
+    # Limited hardware - builds on presubmit, tests only on nightly
     "gfx125x": {
         "linux": {
             # NOTE: MI455 runner supply is very limited.
@@ -413,25 +469,27 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            # Tests only on submodule changes due to limited hardware
-            "tests_on_trigger": ["submodule_bump"],
+            # Tests only on nightly due to limited hardware
+            "tests_on_trigger": ["nightly"],
             # Force quick tests for MI455 hardware
             "test_type_for_family": "quick",
+            # PyTorch tests have known failures on MI455 - skip until resolved
+            "disabled_framework_tests": ["pytorch"],
         },
     },
-    # Postsubmit family - builds on postsubmit, tests on postsubmit and nightly
+    # Postsubmit family - builds on postsubmit, tests only on nightly
     "gfx90a": {
         "linux": {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "asan-debug", "host-asan"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": ["postsubmit", "nightly"],
+            "tests_on_trigger": ["nightly"],
             # Only run tests when gfx90a label is present on PR
             "trigger_test_label_only": True,
         },
@@ -454,6 +512,8 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+            # No 2-GPU pool yet, so components asking for one (rccl) are skipped
+            # on this family rather than taking an 8-GPU node.
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": [
@@ -654,6 +714,29 @@ amdgpu_family_info_matrix = {
             "tests_on_trigger": [],
         },
     },
+    # Nightly and submodule_bump only builds, no postsubmit. Tests only on nightly
+    "gfx117x": {
+        "linux": {
+            "test-runs-on": "linux-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["jax"],
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx117x-gpu-rocm",
+            "family": "gfx117X-all",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "builds_on_trigger": ["nightly", "submodule_bump"],
+            "bypass_tests_for_releases": True,
+            "tests_on_trigger": ["nightly"],
+            "disabled_framework_tests": ["jax"],
+        },
+    },
 }
 
 
@@ -726,9 +809,9 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on",
         "test-runs-on-labels",
         "test-runs-on-sandbox",
-        "test-runs-on-multi-gpu",
-        "test-runs-on-multi-gpu-labels",
+        *MULTI_GPU_RUNNER_KEYS,
         "test-runs-on-kernel",
+        "test-runs-on-wsl",
     }
 
     for _trigger, families in gpu_families.items():
@@ -804,12 +887,26 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
     workflow_dispatch where all families are implicitly allowed).
     """
     # Always start with local definitions - source of truth for build support
-    result = _get_local_families_for_trigger_types(trigger_types)
+    result = copy.deepcopy(_get_local_families_for_trigger_types(trigger_types))
 
     # Overlay external runner config if available
     external_config = load_external_runner_config()
     if external_config is not None:
         result = _overlay_runner_config(result, external_config)
+
+    # These sandbox pools are reserved for rocm-systems PR testing. Apply the
+    # policy to both setup and component selection, including local fallbacks.
+    # TODO(#6624): Move sandbox repository/trigger restrictions into each
+    # family's dictionary so the policy is explicit and can vary by family.
+    if (
+        os.environ.get("GITHUB_REPOSITORY") != "ROCm/rocm-systems"
+        or os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
+    ):
+        for family in ("gfx94x", "gfx950"):
+            runners = result.get(family, {}).get("linux", {})
+            if "test-runs-on-sandbox" in runners:
+                runners["test-runs-on-sandbox"] = ""
+                runners["test-runs-on-sandbox-labels"] = []
 
     return result
 
@@ -826,3 +923,95 @@ def get_build_runner_labels():
         return external_config.get("build_runners", {})
 
     return BUILD_RUNNER_LABELS
+
+
+def get_cpu_test_runner(platform: str) -> str:
+    """Returns the CPU test runner label for components with linux_cpu_runner: True.
+
+    Prefers an explicit cpu_test_runners config, then draws from the "medium" build
+    runner pool. These tests need no GPU, so this keeps them off the default pool
+    that real builds compete for.
+
+    Args:
+        platform: "linux" or "windows"
+
+    Returns:
+        Runner label string, or empty string if not configured.
+    """
+    # First check for explicit cpu_test_runners in external config
+    external_config = load_external_runner_config()
+    if external_config is not None:
+        cpu_runners = external_config.get("cpu_test_runners", {})
+        if platform in cpu_runners:
+            return cpu_runners[platform]
+
+    # Otherwise draw from the build runner pools (CPU-only, no GPU). Prefer the
+    # "medium" pool, falling back to "small" then "default" for platforms without
+    # one. These are weighted lists, so select the same way builds do rather than
+    # taking the first entry -- that honors the provider split and skips
+    # zero-weight pools.
+    build_runners = get_build_runner_labels()
+    platform_config = build_runners.get(platform)
+    if not platform_config:
+        return ""
+    labels_config = (
+        platform_config.get("medium")
+        or platform_config.get("small")
+        or platform_config.get("default")
+    )
+    if not labels_config:
+        return ""
+    return select_weighted_label(labels_config, f"cpu-test-runner ({platform})")
+
+
+# Valid ML framework tests that can be disabled per-family
+VALID_DISABLED_FRAMEWORK_TESTS = frozenset(["pytorch", "jax"])
+
+# Opt-in label for also testing a family's Linux build on its test-runs-on-wsl runner.
+WSL_RUN_LABEL = "ci:run-wsl"
+
+# Artifacts that CI control labels need beyond the components' own artifacts.
+# Tests on WSL also install the WSL libhsakmt (see install_rocm_from_artifacts),
+# so a narrowed build adds the stage that produces it.
+CI_LABEL_REQUIRED_ARTIFACTS: dict[str, list[str]] = {
+    WSL_RUN_LABEL: ["wsl-rocdxg"],
+}
+
+
+def get_wsl_test_runner(
+    platform_info: dict, *, labels: list[str], test_runs_on: str, build_variant: str
+) -> str:
+    """WSL runner that also tests a family's Linux build, or "" for none.
+
+    platform_info is the family's "linux" entry, with runners from the CI config.
+    WSL reuses the Linux artifacts, so it follows the family's Linux GPU test
+    decision (test_runs_on) and needs ci:run-wsl. ASAN builds are not tested on WSL.
+    """
+    if WSL_RUN_LABEL not in labels or not test_runs_on or "asan" in build_variant:
+        return ""
+    return platform_info.get("test-runs-on-wsl", "")
+
+
+def is_framework_test_disabled_for_family(
+    *, amdgpu_family: str, platform: str, framework: str
+) -> bool:
+    """Return True if framework is in disabled_framework_tests for the family."""
+    if framework not in VALID_DISABLED_FRAMEWORK_TESTS:
+        raise ValueError(
+            f"Invalid framework {framework!r}. "
+            f"Valid values: {sorted(VALID_DISABLED_FRAMEWORK_TESTS)}"
+        )
+
+    # Empty list returns all families
+    matrix = get_all_families_for_trigger_types([])
+    for info_for_key in matrix.values():
+        platform_info = info_for_key.get(platform)
+        if not platform_info:
+            continue
+
+        family = platform_info.get("family", "")
+        if amdgpu_family.lower() == family.lower():
+            disabled = platform_info.get("disabled_framework_tests", [])
+            return framework in disabled
+
+    return False

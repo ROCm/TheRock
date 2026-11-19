@@ -15,6 +15,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-zstd
+      HARDENING_DEFERRED "zstd (CMake)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -85,6 +86,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     -DZSTD_BUILD_STATIC=ON
     -DZSTD_BUILD_SHARED=OFF
   )
+  # Driver builds link zstd into comgr, which uses the static MSVC runtime.
+  if(THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    list(APPEND CONFIGURE_ARGS
+      -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+      -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+    )
+  endif()
   set(POST_INSTALL_COMMANDS)
 else()
   message(FATAL_ERROR "System not recognized")
@@ -95,18 +103,6 @@ set(patch_source_commands)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
        bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
-endif()
-
-# The nested configure below does not otherwise inherit compile flags, and zstd
-# links statically into shipped binaries.
-set(driver_build_flag_args)
-if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
-  list(APPEND driver_build_flag_args
-    "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}"
-    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
-    "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
-    "-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS}"
-  )
 endif()
 
 add_custom_target(
@@ -126,7 +122,6 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
-      ${driver_build_flag_args}
       -DZSTD_BUILD_TESTS=OFF
       -DZSTD_LEGACY_SUPPORT=OFF
       -DZSTD_BUILD_PROGRAMS=OFF

@@ -7,7 +7,8 @@
 Build Debian or RPM repository metadata from a local native packaging tree.
 
 Called from ``multi_arch_build_native_linux_packages.yml`` **after** the simulate
-install test and **before** ``upload_package_repo.py``. Simulate must run first
+install test and **before** ``verify_package_repo_checksums.py``. The checksum
+check must pass before ``upload_package_repo.py`` runs. Simulate must run first
 because this script moves loose ``.deb`` / ``.rpm`` files into standard repo
 layout (``pool/main/`` or ``x86_64/``) before indexing.
 
@@ -109,8 +110,9 @@ def generate_release_file_with_checksums(
 
         file_size = file_path.stat().st_size
 
-        md5_hash = hashlib.md5()
-        sha1_hash = hashlib.sha1()
+        # Retain Debian MD5/SHA1 metadata checksums alongside SHA256.
+        md5_hash = hashlib.md5(usedforsecurity=False)
+        sha1_hash = hashlib.sha1(usedforsecurity=False)
         sha256_hash = hashlib.sha256()
 
         with open(file_path, "rb") as f:

@@ -64,7 +64,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
 
 permissions:
   contents: read
@@ -72,9 +72,10 @@ permissions:
 jobs:
   test_artifact_structure:
     name: "Validate artifact structure"
-    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
-      image: python:3.12-slim
+      # https://hub.docker.com/_/python/tags?name=3.12-slim
+      image: python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
     env:
       ARTIFACT_GITHUB_REPO: ${{ inputs.artifact_github_repo }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -100,11 +101,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          # Kpack splits family builds into per-target archives; validate those too.
           python ./build_tools/artifact_manager.py fetch \
             --run-id="${ARTIFACT_RUN_ID}" \
             --run-github-repo="${ARTIFACT_GITHUB_REPO}" \
             --stage=all \
             --amdgpu-families="${AMDGPU_FAMILIES}" \
+            --expand-family-to-targets \
             --platform="${PLATFORM}" \
             --output-dir="${OUTPUT_ROOT}" \
             --no-extract

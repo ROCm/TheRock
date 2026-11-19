@@ -21,7 +21,10 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
-from github_actions.amdgpu_family_matrix import get_all_families_for_trigger_types
+from github_actions.amdgpu_family_matrix import (
+    get_all_families_for_trigger_types,
+    is_framework_test_disabled_for_family,
+)
 from github_actions.github_actions_api import gha_append_step_summary, gha_set_output
 from configure_pytorch_release_matrix import PYTORCH_TEST_LEVELS
 
@@ -62,6 +65,17 @@ def build_test_matrix(
     print(f"Resolved {platform} GPU test families: {amdgpu_families or 'none'}")
     include: list[dict[str, str]] = []
     for requested_family in amdgpu_families:
+        # Check if PyTorch tests are disabled for this family
+        if is_framework_test_disabled_for_family(
+            amdgpu_family=requested_family,
+            platform=platform,
+            framework="pytorch",
+        ):
+            print(
+                f"Skipping {requested_family}: PyTorch tests disabled for this family"
+            )
+            continue
+
         test_runs_on = find_test_runs_on(
             amdgpu_family=requested_family,
             platform=platform,

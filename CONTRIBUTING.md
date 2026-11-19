@@ -334,7 +334,8 @@ gitleaks detect --source . --config build_tools/scan_tools/gitleaks.toml \
   --redact --no-banner --no-git
 
 # Unsafe patterns in Python (pip install bandit).
-bandit --configfile build_tools/scan_tools/bandit.yml --severity-level low \
+bandit --ini build_tools/scan_tools/bandit.ini \
+  --configfile build_tools/scan_tools/bandit.yml --severity-level low \
   --recursive .
 
 # GitHub Actions workflow vulnerabilities (pip install zizmor).
@@ -379,6 +380,11 @@ request as a draft:
 > maintainers will be asked to review the changes. If a pull request is only
 > intended to be used for testing, please mark it as a draft to limit
 > review request notifications.
+
+Multi-Arch CI skips builds and tests on draft pull requests. Marking a pull
+request ready for review starts a full run, and adding the `ci:run-on-draft`
+label runs CI while the pull request stays a draft. See
+[Draft pull requests](docs/development/ci_behavior_manipulation.md#draft-pull-requests).
 
 #### Requesting a code review
 

@@ -20,6 +20,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LIBLZMA_VERSION "${CMAKE_MATCH_1}")
 
     therock_cmake_subproject_declare(therock-liblzma
+      HARDENING_DEFERRED "liblzma (CMake)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       FPRINT_SOURCE_DIR "${_source_dir}"
@@ -46,6 +47,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
+    therock_cmake_subproject_provide_package(therock-liblzma LibLZMA lib/rocm_sysdeps/lib/cmake/LIBLZMA)
     therock_cmake_subproject_provide_package(therock-liblzma liblzma lib/rocm_sysdeps/lib/cmake/liblzma)
     therock_cmake_subproject_activate(therock-liblzma)
 
@@ -70,6 +72,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
+
+# Driver builds link liblzma into comgr, which uses the static MSVC runtime.
+set(driver_msvc_runtime_args)
+if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  list(APPEND driver_msvc_runtime_args
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+  )
+endif()
+
 # xz/liblzma provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -106,6 +118,7 @@ add_custom_target(
       -DSKIP_INSTALL_FILES=ON
       # Set versioning to generic to override with a private map
       -DXZ_SYMBOL_VERSIONING=generic
+      ${driver_msvc_runtime_args}
 
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
@@ -123,10 +136,11 @@ add_custom_target(
 # on windows vs linux.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LIBLZMA_TYPE "SHARED")
-  set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.so.5")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/liblzma.so")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(LIBLZMA_TYPE "STATIC")
-  set(LIBLZMA_IMPORTED_LOCATION "lib/liblzmastatic.lib")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/lzma.lib")
+  set(LIBLZMA_CFLAGS "-DLZMA_API_STATIC")
 else()
   message(FATAL_ERROR "Unrecognized system type")
 endif()

@@ -46,6 +46,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
@@ -86,9 +87,15 @@ def parse_source(value: str) -> dict:
 
 def fetch_bytes(url: str) -> bytes:
     """Fetch URL, return raw bytes. Raises on HTTP error."""
+    if urlsplit(url).scheme != "https" or not urlsplit(url).netloc:
+        raise ValueError(f"Expected an HTTPS URL: {url}")
     print(f"  Fetching {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "amdrocm-aggregate/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(
+        req,
+        timeout=60,
+        # HTTPS URL checked above.
+    ) as resp:  # nosec B310
         return resp.read()
 
 

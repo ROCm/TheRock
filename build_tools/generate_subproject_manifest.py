@@ -19,6 +19,7 @@ CMAKE_ARGS = [
     "-GNinja",
     "-DTHEROCK_AMDGPU_FAMILIES=gfx1100",  # Required by cmake, but doesn't affect manifest
     "-DTHEROCK_ENABLE_ALL=ON",
+    "-DTHEROCK_ENABLE_FFTW3=ON",  # HOST_MATH defaults to OFF.
     "-DTHEROCK_BUNDLE_SYSDEPS=OFF",
     "-DTHEROCK_ENABLE_LIBHIPCXX=OFF",
 ]

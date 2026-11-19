@@ -458,7 +458,8 @@ def load_ownership_manifest(path: Path) -> OwnershipManifest:
     """Load and validate an ownership manifest from ``path``."""
     try:
         with path.open("r", encoding="utf-8") as f:
-            data = yaml.load(f, Loader=_UniqueKeyLoader)
+            # SafeLoader subclass rejecting duplicate keys.
+            data = yaml.load(f, Loader=_UniqueKeyLoader)  # nosec B506
     except yaml.YAMLError as e:
         raise ManifestError(f"{path}: {e}") from e
     except (OSError, UnicodeDecodeError) as e:

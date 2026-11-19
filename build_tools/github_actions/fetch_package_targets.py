@@ -26,7 +26,7 @@ Example usage:
 ```yml
 jobs:
   setup_metadata:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
 

@@ -4,7 +4,11 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed and whether to run/skip tests.
+This script determines which projects changed based on git diff.
+
+Note: Skip-CI logic (for docs-only changes) has been moved to
+configure_multi_arch_ci.py, which uses TOML config files for skip patterns.
+This allows external repos to define their own skip patterns.
 
 Stage Reuse:
     TheRock's stage_reuse_decision.py handles stage impact analysis and
@@ -23,9 +27,15 @@ Usage:
         --config-path .github/repos-config.json
 
 Outputs (to $GITHUB_OUTPUT):
-    changed_projects: Comma-separated list of changed project paths
-    run_all_tests: "true" if CI files changed (run full test suite)
-    skip_tests: "true" if only docs/skippable files changed
+    changed_projects: Comma-separated list of changed project paths. Empty when
+                the run cannot be narrowed safely -- for schedule/dispatch,
+                shared CI changes, workflow changes without a configured
+                project scope, or an unclassifiable diff -- which downstream
+                means "test every project".
+
+Test depth (test_type) is not decided here: TheRock's
+configure_multi_arch_ci.py derives it from the same diff, using the CI-plumbing
+patterns in configure_ci_path_filters.py.
 """
 
 import argparse
@@ -64,9 +74,19 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
 ]
 
-# Patterns that trigger a full test run when changed (CI infrastructure)
-FULL_TEST_TRIGGER_PATTERNS = [
+# Repositories that scope TheRock workflow changes to configured projects.
+# Repositories absent from this map retain full-test coverage.
+WORKFLOW_TEST_SCOPE_BY_REPO = {
+    "rocm/rocm-libraries": "configured-projects",
+}
+
+# Patterns for TheRock workflow changes in the calling repository.
+CALLER_WORKFLOW_TRIGGER_PATTERNS = [
     ".github/workflows/therock*",
+]
+
+# Changes to project discovery or shared test logic retain global coverage.
+FULL_TEST_TRIGGER_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -88,6 +108,13 @@ FULL_TEST_TRIGGER_PATTERNS = [
 # _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step with TheRock when
 # adding directories.
 CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    # hipCCL is a monorepo-native project (projects/hipccl/hipccl3, the unified
+    # rocPRIM+hipCUB+rocThrust superbuild); it has no upstream repo to subtree-
+    # sync, so it is absent from rocm-libraries repos-config.json. Without this,
+    # edits under projects/hipccl are unclassified and fall back to the full
+    # test suite. Resolves to the hipccl graph node -> prim test jobs via
+    # _EXTERNAL_SUBTREE_ALIASES in determine_rocm_test_dependencies.py.
+    "projects/hipccl",
     "dnn-providers/cmake",
     "shared/amdgpu-windows-interop",
     "shared/kpack",
@@ -96,15 +123,6 @@ CI_RELEVANT_NON_SUBTREE_PREFIXES = {
     "emulation/mirage",
     "emulation/rocjitsu",
 }
-
-
-@dataclass
-class ConfigureResult:
-    """Result of CI configuration analysis."""
-
-    changed_projects: str  # Comma-separated list
-    run_all_tests: bool
-    skip_tests: bool
 
 
 @dataclass
@@ -155,8 +173,8 @@ def get_modified_paths_api(
 ) -> Optional[Set[str]]:
     """Get paths of files changed using GitHub API (compare endpoint).
 
-    Returns None if the result is truncated (>300 files) to signal caller
-    should fall back to run_all_tests.
+    Returns None if the result is truncated (>300 files) to signal that the
+    diff is incomplete and cannot be used to narrow the run.
     """
     result = subprocess.run(
         [
@@ -171,7 +189,7 @@ def get_modified_paths_api(
     )
     data = json.loads(result.stdout)
     files = data.get("files", [])
-    # GitHub compare API returns max 300 files; if truncated, fall back to run-all
+    # GitHub compare API returns max 300 files; a truncated diff is unusable.
     if len(files) >= 300:
         logger.warning("Compare API returned 300+ files, result may be truncated")
         return None
@@ -294,15 +312,22 @@ def configure(
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
-) -> ConfigureResult:
-    """Main configuration logic."""
+) -> str:
+    """Main configuration logic.
 
-    # Schedule/workflow_dispatch events run all tests
+    Returns the comma-separated project paths this run is scoped to. An empty
+    string means the run could not be narrowed safely, which downstream means
+    "test every project".
+
+    Note: Skip-CI logic (for docs-only changes) is now handled by
+    configure_multi_arch_ci.py using TOML config files. This function
+    focuses on determining changed_projects.
+    """
+
+    # Schedule/workflow_dispatch events have no diff to narrow against.
     if event_name in ("schedule", "workflow_dispatch"):
-        logger.info(f"{event_name} event - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        logger.info(f"{event_name} event has no diff - not scoping to projects")
+        return ""
 
     # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
@@ -314,47 +339,67 @@ def configure(
         logger.info(f"Getting push diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
     else:
-        logger.warning("No SHAs provided - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        logger.warning("No SHAs provided - not scoping to projects")
+        return ""
 
-    # If API returned None (truncated results), fall back to run-all
+    # A truncated diff is an incomplete diff, so it cannot narrow the run.
     if modified_paths is None:
-        logger.info("Truncated API response - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        logger.info("Truncated API response - not scoping to projects")
+        return ""
 
     if not modified_paths:
-        logger.info("No modified paths - skipping tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
-        )
+        logger.info("No modified paths - no projects changed")
+        return ""
 
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Check if CI files changed (run all tests)
+    # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("CI files changed - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        logger.info("Shared CI files changed - not scoping to projects")
+        return ""
 
-    # Check if only skippable files changed
-    if not has_non_skippable(modified_paths):
-        logger.info("Only skippable files changed - skipping tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=False, skip_tests=True
+    # Apply the calling repository's workflow test policy.
+    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
+        workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
+        if workflow_test_scope != "configured-projects":
+            logger.info(
+                "Workflow changed in %s - not scoping to projects",
+                github_repo,
+            )
+            return ""
+
+        config = load_repo_config(config_path)
+        if not config:
+            logger.warning("No config loaded - not scoping to projects")
+            return ""
+
+        own_projects = get_valid_prefixes(config)
+
+        # A second, unknown change must retain the conservative full run.
+        other_paths = {
+            path
+            for path in modified_paths
+            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
+        }
+        unclassified = get_unclassified_paths(other_paths, own_projects)
+        if unclassified:
+            logger.info(
+                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
+                " - not scoping to projects"
+            )
+            return ""
+
+        logger.info(
+            "Workflow changed in %s - testing configured projects",
+            github_repo,
         )
+        return ",".join(sorted(own_projects))
 
     # Find changed projects from config
     config = load_repo_config(config_path)
     if not config:
-        logger.warning("No config loaded - running all tests")
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        logger.warning("No config loaded - not scoping to projects")
+        return ""
 
     valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
 
@@ -366,20 +411,14 @@ def configure(
     if unclassified:
         logger.info(
             f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-            " - running all tests"
+            " - not scoping to projects"
         )
-        return ConfigureResult(
-            changed_projects="", run_all_tests=True, skip_tests=False
-        )
+        return ""
 
     matched = find_matched_subtrees(modified_paths, valid_prefixes)
     logger.info(f"Matched projects: {matched}")
 
-    return ConfigureResult(
-        changed_projects=",".join(matched),
-        run_all_tests=False,
-        skip_tests=False,
-    )
+    return ",".join(matched)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -423,7 +462,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     logger.info(f"Configuring CI for {args.github_repo}")
 
-    result = configure(
+    changed_projects = configure(
         event_name=args.event_name,
         github_repo=args.github_repo,
         base_sha=args.base_sha or None,
@@ -431,13 +470,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         config_path=args.config_path,
     )
 
-    set_github_output(
-        {
-            "changed_projects": result.changed_projects,
-            "run_all_tests": str(result.run_all_tests).lower(),
-            "skip_tests": str(result.skip_tests).lower(),
-        }
-    )
+    set_github_output({"changed_projects": changed_projects})
 
     return 0
 

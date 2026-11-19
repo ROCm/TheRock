@@ -170,9 +170,11 @@ Build environments:
 
 #### Super-project CMake build - Validation methods
 
-We are evaluating adding unit tests for certain features of the CMake
-build system itself, see https://github.com/ROCm/TheRock/pull/6984 for
-example.
+Unit tests for the CMake build system live in [`cmake/tests/`](/cmake/tests).
+Tests such as [`rocm_build_flags_test.py`](/cmake/tests/rocm_build_flags_test.py)
+use small CMake projects to exercise helpers without configuring the full
+super-project or initializing its submodules. Some tests compile small programs
+and require a host compiler, in addition to CMake and Ninja.
 
 The CI systems in [TheRock](https://github.com/ROCm/TheRock) and component
 repositories like [rocm-systems](https://github.com/ROCm/rocm-systems)
@@ -184,6 +186,10 @@ to build system files, we generally look for
   should not have new failures.
 - The build jobs should not significantly regress in duration.
 - The build artifacts should not unexpectedly grow in size.
+
+The [artifact structure workflow](/.github/workflows/test_artifacts_structure.yml)
+fetches generic, family, and per-target archives before checking for file
+overlaps. Kpack-split files may exist only in per-target archives.
 
 > [!IMPORTANT]
 > Certain types of changes benefit from additional validation, such as:

@@ -7,15 +7,20 @@ These tests cover:
   - PopulatedFiles: per-instance isolation, dedup semantics
   - Multi-arch packaging: each library package independently tracks its own files
   - params.populated_packages: registration and cross-package search helpers
+  - mark_amdsmi_rocm_sdk_core: flagging the amdsmi module shipped in rocm-sdk-core
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import stat
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -24,9 +29,18 @@ import sys
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
-from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from _therock_utils.py_packaging import (
+    Parameters,
+    PopulatedDistPackage,
+    PopulatedFiles,
+    build_packages,
+)
 from build_python_packages import (
+    _artifact_catalog_has_matches,
     _run_kpack_split,
+    mark_amdsmi_rocm_sdk_core,
+    PROFILER_WHEEL_INCLUDES,
+    profiler_artifact_filter,
     validate_kpack_split_target_completeness,
 )
 
@@ -51,6 +65,96 @@ class TmpDirTestCase(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
         return p
+
+
+# ---------------------------------------------------------------------------
+# Package build concurrency
+# ---------------------------------------------------------------------------
+
+
+class BuildPackagesConcurrencyTest(TmpDirTestCase):
+    def _make_package_dirs(self, count: int) -> list[Path]:
+        package_dirs = []
+        for i in range(count):
+            package_dir = self.temp_dir / f"package-{i}"
+            package_dir.mkdir()
+            (package_dir / "setup.py").write_text("# test fixture\n")
+            package_dirs.append(package_dir)
+        return package_dirs
+
+    def test_builds_independent_packages_concurrently(self):
+        """Both subprocesses must start before either is allowed to finish."""
+        package_dirs = self._make_package_dirs(2)
+        both_started = threading.Barrier(2, timeout=5)
+
+        def check_call(*args, **kwargs):
+            both_started.wait()
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ) as check_call_mock:
+            build_packages(
+                self.temp_dir,
+                package_dirs=package_dirs,
+                max_workers=2,
+            )
+
+        self.assertEqual(check_call_mock.call_count, 2)
+
+    def test_each_package_logs_to_its_own_file(self):
+        """Concurrent setup.py output lands in separate per-package logs."""
+        package_dirs = self._make_package_dirs(2)
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            kwargs["stdout"].write(f"output of {name}\n")
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        log_dir = self.temp_dir / "logs"
+        for name in ("package-0", "package-1"):
+            self.assertEqual(
+                (log_dir / f"{name}.log").read_text(), f"output of {name}\n"
+            )
+
+    def test_failure_stops_queued_packages(self):
+        """A failing package re-raises; a package still queued never starts."""
+        package_dirs = self._make_package_dirs(3)
+        failed = threading.Event()
+        started: list[str] = []
+        started_lock = threading.Lock()
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            with started_lock:
+                started.append(name)
+            if name == "package-0":
+                failed.set()
+                raise subprocess.CalledProcessError(1, args[0])
+            if name == "package-1":
+                # Stay busy until package-0 has failed, so the abort flag is
+                # set before a worker can take package-2.
+                failed.wait(timeout=5)
+                time.sleep(0.2)
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        self.assertIn("package-0", started)
+        self.assertNotIn("package-2", started)
+
+    def test_rejects_nonpositive_workers(self):
+        with self.assertRaisesRegex(ValueError, "max_workers must be at least 1"):
+            build_packages(self.temp_dir, package_dirs=[], max_workers=0)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +264,9 @@ class MultiArchPackagingTest(TmpDirTestCase):
             f.write_text(content)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path) -> Parameters:
+    def _make_params(
+        self, artifact_dir: Path, *, kpack_split: bool = False
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
@@ -168,6 +274,7 @@ class MultiArchPackagingTest(TmpDirTestCase):
             version="0.0.1.test",
             version_suffix="",
             artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
         )
 
     def test_each_library_package_independently_owns_shared_relpaths(self):
@@ -236,6 +343,101 @@ class MultiArchPackagingTest(TmpDirTestCase):
 
         self.assertEqual(len(params.populated_packages), 1)
         self.assertIs(params.populated_packages[0], lib)
+
+    def test_profiler_selection_ignores_artifacts_without_trace_decoder_payload(self):
+        """The profiler wheel is only built when selected artifacts contain files.
+
+        profiler_artifact_filter matches the rocprofiler-sdk `lib` artifact so that
+        the rocprof_trace_decoder Python API can be packaged. That artifact exists
+        in every build, including ROCm versions that ship no Python API at all, so
+        matching by artifact name alone is not enough: without a file-level check
+        we would emit a rocm-profiler wheel containing no payload whenever
+        rocprofiler-systems/-compute are absent. This asserts that selection is
+        driven by matched files, not by matched artifact names.
+        """
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-sdk",
+            "lib",
+            "generic",
+            {"lib/librocprof-trace-decoder.so": "so"},
+        )
+
+        params = self._make_params(artifact_dir)
+        artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+
+        self.assertTrue(artifacts.artifact_names)
+        self.assertFalse(_artifact_catalog_has_matches(artifacts))
+
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-sdk",
+            "lib",
+            "generic",
+            {"lib/python3/site-packages/rocprof_trace_decoder/__init__.py": ""},
+        )
+        params = self._make_params(artifact_dir)
+        artifacts = params.filter_artifacts(
+            profiler_artifact_filter,
+            includes=PROFILER_WHEEL_INCLUDES,
+        )
+        self.assertTrue(_artifact_catalog_has_matches(artifacts))
+
+    def test_trace_decoder_profiler_setup_builds_wheel_with_python_payload(self):
+        """The profiler wheel exposes trace decoder as a normal importable package.
+
+        The trace decoder Python API lands in the platform dir under
+        lib/python3/site-packages/. setup.py must remap it to a top level
+        `rocprof_trace_decoder` package.
+        """
+        if importlib.util.find_spec("wheel") is None:
+            self.skipTest("wheel package is not available")
+
+        artifact_dir = self.temp_dir / "artifacts"
+        artifact_dir.mkdir()
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir()
+        params = Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.dev0",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+        profiler = PopulatedDistPackage(params, logical_name="profiler")
+        trace_decoder_pkg = (
+            profiler.platform_dir
+            / "lib"
+            / "python3"
+            / "site-packages"
+            / "rocprof_trace_decoder"
+        )
+        trace_decoder_pkg.mkdir(parents=True)
+        (trace_decoder_pkg / "__init__.py").write_text("__version__ = '0.0.1.dev0'\n")
+
+        wheel_dir = self.temp_dir / "wheels"
+        wheel_dir.mkdir()
+        subprocess.run(
+            [sys.executable, "setup.py", "bdist_wheel", "-d", str(wheel_dir)],
+            cwd=profiler.path,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        wheel_path = next(wheel_dir.glob("rocm_profiler-*.whl"))
+        with zipfile.ZipFile(wheel_path) as zf:
+            names = set(zf.namelist())
+            self.assertIn("rocprof_trace_decoder/__init__.py", names)
+            metadata_name = next(
+                name for name in names if name.endswith(".dist-info/METADATA")
+            )
+            metadata = zf.read(metadata_name).decode()
+            self.assertIn("Requires-Dist: pyelftools", metadata)
 
     def test_find_populated_searches_across_packages(self):
         """_find_populated locates a file regardless of which package owns it."""
@@ -353,6 +555,46 @@ class MultiArchPackagingTest(TmpDirTestCase):
         owner, _ = result
         self.assertIs(owner, lib_gfx94, "gfx94X devel must link to gfx94X libraries")
 
+    def test_devel_manifest_uses_matching_target_family(self):
+        """The final devel manifest names its target-specific runtime package."""
+        # Create a target-specific runtime artifact.
+        artifact_dir = self.temp_dir / "artifacts"
+        shared_relpath = "lib/librocblas.txt"
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "gfx94X-dcgpu",
+            {shared_relpath: "gfx94X rocblas"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir)
+        lib_gfx94 = PopulatedDistPackage(
+            params, logical_name="libraries", target_family="gfx94X-dcgpu"
+        )
+        lib_gfx94.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.target_family == "gfx94X-dcgpu")
+        )
+        devel_gfx94 = PopulatedDistPackage(
+            params, logical_name="devel", target_family="gfx94X-dcgpu"
+        )
+        devel_gfx94.populate_devel_files()
+
+        # Verify the manifest targets the matching runtime package.
+        manifest = json.loads(
+            (devel_gfx94.pure_dir / ".devel_links/devel.json").read_text()
+        )
+        self.assertEqual(
+            manifest["links"],
+            [
+                {
+                    "relpath": shared_relpath,
+                    "target": "../../_rocm_sdk_libraries_gfx94X_dcgpu/lib/librocblas.txt",
+                }
+            ],
+        )
+
     def test_find_populated_falls_back_to_generic_package(self):
         """A target-specific devel package can find files from a generic (core) package.
 
@@ -402,6 +644,111 @@ class MultiArchPackagingTest(TmpDirTestCase):
             owner,
             core,
             "core (generic) file must be reachable from arch-specific devel",
+        )
+
+    def test_devel_package_keeps_files_and_records_runtime_links(self):
+        """Keep devel files in wheel staging and record runtime links."""
+        # Create runtime and devel artifacts.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "lib",
+            "generic",
+            {"lib/libshared.txt": "runtime payload"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        runtime = PopulatedDistPackage(params, logical_name="libraries")
+        runtime.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.component == "lib")
+        )
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files()
+
+        # Verify files remain in the wheel and runtime links move to the manifest.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "lib/libshared.txt"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest,
+            {
+                "version": "0.0.1.test",
+                "links": [
+                    {
+                        "relpath": "lib/libshared.txt",
+                        "target": "../../_rocm_sdk_libraries/lib/libshared.txt",
+                    }
+                ],
+            },
+        )
+
+    def test_devel_package_preserves_direct_file_mode(self):
+        """A representative direct devel executable retains its source mode."""
+        # Create an executable development file.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"bin/direct-tool": "#!/bin/sh\n"},
+        )
+        source_tool = artifact_dir / "sdk_dev_generic/stage/bin/direct-tool"
+        source_tool.chmod(0o755)
+
+        # Package the development artifact.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the staged executable retains its source mode.
+        self.assertEqual(
+            stat.S_IMODE((devel.platform_dir / "bin/direct-tool").stat().st_mode),
+            stat.S_IMODE(source_tool.stat().st_mode),
+        )
+
+    def test_devel_package_serializes_source_symlink(self):
+        """A source symlink is serialized without entering wheel staging."""
+        # Create a development artifact containing a source symlink.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+        source_link = artifact_dir / "sdk_dev_generic/stage/include/direct-link.h"
+        source_link.symlink_to("direct.h")
+
+        # Package the artifact and inspect the generated link metadata.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the wheel staging tree contains only the target file and the
+        # source link is represented by its original path and target.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "include/direct-link.h"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest["links"],
+            [{"relpath": "include/direct-link.h", "target": "direct.h"}],
         )
 
 
@@ -805,12 +1152,31 @@ class DevicePackagingTest(TmpDirTestCase):
         args = argparse.Namespace(
             build_packages=False,
             dest_dir=params.dest_dir,
-            devel_tarball_compression=False,
         )
         _run_kpack_split(args, params, core, None)
         devices = [p for p in params.populated_packages if p.logical_name == "device"]
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0].target_family, "gfx1250")
+
+    def test_split_batches_device_packages_for_parallel_build(self):
+        artifact_dir = self._setup_kpack_split_artifacts(("gfx942", "gfx1100"))
+        params = self._make_params(artifact_dir, kpack_split=True)
+        core = PopulatedDistPackage(params, logical_name="core")
+        args = argparse.Namespace(
+            build_packages=True,
+            dest_dir=params.dest_dir,
+            devel_tarball_compression=False,
+            wheel_build_workers=4,
+            wheel_compression=True,
+        )
+
+        with mock.patch("build_python_packages.build_packages") as build_mock:
+            _run_kpack_split(args, params, core, None)
+
+        device_call = build_mock.call_args_list[1]
+        device_package_dirs = device_call.kwargs["package_dirs"]
+        self.assertEqual(len(device_package_dirs), 2)
+        self.assertEqual(device_call.kwargs["max_workers"], 4)
 
     def test_conflicting_payloads_fail_before_population(self):
         artifact_dir = self.temp_dir / "artifacts"
@@ -1161,7 +1527,7 @@ class RestrictFamiliesTest(TmpDirTestCase):
         content = dist_info_path.read_text()
         if ns is None:
             ns = {}
-        exec(content, ns)
+        exec(content, ns)  # nosec B102
         return ns
 
     def _make_two_family_params(self) -> Parameters:
@@ -1336,7 +1702,7 @@ class RestrictFamiliesTest(TmpDirTestCase):
         params = self._make_params(artifact_dir, version="7.0.0", version_suffix="rc1")
 
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        exec(params.dist_info_contents, ns)  # nosec B102
 
         self.assertEqual(ns["__version__"], params.dist_info.__version__)
         self.assertEqual(
@@ -1451,7 +1817,7 @@ class CrossPlatformFamiliesTest(TmpDirTestCase):
 
     def _exec_dist_info(self, params: Parameters) -> dict:
         ns: dict = {}
-        exec(params.dist_info_contents, ns)
+        exec(params.dist_info_contents, ns)  # nosec B102
         return ns
 
     # ----- Backward compat: no kwargs => on-disk artifact view ------------
@@ -1954,16 +2320,18 @@ class PerTargetExtrasTest(TmpDirTestCase):
 
 
 # ---------------------------------------------------------------------------
-# Regression tests for AIPROFSYST-669: rocm-profiler wheel silently dropped
-# libprofiler-hub.so*
+# rocm-profiler wheel allowlist. Includes the AIPROFSYST-669 regression,
+# where libprofiler-hub.so* was silently dropped.
 # ---------------------------------------------------------------------------
 
 
-class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
-    """profiler-hub is a runtime .so dependency of rocprofiler-systems
-    (NEEDED libprofiler-hub.so.0). PROFILER_WHEEL_INCLUDES never listed it,
-    so it was silently dropped from the rocm-profiler wheel, breaking every
-    rocprof-sys tool at load time.
+class ProfilerWheelIncludesTest(TmpDirTestCase):
+    """PROFILER_WHEEL_INCLUDES is a targeted allowlist.
+
+    profiler-hub is a runtime .so dependency of rocprofiler-systems
+    (NEEDED libprofiler-hub.so.0). The allowlist once omitted it, so it was
+    silently dropped from the rocm-profiler wheel. bin/rocprof-sys-* likewise
+    does not match bin/rocsys, so that binary must be listed on its own.
     """
 
     def _add_artifact(
@@ -1992,9 +2360,13 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             artifacts=ArtifactCatalog(artifact_dir),
         )
 
-    def test_profiler_wheel_includes_libprofiler_hub(self):
-        """libprofiler-hub.so*, staged under its own profiler-hub artifact,
-        must be selected into the profiler wheel, same as librocprof-sys*.
+    def test_profiler_wheel_includes_allowlisted_files(self):
+        """Allowlisted profiler libraries and binaries are copied into the wheel.
+
+        libprofiler-hub.so* arrives from its own artifact and must be selected
+        the same way as librocprof-sys*. bin/rocsys must be selected too:
+        bin/rocprof-sys-* does not match that name. Each tool's LICENSE.md
+        arrives from its doc artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2013,6 +2385,16 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
         )
         self._add_artifact(
             artifact_dir,
+            "rocprofiler-systems",
+            "run",
+            "generic",
+            {
+                "bin/rocsys": "unified cli",
+                "bin/rocprof-sys-run": "existing cli",
+            },
+        )
+        self._add_artifact(
+            artifact_dir,
             "profiler-hub",
             "lib",
             "generic",
@@ -2020,6 +2402,14 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
                 "lib/libprofiler-hub.so.0": "profiler-hub runtime dependency",
             },
         )
+        for name in ["rocprofiler-compute", "rocprofiler-systems"]:
+            self._add_artifact(
+                artifact_dir,
+                name,
+                "doc",
+                "generic",
+                {f"share/doc/{name}/LICENSE.md": f"{name} license"},
+            )
 
         params = self._make_params(artifact_dir)
         profiler_artifacts = params.filter_artifacts(
@@ -2035,11 +2425,19 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
             "(AIPROFSYST-669 regression)",
         )
         self.assertTrue(profiler.files.has("lib/librocprof-sys.so.1"))
+        self.assertTrue(
+            profiler.files.has("bin/rocsys"),
+            "bin/rocsys was dropped from the profiler wheel",
+        )
+        self.assertTrue(profiler.files.has("bin/rocprof-sys-run"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-compute/LICENSE.md"))
+        self.assertTrue(profiler.files.has("share/doc/rocprofiler-systems/LICENSE.md"))
 
-    def test_profiler_wheel_excludes_unrelated_lib_files(self):
-        """PROFILER_WHEEL_INCLUDES is a targeted allowlist, not a bare lib/**
-        catch-all - an unrelated file must not sneak into the profiler wheel,
-        even once the profiler-hub library arrives via its own artifact.
+    def test_profiler_wheel_excludes_unrelated_files(self):
+        """The allowlist is not a bare lib/** or bin/** catch-all.
+
+        An unrelated library or binary must not enter the profiler wheel,
+        including once the profiler-hub library arrives via its own artifact.
         """
         from build_python_packages import (
             PROFILER_WHEEL_INCLUDES,
@@ -2057,6 +2455,15 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
                 "lib/libunrelated-dependency.so.1": "should not be selected",
             },
         )
+        self._add_artifact(
+            artifact_dir,
+            "rocprofiler-systems",
+            "run",
+            "generic",
+            {
+                "bin/not-a-profiler-tool": "should not be selected",
+            },
+        )
 
         params = self._make_params(artifact_dir)
         profiler_artifacts = params.filter_artifacts(
@@ -2068,6 +2475,7 @@ class ProfilerWheelLibprofilerHubTest(TmpDirTestCase):
 
         self.assertTrue(profiler.files.has("lib/libprofiler-hub.so.0"))
         self.assertFalse(profiler.files.has("lib/libunrelated-dependency.so.1"))
+        self.assertFalse(profiler.files.has("bin/not-a-profiler-tool"))
 
 
 class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
@@ -2130,6 +2538,36 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+
+class MarkAmdsmiRocmSdkCoreTest(TmpDirTestCase):
+    def _write_wrapper(self, text: str) -> Path:
+        return self.write_file("share/amd_smi/amdsmi/amdsmi_wrapper.py", text)
+
+    def test_flag_is_set(self):
+        wrapper = self._write_wrapper("x = 1\n_AMDSMI_ROCM_SDK_CORE = False\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n_AMDSMI_ROCM_SDK_CORE = True\n")
+
+    def test_wrapper_without_flag_is_unchanged(self):
+        wrapper = self._write_wrapper("x = 1\n")
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+        self.assertEqual(wrapper.read_text(), "x = 1\n")
+
+    def test_missing_module_is_ignored(self):
+        mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_duplicate_flag_fails(self):
+        self._write_wrapper(
+            "_AMDSMI_ROCM_SDK_CORE = False\n_AMDSMI_ROCM_SDK_CORE = False\n"
+        )
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
+
+    def test_changed_flag_line_fails(self):
+        self._write_wrapper("_AMDSMI_ROCM_SDK_CORE: bool = False\n")
+        with self.assertRaises(RuntimeError):
+            mark_amdsmi_rocm_sdk_core(self.temp_dir)
 
 
 # ---------------------------------------------------------------------------

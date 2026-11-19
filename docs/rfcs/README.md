@@ -30,6 +30,8 @@ benefit from further discussion.
 - [RFC0012: Repo Structure](./RFC0012-Repo-Structure.md)
 - [RFC0013: Consumer-Based Test Selection](./RFC0013-Consumer-Based-Test-Selection.md)
 - [RFC0014: Code Coverage Infrastructure for TheRock](./RFC0014-Code-Coverage-Infrastructure.md)
+- [RFC0015: Distributing Fortran Bindings Across rocm-systems and rocm-libraries](./RFC0015-Fortran-Bindings-Split.md)
+- [RFC0016: End-User Projects With Independent Release Lifecycle](./RFC0016-End-User-Projects-Independent-Release-Lifecycle.md)
 - [RFC0017: Custom Python Bindings: Layering, Packaging, and Validation](./RFC0017-Custom-Python-Bindings-Layering.md)
 
 ## Adding an RFC

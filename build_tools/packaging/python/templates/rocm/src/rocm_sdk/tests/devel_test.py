@@ -6,6 +6,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import importlib.metadata as md
 import os
 from pathlib import Path
 import platform
@@ -56,6 +57,30 @@ class ROCmDevelTest(unittest.TestCase):
         hip_file = path / "hip" / "hip-config.cmake"
         self.assertTrue(
             hip_file.exists(), msg=f"Expected hip config to exist {hip_file}"
+        )
+
+    def testDirectDevelFileOwnedByWheel(self):
+        """A direct devel file remains owned by the installed wheel."""
+        # Locate a representative development file through the public SDK command.
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--cmake"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
+        hip_file = Path(output) / "hip" / "hip-config.cmake"
+
+        # Verify the representative development file is installed and owned by
+        # the wheel rather than generated during initialization.
+        dist_files = md.files("rocm-sdk-devel")
+        self.assertIsNotNone(dist_files)
+        hip_record = next(
+            (
+                dist_file
+                for dist_file in dist_files
+                if Path(dist_file.locate()).resolve() == hip_file.resolve()
+            ),
+            None,
+        )
+        self.assertIsNotNone(hip_record, msg=f"No RECORD entry for {hip_file}")
+        self.assertIsNotNone(
+            hip_record.hash, msg=f"Expected a wheel-generated hash for {hip_file}"
         )
 
     def testCLIPathRoot(self):
@@ -117,7 +142,7 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
-        # Make sure the devel package is expanded.
+        # Make sure the devel package is initialized.
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
         _ = utils.run_command(cmd, capture=True).decode().strip()
 
@@ -171,9 +196,14 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "opencl" in str(so_path):
-                # We use OpenCL ICD from distro rather than TheRock
-                # and we do not build it
+            if (
+                "opencl" in str(so_path)
+                or "oclruntime" in so_path.name
+                or "oclperf" in so_path.name
+                or "oclgl" in so_path.name
+            ):
+                # OpenCL ICD comes from the distro; oclruntime/oclperf are
+                # test-only libraries that depend on libOpenCL.
                 continue
             if so_path.name.endswith(".abi3.so") or ".cpython-" in so_path.name:
                 # Python C extensions use symbols resolved at import time,
@@ -203,6 +233,17 @@ class ROCmDevelTest(unittest.TestCase):
                 if kpack_paths:
                     kpack_dir = str(kpack_paths[0].parent).replace("\\", "\\\\")
                     extra_setup += f"os.add_dll_directory('{kpack_dir}') if hasattr(os, 'add_dll_directory') else None; "
+            elif platform.system() == "Windows":
+                # Some libraries (e.g. rocdecode) import DLLs that ship under
+                # lib/rocm_sysdeps/bin rather than co-located in bin/. Linux
+                # resolves these via RPATH; Windows has no RPATH equivalent, so
+                # the sysdeps bin directory must be on the DLL search path. The
+                # library lives at <root>/bin/<name>.dll and the sysdeps DLLs at
+                # the sibling <root>/lib/rocm_sysdeps/bin.
+                sysdeps_bin = so_path.parents[1] / "lib" / "rocm_sysdeps" / "bin"
+                if sysdeps_bin.is_dir():
+                    sysdeps_dir = str(sysdeps_bin).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{sysdeps_dir}'); "
 
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
@@ -218,7 +259,7 @@ class ROCmDevelTest(unittest.TestCase):
         """Every file in the libraries platform tree must also appear in the
         devel tree as the same (hardlinked) file.
 
-        Host libraries are mirrored when the devel tree is expanded; per-ISA
+        Host libraries are mirrored when the devel tree is initialized; per-ISA
         device payloads (.kpack archives, Tensile/MIOpen kernels, per-arch .so)
         are mirrored by `_devel._reconcile_device_links`. Walking libraries and
         checking each entry exists in devel is sufficient because devel is a
@@ -237,7 +278,7 @@ class ROCmDevelTest(unittest.TestCase):
         except ModuleNotFoundError:
             self.skipTest("rocm-sdk-libraries is not installed")
 
-        # Expand the devel tree and reconcile device links before comparing.
+        # Initialize the devel tree and refresh device links before comparing.
         utils.run_command(
             [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
         )

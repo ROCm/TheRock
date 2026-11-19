@@ -5,6 +5,7 @@
 
 from typing import Callable, Sequence
 
+import concurrent.futures
 import importlib.util
 import io
 import json
@@ -18,6 +19,8 @@ import subprocess
 import shutil
 import sys
 import tarfile
+import threading
+import time
 
 from .artifacts import ArtifactCatalog, ArtifactName
 from .sdk_targets import package_owner, render_dist_info
@@ -34,9 +37,12 @@ BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 PYTHON_PACKAGING_DIR = BUILD_TOOLS_DIR / "packaging" / "python" / "templates"
 DIST_INFO_PATH = PYTHON_PACKAGING_DIR / "rocm" / "src" / "rocm_sdk" / "_dist_info.py"
 
-assert BUILD_TOOLS_DIR.exists()
-assert PYTHON_PACKAGING_DIR.exists()
-assert DIST_INFO_PATH.exists()
+if not BUILD_TOOLS_DIR.exists():
+    raise FileNotFoundError(f"Missing build tools directory: {BUILD_TOOLS_DIR}")
+if not PYTHON_PACKAGING_DIR.exists():
+    raise FileNotFoundError(f"Missing packaging templates: {PYTHON_PACKAGING_DIR}")
+if not DIST_INFO_PATH.exists():
+    raise FileNotFoundError(f"Missing distribution metadata template: {DIST_INFO_PATH}")
 
 ENABLED_VLOG_LEVEL: int = 5
 
@@ -63,9 +69,8 @@ class PopulatedFiles:
     def mark_populated(
         self, package: "PopulatedDistPackage", relpath: str, dest_path: Path
     ):
-        assert (
-            not relpath in self.materialized_relpaths
-        ), f"File already populated {relpath}"
+        if relpath in self.materialized_relpaths:
+            raise AssertionError(f"File already populated {relpath}")
         self.materialized_relpaths[relpath] = (package, dest_path)
 
 
@@ -179,7 +184,8 @@ class Parameters:
         # regardless of where those values originated.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(
+        # Executes the repository-owned static template below.
+        exec(  # nosec B102
             render_dist_info(DIST_INFO_PATH), self.dist_info.__dict__
         )  # static template only, no user input
         self.dist_info.__version__ = version
@@ -438,10 +444,10 @@ class PopulatedDistPackage:
         self.params.populated_packages.append(self)
         return self
 
-    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]):
+    def _emit_devel_links_manifest(self, devel_links: list[dict[str, str]]) -> None:
         """Writes the `_devel_links` manifest consumed by `rocm-sdk init`.
 
-        Each device wheel ships this manifest so that, at devel expansion time,
+        Each device wheel ships this manifest so that, during devel initialization,
         its per-ISA files are hardlinked from the rocm-sdk-libraries overlay into
         the generic rocm-sdk-devel tree (and recorded in this wheel's RECORD so
         that `pip uninstall` prunes them). Named per target family so that
@@ -449,8 +455,13 @@ class PopulatedDistPackage:
         colliding.
         """
         manifest_dir = self.platform_dir / ".devel_links"
-        manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = manifest_dir / f"{package_owner(self.target_family)}.json"
+        self._write_devel_links_manifest(manifest_path, devel_links)
+
+    def _write_devel_links_manifest(
+        self, manifest_path: Path, devel_links: list[dict[str, str]]
+    ) -> None:
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
             json.dumps(
                 {"version": self.params.version, "links": devel_links},
@@ -587,9 +598,8 @@ class PopulatedDistPackage:
         *,
         addl_artifact_names: Sequence[str] = (),
         exclude_components: Sequence[str] = (),
-        tarball_compression: bool = True,
-    ):
-        """Populates all files that have not yet been materialized and symlink the rest."""
+    ) -> None:
+        """Populates non-link devel files and records the remaining links."""
         package_path = self.platform_dir
         # Set up for what artifacts to include in the devel package, including
         # any emitted runtime artifacts plus additional requested.
@@ -643,22 +653,29 @@ class PopulatedDistPackage:
                 dir_entry,
             )
 
-        # For packaging, the devel platform/ contents are not wheel safe, so we
-        # store them into their own tarball and dynamically decompress at runtime.
-        # The tarball will contain as its first path component the top level
-        # python package name that contains the platform files.
-        tar_suffix = ".tar.xz" if tarball_compression else ".tar"
-        tar_mode = "w:xz" if tarball_compression else "w"
-        tar_path = self.pure_dir / f"_devel{tar_suffix}"
-        log(f"::: Building secondary devel tarball: {tar_path}")
-        with tarfile.open(tar_path, mode=tar_mode) as tf:
-            for root, dirnames, files in os.walk(package_path):
-                for file in list(files) + list(dirnames):
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, package_path.parent)
-                    log(f"Adding {arcname}", vlog=2)
-                    tf.add(file_path, arcname=arcname, recursive=False)
-        shutil.rmtree(package_path)
+        # Wheel archives do not portably represent symlinks. Store them in the
+        # same JSON format used by device wheels, then remove them from the wheel
+        # staging tree so setuptools packages only non-link files.
+        devel_links: list[dict[str, str]] = []
+        symlink_paths: list[Path] = []
+        for root, dirnames, filenames in os.walk(package_path):
+            for name in [*dirnames, *filenames]:
+                link_path = Path(root) / name
+                if not link_path.is_symlink():
+                    continue
+                relpath = link_path.relative_to(package_path).as_posix()
+                target = os.readlink(link_path)
+                if is_windows:
+                    target = target.replace("\\", "/")
+                devel_links.append({"relpath": relpath, "target": target})
+                symlink_paths.append(link_path)
+
+        for symlink_path in symlink_paths:
+            symlink_path.unlink()
+
+        manifest_path = self.pure_dir / ".devel_links" / "devel.json"
+        log(f"::: Writing devel link manifest: {manifest_path}")
+        self._write_devel_links_manifest(manifest_path, devel_links)
 
     def _find_populated(
         self, relpath: str
@@ -817,65 +834,163 @@ def get_soname(sofile: Path) -> str:
     )
 
 
+def _build_package_worker(
+    child_path: Path,
+    *,
+    effective_dist_dir: Path,
+    wheel_compression: bool,
+    log_dir: Path,
+) -> None:
+    """Build one staged package by invoking its ``setup.py``.
+
+    ``rocm`` is built as an sdist. Every other package is a wheel, written
+    uncompressed when ``wheel_compression`` is false. ``build_packages``
+    calls this directly for a single package and submits it to the thread
+    pool when several packages run together. Each call writes its artifacts
+    into the shared ``effective_dist_dir`` and its ``setup.py`` output to
+    ``log_dir/<package>.log``, so concurrent packages do not share one
+    console. On failure that log is printed before the error is re-raised.
+    """
+    child_name = child_path.name
+
+    # Some of our packages build as sdists and some as wheels.
+    # Contrary to documented wisdom, we invoke setuptools directly. This is
+    # because the "build frontends" have an impossible compatibility matrix
+    # and opinions about how to pass arguments to the backends. So we skip
+    # the frontends for such a closed case as this.
+    setuppy_path = child_path / "setup.py"
+    build_args = [
+        sys.executable,
+        str(setuppy_path.resolve()),
+    ]
+    if child_name in ["rocm"]:
+        build_args.append("sdist")
+    else:
+        build_args.append("bdist_wheel")
+        if not wheel_compression:
+            build_args.append("--compression")
+            build_args.append("stored")
+    build_args.extend(
+        [
+            "-v",
+            "--dist-dir",
+            str(effective_dist_dir.resolve()),
+        ]
+    )
+
+    pkg_log = log_dir / f"{child_name}.log"
+    start_time = time.monotonic()
+    log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
+    failed: subprocess.CalledProcessError | None = None
+    with pkg_log.open("w") as log_fh:
+        try:
+            subprocess.check_call(
+                build_args, cwd=child_path, stdout=log_fh, stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as exc:
+            failed = exc
+    if failed is not None:
+        # Read after the write handle is closed so Windows can open the file,
+        # and so the child's buffered output is on disk.
+        log(f"::: Python package {child_name} failed; full log: {pkg_log}")
+        log(pkg_log.read_text(errors="replace"))
+        raise failed
+    duration = time.monotonic() - start_time
+    log(f"::: Built python package {child_name} in {duration:.1f} seconds")
+
+    if child_name == "rocm":
+        # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
+        # text mode, which yields CRLF on Windows. Normalize so the
+        # rocm sdist's text members are content-identical across Linux
+        # and Windows builds (tar metadata such as mtime may still
+        # differ).
+        sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
+        if not sdists:
+            raise RuntimeError(
+                f"No {child_name} sdist produced in {effective_dist_dir}"
+            )
+        for sdist in sdists:
+            _normalize_sdist_line_endings(sdist)
+
+
 def build_packages(
     dest_dir: Path,
     *,
     wheel_compression: bool = True,
     package_dirs: list[Path] | None = None,
     dist_dir: Path | None = None,
-):
+    log_dir: Path | None = None,
+    max_workers: int = 3,
+) -> None:
+    """Build independent package staging directories concurrently.
+
+    Each worker launches one setuptools process. Wheel compression within each
+    process remains single-threaded, so this controls package-level parallelism,
+    not compression threads. Each package's output is written to
+    ``log_dir/<package>.log`` (default ``dest_dir/logs``).
+    """
+    if max_workers < 1:
+        raise ValueError(f"max_workers must be at least 1, got {max_workers}")
+
     effective_dist_dir = dist_dir or (dest_dir / "dist")
     effective_dist_dir.mkdir(parents=True, exist_ok=True)
+    effective_log_dir = log_dir or (dest_dir / "logs")
+    effective_log_dir.mkdir(parents=True, exist_ok=True)
     if package_dirs is None:
         package_dirs = [
             p
             for p in dest_dir.iterdir()
             if p.is_dir() and (p / "pyproject.toml").exists()
         ]
-    for child_path in package_dirs:
-        child_name = child_path.name
+    if not package_dirs:
+        return
 
-        # Some of our packages build as sdists and some as wheels.
-        # Contrary to documented wisdom, we invoke setuptools directly. This is
-        # because the "build frontends" have an impossible compatibility matrix
-        # and opinions about how to pass arguments to the backends. So we skip
-        # the frontends for such a closed case as this.
-        setuppy_path = child_path / "setup.py"
-        build_args = [
-            sys.executable,
-            str(setuppy_path.resolve()),
+    worker_count = min(max_workers, len(package_dirs))
+    log(
+        f"::: Building {len(package_dirs)} python package(s) "
+        f"with {worker_count} worker(s)"
+    )
+    if worker_count == 1:
+        for child_path in package_dirs:
+            _build_package_worker(
+                child_path,
+                effective_dist_dir=effective_dist_dir,
+                wheel_compression=wheel_compression,
+                log_dir=effective_log_dir,
+            )
+        return
+
+    # A worker that finishes after a failure would otherwise pick up the next
+    # queued package before the main thread can cancel it. Setting this flag
+    # in the failing worker makes every not-yet-started package a no-op.
+    abort = threading.Event()
+
+    def _build_unless_aborted(child_path: Path) -> None:
+        if abort.is_set():
+            return
+        try:
+            _build_package_worker(
+                child_path,
+                effective_dist_dir=effective_dist_dir,
+                wheel_compression=wheel_compression,
+                log_dir=effective_log_dir,
+            )
+        except Exception:
+            abort.set()
+            raise
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(_build_unless_aborted, child_path)
+            for child_path in package_dirs
         ]
-        if child_name in ["rocm"]:
-            build_args.append("sdist")
-        else:
-            build_args.append("bdist_wheel")
-            if not wheel_compression:
-                build_args.append("--compression")
-                build_args.append("stored")
-        build_args.extend(
-            [
-                "-v",
-                "--dist-dir",
-                str(effective_dist_dir.resolve()),
-            ]
-        )
-
-        log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
-        subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
-
-        if child_name == "rocm":
-            # setuptools writes PKG-INFO / setup.cfg / egg-info in platform
-            # text mode, which yields CRLF on Windows. Normalize so the
-            # rocm sdist's text members are content-identical across Linux
-            # and Windows builds (tar metadata such as mtime may still
-            # differ).
-            sdists = list(effective_dist_dir.glob(f"{child_name}-*.tar.gz"))
-            if not sdists:
-                raise RuntimeError(
-                    f"No {child_name} sdist produced in {effective_dist_dir}"
-                )
-            for sdist in sdists:
-                _normalize_sdist_line_endings(sdist)
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+        except Exception:
+            for future in futures:
+                future.cancel()
+            raise
 
 
 _TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".cfg", ".txt", ".rst", ".in"})

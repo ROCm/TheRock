@@ -174,6 +174,9 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
+    # Lets hipBLASLt label TensileLite wheels with the ROCm package version
+    # ("git" in local builds means a dev identity).
+    -DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
@@ -302,7 +305,7 @@ if(THEROCK_ENABLE_SPARSE)
     BUILD_DEPS
       rocm-cmake
       rocBLAS
-      rocPRIM
+      ${_prim_build_dep}
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -440,7 +443,7 @@ if(THEROCK_ENABLE_SOLVER)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        rocPRIM
+        ${_prim_build_dep}
         therock-fmt
         therock-googletest
       RUNTIME_DEPS

@@ -136,13 +136,28 @@ Set-Utf8NoBom $LibvaMesonBuild $content
 
 Write-Host "Patched $LibvaMesonBuild"
 
-# Patch libva's va.c so the VA-API driver (vaon12_drv_video.dll) is located
-# relative to ROCM_PATH, removing the need for a LIBVA_DRIVERS_PATH environment
-# variable. This mirrors the Linux sysdeps patch (patch_source.sh lines 47-67),
-# but builds the path with a portable snprintf()+malloc() sequence because MSVC
-# has no asprintf(). secure_getenv() is supplied on Windows by libva's own
-# compat_win32.h shim. The search path ends in bin/ (not lib/) because Windows
-# installs runtime .dll files to bin/ while lib/ holds only .lib import libs.
+# Patch libva's va.c so the VA-API driver (vaon12_drv_video.dll) is found next
+# to libva without a LIBVA_DRIVERS_PATH environment variable. This mirrors the
+# Linux sysdeps patch in patch_source.sh. The driver search path is built in
+# priority order:
+#   1. The directory containing rocm_sysdeps_va.dll itself (TheRock ships libva
+#      and the mesa VA driver side by side, so this is expected to succeed).
+#   2. %ROCM_PATH%\lib\rocm_sysdeps\bin
+#   3. %LIBVA_DRIVERS_PATH%, or the compiled-in VA_DRIVERS_PATH if unset.
+# va_openDriver() walks the ';'-separated list and stops at the first driver
+# that loads, so a stale ROCM_PATH or LIBVA_DRIVERS_PATH can no longer shadow
+# the bundled driver.
+#
+# Windows-specific differences from the Linux patch:
+#   * MSVC has no dladdr()/asprintf()/strndup(), so the module directory comes
+#     from GetModuleHandleExA()+GetModuleFileNameA() and strings are built with
+#     snprintf()+malloc(). The module path buffer grows on truncation so long
+#     installation paths (beyond MAX_PATH) are still resolved.
+#   * libva's compat_win32.h maps secure_getenv() to a helper that returns a
+#     pointer into a single static buffer, so the LIBVA_DRIVERS_PATH value is
+#     copied before ROCM_PATH is read, otherwise it would be overwritten.
+#   * Runtime .dll files are installed to bin\ (lib\ holds only .lib import
+#     libraries), so the ROCM_PATH entry ends in bin rather than lib.
 $LibvaSource = "$($LibvaSubprojectDir.FullName)/va/va.c"
 if (-not (Test-Path $LibvaSource)) {
   Write-Error "Could not find $LibvaSource - was libva extracted by meson setup?"
@@ -151,7 +166,7 @@ if (-not (Test-Path $LibvaSource)) {
 
 $va = Convert-Lf (Get-Content $LibvaSource -Raw)
 
-# 1. Declare a scratch buffer for the ROCM_PATH-derived search path.
+# 1. Declare a scratch buffer for the combined search path.
 $declOld = "    char *search_path = NULL;"
 $declNew = "    char *search_path = NULL;`n    char *temp_path = NULL;"
 if (-not $va.Contains($declOld)) {
@@ -160,29 +175,82 @@ if (-not $va.Contains($declOld)) {
 }
 $va = $va.Replace($declOld, $declNew)
 
-# 2. Prefer <ROCM_PATH>/lib/rocm_sysdeps/lib, falling back to VA_DRIVERS_PATH.
+# 2. Build "<libva dir>;<ROCM_PATH>\lib\rocm_sysdeps\bin;<LIBVA_DRIVERS_PATH or
+#    VA_DRIVERS_PATH>", omitting any entry that is unavailable.
 $searchOld = Convert-Lf @'
     if (!search_path)
         search_path = VA_DRIVERS_PATH;
 '@
 $searchNew = Convert-Lf @'
-    if (!search_path) {
-        char *rocm_path = secure_getenv("ROCM_PATH");
-        if (rocm_path) {
-            const char *suffix = "/lib/rocm_sysdeps/bin";
-            int n = snprintf(NULL, 0, "%s%s", rocm_path, suffix);
-            if (n < 0) {
-                temp_path = NULL;
-            } else {
-                temp_path = (char *)malloc(n + 1);
-                if (temp_path) {
-                    snprintf(temp_path, n + 1, "%s%s", rocm_path, suffix);
-                    search_path = temp_path;
+    {
+        char *env_dir = search_path ? strdup(search_path) : NULL;
+        const char *last_dir = env_dir ? env_dir : VA_DRIVERS_PATH;
+        char *self_dir = NULL;
+        char *rocm_dir = NULL;
+        char *rocm_path;
+        HMODULE self_module = NULL;
+        char *module_path = NULL;
+        DWORD size = MAX_PATH;
+        DWORD len = 0;
+        int n;
+
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)&va_openDriver, &self_module)) {
+            /* GetModuleFileNameA() returns the buffer size when the path was
+             * truncated, so grow the buffer until it fits (long paths). */
+            for (;;) {
+                char *buf = (char *)realloc(module_path, size);
+                if (!buf) {
+                    len = 0;
+                    break;
+                }
+                module_path = buf;
+                len = GetModuleFileNameA(self_module, module_path, size);
+                if (len < size)
+                    break;
+                len = 0;
+                if (size >= 32768)
+                    break;
+                size = size * 2 > 32768 ? 32768 : size * 2;
+            }
+            if (len > 0) {
+                char *last_sep = strrchr(module_path, '\\');
+                char *last_fwd = strrchr(module_path, '/');
+                if (!last_sep || (last_fwd && last_fwd > last_sep))
+                    last_sep = last_fwd;
+                if (last_sep) {
+                    *last_sep = '\0';
+                    self_dir = strdup(module_path);
                 }
             }
+            free(module_path);
+        }
+
+        rocm_path = secure_getenv("ROCM_PATH");
+        if (rocm_path) {
+            n = snprintf(NULL, 0, "%s\\lib\\rocm_sysdeps\\bin", rocm_path);
+            if (n >= 0 && (rocm_dir = (char *)malloc(n + 1)))
+                snprintf(rocm_dir, n + 1, "%s\\lib\\rocm_sysdeps\\bin", rocm_path);
+        }
+
+        n = snprintf(NULL, 0, "%s%s%s%s%s",
+                     self_dir ? self_dir : "", self_dir ? ENV_VAR_SEPARATOR : "",
+                     rocm_dir ? rocm_dir : "", rocm_dir ? ENV_VAR_SEPARATOR : "",
+                     last_dir);
+        if (n >= 0 && (temp_path = (char *)malloc(n + 1))) {
+            snprintf(temp_path, n + 1, "%s%s%s%s%s",
+                     self_dir ? self_dir : "", self_dir ? ENV_VAR_SEPARATOR : "",
+                     rocm_dir ? rocm_dir : "", rocm_dir ? ENV_VAR_SEPARATOR : "",
+                     last_dir);
+            search_path = temp_path;
         } else {
             search_path = VA_DRIVERS_PATH;
         }
+
+        free(self_dir);
+        free(rocm_dir);
+        free(env_dir);
     }
 '@
 if (-not $va.Contains($searchOld)) {

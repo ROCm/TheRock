@@ -99,9 +99,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   else()
     message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
     message(STATUS "Python executables: ${_detected_python_executables}")
-    # Join all detected Python versions into a single string separated by semicolons.
+    # Join all detected Python versions/executables into semicolon-separated strings.
     # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
+    list(JOIN _detected_python_executables "\;" _detected_python_executables_str)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-sdk
@@ -122,6 +123,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_BUILD_YAML_CPP=OFF
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
+      -DROCPROFILER_PYTHON_EXECUTABLES:STRING="${_detected_python_executables_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     IGNORE_PACKAGES
@@ -450,13 +452,16 @@ if(THEROCK_ENABLE_ROCPROFSYS)
   endif()
 
   therock_cmake_subproject_declare(rocprofiler-systems
+    HARDENING_DEFERRED
+      "PAPI (autotools, when ROCPROFSYS_USE_PAPI and ROCPROFSYS_BUILD_PAPI are enabled)"
+      "libiberty (autotools, when built internally instead of using an external library)"
+      "elfutils (autotools, when ROCPROFSYS_BUILD_ELFUTILS is enabled)"
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
-      -DROCPROFSYS_BUILD_TBB=ON
       -DROCPROFSYS_BUILD_LIBIBERTY="${_rocprofsys_build_libiberty}"
       -DROCPROFSYS_BUILD_DYNINST=ON
       -DROCPROFSYS_INSTALL_TESTING="${THEROCK_BUILD_TESTING}"
@@ -532,7 +537,9 @@ if(THEROCK_ENABLE_ROCPROFSYS)
     if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
+      therock_filter_amdgpu_targets(_ROCPROFSYS_GFX_TARGETS
+      rocprofiler-systems-examples ${THEROCK_TEST_AMDGPU_TARGETS})
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${_ROCPROFSYS_GFX_TARGETS}")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems-examples
