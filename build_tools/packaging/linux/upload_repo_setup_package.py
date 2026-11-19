@@ -15,7 +15,8 @@ once per format and stored under ``deb/`` and ``rpm/``.
     {run_id}-linux/amd-repo-setup/<os_profile>/<file>    (run's artifacts bucket)
     v5/amd-repo-setup/<os_profile>/<file>                (after publish_rocm_to_release_buckets.py)
 
-e.g. ``12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``.
+e.g. ``12345-linux/amd-repo-setup/rhel10/amd-repo-setup-10.1.0~rc3-1.rc.el10.noarch.rpm``
+and ``12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb``.
 
 The bucket and prefix come from the CI environment: ``GITHUB_REPOSITORY``,
 ``RELEASE_TYPE`` and the event payload used for fork detection. The ``release``
