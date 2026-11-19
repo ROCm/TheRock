@@ -134,6 +134,7 @@ each selected artifact, for example `amd-llvm_lib_generic.fprint`.
 | `--epoch`                 | Record this `THEROCK_FPRINT_EPOCH` in each new entry.                                                |
 | `INCLUDE...`, `--exclude` | Select artifacts, see [Select artifacts](#select-artifacts).                                         |
 | `--index`                 | Index file to update (default: the prototype index). A missing file is created.                      |
+| `--verbose`               | List every skipped artifact. By default only the number is printed.                                  |
 
 Set `THEROCK_LOCAL_STAGING_DIR` to read a local directory laid out like the S3
 run (`<staging>/<run-id>-<platform>/`) instead of S3. Review changes to the
@@ -200,18 +201,26 @@ example `amd-llvm_lib_generic`. An artifact is used if any include pattern
 matches and no exclude pattern does. With no include pattern, only `amd-llvm`
 is used.
 
+These examples write to a new temporary index, so they don't change the
+checked-in one. Without `--index`, `record` updates the prototype index.
+
 ```bash
+artifact_cache_index="$(mktemp -d /tmp/artifact-cache-select-XXXXXX)/index.json"
+
 # Record base and amd-llvm without debug components.
 python build_tools/artifact_cache/artifact_cache.py record \
+  --index "$artifact_cache_index" \
   --run-id 43936062480 --platform linux amd-llvm base --exclude _dbg_
 
 # Record every artifact in the run.
 python build_tools/artifact_cache/artifact_cache.py record \
+  --index "$artifact_cache_index" \
   --run-id 43936062480 --platform linux .
 ```
 
 Artifacts that have no fingerprint, such as the split per-GPU-target artifacts,
-are reported as skipped.
+are skipped. `record` prints how many were skipped; add `--verbose` to list
+them.
 
 ### Find matching artifacts with the `lookup` subcommand
 

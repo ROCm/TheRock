@@ -683,7 +683,12 @@ def add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         nargs="*",
         help="Regular expressions of artifacts to exclude",
     )
-    parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
+    parser.add_argument(
+        "--index",
+        type=Path,
+        default=DEFAULT_INDEX,
+        help="Index file to use (default: the prototype_artifact_cache_index.json)",
+    )
     parser.add_argument(
         "--platform",
         choices=["linux", "windows"],
@@ -705,13 +710,25 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     lookup_parser = subparsers.add_parser(
         "lookup", help="Write a hit/miss plan for the selected artifacts"
     )
-    lookup_parser.add_argument("--fingerprints-dir", type=Path, required=True)
-    lookup_parser.add_argument("--output", type=Path, required=True)
+    lookup_parser.add_argument(
+        "--fingerprints-dir",
+        type=Path,
+        required=True,
+        help="Directory with the build's .fprint files, e.g. build/artifacts",
+    )
+    lookup_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Where to write the reuse plan (JSON)",
+    )
     add_selection_arguments(lookup_parser)
     record_parser = subparsers.add_parser(
         "record", help="Import a CI run's fingerprints and checksums"
     )
-    record_parser.add_argument("--run-id", required=True)
+    record_parser.add_argument(
+        "--run-id", required=True, help="GitHub Actions workflow run ID to read"
+    )
     record_parser.add_argument(
         "--run-github-repo",
         type=str,
@@ -719,6 +736,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         help="GitHub repository for --run-id in 'owner/repo' format (e.g. "
         f"'{DEFAULT_REPOSITORY}'). Defaults to GITHUB_REPOSITORY env var or "
         f"'{DEFAULT_REPOSITORY}'",
+    )
+    record_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="List every skipped artifact instead of only counting them",
     )
     add_selection_arguments(record_parser)
     return parser.parse_args(argv)
@@ -753,8 +775,15 @@ def run_record(args: argparse.Namespace) -> None:
     updated_index, summary = record_artifacts_from_ci_run(
         index=index, new_entries=collected.entries
     )
-    for skipped in collected.skipped:
-        print(f"Skipped {skipped.artifact}: {skipped.reason}")
+    if args.verbose:
+        for skipped in collected.skipped:
+            print(f"Skipped {skipped.artifact}: {skipped.reason}")
+    elif collected.skipped:
+        reasons = sorted({skipped.reason for skipped in collected.skipped})
+        print(
+            f"Skipped {len(collected.skipped)} artifacts ({', '.join(reasons)}); "
+            "use --verbose to list them"
+        )
     if summary.changed:
         write_json(args.index, updated_index)
     print(

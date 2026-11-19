@@ -226,15 +226,32 @@ class RecordTest(CacheTestCase):
         self.record("--epoch", "7")
         self.assertEqual({e["epoch"] for e in self.index()["entries"]}, {"7"})
 
-    def test_artifacts_without_fingerprints_are_skipped_and_reported(self):
+    def make_run_with_unfingerprinted_base(self):
         make_run(
             self.staging,
             fingerprints={**dict.fromkeys(LLVM, sha("a")), **dict.fromkeys(BASE, None)},
         )
+
+    def test_artifacts_without_fingerprints_are_skipped_and_counted(self):
+        self.make_run_with_unfingerprinted_base()
         code, out, _ = self.record(".")
         self.assertEqual(code, 0)
-        self.assertIn("Skipped base_dev_generic: no_fingerprint", out)
+        self.assertIn("Skipped 2 artifacts (no_fingerprint); use --verbose", out)
+        self.assertNotIn("base_dev_generic", out)
         self.assertEqual({e["name"] for e in self.index()["entries"]}, {"amd-llvm"})
+
+    def test_verbose_lists_each_skipped_artifact(self):
+        self.make_run_with_unfingerprinted_base()
+        code, out, _ = self.record(".", "--verbose")
+        self.assertEqual(code, 0)
+        self.assertIn("Skipped base_dev_generic: no_fingerprint", out)
+        self.assertIn("Skipped base_lib_generic: no_fingerprint", out)
+        self.assertNotIn("use --verbose", out)
+
+    def test_nothing_is_reported_when_no_artifact_is_skipped(self):
+        make_run(self.staging)
+        _, out, _ = self.record()
+        self.assertNotIn("Skipped", out)
 
     def test_fingerprint_without_a_checksum_is_an_error(self):
         run_dir = make_run(self.staging)
