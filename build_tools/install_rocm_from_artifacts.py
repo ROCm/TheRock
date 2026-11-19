@@ -575,6 +575,11 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
             extra_artifacts.append("prim")
+            if args.dev:
+                # The installed rocthrust/hipcub CMake package configs depend on
+                # libhipcxx (find_package(libhipcxx) + libhipcxx::libhipcxx), so
+                # prim headers and configs are only usable with its _dev too.
+                argv.append("libhipcxx_dev")
         if args.rand:
             extra_artifacts.append("rand")
         if args.rccl:
