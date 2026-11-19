@@ -73,6 +73,7 @@ setup(
             "amdclang-cl=rocm_sdk_core._cli:amdclang_cl",
             "amdflang=rocm_sdk_core._cli:amdflang",
             "amdlld=rocm_sdk_core._cli:amdlld",
+            "clang-offload-bundler=rocm_sdk_core._cli:clang_offload_bundler",
             "hipcc=rocm_sdk_core._cli:hipcc",
             "hipconfig=rocm_sdk_core._cli:hipconfig",
             "hipify-clang=rocm_sdk_core._cli:hipify_clang",

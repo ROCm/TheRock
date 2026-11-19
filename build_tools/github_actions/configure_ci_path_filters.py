@@ -8,6 +8,7 @@ This module provides utilities to:
 - Filter paths based on skippable patterns (docs, markdown, etc.)
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
+- Identify diffs confined to an external repo's TheRock CI plumbing
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -20,6 +21,7 @@ Public API:
     get_changed_files_for_external_repo() - Get changed files for external repos via API/git
     is_ci_run_required() - Check if CI run is required based on modified paths
     get_jobs_for_changes() - Identify job groups directly affected by changed paths
+    is_external_repo_ci_only_change() - Check if an external repo diff is confined to TheRock CI plumbing
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -731,3 +733,74 @@ def get_changed_files_for_external_repo(
 
     print(f"  External repo {repo_name}: no SHAs provided and checkout not found")
     return None
+
+
+# ============================================================================
+# External repo CI-plumbing detection
+# ============================================================================
+
+# TheRock CI plumbing inside a calling repository (rocm-libraries,
+# rocm-systems). These paths configure *how* a run happens -- which workflow
+# calls into TheRock, how a diff is attributed to projects, how CTest
+# categorizes tests -- rather than changing any library source.
+#
+# A change here can alter test selection for every project at once, so the run
+# cannot be narrowed to a subset of projects and instead covers all of them.
+# That breadth is decided separately, by the calling repo's
+# configure_external_repo_ci.py; these patterns only drive test *depth*.
+EXTERNAL_REPO_CI_PATTERNS = [
+    # Workflows in the calling repo that invoke TheRock's reusable workflows.
+    ".github/workflows/therock*",
+    # Project discovery and shared CI helper scripts.
+    ".github/scripts/therock*",
+    ".github/scripts/get_changed_projects.py",
+    ".github/scripts/ci_utils.py",
+    ".github/scripts/config_loader.py",
+    ".github/scripts/repo_config_model.py",
+    ".github/scripts/pr_detect_changed_subtrees.py",
+    ".github/repos-config.json",
+    # shared/ctest holds the CTest categorization logic that every project's
+    # tests consume, so a change there can alter selection everywhere.
+    "shared/ctest/*",
+]
+
+
+def is_external_repo_ci_only_change(
+    changed_files: Optional[Iterable[str]],
+    skip_patterns: Optional[list[str]] = None,
+) -> bool:
+    """Whether an external repo's diff touches *only* TheRock CI plumbing.
+
+    CI-plumbing changes build no new library code, so a diff confined to them
+    can be tested at quick depth, mirroring TheRock's own CI-workflow changes.
+    The test is deliberately strict: a diff that also edits library source
+    returns False, so that source keeps its normal (standard) depth. Such a
+    change is CI-*affecting* but not CI-*only* -- it still widens the run to
+    every project, but widening breadth is not a reason to shrink depth.
+
+    Args:
+        changed_files: Paths changed in the calling repository, or None when
+            the diff could not be determined.
+        skip_patterns: Skip-CI patterns from the calling repo's TOML config.
+            Paths matching these (docs, markdown) are ignored, so a workflow
+            edit that also touches a README still qualifies as CI-only.
+
+    Returns:
+        True only when at least one CI-relevant path changed and every such
+        path matches EXTERNAL_REPO_CI_PATTERNS.
+    """
+    if not changed_files:
+        return False
+    # An empty workflow allowlist disables the TheRock-only workflow exclusion,
+    # matching how is_ci_run_required() treats external repositories.
+    relevant_paths = [
+        path
+        for path in changed_files
+        if not _is_path_unrelated_to_ci(path, skip_patterns or [], set())
+    ]
+    if not relevant_paths:
+        return False
+    return all(
+        any(fnmatch.fnmatch(path, pattern) for pattern in EXTERNAL_REPO_CI_PATTERNS)
+        for path in relevant_paths
+    )
