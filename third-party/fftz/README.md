@@ -2,7 +2,7 @@
 
 This experimental integration builds [AMD AOCL-FFTZ](https://github.com/amd/aocl-fftz)
 and its FFTW compatibility wrapper. It does not change rocFFT or hipFFT's CPU
-reference provider.
+reference provider by default.
 
 For a minimal Windows configuration, run these commands from an MSVC developer
 environment after fetching sources with `build_tools/fetch_sources.py`:
@@ -55,5 +55,30 @@ source directory.
 The FFTW wrapper's float guru64 dimension types and opaque plan types still
 require compatibility work before rocFFT can use it. This build integration
 does not patch those interfaces or establish full numerical compatibility.
+
+## Experimental FFT reference backends
+
+With the matching rocFFT reference-adapter changes, configure TheRock with
+`-DTHEROCK_ENABLE_FFT=ON -DTHEROCK_ENABLE_FFTZ=ON -DTHEROCK_ROCFFT_REFERENCE_BACKEND=FFTZ -DTHEROCK_HIPFFT_REFERENCE_BACKEND=FFTZ`, then build the top-level
+`rocFFT+dist` and `hipFFT+dist` targets. Both default to `FFTW` and can be
+selected independently.
+
+The FFTZ backends use the native API and do not depend on the FFTW
+wrapper. It installs the native FFTZ runtime beside the tests. The historical
+test names and `--fftw_compare` option remain valid; `--reference_compare`
+names the same control independently of the selected backend. FFTZ does not
+support FFTW wisdom, so this backend rejects `--wise`.
+
+hipFFT retains its hipFFTW API tests, using AMD's own public declarations when
+FFTZ is selected. Its CPU numerical reference uses the same adapter contract
+as rocFFT. The projects keep separate copies of their test helper headers, as
+they already do, so standalone builds do not require the other project's
+private sources.
+
+The static build topology still lists FFTW as an FFT artifact dependency. It
+therefore enables the FFTW build even when both test backends select FFTZ.
+The native selection removes FFTW link/header requirements from the test
+targets; topology and CI dependency selection still need to follow the chosen
+backends before FFTW can be omitted from the complete build and deployment.
 
 Generated with Codex.

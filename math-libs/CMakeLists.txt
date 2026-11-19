@@ -377,6 +377,20 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
   ##############################################################################
   set(_fft_subproject_names)
 
+  set(THEROCK_ROCFFT_REFERENCE_BACKEND "FFTW" CACHE STRING "rocFFT CPU reference backend (FFTW or FFTZ)")
+  set_property(CACHE THEROCK_ROCFFT_REFERENCE_BACKEND PROPERTY STRINGS FFTW FFTZ)
+  if(THEROCK_ROCFFT_REFERENCE_BACKEND STREQUAL "FFTW")
+    set(_rocfft_reference_deps therock-fftw3 therock-fftw3f)
+  elseif(THEROCK_ROCFFT_REFERENCE_BACKEND STREQUAL "FFTZ")
+    if(NOT THEROCK_ENABLE_FFTZ)
+      message(FATAL_ERROR "The FFTZ reference backend requires THEROCK_ENABLE_FFTZ=ON")
+    endif()
+    set(_rocfft_reference_deps therock-fftz)
+  else()
+    message(FATAL_ERROR "Unknown THEROCK_ROCFFT_REFERENCE_BACKEND: ${THEROCK_ROCFFT_REFERENCE_BACKEND}")
+  endif()
+
+
   therock_cmake_subproject_declare(rocFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocFFT"
@@ -385,6 +399,9 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DROCFFT_REFERENCE_BACKEND=${THEROCK_ROCFFT_REFERENCE_BACKEND}
+      # The Windows amd-llvm build does not provide an OpenMP runtime.
+      -DBUILD_CLIENTS_TESTS_OPENMP=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DBUILD_CLIENTS=OFF
       -DBUILD_SHARED_LIBS=ON
       -DUSE_HIPRAND=ON
@@ -396,8 +413,7 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
-      therock-fftw3
-      therock-fftw3f
+      ${_rocfft_reference_deps}
     RUNTIME_DEPS
       hip-clr
       hipRAND
@@ -414,6 +430,19 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
   # hipFFT
   ##############################################################################
 
+  set(THEROCK_HIPFFT_REFERENCE_BACKEND "FFTW" CACHE STRING "hipFFT CPU reference backend (FFTW or FFTZ)")
+  set_property(CACHE THEROCK_HIPFFT_REFERENCE_BACKEND PROPERTY STRINGS FFTW FFTZ)
+  if(THEROCK_HIPFFT_REFERENCE_BACKEND STREQUAL "FFTW")
+    set(_hipfft_reference_deps therock-fftw3 therock-fftw3f)
+  elseif(THEROCK_HIPFFT_REFERENCE_BACKEND STREQUAL "FFTZ")
+    if(NOT THEROCK_ENABLE_FFTZ)
+      message(FATAL_ERROR "The FFTZ reference backend requires THEROCK_ENABLE_FFTZ=ON")
+    endif()
+    set(_hipfft_reference_deps therock-fftz)
+  else()
+    message(FATAL_ERROR "Unknown THEROCK_HIPFFT_REFERENCE_BACKEND: ${THEROCK_HIPFFT_REFERENCE_BACKEND}")
+  endif()
+
   therock_cmake_subproject_declare(hipFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipFFT"
@@ -422,6 +451,8 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DHIPFFT_REFERENCE_BACKEND=${THEROCK_HIPFFT_REFERENCE_BACKEND}
+      -DBUILD_CLIENTS_TESTS_OPENMP=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DBUILD_SHARED_LIBS=ON
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
@@ -429,8 +460,7 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
-      therock-fftw3
-      therock-fftw3f
+      ${_hipfft_reference_deps}
     RUNTIME_DEPS
       hip-clr
       rocFFT

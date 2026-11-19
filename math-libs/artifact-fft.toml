@@ -1,5 +1,7 @@
 # rocFFT
 [components.lib."math-libs/rocFFT/stage"]
+# The CPU reference runtime is needed only by the test component.
+exclude = ["bin/aocl_fftz.dll", "bin/libaocl_fftz.so*"]
 include = [
   "**/rocfft_kernel_cache.db",
 ]
@@ -16,10 +18,13 @@ include = [
   "bin/rocfft-bench*",
   "bin/dyna-rocfft-bench*",
   "bin/rocfft/**",
+  "bin/aocl_fftz.dll",
+  "bin/libaocl_fftz.so*",
 ]
 
 # hipFFT
 [components.lib."math-libs/hipFFT/stage"]
+exclude = ["bin/aocl_fftz.dll", "bin/libaocl_fftz.so*"]
 [components.dbg."math-libs/hipFFT/stage"]
 [components.dev."math-libs/hipFFT/stage"]
 [components.doc."math-libs/hipFFT/stage"]
@@ -28,4 +33,6 @@ include = [
   # Clients tests (test_runner runs ctest from bin/hipfft/; needs CTestTestfile.cmake)
   "bin/hipfft/**",
   "bin/hipfft-test*",
+  "bin/aocl_fftz.dll",
+  "bin/libaocl_fftz.so*",
 ]
