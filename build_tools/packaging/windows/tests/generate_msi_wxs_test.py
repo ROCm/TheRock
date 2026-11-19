@@ -801,7 +801,9 @@ class TestBuildAll(unittest.TestCase):
             out = root / "out"
             build_all(self._args(root, ["runtime", "core"], output_dir=out))
             names = {p.name for p in out.glob("*.wxs")}
-            self.assertEqual(names, {"amdrocm-runtime-1.2.3.wxs", "amdrocm-core-1.2.3.wxs"})
+            self.assertEqual(
+                names, {"amdrocm-runtime-1.2.3.wxs", "amdrocm-core-1.2.3.wxs"}
+            )
 
     def test_single_package_output_dir_uses_stem(self):
         with tempfile.TemporaryDirectory() as tmp:
