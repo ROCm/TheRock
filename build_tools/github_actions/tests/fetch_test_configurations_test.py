@@ -1196,9 +1196,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(prof["multi_gpu_runner"], "test-linux-gfx950-8gpu-crusoe-rocm")
         self.assertTrue(prof["whole_node"])
         self.assertNotIn("--cap-add", prof["container_options"])
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
         for name in ("hip-tests", "rocgdb-gpu"):
             self.assertNotIn("whole_node", jobs[name])
             self.assertNotIn("multi_gpu_runner", jobs[name])
+            self.assertNotIn(
+                "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs[name]["container_options"]
+            )
 
     def test_whole_node_jobs_stay_on_docker_label(self):
         jobs = self._run_gfx950_with_pool(
@@ -1206,6 +1210,20 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertNotIn("whole_node", jobs["rocprofiler-sdk"])
         self.assertNotIn("multi_gpu_runner", jobs["rocprofiler-sdk"])
+        self.assertNotIn(
+            "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs["rocprofiler-sdk"]["container_options"]
+        )
+
+    def test_apptainer_job_options_follow_the_8gpu_label_too(self):
+        out = fetch_test_configurations._build_container_options(
+            {
+                "job_name": "rocprofiler-sdk",
+                "test_runner": "test-linux-gfx950-8gpu-crusoe-rocm",
+            },
+            "linux",
+            "gfx950-dcgpu",
+        )
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", out["container_options"])
 
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)

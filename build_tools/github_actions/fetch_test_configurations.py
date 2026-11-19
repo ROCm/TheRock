@@ -153,6 +153,11 @@ _APPTAINER_WHOLE_NODE_LABELS = {
 }
 # The profiler tests read every GPU's KFD topology in /sys.
 _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
+# Extra options per job on _APPTAINER_RUNNER_LABELS. Crusoe nodes are VMs: the
+# kernel-replay pageable copy runs ~3 GB/s there (hipMemcpy itself 42-57 GB/s).
+_APPTAINER_JOB_OPTIONS = {
+    "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
+}
 
 
 def _build_container_options(
@@ -201,6 +206,8 @@ def _build_container_options(
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]
+    if runner in _APPTAINER_RUNNER_LABELS:
+        options_parts.extend(_APPTAINER_JOB_OPTIONS.get(job_config.get("job_name"), []))
 
     # Concatenate all parts with a space separator
     job_config["container_options"] = " ".join(options_parts)
