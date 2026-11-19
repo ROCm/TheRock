@@ -396,6 +396,7 @@ test_matrix = {
         "exclude_family": {
             # rocroller does not support gfx110X architectures (see TheRock#6693)
             # rocroller does not plan to support Linux and Windows gfx115X architectures
+            # rocroller has no gfx117X arch definition (only target names, rocm-libraries#13322)
             "linux": [
                 "gfx1100",
                 "gfx1101",
@@ -405,6 +406,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
             ],
             "windows": [
                 "gfx1100",
@@ -415,6 +417,7 @@ test_matrix = {
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
+                "gfx117X-all",
             ],
         },
     },
