@@ -137,8 +137,8 @@ _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
 # Apptainer-backed labels in families that also have docker runners, where the
 # options must stay for the docker runners.
 _APPTAINER_RUNNER_LABELS = [
-    "test-linux-gfx950-1gpu-crusoe-rocm",
-    "test-linux-gfx950-8gpu-crusoe-rocm",
+    "linux-gfx950-1gpu-crusoe-rocm",
+    "linux-gfx950-8gpu-crusoe-rocm",
 ]
 _APPTAINER_UNSUPPORTED_OPTIONS = [
     "--user 0:0",
@@ -149,7 +149,7 @@ _APPTAINER_UNSUPPORTED_OPTIONS = [
 # A 1-GPU job on these labels cannot see the node's other GPUs, so components
 # that need them run on the same cluster's whole-node label instead.
 _APPTAINER_WHOLE_NODE_LABELS = {
-    "test-linux-gfx950-1gpu-crusoe-rocm": "test-linux-gfx950-8gpu-crusoe-rocm",
+    "linux-gfx950-1gpu-crusoe-rocm": "linux-gfx950-8gpu-crusoe-rocm",
 }
 # The profiler tests read every GPU's KFD topology in /sys.
 _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
@@ -1480,13 +1480,10 @@ def run():
                 test_runs_on_multi_gpu_default = ""
             elif test_runs_on_from_workflow is not None:
                 # Workflow provided a non-empty runner. Spread over the label pool
-                # only when that runner is in it; any other runner (a kernel or
-                # test label) is used as-is.
-                pool = platform_info.get("test-runs-on-labels") or []
-                if any(
-                    entry.get("label") == test_runs_on_from_workflow for entry in pool
-                ):
-                    test_runs_on_labels = pool
+                # only for the family's default runner; any other runner (a pool
+                # member, a kernel or test label) is used as-is.
+                if test_runs_on_from_workflow == platform_info.get("test-runs-on"):
+                    test_runs_on_labels = platform_info.get("test-runs-on-labels")
                 test_runs_on_default = test_runs_on_from_workflow
                 test_runs_on_multi_gpu_labels = platform_info.get(
                     "test-runs-on-multi-gpu-labels"
@@ -1810,7 +1807,10 @@ def run():
                 )
                 continue
 
-        whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(test_runs_on_default)
+        # The drawn runner, so a pool pick of the 1-GPU Apptainer label counts too.
+        whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(
+            component.get("test_runner") or test_runs_on_default
+        )
         if whole_node_runner and (
             "multi_gpu_runner" in component or job_name in _APPTAINER_WHOLE_NODE_JOBS
         ):

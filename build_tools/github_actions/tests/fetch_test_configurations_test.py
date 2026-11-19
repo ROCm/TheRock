@@ -1120,7 +1120,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_container_options_drop_root_on_apptainer_label(self):
         job = {
-            "test_runner": "test-linux-gfx950-1gpu-crusoe-rocm",
+            "test_runner": "linux-gfx950-1gpu-crusoe-rocm",
             "container_options": [
                 "--cap-add SYS_MODULE",
                 "--cap-add=SYS_PTRACE",
@@ -1149,7 +1149,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_container_options_use_multi_gpu_runner_label(self):
         job = {
             "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
-            "multi_gpu_runner": "test-linux-gfx950-8gpu-crusoe-rocm",
+            "multi_gpu_runner": "linux-gfx950-8gpu-crusoe-rocm",
         }
         out = fetch_test_configurations._build_container_options(
             job, "linux", "gfx950-dcgpu"
@@ -1174,10 +1174,8 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         return {job["job_name"]: job for job in self._get_components()}
 
     def test_workflow_runner_outside_label_pool_is_used_as_is(self):
-        hip = self._run_gfx950_with_pool("test-linux-gfx950-1gpu-crusoe-rocm")[
-            "hip-tests"
-        ]
-        self.assertEqual(hip["test_runner"], "test-linux-gfx950-1gpu-crusoe-rocm")
+        hip = self._run_gfx950_with_pool("linux-gfx950-1gpu-crusoe-rocm")["hip-tests"]
+        self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-crusoe-rocm")
         self.assertNotIn("--user 0:0", hip["container_options"])
 
     def test_workflow_runner_in_label_pool_keeps_pool(self):
@@ -1189,11 +1187,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_whole_node_jobs_move_to_apptainer_whole_node_label(self):
         jobs = self._run_gfx950_with_pool(
-            "test-linux-gfx950-1gpu-crusoe-rocm",
+            "linux-gfx950-1gpu-crusoe-rocm",
             ["test:hip-tests", "test:rocgdb-gpu", "test:rocprofiler-sdk"],
         )
         prof = jobs["rocprofiler-sdk"]
-        self.assertEqual(prof["multi_gpu_runner"], "test-linux-gfx950-8gpu-crusoe-rocm")
+        self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
         self.assertTrue(prof["whole_node"])
         self.assertNotIn("--cap-add", prof["container_options"])
         self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
@@ -1214,11 +1212,70 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs["rocprofiler-sdk"]["container_options"]
         )
 
+    def _run_gfx950_with_crusoe_in_pool(self, test_runs_on, labels, drawn):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = test_runs_on
+        os.environ["TEST_LABELS"] = json.dumps(labels)
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {
+                "linux": {
+                    "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "count": 9},
+                        {"label": "linux-gfx950-1gpu-crusoe-rocm", "count": 3},
+                    ],
+                }
+            }
+        }
+        with patch.object(
+            fetch_test_configurations,
+            "select_weighted_label",
+            side_effect=lambda pool, _name: drawn,
+        ):
+            fetch_test_configurations.run()
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_pool_member_that_is_not_the_default_is_used_as_is(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:hip-tests"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertEqual(
+            jobs["hip-tests"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+
+    def test_pool_draw_of_the_crusoe_label_moves_profiler_to_whole_node(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests", "test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+        )
+        prof = jobs["rocprofiler-sdk"]
+        self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(prof["whole_node"])
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
+        self.assertEqual(
+            jobs["hip-tests"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+        self.assertNotIn("--user 0:0", jobs["hip-tests"]["container_options"])
+
+    def test_pool_draw_of_ossci_leaves_profiler_on_docker(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        prof = jobs["rocprofiler-sdk"]
+        self.assertEqual(prof["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
+        self.assertNotIn("whole_node", prof)
+        self.assertIn("--user 0:0", prof["container_options"])
+
     def test_apptainer_job_options_follow_the_8gpu_label_too(self):
         out = fetch_test_configurations._build_container_options(
             {
                 "job_name": "rocprofiler-sdk",
-                "test_runner": "test-linux-gfx950-8gpu-crusoe-rocm",
+                "test_runner": "linux-gfx950-8gpu-crusoe-rocm",
             },
             "linux",
             "gfx950-dcgpu",
