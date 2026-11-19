@@ -657,6 +657,7 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
 source_paths = ["rocfft", "hipfft"]
+changed_projects_enabled = true
 
 [artifacts.prim]
 artifact_group = "math-libs"
@@ -681,11 +682,13 @@ source_paths = ["rocsolver", "hipsolver"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "prim", "rand", "sparse"]
+changed_projects_enabled = true
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "core-amdsmi"]
+changed_projects_enabled = true
 
 [artifacts.composable-kernel]
 artifact_group = "math-libs"
@@ -697,6 +700,7 @@ source_paths = ["composablekernel"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+changed_projects_enabled = true
 
 [artifacts.libhipcxx]
 artifact_group = "math-libs"
@@ -709,6 +713,7 @@ artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "prim"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm", "libhipcxx"]
+changed_projects_enabled = true
 
 [artifacts.support]
 artifact_group = "math-libs"

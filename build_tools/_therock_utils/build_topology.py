@@ -134,6 +134,7 @@ class Artifact:
     source_paths: List[str] = field(
         default_factory=list
     )  # Monorepo source paths for granular CI reuse (e.g., ["rocblas", "hipblas", "origami"])
+    changed_projects_enabled: bool = False  # Opt in to changed_projects build scoping
 
 
 class BuildTopology:
@@ -246,6 +247,9 @@ class BuildTopology:
                 split_databases=artifact_data.get("split_databases", []),
                 test_artifacts=artifact_data.get("test_artifacts", []),
                 source_paths=artifact_data.get("source_paths") or [artifact_name],
+                changed_projects_enabled=artifact_data.get(
+                    "changed_projects_enabled", False
+                ),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
