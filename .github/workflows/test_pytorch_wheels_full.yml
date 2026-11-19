@@ -103,6 +103,9 @@ on:
       results_complete:
         description: Whether every expected shard reported complete results
         value: ${{ jobs.test_summary.outputs.results_complete }}
+      test_counts:
+        description: JSON of final-outcome counts per test config (run, passed, failed, error, skipped, not_selected, flaky)
+        value: ${{ jobs.test_summary.outputs.test_counts }}
     inputs:
       amdgpu_family:
         required: true
@@ -452,6 +455,7 @@ jobs:
       observed_report_count: ${{ steps.results.outputs.observed_report_count }}
       expected_report_count: ${{ steps.results.outputs.expected_report_count }}
       results_complete: ${{ steps.results.outputs.results_complete }}
+      test_counts: ${{ steps.results.outputs.test_counts }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

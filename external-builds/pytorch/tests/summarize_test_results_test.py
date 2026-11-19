@@ -35,6 +35,9 @@ def case(name: str, classname: str = "test_nn.TestNN", body: str = "") -> str:
 FAILURE = '<failure message="boom">trace</failure>'
 ERROR = '<error message="setup broke">trace</error>'
 SKIP = '<skipped message="not supported on ROCm" />'
+SKIP_FAST = (
+    '<skipped message="test is fast; we disabled it with PYTORCH_TEST_SKIP_FAST" />'
+)
 RERUN = '<rerun message="first attempt failed" />'
 
 
@@ -139,9 +142,26 @@ class CollectOutcomesTest(TestCaseBase):
                 "FAILED": 1,
                 "ERROR": 1,
                 "SKIPPED": 1,
+                "NOT_SELECTED": 0,
                 "FLAKY": 0,
                 "RUN": 3,
             },
+        )
+
+    def test_skip_fast_skips_are_not_selected(self):
+        self.reports.add_report(
+            "test_linalg",
+            junit_xml(
+                case("test_slow", "test_linalg.TestLinalg"),
+                case("test_fast", "test_linalg.TestLinalg", SKIP_FAST),
+                case("test_rocm", "test_linalg.TestLinalg", SKIP),
+            ),
+        )
+
+        counts = summarize.count_outcomes(summarize.collect_outcomes(self.reports.root))
+
+        self.assertEqual(
+            (counts["RUN"], counts["SKIPPED"], counts["NOT_SELECTED"]), (1, 1, 1)
         )
 
 
@@ -265,6 +285,7 @@ class WriteCountOutputsTest(TestCaseBase):
                 "passed_test_count": "1",
                 "failed_test_count": "2",
                 "skipped_test_count": "1",
+                "not_selected_test_count": "0",
                 "results_complete": "true",
             },
         )
@@ -397,11 +418,39 @@ class CombinedSummaryTest(TestCaseBase):
                 "observed_report_count": 2,
                 "expected_report_count": 2,
                 "results_complete": True,
+                "test_counts": (
+                    '{"default":{"run":4,"passed":2,"failed":2,"error":0,'
+                    '"skipped":0,"not_selected":0,"flaky":0}}'
+                ),
             },
         )
         self.assertIn(
             "results_complete=true",
             (self.temp / "github_output").read_text().splitlines(),
+        )
+
+    def test_counts_are_reported_per_config(self):
+        self.add_shard(1)
+        slow = ReportSet(self.temp / "artifacts" / "test-reports-slow-1-1")
+        slow.add_report(
+            "test_linalg",
+            junit_xml(
+                case("test_slow", "test_linalg.TestLinalg"),
+                case("test_fast", "test_linalg.TestLinalg", SKIP_FAST),
+            ),
+        )
+        slow.add_module_log("test_linalg")
+        slow.record_run("full", "test_linalg 1/1 was successful\n")
+
+        outputs = self.write(expected=2)
+
+        counts = json.loads(outputs["test_counts"])
+        self.assertEqual(counts["default"]["run"], 2)
+        self.assertEqual((counts["slow"]["run"], counts["slow"]["skipped"]), (1, 0))
+        self.assertEqual(counts["slow"]["not_selected"], 1)
+        self.assertIn(
+            "| slow | 1 | 1 | 0 | 0 | 0 | 1 | 0 |",
+            (self.temp / "summary.md").read_text(),
         )
 
     def test_retry_pass_is_not_a_failure(self):
