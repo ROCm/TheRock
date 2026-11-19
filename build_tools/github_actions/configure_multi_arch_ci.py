@@ -1571,6 +1571,26 @@ def _should_use_published_rocm_for_changes(
     return not needs_rocm_artifacts
 
 
+def _changed_projects_opted_in(changed_projects: list[str]) -> bool:
+    """Whether every changed project maps to an artifact that opted in.
+
+    Artifacts opt in by setting `changed_projects_enabled` in BUILD_TOPOLOGY.toml.
+    This is all-or-nothing: a single project that maps to a non-enabled artifact
+    (or to no artifact at all) disables narrowing, so changed_projects is not
+    passed on to the build and a full build happens instead. That keeps a stale
+    or missing source_paths mapping from silently skipping a project's build.
+    """
+    from _therock_utils.build_topology import get_topology
+
+    topology = get_topology()
+    alias_map = topology.get_alias_to_artifact_map()
+    for project in changed_projects:
+        artifact = topology.artifacts.get(alias_map.get(project.split("/")[-1].lower()))
+        if artifact is None or not artifact.changed_projects_enabled:
+            return False
+    return True
+
+
 def decide_jobs(
     ci_inputs: CIInputs,
     git_context: GitContext,
@@ -1757,6 +1777,7 @@ def decide_jobs(
         stage_reuse_mode is not StageReuseMode.OFF
         and ci_inputs.changed_projects
         and not rebuild_artifacts
+        and _changed_projects_opted_in(ci_inputs.changed_projects)
     ):
         rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
             ci_inputs.changed_projects

@@ -1251,6 +1251,46 @@ class TestDecideJobs(unittest.TestCase):
                 self.assertEqual(result.build_rocm.reusable_artifacts, [])
                 self.assertIsNone(result.auto_stage_reuse)
 
+    def test_changed_projects_opted_in(self):
+        """Only projects mapping to changed_projects_enabled artifacts opt in."""
+        import textwrap
+
+        from _therock_utils.build_topology import BuildTopology
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".toml", delete=False
+        ) as topology_file:
+            topology_file.write(
+                textwrap.dedent(
+                    """
+                    [artifacts.fft]
+                    artifact_group = "math-libs"
+                    source_paths = ["rocfft", "hipfft"]
+                    changed_projects_enabled = true
+
+                    [artifacts.blas]
+                    artifact_group = "math-libs"
+                    source_paths = ["rocblas"]
+                    """
+                )
+            )
+        self.addCleanup(os.unlink, topology_file.name)
+
+        with patch(
+            "_therock_utils.build_topology.get_topology",
+            return_value=BuildTopology(topology_file.name),
+        ):
+            self.assertTrue(cm._changed_projects_opted_in(["projects/rocfft"]))
+            self.assertTrue(
+                cm._changed_projects_opted_in(["projects/rocfft", "projects/hipfft"])
+            )
+            # Not opted in, unknown, and mixed all decline to narrow the build.
+            self.assertFalse(cm._changed_projects_opted_in(["projects/rocblas"]))
+            self.assertFalse(cm._changed_projects_opted_in(["shared/ctest"]))
+            self.assertFalse(
+                cm._changed_projects_opted_in(["projects/rocfft", "projects/rocblas"])
+            )
+
     def test_reuse_scoped_to_selected_targets(self):
         """decide_jobs threads the resolved targets into automatic reuse.
         With no families selected there are no build platforms, so automatic

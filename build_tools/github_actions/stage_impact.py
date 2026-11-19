@@ -406,52 +406,44 @@ def analyze_artifact_impact_from_projects(
 ) -> Tuple[List[str], List[str]]:
     """Compute rebuild/reusable artifacts from external repo changed_projects.
 
-    Maps project paths (e.g., "projects/rocfft") to artifact names (e.g., "fft")
+    Maps project paths (e.g., "projects/rocprim") to artifact names (e.g., "prim")
     using BUILD_TOPOLOGY.toml source_paths mappings. This enables granular CI
     artifact reuse: when only specific source paths change in an external repo,
     only affected artifacts rebuild while others reuse baseline artifacts.
 
-    Scoping is strictly opt-in. Only artifacts marked `changed_projects_enabled`
-    in BUILD_TOPOLOGY.toml participate, and the narrowing is all-or-nothing: if
-    any changed project maps to an artifact that has not opted in (or maps to
-    nothing at all), we return empty lists so the caller performs a full build.
-    This keeps a stale or missing source_paths mapping from silently skipping
-    the build of a project that actually changed.
-
     Args:
         changed_projects: List of changed project paths from external repo
-            (e.g., ["projects/rocfft", "projects/hipfft"]).
+            (e.g., ["projects/rocprim", "projects/hipcub"]).
         topology: BuildTopology instance (loaded from BUILD_TOPOLOGY.toml if None).
 
     Returns:
-        (rebuild_artifacts, reusable_artifacts) tuple of sorted artifact name
-        lists, or ([], []) to request a full build.
+        (rebuild_artifacts, reusable_artifacts) tuple of sorted artifact name lists.
     """
     if topology is None:
         from _therock_utils.build_topology import get_topology
 
         topology = get_topology()
 
-    enabled_artifacts = {
-        artifact.name
-        for artifact in topology.artifacts.values()
-        if artifact.changed_projects_enabled
-    }
+    # Collect artifacts with source_paths mappings (derived from topology)
+    granular_source_sets = set(topology.get_source_sets_with_source_paths())
+    all_stage_artifacts: Set[str] = set()
+    for stage in topology.get_build_stages():
+        for group_name in stage.artifact_groups:
+            group = topology.artifact_groups.get(group_name)
+            if group and set(group.source_sets) & granular_source_sets:
+                for artifact in topology.get_artifacts_in_group(group_name):
+                    if artifact.source_paths:
+                        all_stage_artifacts.add(artifact.name)
 
-    alias_map = topology.get_alias_to_artifact_map()
+    # Map changed projects to artifacts
     rebuild_artifacts: Set[str] = set()
+    alias_map = topology.get_alias_to_artifact_map()
     for project in changed_projects:
         normalized = project.split("/")[-1].lower()
-        artifact_name = alias_map.get(normalized)
-        if artifact_name is None or artifact_name not in enabled_artifacts:
-            return [], []
-        rebuild_artifacts.add(artifact_name)
+        if normalized in alias_map:
+            rebuild_artifacts.add(alias_map[normalized])
 
-    if not rebuild_artifacts:
-        return [], []
-
-    # Only opted-in artifacts are ever eligible for reuse. Everything else is
-    # left out of both lists and therefore rebuilt as normal.
-    reusable_artifacts = enabled_artifacts - rebuild_artifacts
+    # Artifacts not in rebuild set are reusable
+    reusable_artifacts = all_stage_artifacts - rebuild_artifacts
 
     return sorted(rebuild_artifacts), sorted(reusable_artifacts)

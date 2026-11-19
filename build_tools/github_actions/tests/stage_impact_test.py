@@ -15,10 +15,7 @@ from pathlib import Path
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 from _therock_utils.build_topology import BuildTopology
-from github_actions.stage_impact import (
-    analyze_artifact_impact_from_projects,
-    analyze_stage_impact,
-)
+from github_actions.stage_impact import analyze_stage_impact
 
 
 class StageImpactTest(unittest.TestCase):
@@ -841,77 +838,6 @@ class SharedSourcePathsAnalysisTest(unittest.TestCase):
         # prim and rand should be reusable
         self.assertIn("prim", result.reusable_artifacts)
         self.assertIn("rand", result.reusable_artifacts)
-
-
-class ChangedProjectsOptInTest(unittest.TestCase):
-    """Only artifacts with changed_projects_enabled may scope the build."""
-
-    def setUp(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".toml", delete=False
-        ) as temp_file:
-            self.topology_path = temp_file.name
-        with open(self.topology_path, "w", encoding="utf-8") as f:
-            f.write(
-                textwrap.dedent(
-                    """
-                    [source_sets.rocm-libraries]
-                    description = "ROCm libraries"
-                    submodules = ["rocm-libraries"]
-
-                    [artifact_groups.math-libs]
-                    description = "Math libs"
-                    type = "per-arch"
-                    source_sets = ["rocm-libraries"]
-
-                    [build_stages.math-libs]
-                    description = "Math libs stage"
-                    artifact_groups = ["math-libs"]
-                    type = "per-arch"
-
-                    [artifacts.fft]
-                    artifact_group = "math-libs"
-                    type = "target-specific"
-                    source_paths = ["rocfft", "hipfft"]
-                    changed_projects_enabled = true
-
-                    [artifacts.rocwmma]
-                    artifact_group = "math-libs"
-                    type = "target-specific"
-                    changed_projects_enabled = true
-
-                    [artifacts.blas]
-                    artifact_group = "math-libs"
-                    type = "target-specific"
-                    source_paths = ["rocblas", "hipblas"]
-                    """
-                )
-            )
-        self.topology = BuildTopology(self.topology_path)
-
-    def tearDown(self):
-        if os.path.exists(self.topology_path):
-            os.unlink(self.topology_path)
-
-    def analyze(self, projects):
-        return analyze_artifact_impact_from_projects(projects, topology=self.topology)
-
-    def test_opted_in_project_scopes_the_build(self):
-        rebuild, reusable = self.analyze(["projects/rocfft"])
-        self.assertEqual(rebuild, ["fft"])
-        self.assertEqual(reusable, ["rocwmma"])
-
-    def test_non_opted_in_project_forces_full_build(self):
-        self.assertEqual(self.analyze(["projects/rocblas"]), ([], []))
-
-    def test_mixed_projects_force_full_build(self):
-        self.assertEqual(self.analyze(["projects/rocfft", "projects/rocblas"]), ([], []))
-
-    def test_unmapped_project_forces_full_build(self):
-        self.assertEqual(self.analyze(["shared/ctest"]), ([], []))
-
-    def test_no_changed_projects_forces_full_build(self):
-        self.assertEqual(self.analyze([]), ([], []))
 
 
 if __name__ == "__main__":
