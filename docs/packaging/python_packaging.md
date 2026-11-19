@@ -190,6 +190,49 @@ pip install "rocm[libraries,devel,device-gfx942]" --pre \
 > `{run_id}-{platform}/python/` but does not generate an index. To create
 > `index.html`, run the indexer command above against the staged directory.
 
+## Building the Origami bindings wheel
+
+[`build_tools/build_origami_wheel.py`](/build_tools/build_origami_wheel.py)
+builds the `rocm-origami` bindings wheel against an installed shared Origami
+CMake package. The source checkout must contain Origami's `pyproject.toml`;
+older Libraries pins without that file cannot use this command. The installed
+prefix must provide the headers and native library from the intended runtime
+build.
+
+Install the PEP 517 frontend in your build environment:
+
+```bash
+python -m pip install build
+```
+
+After building and staging Origami through TheRock, invoke the builder explicitly:
+
+```bash
+python build_tools/build_origami_wheel.py \
+  --source-dir rocm-libraries/shared/origami \
+  --rocm-dir build/math-libs/BLAS/origami/dist \
+  --wheel-dir build/origami-wheels
+```
+
+The builder uses Origami's packaging backend and metadata, selects
+`ORIGAMI_BUILD_FROM_SOURCE=OFF`, and passes the installed prefix through
+`CMAKE_PREFIX_PATH`. Its temporary build directory is outside the source tree
+and is removed when the build ends. Build isolation is enabled by default;
+`--no-isolation` uses backend dependencies already installed in the selected
+Python interpreter, including scikit-build-core and nanobind.
+
+The wheel contains the Python package and extension. The native shared runtime
+must be supplied separately. On Linux the release extension depends on
+`liborigami.so.1`; install it with the matching ROCm runtime. Origami initializes
+an installed `rocm_sdk` before importing the extension. Without the SDK, the
+runtime must be discoverable by the system loader.
+
+This command is opt-in. It does not enable Python in the SDK build, change the
+Libraries pin, or add a wheel to release artifacts. Release enablement follows
+an updated Libraries pin and validation of the intended wheel/runtime pair and
+artifact inclusion. Build the wheel in the same compatible build environment as
+the native SDK.
+
 ## Mirroring Third-Party Python Dependencies
 
 [`mirror_python_dependencies.py`](/build_tools/packaging/python/mirror_python_dependencies.py)
