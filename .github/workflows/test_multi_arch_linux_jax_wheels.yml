@@ -350,7 +350,7 @@ jobs:
           path: jax-lab
           repository: ROCm/jax-lab
           # Pinned, so that a jax-lab change reaches these runs through a PR here.
-          ref: dae9978dd1df40d5ba65a03a21b3e88fbc271220
+          ref: fd244b10e55fd3b15394eb6e682f96ca5ccd3b48
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
