@@ -253,6 +253,28 @@ EXACTLY_LABEL = "ci:exactly"
 # ready for review. This label opts a draft back in to the normal CI behavior.
 RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
 
+# Label prefixes that can change which CI jobs run. GitHub cannot filter the
+# `labeled` pull_request event by label name, so every label triggers a run.
+# Labels outside these prefixes (e.g. 'documentation', 'project: amdsmi') do
+# not influence any CI decision, so a run triggered solely by adding one skips
+# all build and test jobs.
+#
+# Keep in sync with the `concurrency.group` expression in
+# .github/workflows/multi_arch_ci.yml and multi_arch_ci_asan.yml, which gives
+# those runs their own group so they cannot cancel the PR's in-flight run.
+CI_AFFECTING_LABEL_PREFIXES = (
+    "ci:",
+    "test:",
+    "test_filter:",
+    "test_runner:",
+    "build_variant:",
+)
+
+
+def is_ci_affecting_label(label: str) -> bool:
+    """Whether adding this label can change which CI jobs run."""
+    return label.startswith(CI_AFFECTING_LABEL_PREFIXES)
+
 
 def _apply_stage_test_labels(
     platform: str,
@@ -320,6 +342,11 @@ class CIInputs:
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
     checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
     is_draft_pr: bool = False  # pull_request.draft from the event payload
+    # The pull_request event's "action" (e.g. "opened", "synchronize",
+    # "labeled") and, for a "labeled" action, the name of the label that was
+    # just added. Empty for non-pull_request events.
+    event_action: str = ""
+    event_label: str = ""
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
@@ -471,6 +498,8 @@ class CIInputs:
         pr_labels: list[str] = []
         pr_base_ref = ""
         is_draft_pr = False
+        event_action = ""
+        event_label = ""
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
             # Extract label name strings from the event payload's label objects:
@@ -480,6 +509,9 @@ class CIInputs:
             pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
             pr_base_ref = pr_obj.get("base", {}).get("ref", "")
             is_draft_pr = bool(pr_obj.get("draft", False))
+            event_action = event.get("action", "")
+            # Only a "labeled" action carries the label that triggered the run.
+            event_label = event.get("label", {}).get("name", "")
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -539,6 +571,8 @@ class CIInputs:
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
             checkout_commit=os.environ.get("THEROCK_CHECKOUT_COMMIT", ""),
             is_draft_pr=is_draft_pr,
+            event_action=event_action,
+            event_label=event_label,
             linux_amdgpu_families=_parse_comma_list(
                 os.environ.get("LINUX_AMDGPU_FAMILIES", "")
             ),
@@ -981,6 +1015,7 @@ def should_skip_ci(
 
     Returns True for:
     - 'ci:skip' PR label
+    - 'labeled' events for a label that does not affect CI job decisions
     - Draft PRs without the 'ci:run-on-draft' label
     - Pull requests missing the workflow's opt-in label, or carrying its
       opt-out label (pull_request_opt_in_label / pull_request_opt_out_label)
@@ -997,7 +1032,20 @@ def should_skip_ci(
         print("  Skipping: 'ci:skip' PR label")
         return True
 
-    # 1b. Draft PRs are usually not ready for review, so builds and tests are
+    # 1b. The 'labeled' event cannot be filtered by label name in the workflow
+    #     trigger, so applying any label starts a run. When the new label is not
+    #     one CI reads, nothing about the job selection changed since the last
+    #     run, so there is nothing to re-run.
+    if ci_inputs.event_action == "labeled" and not is_ci_affecting_label(
+        ci_inputs.event_label
+    ):
+        print(
+            f"  Skipping: label '{ci_inputs.event_label}' does not affect CI "
+            "job decisions"
+        )
+        return True
+
+    # 1c. Draft PRs are usually not ready for review, so builds and tests are
     #     skipped by default. Marking the PR ready for review re-triggers CI,
     #     and the opt-in label runs CI on the draft as-is. 'ci:skip' is checked
     #     first so it wins when both labels are present.
@@ -1008,7 +1056,7 @@ def should_skip_ci(
         )
         return True
 
-    # 1c. Per-workflow label policy (pull_request events only). Checked before
+    # 1d. Per-workflow label policy (pull_request events only). Checked before
     #     the path filters so a label skip never needs the changed-file lookup.
     #     The opt-out label wins when the PR has both labels.
     if ci_inputs.is_pull_request:

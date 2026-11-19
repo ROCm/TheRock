@@ -80,6 +80,44 @@ run.
 
 `push`, `schedule`, and `workflow_dispatch` runs are unaffected.
 
+#### Labels that do not affect CI
+
+The workflows trigger on the `labeled` event so that adding a `ci:...` or
+`test:...` label starts a run immediately. GitHub cannot filter that event by
+label name, so adding *any* label starts a run — including labels CI never
+reads, such as `documentation` or `project: amdsmi`.
+
+A run triggered by adding such a label skips all builds and tests, and it does
+not cancel the pull request's in-flight run. Only labels with one of these
+prefixes re-trigger CI:
+
+| Prefix           | Example              |
+| ---------------- | -------------------- |
+| `ci:`            | `ci:gfx94X-dcgpu`    |
+| `test:`          | `test:rocprim`       |
+| `test_filter:`   | `test_filter:quick`  |
+| `test_runner:`   | `test_runner:oem`    |
+| `build_variant:` | `build_variant:asan` |
+
+This only applies to the `labeled` event. A `push` to the branch always
+re-evaluates every label currently on the pull request, so a label that was
+skipped here still takes effect on the next run.
+
+Two places implement this and must be kept in sync:
+
+- `CI_AFFECTING_LABEL_PREFIXES` in
+  [`configure_multi_arch_ci.py`](../../build_tools/github_actions/configure_multi_arch_ci.py)
+  decides whether to skip the jobs.
+- The `concurrency.group` expression in
+  [`multi_arch_ci.yml`](../../.github/workflows/multi_arch_ci.yml) and
+  [`multi_arch_ci_asan.yml`](../../.github/workflows/multi_arch_ci_asan.yml)
+  puts these runs in their own group so they cannot cancel the in-flight run.
+  GitHub evaluates `concurrency` before any job starts, so this list cannot be
+  read from Python.
+
+Removing a label (`unlabeled`) does not trigger the workflows at all. Push a
+commit or re-run the workflow to pick up a label removal.
+
 #### Per-workflow label inputs
 
 Workflows that call
@@ -95,6 +133,8 @@ these inputs. They apply only to `pull_request` events and are ignored on
 CI is skipped by the first matching check:
 
 1. The `ci:skip` label is present.
+1. The run was triggered by adding a label that does not affect CI. See
+   [Labels that do not affect CI](#labels-that-do-not-affect-ci).
 1. The pull request is a draft without the `ci:run-on-draft` label.
 1. `pull_request_opt_in_label` is set and the pull request lacks it.
 1. `pull_request_opt_out_label` is set and the pull request has it. The opt-out

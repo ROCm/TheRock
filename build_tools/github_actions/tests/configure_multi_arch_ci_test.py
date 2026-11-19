@@ -26,7 +26,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
 )
 from configure_multi_arch_ci_summary import format_summary
-from workflow_utils import WORKFLOWS_DIR
+from workflow_utils import WORKFLOWS_DIR, load_workflow
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -394,6 +394,28 @@ class TestCIInputsFromEnviron(unittest.TestCase):
         )
         self.assertTrue(inputs.is_draft_pr)
 
+    def test_pull_request_extracts_labeled_action(self):
+        """A 'labeled' event carries the action and the added label's name."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={
+                "action": "labeled",
+                "label": {"name": "documentation", "id": 1},
+                "pull_request": {"labels": [{"name": "documentation", "id": 1}]},
+            },
+        )
+        self.assertEqual(inputs.event_action, "labeled")
+        self.assertEqual(inputs.event_label, "documentation")
+
+    def test_pull_request_without_label_action_has_no_event_label(self):
+        """Actions other than 'labeled' carry no label in the payload."""
+        inputs = _run_from_environ(
+            event_name="pull_request",
+            event_payload={"action": "synchronize", "pull_request": {}},
+        )
+        self.assertEqual(inputs.event_action, "synchronize")
+        self.assertEqual(inputs.event_label, "")
+
     def test_non_pull_request_event_is_never_draft(self):
         """Draft state is only read for pull_request events.
 
@@ -560,6 +582,39 @@ class TestGitContext(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
+class TestCIAffectingLabelPrefixesMatchWorkflows(unittest.TestCase):
+    """The concurrency expression duplicates CI_AFFECTING_LABEL_PREFIXES.
+
+    GitHub evaluates `concurrency` before any job runs, so the prefix list
+    cannot come from configure_multi_arch_ci.py there. These tests fail if the
+    two copies drift apart.
+    """
+
+    WORKFLOWS = ["multi_arch_ci.yml", "multi_arch_ci_asan.yml"]
+
+    def _concurrency_group(self, filename):
+        workflow = load_workflow(WORKFLOWS_DIR / filename)
+        return workflow["concurrency"]["group"]
+
+    def test_workflows_check_every_prefix(self):
+        """Each Python prefix has a matching startsWith() in the expression."""
+        for filename in self.WORKFLOWS:
+            group = self._concurrency_group(filename)
+            for prefix in cm.CI_AFFECTING_LABEL_PREFIXES:
+                with self.subTest(workflow=filename, prefix=prefix):
+                    self.assertIn(
+                        f"startsWith(github.event.label.name, '{prefix}')", group
+                    )
+
+    def test_workflows_check_no_extra_prefixes(self):
+        """The expression has no startsWith() beyond the Python prefixes."""
+        pattern = re.compile(r"startsWith\(github\.event\.label\.name, '([^']*)'\)")
+        for filename in self.WORKFLOWS:
+            with self.subTest(workflow=filename):
+                found = set(pattern.findall(self._concurrency_group(filename)))
+                self.assertEqual(found, set(cm.CI_AFFECTING_LABEL_PREFIXES))
+
+
 class TestShouldSkipCI(unittest.TestCase):
     """Test the skip CI gate.
 
@@ -590,6 +645,48 @@ class TestShouldSkipCI(unittest.TestCase):
         inputs = self._inputs(pr_labels=[])
         git = cm.GitContext(changed_files=["CMakeLists.txt"])
         self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_labeled_event_with_non_ci_label_skips(self):
+        """Adding a label CI does not read changes no job decision."""
+        for label in ["documentation", "project: amdsmi", "bug", "testing"]:
+            with self.subTest(label=label):
+                inputs = self._inputs(
+                    event_action="labeled",
+                    event_label=label,
+                    pr_labels=[label],
+                )
+                git = cm.GitContext(changed_files=["CMakeLists.txt"])
+                self.assertTrue(cm.should_skip_ci(inputs, git))
+
+    def test_labeled_event_with_ci_affecting_label_runs(self):
+        """Adding a label CI reads re-runs with the new job decisions."""
+        for label in [
+            "ci:skip-pytorch",
+            "ci:gfx94X-dcgpu",
+            "ci:build:gfx950",
+            "ci:test:gfx110x",
+            "ci:platform:linux",
+            "test:rocprim",
+            "test_filter:quick",
+            "test_runner:oem",
+            "build_variant:asan",
+        ]:
+            with self.subTest(label=label):
+                inputs = self._inputs(
+                    event_action="labeled",
+                    event_label=label,
+                    pr_labels=[label],
+                )
+                git = cm.GitContext(changed_files=["CMakeLists.txt"])
+                self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_non_labeled_events_ignore_the_label_gate(self):
+        """Only 'labeled' events are gated; a PR's other labels are irrelevant."""
+        for action in ["opened", "synchronize", "ready_for_review"]:
+            with self.subTest(action=action):
+                inputs = self._inputs(event_action=action, pr_labels=["documentation"])
+                git = cm.GitContext(changed_files=["CMakeLists.txt"])
+                self.assertFalse(cm.should_skip_ci(inputs, git))
 
     def test_draft_pr_skips(self):
         """Draft PR without ci:run-on-draft skips CI."""

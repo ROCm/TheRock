@@ -170,7 +170,24 @@ concurrency:
   # `github.workflow`: each workflow gets its own concurrency group
   # `github.head_ref`: the branch name (only defined for pull_request events)
   # `github.run_id`  : fallback, unique for each run
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  #
+  # The `labeled` event cannot be filtered by label name in the trigger, so
+  # applying any label (e.g. `documentation`) starts a run. Such a run would
+  # otherwise cancel the PR's in-flight CI through this group. Labels outside
+  # the prefixes CI reads get their own group instead, so the in-flight run
+  # survives; the run itself then skips every job via should_skip_ci().
+  #
+  # Keep the prefix list in sync with CI_AFFECTING_LABEL_PREFIXES in
+  # build_tools/github_actions/configure_multi_arch_ci.py.
+  group: >-
+    ${{ github.workflow }}-${{ github.head_ref || github.run_id }}${{
+    (github.event.action == 'labeled'
+    && !(startsWith(github.event.label.name, 'ci:')
+    || startsWith(github.event.label.name, 'test:')
+    || startsWith(github.event.label.name, 'test_filter:')
+    || startsWith(github.event.label.name, 'test_runner:')
+    || startsWith(github.event.label.name, 'build_variant:')))
+    && format('-noop-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
