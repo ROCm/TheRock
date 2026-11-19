@@ -138,6 +138,13 @@ if(THEROCK_ENABLE_COMPILER)
       -DTHEROCK_COMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}
       -C${_therock_llvm_cache}
     )
+    #TODO: This will eventually be rolled into ROCm.cmake with future updates to llvm submodule.
+    if(WIN32)
+      # MLIR is not an enabled project on Windows. ClangIR would pull it in
+      # as a dependency-only project whose targets are not exported with Clang.
+      # -D replaces a cached ON on every configure.
+      list(APPEND _amd_llvm_cmake_args -DCLANG_ENABLE_CIR=OFF)
+    endif()
   endif()
 
   therock_cmake_subproject_declare(amd-llvm
