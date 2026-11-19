@@ -796,12 +796,13 @@ def run_build(args) -> None:
 
     # Per-component: commit a change, reconfigure (+build), look up, revert.
     for component in components:
-        name, source_dir, source_file = (
-            component["name"],
-            component["source_dir"],
-            component["source_file"],
-        )
-        src = repo_root / source_dir
+        name = component["name"]
+        src = repo_root / component["source_dir"]
+        source_file = component.get("source_file") or _pick_source_file(src)
+        if source_file is None or not src.is_dir():
+            print(f"[benchmark] skip {name}: no perturbable source file", flush=True)
+            continue
+        print(f"[benchmark] change: {name}", flush=True)
         head = subprocess.run(
             ["git", "-C", str(src), "rev-parse", "HEAD"],
             check=True,
