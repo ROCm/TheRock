@@ -1,6 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+import argparse
 import logging
 import os
 import shlex
@@ -11,6 +12,7 @@ import shutil
 import json
 import sys
 import platform
+import xml.etree.ElementTree as ET
 
 logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
@@ -181,7 +183,7 @@ def setup_env(env):
         env["HSA_ENABLE_SDMA"] = "1"
 
 
-def execute_tests(env):
+def execute_tests(env, *, label_regex=None, test_regex=None, junit=None):
     # Allow for more time in ASAN mode to run the tests.
     timeout = 1500 if is_asan() else 600
     cmd = [
@@ -191,13 +193,21 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--no-tests=error",
         "--timeout",
         f"{timeout}",
     ]
 
     # If quick tests are enabled, run only the smoke test subset
-    if TEST_TYPE == "quick":
+    if label_regex is not None:
+        if label_regex:
+            cmd.extend(["-L", label_regex])
+    elif TEST_TYPE == "quick":
         cmd.extend(["-L", "smoke"])
+    if test_regex:
+        cmd.extend(["-R", test_regex])
+    if junit:
+        cmd.extend(["--output-junit", str(junit)])
 
     ignored_tests = list(GENERIC_TEST_TO_IGNORE)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
@@ -207,8 +217,25 @@ def execute_tests(env):
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    if junit:
+        cases = list(ET.parse(junit).iter("testcase"))
+        if not any(
+            case.find("skipped") is None
+            and case.get("status") not in ("disabled", "notrun", "skipped")
+            for case in cases
+        ):
+            raise RuntimeError(
+                "No selected HIP test executed; inspect the JUnit report"
+            )
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run installed upstream HIP tests")
+    parser.add_argument("--label-regex", help="CTest label filter; empty selects all")
+    parser.add_argument("--test-regex", help="CTest test-name filter")
+    parser.add_argument("--junit", type=Path, help="JUnit output path")
+    args = parser.parse_args()
     setup_env(env)
-    execute_tests(env)
+    execute_tests(
+        env, label_regex=args.label_regex, test_regex=args.test_regex, junit=args.junit
+    )
