@@ -49,18 +49,25 @@ Usage examples:
     python run_pytorch_tests_full.py --gpu-policy all --device-query all
     python run_pytorch_tests_full.py --gpu-policy single --device-query all
 
+    # Record started/complete markers and run_test.py output in the test
+    # reports so summarize_test_results.py can tell a complete run from one
+    # that timed out or crashed (used by CI):
+    python run_pytorch_tests_full.py --record-run core
+
 Environment variables (all overridable via CLI flags or workflow YAML):
     AMDGPU_FAMILY, TEST_CONFIG, SHARD_NUMBER, NUM_TEST_SHARDS,
     TESTS_TO_INCLUDE, PYTORCH_VERSION
 """
 
 import argparse
+import json
 import os
 import platform
 import subprocess
 import sysconfig
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 from pytorch_utils import (
@@ -68,6 +75,12 @@ from pytorch_utils import (
     configure_gpu_visibility,
     detect_pytorch_version,
     reconcile_agent_visibility_env,
+)
+from summarize_test_results import (
+    COMPLETION_MARKER,
+    REPORT_METADATA,
+    RUNNER_OUTPUT,
+    STARTED_MARKER,
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -365,6 +378,15 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         action=argparse.BooleanOptionalAction,
         help="""Allows version mismatches between pytorch test sources and installed packages. Defaults to False, so mismatched versions block running tests""",
     )
+    parser.add_argument(
+        "--record-run",
+        metavar="NAME",
+        default="",
+        help="Record this invocation in the test reports directory as NAME: "
+        "a started marker and report metadata before running, then the "
+        "run_test.py output and a completion marker after it exits. "
+        "summarize_test_results.py uses these to detect incomplete runs.",
+    )
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -392,6 +414,53 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         args.gpu_policy = "all" if is_distributed else "single"
 
     return args, passthrough_args
+
+
+def start_recorded_run(reports_dir: Path, name: str, amdgpu_family: str) -> Path:
+    """Marks invocation `name` as started and returns its output log path.
+
+    Writes report metadata so the uploaded reports identify their platform
+    and family. The completion marker is written by `finish_recorded_run`
+    only after the tests exit, so a run killed by a step timeout stays
+    started but incomplete.
+    """
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    metadata = {"os": platform.system(), "amdgpu_family": amdgpu_family}
+    (reports_dir / REPORT_METADATA).write_text(json.dumps(metadata) + "\n")
+    output_log = reports_dir / RUNNER_OUTPUT.format(name)
+    output_log.write_bytes(b"")
+    (reports_dir / STARTED_MARKER.format(name)).touch()
+    return output_log
+
+
+def finish_recorded_run(reports_dir: Path, name: str) -> None:
+    (reports_dir / COMPLETION_MARKER.format(name)).touch()
+
+
+def run_command(cmd: list[str], cwd: Path, output_log: Path | None = None) -> int:
+    """Runs `cmd`, also appending its combined output to `output_log` if set."""
+    if output_log is None:
+        return subprocess.run(cmd, cwd=str(cwd)).returncode
+
+    proc = subprocess.Popen(
+        cmd, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
+
+    def copy_output() -> None:
+        with open(output_log, "ab") as log:
+            for line in iter(proc.stdout.readline, b""):
+                sys.stdout.buffer.write(line)
+                sys.stdout.buffer.flush()
+                log.write(line)
+                log.flush()
+
+    copier = threading.Thread(target=copy_output, daemon=True)
+    copier.start()
+    return_code = proc.wait()
+    # Orphaned test processes can hold the pipe open after run_test.py exits
+    # (https://github.com/ROCm/TheRock/issues/999); don't wait on them forever.
+    copier.join(timeout=60)
+    return return_code
 
 
 def run_test_supports_exclude_jit_executor(pytorch_dir: Path) -> bool:
@@ -514,6 +583,7 @@ def _run_inductor(
     args: argparse.Namespace,
     tests_to_skip: str,
     passthrough_args: list[str],
+    output_log: Path | None = None,
 ) -> int:
     """Run the inductor test config as two run_test.py invocations.
 
@@ -545,19 +615,25 @@ def _run_inductor(
         print(f"Inductor phase: {label}")
         print(f"{'=' * 60}")
         print(f"Executing: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+        returncode = run_command(cmd, args.pytorch_dir, output_log)
         print(
-            f"run_test.py [{label}] finished with return code: {result.returncode}",
+            f"run_test.py [{label}] finished with return code: {returncode}",
             flush=True,
         )
-        if result.returncode != 0:
-            worst_rc = result.returncode
+        if returncode != 0:
+            worst_rc = returncode
 
     return worst_rc
 
 
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
+    reports_dir = args.pytorch_dir / "test" / "test-reports"
+    output_log = None
+    if args.record_run:
+        output_log = start_recorded_run(
+            reports_dir, args.record_run, args.amdgpu_family
+        )
     check_pytorch_source_version(
         pytorch_dir=args.pytorch_dir, allow_mismatch=args.allow_version_mismatch
     )
@@ -592,13 +668,15 @@ def main(argv: list[str]) -> int:
     print_env()
 
     if args.test_config == "inductor":
-        return_code = _run_inductor(args, tests_to_skip, passthrough_args)
+        return_code = _run_inductor(args, tests_to_skip, passthrough_args, output_log)
     else:
         cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
         print(f"Executing: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-        return_code = result.returncode
+        return_code = run_command(cmd, args.pytorch_dir, output_log)
         print(f"run_test.py finished with return code: {return_code}")
+
+    if args.record_run:
+        finish_recorded_run(reports_dir, args.record_run)
 
     # Force-exit immediately.  PyTorch's run_test.py is known to hang after
     # all test files complete due to leaked daemon threads or orphan child
