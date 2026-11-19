@@ -814,7 +814,19 @@ def run_build(args) -> None:
             target.write_text(target.read_text() + f"\n// benchmark change {name}\n")
             subprocess.run(["git", "-C", str(src), "add", source_file], check=True)
             subprocess.run(
-                ["git", "-C", str(src), "commit", "-q", "-m", f"benchmark: {name}"],
+                [
+                    "git",
+                    "-C",
+                    str(src),
+                    "-c",
+                    "user.email=benchmark@local",
+                    "-c",
+                    "user.name=benchmark",
+                    "commit",
+                    "-q",
+                    "-m",
+                    f"benchmark: {name}",
+                ],
                 check=True,
             )
             cfg = _timed(configure_cmd)
