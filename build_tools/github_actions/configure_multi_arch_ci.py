@@ -71,6 +71,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
     CI_LABEL_REQUIRED_ARTIFACTS,
+    MULTI_GPU_RUNNER_KEYS,
     all_build_variants,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
@@ -94,6 +95,7 @@ from github_actions_api import (
     gha_append_step_summary,
     gha_load_github_event,
     gha_set_output,
+    str2bool,
 )
 from get_latest_python_package_version import get_latest_python_package_version
 from stage_impact import analyze_artifact_impact_from_projects
@@ -302,6 +304,7 @@ class CIInputs:
     build_variant: str  # Build variant label, e.g. "release", "asan", "tsan"
     release_type: str = "ci"  # "ci", or one of the supported release types
     built_rocm_version: str = ""  # ROCM_PACKAGE_VERSION computed during setup
+    run_rocm_tests: bool = True
     build_python_packages: bool = True
     build_pytorch: bool = True
     build_jax: bool = False
@@ -311,6 +314,8 @@ class CIInputs:
 
     # Labels from the PR event payload or workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
+    pull_request_opt_in_label: str = ""  # Skip PRs lacking this label; "" disables
+    pull_request_opt_out_label: str = ""  # Skip PRs with this label; "" disables
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
     checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
@@ -448,6 +453,8 @@ class CIInputs:
         # push before-commit) comes from the event payload.
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
+        # str2bool("") is False, so an unset variable must default to "true".
+        run_rocm_tests = str2bool(os.environ.get("RUN_ROCM_TESTS", "true"))
         build_python_packages = (
             os.environ.get("BUILD_PYTHON_PACKAGES", "true").lower() != "false"
         )
@@ -518,6 +525,7 @@ class CIInputs:
             build_variant=build_variant,
             release_type=release_type,
             built_rocm_version=os.environ.get("ROCM_PACKAGE_VERSION", ""),
+            run_rocm_tests=run_rocm_tests,
             build_python_packages=build_python_packages,
             build_pytorch=build_pytorch,
             build_jax=build_jax,
@@ -525,6 +533,8 @@ class CIInputs:
             build_native_windows=build_native_windows,
             python_versions=[python_version] if python_version else [],
             pr_labels=pr_labels,
+            pull_request_opt_in_label=os.environ.get("PULL_REQUEST_OPT_IN_LABEL", ""),
+            pull_request_opt_out_label=os.environ.get("PULL_REQUEST_OPT_OUT_LABEL", ""),
             pr_base_ref=pr_base_ref,
             checkout_ref=os.environ.get("THEROCK_CHECKOUT_REF", ""),
             checkout_commit=os.environ.get("THEROCK_CHECKOUT_COMMIT", ""),
@@ -972,6 +982,8 @@ def should_skip_ci(
     Returns True for:
     - 'ci:skip' PR label
     - Draft PRs without the 'ci:run-on-draft' label
+    - Pull requests missing the workflow's opt-in label, or carrying its
+      opt-out label (pull_request_opt_in_label / pull_request_opt_out_label)
     - Only skippable files changed (docs, .md, etc.)
     - No files changed
     - ASAN builds on PRs without ci:asan or ci:host-asan labels
@@ -995,6 +1007,19 @@ def should_skip_ci(
             "the pull request ready for review to run CI)"
         )
         return True
+
+    # 1c. Per-workflow label policy (pull_request events only). Checked before
+    #     the path filters so a label skip never needs the changed-file lookup.
+    #     The opt-out label wins when the PR has both labels.
+    if ci_inputs.is_pull_request:
+        opt_in = ci_inputs.pull_request_opt_in_label
+        if opt_in and opt_in not in ci_inputs.pr_labels:
+            print(f"  Skipping: pull request lacks the opt-in label '{opt_in}'")
+            return True
+        opt_out = ci_inputs.pull_request_opt_out_label
+        if opt_out and opt_out in ci_inputs.pr_labels:
+            print(f"  Skipping: pull request has the opt-out label '{opt_out}'")
+            return True
 
     # 2. Path filter skipping - check before ASAN label logic so we don't print
     #    "Running: ASAN CI triggered by PR label" when CI will be skipped anyway.
@@ -1751,22 +1776,18 @@ def decide_jobs(
         git_context=git_context,
         external_skip_patterns=external_skip_patterns,
     )
-    test_rocm = TestRocmDecision(
-        action=JobAction.RUN,
-        test_type=test_type,
-        test_type_reason=test_type_reason,
-    )
-
-    # TODO(#3433): Plumb test_rocm.action through workflow outputs. Until then,
-    # the skip is enforced in _expand_build_config_for_platform() via test_runs_on.
-    if ci_inputs.build_variant == "asan":
-        # Only run ASAN tests on scheduled or workflow_dispatch runs, to avoid impact on submodule bumps
-        if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-            test_rocm = TestRocmDecision(
-                action=JobAction.SKIP,
-                test_type=test_type,
-                test_type_reason="ASAN tests skipped due to non-nightly trigger",
-            )
+    if ci_inputs.run_rocm_tests:
+        test_rocm = TestRocmDecision(
+            action=JobAction.RUN,
+            test_type=test_type,
+            test_type_reason=test_type_reason,
+        )
+    else:
+        test_rocm = TestRocmDecision(
+            action=JobAction.SKIP,
+            test_type=test_type,
+            test_type_reason="run_rocm_tests is false",
+        )
 
     return JobDecisions(
         build_rocm=build_rocm,
@@ -1958,44 +1979,18 @@ def _expand_build_config_for_platform(
                     f"runner available, disabling tests"
                 )
 
-        # TODO(#3433): Remove once ASAN tests pass and test_rocm.action is plumbed.
-        if build_variant.startswith("host-asan"):
-            # Run host-asan tests only on nightly (schedule or workflow_dispatch)
-            # due to limited ASAN runner capacity and stability concerns.
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: host-asan tests only run on nightly, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
-                print(
-                    f"  {family_name}: using host-asan sandbox runner: {test_runs_on}"
-                )
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no host-asan sandbox runner available, "
-                    f"disabling tests"
-                )
-        elif "asan" in build_variant:
-            # Only run full ASAN tests on scheduled or workflow_dispatch runs
-            if not (ci_inputs.is_schedule or ci_inputs.is_workflow_dispatch):
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: ASAN tests skipped for non-nightly trigger, "
-                    f"disabling tests"
-                )
-            elif "test-runs-on-sandbox" in platform_info:
-                test_runs_on = platform_info["test-runs-on-sandbox"]
+        # asan-family variants use the sandbox runner when one is configured
+        # (it is blanked to "" outside rocm-systems PRs, so check truthiness),
+        # otherwise the family's regular runner.
+        if "asan" in build_variant:
+            sandbox_runner = platform_info.get("test-runs-on-sandbox")
+            if sandbox_runner:
+                test_runs_on = sandbox_runner
                 print(f"  {family_name}: using ASAN sandbox runner: {test_runs_on}")
-            else:
-                test_runs_on = ""
-                print(
-                    f"  {family_name}: no ASAN sandbox runner available, "
-                    f"disabling tests"
-                )
+
+        # run_rocm_tests=false (test_rocm SKIP) disables all test jobs.
+        if jobs.test_rocm.action == JobAction.SKIP:
+            test_runs_on = ""
 
         # If run-full-tests-only is set and test_type is "quick", disable testing
         if (
@@ -2052,7 +2047,11 @@ def _expand_build_config_for_platform(
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
         # to run even when GPU testing is gated (e.g., trigger_test_label_only).
-        test_runs_on_cpu = get_cpu_test_runner(platform)
+        test_runs_on_cpu = (
+            ""
+            if jobs.test_rocm.action == JobAction.SKIP
+            else get_cpu_test_runner(platform)
+        )
 
         # tests_enabled is true when any test runner (GPU or CPU) is available.
         # This provides a single flag for workflows to gate test jobs.
@@ -2075,14 +2074,10 @@ def _expand_build_config_for_platform(
         # Include multi-GPU runner info only when GPU tests are enabled.
         # When test_runs_on is empty (tests gated by trigger), multi-GPU tests
         # should also be gated to respect the same trigger policy.
-        if test_runs_on and "test-runs-on-multi-gpu" in platform_info:
-            family_info["test-runs-on-multi-gpu"] = platform_info[
-                "test-runs-on-multi-gpu"
-            ]
-        if test_runs_on and "test-runs-on-multi-gpu-labels" in platform_info:
-            family_info["test-runs-on-multi-gpu-labels"] = platform_info[
-                "test-runs-on-multi-gpu-labels"
-            ]
+        if test_runs_on:
+            for key in MULTI_GPU_RUNNER_KEYS:
+                if key in platform_info:
+                    family_info[key] = platform_info[key]
         # Per-family test labels allow limiting which tests run for specific architectures
         if "test_labels_for_family" in platform_info:
             family_info["test_labels_for_family"] = platform_info[
