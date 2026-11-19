@@ -143,6 +143,60 @@ def get_artifact_features(
     )
 
 
+def get_scoped_stage_features(
+    topology: BuildTopology,
+    stage_name: str,
+    artifact_names: List[str],
+    platform_name: str = "",
+    build_dir: Path = None,
+) -> Set[str]:
+    """Get features for a subset of a stage's artifacts, plus what they need.
+
+    The named artifacts are expanded transitively through artifact_deps, and the
+    stage's inbound artifacts are always added. Inbound artifacts are prebuilt
+    rather than rebuilt here, but CMake still needs their features enabled for
+    dependency resolution -- the same reason get_stage_features() includes them.
+
+    Without this, a scoped build drops targets the stage still references:
+    enabling only RAND leaves BASE off, and math-libs fails to configure with
+    'non-existent target "rocm-core"'.
+    """
+    # Resolve the requested names the same way an unscoped --artifacts build
+    # does, so project_mappings.json keeps priority over the subproject alias
+    # map (hipSPARSE must land on SPARSE, not on blas).
+    features = get_artifact_features(
+        topology, artifact_names, platform_name=platform_name, build_dir=build_dir
+    )
+
+    feature_to_artifacts: dict[str, List[str]] = {}
+    for artifact in topology.artifacts.values():
+        feature_to_artifacts.setdefault(
+            topology.get_artifact_feature_name(artifact), []
+        ).append(artifact.name)
+
+    closure: Set[str] = set()
+    worklist = [
+        name for feature in features for name in feature_to_artifacts.get(feature, [])
+    ]
+    while worklist:
+        artifact_name = worklist.pop()
+        if artifact_name in closure:
+            continue
+        closure.add(artifact_name)
+        artifact = topology.artifacts.get(artifact_name)
+        if artifact:
+            worklist.extend(artifact.artifact_deps)
+
+    closure |= topology.get_inbound_artifacts(stage_name)
+
+    return features | get_artifact_features(
+        topology,
+        sorted(closure),
+        platform_name=platform_name,
+        build_dir=build_dir,
+    )
+
+
 def filter_artifacts_for_stage(
     topology: BuildTopology,
     stage_name: str,
@@ -254,7 +308,15 @@ def generate_cmake_args(
 
     # --artifacts resolves names (artifacts, source_paths, subprojects) to features
     # --stage enables all artifacts in stage
-    if artifact_names:
+    if artifact_names and stage_name:
+        features = get_scoped_stage_features(
+            topology,
+            stage_name,
+            artifact_names,
+            platform_name=platform_name,
+            build_dir=build_dir,
+        )
+    elif artifact_names:
         features = get_artifact_features(
             topology, artifact_names, platform_name=platform_name, build_dir=build_dir
         )

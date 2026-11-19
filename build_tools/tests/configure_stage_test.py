@@ -153,7 +153,15 @@ class StageArtifactFilteringTest(unittest.TestCase):
             platform_name="linux",
         )
         self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", args)
-        self.assertNotIn("-DTHEROCK_ENABLE_BLAS=ON", args)
+        # hipSPARSE must resolve to SPARSE and nothing else. BLAS is also
+        # enabled, but as a declared artifact_dep of sparse rather than a
+        # mis-resolution, so assert on the resolution directly.
+        self.assertEqual(
+            self.topology.resolve_artifacts_to_features(["hipSPARSE"]), {"SPARSE"}
+        )
+        # Scoping still narrows: unrelated math-libs artifacts stay off.
+        self.assertNotIn("-DTHEROCK_ENABLE_FFT=ON", args)
+        self.assertNotIn("-DTHEROCK_ENABLE_ROCWMMA=ON", args)
 
     def test_hipsparse_and_rocsparse_both_sparse(self):
         """Both hipSPARSE and rocSPARSE map to SPARSE feature."""
@@ -174,7 +182,11 @@ class StageArtifactFilteringTest(unittest.TestCase):
             platform_name="linux",
         )
         self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", args)
-        self.assertNotIn("-DTHEROCK_ENABLE_BLAS=ON", args)
+        # As above: BLAS comes in as sparse's artifact_dep, not a mis-resolution.
+        self.assertEqual(
+            self.topology.resolve_artifacts_to_features(["hipsparselt"]), {"SPARSE"}
+        )
+        self.assertNotIn("-DTHEROCK_ENABLE_FFT=ON", args)
 
 
 class ManifestValidationTest(unittest.TestCase):
