@@ -226,3 +226,4 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 - 2026-08-06: Address review feedback: Python package background, release channel, mixing generated and custom bindings (Brian Harrison).
 - 2026-10-01: Merge `main`; number as RFC0017 (Brian Harrison).
 - 2026-11-19: Replace the `rocm-bindings` repository with `bindings/python/<package-name>/` in each super-repo, per review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050). TheRock builds, validates, and publishes binding wheels after the SDK, following its SDK-dependent wheel versioning and promotion. Add validation, provenance, and the Stable ABI policy. Name Origami as the pilot (Brian Harrison).
+- 2026-11-19: Merge `main`; renumber as RFC0019, since RFC0017 is claimed by another open pull request and RFC0019 is not on `main` or claimed by one (Brian Harrison).
