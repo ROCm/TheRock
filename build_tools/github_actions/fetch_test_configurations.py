@@ -163,9 +163,15 @@ _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
-# Jobs that pool draws keep off Apptainer labels; a manual run can still pick
-# one. libhipcxx_amdclang faults on Crusoe's amdgpu 6.16.13 (OSSCI: 6.19.14).
-_APPTAINER_EXCLUDED_POOL_JOBS = ["libhipcxx_amdclang"]
+# Labels that pool draws keep a job off; a manual run can still pick one.
+# libhipcxx_amdclang faults on Crusoe's amdgpu 6.16.13 (OSSCI: 6.19.14); remove
+# after the driver update (https://github.com/ROCm/TheRock/issues/10157).
+_POOL_EXCLUDED_LABELS = {
+    "libhipcxx_amdclang": [
+        "linux-gfx950-1gpu-crusoe-rocm",
+        "linux-gfx950-8gpu-crusoe-rocm",
+    ],
+}
 
 
 def _build_container_options(
@@ -241,7 +247,7 @@ def _family_matches(
     )
 
 
-def _manual_test_runs_on(job_name: str) -> str:
+def _manual_test_runs_on(*, sanity: bool = False) -> str:
     """The runner test_artifacts.yml forces on a GPU job of a manual run, or "".
 
     Mirrors its test_runs_on rules: a user's workflow_dispatch with test_runs_on
@@ -250,7 +256,7 @@ def _manual_test_runs_on(job_name: str) -> str:
     """
     if os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch":
         return ""
-    if job_name != "sanity" and "github-actions" in os.getenv("GITHUB_ACTOR", ""):
+    if not sanity and "github-actions" in os.getenv("GITHUB_ACTOR", ""):
         return ""
     return os.getenv("TEST_RUNS_ON", "")
 
@@ -1546,9 +1552,10 @@ def run():
                     # pool only for the family's default runner, and not when a
                     # manual run pins GPU jobs to it; any other runner (a pool
                     # member, a kernel or test label) is used as-is.
-                    if test_runs_on_from_workflow == platform_info.get(
-                        "test-runs-on"
-                    ) and not _manual_test_runs_on(""):
+                    if (
+                        test_runs_on_from_workflow == platform_info.get("test-runs-on")
+                        and not _manual_test_runs_on()
+                    ):
                         test_runs_on_labels = pool_with_apptainer(
                             platform_info, "test-runs-on-labels"
                         )
@@ -1871,9 +1878,8 @@ def run():
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
                 )
             elif test_runs_on_labels:
-                pool = test_runs_on_labels
-                if job_name in _APPTAINER_EXCLUDED_POOL_JOBS:
-                    pool = [e for e in pool if e["label"] not in apptainer_labels]
+                excluded = _POOL_EXCLUDED_LABELS.get(job_name, [])
+                pool = [e for e in test_runs_on_labels if e["label"] not in excluded]
                 component["test_runner"] = (
                     select_weighted_label(pool, job_name)
                     if pool
@@ -1889,7 +1895,9 @@ def run():
                 continue
 
         manual_runner = (
-            "" if component.get("linux_cpu_runner") else _manual_test_runs_on(job_name)
+            ""
+            if component.get("linux_cpu_runner")
+            else _manual_test_runs_on(sanity=job_name == "sanity")
         )
         if manual_runner:
             # test_artifacts.yml runs the job there, whatever was picked above.
@@ -1897,6 +1905,7 @@ def run():
                 "multi_gpu_runner" if "multi_gpu_runner" in component else "test_runner"
             )
             component[runner_key] = manual_runner
+            logging.info(f"  {job_name}: manual run, using runner: {manual_runner}")
         # The runner the job gets, so a pool pick of the 1-GPU Apptainer label
         # counts too.
         whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(

@@ -1415,6 +1415,18 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             self.drawn_from,
         )
 
+    def test_excluded_job_still_draws_other_apptainer_labels(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:libhipcxx_amdclang"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+            apptainer_label="linux-gfx950-1gpu-newcsp-rocm",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-newcsp-rocm"],
+            self.drawn_from,
+        )
+
     def test_manual_run_keeps_an_excluded_job_on_the_apptainer_label(self):
         jobs = self._run_gfx950_with_crusoe_in_pool(
             "linux-gfx950-1gpu-crusoe-rocm",

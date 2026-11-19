@@ -264,6 +264,8 @@ jobs:
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # For workflow_dispatch, honor the explicit test_runs_on input if provided.
       # Otherwise, use the runner selected by fetch_test_configurations.py.
+      # Keep in sync with _manual_test_runs_on() in fetch_test_configurations.py:
+      # container options are built for the runner chosen here.
       test_runs_on: ${{ (github.event_name == 'workflow_dispatch' && inputs.test_runs_on) || fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ needs.configure_test_matrix.outputs.sanity_component }}
@@ -307,6 +309,8 @@ jobs:
       #      So do whole_node components: test_runs_on hides GPUs they need.
       #   2. Multi-GPU components use the multi-GPU runner (required for correct execution)
       #   3. Per-component runner (set by fetch_test_configurations.py, includes CPU-only)
+      # Keep in sync with _manual_test_runs_on() in fetch_test_configurations.py:
+      # container options are built for the runner chosen here.
       test_runs_on: >-
         ${{
           (github.event_name == 'workflow_dispatch' &&
