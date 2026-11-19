@@ -44,6 +44,7 @@ The first is a binding that replaces the library under test; the second is a bin
 - **hipDNN:** `projects/hipdnn/python/` has a nanobind extension project (Stable ABI, Python 3.12+) and a separate wheel project with a custom packer. The wheel declares no SDK dependency. TheRock does not build it.
 - **Origami:** `shared/origami/python/` is a scikit-build-core project that compiles its own copy of the library by default. [rocm-libraries#10975](https://github.com/ROCm/rocm-libraries/pull/10975) (open) links it against the installed shared `liborigami` instead and renames the package to `rocm-origami`.
 - **TensileLite:** hipBLASLt's kernel generator, a Python package in `projects/hipblaslt/tensilelite` that the native hipBLASLt build also uses. Its `rocisa` extension is built with hipBLASLt and ships in `rocm-sdk-libraries` as an accepted test- and codegen-only exception ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)).
+- **rocSHMEM:** `python/rocshmem/` in rocm-systems is a standalone Python project (`rocshmem4py`, [rocm-systems#9471](https://github.com/ROCm/rocm-systems/pull/9471)). [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) (open) packages it inside TheRock's native build, with one wheel per Python minor version.
 - Neither super-repo has a `bindings/` directory yet.
 
 ## Design principles
@@ -145,7 +146,7 @@ super-repo revision + patches
 
 ### Build
 
-- Binding wheel jobs consume the SDK wheels built from the same super-repo revision, either in the same run or reused from a prior run; reuse records both revisions. A binding job can be rerun without rerunning the native build.
+- Binding wheel jobs consume SDK wheels built from the same super-repo revision, or reused from a prior run whose native inputs are unchanged; reuse records both revisions. A binding job can be rerun without rerunning the native build.
 - There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed, reusing cached native artifacts ([TheRock#7782](https://github.com/ROCm/TheRock/issues/7782), [TheRock#8651](https://github.com/ROCm/TheRock/issues/8651)).
 - A feature flag ([`flags.md`](../development/flags.md)), off by default, gates the jobs during rollout. Once it is on, super-repo pull request CI runs the binding jobs for changed components, and a failure blocks the merge.
 
@@ -164,7 +165,7 @@ Each run records the SDK build, SDK and binding package versions, source revisio
 
 - **Version.** The binding's version plus a local label for its SDK build, from TheRock's version scripts ([`versioning.md`](../packaging/versioning.md)), for example `0.2.0+rocm10.1.0a20261119`.
 - **Dependency.** Nightly and prerelease wheels pin the exact SDK build they were validated with, `rocm[libraries]==<SDK version>`, and check the same version at import. Installing one installs the matching SDK wheels, or moves an existing install to that build, so two packages install together only when they share an SDK build.
-- **Stable releases.** Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling does today for its SDK-dependent framework wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
+- **Stable releases.** Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling already does for some SDK-dependent wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
 - **Index.** Binding wheels publish as separate wheels to the same per-channel Python index as the SDK wheels ([`RELEASES.md`](../../RELEASES.md)), only after passing validation.
 - **Cadence.** Every SDK build ships its bindings, rebuilt for it. TheRock releases continuously, so a native change that breaks its binding is a build break, fixed by the component team in the same pull request.
 
@@ -172,10 +173,10 @@ Each run records the SDK build, SDK and binding package versions, source revisio
 
 1. **Directory setup.** Add `bindings/python/README.md`, pointing to this RFC, in `rocm-libraries` and `rocm-systems`.
 
-1. **Origami pilot.** Move Origami's Python package to `bindings/python/rocm-origami/` as its own project that links the shared `liborigami` from the installed SDK, rejects a static one, and loads ROCm as described above. Origami's current combined native and Python build, including the shared-library linking from rocm-libraries#10975, moves into this project. Then add the TheRock job, validation, and publishing, including:
+1. **Origami pilot.** Move Origami's Python package to `bindings/python/rocm-origami/` as its own project that finds the installed shared `liborigami` with `find_package()`, rejects a static one, and loads ROCm as described above. It takes the installed-library path from rocm-libraries#10975; Origami's build-from-source mode stays out of the binding. Then add the TheRock job, validation, and publishing, including:
 
    - the `ROCM_SDK_VERSION` build input and `device-*` extras;
-   - a package classification for binding wheels in TheRock's upload and release tooling, which today accepts only core, PyTorch, and JAX packages;
+   - a package classification for binding wheels in TheRock's upload and release tooling, which today accepts only core, PyTorch, and JAX packages and files any `rocm`-prefixed name, such as `rocm-origami`, as core;
    - stable promotion support for binding wheels, including their device extras.
 
    The pilot is done when:
@@ -189,6 +190,7 @@ After the pilot, these proceed independently:
 
 - **hipDNN** moves `projects/hipdnn/python/` to `bindings/python/hipdnn-frontend/` as one project and retires its custom packer.
 - **TensileLite** adopts the packaging and validation rules; its location is an open question.
+- **rocSHMEM** moves `python/rocshmem/` to `bindings/python/`, and its TheRock packaging ([TheRock#5638](https://github.com/ROCm/TheRock/pull/5638)) follows this RFC's build and release model.
 - **Other components** adopt the layout as they add bindings. Maintainers review the first layouts closely in code review.
 - A **developer guide** under `docs/packaging/` links back to this RFC.
 
@@ -198,7 +200,7 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 
 ## Open questions
 
-- **Python 3.10 and 3.11.** nanobind's Stable ABI needs Python 3.12, but the SDK supports 3.10 and 3.11 ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)) and Origami's consumers include 3.11 environments. The Origami pilot either needs a per-minor build exception or accepts a 3.12 floor.
+- **Python 3.10 and 3.11.** nanobind's Stable ABI needs Python 3.12, but the SDK supports 3.10 and 3.11 ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)) and Origami's consumers include 3.11 environments. The Origami pilot either needs a per-minor build exception or accepts a 3.12 floor. rocSHMEM's existing per-minor wheels need the same decision.
 - **TensileLite.** The native hipBLASLt build uses TensileLite, and `rocisa` is built with hipBLASLt. Whether the package moves to `bindings/python/`, and whether `rocisa` leaves the native build, is settled with the hipBLASLt maintainers.
 - **Import namespace.** Whether custom bindings use their own top-level import packages or the shared `rocm.*` namespace that `hip-python` keeps open is settled with the `hip-python` owners.
 
