@@ -8,4 +8,6 @@ set(CMAKE_INSTALL_LIBDIR "lib")  # No lib64 for us, thank you very much.
 # Only build shared library on Linux
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(BUILD_SHARED_LIBS ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(BUILD_SHARED_LIBS OFF)
 endif()
