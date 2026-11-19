@@ -28,7 +28,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       repository:
@@ -67,7 +67,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       repository:
@@ -150,6 +150,7 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      build_image: ${{ matrix.build_image }}
       wheel_type: ${{ matrix.wheel_type }}
       publish: ${{ matrix.publish }}
       gfx_arch: ${{ matrix.gfx_arch }}
