@@ -5,5 +5,10 @@
 [components.doc."cv-libs/rpp/stage"]
 [components.test."cv-libs/rpp/stage"]
 include = [
+  "bin/rpp_tests",
+  "bin/rpp/**",
+  # Legacy test sources.
+  # TODO(ROCm/rocm-libraries#10163): drop once RPP stops installing
+  # utilities/test_suite.
   "share/rpp/**",
 ]
