@@ -23,6 +23,7 @@ Example
 import argparse
 import functools
 import json
+import os
 import subprocess
 from pathlib import Path
 import sys
@@ -79,6 +80,70 @@ def ensure_profiler_library_symlinks(profiler: PopulatedDistPackage) -> None:
             link = target.with_suffix("")
             if not link.exists():
                 link.symlink_to(target.name)
+
+    # soname_aliases lists every shared library whose filename is not the
+    # SONAME. That includes real files like libfoo.so.1.2.3, not only
+    # differently named links. Wheel packaging follows symlinks, so turning
+    # a versioned filename into a link would copy the library again. Skip
+    # those, and only recreate a name that is not a version of the SONAME
+    # (libdyninstAPI_RT.so -> librocprof-sys-rt.so).
+    soname_aliases = getattr(getattr(profiler, "files", None), "soname_aliases", {})
+    for relpath, soname in soname_aliases.items():
+        alias_name = Path(relpath).name
+        unversioned_name = Path(soname).with_suffix("").name
+        if _is_soname_version_filename(alias_name, soname):
+            continue
+        alias_path = profiler.platform_dir / relpath
+        if alias_path.exists() or alias_path.is_symlink():
+            continue
+        target = _runtime_alias_target(
+            profiler_lib_dir, alias_path.parent, soname, unversioned_name
+        )
+        if target is None:
+            continue
+        alias_path.parent.mkdir(parents=True, exist_ok=True)
+        # Use forward slashes so the link text is the same on every OS.
+        alias_path.symlink_to(
+            Path(os.path.relpath(target, alias_path.parent)).as_posix()
+        )
+
+
+def _is_soname_version_filename(alias_name: str, soname: str) -> bool:
+    """True when alias_name is the SONAME, its unversioned name, or the SONAME plus numeric version parts.
+
+    librocprof-sys-rt.so and librocprof-sys-rt.so.1.2.3 are versions of
+    librocprof-sys-rt.so.1. libdyninstAPI_RT.so is a different name.
+    """
+    if alias_name == soname:
+        return True
+    stem = soname
+    while True:
+        base, dot, suffix = stem.rpartition(".")
+        if not dot or not suffix.isdigit():
+            break
+        stem = base
+        if alias_name == stem:
+            return True
+    prefix = soname + "."
+    if not alias_name.startswith(prefix):
+        return False
+    rest = alias_name[len(prefix) :]
+    return bool(rest) and all(part.isdigit() for part in rest.split("."))
+
+
+def _runtime_alias_target(
+    lib_dir: Path, alias_dir: Path, soname: str, unversioned_name: str
+) -> Path | None:
+    """Return the kept library a dropped alias should point at."""
+    for candidate in (
+        lib_dir / unversioned_name,
+        lib_dir / soname,
+        alias_dir / unversioned_name,
+        alias_dir / soname,
+    ):
+        if candidate.exists():
+            return candidate
+    return None
 
 
 AMDSMI_ROCM_SDK_CORE_FLAG = "_AMDSMI_ROCM_SDK_CORE = False"
