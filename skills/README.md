@@ -30,6 +30,16 @@ The base skill also carries a writing guide,
 comments, and handoffs. The author and review actions apply it when they draft or critique a
 description.
 
+## PR labeling skills
+
+| Skill                            | Use it when                                                                                                                                                                                                                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`pr-ci-labels/`](pr-ci-labels/) | Choosing the CI labels a PR should carry (the smallest set that safely tests the change), or checking a PR's labels and which labels its CI runs used. Standalone; the PR-quality skills can call it. See [`SKILL.md`](pr-ci-labels/SKILL.md) and the label rules in [`reference.md`](pr-ci-labels/reference.md). |
+
+The label list itself stays in TheRock's
+[`ci_behavior_manipulation.md`](../docs/development/ci_behavior_manipulation.md); the skill reads it
+rather than keeping a copy.
+
 ## Related automated check
 
 [`therock_pr_bot/`](therock_pr_bot/) is the **enforcement** counterpart to the advisory skills: an
