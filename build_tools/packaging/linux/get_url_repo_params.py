@@ -986,7 +986,7 @@ def main(argv: list[str] | None = None) -> int:
         "--release-type",
         type=str,
         required=True,
-        help="Release line (e.g. prerelease, release, nightly, dev)",
+        help="Release type (e.g. prerelease, release, nightly, dev)",
     )
     p_rp.add_argument(
         "--build-date",
