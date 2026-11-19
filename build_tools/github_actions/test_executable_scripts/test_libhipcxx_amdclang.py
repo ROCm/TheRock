@@ -12,7 +12,6 @@ from pathlib import Path
 import platform
 
 from libhipcxx_utils import (
-    add_libhipcxx_prehook,
     get_gpu_architecture_portable,
     prepend_env_path,
 )
@@ -135,10 +134,6 @@ if is_windows:
         f"'{THEROCK_BIN_PATH.as_posix()}', {LIBHIPCXX_TEST_TIMEOUT})"
     )
 
-# See add_libhipcxx_prehook() for why this is needed.
-PRE_HOOK_FILE = THEROCK_DIR / "math-libs" / "pre_hook_libhipcxx_tests.cmake"
-add_libhipcxx_prehook(cmd, PRE_HOOK_FILE)
-
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
@@ -177,10 +172,5 @@ else:
         "bash",
         "../ci/test_libhipcxx.sh",
     ]
-    # The script runs 'cmake --preset' in a new build dir. That configure
-    # needs the pre-hook too.
-    prehook_options = []
-    if add_libhipcxx_prehook(prehook_options, PRE_HOOK_FILE):
-        cmd.extend(["-cmake-options", " ".join(prehook_options)])
     logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True, env=environ_vars)
