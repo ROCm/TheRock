@@ -25,6 +25,40 @@ logger = TheRockLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
+def get_deb_compression_args(choice: str, auto_max_cpus: int = 4) -> str:
+    """Return the dpkg-deb compression arguments passed through dh_builddeb.
+
+    xz gives the smallest packages but is CPU-heavy; zstd -9 is ~4x faster on
+    low-core machines at the cost of ~16% larger packages.
+
+    Parameters:
+    choice: "xz", "zstd", or "auto". Any other value logs a warning and
+        falls back to "auto".
+    auto_max_cpus: "auto" selects zstd at or below this many usable CPUs
+        (e.g. small CI runners, where xz dominates packaging time), xz above it
+
+    Returns: dpkg-deb compression arguments ("-Zxz" or "-Zzstd -z9")
+    """
+    compression_args = {"xz": "-Zxz", "zstd": "-Zzstd -z9"}
+    if choice in compression_args:
+        logger.info(f"DEB compression: {choice} (requested)")
+        return compression_args[choice]
+    if choice != "auto":
+        logger.warning(
+            f"Invalid DEB compression '{choice}' (expected auto, xz or zstd); "
+            "using auto"
+        )
+
+    # sched_getaffinity honors CPU pinning; fall back where it is unavailable.
+    if hasattr(os, "sched_getaffinity"):
+        cpus = len(os.sched_getaffinity(0))
+    else:
+        cpus = os.cpu_count() or 1
+    resolved = "zstd" if cpus <= auto_max_cpus else "xz"
+    logger.info(f"DEB compression: {resolved} (auto: {cpus} usable CPUs)")
+    return compression_args[resolved]
+
+
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     """Create a non-versioned Debian meta package (.deb).
 
@@ -103,7 +137,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         pkg_name,
         build_config.artifacts_dir,
         build_config.gfx_arch,
-        build_config.enable_kpack,
         target_members=package_target_members(build_config),
     )
     sourcedir_list.extend(dir_list)
@@ -117,17 +150,12 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     logger.debug(f"sourcedir_list: {sourcedir_list}")
 
     # GFX_META is a versioned meta package (empty content, just dependencies)
-    is_gfx_meta = build_config.enable_kpack and build_config.gfx_arch == GFX_META
+    is_gfx_meta = build_config.gfx_arch == GFX_META
     if not sourcedir_list and not is_meta and not is_gfx_meta:
-        if build_config.enable_kpack:
-            logger.info(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
-            )
-            return []
-        else:
-            sys.exit(
-                f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
-            )
+        logger.info(
+            f"{pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+        )
+        return []
 
     if not sourcedir_list:
         logger.debug(f"{pkg_name} is a Meta package")
@@ -263,18 +291,16 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     logger.debug("generate_rules_file")
     rules_file = Path(deb_dir) / "rules"
-    disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
-    # Disable debian dh_strip for multi-arch builds
+    # Disable debian dh_strip
     # WORKAROUND: dh_strip's debugedit incorrectly truncates ELF files with
     # unconventional layouts (e.g., program headers at end of file).
     # This causes "program header goes past the end of the file" errors.
     # See: https://github.com/ROCm/TheRock/issues/4047
-    if config.enable_kpack:
-        disable_dh_strip = True
+    disable_dh_strip = True
 
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
@@ -289,6 +315,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     context = {
         "disable_dwz": disable_dwz,
         "disable_dh_strip": disable_dh_strip,
+        "deb_compression_args": config.deb_compression_args,
         "install_prefix": config.install_prefix,
         "pkg_name": pkg_name,
     }

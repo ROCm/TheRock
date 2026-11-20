@@ -2,7 +2,14 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Tests for configure_external_repo_ci.py."""
+"""Tests for configure_external_repo_ci.py.
+
+That module is on its way out: it no longer decides test depth, only project
+scope. Coverage here is deliberately limited to the scoping logic still in use.
+Dead surface (has_non_skippable) and its duplicated CI-plumbing pattern lists
+are not tested -- the live copy of those patterns is EXTERNAL_REPO_CI_PATTERNS
+in configure_ci_path_filters.py, covered by configure_ci_path_filters_test.py.
+"""
 
 import os
 import sys
@@ -14,16 +21,13 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "github_actions"))
 
 from configure_external_repo_ci import (
     CI_RELEVANT_NON_SUBTREE_PREFIXES,
-    ConfigureResult,
     RepoEntry,
     configure,
     find_matched_subtrees,
     get_unclassified_paths,
     get_valid_prefixes,
-    has_non_skippable,
     is_skippable,
     load_repo_config,
-    matches_patterns,
 )
 
 
@@ -49,39 +53,6 @@ class IsSkippableTest(unittest.TestCase):
         self.assertFalse(is_skippable("src/main.cpp"))
         self.assertFalse(is_skippable("projects/rocblas/src/blas.cpp"))
         self.assertFalse(is_skippable("CMakeLists.txt"))
-
-
-class HasNonSkippableTest(unittest.TestCase):
-    """Tests for has_non_skippable()."""
-
-    def test_all_skippable_returns_false(self):
-        paths = ["README.md", "docs/guide.rst", "CHANGELOG.md"]
-        self.assertFalse(has_non_skippable(paths))
-
-    def test_mixed_returns_true(self):
-        paths = ["README.md", "src/main.cpp"]
-        self.assertTrue(has_non_skippable(paths))
-
-    def test_all_non_skippable_returns_true(self):
-        paths = ["src/a.cpp", "src/b.cpp"]
-        self.assertTrue(has_non_skippable(paths))
-
-
-class MatchesPatternsTest(unittest.TestCase):
-    """Tests for matches_patterns()."""
-
-    def test_matches_workflow_pattern(self):
-        paths = [".github/workflows/therock-ci.yml"]
-        patterns = [".github/workflows/therock*"]
-        self.assertTrue(matches_patterns(paths, patterns))
-
-    def test_no_match_returns_false(self):
-        paths = ["src/main.cpp"]
-        patterns = [".github/workflows/therock*"]
-        self.assertFalse(matches_patterns(paths, patterns))
-
-    def test_empty_paths_returns_false(self):
-        self.assertFalse(matches_patterns([], ["*.md"]))
 
 
 class FindMatchedSubtreesTest(unittest.TestCase):
@@ -185,27 +156,11 @@ class LoadRepoConfigTest(unittest.TestCase):
 
 
 class ConfigureTest(unittest.TestCase):
-    """Tests for configure() main logic."""
+    """Tests for configure() main logic.
 
-    def test_schedule_event_runs_all_tests(self):
-        result = configure(
-            event_name="schedule",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result.run_all_tests, True)
-
-    def test_workflow_dispatch_runs_all_tests(self):
-        result = configure(
-            event_name="workflow_dispatch",
-            github_repo="ROCm/rocm-libraries",
-            base_sha=None,
-            head_sha=None,
-            config_path="",
-        )
-        self.assertEqual(result.run_all_tests, True)
+    An empty return value means "could not narrow safely", which downstream
+    means every project is tested.
+    """
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -222,8 +177,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.run_all_tests, False)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -240,11 +194,10 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.run_all_tests, False)
-        self.assertEqual(result.changed_projects, "")
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_ci_workflow_changed_runs_all_tests(self, mock_api):
+    def test_ci_workflow_changed_is_not_scoped(self, mock_api):
         mock_api.return_value = {".github/workflows/therock-ci.yml"}
         result = configure(
             event_name="pull_request",
@@ -253,7 +206,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -269,11 +222,10 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path=".github/repos-config.json",
         )
-        self.assertEqual(result.changed_projects, "projects/rocblas")
-        self.assertEqual(result.run_all_tests, False)
+        self.assertEqual(result, "projects/rocblas")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_truncated_api_response_runs_all_tests(self, mock_api):
+    def test_truncated_api_response_is_not_scoped(self, mock_api):
         mock_api.return_value = None  # Signals truncated response
         result = configure(
             event_name="pull_request",
@@ -282,9 +234,9 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
-    def test_no_shas_provided_runs_all_tests(self):
+    def test_no_shas_provided_is_not_scoped(self):
         result = configure(
             event_name="pull_request",
             github_repo="ROCm/rocm-libraries",
@@ -292,10 +244,10 @@ class ConfigureTest(unittest.TestCase):
             head_sha=None,
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
-    def test_push_without_base_sha_runs_all_tests(self):
-        """Push events without base_sha should run all tests."""
+    def test_push_without_base_sha_is_not_scoped(self):
+        """Push events without base_sha have no diff to narrow against."""
         result = configure(
             event_name="push",
             github_repo="ROCm/rocm-libraries",
@@ -303,7 +255,7 @@ class ConfigureTest(unittest.TestCase):
             head_sha="def456",
             config_path="",
         )
-        self.assertEqual(result.run_all_tests, True)
+        self.assertEqual(result, "")
 
 
 class GetUnclassifiedPathsTest(unittest.TestCase):
@@ -346,40 +298,45 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
 
     def test_shared_component_is_surfaced(self):
         r = self._configure(["shared/amdgpu-windows-interop/pal/x.cpp"])
-        self.assertEqual(r.changed_projects, "shared/amdgpu-windows-interop")
-        self.assertFalse(r.run_all_tests)
+        self.assertEqual(r, "shared/amdgpu-windows-interop")
 
     def test_emulation_components_are_surfaced(self):
         r = self._configure(["emulation/mirage/a.cpp", "emulation/rocjitsu/b.cpp"])
         self.assertEqual(
-            sorted(r.changed_projects.split(",")),
+            sorted(r.split(",")),
             ["emulation/mirage", "emulation/rocjitsu"],
         )
 
-    def test_ctest_harness_triggers_full_run(self):
+    def test_ctest_harness_is_not_scoped(self):
         r = self._configure(["shared/ctest/TestCategories.cmake"])
-        self.assertTrue(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "")
+        self.assertEqual(r, "")
 
     def test_dnn_provider_cmake_surfaces_prefix(self):
         r = self._configure(
             ["dnn-providers/cmake/Tests.cmake"],
             repo="ROCm/rocm-libraries",
         )
-        self.assertFalse(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "dnn-providers/cmake")
+        self.assertEqual(r, "dnn-providers/cmake")
 
-    def test_mixed_recognized_and_unclassified_runs_all(self):
+    def test_hipccl_monorepo_dir_surfaces_prefix(self):
+        # projects/hipccl is monorepo-native (not subtree-synced); edits there
+        # must classify to the projects/hipccl prefix, not fall back to the
+        # full test suite.
+        r = self._configure(
+            ["projects/hipccl/hipccl3/rocprim/foo.hpp"],
+            repo="ROCm/rocm-libraries",
+        )
+        self.assertEqual(r, "projects/hipccl")
+
+    def test_mixed_recognized_and_unclassified_is_not_scoped(self):
         r = self._configure(
             ["projects/rocm-core/src/x.cpp", "tools/rocm-build/helper.py"]
         )
-        self.assertTrue(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "")
+        self.assertEqual(r, "")
 
     def test_recognized_plus_skippable_still_narrows(self):
         r = self._configure(["projects/rocm-core/src/x.cpp", "README.md"])
-        self.assertFalse(r.run_all_tests)
-        self.assertEqual(r.changed_projects, "projects/rocm-core")
+        self.assertEqual(r, "projects/rocm-core")
 
     def test_declared_prefixes_are_wellformed(self):
         for prefix in CI_RELEVANT_NON_SUBTREE_PREFIXES:

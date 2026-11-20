@@ -3,9 +3,19 @@
 include = [
   "share/miopen/**",
 ]
+exclude = [
+  # With MIOPEN_ENABLE_HIPDNN_WRAPPER=ON, MIOpen installs test-only files here,
+  # including a fake hipDNN backend named like the real one. The default lib
+  # patterns claim every .so/.dll, so without this it would ship as a runtime
+  # library.
+  "bin/miopen_wrapper_tests/**",
+]
 [components.run."ml-libs/MIOpen/stage"]
 exclude = [
   "bin/miopen_gtest*",
+  # Same folder as in lib. This entry has no include, so it would take whatever
+  # lib skips.
+  "bin/miopen_wrapper_tests/**",
 ]
 [components.dbg."ml-libs/MIOpen/stage"]
 [components.dev."ml-libs/MIOpen/stage"]
@@ -13,4 +23,5 @@ exclude = [
 [components.test."ml-libs/MIOpen/stage"]
 include = [
   "bin/miopen_gtest*",
+  "bin/miopen_wrapper_tests/**",
 ]

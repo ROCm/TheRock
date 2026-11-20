@@ -12,7 +12,6 @@ RUN apt-get update \
         jq \
         libgfortran5 \
         lld \
-        ninja-build \
         psmisc \
         python3-setuptools \
         python3-wheel \
