@@ -228,6 +228,7 @@ jobs:
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION}" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --find-links="${PACKAGE_FIND_LINKS_URL}" \
+            --extra-index-url=https://nightly.repo.amd.com/rocm/whl-next/ \
             --activate-in-future-github-actions-steps
 
       # Here we checkout the same version of PyTorch that wheels were built from
