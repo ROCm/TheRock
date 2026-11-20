@@ -166,8 +166,8 @@ _APPTAINER_JOB_OPTIONS = {
 # Labels that pool draws keep a job off (single-GPU pool draws only); a manual
 # run can still pick one.
 # Their managed-memory / KFD SVM tests fail only on Crusoe (amdgpu 6.16.13;
-# OSSCI 6.19.14 passes); remove once fixed there
-# (https://github.com/ROCm/TheRock/issues/10157).
+# OSSCI 6.19.14 passes).
+# TODO(#10157): remove these entries once the tests pass on Crusoe.
 _CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
 _POOL_EXCLUDED_LABELS = {
     "hip-tests": _CRUSOE_LABELS,
@@ -257,8 +257,11 @@ def _manual_test_runs_on(*, sanity: bool = False) -> str:
     set runs every GPU job there (the sanity job even for bot actors), whatever
     this script picked. Container options and whole-node routing must follow it.
     """
+    # pull_request, push, schedule, workflow_call: not a manual dispatch.
     if os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch":
         return ""
+    # Bot dispatch (actor contains "github-actions", e.g. rockrel). A bot's
+    # sanity job skips this and still returns TEST_RUNS_ON below.
     if not sanity and "github-actions" in os.getenv("GITHUB_ACTOR", ""):
         return ""
     return os.getenv("TEST_RUNS_ON", "")
@@ -1913,14 +1916,18 @@ def run():
             else _manual_test_runs_on(sanity=job_name == "sanity")
         )
         if manual_runner:
-            # test_artifacts.yml runs the job there, whatever was picked above.
+            # test_artifacts.yml will run the job on the label typed in the
+            # dispatch form, so replace the machine picked above with that one.
             runner_key = (
                 "multi_gpu_runner" if "multi_gpu_runner" in component else "test_runner"
             )
             component[runner_key] = manual_runner
             logging.info(f"  {job_name}: manual run, using runner: {manual_runner}")
-        # The runner the job gets, so a pool pick of the 1-GPU Apptainer label
-        # counts too.
+        # 1-GPU Crusoe hides the other GPUs. Map
+        # linux-gfx950-1gpu-crusoe-rocm to linux-gfx950-8gpu-crusoe-rocm
+        # from the label this job got: manual pin, else drawn test_runner
+        # (a pool pick counts), else the family default. OSSCI is absent
+        # from the map, so those jobs stay put.
         whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(
             manual_runner or component.get("test_runner") or test_runs_on_default
         )
