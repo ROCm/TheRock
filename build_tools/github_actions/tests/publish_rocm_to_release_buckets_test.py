@@ -545,11 +545,11 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
 
 
 class TestRepoSetupPackagesArePublished(unittest.TestCase):
-    """The amd-repo-setup packages are published to ``v5/amd-repo-setup/``.
+    """The amd-repo-setup packages are published to `v5/amd-repo-setup/`.
 
-    These tests drive main() with a real ``LocalStorageBackend`` and assert the
+    These tests drive main() with a real `LocalStorageBackend` and assert the
     files on disk; the rest of this module mocks the copy. The local backend
-    ignores the bucket, which ``test_repo_setup_packages_go_to_the_stream_core_bucket``
+    ignores the bucket, which `test_repo_setup_packages_go_to_the_stream_core_bucket`
     covers.
     """
 
@@ -579,7 +579,7 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
     def _publish(self, release_type, run_id, packages, *extra_args, contents=b"X"):
         """Seed one run's outputs, run the real publish, return what it wrote.
 
-        Returns the published paths below ``v5/``, relative to the staging
+        Returns the published paths below `v5/`, relative to the staging
         root; the local backend maps every bucket onto it.
         """
         root = WorkflowOutputRoot("unused", "", run_id, "linux")

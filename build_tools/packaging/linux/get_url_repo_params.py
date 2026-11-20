@@ -587,10 +587,10 @@ _RUN_ID_RE = re.compile(r"^[0-9]+\Z")
 
 
 def parse_build_date(value: str) -> date | None:
-    """Parse a ``YYYYMMDD`` build date; empty means none (use today).
+    """Parse a `YYYYMMDD` build date; empty means none (use today).
 
     Raises:
-        ValueError: If ``value`` is not empty and not a real ``YYYYMMDD`` date.
+        ValueError: If `value` is not empty and not a real `YYYYMMDD` date.
     """
     if not value:
         return None
@@ -634,8 +634,8 @@ def cmd_repo_setup_params(args: argparse.Namespace) -> int:
     """Emit every parameter the amd-repo-setup build matrix needs, in one output.
 
     Outputs: ``os_profiles`` and ``images`` (JSON, the matrix), then the stream
-    the build line configures and what follows from it -- ``stream``,
-    ``repo_base_url``, ``gpg_key_url``, ``repo_sub_folder``, ``version_suffix``.
+    the build line configures and what follows from it -- `stream`,
+    `repo_base_url`, `gpg_key_url`, `repo_sub_folder`, `version_suffix`.
     A line with no public stream gets all five empty, which callers read as
     "no package for this line"; the matrix is still emitted.
     """
