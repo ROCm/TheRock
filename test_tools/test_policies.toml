@@ -56,10 +56,12 @@ level = 3
 # --- Self-only components -----------------------------------------------------
 
 [component.amdsmi]
-# amdsmi is a monitoring/management library: its many graph consumers link it
-# but exercise almost none of its surface, so walking to them buys ~no signal
-# for the runtime it costs. Self only -- an amdsmi change runs amdsmitst.
+# Limit to "self only" and extend with a few particularly sensitive users.
+# amdsmi is a monitoring/management library: many graph consumers link it
+# but exercise similar parts of its API surface, so testing them provides little signal
+# for the test time it costs.
 level = 5
+test_include = ["rccl", "rdc"]
 
 # --- Test-only / non-derivable inclusions -------------------------------------
 # Couplings the graph cannot express (test-only targets, or edges not declared as
