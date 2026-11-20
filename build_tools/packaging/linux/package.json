@@ -1475,7 +1475,7 @@
         "Artifact": "libhipcxx",
         "Artifact_Subdir": [
           {
-            "Name": "libhipcxx",
+            "Name": "libhipcxx_tests",
             "Components": [
               "test"
             ]
