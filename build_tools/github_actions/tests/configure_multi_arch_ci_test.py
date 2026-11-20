@@ -3809,7 +3809,8 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        # build_native_windows is Windows-only; tarballs are release-only.
+        # build_native_windows is Windows-only, so Linux CI does not consume it.
+        # build_runs_on_tarballs is used by release workflows, not Linux CI.
         unused_fields = {
             "build_native_windows",
             "build_runs_on_tarballs",
