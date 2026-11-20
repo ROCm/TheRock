@@ -165,13 +165,14 @@ _APPTAINER_JOB_OPTIONS = {
 }
 # Labels that pool draws keep a job off (single-GPU pool draws only); a manual
 # run can still pick one.
-# libhipcxx_amdclang faults on Crusoe's amdgpu 6.16.13 (OSSCI: 6.19.14); remove
-# after the driver update (https://github.com/ROCm/TheRock/issues/10157).
+# Their managed-memory / KFD SVM tests fail only on Crusoe (amdgpu 6.16.13;
+# OSSCI 6.19.14 passes); remove once fixed there
+# (https://github.com/ROCm/TheRock/issues/10157).
+_CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
 _POOL_EXCLUDED_LABELS = {
-    "libhipcxx_amdclang": [
-        "linux-gfx950-1gpu-crusoe-rocm",
-        "linux-gfx950-8gpu-crusoe-rocm",
-    ],
+    "hip-tests": _CRUSOE_LABELS,
+    "libhipcxx_amdclang": _CRUSOE_LABELS,
+    "rocprofiler-systems": _CRUSOE_LABELS,
 }
 
 
