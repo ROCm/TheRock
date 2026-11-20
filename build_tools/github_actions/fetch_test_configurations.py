@@ -499,7 +499,7 @@ test_matrix = {
     # runner): it starts pytest_runner.py inside `mirage run` with the fetched
     # rocjitsu/mirage, and the TensileLite pytest plugin it loads selects this
     # job's shard from SHARD_INDEX/TOTAL_SHARDS (pytest_runner.py does not shard).
-    # The rocjitsu-fast category leaves out configs marked rocjitsu_slow (> 2 h
+    # The rocjitsu-quick category leaves out configs marked rocjitsu_slow (> 2 h
     # each under emulation, the per-test cap). The rest measures ~15 test-hours
     # at 6 emulator threads per xdist worker, so 3 shards keep each one inside
     # timeout_minutes.
@@ -515,7 +515,7 @@ test_matrix = {
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
         "test_script": (
-            "TEST_CATEGORY=rocjitsu-fast python "
+            "TEST_CATEGORY=rocjitsu-quick python "
             + _get_artifact_path(
                 "share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py"
             )
