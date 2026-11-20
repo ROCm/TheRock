@@ -3854,6 +3854,40 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-rocjitsu-embed",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "libgcc-s1",
+      "libstdc++6"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "rocjitsu GPU simulator for embedding in native applications",
+    "Description_Long": "Provides the rocjitsu C API shared library and its private memory helper for in-process GPU simulation. Applications can load librocjitsu_embed.so while retaining control of their libc calls and signal handlers.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocjitsu-embed",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjitsu-embed",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
     "Package": "amdrocm-hrr",
     "Version": "",
     "Architecture": "amd64",

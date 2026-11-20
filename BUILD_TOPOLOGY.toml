@@ -924,6 +924,13 @@ feature_group = "EMULATION"
 disable_platforms = ["windows"]
 source_paths = ["rocjitsu", "machine-readable-isa"]
 
+[artifacts.rocjitsu-embed]
+artifact_group = "rocjitsu"
+type = "target-neutral"
+artifact_deps = ["rocjitsu"]
+feature_group = "EMULATION"
+disable_platforms = ["darwin", "windows"]
+
 [artifacts.rocjitsu-hotswap]
 artifact_group = "rocjitsu"
 type = "target-neutral"
