@@ -153,7 +153,6 @@ class WorkloadEnvTest(unittest.TestCase):
             runner="linux-gfx942-8gpu-ossci-rocm",
             rocm_version="10.2.0a20261016",
             constraint_file=Path("/tmp/constraints.txt"),
-            sdk_root=Path("/sdk"),
         )
 
         python = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -164,8 +163,7 @@ class WorkloadEnvTest(unittest.TestCase):
         self.assertEqual(env["ROCM_VERSION"], "10.2.0a20261016")
         self.assertEqual(env["ROCM_TAG"], "therock-10.2.0a20261016")
         self.assertEqual(env["HIP_VISIBLE_DEVICES"], "0,1,2,3")
-        self.assertEqual(env["PATH"], "/sdk/bin:/usr/bin")
-        self.assertEqual(env["LD_LIBRARY_PATH"], "/sdk/lib")
+        self.assertEqual(env["PATH"], "/usr/bin")
         self.assertEqual(env["PYTHON"], sys.executable)
 
 
@@ -199,13 +197,9 @@ class MainTest(unittest.TestCase):
         (self.lab / "targets" / "maxtext_release" / "run.sh").write_text("exit 0\n")
         self.list = self.tmp / "list.txt"
         self.list.write_text("maxtext_release llama3_1_8b 8\n")
-        for name, value in [
-            ("installed_jax_stack", lambda: STACK),
-            ("rocm_sdk_root", lambda: Path("/sdk")),
-        ]:
-            patch = mock.patch.object(e2e, name, value)
-            patch.start()
-            self.addCleanup(patch.stop)
+        patch = mock.patch.object(e2e, "installed_jax_stack", lambda: STACK)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def argv(self, *extra: str) -> list[str]:
         return [

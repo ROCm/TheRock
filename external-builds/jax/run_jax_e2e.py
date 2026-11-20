@@ -129,13 +129,6 @@ def visible_devices(env: dict[str, str], count: int) -> str:
     return ",".join(devices[:count])
 
 
-def rocm_sdk_root() -> Path:
-    out = subprocess.run(
-        ["rocm-sdk", "path", "--root"], check=True, capture_output=True, text=True
-    )
-    return Path(out.stdout.strip())
-
-
 def workload_env(
     base: dict[str, str],
     workload: Workload,
@@ -143,7 +136,6 @@ def workload_env(
     runner: str,
     rocm_version: str,
     constraint_file: Path,
-    sdk_root: Path,
 ) -> dict[str, str]:
     """The environment jax-lab's run.sh expects, as its own CI sets it."""
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -161,12 +153,6 @@ def workload_env(
             "HIP_VISIBLE_DEVICES": visible_devices(base, workload.gpus),
             # The whole log rather than jax-lab's two-line tail on failure.
             "JAX_LAB_VERBOSE": "1",
-            "PATH": f"{sdk_root / 'bin'}:{base.get('PATH', '')}",
-            "LD_LIBRARY_PATH": ":".join(
-                p
-                for p in [os.fspath(sdk_root / "lib"), base.get("LD_LIBRARY_PATH")]
-                if p
-            ),
         }
     )
     return env
@@ -258,7 +244,6 @@ def main(argv: list[str]) -> int:
     results_dir.mkdir(parents=True, exist_ok=True)
     constraint_file = results_dir / "constraints.txt"
     constraint_file.write_text(constraints(stack))
-    sdk_root = rocm_sdk_root()
 
     outcomes = {}
     for workload in workloads:
@@ -268,7 +253,6 @@ def main(argv: list[str]) -> int:
             runner=args.runner,
             rocm_version=args.rocm_version,
             constraint_file=constraint_file,
-            sdk_root=sdk_root,
         )
         command = workload_command(workload)
         if args.dry_run:
