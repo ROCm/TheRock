@@ -157,5 +157,21 @@ if ! grep -qE '^[[:space:]]*\{[[:space:]]*"amdgpu",[[:space:]]*\{[[:space:]]*"li
   exit 1
 fi
 
+# LIBVA_DRIVER_NAME is meant for the system libva. It replaces the names libva
+# derives from the kernel driver, so it bypasses the amdgpu mapping above. Any
+# other value then fails, or loads a different Mesa when LIBVA_DRIVERS_PATH is
+# also set. This libva only drives the bundled Mesa driver, so log and ignore
+# the variable. vaSetDriverName() is unchanged.
+sed -i '/^[[:space:]]*driver_name_env = secure_getenv("LIBVA_DRIVER_NAME");$/{
+a\    if (driver_name_env) {
+a\        va_infoMessage(dpy, "Ignoring LIBVA_DRIVER_NAME=%s: ROCm libva always loads its bundled VA driver\\n", driver_name_env);
+a\        driver_name_env = NULL;
+a\    }
+}' "$LIBVA_SOURCE"
+if ! grep -q 'Ignoring LIBVA_DRIVER_NAME=%s' "$LIBVA_SOURCE"; then
+  echo "ERROR: Failed to make libva ignore LIBVA_DRIVER_NAME in $LIBVA_SOURCE" >&2
+  exit 1
+fi
+
 # Modify pkgconfig generation to make driverdir relative to ${libdir} for relocatable packages
 sed -i "/va_vars = vars + \['driverdir=' + driverdir\]/c\va_vars = vars + ['driverdir=\${libdir}']" "$LIBVA_PKGCONFIG_MESON_BUILD"
