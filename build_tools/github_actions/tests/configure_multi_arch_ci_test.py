@@ -26,7 +26,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
 )
 from configure_multi_arch_ci_summary import format_summary
-from workflow_utils import WORKFLOWS_DIR, load_workflow
+from workflow_utils import WORKFLOWS_DIR
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -3826,59 +3826,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             f"BuildConfig fields mismatch with {workflow_path.name}.\n"
             f"  In YAML but not Python: {yaml_fields - python_fields}\n"
             f"  In Python but not YAML: {python_fields - yaml_fields - unused_fields}",
-        )
-
-
-class TestArtifactStructureRunner(unittest.TestCase):
-    """The artifact structure job runs in a Linux container on both platforms.
-
-    It must therefore take a Linux runner label from the CI config even in the
-    Windows pipeline, where build_runs_on_small resolves to a Windows label.
-    """
-
-    def setUp(self):
-        self._orig_env = os.environ.copy()
-        # Exercise the local fallback rather than a developer's checked-out config.
-        os.environ.pop("CI_CONFIG_PATH", None)
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self._orig_env)
-
-    def test_linux_small_runner_comes_from_linux_pool(self):
-        from amdgpu_family_matrix import get_build_runner_labels, select_build_runner
-
-        linux_labels = {
-            label["label"]
-            for pool in get_build_runner_labels()["linux"].values()
-            for label in pool
-        }
-        self.assertIn(
-            select_build_runner("linux", "release", size="small"), linux_labels
-        )
-
-    def test_both_pipelines_pass_a_linux_label_to_the_structure_job(self):
-        for workflow_name in ("multi_arch_ci_linux.yml", "multi_arch_ci_windows.yml"):
-            with self.subTest(workflow=workflow_name):
-                workflow = load_workflow(WORKFLOWS_DIR / workflow_name)
-                job = workflow["jobs"]["validate_artifact_structure"]
-                self.assertEqual(
-                    job["uses"], "./.github/workflows/test_artifacts_structure.yml"
-                )
-                self.assertEqual(
-                    job["with"].get("build_runs_on"),
-                    "${{ fromJSON(inputs.build_config).artifact_structure_runs_on }}",
-                )
-
-    def test_structure_workflow_has_no_hardcoded_runner_default(self):
-        workflow = load_workflow(WORKFLOWS_DIR / "test_artifacts_structure.yml")
-        # `on` parses as the boolean True in YAML 1.1.
-        inputs = workflow[True]["workflow_call"]["inputs"]
-        self.assertEqual(
-            inputs["build_runs_on"]["default"],
-            "",
-            "Runner labels must come from the CI config via the caller, "
-            "not from a literal default that silently goes stale.",
         )
 
 

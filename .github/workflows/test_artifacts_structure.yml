@@ -62,12 +62,7 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
       build_runs_on:
-        description: >-
-          Runner label for this job. Callers should pass a label resolved from
-          the CI config (build_config.artifact_structure_runs_on) rather than a
-          literal. Empty falls back to a GitHub-hosted runner.
-          This job runs in a Linux container, so this must be a Linux label even
-          when validating Windows artifacts.
+        description: "Runner label for the build job"
         type: string
         default: ""
 

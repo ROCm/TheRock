@@ -887,9 +887,8 @@ class BuildConfig:
     build_runs_on_large: str = ""
     build_runs_on_small: str = ""
     build_runs_on_medium: str = ""
-    # Runner for artifact structure validation. That job runs in a Linux
-    # container, so this is always a Linux small runner even in the windows
-    # config, where build_runs_on_small is a Windows label.
+    # Linux because that job runs in a container, small because its tests are
+    # minimal. Always the Linux pool, even in the windows config.
     artifact_structure_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
