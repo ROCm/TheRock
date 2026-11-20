@@ -338,8 +338,12 @@
     "consumers": [
       "miopen",
       "rccl-translate",
+      "rocjitsu-embed",
       "rocjitsu-hotswap"
     ]
+  },
+  "rocjitsu-embed": {
+    "consumers": []
   },
   "rocjitsu-hotswap": {
     "consumers": [
