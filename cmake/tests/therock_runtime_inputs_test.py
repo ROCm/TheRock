@@ -30,7 +30,7 @@ class RuntimeInputsTest(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory(prefix="therock runtime inputs ")
         self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self.root = Path(directory.name).resolve()
         self.source = self.root / "source"
         self.build = self.root / "build"
         self.runtime = self.source / "systems/runtimes"
@@ -39,13 +39,17 @@ class RuntimeInputsTest(unittest.TestCase):
             self.environment.pop(name, None)
         self.project = f"""
             cmake_minimum_required(VERSION 3.25)
-            project(runtime_inputs_fixture NONE)
             set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${{CMAKE_SOURCE_DIR}}/systems")
             include("{RUNTIME_INPUTS.as_posix()}")
             therock_prepare_runtime_inputs(args state depends sources)
             foreach(name args state depends sources)
               file(WRITE "${{CMAKE_BINARY_DIR}}/${{name}}.txt" "${{${{name}}}}")
             endforeach()
+            # Capture inputs before restoring PATH for generator tool launchers.
+            if(DEFINED FIXTURE_TOOL_PATH)
+              set(ENV{{PATH}} "${{FIXTURE_TOOL_PATH}}")
+            endif()
+            project(runtime_inputs_fixture NONE)
         """
         write_file(self.source / "CMakeLists.txt", self.project)
         self.inputs = (
@@ -225,6 +229,7 @@ class RuntimeInputsTest(unittest.TestCase):
 
     def test_captured_environment_changes_and_definedness(self) -> None:
         self.configure()
+        tool_path = self.environment.get("PATH", os.defpath)
         for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "PATH"):
             original = self.environment.get(name)
             for value in (
@@ -242,7 +247,7 @@ class RuntimeInputsTest(unittest.TestCase):
                         self.environment.pop(name, None)
                     else:
                         self.environment[name] = value
-                    self.configure()
+                    self.configure(f"-DFIXTURE_TOOL_PATH={tool_path}")
                     state = self.state().read_text()
                     self.assertNotEqual(self.state().read_bytes(), previous)
                     self.assertIn(
