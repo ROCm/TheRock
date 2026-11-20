@@ -101,7 +101,20 @@ endif(THEROCK_ENABLE_RAND)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
-  # libhipcxx
+  # libhipcxx (phase 1 of 2, built BEFORE prim)
+  #
+  # libhipcxx is built in two phases because of a dependency cycle between it
+  # and prim (hipCCL, or rocPRIM/hipCUB/rocThrust):
+  #
+  #   Phase 1 (this block, before PRIM): headers and CMake package, tests off.
+  #     hipCUB/rocThrust (hipccl3 with the CCCL 3.1 changes) find_package(libhipcxx)
+  #     at configure time, so libhipcxx must be staged before prim configures.
+  #   Phase 2 (libhipcxx_tests, after PRIM): same source, tests on. The libhipcxx
+  #     header tests include <hipcub/hipcub.hpp>, so they need prim to be built.
+  #
+  # Phase 2 also supplies the libhipcxx `test` artifact component; see the
+  # "libhipcxx tests + artifact" block after PRIM. BUILD_TOPOLOGY.toml mirrors
+  # this order: `prim` lists `libhipcxx` in artifact_deps.
   ##############################################################################
 
   set(libhipcxx_runtime_deps)
@@ -225,12 +238,7 @@ if(THEROCK_ENABLE_PRIM)
           -DROCM_DIR=
           -DHIPCCL_BUILD_ALL=ON
           -DHIPCCL_BUILD_LIBHIPCXX=OFF
-          # Until the rocm-libraries pin has the hipccl3 3.1 changes (where libhipcxx
-          # is a hard requirement and rocThrust exports it), keep rocThrust off the
-          # optional libhipcxx backend. libhipcxx is now built before hipCCL, so
-          # without this rocThrust would link libhipcxx::libhipcxx but its installed
-          # package config would not find_package(libhipcxx), breaking consumers.
-          # Ignored (unused variable) by pins where the option no longer exists.
+          # Same as hipCCL above: see the ROCTHRUST_USE_LIBHIPCXX note there.
           -DROCTHRUST_USE_LIBHIPCXX=OFF
           -DBUILD_TEST=ON
           -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
@@ -386,9 +394,9 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_DIR=
         -DBUILD_TEST=${_rocthrust_tests_enabled}
         -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
-        # libhipcxx is now declared before PRIM, so the strict package provider
-        # rejects rocThrust's optional find_package(libhipcxx) (no declared dep).
-        # Keep rocThrust off its optional libhipcxx backend, as on main.
+        # See the ROCTHRUST_USE_LIBHIPCXX note in the hipCCL block above. Here it
+        # also keeps the strict package provider from rejecting rocThrust's
+        # optional find_package(libhipcxx), which this subproject does not declare.
         -DROCTHRUST_USE_LIBHIPCXX=OFF
       CMAKE_INCLUDES
         ${_primlibs_benchmark_includes}
@@ -439,8 +447,9 @@ endif(THEROCK_ENABLE_PRIM)
 
 if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
-  # libhipcxx tests + artifact
+  # libhipcxx tests + artifact (phase 2 of 2, built AFTER prim)
   #
+  # See "libhipcxx (phase 1 of 2)" above for why libhipcxx is built in two phases.
   # Declared after PRIM because the libhipcxx header tests include
   # <hipcub/hipcub.hpp>, while hipCUB requires libhipcxx at configure time. The
   # main libhipcxx subproject (tests off) is therefore a build dep of prim, and
