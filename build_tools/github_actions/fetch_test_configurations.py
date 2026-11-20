@@ -163,7 +163,8 @@ _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
-# Labels that pool draws keep a job off; a manual run can still pick one.
+# Labels that pool draws keep a job off (single-GPU pool draws only); a manual
+# run can still pick one.
 # libhipcxx_amdclang faults on Crusoe's amdgpu 6.16.13 (OSSCI: 6.19.14); remove
 # after the driver update (https://github.com/ROCm/TheRock/issues/10157).
 _POOL_EXCLUDED_LABELS = {
