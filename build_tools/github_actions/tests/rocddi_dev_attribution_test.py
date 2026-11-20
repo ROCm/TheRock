@@ -6,6 +6,8 @@
 import ast
 import json
 import re
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -147,3 +149,55 @@ def test_manual_configure_receives_the_complete_requested_matrix_and_ref(workflo
         "ARCH_MATRIX": matrix,
         "SUITES": "hip",
     }
+
+
+@pytest.mark.parametrize("repeat", ["1", "10000", "0", "1.5", ""])
+def test_manual_repeat_is_forwarded_without_replacing_invalid_values(workflow, repeat):
+    context = dispatch_context(workflow, hip_test_repeat=repeat)
+    assert (
+        render(workflow["jobs"]["test"]["with"]["hip_test_repeat"], context) == repeat
+    )
+
+
+def test_push_repeat_uses_the_single_execution_default(workflow):
+    context = {"github.event_name": "push", "inputs.hip_test_repeat": ""}
+    assert render(workflow["jobs"]["test"]["with"]["hip_test_repeat"], context) == "1"
+
+
+@pytest.mark.parametrize(
+    "repeat, expected", [(None, "1"), ("37", "37"), ("", ""), ("0", "0")]
+)
+def test_candidate_source_records_default_or_requested_repeat_count(
+    tmp_path, monkeypatch, repeat, expected
+):
+    build_script = (
+        WORKFLOWS_DIR.parents[1] / "build_tools/github_actions/rocddi_dev_build.sh"
+    )
+    source = (
+        build_script.read_text().split("python - <<'PY'\n", 1)[1].split("\nPY", 1)[0]
+    )
+    commit = "a" * 40
+    values = {
+        "EXTERNAL_REPO_CONFIG": json.dumps({"ref": commit}),
+        "ROCM_SYSTEMS_REF": "shared/rocddi-cts-dev",
+        "BASELINE_RUN_ID": "123",
+        "AMDGPU_FAMILY": "",
+        "AMDGPU_TARGETS": "",
+        "TEST_RUNS_ON": '""',
+        "HIP_TEST_LABEL": "all",
+        "HIP_TEST_FILTER": "",
+        "HIP_TEST_LEVEL": "level_0",
+    }
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    if repeat is None:
+        monkeypatch.delenv("HIP_TEST_REPEAT", raising=False)
+    else:
+        monkeypatch.setenv("HIP_TEST_REPEAT", repeat)
+    monkeypatch.chdir(tmp_path)
+    outputs = iter([commit, commit, "inert compiler version"])
+    monkeypatch.setattr(
+        subprocess, "check_output", lambda *args, **kwargs: next(outputs)
+    )
+    exec(source, {})
+    assert json.loads(Path("SOURCE.json").read_text())["hip_test_repeat"] == expected

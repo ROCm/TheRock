@@ -45,6 +45,10 @@ on:
       hip_test_level:
         type: string
         default: level_0
+      hip_test_repeat:
+        description: "Run each selected HIP test up to this many times, stopping on failure (integer 1–10000)"
+        type: string
+        default: '1'
 
 permissions:
   contents: read
@@ -78,6 +82,7 @@ jobs:
       HIP_TEST_LABEL: ${{ inputs.hip_test_label }}
       HIP_TEST_FILTER: ${{ inputs.hip_test_filter }}
       HIP_TEST_LEVEL: ${{ inputs.hip_test_level }}
+      HIP_TEST_REPEAT: ${{ inputs.hip_test_repeat }}
       TEATIME_FORCE_INTERACTIVE: '0'
       PYTHONDONTWRITEBYTECODE: '1'
     outputs:
@@ -241,7 +246,9 @@ jobs:
           HIP_TEST_LEVEL: ${{ inputs.hip_test_level }}
           HIP_TEST_LABEL: ${{ inputs.hip_test_label }}
           HIP_TEST_FILTER: ${{ inputs.hip_test_filter }}
+          HIP_TEST_REPEAT: ${{ inputs.hip_test_repeat }}
           AMD_LOG_LEVEL: '1'
+          ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           export PATH="$PWD/candidate/bin:$PWD/candidate/lib/llvm/bin:$PATH"
@@ -250,6 +257,7 @@ jobs:
           fi
           python3 build_tools/github_actions/test_executable_scripts/test_hiptests.py \
             --label-regex "$HIP_TEST_LABEL" --test-regex "$HIP_TEST_FILTER" \
+            --repeat "$HIP_TEST_REPEAT" \
             --junit "$PWD/diagnostics/hip-tests.xml" \
             2>&1 | tee diagnostics/hip-tests.txt
       - name: Capture candidate HSA observations

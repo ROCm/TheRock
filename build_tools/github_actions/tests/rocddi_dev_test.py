@@ -18,6 +18,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import configure_rocddi_dev as configure
 from hiptests_runner_test import installed_ctest_prefix
+from workflow_utils import WORKFLOWS_DIR, load_workflow
 
 RUNNERS = {
     "cdna2": {"linux": {"family": "gfx90a", "test-runs-on": "cdna2-runner"}},
@@ -174,8 +175,42 @@ def test_default_revision_is_shared_runtime_branch(monkeypatch, tmp_path):
     resolve.assert_called_once_with("ROCm/rocm-systems", "shared/rocddi-cts-dev")
 
 
-def test_workflow_all_label_runs_an_unlabelled_selected_case(
-    installed_ctest_prefix, tmp_path
+def test_repeat_input_defaults_and_forwarding():
+    caller = load_workflow(WORKFLOWS_DIR / "rocddi_cts_dev.yml")
+    reusable = load_workflow(WORKFLOWS_DIR / "rocddi_dev_test.yml")
+    for inputs in (
+        (caller.get("on") or caller[True])["workflow_dispatch"]["inputs"],
+        (reusable.get("on") or reusable[True])["workflow_call"]["inputs"],
+    ):
+        assert inputs["hip_test_repeat"]["type"] == "string"
+        assert inputs["hip_test_repeat"]["default"] == "1"
+        assert not inputs["hip_test_repeat"].get("required", False)
+    assert caller["jobs"]["test"]["with"]["hip_test_repeat"] == (
+        "${{ github.event_name == 'push' && '1' || inputs.hip_test_repeat }}"
+    )
+    step = next(
+        step
+        for step in reusable["jobs"]["hip"]["steps"]
+        if step.get("name") == "Run selected upstream HIP tests"
+    )
+    assert step["env"]["HIP_TEST_REPEAT"] == "${{ inputs.hip_test_repeat }}"
+    assert reusable["jobs"]["build"]["env"]["HIP_TEST_REPEAT"] == (
+        "${{ inputs.hip_test_repeat }}"
+    )
+
+
+@pytest.mark.parametrize(
+    "test_filter, repeat, returncode",
+    [
+        ("Unit_Unlabelled", "1", 0),
+        ("Unit_Unlabelled", "3", 0),
+        ("Unit_Fail", "3", 1),
+        ("Unit_Unlabelled", "0", 2),
+        ("Unit_Unlabelled", "$(touch repeat-injected)", 2),
+    ],
+)
+def test_workflow_preserves_selection_and_validates_quoted_repeat(
+    installed_ctest_prefix, tmp_path, test_filter, repeat, returncode
 ):
     root = Path(__file__).resolve().parents[3]
     workflow = yaml.safe_load(
@@ -204,13 +239,19 @@ def test_workflow_all_label_runs_an_unlabelled_selected_case(
             "THEROCK_BIN_DIR": str(installed_ctest_prefix / "bin"),
             "AMDGPU_FAMILIES": "gfx90a",
             "HIP_TEST_LABEL": "all",
-            "HIP_TEST_FILTER": "Unit_Unlabelled",
+            "HIP_TEST_FILTER": test_filter,
+            "HIP_TEST_REPEAT": repeat,
         },
         text=True,
         capture_output=True,
     )
-    assert run.returncode == 0, run.stdout + run.stderr
+    assert run.returncode == returncode, run.stdout + run.stderr
     report = tmp_path / "diagnostics/hip-tests.xml"
+    assert not (tmp_path / "repeat-injected").exists()
+    if returncode == 2:
+        assert "--repeat: must be an integer from 1 to 10000" in run.stdout
+        assert not report.exists()
+        return
     assert [case.get("name") for case in ET.parse(report).iter("testcase")] == [
-        "Unit_Unlabelled"
+        test_filter
     ]

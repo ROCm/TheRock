@@ -38,6 +38,10 @@ on:
         type: choice
         options: [level_0, level_1, level_2, level_3, level_4]
         default: level_0
+      hip_test_repeat:
+        description: "Run each selected HIP test up to this many times, stopping on failure (integer 1–10000)"
+        type: string
+        default: '1'
       baseline_run_id:
         description: "Prebuilt LLVM/base/sysdeps run"
         type: string
@@ -105,4 +109,5 @@ jobs:
       hip_test_label: ${{ inputs.hip_test_label }}
       hip_test_filter: ${{ inputs.hip_test_filter }}
       hip_test_level: ${{ inputs.hip_test_level || 'level_0' }}
+      hip_test_repeat: ${{ github.event_name == 'push' && '1' || inputs.hip_test_repeat }}
       baseline_run_id: ${{ inputs.baseline_run_id || '43537534946' }}

@@ -66,6 +66,7 @@ record = {
     "hip_test_label": os.environ["HIP_TEST_LABEL"],
     "hip_test_filter": os.environ["HIP_TEST_FILTER"],
     "hip_test_level": os.environ["HIP_TEST_LEVEL"],
+    "hip_test_repeat": os.environ.get("HIP_TEST_REPEAT", "1"),
 }
 pathlib.Path("SOURCE.json").write_text(json.dumps(record, indent=2) + "\n")
 print(json.dumps(record, indent=2))

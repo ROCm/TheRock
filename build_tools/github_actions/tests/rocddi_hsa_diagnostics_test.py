@@ -335,6 +335,8 @@ def test_diagnostics_follow_unchanged_hip_tests_and_require_verified_candidate()
     )
     probe = steps[hip + 1]
     assert probe["name"] == "Capture candidate HSA observations"
+    assert steps[hip]["env"]["ROCDDI_HSA_STARTUP_DIAGNOSTICS"] == "1"
+    assert probe["env"]["ROCDDI_HSA_STARTUP_DIAGNOSTICS"] == "1"
     assert (
         probe["if"]
         == "${{ !cancelled() && steps.verify_candidate.outcome == 'success' }}"

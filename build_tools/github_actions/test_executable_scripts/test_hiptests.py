@@ -183,7 +183,21 @@ def setup_env(env):
         env["HSA_ENABLE_SDMA"] = "1"
 
 
-def execute_tests(env, *, label_regex=None, test_regex=None, junit=None):
+def parse_repeat_count(value: str) -> int:
+    try:
+        count = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "must be an integer from 1 to 10000"
+        ) from error
+    if not 1 <= count <= 10000:
+        raise argparse.ArgumentTypeError("must be an integer from 1 to 10000")
+    return count
+
+
+def execute_tests(
+    env, *, label_regex=None, test_regex=None, junit=None, repeat: int = 1
+):
     # Allow for more time in ASAN mode to run the tests.
     timeout = 1500 if is_asan() else 600
     cmd = [
@@ -208,6 +222,8 @@ def execute_tests(env, *, label_regex=None, test_regex=None, junit=None):
         cmd.extend(["-R", test_regex])
     if junit:
         cmd.extend(["--output-junit", str(junit)])
+    if repeat > 1:
+        cmd.extend(["--repeat", f"until-fail:{repeat}"])
 
     ignored_tests = list(GENERIC_TEST_TO_IGNORE)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
@@ -234,8 +250,19 @@ if __name__ == "__main__":
     parser.add_argument("--label-regex", help="CTest label filter; empty selects all")
     parser.add_argument("--test-regex", help="CTest test-name filter")
     parser.add_argument("--junit", type=Path, help="JUnit output path")
+    parser.add_argument(
+        "--repeat",
+        type=parse_repeat_count,
+        default=1,
+        help="Run each selected test up to N times, stopping on failure (1–10000; default: 1)",
+        metavar="N",
+    )
     args = parser.parse_args()
     setup_env(env)
     execute_tests(
-        env, label_regex=args.label_regex, test_regex=args.test_regex, junit=args.junit
+        env,
+        label_regex=args.label_regex,
+        test_regex=args.test_regex,
+        junit=args.junit,
+        repeat=args.repeat,
     )

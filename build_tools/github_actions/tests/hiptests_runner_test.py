@@ -62,6 +62,61 @@ def test_existing_hip_runner_filters_and_retains_real_ctest_results(
     ]
 
 
+@pytest.mark.parametrize(
+    "repeat, failure_run, expected_count",
+    [(None, 0, 1), ("1", 0, 1), ("3", 0, 3), ("5", 2, 2), ("10000", 1, 1)],
+)
+def test_repeat_counts_selected_cases_and_stops_on_failure(
+    installed_ctest_prefix, tmp_path, repeat, failure_run, expected_count
+):
+    counter = tmp_path / "counter.txt"
+    script = tmp_path / "count.py"
+    script.write_text(
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "assert os.environ['THEROCK_REQUIRE_HIP_YAML_ENTRIES'] == '1'\n"
+        "counter = Path(sys.argv[1])\n"
+        "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+        "counter.write_text(str(count))\n"
+        "raise SystemExit(count == int(sys.argv[2]))\n"
+    )
+    tests = installed_ctest_prefix / "share/hip/catch_tests/CTestTestfile.cmake"
+    with tests.open("a") as output:
+        output.write(
+            f'add_test(Unit_Repeat "{sys.executable}" -B "{script}" "{counter}" {failure_run})\n'
+            "set_tests_properties(Unit_Repeat PROPERTIES LABELS smoke)\n"
+        )
+    report = tmp_path / "junit.xml"
+    args = [] if repeat is None else ["--repeat", repeat]
+    run = run_hip_runner(
+        installed_ctest_prefix,
+        "--label-regex",
+        "smoke",
+        "--test-regex",
+        "^Unit_Repeat$",
+        "--junit",
+        str(report),
+        *args,
+    )
+    assert run.returncode == (1 if failure_run else 0), run.stdout + run.stderr
+    assert int(counter.read_text()) == expected_count
+    assert [case.get("name") for case in ET.parse(report).iter("testcase")] == [
+        "Unit_Repeat"
+    ]
+    if repeat is None or repeat == "1":
+        assert "--repeat" not in run.stderr
+    else:
+        assert f"--repeat until-fail:{repeat}" in run.stderr
+
+
+@pytest.mark.parametrize("repeat", ["0", "-1", "10001", "1.5", "nan", "abc", ""])
+def test_invalid_repeat_fails_before_running_ctest(installed_ctest_prefix, repeat):
+    run = run_hip_runner(installed_ctest_prefix, f"--repeat={repeat}")
+    assert run.returncode == 2
+    assert "--repeat: must be an integer from 1 to 10000" in run.stderr
+    assert "++ Exec" not in run.stderr
+
+
 def test_hip_runner_continues_after_a_failed_case_and_returns_failure(
     installed_ctest_prefix, tmp_path
 ):
