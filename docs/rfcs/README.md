@@ -32,6 +32,7 @@ benefit from further discussion.
 - [RFC0014: Code Coverage Infrastructure for TheRock](./RFC0014-Code-Coverage-Infrastructure.md)
 - [RFC0015: Distributing Fortran Bindings Across rocm-systems and rocm-libraries](./RFC0015-Fortran-Bindings-Split.md)
 - [RFC0016: End-User Projects With Independent Release Lifecycle](./RFC0016-End-User-Projects-Independent-Release-Lifecycle.md)
+- [RFC0017: Fingerprint-Based CI Artifact Cache](./RFC0017-Fingerprint-Based-Artifact-Cache.md)
 
 ## Adding an RFC
 
