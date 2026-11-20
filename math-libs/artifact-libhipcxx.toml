@@ -8,6 +8,8 @@ include = [
   "include/*",
 ]
 [components.test."math-libs/libhipcxx_tests/build"]
+# libhipcxx_tests only exists with THEROCK_BUILD_TESTING and THEROCK_ENABLE_PRIM.
+optional = true
 include = [
   "libhipcxx/**/*",
 ]
