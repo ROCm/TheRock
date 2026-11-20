@@ -62,9 +62,14 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
       build_runs_on:
-        description: "Runner label for the build job"
+        description: >-
+          Linux runner label for this job. Callers should pass a label resolved
+          from the CI config (build_config.build_runs_on_linux_small) rather
+          than a literal. Empty falls back to a GitHub-hosted runner.
+          This job runs in a Linux container, so this must be a Linux label even
+          when validating Windows artifacts.
         type: string
-        default: "az-linux-scale-rocm-default-prod"
+        default: ""
 
 permissions:
   contents: read

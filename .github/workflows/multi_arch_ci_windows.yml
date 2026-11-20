@@ -155,6 +155,8 @@ jobs:
       amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       platform: windows
       release_type: ${{ inputs.release_type }}
+      # Linux label: this job validates Windows artifacts from a Linux container.
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_linux_small }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
