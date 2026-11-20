@@ -162,8 +162,7 @@ jobs:
         --config=rocm_ci_hermetic
         --config=rocm_rbe_dynamic
         --config=rocm_rbe_dev
-        --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}"
-        --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}"
+        --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="ghcr.io/rocm/jax-build-ubu24.rocmless@sha256:68854ed30b800d3e8c390f6e651721e2bead58830da1c59e1b828354eb8f077f"
         --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
         --test_filter="${XLA_TEST_FILTER}"
