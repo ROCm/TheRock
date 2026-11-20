@@ -95,16 +95,26 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # co-location behind amdhip64's preload does not make it resolvable.
                 preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack');"
 
+                distribution = di.ALL_PACKAGES["libraries"].get_dist_package_name(
+                    target_family=di.determine_target_family()
+                )
+                expected_sha256 = utils.get_record_sha256(distribution, so_path)
+
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = (
                     extra_setup
                     + preload_command
-                    + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                    + " import ctypes; import sys; from pathlib import Path;"
+                    + " from rocm_sdk.tests.utils import assert_loaded_library;"
+                    + " library = ctypes.CDLL(sys.argv[1]);"
+                    + " assert_loaded_library(library, Path(sys.argv[1]), sys.argv[2])"
                 )
 
-                subprocess.check_call([sys.executable, "-c", command, str(so_path)])
+                subprocess.check_call(
+                    [sys.executable, "-c", command, str(so_path), expected_sha256]
+                )
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:

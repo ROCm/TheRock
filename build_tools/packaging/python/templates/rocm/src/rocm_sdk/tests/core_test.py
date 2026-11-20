@@ -151,13 +151,20 @@ class ROCmCoreTest(unittest.TestCase):
                     extra_setup = f"import os; os.add_dll_directory('{sysdeps_dir}'); "
 
             with self.subTest(msg="Check shared library loads", so_path=so_path):
+                expected_sha256 = utils.get_record_sha256(
+                    di.ALL_PACKAGES["core"].get_dist_package_name(), so_path
+                )
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = (
-                    extra_setup + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                    extra_setup
+                    + "import ctypes; import sys; from pathlib import Path;"
+                    + " from rocm_sdk.tests.utils import assert_loaded_library;"
+                    + " library = ctypes.CDLL(sys.argv[1]);"
+                    + " assert_loaded_library(library, Path(sys.argv[1]), sys.argv[2])"
                 )
-                cmd = [sys.executable, "-c", command, str(so_path)]
+                cmd = [sys.executable, "-c", command, str(so_path), expected_sha256]
                 subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
