@@ -180,12 +180,12 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(job["e2e_timeout_minutes"], 2 * 60)
         self.assertEqual(job["job_timeout_minutes"], 240 + 2 * 60)
 
-    def test_large_runs_every_workload(self):
+    def test_large_runs_the_large_list(self):
         job = self.multi_job("large", today=TUESDAY)
 
         self.assertEqual(job["e2e_list"], matrix_script.E2E_LISTS["large"])
-        self.assertEqual(job["e2e_timeout_minutes"], 13 * 60)
-        self.assertEqual(job["job_timeout_minutes"], 240 + 13 * 60)
+        self.assertEqual(job["e2e_timeout_minutes"], 11 * 60)
+        self.assertEqual(job["job_timeout_minutes"], 240 + 11 * 60)
 
     def test_other_python_versions_run_none(self):
         # jax-lab runs and pins Python 3.12 alone.
@@ -259,8 +259,8 @@ class OutputsTest(unittest.TestCase):
                         "test_timeout_minutes": 90,
                         "test_list": "",
                         "e2e_list": matrix_script.E2E_LISTS["large"],
-                        "e2e_timeout_minutes": 780,
-                        "job_timeout_minutes": 1020,
+                        "e2e_timeout_minutes": 660,
+                        "job_timeout_minutes": 900,
                     },
                 ]
             },

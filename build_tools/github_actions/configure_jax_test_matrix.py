@@ -26,7 +26,8 @@ back.
 
 The end-to-end workloads from ROCm/jax-lab run as a step of the multi-GPU job
 rather than a job of their own, so they follow whatever this emits: two of them
-for medium, all of them for large, and only on the Python version jax-lab runs.
+for medium, all that fit a gfx942 for large, and only on the Python version
+jax-lab runs.
 """
 
 import argparse

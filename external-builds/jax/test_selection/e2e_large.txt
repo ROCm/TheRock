@@ -1,11 +1,10 @@
 # ROCm/jax-lab workloads for a large run, one "<target> <workload> <gpus>" each:
-# every workload jax-lab has, with the GPU count its own CI gives it.
+# every workload jax-lab has, with the GPU count its own CI gives it, except
+# mixtral_8x7b and gpt_oss_20b, which run out of memory on a gfx942.
 maxtext_release gemma3_4b 8
 maxtext_release llama3_1_8b 8
-maxtext_release mixtral_8x7b 8
 maxtext_release deepseek2_16b 8
 maxtext_release qwen3_14b 8
-maxtext_release gpt_oss_20b 8
 maxtext_release olmo3_7b 8
 flax_release convolution 4
 flax_release resnet 4

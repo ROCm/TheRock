@@ -60,13 +60,14 @@ python external-builds/jax/run_jax_e2e.py --jax-lab-dir jax-lab \
 - Each workload gets 60 minutes, as in jax-lab's CI, and the step's budget is
   their sum.
 
-`large` runs every jax-lab workload. `medium` runs two MaxText ones:
-`llama3_1_8b`, the dense baseline, and `deepseek2_16b`, which adds
+`large` runs every jax-lab workload that fits a gfx942. `medium` runs two
+MaxText ones: `llama3_1_8b`, the dense baseline, and `deepseek2_16b`, which adds
 mixture-of-experts routing with shared experts, MLA attention and YaRN RoPE.
 MaxText checks the most of any target (per-step TFLOP/s and step time on all 8
 GPUs, against one final number for the others) and needs no downloaded data.
-`mixtral_8x7b` and `gpt_oss_20b` peak at 69-92% of a 288 GB MI355X, more than
-an MI300X's 192 GB, while these two stay under half.
+`mixtral_8x7b` and `gpt_oss_20b` peak at 69-92% of a 288 GB MI355X and run out
+of memory on a 192 GB gfx942, so neither list has them, while these two stay
+under half.
 
 ## `small_tests.txt`
 

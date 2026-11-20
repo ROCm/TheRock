@@ -70,12 +70,13 @@ class CheckedInListsTest(unittest.TestCase):
             ],
         )
 
-    def test_large_is_every_jax_lab_workload_and_covers_medium(self):
+    def test_large_is_what_fits_a_gfx942_and_covers_medium(self):
         medium = set(e2e.read_workload_list(SELECTION_DIR / "e2e_medium.txt"))
         large = e2e.read_workload_list(SELECTION_DIR / "e2e_large.txt")
 
-        self.assertEqual(len(large), 13)
-        self.assertEqual(len(set(large)), 13)
+        self.assertEqual(len(large), 11)
+        self.assertEqual(len(set(large)), 11)
+        self.assertFalse({"mixtral_8x7b", "gpt_oss_20b"} & {w.name for w in large})
         self.assertLessEqual(medium, set(large))
         self.assertEqual(
             {w.target for w in large},
