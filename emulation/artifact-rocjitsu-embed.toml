@@ -1,0 +1,3 @@
+# rocjitsu C API embedding runtime
+[components.lib."emulation/rocjitsu-embed/stage"]
+include = ["libexec/rocjitsu-embed/rocjitsu-memory"]

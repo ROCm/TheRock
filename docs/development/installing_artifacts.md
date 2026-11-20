@@ -73,6 +73,26 @@ By default for CI workflow retrieval (`--run-id`), all artifacts (excluding test
 - Add `--tests` to include test artifacts for enabled components
 - Add `--dev` to include development artifacts for enabled components
 
+### Installing the rocjitsu embedding runtime
+
+On Linux, applications that host simulated GPUs in process can load
+`<prefix>/lib/librocjitsu_embed.so` with `dlopen(path, RTLD_NOW | RTLD_LOCAL)`.
+The host retains control of its libc calls and signal handlers. The
+`amdrocm-rocjitsu-embed` native package installs the library and its private
+memory helper together. The `rocjitsu_dev_generic` artifact provides the public
+C headers.
+
+Given a CI workflow run ID in `RUN_ID`, this command installs just the
+embedding runtime.
+
+```bash
+python build_tools/fetch_artifacts.py --run-id "${RUN_ID}" --flatten \
+    --output-dir ./rocjitsu-embed '^rocjitsu-embed_lib_generic\.'
+```
+
+The library finds its helper at `../libexec/rocjitsu-embed/rocjitsu-memory`
+relative to its own directory, so the entire installation can be relocated.
+
 ### Selecting Your GPU Family
 
 Select your AMD GPU family from [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake#L44-L81). Common families include:

@@ -22,6 +22,7 @@ if(THEROCK_ENABLE_ROCJITSU)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
+      -DROCJITSU_BUILD_EMBED_LIBRARY=${THEROCK_ENABLE_ROCJITSU_EMBED}
     INSTALL_RPATH_DIRS
       lib
   )
@@ -55,6 +56,39 @@ if(THEROCK_ENABLE_ROCJITSU)
     SUBPROJECT_DEPS
       rocjitsu
   )
+endif()
+
+if(THEROCK_ENABLE_ROCJITSU_EMBED)
+  # The simulator and its embedding library share one rocjitsu build. Give
+  # the embedding runtime its own stage so it can be installed independently.
+  therock_cmake_subproject_declare(rocjitsu-embed
+    DISABLE_AMDGPU_TARGETS
+    NO_MERGE_COMPILE_COMMANDS
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocjitsu-embed"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu-embed"
+    CMAKE_ARGS
+      -DROCJITSU_DIST_DIR=${CMAKE_CURRENT_BINARY_DIR}/rocjitsu/dist
+    BUILD_DEPS
+      rocjitsu
+  )
+  therock_cmake_subproject_activate(rocjitsu-embed)
+
+  therock_provide_artifact(rocjitsu-embed
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocjitsu-embed.toml
+    COMPONENTS
+      lib
+    SUBPROJECT_DEPS
+      rocjitsu-embed
+  )
+
+  if(THEROCK_BUILD_TESTING AND NOT THEROCK_SANITIZER)
+    add_test(
+      NAME therock-rocjitsu-embed
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/rocjitsu-embed/install_test.py"
+        "${THEROCK_BINARY_DIR}/artifacts/rocjitsu-embed_lib_generic/emulation/rocjitsu-embed/stage/lib/librocjitsu_embed.so"
+    )
+  endif()
 endif()
 
 if(THEROCK_ENABLE_ROCJITSU_HOTSWAP)

@@ -427,7 +427,7 @@ class BuildTopology:
         # Valid type values
         valid_stage_types = {"generic", "per-arch"}
         valid_artifact_types = {"target-neutral", "target-specific"}
-        valid_platforms = {"windows", "linux"}
+        valid_platforms = {"darwin", "linux", "windows"}
         valid_processors = {"x86_64", "aarch64", "ppc64le"}
 
         # Validate build stage names and types
