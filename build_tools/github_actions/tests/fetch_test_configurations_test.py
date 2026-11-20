@@ -1209,6 +1209,29 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIn("--cap-add SYS_MODULE", out["container_options"])
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
 
+    def test_container_options_drop_root_on_apptainer_family(self):
+        job = {
+            "test_runner": "linux-mi455-gpu-rocm",
+            "container_options": ["--cap-add=SYS_PTRACE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx125X-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+        self.assertNotIn("--cap-add", out["container_options"])
+
+    def test_container_options_keep_root_on_cpu_runner_apptainer_family(self):
+        job = {
+            "test_runner": "azure-linux-scale-rocm",
+            "linux_cpu_runner": True,
+            "container_options": ["--cap-add=SYS_PTRACE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx125X-dcgpu"
+        )
+        self.assertIn("--user 0:0", out["container_options"])
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
     def test_container_options_use_multi_gpu_runner_label(self):
         job = {
             "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",

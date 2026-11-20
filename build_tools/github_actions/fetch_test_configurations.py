@@ -136,7 +136,7 @@ _GPU_CONTAINER_OPTIONS = {
     ],
 }
 
-# Options that Apptainer-backed runners cannot honor: they always run as the
+# Options that Apptainer-backed runners do not support: they always run as the
 # invoking user and cannot grant capabilities, so requesting them fails the job.
 _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
 # Apptainer-backed labels in families that also have docker runners, where the
@@ -146,10 +146,10 @@ _APPTAINER_RUNNER_LABELS = [
     "linux-gfx950-8gpu-crusoe-rocm",
 ]
 _APPTAINER_UNSUPPORTED_OPTIONS = [
-    "--user 0:0",
-    "--cap-add SYS_MODULE",
-    "--cap-add=SYS_PTRACE",
-    "--cap-add=PERFMON",
+    "--user 0:0",  # _BASE_CONTAINER_OPTIONS: root inside the container
+    "--cap-add SYS_MODULE",  # sanity: amd-smi reads kernel modules
+    "--cap-add=SYS_PTRACE",  # rocgdb, rocprofiler-sdk: ptrace other processes
+    "--cap-add=PERFMON",  # rocprofiler-systems: perf_event sampling
 ]
 # A 1-GPU job on these labels cannot see the node's other GPUs, so components
 # that need them run on the same cluster's whole-node label instead.
@@ -218,11 +218,12 @@ def _build_container_options(
     # Same runner choice as test_runs_on in test_artifacts.yml
     runner = job_config.get("multi_gpu_runner") or job_config.get("test_runner")
 
-    # Drop options the Apptainer runners for this family or label cannot honor
+    # Drop options the Apptainer runners for this family or label do not support.
+    # CPU-only jobs run on docker runners whatever the family, so keep theirs.
     if (
-        any(family in amdgpu_families for family in _APPTAINER_FAMILIES)
-        or runner in apptainer_labels
-    ):
+        not job_config.get("linux_cpu_runner", False)
+        and any(family in amdgpu_families for family in _APPTAINER_FAMILIES)
+    ) or runner in apptainer_labels:
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]
