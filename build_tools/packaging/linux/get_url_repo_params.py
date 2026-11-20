@@ -600,7 +600,7 @@ def parse_build_date(value: str) -> date | None:
 
 
 def nightly_sub_folder(run_id: str, *, today: date | None = None) -> str:
-    """Return the dated build sub-folder ``YYYYMMDD-<run_id>`` (nightly, dev).
+    """Return the dated build sub-folder `YYYYMMDD-<run_id>` (nightly, dev).
 
     ``today`` is injectable for deterministic tests; it defaults to the current
     UTC date.
