@@ -153,7 +153,6 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 | Tool                    | Platform |
 | ----------------------- | -------- |
 | `amd-smi`               | Linux    |
-| `rocm-smi`              | Linux    |
 | `rocm_agent_enumerator` | Linux    |
 | `hipinfo`               | Windows  |
 | `offload-arch`          | Both     |

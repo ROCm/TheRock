@@ -82,6 +82,9 @@ therock_cmake_subproject_declare(rocm_smi_lib
     # See the post_hook, which needs to advertise install interface directories
     # in this case.
     "-DTHEROCK_HAS_BUNDLED_LIBDRM=${THEROCK_BUNDLED_LIBDRM}"
+    # rocm-smi-lib is deprecated in favor of AMD SMI; skip building it. The
+    # subproject honors this flag and configures to a no-op.
+    "-DROCM_SMI_DISABLE=True"
   INTERFACE_LINK_DIRS
     "lib"
   INSTALL_RPATH_DIRS
