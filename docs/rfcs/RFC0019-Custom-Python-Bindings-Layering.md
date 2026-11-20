@@ -16,8 +16,8 @@ This RFC defines where custom Python bindings for ROCm components live, how they
 - **What it is.** A canonical Python project that builds on top of its component's installed native library. It is not part of that library's build.
 - **How it builds.** `python -m pip install ./bindings/python/<package-name>` builds the binding against an installed ROCm. The binding never rebuilds, bundles, or replaces a ROCm library.
 - **How it ships.** TheRock builds the wheel in a separate job after the SDK wheels, from the same source revision, and publishes it to the SDK's Python index. Each wheel depends on the SDK build it was built and validated with, relaxed to a patch-compatible range once promoted to stable. Users install the published wheel; source builds are for developers and system ROCm installs.
-- **How it is validated.** Before publishing, TheRock installs the wheel into a fresh environment as a consumer would and checks that it loads the shipped SDK libraries. GPU tests run after nightly publication and gate promotion to stable. Each run records the SDK build, package versions, source revisions, and test inputs.
-- **Python versions.** Native extensions use the CPython Stable ABI, and its floor is the minimum Python version. Other Python versions are allowed only in exceptional cases, agreed before they are added.
+- **How it is validated.** Before publishing, TheRock installs the wheel into a fresh environment as a consumer would and checks that it loads the shipped SDK libraries. GPU tests run after publication and gate promotion to stable. Each run records the SDK build, package versions, source revisions, and test inputs.
+- **Python versions.** Native extensions use the CPython Stable ABI, and the Stable ABI floor is the package's minimum Python version. Per-minor builds below the floor are exceptions, agreed before they are added.
 - **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN, rocSHMEM, and TensileLite independently.
 
 ## Background
@@ -128,20 +128,20 @@ A build against SDK wheels receives the SDK version through `ROCM_SDK_VERSION`, 
 
 Without it, the build adds none of these, and the package loads ROCm from the system loader path, which for a tarball install means setting `LD_LIBRARY_PATH`.
 
-In both cases, extensions carry only `$ORIGIN`-relative RPATHs, and wheel repair tools must not copy ROCm libraries into the wheel. Library-resolution problems, such as [TheRock#10078](https://github.com/ROCm/TheRock/issues/10078), are fixed in shared TheRock tooling, not in per-binding wheel repair scripts like the one proposed in [TheRock#10094](https://github.com/ROCm/TheRock/pull/10094). The Origami pilot is where these fixes get tested.
+In both cases, extensions carry only `$ORIGIN`-relative RPATHs, and wheel repair tools must not copy ROCm libraries into the wheel. Library-resolution problems, such as [TheRock#10078](https://github.com/ROCm/TheRock/issues/10078), are fixed in shared TheRock tooling, not in per-package wheel repair scripts such as the PyTorch one proposed in [TheRock#10094](https://github.com/ROCm/TheRock/pull/10094). The Origami pilot is where these fixes get tested.
 
 ### Python versions
 
 - Native extensions use the CPython Stable ABI (`abi3`): one wheel per platform covers every Python minor at or above the Stable ABI floor, which is the package's minimum Python version.
 - `Requires-Python` states the floor and the wheel tags match the extension. CI tests every SDK-supported Python minor at or above the floor.
-- Other Python versions are allowed only in exceptional cases, agreed with TheRock maintainers before they are added. Pure-Python packages need no matrix.
+- Per-minor builds for Python versions below the floor are exceptions, agreed with TheRock maintainers before they are added. Pure-Python packages need no matrix.
 
 ## Packaging and validation in TheRock
 
 ```text
 super-repo revision + patches
-  └─► native build ─► SDK wheels ─► binding wheel build ─► CPU validation ─► publish nightly
-                                                                                └─► GPU tests ─► promote to stable
+  └─► native build ─► SDK wheels ─► binding wheel build ─► CPU checks ─► publish
+                                                                         └─► GPU tests ─► promote to stable
 ```
 
 ### Build
@@ -153,16 +153,16 @@ super-repo revision + patches
 
 ### Validate
 
-Validation follows the pattern TheRock uses for PyTorch wheels ([gating releases](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#gating-releases-with-pytorch-tests)): CPU checks gate publication, and GPU tests run after publication, because GPU runner queues can be long and host and device wheels publish as one unit.
+Validation follows the timing of TheRock's multi-arch PyTorch releases ([gating releases](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#gating-releases-with-pytorch-tests)): wheels publish without a staging step, and GPU tests run after publication, because GPU runner queues can be long and host and device wheels publish as one unit. CPU checks run before publishing. Unlike PyTorch, where post-publish tests are only a signal, GPU results here gate promotion to stable.
 
 Before publishing, on CPU runners, for every platform and Python version the wheel claims:
 
 1. **Consumer install.** In a fresh environment with no system ROCm on the loader path, install the wheel with a device extra and let `pip` resolve the SDK wheels. The resolved SDK must be the one the run built or selected.
-1. **No conflicts.** The binding wheel installs no file an SDK wheel owns, and no SDK wheel contains a copy of the binding.
+1. **No conflicts.** The binding wheel installs no file an SDK wheel owns, no SDK wheel contains a copy of the binding, and the binding wheel contains no device code.
 1. **Shipped libraries.** Import the package and confirm the loaded native libraries come from the SDK wheels. A bundled or substituted copy fails.
 1. **CPU tests.** Run the binding's tests that need no GPU. Tests that generate native code, such as TensileLite kernel generation, are reported separately from tests of the shipped libraries.
 
-After nightly publication, GPU runners run the binding's GPU tests for each supported target. Their results are reported with the run and gate promotion to stable.
+After publication, GPU runners run the binding's GPU tests for the targets that TheRock's release testing covers, following [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py), including its release-test bypasses. Their results are reported with the run and gate promotion to stable.
 
 Each run records the SDK build, SDK and binding package versions, source revisions with patches, wheel digests, Python version and environment, loaded library paths and versions, test inputs, generated artifacts, and results. The record is stored with the run's artifacts.
 
@@ -170,7 +170,7 @@ Each run records the SDK build, SDK and binding package versions, source revisio
 
 - **Version.** The binding's version plus a local label for its SDK build, from TheRock's version scripts ([`versioning.md`](../packaging/versioning.md)), for example `0.2.0+rocm10.1.0a20261119`.
 - **Dependency.** Nightly and prerelease wheels pin the exact SDK build they were built and validated with, `rocm[libraries]==<SDK version>`, and check the same version at import. Installing one installs the matching SDK wheels, or moves an existing install to that build, so two packages install together only when they share an SDK build.
-- **Stable releases.** Only wheels whose GPU tests passed are promoted. Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling already does for some SDK-dependent wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
+- **Stable releases.** Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling already does for some SDK-dependent wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
 - **Index.** Binding wheels publish as separate wheels to the same per-channel Python index as the SDK wheels ([`RELEASES.md`](../../RELEASES.md)), after passing the CPU checks, in the same release as the SDK wheels they depend on.
 - **Cadence.** Every SDK build ships its bindings, rebuilt for it. TheRock releases continuously, so a native change that breaks its binding is a build break, fixed by the component team in the same pull request.
 
@@ -190,15 +190,14 @@ Each run records the SDK build, SDK and binding package versions, source revisio
    - Origami installs with `pip` from its directory against an installed SDK without rebuilding or replacing `liborigami`;
    - TheRock builds, validates, and publishes its wheel with the matching SDK, with provenance recorded, and promotes it to stable after its GPU tests pass;
    - Origami's Python floor or per-minor exception is decided; and
-   - the guide lets the next component follow without new design work.
+   - the [Building Python Based Projects](../packaging/python_packaging.md#building-python-based-projects) section of `python_packaging.md` covers ROCm subprojects with bindings as well as frameworks, links back to this RFC, and lets the next component follow without new design work.
 
 After the pilot, these proceed independently:
 
 - **hipDNN** moves `projects/hipdnn/python/` to `bindings/python/hipdnn-frontend/` as one project and retires its custom packer.
 - **TensileLite** adopts the packaging and validation rules; its location is an open question.
-- **rocSHMEM** moves `python/rocshmem/` to `bindings/python/rocshmem4py/`, and [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) moves its wheel build out of the native build into the binding job.
+- **rocSHMEM** moves `python/rocshmem/` to `bindings/python/rocshmem4py/`, and [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) moves its wheel build out of the native build into the binding job, building one `abi3` wheel unless a per-minor exception is agreed.
 - **Other components** adopt the layout as they add bindings. Maintainers review the first layouts closely in code review.
-- **Packaging guidance.** The [Building Python Based Projects](../packaging/python_packaging.md#building-python-based-projects) section of `python_packaging.md` is extended to cover ROCm subprojects with bindings as well as frameworks, and links back to this RFC.
 
 ## Stakeholders
 
@@ -234,4 +233,4 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 - 2026-10-01: Merge `main`; number as RFC0017 (Brian Harrison).
 - 2026-11-19: Replace the `rocm-bindings` repository with `bindings/python/<package-name>/` in each super-repo, per review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050). TheRock builds, validates, and publishes binding wheels after the SDK, following its SDK-dependent wheel versioning and promotion. Add validation, provenance, and the Stable ABI policy. Name Origami as the pilot (Brian Harrison).
 - 2026-11-19: Merge `main`; renumber as RFC0019, since RFC0017 is claimed by another open pull request and RFC0019 is not on `main` or claimed by one (Brian Harrison).
-- 2026-11-20: Address review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050): CPU checks gate publication and GPU tests gate promotion to stable; binding wheels carry no device code of their own; the Stable ABI floor is the minimum Python version, with other versions only by exception; release tooling sequence for the pilot; shared library-resolution fixes; packaging guidance in `python_packaging.md` (Brian Harrison).
+- 2026-11-20: Address review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050): CPU checks gate publication and GPU tests gate promotion to stable, for the targets TheRock's release testing covers; binding wheels carry no device code of their own; the Stable ABI floor is the minimum Python version, with per-minor builds below it only by exception, closing the Python open question; release tooling sequence for the pilot; shared library-resolution fixes; `_rocm_init.py` preloads every SDK library the extension uses; packaging guidance in `python_packaging.md` as a pilot exit criterion; generated bindings may use `bindings/` if TheRock#5609 adopts it (Brian Harrison).
