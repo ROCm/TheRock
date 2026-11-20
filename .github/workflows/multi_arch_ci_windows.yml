@@ -156,7 +156,7 @@ jobs:
       platform: windows
       release_type: ${{ inputs.release_type }}
       # Linux label: this job validates Windows artifacts from a Linux container.
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_linux_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).artifact_structure_runs_on }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 

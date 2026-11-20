@@ -3867,7 +3867,7 @@ class TestArtifactStructureRunner(unittest.TestCase):
                 )
                 self.assertEqual(
                     job["with"].get("build_runs_on"),
-                    "${{ fromJSON(inputs.build_config).build_runs_on_linux_small }}",
+                    "${{ fromJSON(inputs.build_config).artifact_structure_runs_on }}",
                 )
 
     def test_structure_workflow_has_no_hardcoded_runner_default(self):

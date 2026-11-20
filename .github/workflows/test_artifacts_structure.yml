@@ -63,9 +63,9 @@ on:
         type: string
       build_runs_on:
         description: >-
-          Linux runner label for this job. Callers should pass a label resolved
-          from the CI config (build_config.build_runs_on_linux_small) rather
-          than a literal. Empty falls back to a GitHub-hosted runner.
+          Runner label for this job. Callers should pass a label resolved from
+          the CI config (build_config.artifact_structure_runs_on) rather than a
+          literal. Empty falls back to a GitHub-hosted runner.
           This job runs in a Linux container, so this must be a Linux label even
           when validating Windows artifacts.
         type: string

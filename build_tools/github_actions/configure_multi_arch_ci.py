@@ -887,10 +887,10 @@ class BuildConfig:
     build_runs_on_large: str = ""
     build_runs_on_small: str = ""
     build_runs_on_medium: str = ""
-    # Always a Linux small runner, even in the windows config, for jobs that run
-    # in a Linux container regardless of the platform whose artifacts they
-    # inspect (e.g. artifact structure validation).
-    build_runs_on_linux_small: str = ""
+    # Runner for artifact structure validation. That job runs in a Linux
+    # container, so this is always a Linux small runner even in the windows
+    # config, where build_runs_on_small is a Windows label.
+    artifact_structure_runs_on: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -2123,7 +2123,7 @@ def _expand_build_config_for_platform(
     )
     # Deliberately "linux" rather than `platform`: the windows config still needs
     # a Linux runner for jobs that run in a Linux container.
-    build_runs_on_linux_small = select_build_runner(
+    artifact_structure_runs_on = select_build_runner(
         "linux", build_variant, size="small", triggers=triggers
     )
 
@@ -2279,7 +2279,7 @@ def _expand_build_config_for_platform(
         build_runs_on_large=build_runs_on_large,
         build_runs_on_small=build_runs_on_small,
         build_runs_on_medium=build_runs_on_medium,
-        build_runs_on_linux_small=build_runs_on_linux_small,
+        artifact_structure_runs_on=artifact_structure_runs_on,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,
