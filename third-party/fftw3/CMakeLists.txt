@@ -17,6 +17,30 @@ else()
   set(_fftw3_enable_threads "OFF")
 endif()
 
+# FFTW leaves SIMD codelets out unless they are requested. Enable them on
+# Linux x86_64. FFTW picks the ISA at runtime. Upstream's CMake build has no
+# equivalent of autotools' --enable-avx512, so this is SSE2/AVX/AVX2 only;
+# AVX-512 codelet support, if ever needed, is a separate follow-up patch.
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _fftw3_proc)
+set(_fftw3_x86_64 OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _fftw3_proc MATCHES "^(x86_64|amd64)$")
+  set(_fftw3_x86_64 ON)
+endif()
+
+set(_fftw3_common_cmake_args
+  -DBUILD_SHARED_LIBS=ON
+  -DENABLE_THREADS=${_fftw3_enable_threads}
+  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+)
+if(_fftw3_x86_64)
+  list(APPEND _fftw3_common_cmake_args
+    -DENABLE_SSE2=ON
+    -DENABLE_AVX=ON
+    -DENABLE_AVX2=ON
+  )
+endif()
+
 therock_cmake_subproject_declare(therock-fftw3
   USE_DIST_AMDGPU_TARGETS
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3"
@@ -26,10 +50,7 @@ therock_cmake_subproject_declare(therock-fftw3
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   CMAKE_ARGS
-    -DBUILD_SHARED_LIBS=ON
-    -DENABLE_THREADS=${_fftw3_enable_threads}
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    ${_fftw3_common_cmake_args}
 )
 therock_cmake_subproject_provide_package(therock-fftw3 FFTW3 lib/cmake/fftw3)
 therock_cmake_subproject_activate(therock-fftw3)
@@ -46,10 +67,7 @@ therock_cmake_subproject_declare(therock-fftw3f
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   CMAKE_ARGS
     -DENABLE_FLOAT=ON
-    -DBUILD_SHARED_LIBS=ON
-    -DENABLE_THREADS=${_fftw3_enable_threads}
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    ${_fftw3_common_cmake_args}
 )
 therock_cmake_subproject_provide_package(therock-fftw3f FFTW3f lib/cmake/fftw3f)
 therock_cmake_subproject_activate(therock-fftw3f)
