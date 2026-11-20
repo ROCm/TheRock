@@ -174,8 +174,10 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
     -DHIPBLASLT_ENABLE_THEROCK=ON
-    # Lets hipBLASLt label TensileLite wheels with the ROCm package version
-    # ("git" in local builds means a dev identity).
+    # hipBLASLt reports the ROCm version as its own version, and the package
+    # version plus git revision from hipblasLtGetBuildVersion ("git" in local
+    # builds means a dev identity).
+    "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
     -DTHEROCK_PACKAGE_VERSION=${THEROCK_PACKAGE_VERSION}
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
