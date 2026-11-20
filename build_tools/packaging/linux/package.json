@@ -2478,6 +2478,12 @@
               "run",
               "doc"
             ]
+          },
+          {
+            "Name": "rccl-translate",
+            "Components": [
+              "lib"
+            ]
           }
         ]
       }
