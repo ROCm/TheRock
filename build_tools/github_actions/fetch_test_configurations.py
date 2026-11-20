@@ -1579,6 +1579,15 @@ def run():
                     for key in MULTI_GPU_RUNNER_KEYS
                     if key in platform_info
                 }
+                # Union of the hardcoded set (linux-gfx950-{1,8}gpu-crusoe-rocm)
+                # and labels read from the config file
+                # (test-runs-on-apptainer-labels, test-runs-on-multi-gpu-apptainer-labels).
+                # A label in both stays one entry. Hardcoded labels still drop
+                # "--user 0:0" on a manual linux-gfx950-1gpu-crusoe-rocm pin when
+                # the config file has no Apptainer pools. A config-only label,
+                # e.g. linux-gfx950-1gpu-newcsp-rocm, must be added here, or its
+                # job keeps using the Docker options (--user 0:0, --cap-add)
+                # instead of the Apptainer ones and fails on that runner.
                 apptainer_labels |= {
                     entry["label"]
                     for key in APPTAINER_POOL_KEYS.values()
