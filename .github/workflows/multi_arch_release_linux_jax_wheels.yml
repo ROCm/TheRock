@@ -15,8 +15,12 @@ name: Multi-Arch Release Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      test_amdgpu_family:
-        description: "GPU family to use for JAX tests; empty means skip tests."
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated list of GPU families in this release (e.g. the
+          release's dist_amdgpu_families). JAX tests run only if it contains
+          "gfx94X-dcgpu"; XLA tests run only if it contains "gfx950". Empty
+          skips both.
         type: string
         default: ""
       release_type:
@@ -52,10 +56,13 @@ on:
         default: ""
   workflow_dispatch:
     inputs:
-      test_amdgpu_family:
-        description: "Representative GPU family to use for JAX tests."
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated list of GPU families to test. JAX tests run
+          only if it contains "gfx94X-dcgpu"; XLA tests run only if it
+          contains "gfx950".
         type: string
-        default: "gfx94X-dcgpu"
+        default: "gfx94X-dcgpu;gfx950-dcgpu"
       release_type:
         description: 'Release type; ordinary developer-triggered jobs should use "dev".'
         type: choice
@@ -145,7 +152,7 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
-      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      test_amdgpu_families: ${{ inputs.test_amdgpu_families }}
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}

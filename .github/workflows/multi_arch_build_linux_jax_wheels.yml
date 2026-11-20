@@ -21,8 +21,11 @@ name: Multi-Arch Build Linux JAX Wheels
 on:
   workflow_call:
     inputs:
-      test_amdgpu_family:
-        description: "GPU family to use for JAX tests; empty means skip tests."
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated list of GPU families in this release. JAX tests
+          run only if it contains "gfx94X-dcgpu"; the XLA bazel suite
+          (test_xla job) runs only if it contains "gfx950".
         type: string
         default: ""
       python_version:
@@ -103,10 +106,13 @@ on:
         value: ${{ jobs.build_jax_wheels.outputs.jax_pjrt_version }}
   workflow_dispatch:
     inputs:
-      test_amdgpu_family:
-        description: "Representative GPU family to use for JAX tests."
+      test_amdgpu_families:
+        description: >-
+          Semicolon-separated list of GPU families in this release. JAX tests
+          run only if it contains "gfx94X-dcgpu"; the XLA bazel suite
+          (test_xla job) runs only if it contains "gfx950".
         type: string
-        default: "gfx94X-dcgpu"
+        default: "gfx94X-dcgpu;gfx950-dcgpu"
       python_version:
         description: "Python version to build wheels for."
         type: string
@@ -355,14 +361,14 @@ jobs:
   configure_jax_tests:
     name: Configure JAX Tests
     # The tests install from the release index, so unpublished wheels go untested.
-    if: ${{ inputs.publish && inputs.test_amdgpu_family != '' }}
+    if: ${{ inputs.publish && contains(inputs.test_amdgpu_families, 'gfx94X-dcgpu') }}
     runs-on: ubuntu-26.04
     outputs:
       enabled: ${{ steps.configure.outputs.enabled }}
       matrix: ${{ steps.configure.outputs.matrix }}
       summary: ${{ steps.summary.outputs.summary }}
     env:
-      TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
+      TEST_AMDGPU_FAMILY: "gfx94X-dcgpu"
       TEST_SIZE: ${{ inputs.test_size }}
 
     steps:
@@ -402,6 +408,7 @@ jobs:
   test_xla:
     name: Test XLA
     needs: [build_jax_wheels]
+    if: ${{ contains(inputs.test_amdgpu_families, 'gfx950') }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -420,7 +427,7 @@ jobs:
   test_jax_wheels:
     if: ${{ needs.configure_jax_tests.outputs.enabled == 'true' }}
     needs: [build_jax_wheels, configure_jax_tests]
-    name: Test | ${{ inputs.test_amdgpu_family }} | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
+    name: Test | gfx94X-dcgpu | ${{ inputs.test_size }} | ${{ matrix.test_subset }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.configure_jax_tests.outputs.matrix) }}
@@ -429,7 +436,7 @@ jobs:
     uses: ./.github/workflows/test_multi_arch_linux_jax_wheels.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
-      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      test_amdgpu_family: "gfx94X-dcgpu"
       package_index_url: ${{ needs.build_jax_wheels.outputs.package_index_url }}
       rocm_version: ${{ inputs.rocm_version }}
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
