@@ -19,9 +19,9 @@ on:
         type: string
         default: ""
       rocm_version:
-        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929')."
+        required: true
         type: string
-        default: ""
       therock_repo:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -73,9 +73,9 @@ on:
         type: string
         default: ""
       rocm_version:
-        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929'). Empty installs the latest available."
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929')."
         type: string
-        default: ""
+        default: "7.14.0.dev0"
       therock_repo:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -223,11 +223,10 @@ jobs:
       # build does for its own bazel ROCM_PATH.
       - name: Install rocm[libraries,devel] wheels
         env:
-          DEVICE_EXTRAS: ${{ steps.expand.outputs.device_extras }}
+          ROCM_PACKAGES: rocm[libraries,devel${{ steps.expand.outputs.device_extras && format(',{0}', steps.expand.outputs.device_extras) || '' }}]==${{ inputs.rocm_version }}
         run: |
-          pkg="rocm[libraries,devel${DEVICE_EXTRAS:+,$DEVICE_EXTRAS}]${ROCM_VERSION:+==$ROCM_VERSION}"
           python build_tools/setup_venv.py .venv \
-            --packages "${pkg}" \
+            --packages "${ROCM_PACKAGES}" \
             --index-url="${ROCM_PACKAGE_INDEX_URL}" \
             --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
