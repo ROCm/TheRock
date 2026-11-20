@@ -429,7 +429,10 @@ upstream repositories and installed into the ROCm tree as part of the build:
   [ROCm/ROCgdb `.github/scripts/test_rocgdb.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/test_rocgdb.py),
   installed to `tests/rocgdb/test_rocgdb.py`. Its emulation support module
   [`rocjitsu_emulator.py`](https://github.com/ROCm/ROCgdb/blob/amd-staging/.github/scripts/rocjitsu_emulator.py)
-  is installed next to it as `tests/rocgdb/rocjitsu_emulator.py`.
+  is installed next to it as `tests/rocgdb/rocjitsu_emulator.py`. The sanitizer
+  suppression files it uses (`.github/scripts/sanitizers/*.supp`) are installed
+  to `tests/rocgdb/sanitizers/`, and the testsuite's own
+  `gdb/tsan-suppressions.txt` to `tests/rocgdb/gdb/`.
 - ROCr Debug Agent: source of truth is
   [ROCm/rocm-systems `projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py`](https://github.com/ROCm/rocm-systems/blob/develop/projects/rocr-debug-agent/.github/scripts/test_rocr-debug-agent.py),
   installed to `tests/rocm-debug-agent/test_rocr-debug-agent.py`
@@ -562,7 +565,7 @@ Usage: `-DTHEROCK_ROCGDB_UPSTREAM_BUILD=ON`
 ### THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
 
 - **Default**: `OFF` - Require `.github/scripts/test_rocgdb.py`, `.github/scripts/rocjitsu_emulator.py` and `.github/scripts/rocgdb_emulate.py` to exist in the rocgdb source tree; configure fails if any is missing.
-- **Non-default**: `ON` - If any of them is missing from the source tree, download all three from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install them.
+- **Non-default**: `ON` - If any of them is missing from the source tree, download all three, together with the sanitizer suppression files (`.github/scripts/sanitizers/*.supp`) that `test_rocgdb.py` uses, from `ROCm/ROCgdb` `amd-staging` at configure time (with retries) and install them. Configure fails if any of the downloads fails. A source tree that has the scripts but not the suppression files installs without them.
 
 Use this when building a rocgdb source tree (e.g. upstream master) that is not part of the branches exercised by TheRock CI.
 
