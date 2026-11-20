@@ -383,7 +383,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_tensilelite_rocjitsu_wraps_pytest_runner_in_launcher(self):
         job = self._rocjitsu_lane_job()
-        self.assertTrue(job["test_script"].startswith("TEST_CATEGORY=emu-pr python "))
+        self.assertTrue(
+            job["test_script"].startswith("TEST_CATEGORY=rocjitsu-fast python ")
+        )
         self.assertIn("Tests/emulation/run_rocjitsu.py -- python", job["test_script"])
         self.assertTrue(job["test_script"].endswith("pytest_runner.py"))
         self.assertIn("--rocjitsu --mirage", job["fetch_artifact_args"])

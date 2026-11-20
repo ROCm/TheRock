@@ -499,9 +499,10 @@ test_matrix = {
     # runner): it starts pytest_runner.py inside `mirage run` with the fetched
     # rocjitsu/mirage, and the TensileLite pytest plugin it loads selects this
     # job's shard from SHARD_INDEX/TOTAL_SHARDS (pytest_runner.py does not shard).
-    # The emu-pr category leaves out configs marked emu_slow (> 2 h each under
-    # emulation, the per-test cap). The rest measures ~15 test-hours at 6 emulator threads per
-    # xdist worker, so 3 shards keep each one inside timeout_minutes.
+    # The rocjitsu-fast category leaves out configs marked rocjitsu_slow (> 2 h
+    # each under emulation, the per-test cap). The rest measures ~15 test-hours
+    # at 6 emulator threads per xdist worker, so 3 shards keep each one inside
+    # timeout_minutes.
     #
     # The container must run as root (mirage crashes the client otherwise), so
     # _build_container_options keeps --user 0:0 for CPU-only jobs on gfx125X.
@@ -514,7 +515,7 @@ test_matrix = {
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
         "test_script": (
-            "TEST_CATEGORY=emu-pr python "
+            "TEST_CATEGORY=rocjitsu-fast python "
             + _get_artifact_path(
                 "share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py"
             )
