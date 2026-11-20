@@ -957,6 +957,18 @@ def pool_with_apptainer(runners: dict, pool_key: str) -> list[dict] | None:
 
     Only an existing pool is widened: an Apptainer pool alone would replace the
     family's default runner.
+
+    `pool` is the Docker list for `pool_key`, not yet joined with Apptainer.
+    For gfx950 Linux and pool_key "test-runs-on-labels" it is:
+
+        [{"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "weight": 1.0, "count": 9}]
+
+    `extra` is the matching Apptainer list (see APPTAINER_POOL_KEYS), e.g.:
+
+        [{"label": "linux-gfx950-1gpu-crusoe-rocm", "weight": 1.0, "count": 3}]
+
+    Both present returns pool + extra. "test-runs-on-multi-gpu-labels" is the
+    same shape: OSSCI count 2, then Crusoe count 4. A missing key is None.
     """
     pool = runners.get(pool_key)
     extra = runners.get(APPTAINER_POOL_KEYS.get(pool_key, ""))
