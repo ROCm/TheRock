@@ -403,8 +403,7 @@ jobs:
 
   test_xla:
     name: Test XLA
-    needs: [build_jax_wheels]
-    if: ${{ !cancelled() && inputs.trigger_xla_tests }}
+    if: ${{ inputs.trigger_xla_tests }}
     uses: ./.github/workflows/test_multi_arch_linux_xla.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
