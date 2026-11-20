@@ -591,6 +591,15 @@ def main(argv: list[str]) -> int:
 
     print_env()
 
+    # TEMP validation-only branch for ROCm/TheRock#10078: run just the
+    # standalone C++ JIT test once; skip every other shard and config.
+    if args.test_config != "default" or args.shard > 1:
+        print("Validation branch: skipping this shard/config.")
+        os._exit(0)
+    args.include = ["test_utils"]
+    args.shard = args.num_shards = 0
+    tests_to_skip = "TestStandaloneCPPJIT"
+
     if args.test_config == "inductor":
         return_code = _run_inductor(args, tests_to_skip, passthrough_args)
     else:
