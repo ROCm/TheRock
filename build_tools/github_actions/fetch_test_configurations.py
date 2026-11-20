@@ -58,7 +58,7 @@ def _get_artifact_path(artifact_path: str) -> str:
 # related jobs without relying on name-prefix inference.
 TEST_LABEL_GROUPS: dict[str, list[str]] = {
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
-    "tensilelite": ["tensilelite", "tensilelite-common"],
+    "tensilelite": ["tensilelite", "tensilelite-common", "tensilelite-rocjitsu"],
 }
 
 
@@ -173,8 +173,11 @@ def _build_container_options(
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
 
-    # Drop options the Apptainer runners for this family cannot honor
-    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+    # Drop options the Apptainer runners for this family cannot honor. CPU-only
+    # components run in Docker on CPU runners, so they keep them.
+    if not job_config.get("linux_cpu_runner", False) and any(
+        family in amdgpu_families for family in _APPTAINER_FAMILIES
+    ):
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]
@@ -257,8 +260,9 @@ _rocgdb_common = {
 # "linux-gfx942-gpu-rocm-mathlib", which is registered separately in the runner pool.
 #
 # Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
-# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
-# expression. "multi_gpu_runner" routes to multi-GPU machines.
+# (the "medium" build runner pool unless cpu_test_runners overrides it; see
+# get_cpu_test_runner) via the test_artifacts.yml routing expression.
+# "multi_gpu_runner" routes to multi-GPU machines.
 #
 # A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
 # pool by default. Add "multi_gpu_pool": "2gpu" to use the family's 2-GPU pool
@@ -292,6 +296,10 @@ _rocgdb_common = {
 # not in the list; omit the field to run on every tier (the default). For example, a
 # component whose suite is too slow for the quick sanity tier opts out of it with:
 #   "test_types": ["standard", "comprehensive", "full"]
+#
+# A "linux_cpu_runner" component may set "ignore_test_type_for_family": True to
+# run at the requested tier on families whose test_type_for_family lowers it
+# (that override exists for scarce GPU runners, which CPU jobs don't use).
 #
 # A component may mark itself advisory (non-blocking) on specific GPU families via
 # "expect_failure", a map keyed by platform whose value is a list of family entries,
@@ -480,6 +488,56 @@ test_matrix = {
                 "gfx120X-all",
                 "gfx1250-strict",
             ],
+        },
+    },
+    # TensileLite common GEMM tests for gfx1250 under the rocjitsu emulator, on a
+    # CPU runner (no GPU). rocjitsu emulates non-strict gfx1250, which the
+    # gfx1250-strict hardware runners cannot run; include_family lists the plain
+    # "gfx1250" target, so strict-target runs never select this job.
+    #
+    # The launcher ships in the TensileLite test artifact (like miopen-dbsync's
+    # runner): it starts pytest_runner.py inside `mirage run` with the fetched
+    # rocjitsu/mirage, and the TensileLite pytest plugin it loads selects this
+    # job's shard from SHARD_INDEX/TOTAL_SHARDS (pytest_runner.py does not shard).
+    # The rocjitsu-quick category leaves out configs marked rocjitsu_slow (> 2 h
+    # each under emulation, the per-test cap). The rest measures ~15 test-hours
+    # at 6 emulator threads per xdist worker, so 3 shards keep each one inside
+    # timeout_minutes.
+    #
+    # The container must run as root (mirage crashes the client otherwise), so
+    # _build_container_options keeps --user 0:0 for CPU-only jobs on gfx125X.
+    # Needs a rocm-libraries pin that ships Tests/emulation/run_rocjitsu.py.
+    "tensilelite-rocjitsu": {
+        "job_name": "tensilelite-rocjitsu",
+        "fetch_artifact_args": "--blas --tests --rocjitsu --mirage",
+        "timeout_minutes": 150,
+        "additional_requirements_files": [
+            _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
+        ],
+        "test_script": (
+            "TEST_CATEGORY=rocjitsu-quick python "
+            + _get_artifact_path(
+                "share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py"
+            )
+            + f" -- python {_get_script_path('pytest_runner.py')}"
+        ),
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        # Too slow for the quick tier; quick would also force a single shard.
+        "test_types": ["standard", "comprehensive", "full"],
+        # gfx125X forces "quick" for its scarce GPU runners; this CPU job keeps
+        # the requested tier.
+        "ignore_test_type_for_family": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx1250"],
+        },
+        # Advisory while the emulator lane is qualified against hardware.
+        "expect_failure": {
+            "linux": ["gfx1250"],
+        },
+        "total_shards_dict": {
+            "linux": 3,
         },
     },
     "origami": {
@@ -1431,6 +1489,8 @@ def run():
     # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
     amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
     test_type = os.getenv("TEST_TYPE", "standard")
+    # test_type_for_family (below) may lower test_type; see ignore_test_type_for_family.
+    requested_test_type = test_type
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
     skip_stages = os.getenv("SKIP_STAGES", "").split(",")
@@ -1513,6 +1573,15 @@ def run():
     all_components = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+        # test_type_for_family caps the tier for families with scarce GPU
+        # hardware. A CPU-only component that doesn't use that hardware can opt
+        # out with "ignore_test_type_for_family" and run at the requested tier.
+        job_test_type = (
+            requested_test_type
+            if test_matrix[key].get("linux_cpu_runner")
+            and test_matrix[key].get("ignore_test_type_for_family")
+            else test_type
+        )
 
         excluded_stages = set(skip_stages).intersection(
             test_matrix[key].get("skip_stages", [])
@@ -1600,9 +1669,9 @@ def run():
         # quick, and the hipfft/rocfft multi-GPU split jobs run comprehensive/full
         # only. Omit the field to run on every tier.
         allowed_test_types = test_matrix[key].get("test_types")
-        if allowed_test_types and test_type not in allowed_test_types:
+        if allowed_test_types and job_test_type not in allowed_test_types:
             logging.info(
-                f"Excluding job {job_name}: test_type {test_type} not in {allowed_test_types}"
+                f"Excluding job {job_name}: test_type {job_test_type} not in {allowed_test_types}"
             )
             continue
 
@@ -1614,14 +1683,14 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key == "sanity" or selection_key in project_array or "*" in project_array
         ):
-            logging.info(f"Requesting job {job_name} with test_type {test_type}")
+            logging.info(f"Requesting job {job_name} with test_type {job_test_type}")
 
             # Hip-tests on Windows run with both PAL and ROCR backends.
             # See: https://github.com/ROCm/TheRock/issues/3587
             if key == "hip-tests" and platform == "windows":
                 base = test_matrix[key]
                 total_shards = base.get("total_shards_dict", {}).get(platform, 1)
-                if test_type == "quick":
+                if job_test_type == "quick":
                     total_shards = 1
 
                 shard_arr = list(range(1, total_shards + 1))
@@ -1634,7 +1703,7 @@ def run():
                     "test_script": base["test_script"],
                     "platform": base["platform"],
                     "total_shards": total_shards,
-                    "test_type": test_type,
+                    "test_type": job_test_type,
                     "shard_arr": shard_arr,
                     "gpu_enable_pal": "1",
                 }
@@ -1648,7 +1717,7 @@ def run():
                     "test_script": base["test_script"],
                     "platform": base["platform"],
                     "total_shards": total_shards,
-                    "test_type": test_type,
+                    "test_type": job_test_type,
                     "shard_arr": shard_arr,
                     "gpu_enable_pal": "0",
                 }
@@ -1656,7 +1725,7 @@ def run():
                 continue
 
             job_config_data = {**_common_settings, **test_matrix[key]}
-            job_config_data["test_type"] = test_type
+            job_config_data["test_type"] = job_test_type
 
             # A component declares the families it is advisory on via
             # "expect_failure" (see the key reference above). Resolve that
@@ -1681,7 +1750,7 @@ def run():
             # and ctest stages have to be chained here instead. Fold both
             # into test_runner.py's own dual-mode support and drop this
             # branch once that lands.
-            if key == "tensilelite" and test_type != "quick":
+            if key == "tensilelite" and job_test_type != "quick":
                 job_config_data["test_script"] = (
                     job_config_data["test_script"]
                     + f" && TEST_COMPONENT=hipblaslt-tensilelite python {_get_script_path('test_runner.py')}"
@@ -1700,7 +1769,7 @@ def run():
             job_config_data["total_shards"] = total_shards
 
             # If the test type is quick tests, we only need one shard for the test job
-            if test_type == "quick":
+            if job_test_type == "quick":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
@@ -1711,7 +1780,7 @@ def run():
                 # Skip multi-GPU tests for quick runs unless enable_multi_gpu_by_label is set.
                 # Jobs that require multi-GPU runners (defined via "multi_gpu" in their config)
                 # only run on standard, comprehensive, or full tiers by default.
-                if test_type == "quick" and not enable_multi_gpu_by_label:
+                if job_test_type == "quick" and not enable_multi_gpu_by_label:
                     logging.info(
                         f"Excluding job {job_name}: multi-GPU tests skipped for quick runs (capacity constraint)"
                     )

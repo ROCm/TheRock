@@ -346,11 +346,93 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 )
                 self.assertEqual(job["timeout_minutes"], 180)
 
-    def test_tensilelite_label_selects_unit_and_common_jobs(self):
+    def test_tensilelite_label_selects_unit_common_and_rocjitsu_jobs(self):
         os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite"])
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["AMDGPU_TARGETS"] = "gfx1250"
+        os.environ["TEST_TYPE"] = "standard"
+        self.assertIn("tensilelite-rocjitsu", self._selected_names())
+        os.environ["AMDGPU_FAMILIES"] = "gfx94X-dcgpu"
+        os.environ.pop("AMDGPU_TARGETS")
         names = self._selected_names()
         self.assertIn("tensilelite", names)
         self.assertIn("tensilelite-common", names)
+
+    # -----------------------
+    # tensilelite-rocjitsu (Tensile/Tests/common under the rocjitsu emulator)
+    # -----------------------
+
+    def _rocjitsu_lane_job(self, families="gfx125X-dcgpu", targets="gfx1250"):
+        """Run selection for tensilelite-rocjitsu; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = "tensilelite-rocjitsu"
+        os.environ["AMDGPU_FAMILIES"] = families
+        if targets:
+            os.environ["AMDGPU_TARGETS"] = targets
+        fetch_test_configurations.run()
+        jobs = [
+            j for j in self._get_components() if j["job_name"] == "tensilelite-rocjitsu"
+        ]
+        return jobs[0] if jobs else None
+
+    def test_tensilelite_rocjitsu_runs_on_cpu_runner_for_gfx1250(self):
+        job = self._rocjitsu_lane_job()
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["expect_failure"])
+        self.assertEqual(job["shard_arr"], [1, 2, 3])
+
+    def test_tensilelite_rocjitsu_wraps_pytest_runner_in_launcher(self):
+        job = self._rocjitsu_lane_job()
+        self.assertTrue(
+            job["test_script"].startswith("TEST_CATEGORY=rocjitsu-quick python ")
+        )
+        self.assertIn("Tests/emulation/run_rocjitsu.py -- python", job["test_script"])
+        self.assertTrue(job["test_script"].endswith("pytest_runner.py"))
+        self.assertIn("--rocjitsu --mirage", job["fetch_artifact_args"])
+
+    def test_tensilelite_rocjitsu_keeps_root_container_options(self):
+        # gfx125X GPU jobs run on Apptainer runners, which drop --user 0:0; this
+        # CPU job runs in Docker and needs root (mirage segfaults the client
+        # as a non-root user).
+        job = self._rocjitsu_lane_job()
+        self.assertIn("--user 0:0", job["container_options"])
+
+    def test_other_cpu_components_keep_family_test_type(self):
+        # Only components that opt out ignore test_type_for_family (gfx125X: quick).
+        os.environ["PROJECTS_TO_TEST"] = "hipfile,tensilelite-rocjitsu"
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["AMDGPU_TARGETS"] = "gfx1250"
+        os.environ["TEST_TYPE"] = "standard"
+        fetch_test_configurations.run()
+        jobs = {j["job_name"]: j for j in self._get_components()}
+        self.assertEqual(jobs["hipfile"]["test_type"], "quick")
+        self.assertEqual(jobs["tensilelite-rocjitsu"]["test_type"], "standard")
+
+    def test_gpu_components_on_apptainer_family_drop_root(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["AMDGPU_TARGETS"] = "gfx1250-strict"
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == "hipblaslt"]
+        self.assertTrue(jobs)
+        self.assertNotIn("--user 0:0", jobs[0]["container_options"])
+
+    def test_tensilelite_rocjitsu_skips_strict_targets(self):
+        # rocjitsu emulates non-strict gfx1250; strict hardware runs must not select it.
+        self.assertIsNone(self._rocjitsu_lane_job(targets="gfx1250-strict"))
+
+    def test_tensilelite_rocjitsu_excluded_on_other_families(self):
+        self.assertIsNone(self._rocjitsu_lane_job("gfx950-dcgpu", "gfx950"))
+
+    def test_tensilelite_rocjitsu_excluded_on_quick(self):
+        os.environ["TEST_TYPE"] = "quick"
+        self.assertIsNone(self._rocjitsu_lane_job())
+
+    def test_tensilelite_rocjitsu_not_scheduled_on_asan_builds(self):
+        for build_variant in ("asan", "host-asan", "asan-debug", "host-asan-debug"):
+            with self.subTest(build_variant=build_variant):
+                os.environ["BUILD_VARIANT"] = build_variant
+                self.assertIsNone(self._rocjitsu_lane_job())
 
     def test_tensilelite_common_label_selects_only_common_job(self):
         os.environ["TEST_LABELS"] = json.dumps(["test:tensilelite-common"])

@@ -62,6 +62,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 INSTALLED_COMPONENTS = {
     "tensilelite": "share/hipblaslt/tensilelite",
     "tensilelite-common": "share/hipblaslt/tensilelite",
+    "tensilelite-rocjitsu": "share/hipblaslt/tensilelite",
 }
 
 
