@@ -42,7 +42,9 @@ class LoadedLibraryTest(unittest.TestCase):
                 .decode()
                 .rstrip("=")
             )
-            with patch.object(utils, "get_loaded_library_path", return_value=expected):
+            with patch.object(
+                utils, "get_loaded_library_path", return_value=expected.resolve(strict=True)
+            ):
                 utils.assert_loaded_library(None, expected, digest)
                 expected.write_bytes(b"version=1; modified runtime")
                 with self.assertRaisesRegex(AssertionError, "SHA-256 differs"):
@@ -50,7 +52,9 @@ class LoadedLibraryTest(unittest.TestCase):
             conflict = Path(directory) / "package-old" / "runtime.dll"
             conflict.parent.mkdir()
             conflict.write_bytes(original)
-            with patch.object(utils, "get_loaded_library_path", return_value=conflict):
+            with patch.object(
+                utils, "get_loaded_library_path", return_value=conflict.resolve(strict=True)
+            ):
                 with self.assertRaisesRegex(
                     AssertionError, "Unexpected loaded library"
                 ):
