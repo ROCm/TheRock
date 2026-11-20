@@ -1,7 +1,7 @@
 ---
 author: Brian Harrison (bharriso)
 created: 2026-06-23
-modified: 2026-11-19
+modified: 2026-11-20
 status: draft
 discussion: https://github.com/ROCm/TheRock/issues/6048
 ---
@@ -15,9 +15,9 @@ This RFC defines where custom Python bindings for ROCm components live, how they
 - **Where.** Each binding is a standalone Python project in its component's super-repo, at `bindings/python/<package-name>/`, beside the `bindings/fortran/` tree proposed in the RFC0015 update ([TheRock#9433](https://github.com/ROCm/TheRock/pull/9433)). There is no separate bindings repository.
 - **What it is.** A canonical Python project that builds on top of its component's installed native library. It is not part of that library's build.
 - **How it builds.** `python -m pip install ./bindings/python/<package-name>` builds the binding against an installed ROCm. The binding never rebuilds, bundles, or replaces a ROCm library.
-- **How it ships.** TheRock builds the wheel in a separate job after the SDK wheels, from the same source revision, and publishes it to the SDK's Python index. Each wheel depends on the SDK build it was tested with, relaxed to a patch-compatible range once promoted to stable. Users install the published wheel; source builds are for developers and system ROCm installs.
-- **How it is validated.** TheRock installs the wheel into a fresh environment as a consumer would and checks that it calls the shipped SDK libraries. Each run records the SDK build, package versions, source revisions, and test inputs.
-- **Python versions.** New native extensions use the CPython Stable ABI. Builds per Python minor version are exceptions, agreed before they are added.
+- **How it ships.** TheRock builds the wheel in a separate job after the SDK wheels, from the same source revision, and publishes it to the SDK's Python index. Each wheel depends on the SDK build it was built and validated with, relaxed to a patch-compatible range once promoted to stable. Users install the published wheel; source builds are for developers and system ROCm installs.
+- **How it is validated.** Before publishing, TheRock installs the wheel into a fresh environment as a consumer would and checks that it loads the shipped SDK libraries. GPU tests run after nightly publication and gate promotion to stable. Each run records the SDK build, package versions, source revisions, and test inputs.
+- **Python versions.** Native extensions use the CPython Stable ABI, and its floor is the minimum Python version. Other Python versions are allowed only in exceptional cases, agreed before they are added.
 - **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN, rocSHMEM, and TensileLite independently.
 
 ## Background
@@ -57,11 +57,11 @@ The first is a binding that replaces the library under test; the second is a bin
 
 **P4. Bindings sit next to their component.** Same super-repo and owners, so an API change and its binding update land in the same pull request.
 
-**P5. Release what was tested.** TheRock publishes the wheel it validated, against the SDK it validated, and records the evidence.
+**P5. Release what was tested.** TheRock publishes the wheel it validated, against the SDK it validated, promotes to stable only wheels whose GPU tests passed, and records the evidence.
 
 ## Non-goals
 
-- Generated C API bindings (`hip-python`) and Fortran bindings ([RFC0015](./RFC0015-Fortran-Bindings-Split.md)).
+- Generated C API bindings (`hip-python`) and Fortran bindings ([RFC0015](./RFC0015-Fortran-Bindings-Split.md)). Generated bindings can use the same `bindings/` tree if [TheRock#5609](https://github.com/ROCm/TheRock/pull/5609) adopts it.
 - Bindings in other languages.
 - Mandating one binding framework. The choice is the component's, within the Python version policy below.
 - A release cadence separate from the SDK.
@@ -124,65 +124,71 @@ A build against SDK wheels receives the SDK version through `ROCM_SDK_VERSION`, 
 
 - an install requirement on that SDK (see [Release](#release)), following [`python_packaging.md`](../packaging/python_packaging.md);
 - `device-<target>` extras that forward to the matching `rocm` device wheels, so users select device code the same way as for the SDK;
-- a generated `_rocm_init.py` that calls `rocm_sdk.initialize_process()` before the extension is imported, because SDK wheel libraries are not on the loader's search path.
+- a generated `_rocm_init.py` that calls `rocm_sdk.initialize_process()` before the extension is imported, preloading every SDK library the extension links or loads at runtime, because SDK wheel libraries are not on the loader's search path.
 
 Without it, the build adds none of these, and the package loads ROCm from the system loader path, which for a tarball install means setting `LD_LIBRARY_PATH`.
 
-In both cases, extensions carry only `$ORIGIN`-relative RPATHs, and wheel repair tools must not copy ROCm libraries into the wheel.
+In both cases, extensions carry only `$ORIGIN`-relative RPATHs, and wheel repair tools must not copy ROCm libraries into the wheel. Library-resolution problems, such as [TheRock#10078](https://github.com/ROCm/TheRock/issues/10078), are fixed in shared TheRock tooling, not in per-binding wheel repair scripts like the one proposed in [TheRock#10094](https://github.com/ROCm/TheRock/pull/10094). The Origami pilot is where these fixes get tested.
 
 ### Python versions
 
-- New native extensions use the CPython Stable ABI (`abi3`): one wheel per platform covers every Python minor at or above its floor.
+- Native extensions use the CPython Stable ABI (`abi3`): one wheel per platform covers every Python minor at or above the Stable ABI floor, which is the package's minimum Python version.
 - `Requires-Python` states the floor and the wheel tags match the extension. CI tests every SDK-supported Python minor at or above the floor.
-- A per-minor build is an exception, agreed with TheRock maintainers before it is added. Pure-Python packages need no matrix.
+- Other Python versions are allowed only in exceptional cases, agreed with TheRock maintainers before they are added. Pure-Python packages need no matrix.
 
 ## Packaging and validation in TheRock
 
 ```text
 super-repo revision + patches
-  └─► native build ─► SDK wheels ─► binding wheel build ─► fresh-environment install
-                                                                 └─► validate ─► record ─► publish
+  └─► native build ─► SDK wheels ─► binding wheel build ─► CPU validation ─► publish nightly
+                                                                                └─► GPU tests ─► promote to stable
 ```
 
 ### Build
 
 - Binding wheel jobs use the SDK wheels built in the same run, from native artifacts of the same revision or reused ones whose native inputs are unchanged ([TheRock#7782](https://github.com/ROCm/TheRock/issues/7782), [TheRock#8651](https://github.com/ROCm/TheRock/issues/8651)); reuse records both revisions. A binding job can be rerun without rerunning the native build.
 - There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed.
+- Binding wheels carry no device code of their own. ROCm device code reaches users through the `rocm-sdk-device-*` wheels and the binding's `device-<target>` extras. A binding that needs to ship its own device code requires kpack splitting for binding wheels, which TheRock adds when the first such binding needs it.
 - A feature flag ([`flags.md`](../development/flags.md)), off by default, gates the jobs during rollout. Once it is on, super-repo pull request CI runs the binding jobs for changed components, and a failure blocks the merge.
 
 ### Validate
 
-For every platform and Python version the wheel claims:
+Validation follows the pattern TheRock uses for PyTorch wheels ([gating releases](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#gating-releases-with-pytorch-tests)): CPU checks gate publication, and GPU tests run after publication, because GPU runner queues can be long and host and device wheels publish as one unit.
 
-1. **Consumer install.** In a fresh environment with no system ROCm on the loader path, install the wheel with the device extra for the test GPU and let `pip` resolve the SDK wheels. The resolved SDK must be the one the run built or selected.
+Before publishing, on CPU runners, for every platform and Python version the wheel claims:
+
+1. **Consumer install.** In a fresh environment with no system ROCm on the loader path, install the wheel with a device extra and let `pip` resolve the SDK wheels. The resolved SDK must be the one the run built or selected.
 1. **No conflicts.** The binding wheel installs no file an SDK wheel owns, and no SDK wheel contains a copy of the binding.
-1. **Shipped libraries.** Import the package, call at least one native API, and confirm the loaded native libraries come from the SDK wheels. A bundled or substituted copy fails.
-1. **Tests.** Run the binding's tests on CPU and GPU runners. Tests that generate native code, such as TensileLite kernel generation, are reported separately from tests of the shipped libraries.
+1. **Shipped libraries.** Import the package and confirm the loaded native libraries come from the SDK wheels. A bundled or substituted copy fails.
+1. **CPU tests.** Run the binding's tests that need no GPU. Tests that generate native code, such as TensileLite kernel generation, are reported separately from tests of the shipped libraries.
+
+After nightly publication, GPU runners run the binding's GPU tests for each supported target. Their results are reported with the run and gate promotion to stable.
 
 Each run records the SDK build, SDK and binding package versions, source revisions with patches, wheel digests, Python version and environment, loaded library paths and versions, test inputs, generated artifacts, and results. The record is stored with the run's artifacts.
 
 ### Release
 
 - **Version.** The binding's version plus a local label for its SDK build, from TheRock's version scripts ([`versioning.md`](../packaging/versioning.md)), for example `0.2.0+rocm10.1.0a20261119`.
-- **Dependency.** Nightly and prerelease wheels pin the exact SDK build they were validated with, `rocm[libraries]==<SDK version>`, and check the same version at import. Installing one installs the matching SDK wheels, or moves an existing install to that build, so two packages install together only when they share an SDK build.
-- **Stable releases.** Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling already does for some SDK-dependent wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
-- **Index.** Binding wheels publish as separate wheels to the same per-channel Python index as the SDK wheels ([`RELEASES.md`](../../RELEASES.md)), only after passing validation.
+- **Dependency.** Nightly and prerelease wheels pin the exact SDK build they were built and validated with, `rocm[libraries]==<SDK version>`, and check the same version at import. Installing one installs the matching SDK wheels, or moves an existing install to that build, so two packages install together only when they share an SDK build.
+- **Stable releases.** Only wheels whose GPU tests passed are promoted. Promotion to stable rewrites the pin to a patch-compatible range (`~=X.Y.Z`) and the import check to `X.Y.*`, as TheRock's promotion tooling already does for some SDK-dependent wheels, so later SDK patch and post releases work without a rebuild. Because promotion rewrites the wheel's metadata, the release records the validated wheel's digest next to the promoted one.
+- **Index.** Binding wheels publish as separate wheels to the same per-channel Python index as the SDK wheels ([`RELEASES.md`](../../RELEASES.md)), after passing the CPU checks, in the same release as the SDK wheels they depend on.
 - **Cadence.** Every SDK build ships its bindings, rebuilt for it. TheRock releases continuously, so a native change that breaks its binding is a build break, fixed by the component team in the same pull request.
 
 ## Rollout
 
 1. **Directory setup.** Add `bindings/python/README.md`, pointing to this RFC, in `rocm-libraries` and `rocm-systems`.
 
-1. **Origami pilot.** Move Origami's Python package to `bindings/python/rocm-origami/` as its own project that finds the installed shared `liborigami` with `find_package()`, rejects a static one, and loads ROCm as described above. It takes the installed-library path from rocm-libraries#10975; Origami's build-from-source mode stays out of the binding. Then add the TheRock job, validation, and publishing, including:
+1. **Origami pilot.** Move Origami's Python package to `bindings/python/rocm-origami/` as its own project that finds the installed shared `liborigami` with `find_package()`, rejects a static one, and loads ROCm as described above. It takes the installed-library path from rocm-libraries#10975; Origami's build-from-source mode stays out of the binding. Then take the wheel through TheRock's release path, adding the `ROCM_SDK_VERSION` build input and `device-*` extras first:
 
-   - the `ROCM_SDK_VERSION` build input and `device-*` extras;
-   - a package classification for binding wheels in TheRock's upload and release tooling, which today accepts only core, PyTorch, and JAX packages and files any `rocm`-prefixed name, such as `rocm-origami`, as core;
-   - stable promotion support for binding wheels, including their device extras.
+   1. Build the wheel locally.
+   1. Build it in CI and upload it to the run's artifact bucket, following [`workflow_outputs.md`](../development/workflow_outputs.md).
+   1. Publish nightlies to the central release indexes with [`publish_rocm_to_release_buckets.py`](../../build_tools/github_actions/publish_rocm_to_release_buckets.py), with the package added to [`rocm_whl_next_ownership.yaml`](../../build_tools/packaging/python/rocm_whl_next_ownership.yaml). This needs a package classification for binding wheels in TheRock's upload and release tooling, which today accepts only core, PyTorch, and JAX packages and files any `rocm`-prefixed name, such as `rocm-origami`, as core.
+   1. Promote from prerelease to stable with [`promote_packages.py`](../../build_tools/packaging/promote_packages.py) and [`upload_release_packages.py`](../../build_tools/packaging/upload_release_packages.py), extended to support binding wheels and their device extras.
 
    The pilot is done when:
 
    - Origami installs with `pip` from its directory against an installed SDK without rebuilding or replacing `liborigami`;
-   - TheRock builds, validates, and publishes its wheel with the matching SDK, with provenance recorded;
+   - TheRock builds, validates, and publishes its wheel with the matching SDK, with provenance recorded, and promotes it to stable after its GPU tests pass;
    - Origami's Python floor or per-minor exception is decided; and
    - the guide lets the next component follow without new design work.
 
@@ -192,7 +198,7 @@ After the pilot, these proceed independently:
 - **TensileLite** adopts the packaging and validation rules; its location is an open question.
 - **rocSHMEM** moves `python/rocshmem/` to `bindings/python/rocshmem4py/`, and [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) moves its wheel build out of the native build into the binding job.
 - **Other components** adopt the layout as they add bindings. Maintainers review the first layouts closely in code review.
-- A **developer guide** under `docs/packaging/` links back to this RFC.
+- **Packaging guidance.** The [Building Python Based Projects](../packaging/python_packaging.md#building-python-based-projects) section of `python_packaging.md` is extended to cover ROCm subprojects with bindings as well as frameworks, and links back to this RFC.
 
 ## Stakeholders
 
@@ -200,7 +206,6 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 
 ## Open questions
 
-- **Python 3.10 and 3.11.** nanobind's Stable ABI needs Python 3.12, but ROCm and PyTorch, which uses Origami's Python package, still require 3.10 and 3.11 ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)). The Origami pilot either needs a per-minor build exception or accepts a 3.12 floor. rocSHMEM's existing per-minor wheels need the same decision.
 - **TensileLite.** The native hipBLASLt build uses TensileLite, and `rocisa` is built with hipBLASLt. Whether the package moves to `bindings/python/`, and whether `rocisa` leaves the native build, is settled with the hipBLASLt maintainers.
 - **Import namespace.** Whether custom bindings use their own top-level import packages or the shared `rocm.*` namespace that `hip-python` keeps open is settled with the `hip-python` owners.
 
@@ -229,3 +234,4 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 - 2026-10-01: Merge `main`; number as RFC0017 (Brian Harrison).
 - 2026-11-19: Replace the `rocm-bindings` repository with `bindings/python/<package-name>/` in each super-repo, per review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050). TheRock builds, validates, and publishes binding wheels after the SDK, following its SDK-dependent wheel versioning and promotion. Add validation, provenance, and the Stable ABI policy. Name Origami as the pilot (Brian Harrison).
 - 2026-11-19: Merge `main`; renumber as RFC0019, since RFC0017 is claimed by another open pull request and RFC0019 is not on `main` or claimed by one (Brian Harrison).
+- 2026-11-20: Address review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050): CPU checks gate publication and GPU tests gate promotion to stable; binding wheels carry no device code of their own; the Stable ABI floor is the minimum Python version, with other versions only by exception; release tooling sequence for the pilot; shared library-resolution fixes; packaging guidance in `python_packaging.md` (Brian Harrison).
