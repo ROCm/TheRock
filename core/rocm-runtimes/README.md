@@ -5,12 +5,19 @@ Linux builds can enable `rocm-systems/runtimes/` with
 TheRock's BASE and COMPILER features. It is independent of
 `THEROCK_ENABLE_CORE_RUNTIME`.
 
+This TheRock integration currently supports Linux only. Upstream contains Windows
+host support, but native Windows build and test qualification is still in progress.
+
 Prepare Rust, Cargo and dependency sources as described in the selected
 `rocm-systems/runtimes/` revision. The build forwards `ROCM_RUNTIMES_CARGO`,
 `ROCM_RUNTIMES_RUSTC`, `ROCM_RUNTIMES_LLD`, `ROCM_RUNTIMES_CARGO_HOME`,
 `ROCM_RUNTIMES_CARGO_CONFIG` and `ROCM_RUNTIMES_CARGO_JOBS` when supplied.
-Relative Cargo configuration paths are anchored to the initial CMake invocation
-directory. Clearing configuration or jobs removes the previous child setting.
+CMake anchors untyped `-D` path inputs to its invocation directory when it
+initializes their cache types. Any paths still relative after cache initialization
+use TheRock's top-level source directory.
+Clearing an override removes the previous child setting. Cargo and Rust compiler
+discovery are handled upstream; the default linker comes from TheRock's compiler
+toolchain.
 An absent or explicitly empty Cargo home selects the upstream build's isolated
 `cargo-home` directory. Rerun outer CMake after changing `RUSTFLAGS`,
 `CARGO_ENCODED_RUSTFLAGS` or `PATH`; upstream captures them during configuration.

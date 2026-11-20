@@ -272,6 +272,7 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
 
 # Additional manual features that don't map to artifacts
 
+# TODO: Move this feature to BUILD_TOPOLOGY.toml when runtimes produce artifacts.
 if(THEROCK_RESET_FEATURES)
   unset(THEROCK_ENABLE_ROCDDI_RUNTIMES CACHE)
 endif()

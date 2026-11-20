@@ -120,12 +120,16 @@ if(THEROCK_ENABLE_ROCDDI_RUNTIMES)
   if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "rocm-systems/runtimes currently requires Linux")
   endif()
-  if(NOT EXISTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/CMakeLists.txt")
-    message(FATAL_ERROR "THEROCK_ENABLE_ROCDDI_RUNTIMES requires a rocm-systems source revision containing runtimes/")
-  endif()
   include("${CMAKE_CURRENT_SOURCE_DIR}/rocm-runtimes/RuntimeInputs.cmake")
   therock_prepare_runtime_inputs(
     _runtimes_cmake_args _runtimes_state _runtimes_input_depends _runtimes_sources)
+  if(NOT ROCM_RUNTIMES_LLD)
+    # Rust's linker lookup is separate from CMAKE_LINKER. Use the toolchain's
+    # ld.lld without exposing LLVM headers, libraries or CMake packages.
+    therock_cmake_subproject_dist_dir(_runtimes_toolchain_dir amd-llvm)
+    list(APPEND _runtimes_cmake_args
+      "-DROCM_RUNTIMES_LLD:FILEPATH=${_runtimes_toolchain_dir}/lib/llvm/bin/ld.lld")
+  endif()
   therock_cmake_subproject_declare(rocm-runtimes
     HARDENING_DEFERRED "runtime Cargo build including native AddrLib"
     DISABLE_AMDGPU_TARGETS
@@ -139,7 +143,6 @@ if(THEROCK_ENABLE_ROCDDI_RUNTIMES)
     CMAKE_ARGS
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       ${_runtimes_cmake_args}
-    BUILD_DEPS amd-llvm
   )
   target_sources(rocm-runtimes PRIVATE ${_runtimes_sources})
   therock_cmake_subproject_activate(rocm-runtimes)
