@@ -238,11 +238,14 @@ if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
       LIBCLANG
       OFFLOAD_ARCH
     )
-    if(WIN32)
-      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-      # we might as well build them from source ourselves.
-      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-    endif()
+    # Required on every platform. LLVM lists clang-scan-deps in the runtimes'
+    # TOOLCHAIN_TOOLS so the scanner is built before CMake probes for it, but
+    # only when the target exists. Since LLVM raised its CMake minimum to 3.31,
+    # CMP0155 is NEW and the C++20-or-later runtimes are scanned for module
+    # imports, so omitting this target leaves the scan command unresolved.
+    # On Windows it can also come from MSVC's "C++ Clang tools for Windows",
+    # but we might as well build it from source ourselves.
+    list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
     therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
   endblock()
 endif()
