@@ -87,9 +87,11 @@ function(find_library_prefix package_name target_name output_var)
   endif()
 endfunction()
 
-# Download the ROCgdb CI helper scripts from a single amd-staging commit into
-# dest_dir. Resolves the branch first so a push landing between the two
-# downloads cannot give a mismatched pair.
+# Download the ROCgdb CI helper files from a single amd-staging commit into
+# dest_dir. Each name is relative to .github/scripts and may include a
+# subdirectory (for example sanitizers/tsan.supp), which is created under
+# dest_dir. Resolves the branch first so a push landing between the
+# downloads cannot give a mismatched set.
 #
 # Use curl rather than file(DOWNLOAD): file(DOWNLOAD)'s STATUS is the libcurl
 # transfer code, so HTTP 404/500 responses are reported as success and the
@@ -119,7 +121,7 @@ function(_rocgdb_download_ci_scripts dest_dir)
       message(STATUS "Attempting to download ${script} (attempt ${attempt}/3)")
       execute_process(
         COMMAND "${CURL_EXECUTABLE}"
-          --fail --silent --show-error --location
+          --fail --silent --show-error --location --create-dirs
           --max-time 60
           --output "${script_path}"
           "${script_url}"
@@ -151,9 +153,10 @@ option(ROCGDB_UPSTREAM_BUILD "Building from upstream master (skips AMD-specific 
 
 # When the rocgdb source tree does not carry .github/scripts/test_rocgdb.py,
 # rocjitsu_emulator.py or rocgdb_emulate.py (e.g. an upstream branch), fetch
-# them from ROCm/ROCgdb amd-staging at configure time so that they can be
-# installed for TheRock CI to invoke.
-option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from amd-staging if missing in source tree" OFF)
+# them, and the sanitizer suppression files that test_rocgdb.py uses, from
+# ROCm/ROCgdb amd-staging at configure time so that they can be installed for
+# TheRock CI to invoke.
+option(ROCGDB_DOWNLOAD_CI_SCRIPT "Download test_rocgdb.py, rocjitsu_emulator.py, rocgdb_emulate.py and the sanitizer suppression files from amd-staging if the scripts are missing in source tree" OFF)
 
 # Find standard build tools.
 find_program(MAKE_EXECUTABLE NAMES make REQUIRED)
@@ -781,6 +784,7 @@ if(BUILD_TESTING)
     "contrib/dg-extract-results.py"
     "gdb/disable-implicit-rules.mk"
     "gdb/silent-rules.mk"
+    "gdb/tsan-suppressions.txt"
     "include/dwarf2.def"
     "include/dwarf2.h"
   )
@@ -829,6 +833,18 @@ if(BUILD_TESTING)
   # missing and ROCGDB_DOWNLOAD_CI_SCRIPT is enabled, all are fetched from the
   # same amd-staging commit so they always match.
   set(ROCGDB_CI_SCRIPTS test_rocgdb.py rocjitsu_emulator.py rocgdb_emulate.py)
+  # The suppression files that test_rocgdb.py picks up from a "sanitizers"
+  # directory next to it.  They are not required, so they do not make the
+  # configuration fail when missing, but when the scripts have to be
+  # downloaded they are downloaded with them, so they come from the same
+  # commit as the test_rocgdb.py that reads them.
+  set(ROCGDB_CI_SANITIZER_SUPPRESSIONS
+    sanitizers/asan.supp
+    sanitizers/hwasan.supp
+    sanitizers/lsan.supp
+    sanitizers/msan.supp
+    sanitizers/tsan.supp
+    sanitizers/ubsan.supp)
   set(ROCGDB_CI_SCRIPTS_DIR "${ROCGDB_SOURCE_DIR}/.github/scripts")
   set(missing_ci_scripts)
   foreach(script IN LISTS ROCGDB_CI_SCRIPTS)
@@ -844,7 +860,8 @@ if(BUILD_TESTING)
     endif()
     message(STATUS "${missing_ci_scripts_list} missing from the source tree")
     set(ROCGDB_CI_SCRIPTS_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-    _rocgdb_download_ci_scripts("${ROCGDB_CI_SCRIPTS_DIR}" ${ROCGDB_CI_SCRIPTS})
+    _rocgdb_download_ci_scripts("${ROCGDB_CI_SCRIPTS_DIR}"
+      ${ROCGDB_CI_SCRIPTS} ${ROCGDB_CI_SANITIZER_SUPPRESSIONS})
   endif()
 
   install(
@@ -877,6 +894,23 @@ if(BUILD_TESTING)
   else()
     message(WARNING "rocgdb tests: xfails ignore list not found at "
       "${ROCGDB_SOURCE_DIR}/.github/scripts/rocgdb_ignore_list.json; skipping installation.")
+  endif()
+
+  # Install the sanitizer suppression files that test_rocgdb.py picks up from
+  # a "sanitizers" directory next to it (<sanitizer>.supp, passed through
+  # <SANITIZER>_OPTIONS=suppressions=).  They come from the same place as the
+  # scripts: the source tree, or the download above.  They are optional for
+  # the script, so a source tree that has the scripts but not these files is
+  # not an error.
+  set(ROCGDB_SANITIZER_SUPPRESSIONS_DIR "${ROCGDB_CI_SCRIPTS_DIR}/sanitizers")
+  if(EXISTS "${ROCGDB_SANITIZER_SUPPRESSIONS_DIR}")
+    install(DIRECTORY ${ROCGDB_SANITIZER_SUPPRESSIONS_DIR}/
+      DESTINATION tests/rocgdb/sanitizers
+      COMPONENT tests
+      FILES_MATCHING PATTERN "*.supp")
+  else()
+    message(STATUS "rocgdb tests: sanitizer suppressions not found at "
+      "${ROCGDB_SANITIZER_SUPPRESSIONS_DIR}; skipping installation.")
   endif()
 else()
   message(STATUS "rocgdb tests: BUILD_TESTING not set. Skipping installation integrity tests.")
