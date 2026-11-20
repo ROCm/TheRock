@@ -233,8 +233,9 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
 ```
 
 `--verify-repo-url` checks that the repository is reachable before building. It
-is skipped for nightly and dev: their package points at the build folder of the
-release run that builds it, and that run publishes the folder only afterwards.
+applies to stable and rc, whose repository already exists. It is skipped for
+nightly and dev: their package points at the build folder of the release run that
+builds it, and that run publishes the folder only afterwards.
 
 ### Package naming
 
