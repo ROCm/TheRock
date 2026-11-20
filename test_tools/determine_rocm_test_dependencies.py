@@ -141,6 +141,7 @@ _CI_TEST_SELECTOR_ALIASES = {
     "hipdnn": ["hipdnn", "hipdnn-cudnn-samples"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
+    "hipblaslt": ["hipblaslt", "hipblaslt-rocjitsu-race"],
     "miopen": ["miopen", "miopen-dbsync"],
     "rocgdb": ["rocgdb-cpu", "rocgdb-gpu"],
     "rocr-debug-agent-tests": ["rocr-debug-agent"],
