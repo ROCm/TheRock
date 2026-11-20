@@ -195,7 +195,8 @@ if(THEROCK_ENABLE_PRIM)
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        # hipCUB (hipccl3) requires libhipcxx via find_package at configure time.
+        # hipccl3 with the CCCL 3.1 changes requires libhipcxx via find_package at
+        # configure time; it must be built and staged before hipCCL configures.
         libhipcxx
       RUNTIME_DEPS
         hip-clr
@@ -385,6 +386,10 @@ if(THEROCK_ENABLE_PRIM)
         -DROCM_DIR=
         -DBUILD_TEST=${_rocthrust_tests_enabled}
         -DBUILD_BENCHMARK=${_primlibs_benchmark_enable}
+        # libhipcxx is now declared before PRIM, so the strict package provider
+        # rejects rocThrust's optional find_package(libhipcxx) (no declared dep).
+        # Keep rocThrust off its optional libhipcxx backend, as on main.
+        -DROCTHRUST_USE_LIBHIPCXX=OFF
       CMAKE_INCLUDES
         ${_primlibs_benchmark_includes}
       COMPILER_TOOLCHAIN
