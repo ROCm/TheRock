@@ -723,6 +723,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         help="Where to write the reuse plan (JSON)",
     )
     add_selection_arguments(lookup_parser)
+    lookup_parser.set_defaults(func=run_lookup)
     record_parser = subparsers.add_parser(
         "record", help="Import a CI run's fingerprints and checksums"
     )
@@ -743,6 +744,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         help="List every skipped artifact instead of only counting them",
     )
     add_selection_arguments(record_parser)
+    record_parser.set_defaults(func=run_record)
     return parser.parse_args(argv)
 
 
@@ -828,10 +830,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the selected command and return its exit status, reporting errors."""
     args = parse_arguments(argv)
     try:
-        if args.command == "record":
-            run_record(args)
-        else:
-            run_lookup(args)
+        args.func(args)
         return 0  # Both cache hits and ordinary misses are successful queries.
     except (CacheError, json.JSONDecodeError, OSError, UnicodeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
