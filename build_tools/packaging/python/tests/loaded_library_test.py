@@ -43,7 +43,9 @@ class LoadedLibraryTest(unittest.TestCase):
                 .rstrip("=")
             )
             with patch.object(
-                utils, "get_loaded_library_path", return_value=expected.resolve(strict=True)
+                utils,
+                "get_loaded_library_path",
+                return_value=expected.resolve(strict=True),
             ):
                 utils.assert_loaded_library(None, expected, digest)
                 expected.write_bytes(b"version=1; modified runtime")
@@ -53,7 +55,9 @@ class LoadedLibraryTest(unittest.TestCase):
             conflict.parent.mkdir()
             conflict.write_bytes(original)
             with patch.object(
-                utils, "get_loaded_library_path", return_value=conflict.resolve(strict=True)
+                utils,
+                "get_loaded_library_path",
+                return_value=conflict.resolve(strict=True),
             ):
                 with self.assertRaisesRegex(
                     AssertionError, "Unexpected loaded library"
