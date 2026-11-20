@@ -149,6 +149,8 @@ def get_scoped_stage_features(
     artifact_names: List[str],
     platform_name: str = "",
     build_dir: Path = None,
+    enabled_flags: Optional[Set[str]] = None,
+    processor_name: str = "",
 ) -> Set[str]:
     """Get features for a subset of a stage's artifacts, plus what they need.
 
@@ -164,7 +166,7 @@ def get_scoped_stage_features(
     # Resolve the requested names the same way an unscoped --artifacts build
     # does, so project_mappings.json keeps priority over the subproject alias
     # map (hipSPARSE must land on SPARSE, not on blas).
-    features = get_artifact_features(
+    requested_features = get_artifact_features(
         topology, artifact_names, platform_name=platform_name, build_dir=build_dir
     )
 
@@ -176,7 +178,9 @@ def get_scoped_stage_features(
 
     closure: Set[str] = set()
     worklist = [
-        name for feature in features for name in feature_to_artifacts.get(feature, [])
+        name
+        for feature in requested_features
+        for name in feature_to_artifacts.get(feature, [])
     ]
     while worklist:
         artifact_name = worklist.pop()
@@ -189,12 +193,25 @@ def get_scoped_stage_features(
 
     closure |= topology.get_inbound_artifacts(stage_name)
 
-    return features | get_artifact_features(
-        topology,
-        sorted(closure),
-        platform_name=platform_name,
-        build_dir=build_dir,
-    )
+    # Gate exactly like get_stage_features. resolve_artifacts_to_features only
+    # looks at disable_platforms, missing disable_platforms_if_flags_not_set,
+    # which would enable CORE_RUNTIME on Windows and fail configure with
+    # "CORE_RUNTIME can be built on Windows only with
+    # -DTHEROCK_FLAG_HSA_WINDOWS_SHARED_RUNTIME=ON".
+    features: Set[str] = set()
+    for artifact_name in closure:
+        artifact = topology.artifacts.get(artifact_name)
+        if artifact is None:
+            continue
+        if topology.is_artifact_disabled_on_platform(
+            artifact, platform_name, enabled_flags=enabled_flags
+        ):
+            continue
+        if topology.is_artifact_disabled_on_processor(artifact, processor_name):
+            continue
+        features.add(topology.get_artifact_feature_name(artifact))
+
+    return features
 
 
 def filter_artifacts_for_stage(
