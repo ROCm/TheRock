@@ -286,7 +286,21 @@ jobs:
       # custom skip-list integration, serialized execution, GPU selection, and
       # more. The list of included test suites is limited here compared to in
       # test_pytorch_wheels_full.yml.
+      # TEMP validation for ROCm/TheRock#10078: native program linking libtorch.
+      - name: Run PyTorch standalone C++ JIT test
+        timeout-minutes: 30
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py \
+            --test-config default \
+            --device-query "${DEVICE_QUERY}" \
+            --gpu-policy "${GPU_POLICY}" \
+            --include test_utils \
+            -k TestStandaloneCPPJIT \
+            -- \
+            --continue-on-collection-errors
+
       - name: Run PyTorch tests
+        if: false # TEMP: validation branch runs only the standalone test.
         timeout-minutes: 120
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
@@ -306,7 +320,7 @@ jobs:
       # Keep this separate from the core invocation because bypassing upstream's
       # Windows blocklist would also re-enable blocklisted core modules.
       - name: Run PyTorch transformer tests
-        if: ${{ !cancelled() }}
+        if: false # TEMP: validation branch runs only the standalone test.
         timeout-minutes: 60
         env:
           # Opt Navi into AOTriton kernels that are disabled by default so the
