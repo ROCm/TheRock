@@ -258,6 +258,7 @@ jobs:
         timeout-minutes: 10
         env:
           PYTHONDONTWRITEBYTECODE: '1'
+          ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
         run: >-
           python3 build_tools/github_actions/rocddi_hsa_diagnostics.py
           --candidate "$PWD/candidate" --output "$PWD/diagnostics/hsa"
