@@ -887,6 +887,8 @@ class BuildConfig:
     build_runs_on_large: str = ""
     build_runs_on_small: str = ""
     build_runs_on_medium: str = ""
+    # Release tarballs use a Linux container, including for Windows artifacts.
+    build_runs_on_tarballs: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
     # Stages excluded from the build graph entirely (no build, no artifact copy).
@@ -2117,6 +2119,9 @@ def _expand_build_config_for_platform(
     build_runs_on_medium = select_build_runner(
         platform, build_variant, size="medium", triggers=triggers
     )
+    build_runs_on_tarballs = select_build_runner(
+        "linux", build_variant, size="large", triggers=triggers
+    )
 
     pytorch_build_matrix: list[dict[str, str]] = []
     build_pytorch = jobs.build_pytorch.action == JobAction.RUN
@@ -2270,6 +2275,7 @@ def _expand_build_config_for_platform(
         build_runs_on_large=build_runs_on_large,
         build_runs_on_small=build_runs_on_small,
         build_runs_on_medium=build_runs_on_medium,
+        build_runs_on_tarballs=build_runs_on_tarballs,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,
         skip_stages=jobs.build_rocm.skipped_stages,

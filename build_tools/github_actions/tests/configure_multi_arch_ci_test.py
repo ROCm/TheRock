@@ -2348,6 +2348,21 @@ class TestExpandBuildConfigs(unittest.TestCase):
         expected_keys = {f.name for f in fields(cm.BuildConfig)}
         self.assertEqual(set(d.keys()), expected_keys)
 
+    @patch("configure_multi_arch_ci.select_build_runner")
+    def test_windows_tarballs_use_large_linux_runner(self, select_runner):
+        select_runner.side_effect = (
+            lambda platform, variant, size, triggers: f"{platform}-{size}"
+        )
+        result = cm.expand_build_configs(
+            self._inputs(),
+            cm.GitContext(),
+            cm.TargetSelection(windows_families=["gfx110x"]),
+            _jobs(build_pytorch=False),
+        )
+        self.assertIsNone(result.linux)
+        self.assertEqual(result.windows.build_runs_on_large, "windows-large")
+        self.assertEqual(result.windows.build_runs_on_tarballs, "linux-large")
+
     @patch(
         "configure_multi_arch_ci.get_latest_python_package_version",
         return_value="10.1.0",
@@ -3794,9 +3809,10 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         workflow_path = WORKFLOWS_DIR / "multi_arch_ci_linux.yml"
         yaml_fields = self._extract_build_config_fields(workflow_path)
         python_fields = {f.name for f in fields(cm.BuildConfig)}
-        # build_native_windows is Windows-only, so Linux CI does not consume it.
+        # build_native_windows is Windows-only; tarballs are release-only.
         unused_fields = {
             "build_native_windows",
+            "build_runs_on_tarballs",
         }
         self.assertEqual(
             yaml_fields,
@@ -3814,11 +3830,13 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
         # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
+        # Tarballs are release-only.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
             "wsl_per_family_info",
+            "build_runs_on_tarballs",
         }
         self.assertEqual(
             yaml_fields,
