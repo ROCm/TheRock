@@ -43,15 +43,18 @@ def get_loaded_library_path(library: ctypes.CDLL) -> Path:
     return Path(link_map.contents.name.decode()).resolve(strict=True)
 
 
-def get_record_sha256(distribution: str, library_path: Path) -> str:
+def get_record_sha256(distributions: list[str], library_path: Path) -> str:
     """Read the wheel's expected digest, independently of the DLL/SO bytes."""
     expected_path = library_path.resolve(strict=True)
-    for entry in importlib.metadata.files(distribution) or ():
-        if Path(entry.locate()).resolve() == expected_path:
-            if entry.hash is None or entry.hash.mode != "sha256":
-                raise AssertionError(f"Missing SHA-256 in wheel RECORD: {library_path}")
-            return entry.hash.value
-    raise AssertionError(f"Library is not in {distribution}'s RECORD: {library_path}")
+    for distribution in distributions:
+        for entry in importlib.metadata.files(distribution) or ():
+            if Path(entry.locate()).resolve() == expected_path:
+                if entry.hash is None or entry.hash.mode != "sha256":
+                    raise AssertionError(
+                        f"Missing SHA-256 in wheel RECORD: {library_path}"
+                    )
+                return entry.hash.value
+    raise AssertionError(f"Library is not in {distributions}' RECORDs: {library_path}")
 
 
 def assert_loaded_library(

@@ -152,7 +152,7 @@ class ROCmCoreTest(unittest.TestCase):
 
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 expected_sha256 = utils.get_record_sha256(
-                    di.ALL_PACKAGES["core"].get_dist_package_name(), so_path
+                    [di.ALL_PACKAGES["core"].get_dist_package_name()], so_path
                 )
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
