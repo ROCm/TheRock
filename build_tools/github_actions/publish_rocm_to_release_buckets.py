@@ -222,7 +222,7 @@ def _publish_python_packages_structured(
 
 
 def _build_date(value: str) -> str:
-    """argparse type for ``--build-date``: ``YYYYMMDD``, or empty for today."""
+    """argparse type for `--build-date`: `YYYYMMDD`, or empty for today."""
     if not value:
         return datetime.date.today().strftime("%Y%m%d")
     try:
@@ -247,7 +247,7 @@ def publish_native_linux_packages(
     multi_arch_build_native_linux_packages.yml) and already include repodata
     (Packages/Release files for deb, repodata/ for rpm).
 
-    The dated folder uses ``build_date``, the run's build date (the nightly
+    The dated folder uses `build_date`, the run's build date (the nightly
     amd-repo-setup package names the same folder), or today if none is given.
 
     dev/nightly example:
@@ -307,7 +307,7 @@ def publish_repo_setup_packages(
 ) -> None:
     """Copy the amd-repo-setup packages from the artifacts bucket to the release bucket.
 
-    Files already published are left in place unless ``overwrite`` is set (for
+    Files already published are left in place unless `overwrite` is set (for
     re-publishing a corrected package by hand). Not every build uploads
     packages, so finding none is not an error.
 
@@ -403,7 +403,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--skip-native-packages",
         action="store_true",
-        help="Skip publishing native Linux packages (deb/rpm repositories and the "
+        help="Skip publishing native Linux packages (deb/rpm and "
         "amd-repo-setup packages)",
     )
     parser.add_argument(
