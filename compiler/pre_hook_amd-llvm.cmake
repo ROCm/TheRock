@@ -49,7 +49,12 @@ else()
     # found in module mode, which ultimately fails to locate the library.
     # For now we will switch the priorty for find_package to first search in
     # CONFIG mode.
-    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+    # The runtimes build with C++20 or later, so CMP0155 (NEW since LLVM raised
+    # its CMake minimum to 3.31) makes CMake scan their sources for module
+    # imports. None of them use named modules, and clang-scan-deps is only in
+    # the required clang tools on Windows, so the scan would run with an unset
+    # scanner. Upstream libcxxabi disables the same policy for GNU.
+    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON;-DCMAKE_CXX_SCAN_FOR_MODULES=OFF")
 
     # Use DWARF4 for sanitizer builds. dwz (the DWARF optimization tool used in
     # Debian/Ubuntu packaging) doesn't fully support DWARF5 - it fails with
@@ -65,6 +70,7 @@ else()
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgpu-amd-amdhsa")
       set(RUNTIMES_amdgpu-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_amdgpu-amd-amdhsa_CMAKE_CXX_SCAN_FOR_MODULES OFF)
       set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
       set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
       set(RUNTIMES_amdgpu-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
