@@ -99,6 +99,64 @@ if(THEROCK_ENABLE_RAND)
   )
 endif(THEROCK_ENABLE_RAND)
 
+if(THEROCK_ENABLE_LIBHIPCXX)
+  ##############################################################################
+  # libhipcxx
+  ##############################################################################
+
+  set(libhipcxx_runtime_deps)
+  # Used on Linux when amd-smi is available. amdsmi is only declared when
+  # THEROCK_ENABLE_CORE_AMDSMI is ON (see core/CMakeLists.txt), so guard on the
+  # target existing to keep narrow configs (e.g. THEROCK_ENABLE_LIBHIPCXX=ON /
+  # THEROCK_ENABLE_ALL=OFF, as in the hipThreads nightly) from referencing a
+  # non-existent target.
+  if(NOT WIN32 AND TARGET amdsmi)
+    list(APPEND libhipcxx_runtime_deps amdsmi)
+  endif()
+
+  therock_cmake_subproject_declare(libhipcxx
+    # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
+    BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # Fixes issue with empty target list for unsupported architectures.
+    CMAKE_ARGS
+      -DLIBHIPCXX_COPY_TO_BUILD=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DCMAKE_CXX_STANDARD=17
+      -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl # Install into include/hipccl/
+      # Header/unit tests need hipCUB (which itself needs libhipcxx), so they
+      # build in the separate libhipcxx_tests subproject after prim.
+      -DLIBCUDACXX_ENABLE_LIBCUDACXX_TESTS=OFF
+      -Dlibhipcxx_ENABLE_CMAKE_TESTS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+      ${libhipcxx_runtime_deps}
+  )
+  therock_cmake_subproject_glob_c_sources(libhipcxx
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(libhipcxx lit)
+  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
+  therock_cmake_subproject_activate(libhipcxx)
+endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# Set by the PRIM block below; consumed by libhipcxx_tests.
+set(_libhipcxx_prim_build_deps)
+
 if(THEROCK_ENABLE_PRIM)
   # THEROCK_FLAG_BUILD_HIPCCL selects between the unified hipCCL superbuild
   # (projects/hipccl/hipccl3) and the legacy separate rocPRIM/hipCUB/rocThrust
@@ -130,6 +188,8 @@ if(THEROCK_ENABLE_PRIM)
         amd-hip
       BUILD_DEPS
         rocm-cmake
+        # hipCUB (hipccl3) requires libhipcxx via find_package at configure time.
+        libhipcxx
       RUNTIME_DEPS
         hip-clr
         ${THEROCK_BUNDLED_SQLITE3}
@@ -169,6 +229,7 @@ if(THEROCK_ENABLE_PRIM)
           therock-googletest
           rocRAND
           hipCCL
+          libhipcxx
           ${_primlibs_benchmark_deps}
         RUNTIME_DEPS
           hip-clr
@@ -356,6 +417,71 @@ if(THEROCK_ENABLE_PRIM)
       ${_prim_subproject_deps}
   )
 endif(THEROCK_ENABLE_PRIM)
+
+if(THEROCK_ENABLE_LIBHIPCXX)
+  ##############################################################################
+  # libhipcxx tests + artifact
+  #
+  # Declared after PRIM because the libhipcxx header tests include
+  # <hipcub/hipcub.hpp>, while hipCUB requires libhipcxx at configure time. The
+  # main libhipcxx subproject (tests off) is therefore a build dep of prim, and
+  # the tests build here, depending on both.
+  #
+  # Requires prim: without it nothing provides hipCUB and the header tests fail
+  # on <hipcub/hipcub.hpp>. Prim-off builds (e.g. a hipThreads-only config) skip
+  # the tests and ship no libhipcxx `test` component; no job that fetches it
+  # runs without prim.
+  ##############################################################################
+  set(_libhipcxx_artifact_subproject_deps libhipcxx)
+
+  if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_PRIM)
+    therock_cmake_subproject_declare(libhipcxx_tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx_tests"
+      BACKGROUND_BUILD
+      DEFAULT_GPU_TARGETS
+        gfx942  # Fixes issue with empty target list for unsupported architectures.
+      CMAKE_ARGS
+        -DLIBHIPCXX_COPY_TO_BUILD=ON
+        -DHIP_PLATFORM=amd
+        -DROCM_PATH=
+        -DROCM_DIR=
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+        -DCMAKE_CXX_STANDARD=17
+        -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        rocm-cmake
+        libhipcxx
+        ${_libhipcxx_prim_build_deps}
+      RUNTIME_DEPS
+        amd-llvm
+        hip-clr
+        ${libhipcxx_runtime_deps}
+    )
+    therock_cmake_subproject_glob_c_sources(libhipcxx_tests
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_require_host_program(libhipcxx_tests lit)
+    therock_cmake_subproject_activate(libhipcxx_tests)
+    list(APPEND _libhipcxx_artifact_subproject_deps libhipcxx_tests)
+  endif()
+
+  therock_provide_artifact(libhipcxx
+    DESCRIPTOR artifact-libhipcxx.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      ${_libhipcxx_artifact_subproject_deps}
+  )
+endif(THEROCK_ENABLE_LIBHIPCXX)
 
 set(_fft_enabled OFF)
 if(THEROCK_ENABLE_FFT)
@@ -603,69 +729,6 @@ if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
       rocALUTION
   )
 endif(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
-
-if(THEROCK_ENABLE_LIBHIPCXX)
-  ##############################################################################
-  # libhipcxx
-  ##############################################################################
-
-  set(libhipcxx_runtime_deps)
-  # Used on Linux when amd-smi is available. amdsmi is only declared when
-  # THEROCK_ENABLE_CORE_AMDSMI is ON (see core/CMakeLists.txt), so guard on the
-  # target existing to keep narrow configs (e.g. THEROCK_ENABLE_LIBHIPCXX=ON /
-  # THEROCK_ENABLE_ALL=OFF, as in the hipThreads nightly) from referencing a
-  # non-existent target.
-  if(NOT WIN32 AND TARGET amdsmi)
-    list(APPEND libhipcxx_runtime_deps amdsmi)
-  endif()
-
-  therock_cmake_subproject_declare(libhipcxx
-    # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
-    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
-    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
-    BACKGROUND_BUILD
-    DEFAULT_GPU_TARGETS
-      gfx942  # Fixes issue with empty target list for unsupported architectures.
-    CMAKE_ARGS
-      -DLIBHIPCXX_COPY_TO_BUILD=ON
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
-      -DCMAKE_CXX_STANDARD=17
-      -DLIBHIPCXX_INSTALL_INCLUDE_SUBDIR=hipccl # Install into include/hipccl/
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      ${_libhipcxx_prim_build_deps}
-    RUNTIME_DEPS
-      amd-llvm
-      hip-clr
-      ${libhipcxx_runtime_deps}
-  )
-  therock_cmake_subproject_glob_c_sources(libhipcxx
-    SUBDIRS
-      .
-  )
-  therock_cmake_subproject_require_host_program(libhipcxx lit)
-  therock_cmake_subproject_provide_package(libhipcxx libhipcxx lib/cmake/libhipcxx)
-  therock_cmake_subproject_activate(libhipcxx)
-
-  therock_provide_artifact(libhipcxx
-    DESCRIPTOR artifact-libhipcxx.toml
-    COMPONENTS
-      dbg
-      dev
-      lib
-      test
-    SUBPROJECT_DEPS
-      libhipcxx
-  )
-endif(THEROCK_ENABLE_LIBHIPCXX)
 
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
