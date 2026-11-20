@@ -190,7 +190,10 @@ def _build_container_options(
             test_runner label also decides whether Apptainer options apply.
         platform: The platform (e.g., "linux", "windows", "wsl")
         amdgpu_families: The AMDGPU family string being tested
+            (e.g. "gfx950-dcgpu", "gfx125X-dcgpu")
         apptainer_labels: Runner labels backed by Apptainer
+            (e.g. "linux-gfx950-1gpu-crusoe-rocm",
+            "linux-gfx950-8gpu-crusoe-rocm")
 
     Returns:
         The modified job_config with updated container_options
