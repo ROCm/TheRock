@@ -1551,10 +1551,9 @@ def run():
                 test_runs_on_default = ""
             else:
                 if test_runs_on_from_workflow is not None:
-                    # Workflow provided a non-empty runner. Spread over the label
-                    # pool only for the family's default runner, and not when a
-                    # manual run pins GPU jobs to it; any other runner (a pool
-                    # member, a kernel or test label) is used as-is.
+                    # TEST_RUNS_ON names one runner. Fill test_runs_on_labels
+                    # (the weighted pool) only when that name is the family's
+                    # default test-runs-on and this is not a manual dispatch.
                     if (
                         test_runs_on_from_workflow == platform_info.get("test-runs-on")
                         and not _manual_test_runs_on()
@@ -1562,6 +1561,10 @@ def run():
                         test_runs_on_labels = pool_with_apptainer(
                             platform_info, "test-runs-on-labels"
                         )
+                    # A manual dispatch, or any other label (one entry from the
+                    # pool, a kernel label, a test label), leaves the pool empty:
+                    # every GPU job then uses test_runs_on_default, which is
+                    # TEST_RUNS_ON itself.
                     test_runs_on_default = test_runs_on_from_workflow
                 else:
                     # Fallback to static matrix (backward compatibility)
