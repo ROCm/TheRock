@@ -1005,13 +1005,11 @@ class TestRealCommittedPolicies(unittest.TestCase):
         selected = self._select_for_external_project("projects/rocdbgapi")
         self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
         self.assertNotIn("rocgdb", selected)
-        self.assertNotIn("rocr-debug-agent-tests", selected)
 
     def test_clr_selects_all_runnable_debugger_tests(self) -> None:
         selected = self._select_for_external_project("projects/clr")
         self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
         self.assertNotIn("rocgdb", selected)
-        self.assertNotIn("rocr-debug-agent-tests", selected)
 
 
 # ---------------------------------------------------------------------------

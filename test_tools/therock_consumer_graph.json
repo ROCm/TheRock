@@ -11,8 +11,7 @@
   "amd-dbgapi": {
     "consumers": [
       "rocgdb",
-      "rocr-debug-agent",
-      "rocr-debug-agent-tests"
+      "rocr-debug-agent"
     ]
   },
   "amd-llvm": {
@@ -35,7 +34,6 @@
       "rdc",
       "rocgdb",
       "rocminfo",
-      "rocr-debug-agent",
       "rocr-runtime",
       "rocrtst",
       "therock-elfio",
@@ -113,7 +111,7 @@
       "rocprofiler-sdk",
       "rocprofiler-systems",
       "rocprofiler-systems-examples",
-      "rocr-debug-agent-tests",
+      "rocr-debug-agent",
       "rocrand",
       "rocroller",
       "rocshmem",
@@ -473,11 +471,6 @@
     "consumers": []
   },
   "rocr-debug-agent": {
-    "consumers": [
-      "rocr-debug-agent-tests"
-    ]
-  },
-  "rocr-debug-agent-tests": {
     "consumers": []
   },
   "rocr-runtime": {
@@ -489,7 +482,6 @@
       "rdc",
       "rocminfo",
       "rocr-debug-agent",
-      "rocr-debug-agent-tests",
       "rocrtst",
       "roctracer"
     ]
@@ -587,7 +579,6 @@
       "rocprofiler-sdk",
       "rocprofiler-systems",
       "rocr-debug-agent",
-      "rocr-debug-agent-tests",
       "rocr-runtime",
       "rocrtst"
     ]
@@ -680,7 +671,7 @@
       "rocblas",
       "rocfft",
       "rocprofiler-systems",
-      "rocr-debug-agent-tests",
+      "rocr-debug-agent",
       "rocrand",
       "rocroller",
       "rocshmem",
