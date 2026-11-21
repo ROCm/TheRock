@@ -4,7 +4,9 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed based on git diff.
+This script determines which projects changed, from the changed-file list that
+the GitHub API reports for the event (PR files for pull requests, compare for
+pushes).
 
 Note: Skip-CI logic (for docs-only changes) has been moved to
 configure_multi_arch_ci.py, which uses TOML config files for skip patterns.
@@ -24,7 +26,11 @@ Usage:
         --github-repo ROCm/rocm-libraries \
         --base-sha abc123 \
         --head-sha def456 \
+        --pr-number 123 \
         --config-path .github/repos-config.json
+
+    --pr-number defaults to the number in $GITHUB_EVENT_PATH. Without one, a
+    pull request is diffed with the compare endpoint, which stops at 300 files.
 
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths. Empty when
@@ -43,26 +49,21 @@ import fnmatch
 import json
 import logging
 import os
-import subprocess
 import sys
-import time
 from dataclasses import dataclass, fields
+from pathlib import Path
 from typing import (
-    Callable,
     Iterable,
     List,
     Mapping,
     Optional,
     Set,
-    Tuple,
-    Type,
-    TypeVar,
 )
+
+from configure_ci_path_filters import get_modified_paths_via_api
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-F = TypeVar("F", bound=Callable[..., object])
 
 # Patterns for files that don't require tests (docs, etc.)
 SKIPPABLE_PATH_PATTERNS = [
@@ -138,62 +139,42 @@ class RepoEntry:
     monorepo_source_of_truth: bool = False
 
 
-def retry(
-    max_attempts: int,
-    delay_seconds: float,
-    exceptions: Tuple[Type[BaseException], ...],
-) -> Callable[[F], F]:
-    """Retry decorator with exponential backoff."""
-
-    def decorator(func: F) -> F:
-        def wrapper(*args: object, **kwargs: object) -> object:
-            last_exception: BaseException | None = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    last_exception = e
-                    logger.warning(f"Attempt {attempt + 1}/{max_attempts} failed: {e}")
-                    if attempt < max_attempts - 1:
-                        time.sleep(delay_seconds * (2**attempt))
-            raise last_exception  # type: ignore[misc]
-
-        return wrapper  # type: ignore[return-value]
-
-    return decorator  # type: ignore[return-value]
-
-
-@retry(
-    max_attempts=3,
-    delay_seconds=2,
-    exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError),
-)
 def get_modified_paths_api(
-    github_repo: str, base_sha: str, head_sha: str
+    github_repo: str,
+    base_sha: str,
+    head_sha: str,
+    pr_number: Optional[int] = None,
 ) -> Optional[Set[str]]:
-    """Get paths of files changed using GitHub API (compare endpoint).
+    """Get paths of files changed using the GitHub API.
 
-    Returns None if the result is truncated (>300 files) to signal that the
-    diff is incomplete and cannot be used to narrow the run.
+    Pull requests use the PR files endpoint, which pages through up to 3000
+    files; other events use the compare endpoint, which stops at 300.
+
+    Returns None if the result is truncated or the API call fails, to signal
+    that the diff is incomplete and cannot be used to narrow the run.
     """
-    result = subprocess.run(
-        [
-            "gh",
-            "api",
-            f"repos/{github_repo}/compare/{base_sha}...{head_sha}",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,
+    paths = get_modified_paths_via_api(
+        github_repo, base_sha, head_sha, pr_number=pr_number
     )
-    data = json.loads(result.stdout)
-    files = data.get("files", [])
-    # GitHub compare API returns max 300 files; a truncated diff is unusable.
-    if len(files) >= 300:
-        logger.warning("Compare API returned 300+ files, result may be truncated")
+    return None if paths is None else set(paths)
+
+
+def get_pr_number_from_event() -> Optional[int]:
+    """Read the pull request number from the Actions event payload, if any."""
+    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    if not event_path:
         return None
-    return {f["filename"] for f in files}
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(event, dict):
+        return None
+    pull_request = event.get("pull_request")
+    number = pull_request.get("number") if isinstance(pull_request, dict) else None
+    if isinstance(number, int) and not isinstance(number, bool):
+        return number
+    return None
 
 
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
@@ -312,6 +293,7 @@ def configure(
     base_sha: Optional[str],
     head_sha: Optional[str],
     config_path: str,
+    pr_number: Optional[int] = None,
 ) -> str:
     """Main configuration logic.
 
@@ -331,8 +313,17 @@ def configure(
 
     # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
-        logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
-        modified_paths = get_modified_paths_api(github_repo, base_sha, head_sha)
+        if pr_number:
+            logger.info(f"Getting PR diff via API: PR #{pr_number} files")
+        else:
+            logger.warning(
+                "No PR number available; using the compare endpoint, which "
+                "returns at most 300 files"
+            )
+            logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
+        modified_paths = get_modified_paths_api(
+            github_repo, base_sha, head_sha, pr_number=pr_number
+        )
     elif event_name == "push" and base_sha and head_sha:
         # For push, the caller passes github.event.before as base_sha;
         # the compare API does not understand git "^" ancestry syntax.
@@ -342,16 +333,20 @@ def configure(
         logger.warning("No SHAs provided - not scoping to projects")
         return ""
 
-    # A truncated diff is an incomplete diff, so it cannot narrow the run.
+    # A truncated diff (or a failed API call) is incomplete, so it cannot
+    # narrow the run.
     if modified_paths is None:
-        logger.info("Truncated API response - not scoping to projects")
+        logger.warning(
+            "Changed files truncated or unavailable (API failure or too many "
+            "files) - not scoping to projects"
+        )
         return ""
 
     if not modified_paths:
         logger.info("No modified paths - no projects changed")
         return ""
 
-    logger.info(f"Modified paths: {len(modified_paths)} files")
+    logger.info(f"Modified paths: {len(modified_paths)}")
 
     # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
@@ -449,6 +444,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Head SHA for PR (github.event.pull_request.head.sha)",
     )
     parser.add_argument(
+        "--pr-number",
+        type=int,
+        default=None,
+        help="Pull request number (default: read from $GITHUB_EVENT_PATH)",
+    )
+    parser.add_argument(
         "--config-path",
         default=".github/repos-config.json",
         help="Path to repos-config.json",
@@ -468,6 +469,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         base_sha=args.base_sha or None,
         head_sha=args.head_sha or None,
         config_path=args.config_path,
+        pr_number=args.pr_number or get_pr_number_from_event(),
     )
 
     set_github_output({"changed_projects": changed_projects})

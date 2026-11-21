@@ -269,8 +269,10 @@ def get_git_modified_paths(
 ) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
-    Uses `git diff --name-only` to find files that have changed between the
-    base reference and the current working tree (including any uncommitted changes).
+    Uses `git diff --name-only --no-renames` to find files that have changed
+    between the base reference and the current working tree (including any
+    uncommitted changes). Rename detection is off so a moved file is listed at
+    both its old and new path; by default git lists only the new one.
 
     Args:
         base_ref: Git reference (commit SHA, branch name, or HEAD^1) to compare against
@@ -280,7 +282,10 @@ def get_git_modified_paths(
         List of relative file paths that were modified, or None if the operation times out
     """
     cwd_msg = f" (in {cwd})" if cwd else ""
-    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'{cwd_msg}")
+    print(
+        "Computing modified paths with: "
+        f"'git diff --name-only --no-renames {base_ref}'{cwd_msg}"
+    )
     try:
         # Push events can advance a branch by multiple commits. The setup
         # checkout is intentionally shallow, so event.before may be older than
@@ -292,7 +297,7 @@ def get_git_modified_paths(
 
         # We have the commit, now run the diff.
         return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
+            ["git", "diff", "--name-only", "--no-renames", base_ref],
             stdout=subprocess.PIPE,
             check=True,
             text=True,
@@ -398,14 +403,14 @@ def is_ci_run_required(
 
     relevant_paths = [path for path in paths_list if is_relevant(path)]
 
-    print(f"{label}Evaluating {len(paths_list)} changed file(s):")
+    print(f"{label}Evaluating {len(paths_list)} changed path(s):")
     for f in paths_list[:10]:
         print(f"  {'[ci]  ' if is_relevant(f) else '[skip]'} {f}")
     if len(paths_list) > 10:
         print(f"  ... and {len(paths_list) - 10} more")
 
     if relevant_paths:
-        print(f"{label}CI required: {len(relevant_paths)} CI-relevant file(s)")
+        print(f"{label}CI required: {len(relevant_paths)} CI-relevant path(s)")
         return True
     else:
         print(f"{label}All files skippable, CI can be skipped")
@@ -459,6 +464,23 @@ def get_ci_workflow_filenames() -> set[str]:
     """
     _, ci_filenames = _get_therock_config()
     return ci_filenames
+
+
+def _paths_from_api_entries(entries: list[dict]) -> list[str]:
+    """Paths touched by GitHub API file entries.
+
+    A renamed file lists both its new ("filename") and old ("previous_filename")
+    path. Both are changes: a file moved out of a project leaves that project.
+    Any entry with a "previous_filename" is treated this way, whatever its
+    "status"; at worst that over-selects tests.
+    """
+    paths: list[str] = []
+    for entry in entries:
+        paths.append(entry["filename"])
+        previous = entry.get("previous_filename")
+        if previous:
+            paths.append(previous)
+    return paths
 
 
 def get_modified_paths_via_api(
@@ -521,7 +543,7 @@ def get_modified_paths_via_api(
                 )
                 return None
 
-            return [f["filename"] for f in files]
+            return _paths_from_api_entries(files)
 
         except subprocess.TimeoutExpired:
             print(
@@ -570,6 +592,7 @@ def _get_pr_files_via_api(
     import time
 
     all_files: list[str] = []
+    entries_seen = 0
     page = 1
     per_page = 100  # Maximum allowed by GitHub API
 
@@ -594,10 +617,11 @@ def _get_pr_files_via_api(
                 if not files:
                     break
 
-                all_files.extend(f["filename"] for f in files)
+                all_files.extend(_paths_from_api_entries(files))
+                entries_seen += len(files)
 
                 # PR files endpoint returns max 3000 files total
-                if len(all_files) >= 3000:
+                if entries_seen >= 3000:
                     print(
                         f"  GitHub PR files API returned 3000+ files, result may be truncated"
                     )
@@ -630,6 +654,7 @@ def _get_pr_files_via_api(
             time.sleep(delay)
             # Reset pagination for retry
             all_files = []
+            entries_seen = 0
             page = 1
 
     print("  GitHub API request failed after all retries")
@@ -702,7 +727,7 @@ def get_changed_files_for_external_repo(
             repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
         )
         if changed_files is not None:
-            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+            print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         else:
             print(f"  External repo {repo_name}: API returned truncated/failed result")
         return changed_files
@@ -713,7 +738,7 @@ def get_changed_files_for_external_repo(
         print(f"    Comparing {base_sha[:12]}...{head_sha[:12]}")
         changed_files = get_modified_paths_via_api(repo_full_name, base_sha, head_sha)
         if changed_files is not None:
-            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+            print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         else:
             print(f"  External repo {repo_name}: API returned truncated/failed result")
         return changed_files
@@ -728,7 +753,7 @@ def get_changed_files_for_external_repo(
         changed_files = list(
             get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
         )
-        print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+        print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         return changed_files
 
     print(f"  External repo {repo_name}: no SHAs provided and checkout not found")

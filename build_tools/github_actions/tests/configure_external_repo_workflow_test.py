@@ -100,7 +100,7 @@ class ExternalRepoWorkflowTest(unittest.TestCase):
                     config_path=str(config_path),
                 )
 
-            get_paths.assert_called_once_with(repo, "base", "head")
+            get_paths.assert_called_once_with(repo, "base", "head", pr_number=None)
             return result
 
     def assertProjectScope(self, result, expected):

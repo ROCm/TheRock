@@ -653,7 +653,7 @@ class GitContext:
         if self.changed_files is None:
             print("GitContext: no changed files computed")
             return
-        print(f"GitContext: {len(self.changed_files)} changed file(s)")
+        print(f"GitContext: {len(self.changed_files)} changed path(s)")
         for path in self.changed_files[:20]:
             print(f"  {path}")
         if len(self.changed_files) > 20:
@@ -1043,7 +1043,7 @@ def should_skip_ci(
 
     # 2b. Local repo (TheRock): check changed files against built-in skip patterns.
     if not ci_inputs.external_repo and git_context.changed_files is not None:
-        print(f"  Checking {len(git_context.changed_files)} changed file(s)...")
+        print(f"  Checking {len(git_context.changed_files)} changed path(s)...")
         if not is_ci_run_required(git_context.changed_files):
             print("  TheRock: CI can be skipped")
             return True
