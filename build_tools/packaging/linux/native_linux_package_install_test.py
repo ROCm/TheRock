@@ -975,8 +975,8 @@ gpgcheck=0
         from build_repo_setup_package import PACKAGE_NAME
 
         # Matches the builder's file names (<name>_<version>_all.deb,
-        # <name>-<version>-<release>.noarch.rpm) and the published copies'
-        # (<name>-<tier>.<fmt>).
+        # <name>-<version>-<release>.noarch.rpm), which the published copies
+        # keep, and any other file named <name>*.<fmt>.
         pattern = (
             f"{PACKAGE_NAME}*.deb"
             if self.package_type == "deb"

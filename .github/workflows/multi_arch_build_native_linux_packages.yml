@@ -16,6 +16,11 @@ on:
         description: "ROCm version to append to the package (8.0.0, 8.0.1rc1, ...)"
         required: true
         type: string
+      build_date:
+        description: "Build date (YYYYMMDD) for the run's dated package folders; empty means today"
+        required: false
+        type: string
+        default: ""
       native_package_type:
         description: "Package type (deb or rpm)"
         required: true
@@ -80,7 +85,7 @@ jobs:
   # Resolve the parameters used to build and upload the amd-repo-setup package:
   # the OS-profile build matrix for this package type, each profile's container
   # image, and the repo.amd.com stream the build line configures, with its
-  # tier, packages base URL, signing-key URL and build sub-folder.
+  # packages base URL, signing-key URL, build sub-folder and version suffix.
   #
   # The build line and the stream are different vocabularies: prerelease
   # configures rc. release_type stays the workflow input because it also selects
@@ -102,14 +107,15 @@ jobs:
       NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_DATE: ${{ inputs.build_date }}
     outputs:
       os_profiles: ${{ steps.derive.outputs.os_profiles }}
       images: ${{ steps.derive.outputs.images }}
       stream: ${{ steps.derive.outputs.stream }}
-      tier: ${{ steps.derive.outputs.tier }}
       repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
       gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
+      version_suffix: ${{ steps.derive.outputs.version_suffix }}
     steps:
       - name: "Quartz - started - build amd-repo-setup"
         continue-on-error: true
@@ -144,7 +150,8 @@ jobs:
           python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-setup-params \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
-            --run-id "${ARTIFACT_RUN_ID}"
+            --run-id "${ARTIFACT_RUN_ID}" \
+            --build-date "${BUILD_DATE}"
 
   build_native_packages:
     permissions:
@@ -331,10 +338,10 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OS_PROFILE: ${{ matrix.os_profile }}
       STREAM: ${{ needs.resolve_repo_setup_params.outputs.stream }}
-      TIER: ${{ needs.resolve_repo_setup_params.outputs.tier }}
       REPO_BASE_URL: ${{ needs.resolve_repo_setup_params.outputs.repo_base_url }}
       GPG_KEY_URL: ${{ needs.resolve_repo_setup_params.outputs.gpg_key_url }}
       REPO_SUB_FOLDER: ${{ needs.resolve_repo_setup_params.outputs.repo_sub_folder }}
+      VERSION_SUFFIX: ${{ needs.resolve_repo_setup_params.outputs.version_suffix }}
     steps:
       - name: Checkout
         timeout-minutes: 15
@@ -372,13 +379,15 @@ jobs:
         run: |
           # The build sub-folder is empty except on a per-build stream, which is
           # the only kind the builder accepts one for. The key URL is empty on an
-          # unsigned stream, where the builder needs none.
+          # unsigned stream, where the builder needs none. The version suffix (the
+          # run id on a per-build stream) gives each build its own file name.
           $PYTHON_CMD build_tools/packaging/linux/build_repo_setup_package.py \
             --os-profile "${OS_PROFILE}" \
             --stream "${STREAM}" \
             --repo-base-url "${REPO_BASE_URL}" \
             --gpg-key-url "${GPG_KEY_URL}" \
             --repo-sub-folder "${REPO_SUB_FOLDER}" \
+            ${VERSION_SUFFIX:+--version-suffix "${VERSION_SUFFIX}"} \
             --rocm-version "${ROCM_VERSION}" \
             --dest-dir repo-setup-package-out \
             --verify-repo-url
@@ -405,7 +414,6 @@ jobs:
         run: |
           $PYTHON_CMD build_tools/packaging/linux/upload_repo_setup_package.py \
             --dest-dir repo-setup-package-out \
-            --tier "${TIER}" \
             --run-id "${ARTIFACT_RUN_ID}" \
             --os-profile "${OS_PROFILE}" \
             --pkg-type "${NATIVE_PACKAGE_TYPE}"

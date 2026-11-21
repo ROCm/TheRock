@@ -459,6 +459,9 @@ def main(argv):
         else:  # deb, rpm, or msi
             outputs[f"rocm_{pkg_type}_package_version"] = version
 
+    # The run's build date, so later jobs can share one date (e.g. the dated
+    # nightly package folders) instead of each reading the clock.
+    outputs["rocm_build_date"] = get_current_date()
     gha_set_output(outputs)
 
 
