@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="-50 -50 1200 1240" role="img" aria-labelledby="title description">
+<title id="title">Proposed shared source identity generator</title>
+<desc id="description">Fifteen numbered steps connect repository inputs and source preparation to validation, deterministic source markers, direct reading, sub-project fingerprints and artifact fingerprints. Numbers are in the bottom-left of their boxes.</desc>
+<rect x="-50" y="-50" width="1200" height="1240" fill="white"/>
+<polyline points="168,95 168,117" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="550,95 550,117" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="932,95 932,117" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="168,117 932,117" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="550,117 550,140" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,140 546,130 554,130" fill="#5B6C7C"/>
+<polyline points="550,270 550,290" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,290 546,280 554,280" fill="#5B6C7C"/>
+<polyline points="135,270 135,345 310,345" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="310,345 300,349 300,341" fill="#5B6C7C"/>
+<polyline points="790,345 955,345 955,425" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="955,425 951,415 959,415" fill="#5B6C7C"/>
+<polyline points="550,400 550,425" fill="none" stroke="#8055AD" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,425 546,415 554,415" fill="#8055AD"/>
+<polyline points="550,540 550,565" fill="none" stroke="#8055AD" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,565 546,555 554,555" fill="#8055AD"/>
+<polyline points="550,645 550,680" fill="none" stroke="#8055AD" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,680 546,670 554,670" fill="#8055AD"/>
+<polyline points="550,790 550,830" fill="none" stroke="#8055AD" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,830 546,820 554,820" fill="#8055AD"/>
+<polyline points="270,890 310,890" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="310,890 300,894 300,886" fill="#5B6C7C"/>
+<polyline points="830,890 790,890" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="790,890 800,886 800,894" fill="#5B6C7C"/>
+<polyline points="550,950 550,980" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,980 546,970 554,970" fill="#5B6C7C"/>
+<polyline points="550,1060 550,1090" fill="none" stroke="#5B6C7C" stroke-width="2" stroke-linejoin="round"/>
+<polygon points="550,1090 546,1080 554,1080" fill="#5B6C7C"/>
+<rect x="0" y="0" width="336" height="95" rx="8" fill="#F1F5F9" stroke="#64748B" stroke-width="2"/>
+<text x="168" y="28.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">rocm-systems</text>
+<text x="168" y="54.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Project and required</text>
+<text x="168" y="80.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">shared inputs</text>
+<rect x="382" y="0" width="336" height="95" rx="8" fill="#F1F5F9" stroke="#64748B" stroke-width="2"/>
+<text x="550" y="28.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">rocm-libraries</text>
+<text x="550" y="54.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Project and required</text>
+<text x="550" y="80.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">shared inputs</text>
+<rect x="764" y="0" width="336" height="95" rx="8" fill="#F1F5F9" stroke="#64748B" stroke-width="2"/>
+<text x="932" y="28.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Separate Git repositories</text>
+<text x="932" y="54.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Repository tree or</text>
+<text x="932" y="80.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">reviewed subtrees</text>
+<rect x="0" y="140" width="270" height="130" rx="8" fill="#E7F1FA" stroke="#527A9E" stroke-width="2"/>
+<text x="135" y="176.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Prepare sources</text>
+<text x="135" y="201.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Checkout and patches</text>
+<text x="135" y="226.94" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#425466">build_tools/fetch_sources.py</text>
+<text x="135" y="247.94" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#425466">or external checkout workflow</text>
+<rect x="310" y="140" width="480" height="130" rx="8" fill="#EEE7F8" stroke="#8055AD" stroke-width="2"/>
+<text x="550" y="165.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Declare source paths and</text>
+<text x="550" y="191.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">version / environment inputs</text>
+<text x="550" y="217.44" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#425466">core/CMakeLists.txt</text>
+<text x="550" y="238.44" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#425466">math-libs/BLAS/CMakeLists.txt</text>
+<text x="550" y="259.44" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="16" fill="#425466">compiler/CMakeLists.txt</text>
+<polygon points="550,290 790,345 550,400 310,345" fill="#FFF3D6" stroke="#B18A32" stroke-width="2"/>
+<text x="550" y="336.48" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="22" fill="#17212B">Inputs valid?</text>
+<text x="550" y="361.78" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#425466">generate_project_smrev.py</text>
+<text x="814" y="332.12" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#17212B">No</text>
+<text x="520" y="419.12" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#17212B">Yes</text>
+<rect x="830" y="425" width="270" height="115" rx="8" fill="#FBE8E8" stroke="#B65C5C" stroke-width="2"/>
+<text x="965" y="464.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Remove stale marker</text>
+<text x="965" y="489.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Stop configuration</text>
+<text x="965" y="514.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">with an error</text>
+<rect x="310" y="425" width="480" height="115" rx="8" fill="#EEE7F8" stroke="#8055AD" stroke-width="2"/>
+<text x="550" y="451.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Generate source identity</text>
+<text x="550" y="477.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Tree/file IDs and metadata</text>
+<text x="550" y="505.12" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#425466">build_tools/</text>
+<text x="550" y="528.12" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#425466">generate_project_smrev.py</text>
+<rect x="310" y="565" width="480" height="80" rx="8" fill="#E7F4EA" stroke="#548565" stroke-width="2"/>
+<text x="550" y="598.98" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="22" fill="#17212B">Write deterministic .smrev</text>
+<text x="550" y="626.62" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#425466">build/source-identities/.amdsmi.smrev</text>
+<rect x="310" y="680" width="480" height="110" rx="8" fill="#EEE7F8" stroke="#8055AD" stroke-width="2"/>
+<text x="550" y="707.14" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Set FPRINT_SOURCE_DIR;</text>
+<text x="550" y="733.14" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">read validated marker directly</text>
+<text x="550" y="758.1" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="15" fill="#425466">cmake/therock_project_smrev.cmake</text>
+<text x="550" y="778.1" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="15" fill="#425466">cmake/therock_subproject.cmake</text>
+<rect x="0" y="830" width="270" height="120" rx="8" fill="#E7F1FA" stroke="#527A9E" stroke-width="2"/>
+<text x="135" y="884.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Configuration and</text>
+<text x="135" y="909.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">selected file hashes</text>
+<rect x="310" y="830" width="480" height="120" rx="8" fill="#E7F1FA" stroke="#527A9E" stroke-width="2"/>
+<text x="550" y="870.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">Calculate sub-project fingerprint</text>
+<text x="550" y="896.64" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="21" fill="#17212B">THEROCK_FPRINT</text>
+<text x="550" y="924.12" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="18" fill="#425466">cmake/therock_subproject.cmake</text>
+<rect x="830" y="830" width="270" height="120" rx="8" fill="#E7F1FA" stroke="#527A9E" stroke-width="2"/>
+<text x="965" y="884.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Compiler and</text>
+<text x="965" y="909.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">dependency fingerprints</text>
+<rect x="310" y="980" width="480" height="80" rx="8" fill="#E7F1FA" stroke="#527A9E" stroke-width="2"/>
+<text x="550" y="1001.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">Combine sub-project fingerprints</text>
+<text x="550" y="1026.3" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#17212B">and artifact descriptor</text>
+<text x="550" y="1052.78" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#425466">cmake/therock_artifacts.cmake</text>
+<rect x="310" y="1090" width="480" height="45" rx="8" fill="#E7F4EA" stroke="#548565" stroke-width="2"/>
+<text x="550" y="1120.32" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="23" fill="#17212B">Artifact .fprint files</text>
+<circle cx="13" cy="83" r="10" fill="white" stroke="#64748B" stroke-width="1"/>
+<text x="13" y="87.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#64748B">1</text>
+<circle cx="395" cy="83" r="10" fill="white" stroke="#64748B" stroke-width="1"/>
+<text x="395" y="87.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#64748B">2</text>
+<circle cx="777" cy="83" r="10" fill="white" stroke="#64748B" stroke-width="1"/>
+<text x="777" y="87.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#64748B">3</text>
+<circle cx="13" cy="258" r="10" fill="white" stroke="#527A9E" stroke-width="1"/>
+<text x="13" y="262.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#527A9E">4</text>
+<circle cx="323" cy="258" r="10" fill="white" stroke="#8055AD" stroke-width="1"/>
+<text x="323" y="262.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#8055AD">5</text>
+<circle cx="380" cy="355" r="10" fill="white" stroke="#B18A32" stroke-width="1"/>
+<text x="380" y="359.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#B18A32">6</text>
+<circle cx="323" cy="528" r="10" fill="white" stroke="#8055AD" stroke-width="1"/>
+<text x="323" y="532.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#8055AD">7</text>
+<circle cx="843" cy="528" r="10" fill="white" stroke="#B65C5C" stroke-width="1"/>
+<text x="843" y="532.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#B65C5C">8</text>
+<circle cx="323" cy="633" r="10" fill="white" stroke="#548565" stroke-width="1"/>
+<text x="323" y="637.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#548565">9</text>
+<circle cx="323" cy="778" r="10" fill="white" stroke="#8055AD" stroke-width="1"/>
+<text x="323" y="782.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#8055AD">10</text>
+<circle cx="13" cy="938" r="10" fill="white" stroke="#527A9E" stroke-width="1"/>
+<text x="13" y="942.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#527A9E">11</text>
+<circle cx="323" cy="938" r="10" fill="white" stroke="#527A9E" stroke-width="1"/>
+<text x="323" y="942.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#527A9E">12</text>
+<circle cx="843" cy="938" r="10" fill="white" stroke="#527A9E" stroke-width="1"/>
+<text x="843" y="942.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#527A9E">13</text>
+<circle cx="323" cy="1048" r="10" fill="white" stroke="#527A9E" stroke-width="1"/>
+<text x="323" y="1052.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#527A9E">14</text>
+<circle cx="323" cy="1123" r="10" fill="white" stroke="#548565" stroke-width="1"/>
+<text x="323" y="1127.42" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#548565">15</text>
+</svg>
