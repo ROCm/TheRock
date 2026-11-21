@@ -354,3 +354,20 @@ index:
 
 The published wheels are validated by the JAX test workflow as part of the
 nightly release process before being made available for use.
+
+### Debug-symbol wheels
+
+Release runs also build every wheel of the JAX matrix (the plugin and PJRT, and
+for upstream tip also `jax` and `jaxlib`) with JAX's `--config=debug_symbols`
+(unstripped, `-g3` for `xla/pjrt` and `xla/python`). They are published like
+their release builds but not tested, with a `.debug` local label to
+their own index, since a pin without a local label would prefer them on
+`whl-next`. Install them as in
+[RELEASES.md](/RELEASES.md#installing-multi-arch-jax-python-packages), with
+step 2 replaced by:
+
+```bash
+pip install --index-url https://nightly.repo.amd.com/rocm/jax/whl-next-debug/ \
+    "jax_rocm10_plugin==0.12.0+rocm10.3.0a20261109.debug" \
+    "jax_rocm10_pjrt==0.12.0+rocm10.3.0a20261109.debug"
+```

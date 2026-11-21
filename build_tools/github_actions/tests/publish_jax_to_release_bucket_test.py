@@ -202,6 +202,30 @@ class TestPublishJaxToReleaseBucket(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
+    def test_structured_whl_next_debug(self, mock_upload_files):
+        wheel = "jax_rocm10_pjrt-0.12.0+rocm10.3.0.debug-py3-none-linux_x86_64.whl"
+        self._touch(wheel)
+        mock_upload_files.return_value = 1
+        main(
+            [
+                "--source-dir",
+                os.fspath(self.source_dir),
+                "--release-type",
+                "dev",
+                "--structured",
+                "--python-index",
+                "whl-next-debug",
+                "--dry-run",
+            ]
+        )
+
+        (uploads,) = mock_upload_files.call_args.args
+        _source, dest = uploads[0]
+        self.assertEqual(
+            dest.relative_path, f"v5/rocm/jax/whl-next-debug/jax-rocm10-pjrt/{wheel}"
+        )
+
+    @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
     def test_structured_raises_when_no_wheels(self, mock_upload_files):
         # Empty source dir: the planner yields nothing and the script fails
         # fast without calling the backend.
