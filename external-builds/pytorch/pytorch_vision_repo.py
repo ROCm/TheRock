@@ -36,6 +36,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/pytorch/vision.git"
 DEFAULT_HASHTAG = "nightly"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def main(cl_args: list[str]):
@@ -75,6 +76,9 @@ def main(cl_args: list[str]):
             default=THIS_DIR / "pytorch",
             help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin and --repo-hashtag. If missing then fallback/upstream defaults will be used",
         )
+        repo_management.add_patch_options(
+            command_parser, default_patch_dir=DEFAULT_PATCHES_DIR
+        )
 
     p = argparse.ArgumentParser("pytorch_vision_repo.py")
     sub_p = p.add_subparsers(required=True)
@@ -83,11 +87,23 @@ def main(cl_args: list[str]):
     )
     add_common(checkout_p)
     repo_management.add_checkout_options(checkout_p, default_hipify=True)
+    checkout_p.add_argument(
+        "--patch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply checked-in patches for the patchset",
+    )
     checkout_p.set_defaults(func=repo_management.do_checkout)
 
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")
     add_common(hipify_p)
     hipify_p.set_defaults(func=repo_management.do_hipify)
+
+    save_patches_p = sub_p.add_parser(
+        "save-patches", help="Save local commits as patch files"
+    )
+    add_common(save_patches_p)
+    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     # Set default values based on the pin file in the pytorch repo.

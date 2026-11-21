@@ -1,0 +1,120 @@
+From 7e85036b17ed8f9332f4e8834fe56716cba00cb7 Mon Sep 17 00:00:00 2001
+From: Xinya Zhang <Xinya.Zhang@amd.com>
+Date: Mon, 28 Sep 2026 17:06:59 +0000
+Subject: [PATCH] [ROCm] Patch AOTriton's cdiv on Windows source builds
+
+aotriton/util.h declares the header-defined template cdiv with
+AOTRITON_API, which expands to __declspec(dllexport)/__declspec(dllimport)
+under MSVC. An export/import attribute does not belong on a template that
+every consumer instantiates from the header, so drop it on Windows.
+
+Windows always builds the AOTriton runtime from source (there are no
+prebuilt Windows runtimes), so the fix is a patch applied to that checkout:
+cmake/External/aotriton-win32/ holds the patches, and
+aotriton_build_from_source adds a PATCH_COMMAND for them on WIN32 only.
+The command first restores the checkout with `git checkout -- .` and then
+`git apply`s every patch in that directory, so re-running the patch step
+never fails with an already-applied patch. The patch carries no version:
+it targets the commit pinned by __AOTRITON_CI_COMMIT (tag 0.14.2b), and
+must be refreshed or dropped whenever that pin moves. Linux, which
+downloads prebuilt runtimes, is untouched.
+
+The alternative of rewriting the installed header after install on all
+platforms was considered and dropped: the problem is Windows-specific,
+and a checked-in .patch is easier to review and to retire than an
+in-CMake regex.
+
+Test Plan:
+Checked the patch applies to a clean export of the pinned commit, including
+a restore-and-reapply second pass:
+
+```
+git -C ../aotriton archive c11b5b886a10 include/aotriton/util.h | tar -x -C $T
+cd $T && git init -q && git add . && git commit -qm base
+git apply --check $P
+git checkout -- include/aotriton/util.h && git apply $P
+git checkout -- include/aotriton/util.h && git apply $P
+```
+
+Configure-only (no build) of the real aotriton.cmake in a scratch project
+with WIN32 faked, then inspected build.ninja: the aotriton_runtime patch
+step runs `git checkout -- .` then `git apply <patch>`, after the update
+step. The same configure without WIN32 adds no patch step.
+
+```
+cmake -G Ninja -S . -B b_win32 -DFAKE_WIN32=ON
+grep -A1 "^build aotriton/src/aotriton_runtime-stamp/aotriton_runtime-patch" b_win32/build.ninja
+```
+
+Not built or run on Windows. lintrunner was not available in the authoring
+environment.
+
+This change was authored with the help of an AI assistant (Claude).
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ .../0001-util-drop-AOTRITON_API-from-cdiv.patch     | 13 +++++++++++++
+ cmake/External/aotriton.cmake                       | 10 ++++++++++
+ 2 files changed, 23 insertions(+)
+ create mode 100644 cmake/External/aotriton-win32/0001-util-drop-AOTRITON_API-from-cdiv.patch
+
+diff --git a/cmake/External/aotriton-win32/0001-util-drop-AOTRITON_API-from-cdiv.patch b/cmake/External/aotriton-win32/0001-util-drop-AOTRITON_API-from-cdiv.patch
+new file mode 100644
+index 0000000..a0a1502
+--- /dev/null
++++ b/cmake/External/aotriton-win32/0001-util-drop-AOTRITON_API-from-cdiv.patch
+@@ -0,0 +1,13 @@
++diff --git a/include/aotriton/util.h b/include/aotriton/util.h
++index f3b2483..60960de 100644
++--- a/include/aotriton/util.h
+++++ b/include/aotriton/util.h
++@@ -37,7 +37,7 @@ TRICAT(uint16_t high, uint16_t mid, uint16_t low) {
++ }
++ 
++ template<typename T>
++-T AOTRITON_API
+++T
++ cdiv(T numerator, T denominator) {
++   return (numerator + (denominator - 1)) / denominator;
++ }
+diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
+index 753fe4a..c787173 100644
+--- a/cmake/External/aotriton.cmake
++++ b/cmake/External/aotriton.cmake
+@@ -2,6 +2,7 @@ if(NOT __AOTRITON_INCLUDED)
+   set(__AOTRITON_INCLUDED TRUE)
+ 
+   set(__AOTRITON_EXTERN_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/aotriton")
++  set(__AOTRITON_WIN32_PATCH_DIR "${CMAKE_CURRENT_LIST_DIR}/aotriton-win32")
+   set(__AOTRITON_INSTALL_DIR "${PROJECT_SOURCE_DIR}/torch")
+   add_library(__caffe2_aotriton INTERFACE)
+ 
+@@ -147,9 +148,17 @@ if(NOT __AOTRITON_INCLUDED)
+     else()
+       SET(RECURSIVE "ON")
+     endif()
++    set(__AOTRITON_PATCH_COMMAND "")
+     if(WIN32)
+       message(STATUS "Building AOTriton Windows dependencies")
+       aotriton_build_windows_dependencies(dlfcn-win32_external xz_external dlfcn-win32_DIR liblzma_DIR)
++      # Restore the checkout first so the patch step can be re-run.
++      find_package(Git REQUIRED)
++      file(GLOB __AOTRITON_WIN32_PATCHES "${__AOTRITON_WIN32_PATCH_DIR}/*.patch")
++      list(SORT __AOTRITON_WIN32_PATCHES)
++      set(__AOTRITON_PATCH_COMMAND
++        PATCH_COMMAND ${GIT_EXECUTABLE} checkout -- .
++        COMMAND ${GIT_EXECUTABLE} apply ${__AOTRITON_WIN32_PATCHES})
+     endif()
+     message(STATUS "PYTORCH_ROCM_ARCH ${PYTORCH_ROCM_ARCH}")
+ 
+@@ -157,6 +166,7 @@ if(NOT __AOTRITON_INCLUDED)
+       GIT_REPOSITORY https://github.com/ROCm/aotriton.git
+       GIT_SUBMODULES_RECURSE ${RECURSIVE}
+       GIT_TAG ${__AOTRITON_CI_COMMIT}
++      ${__AOTRITON_PATCH_COMMAND}
+       PREFIX ${__AOTRITON_EXTERN_PREFIX}
+       CMAKE_CACHE_ARGS
+       -DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}
+-- 
+2.25.1
+

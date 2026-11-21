@@ -23,6 +23,7 @@ import repo_management
 THIS_MAIN_REPO_NAME = "triton"
 THIS_DIR = Path(__file__).resolve().parent
 COMMIT_PINS_DIR = THIS_DIR / "ci_commit_pins"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"
@@ -131,6 +132,9 @@ def main(cl_args: list[str]):
             "--repo-hashtag",
             help="Git repository ref/tag to checkout",
         )
+        repo_management.add_patch_options(
+            command_parser, default_patch_dir=DEFAULT_PATCHES_DIR
+        )
 
     p = argparse.ArgumentParser("pytorch_triton_repo.py")
     sub_p = p.add_subparsers(required=True)
@@ -154,7 +158,19 @@ def main(cl_args: list[str]):
         help="Build a release Triton (vs nightly pin)",
     )
     repo_management.add_checkout_options(checkout_p, default_hipify=default_hipify)
+    checkout_p.add_argument(
+        "--patch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply checked-in patches for the patchset",
+    )
     checkout_p.set_defaults(func=do_checkout)
+
+    save_patches_p = sub_p.add_parser(
+        "save-patches", help="Save local commits as patch files"
+    )
+    add_common(save_patches_p)
+    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)
