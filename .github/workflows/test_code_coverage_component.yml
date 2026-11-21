@@ -9,6 +9,14 @@ on:
       generic_run_id:
         type: string
         default: ""
+      baseline_repository:
+        description: >-
+          Repository owning generic_run_id (owner/repo), passed as
+          --run-github-repo. Empty defaults to the current repository. The
+          instrumented replacement always resolves against this coverage run's
+          own repository.
+        type: string
+        default: ""
       artifact_group:
         type: string
       amdgpu_families:
@@ -131,17 +139,42 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
       - name: Install TheRock Code Coverage Build
         timeout-minutes: 15
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
         run: |
           pip3 install -r requirements-test.txt
+          # Baseline tree comes from generic_run_id. When empty (self-contained
+          # dispatch), fall back to this run's own instrumented artifacts;
+          # --replace then re-extracts them, leaving the whole stack instrumented.
+          generic_run_id="${GENERIC_RUN_ID}"
+          if [[ -z "${generic_run_id}" ]]; then
+            generic_run_id="${CODE_COVERAGE_RUN_ID}"
+            # This run's artifacts are in the CI bucket, whatever release type
+            # the caller gave for its baseline.
+            export RELEASE_TYPE=ci
+          fi
+          # Pass --run-github-repo only when set, so empty defaults to the
+          # current repository. The generic baseline lives in a different repo
+          # than this coverage run (rockrel for the PR check, rocm-libraries for
+          # the nightly); the S3 bucket lookup 404s if that repo is not named.
+          run_github_repo_arg=()
+          if [[ -n "${BASELINE_REPOSITORY}" ]]; then
+            run_github_repo_arg=(--run-github-repo="${BASELINE_REPOSITORY}")
+          fi
           # FETCH_ARTIFACT_ARGS intentionally splits arguments supplied by fetch_test_configurations.py.
           python3 build_tools/install_rocm_code_coverage_build.py \
             --code-coverage-run-id="${CODE_COVERAGE_RUN_ID}" \
-            --run-id="${GENERIC_RUN_ID}" \
+            --run-id="${generic_run_id}" \
+            "${run_github_repo_arg[@]}" \
             --artifact-group="${AMDGPU_FAMILIES}" \
             --amdgpu-targets="${AMDGPU_TARGETS}" \
             --tests \

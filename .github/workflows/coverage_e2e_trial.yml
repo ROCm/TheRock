@@ -1,0 +1,30 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# DO NOT MERGE. Runs the coverage workflows end to end on this draft pull
+# request, since workflow_dispatch only works once a workflow is on the default
+# branch. Uses nightly mode with no baseline_run_id, so the tests run against
+# this run's own instrumented stack.
+
+name: Coverage E2E Trial
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    secrets: inherit
+    with:
+      nightly: true
+    permissions:
+      contents: read
+      id-token: write
