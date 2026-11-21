@@ -59,6 +59,38 @@ class ROCmDevelTest(unittest.TestCase):
             hip_file.exists(), msg=f"Expected hip config to exist {hip_file}"
         )
 
+    def testCLIPathCMakeSysdeps(self):
+        root = Path(
+            utils.run_command(
+                [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
+            )
+            .decode()
+            .strip()
+        )
+        output = (
+            utils.run_command(
+                [sys.executable, "-m", "rocm_sdk", "path", "--cmake", "--sysdeps"],
+                capture=True,
+            )
+            .decode()
+            .strip()
+        )
+        self.assertEqual(
+            output.split(";"),
+            [str(root / "lib" / "cmake"), str(root / "lib" / "rocm_sysdeps")],
+        )
+
+    def testCLIPathSysdepsRequiresCMake(self):
+        for option in ("--root", "--bin"):
+            with self.subTest(option=option):
+                result = subprocess.run(
+                    [sys.executable, "-m", "rocm_sdk", "path", option, "--sysdeps"],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("--sysdeps requires --cmake", result.stderr)
+
     def testDirectDevelFileOwnedByWheel(self):
         """A direct devel file remains owned by the installed wheel."""
         # Locate a representative development file through the public SDK command.

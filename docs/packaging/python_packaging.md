@@ -340,6 +340,15 @@ variables. Examples (exact settings needed will vary by project being built):
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
+When compatible system development dependencies are unavailable, add `--sysdeps`
+to include the SDK's bundled dependencies in the CMake prefix list:
+
+```bash
+-DCMAKE_PREFIX_PATH="$(rocm-sdk path --cmake --sysdeps)"
+```
+
+Without `--sysdeps`, the command continues to print only the SDK CMake directory.
+
 ### Configuring your Python Project Dependencies
 
 This is typically sufficient to *build* ROCm based Python projects. However,

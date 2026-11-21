@@ -272,6 +272,15 @@ $ rocm-sdk path --cmake
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
+When compatible system development dependencies are unavailable, add `--sysdeps`
+to include the SDK's bundled dependencies in the CMake prefix list:
+
+```bash
+-DCMAKE_PREFIX_PATH="$(rocm-sdk path --cmake --sysdeps)"
+```
+
+Without `--sysdeps`, the command continues to print only the SDK CMake directory.
+
 For more details on using the `rocm-sdk-devel` package to build projects, see
 [Using Packages from Frameworks in `docs/packaging/python_packaging.md`](https://github.com/ROCm/TheRock/blob/main/docs/packaging/python_packaging.md#using-packages-from-frameworks).
 
