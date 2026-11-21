@@ -190,6 +190,23 @@ def test_checked_in_manifest_uses_known_owner_paths() -> None:
     } == known_owner_paths
 
 
+def test_checked_in_asan_manifest_loads() -> None:
+    manifest_path = Path(__file__).parents[1] / "rocm_whl_next_asan_ownership.yaml"
+    manifest = load_ownership_manifest(manifest_path)
+    index = manifest.python_indexes[0]
+
+    assert index.public_base == "/rocm/whl-next-asan"
+    assert manifest.streams.known == ("dev", "nightly")
+    assert {package.owner_path for package in index.packages.values()} == {
+        "core/whl-next-asan",
+        "pytorch/whl-next-asan",
+        "third-party/whl-next",
+    }
+    assert index.packages["rocm-sdk-core"].owner_path == "core/whl-next-asan"
+    assert index.packages["torch"].owner_path == "pytorch/whl-next-asan"
+    assert index.packages["sympy"].owner_path == "third-party/whl-next"
+
+
 def test_parse_sorts_packages_by_owner_path_then_name() -> None:
     data = _valid_manifest()
     manifest = parse_ownership_manifest(data)

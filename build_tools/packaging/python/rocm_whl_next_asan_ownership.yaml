@@ -1,0 +1,69 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Authoritative package ownership and stream availability for the aggregate
+# /rocm/whl-next-asan Python index. Owner paths are public paths relative to
+# /rocm and must not include hostnames, buckets, release streams, or
+# storage-internal prefixes.
+schema_version: 3
+
+streams:
+  # Streams that publish core/whl-next-asan and pytorch/whl-next-asan.
+  known:
+    - dev
+    - nightly
+  groups:
+    all:
+      - dev
+      - nightly
+  default: all
+
+python_indexes:
+  - public_base: /rocm/whl-next-asan
+    packages:
+      rocm:
+        owner_path: core/whl-next-asan
+      rocm-profiler:
+        owner_path: core/whl-next-asan
+      rocm-sdk-core:
+        owner_path: core/whl-next-asan
+      rocm-sdk-devel:
+        owner_path: core/whl-next-asan
+      rocm-sdk-device-gfx90a:
+        owner_path: core/whl-next-asan
+      rocm-sdk-device-gfx942:
+        owner_path: core/whl-next-asan
+      rocm-sdk-device-gfx950:
+        owner_path: core/whl-next-asan
+      rocm-sdk-libraries:
+        owner_path: core/whl-next-asan
+      amd-torch-device-gfx90a:
+        owner_path: pytorch/whl-next-asan
+      amd-torch-device-gfx942:
+        owner_path: pytorch/whl-next-asan
+      amd-torch-device-gfx950:
+        owner_path: pytorch/whl-next-asan
+      torch:
+        owner_path: pytorch/whl-next-asan
+      filelock:
+        owner_path: third-party/whl-next
+      fsspec:
+        owner_path: third-party/whl-next
+      jinja2:
+        owner_path: third-party/whl-next
+      markupsafe:
+        owner_path: third-party/whl-next
+      mpmath:
+        owner_path: third-party/whl-next
+      networkx:
+        owner_path: third-party/whl-next
+      pyelftools:
+        owner_path: third-party/whl-next
+      rocm-bootstrap:
+        owner_path: third-party/whl-next
+      setuptools:
+        owner_path: third-party/whl-next
+      sympy:
+        owner_path: third-party/whl-next
+      typing-extensions:
+        owner_path: third-party/whl-next
