@@ -139,8 +139,10 @@ _GPU_CONTAINER_OPTIONS = {
 # Options that Apptainer-backed runners do not support: they always run as the
 # invoking user and cannot grant capabilities, so requesting them fails the job.
 _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
-# Apptainer-backed labels in families that also have docker runners, where the
-# options must stay for the docker runners.
+# Only use: container options. A job whose runner is one of these labels drops
+# --user 0:0 and --cap-add. This list does not choose the runner; the draw pool
+# is read from the config file. gfx950 also has OSSCI Docker runners, so those
+# options stay for an OSSCI Docker runner.
 _APPTAINER_RUNNER_LABELS = [
     "linux-gfx950-1gpu-crusoe-rocm",
     "linux-gfx950-8gpu-crusoe-rocm",
@@ -163,11 +165,11 @@ _APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
-# Labels that pool draws keep a job off (single-GPU pool draws only); a manual
-# run can still pick one.
-# Their managed-memory / KFD SVM tests fail only on Crusoe (amdgpu 6.16.13;
-# OSSCI 6.19.14 passes).
+# Labels that pool draws skip for these jobs (single-GPU draws only; a manual run
+# can still pick them). Their managed-memory / KFD SVM tests fail only on Crusoe
+# (amdgpu 6.16.13; OSSCI 6.19.14 passes).
 # TODO(#10157): remove these entries once the tests pass on Crusoe.
+# Same strings as _APPTAINER_RUNNER_LABELS, but a separate list used only here.
 _CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
 _POOL_EXCLUDED_LABELS = {
     "hip-tests": _CRUSOE_LABELS,

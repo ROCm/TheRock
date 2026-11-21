@@ -55,7 +55,7 @@ MULTI_GPU_RUNNER_KEYS = [
 
 # Apptainer runner pools (e.g. Crusoe), joined to the pool on the left only by
 # component tests (fetch_test_configurations.py), which set Apptainer container
-# options. Callers pinned to older TheRock read the same config but ignore
+# options. Older TheRock checkouts read the same config file and do not read
 # these keys.
 APPTAINER_POOL_KEYS = {
     "test-runs-on-labels": "test-runs-on-apptainer-labels",
