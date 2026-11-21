@@ -10,14 +10,18 @@ on:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         required: true
         type: string
-      rocm_distro_url:
-        description: "URL of the TheRock multi-arch distro tarball to test against."
-        required: true
+      rocm_package_find_links_url:
+        description: "pip --find-links URL for the rocm[libraries,devel] wheel to install."
         type: string
-      rocm_distro_hash:
-        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+        default: ""
+      rocm_package_index_url:
+        description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: "no_hash"
+        default: ""
+      rocm_package_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -64,14 +68,18 @@ on:
         description: GPU family to test (e.g. gfx94X-dcgpu, gfx110X-all)
         type: string
         default: "gfx950"
-      rocm_distro_url:
-        description: "URL of the TheRock multi-arch distro tarball to test against."
+      rocm_package_find_links_url:
+        description: "pip --find-links URL for the rocm[libraries,devel] wheel to install."
         type: string
         default: ""
-      rocm_distro_hash:
-        description: 'sha256 of the tarball, or "no_hash" to skip verification.'
+      rocm_package_index_url:
+        description: "pip --index-url URL for the rocm[libraries,devel] wheel to install."
         type: string
-        default: "no_hash"
+        default: "https://nightly.repo.amd.com/rocm/whl-next/"
+      rocm_package_version:
+        description: "Version pin for the rocm[libraries,devel] wheel (e.g. '7.13.0.dev0+abc123'). Empty installs the latest available."
+        type: string
+        default: ""
       repository:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -168,8 +176,9 @@ jobs:
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
       ROCM_AMD_GPU_TARGETS: ${{ inputs.test_amdgpu_family || 'gfx950' }}
       RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
-      ROCM_DISTRO_URL: ${{ inputs.rocm_distro_url || 'https://nightly.repo.amd.com/rocm/core/tarball/therock-dist-linux-multiarch-10.2.0a20261022.tar.gz' }}
-      ROCM_DISTRO_HASH: ${{ inputs.rocm_distro_hash || 'no_hash' }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+      ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url || 'https://nightly.repo.amd.com/rocm/whl-next/' }}
+      ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
       XLA_TEST_FILTER: "-${{ join(matrix.excluded_tests, ':') }}"
       ROCM_COMMON_BAZEL_ARGS: >-
         --config=rocm_ci_hermetic
@@ -177,8 +186,7 @@ jobs:
         --config=rocm_rbe_dev
         --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="${DOCKER_IMAGE}"
         --repo_env=TF_ROCM_RBE_SINGLE_GPU_POOL="${RBE_SINGLE_GPU_POOL}"
-        --repo_env=ROCM_DISTRO_URL="${ROCM_DISTRO_URL}"
-        --repo_env=ROCM_DISTRO_HASH="${ROCM_DISTRO_HASH}"
+        --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
         --test_filter="${XLA_TEST_FILTER}"
         --jobs=50
@@ -220,6 +228,24 @@ jobs:
         timeout-minutes: 3
         run: |
           python build_tools/print_driver_gpu_info.py
+
+      # Pip-install ROCm from already-built wheels and resolve a local install
+      # prefix, same as multi_arch_build_linux_jax_wheels_ci.yml's jaxlib
+      # build does for its own bazel ROCM_PATH. ROCM_AMD_GPU_TARGETS is
+      # already a concrete gfx target (e.g. "gfx950"), so the matching device
+      # extra is just "device-${ROCM_AMD_GPU_TARGETS}".
+      - name: Install rocm[libraries,devel] wheels
+        run: |
+          pkg="rocm[libraries,devel,device-${ROCM_AMD_GPU_TARGETS}]${ROCM_PACKAGE_VERSION:+==$ROCM_PACKAGE_VERSION}"
+          python build_tools/setup_venv.py .venv \
+            --packages "${pkg}" \
+            --index-url="${ROCM_PACKAGE_INDEX_URL}" \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Resolve ROCM_PATH from installed wheels
+        run: |
+          echo "ROCM_PATH=$(rocm-sdk path --root)" >> "$GITHUB_ENV"
 
       - name: Run XLA tests [single_gpu]
         working-directory: xla
