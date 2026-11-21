@@ -260,6 +260,9 @@ class FakeS3Client:
         "numpy-2.0.0-cp315-cp315-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-win_amd64.whl",
         "sympy-1.13.0-py3-none-any.whl",
+        "six-1.17.0-py2.py3-none-any.whl",
+        "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+        "tzdata-2026.6-py2.py3-none-any.whl",
     ],
 )
 def test_is_wheel_allowed(filename: str) -> None:
@@ -274,7 +277,9 @@ def test_is_wheel_allowed(filename: str) -> None:
         "numpy-2.0.0-cp315-cp315t-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0-cp312-cp312-manylinux_2_28_aarch64.whl",
         "numpy-2.0.0-cp312-cp312-macosx_14_0_x86_64.whl",
-        "six-1.0.0-py2.py3-none-any.whl",
+        "six-1.0.0-py2-none-any.whl",
+        "example-1.0.0-py2.py3-none-manylinux_2_28_aarch64.whl",
+        "example-1.0.0-py2.py3-cp313t-manylinux_2_28_x86_64.whl",
         "numpy-2.0.0.tar.gz",
     ],
 )
@@ -323,6 +328,46 @@ def test_select_dependencies_filters_project_and_name() -> None:
 def test_select_dependencies_rejects_unknown_name() -> None:
     with pytest.raises(ValueError, match="Unknown dependency package"):
         mirror.select_dependencies(dependency_names=frozenset({"unknown"}))
+
+
+@pytest.mark.parametrize(
+    ("package", "compatibility_version"),
+    [("pandas", "2.3.3"), ("python-dateutil", "3.0.0"), ("pillow", "12.3.0")],
+)
+def test_rocpd_snapshot_keeps_python310_wheels(
+    package: str,
+    compatibility_version: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    versions = {compatibility_version, "99.0.0"}
+    metadata = {
+        "releases": {
+            version: [
+                _pypi_file(
+                    f"{package.replace('-', '_')}-{version}-py3-none-any.whl",
+                    _WHEEL_BYTES,
+                )
+            ]
+            for version in versions
+        }
+    }
+    monkeypatch.setattr(mirror, "fetch_pypi_project", lambda package: metadata)
+
+    def download(wheel: PypiWheel, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(_WHEEL_BYTES)
+
+    monkeypatch.setattr(mirror, "download_wheel", download)
+    output_dir = tmp_path / "snapshot"
+    snapshot = mirror.resolve_snapshot(
+        output_dir=output_dir,
+        selected_dependencies=mirror.select_dependencies(
+            dependency_names=frozenset({package})
+        ),
+    )
+    assert {wheel.selected_version for wheel in snapshot.wheels} == versions
+    assert mirror.load_snapshot(output_dir) == snapshot
 
 
 def test_resolve_snapshot_downloads_once_and_round_trips(
