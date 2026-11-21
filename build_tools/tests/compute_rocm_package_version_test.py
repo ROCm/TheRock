@@ -787,7 +787,7 @@ class MainFunctionTest(unittest.TestCase):
         )
 
     def test_build_variant_suffix_varies_by_local_version(self):
-        """Build variant suffix uses + (no local) or . (has local version)."""
+        """Build variant suffix uses + (no local) or . (appends to existing local)."""
         test_cases = [
             # (release_type, git_sha, variant, expected_pattern, description)
             ("nightly", None, "asan", r"^7\.99\.0a[0-9]{8}\+asan$", "nightly +asan"),
@@ -799,20 +799,20 @@ class MainFunctionTest(unittest.TestCase):
                 r"^7\.99\.0\.dev0\+abcdef1234567890\.asan$",
                 "dev .asan",
             ),
-            # Dashes are removed from variant names
+            # Separators in variant names are normalized to "." (PEP 440)
             (
                 "nightly",
                 None,
                 "host-asan",
-                r"^7\.99\.0a[0-9]{8}\+hostasan$",
-                "host-asan -> hostasan",
+                r"^7\.99\.0a[0-9]{8}\+host\.asan$",
+                "host-asan -> host.asan",
             ),
             (
                 "nightly",
                 None,
                 "asan-debug",
-                r"^7\.99\.0a[0-9]{8}\+asandebug$",
-                "asan-debug -> asandebug",
+                r"^7\.99\.0a[0-9]{8}\+asan\.debug$",
+                "asan-debug -> asan.debug",
             ),
             # Other sanitizers work too
             ("nightly", None, "tsan", r"^7\.99\.0a[0-9]{8}\+tsan$", "tsan supported"),
@@ -827,6 +827,26 @@ class MainFunctionTest(unittest.TestCase):
                 )
                 self.assertRegex(version, pattern)
 
+    def test_nightly_bkc_variant_suffix(self):
+        """nightly-bkc appends the variant to the existing bkc local segment."""
+        version = compute_rocm_package_version.compute_version(
+            release_type="nightly-bkc",
+            build_variant="host-asan",
+            override_base_version="7.99.0",
+            version_data=TEST_BKC_VERSION_DATA,
+        )
+        self.assertRegex(version, r"^7\.99\.0a20260811\+bkc\.[0-9]{8}\.host\.asan$")
+
+    def test_prerelease_variant_suffix(self):
+        """prerelease has no local segment, so the variant starts one with +."""
+        version = compute_rocm_package_version.compute_version(
+            release_type="prerelease",
+            prerelease_version=2,
+            build_variant="host-asan",
+            override_base_version="7.99.0",
+        )
+        self.assertEqual(version, "7.99.0rc2+host.asan")
+
     def test_release_variant_no_suffix(self):
         """Empty or 'release' build variant does not add suffix."""
         for variant in ("release", ""):
@@ -838,6 +858,63 @@ class MainFunctionTest(unittest.TestCase):
                 )
                 # Should just be base version + nightly suffix, no variant
                 self.assertRegex(version, r"^7\.99\.0a[0-9]{8}$")
+
+    def test_wheel_versions_are_pep440_canonical(self):
+        """Every release type x variant must round-trip through packaging."""
+        release_types = [
+            "ci",
+            "dev",
+            "dev-bkc",
+            "nightly",
+            "nightly-bkc",
+            "prerelease",
+            "release",
+        ]
+        variants = [None, "release", "asan", "asan-debug", "host-asan", "tsan"]
+        for release_type in release_types:
+            for variant in variants:
+                with self.subTest(release_type=release_type, variant=variant):
+                    version = compute_rocm_package_version.compute_version(
+                        release_type=release_type,
+                        build_variant=variant,
+                        prerelease_version=2,
+                        override_base_version="7.99.0",
+                        override_git_sha="abcdef1234567890",
+                        version_data=TEST_BKC_VERSION_DATA,
+                    )
+                    # Canonical form must be stable: pip/packaging will not
+                    # renormalize the version we publish.
+                    self.assertEqual(str(Version(version)), version)
+                    if variant and variant != "release":
+                        self.assertTrue(
+                            version.endswith(
+                                compute_rocm_package_version.normalize_build_variant(
+                                    variant
+                                )
+                            )
+                        )
+
+
+# Unit tests for the PEP 440 local version label helper.
+class NormalizeBuildVariantTest(unittest.TestCase):
+    def test_normalize_build_variant(self):
+        """Variant separators normalize to '.' per PEP 440 local version labels."""
+        test_cases = [
+            ("asan", "asan"),
+            ("asan-debug", "asan.debug"),
+            ("host-asan", "host.asan"),
+            ("host_asan", "host.asan"),
+            ("host.asan", "host.asan"),
+            ("HOST-ASAN", "host.asan"),
+            ("-host--asan-", "host.asan"),
+            ("-", ""),
+        ]
+        for variant, expected in test_cases:
+            with self.subTest(variant=variant):
+                self.assertEqual(
+                    compute_rocm_package_version.normalize_build_variant(variant),
+                    expected,
+                )
 
 
 if __name__ == "__main__":
