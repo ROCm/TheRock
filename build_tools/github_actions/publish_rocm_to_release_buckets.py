@@ -44,7 +44,7 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     s3://therock-prerelease-artifacts/12345-linux/packages/rpm/
       -> s3://therock-repo-amd-rc-core/v5/rocm/core/packages/rpm/
 
-    amd-repo-setup packages (nightly, prerelease), under the builder's file names:
+    amd-repo-setup packages (dev, nightly, prerelease), under the builder's file names:
 
     s3://therock-nightly-artifacts/12345-linux/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
       -> s3://therock-repo-amd-nightly-core/v5/amd-repo-setup/ubuntu2404/amd-repo-setup_10.1.0~20261105-12345~ubuntu2404_all.deb
