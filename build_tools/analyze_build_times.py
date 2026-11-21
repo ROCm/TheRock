@@ -28,6 +28,7 @@ CI Usage:
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -332,6 +333,26 @@ def calculate_wall_time(tasks: List[Task]) -> int:
     return max_end - min_start
 
 
+def find_failed_components(build_dir: Path) -> List[str]:
+    """Identify project names from Ninja's explicit FAILED target lines."""
+    log_path = build_dir / "logs" / "build_stage.log"
+    if not log_path.exists():
+        return []
+    build_prefix = str(build_dir.resolve()).replace("\\", "/").rstrip("/") + "/"
+    failed = set()
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.search(r"\bFAILED:\s*(.+)$", line)
+        if not match:
+            continue
+        output = match.group(1).strip().replace("\\", "/")
+        if output.startswith(build_prefix):
+            output = output[len(build_prefix) :]
+        name, _category, _phase = parse_output_path(output)
+        if name:
+            failed.add(name)
+    return sorted(failed)
+
+
 def format_time_human(ms: int) -> str:
     """Format milliseconds to human readable time (e.g., 1h 23.5m or 45.32 min)."""
     minutes = ms / 60000
@@ -479,6 +500,14 @@ def main():
         "--build-dir", type=Path, required=True, help="Path to build directory"
     )
     parser.add_argument("--output", type=Path, help="Path to output HTML file")
+    parser.add_argument(
+        "--json-output", type=Path, help="Write machine-readable project phase timings"
+    )
+    parser.add_argument("--stage", help="Build stage name for machine-readable output")
+    parser.add_argument(
+        "--architectures", help="Architecture family or families for this stage"
+    )
+    parser.add_argument("--conclusion", help="GitHub job conclusion at capture time")
     args = parser.parse_args()
 
     ninja_log = args.build_dir / ".ninja_log"
@@ -488,6 +517,37 @@ def main():
 
     tasks = parse_ninja_log(ninja_log)
     projects = analyze_tasks(tasks, args.build_dir)
+
+    if args.json_output:
+        records = []
+        for category, components in projects.items():
+            for name, phases in components.items():
+                for phase, milliseconds in phases.items():
+                    if milliseconds > 0:
+                        records.append(
+                            {
+                                "component": name,
+                                "category": category,
+                                "phase": phase,
+                                "milliseconds": milliseconds,
+                            }
+                        )
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "stage": args.stage,
+                    "architectures": args.architectures or "shared",
+                    "conclusion": args.conclusion or "unknown",
+                    "failedComponents": find_failed_components(args.build_dir),
+                    "wallMilliseconds": calculate_wall_time(tasks),
+                    "projects": records,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
 
     output_file = args.output or args.build_dir / "logs" / "build_observability.html"
     output_file.parent.mkdir(parents=True, exist_ok=True)
