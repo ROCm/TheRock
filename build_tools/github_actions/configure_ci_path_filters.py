@@ -466,6 +466,8 @@ def _paths_from_api_entries(entries: list[dict]) -> list[str]:
 
     A renamed file lists both its new ("filename") and old ("previous_filename")
     path. Both are changes: a file moved out of a project leaves that project.
+    Any entry with a "previous_filename" is treated this way, whatever its
+    "status"; at worst that over-selects tests.
     """
     paths: list[str] = []
     for entry in entries:
@@ -720,7 +722,7 @@ def get_changed_files_for_external_repo(
             repo_full_name, base_sha or "", head_sha or "", pr_number=pr_number
         )
         if changed_files is not None:
-            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+            print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         else:
             print(f"  External repo {repo_name}: API returned truncated/failed result")
         return changed_files
@@ -731,7 +733,7 @@ def get_changed_files_for_external_repo(
         print(f"    Comparing {base_sha[:12]}...{head_sha[:12]}")
         changed_files = get_modified_paths_via_api(repo_full_name, base_sha, head_sha)
         if changed_files is not None:
-            print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+            print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         else:
             print(f"  External repo {repo_name}: API returned truncated/failed result")
         return changed_files
@@ -746,7 +748,7 @@ def get_changed_files_for_external_repo(
         changed_files = list(
             get_git_modified_paths(base_ref, cwd=str(external_repo_path)) or []
         )
-        print(f"  External repo {repo_name}: {len(changed_files)} file(s) changed")
+        print(f"  External repo {repo_name}: {len(changed_files)} path(s) changed")
         return changed_files
 
     print(f"  External repo {repo_name}: no SHAs provided and checkout not found")

@@ -328,7 +328,7 @@ def configure(
         logger.info("No modified paths - no projects changed")
         return ""
 
-    logger.info(f"Modified paths: {len(modified_paths)} files")
+    logger.info(f"Modified paths: {len(modified_paths)}")
 
     # Shared CI and test-selection changes can affect other repositories.
     if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):

@@ -13,6 +13,7 @@ in configure_ci_path_filters.py, covered by configure_ci_path_filters_test.py.
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -387,6 +388,30 @@ class RenamedFilesTest(unittest.TestCase):
                 "ROCm/rocm-libraries", "base", "head", pr_number=1
             )
         self.assertEqual(len(paths), 3200)
+
+
+class PaginationRetryTest(unittest.TestCase):
+    def test_retry_restarts_pagination_and_the_entry_count(self):
+        # A timeout after 2000 of 2500 files must not leave 2000 counted
+        # towards the 3000-file limit when the retry re-reads every page.
+        entries = [{"filename": f"projects/hipcub/f{i}.hpp"} for i in range(2500)]
+        calls = {"n": 0}
+
+        def fake_run(cmd, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 21:
+                raise subprocess.TimeoutExpired(cmd, 60)
+            page = int(cmd[-1].split("&page=")[1])
+            chunk = entries[(page - 1) * 100 : page * 100]
+            return Mock(stdout=json.dumps(chunk))
+
+        with patch(
+            "configure_ci_path_filters.subprocess.run", side_effect=fake_run
+        ), patch("time.sleep"):
+            paths = get_modified_paths_api(
+                "ROCm/rocm-libraries", "base", "head", pr_number=1
+            )
+        self.assertEqual(len(paths), 2500)
 
 
 class LargePrEndToEndTest(unittest.TestCase):
