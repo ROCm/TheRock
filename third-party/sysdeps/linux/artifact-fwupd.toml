@@ -1,0 +1,27 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+  "lib/rocm_sysdeps/share/gdb/**",
+  "lib/rocm_sysdeps/share/bash-completion/**",
+]
+
+# libffi
+[components.lib."third-party/sysdeps/linux/libffi/build/stage"]
+[components.dev."third-party/sysdeps/linux/libffi/build/stage"]
+
+# pcre2
+[components.lib."third-party/sysdeps/linux/pcre2/build/stage"]
+[components.dev."third-party/sysdeps/linux/pcre2/build/stage"]
+
+# libcurl
+[components.lib."third-party/sysdeps/linux/libcurl/build/stage"]
+[components.dev."third-party/sysdeps/linux/libcurl/build/stage"]
+
+# glib
+[components.lib."third-party/sysdeps/linux/glib/build/stage"]
+[components.dev."third-party/sysdeps/linux/glib/build/stage"]
+
+# libfwupd
+[components.lib."third-party/sysdeps/linux/libfwupd/build/stage"]
+[components.dev."third-party/sysdeps/linux/libfwupd/build/stage"]
