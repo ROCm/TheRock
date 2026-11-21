@@ -45,6 +45,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, fields
+from pathlib import Path
 from typing import (
     Iterable,
     List,
@@ -155,11 +156,10 @@ def get_modified_paths_api(
 def get_pr_number_from_event() -> Optional[int]:
     """Read the pull request number from the Actions event payload, if any."""
     event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-    if not event_path or not os.path.isfile(event_path):
+    if not event_path:
         return None
     try:
-        with open(event_path, encoding="utf-8") as f:
-            event = json.load(f)
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
     number = (event.get("pull_request") or {}).get("number")
@@ -302,7 +302,10 @@ def configure(
 
     # Get modified paths via GitHub API
     if event_name == "pull_request" and base_sha and head_sha:
-        logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
+        if pr_number:
+            logger.info(f"Getting PR diff via API: PR #{pr_number} files")
+        else:
+            logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(
             github_repo, base_sha, head_sha, pr_number=pr_number
         )
@@ -315,9 +318,10 @@ def configure(
         logger.warning("No SHAs provided - not scoping to projects")
         return ""
 
-    # A truncated diff is an incomplete diff, so it cannot narrow the run.
+    # A truncated diff (or a failed API call) is incomplete, so it cannot
+    # narrow the run.
     if modified_paths is None:
-        logger.info("Truncated API response - not scoping to projects")
+        logger.info("Changed files truncated or unavailable - not scoping to projects")
         return ""
 
     if not modified_paths:

@@ -16,9 +16,8 @@ import os
 import sys
 import tempfile
 import unittest
-import unittest.mock
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "github_actions"))
 
@@ -26,6 +25,7 @@ from configure_external_repo_ci import (
     CI_RELEVANT_NON_SUBTREE_PREFIXES,
     RepoEntry,
     configure,
+    main,
     find_matched_subtrees,
     get_modified_paths_api,
     get_pr_number_from_event,
@@ -291,17 +291,22 @@ class GetModifiedPathsApiTest(unittest.TestCase):
             page = int(url.split("&page=")[1])
             chunk = names[(page - 1) * per_page : page * per_page]
             out = json.dumps([{"filename": n} for n in chunk])
-            return unittest.mock.Mock(stdout=out)
+            return Mock(stdout=out)
 
         return names, fake_run
 
     def test_pr_with_more_than_300_files_returns_every_path(self):
         names, fake_run = self._gh_pages(716)
-        with patch("configure_ci_path_filters.subprocess.run", side_effect=fake_run):
+        with patch(
+            "configure_ci_path_filters.subprocess.run", side_effect=fake_run
+        ) as run:
             paths = get_modified_paths_api(
                 "ROCm/rocm-libraries", "base", "head", pr_number=15610
             )
         self.assertEqual(paths, set(names))
+        urls = [c.args[0][-1] for c in run.call_args_list]
+        self.assertEqual(len(urls), 8)  # 7 full pages, 1 short page
+        self.assertTrue(all("pulls/15610/files?per_page=100" in u for u in urls))
 
     def test_pr_with_3000_files_is_truncated(self):
         _, fake_run = self._gh_pages(3000)
@@ -313,13 +318,76 @@ class GetModifiedPathsApiTest(unittest.TestCase):
 
     def test_without_pr_number_uses_compare_and_caps_at_300(self):
         files = [{"filename": f"f{i}"} for i in range(300)]
-        out = unittest.mock.Mock(stdout=json.dumps({"files": files}))
+        out = Mock(stdout=json.dumps({"files": files}))
         with patch(
             "configure_ci_path_filters.subprocess.run", return_value=out
         ) as run:
             paths = get_modified_paths_api("ROCm/rocm-libraries", "base", "head")
         self.assertIsNone(paths)
         self.assertIn("compare/base...head", run.call_args[0][0][-1])
+
+
+class LargePrEndToEndTest(unittest.TestCase):
+    """configure()/main() with only the `gh` subprocess faked."""
+
+    CONFIG = [
+        RepoEntry(name="hipcub", url="", branch="", category="projects"),
+        RepoEntry(name="rocprim", url="", branch="", category="projects"),
+    ]
+
+    @staticmethod
+    def _pr_files_run(paths):
+        def fake_run(cmd, **kwargs):
+            page = int(cmd[-1].split("&page=")[1])
+            chunk = paths[(page - 1) * 100 : page * 100]
+            return Mock(stdout=json.dumps([{"filename": p} for p in chunk]))
+
+        return fake_run
+
+    def _paths(self):
+        paths = [f"projects/hipccl/hipccl3/f{i}.hpp" for i in range(715)]
+        return paths + ["projects/hipcub/hipcub/include/x.hpp"]
+
+    def test_configure_scopes_a_716_file_pr(self):
+        run = self._pr_files_run(self._paths())
+        with patch("configure_ci_path_filters.subprocess.run", side_effect=run), patch(
+            "configure_external_repo_ci.load_repo_config", return_value=self.CONFIG
+        ):
+            result = configure(
+                event_name="pull_request",
+                github_repo="ROCm/rocm-libraries",
+                base_sha="base",
+                head_sha="head",
+                config_path="",
+                pr_number=15610,
+            )
+        self.assertEqual(result, "projects/hipccl,projects/hipcub")
+
+    def test_main_reads_pr_number_from_event_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event = Path(tmp) / "event.json"
+            event.write_text(json.dumps({"pull_request": {"number": 15610}}))
+            env = {"GITHUB_EVENT_PATH": os.fspath(event)}
+            with patch.dict(os.environ, env, clear=True), patch(
+                "configure_ci_path_filters.subprocess.run",
+                side_effect=self._pr_files_run(self._paths()),
+            ) as run, patch(
+                "configure_external_repo_ci.load_repo_config",
+                return_value=self.CONFIG,
+            ), patch(
+                "configure_external_repo_ci.set_github_output"
+            ) as output:
+                rc = main(
+                    [
+                        "--event-name", "pull_request",
+                        "--github-repo", "ROCm/rocm-libraries",
+                        "--base-sha", "base",
+                        "--head-sha", "head",
+                    ]
+                )
+        self.assertEqual(rc, 0)
+        self.assertIn("pulls/15610/files", run.call_args_list[0].args[0][-1])
+        output.assert_called_once_with({"changed_projects": "projects/hipccl,projects/hipcub"})
 
 
 class GetPrNumberFromEventTest(unittest.TestCase):
@@ -419,14 +487,6 @@ class ConfigureNonSubtreeTest(unittest.TestCase):
             ["projects/hipccl/hipccl3/rocprim/foo.hpp"],
             repo="ROCm/rocm-libraries",
         )
-        self.assertEqual(r, "projects/hipccl")
-
-    def test_large_hipccl_pr_is_scoped(self):
-        # A PR with 716 files under projects/hipccl once fell back to the full
-        # suite because the 300-file compare cap made the diff look truncated.
-        paths = [f"projects/hipccl/hipccl3/f{i}.hpp" for i in range(715)]
-        paths.append("projects/hipccl/CMakeLists.txt")
-        r = self._configure(paths, repo="ROCm/rocm-libraries")
         self.assertEqual(r, "projects/hipccl")
 
     def test_mixed_recognized_and_unclassified_is_not_scoped(self):
