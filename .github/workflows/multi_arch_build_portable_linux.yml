@@ -16,6 +16,7 @@
 # 10. profiler-apps (generic) - rocprofiler-systems, rocprofiler-compute (after storage-libs)
 # 11. cv-libs (generic) - rpp
 # 12. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
+# 13. fortran-bindings (generic) - Fortran bindings (after math-libs)
 
 # Notes on security:
 #   * Inherit caller-provided secrets; limited-trust PR entry points restrict the set.
@@ -63,7 +64,7 @@ on:
       build_runs_on_small:
         type: string
         default: "aws-linux-scale-rocm-small"
-        description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs, emulation)"
+        description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs, emulation, fortran-bindings)"
       build_runs_on_medium:
         type: string
         default: "aws-linux-scale-rocm-medium"
@@ -489,6 +490,37 @@ jobs:
       id-token: write
 
   # ==========================================================================
+  # STAGE: fortran-bindings (generic, after math-libs)
+  # ==========================================================================
+  fortran-bindings:
+    needs: [compiler-runtime, math-libs]
+    if: >-
+      ${{
+        !cancelled() && !failure() &&
+        !contains(needs.*.result, 'cancelled') &&
+        !contains(inputs.prebuilt_stages, 'fortran-bindings') &&
+        !contains(inputs.skip_stages, 'fortran-bindings')
+      }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      stage_name: fortran-bindings
+      stage_display_name: "Stage - Fortran Bindings"
+      timeout_minutes: 120  # 2 hours
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_runs_on: ${{ inputs.build_runs_on_small }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      external_repo_config: ${{ inputs.external_repo_config }}
+      quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # ==========================================================================
   # GATE: libraries_baseline_ready
   # rocm-libraries reuses exactly these stages from this run via
   # `baseline_run_id` when a submodule bump PR is opened (see
@@ -528,7 +560,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs]
+    needs: [compiler-runtime, emulation, runtime-tests, wsl-rocdxg, math-libs, comm-libs, storage-libs, debug-tools, dctools-core, profiler-apps, media-libs, fortran-bindings]
     name: "Quartz - completed - build ROCm"
     runs-on: ubuntu-26.04
     timeout-minutes: 10
