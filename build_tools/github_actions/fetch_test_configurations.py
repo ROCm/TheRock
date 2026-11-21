@@ -395,7 +395,7 @@ test_matrix = {
         "job_name": "sanity",
         "skip_stages": ["compiler-runtime"],
         "fetch_artifact_args": "--sanity",
-        "timeout_minutes": 5,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_sanity.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {

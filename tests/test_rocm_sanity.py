@@ -31,19 +31,125 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command: list[str], cwd=None, env: dict[str, str] | None = None):
+def run_command(
+    command: list[str], cwd=None, env: dict[str, str] | None = None, capture=True
+):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
-    process = subprocess.run(command, capture_output=True, cwd=cwd, text=True, env=env)
+    process = subprocess.run(
+        command, capture_output=capture, cwd=cwd, text=True, env=env
+    )
     if process.returncode != 0:
         logger.error(f"Command failed!")
-        logger.error("command stdout:")
-        for line in process.stdout.splitlines():
-            logger.error(line)
-        logger.error("command stderr:")
-        for line in process.stderr.splitlines():
-            logger.error(line)
+        if capture:
+            logger.error("command stdout:")
+            for line in process.stdout.splitlines():
+                logger.error(line)
+            logger.error("command stderr:")
+            for line in process.stderr.splitlines():
+                logger.error(line)
         raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
     return process
+
+
+def get_offload_arch() -> str:
+    platform_executable_suffix = ".exe" if is_windows() else ""
+
+    # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
+    offload_arch_executable_file = f"offload-arch{platform_executable_suffix}"
+    offload_arch_path = (
+        THEROCK_BIN_DIR / ".." / "lib" / "llvm" / "bin" / offload_arch_executable_file
+    ).resolve()
+    process = run_command([str(offload_arch_path)])
+
+    # Extract the arch from the command output, working around
+    # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
+    # to contain 'gfx####` text but some ROCm releases contained stray
+    # "HIP Library Path" logging first.
+    # **Note**: this partly defaults the purpose of the sanity check, since
+    # that should really be a test failure. However, per discussion on
+    # https://github.com/ROCm/TheRock/pull/3257 we found that system
+    # installs of ROCm (DLLs in system32) take precedence over user
+    # installs (PATH env var) under certain conditions. Hopefully a
+    # different unit test elsewhere in ROCm catches that more directly.
+    offload_arch = None
+    for line in process.stdout.splitlines():
+        if "gfx" in line:
+            offload_arch = line
+            break
+    assert (
+        offload_arch is not None
+    ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
+    return offload_arch
+
+
+def compile_hip(source: str, executable_file: str, offload_arch: str):
+    platform_executable_suffix = ".exe" if is_windows() else ""
+    # Compiling .cpp file using amdclang++
+    # On Linux, bin/amdclang++ is a symlink to lib/llvm/bin/amdclang++.
+    # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
+    rocm_path = (THEROCK_BIN_DIR / "..").resolve()
+    if is_windows():
+        amdclangxx_path = str(
+            (
+                THEROCK_BIN_DIR
+                / ".."
+                / "lib"
+                / "llvm"
+                / "bin"
+                / f"amdclang++{platform_executable_suffix}"
+            ).resolve()
+        )
+    else:
+        amdclangxx_path = f"{THEROCK_BIN_DIR}/amdclang++"
+    command = [
+        amdclangxx_path,
+        f"--hip-path={rocm_path}",
+        f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
+        "-x",
+        "hip",
+        str(THIS_DIR / source),
+        f"--offload-arch={offload_arch}",
+        "-o",
+        executable_file,
+    ]
+    if not is_windows():
+        # Windows lld-link does not support rpath.
+        command.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
+    run_command(command, cwd=str(THEROCK_BIN_DIR))
+
+
+def dump_kmsg(label: str, last_n: int = 50):
+    """Log the tail of the kernel log; /dev/kmsg bypasses dmesg_restrict."""
+    try:
+        import fcntl
+
+        with open("/dev/kmsg", "r", errors="replace") as f:
+            fd = f.fileno()
+            fcntl.fcntl(
+                fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK
+            )
+            lines = []
+            try:
+                while line := f.readline():
+                    lines.append(line.rstrip())
+            except (BlockingIOError, OSError):
+                pass
+        if lines:
+            logger.info(f"=== {label} (last {last_n} from /dev/kmsg) ===")
+            for line in lines[-last_n:]:
+                logger.info(line)
+            return
+    except (ImportError, OSError):
+        pass
+    try:
+        result = subprocess.run(
+            ["dmesg", "-T"], capture_output=True, text=True, timeout=10
+        )
+        logger.info(f"=== {label} (last {last_n} from dmesg) ===")
+        for line in result.stdout.splitlines()[-last_n:]:
+            logger.info(line)
+    except Exception as e:
+        logger.warning(f"{label}: dmesg failed: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -174,6 +280,28 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    @pytest.mark.skipif(is_windows(), reason="gfx1150 hang debugging, Linux only")
+    def test_hip_simple(self):
+        """Minimal kernel without printf to isolate gfx1150 hang (TheRock#3199)."""
+        executable_file = "hip_simple_check"
+        compile_hip("hip_simple_check.cpp", executable_file, get_offload_arch())
+
+        dump_kmsg("kernel log before hip_simple_check")
+        # The binary has a 20s SIGALRM watchdog that dumps a backtrace and exits 2.
+        exe = str(THEROCK_BIN_DIR / executable_file)
+        logger.info(f"++ Run [{THEROCK_BIN_DIR}]$ {exe}")
+        proc = subprocess.Popen([exe], cwd=str(THEROCK_BIN_DIR))
+        hang_timeout = 30
+        try:
+            proc.wait(timeout=hang_timeout)
+        except subprocess.TimeoutExpired:
+            logger.error(f"hip_simple_check hung for {hang_timeout}s, killing")
+            proc.kill()
+            proc.wait()
+        if proc.returncode != 0:
+            dump_kmsg("kernel log after hip_simple_check", last_n=100)
+        check.equal(proc.returncode, 0)
+
     # TODO(#7458): Re-enable once gfx1250 binary translator supports this kernel code pattern
     @pytest.mark.skipif(
         AMDGPU_FAMILIES and "gfx125X-dcgpu" in AMDGPU_FAMILIES,
@@ -181,75 +309,15 @@ class TestROCmSanity:
     )
     def test_hip_vector_add(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
-
-        # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
-        offload_arch_executable_file = f"offload-arch{platform_executable_suffix}"
-        offload_arch_path = (
-            THEROCK_BIN_DIR
-            / ".."
-            / "lib"
-            / "llvm"
-            / "bin"
-            / offload_arch_executable_file
-        ).resolve()
-        process = run_command([str(offload_arch_path)])
-
-        # Extract the arch from the command output, working around
-        # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
-        # to contain 'gfx####` text but some ROCm releases contained stray
-        # "HIP Library Path" logging first.
-        # **Note**: this partly defaults the purpose of the sanity check, since
-        # that should really be a test failure. However, per discussion on
-        # https://github.com/ROCm/TheRock/pull/3257 we found that system
-        # installs of ROCm (DLLs in system32) take precedence over user
-        # installs (PATH env var) under certain conditions. Hopefully a
-        # different unit test elsewhere in ROCm catches that more directly.
-        offload_arch = None
-        for line in process.stdout.splitlines():
-            if "gfx" in line:
-                offload_arch = line
-                break
-        assert (
-            offload_arch is not None
-        ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
-
-        # Compiling .cpp file using amdclang++
-        # On Linux, bin/amdclang++ is a symlink to lib/llvm/bin/amdclang++.
-        # On Windows, the symlink is not created, so use lib/llvm/bin/ directly.
-        rocm_path = (THEROCK_BIN_DIR / "..").resolve()
+        offload_arch = get_offload_arch()
         hip_check_executable_file = f"hip_check{platform_executable_suffix}"
-        if is_windows():
-            amdclangxx_path = str(
-                (
-                    THEROCK_BIN_DIR
-                    / ".."
-                    / "lib"
-                    / "llvm"
-                    / "bin"
-                    / f"amdclang++{platform_executable_suffix}"
-                ).resolve()
-            )
-        else:
-            amdclangxx_path = f"{THEROCK_BIN_DIR}/amdclang++"
-        command = [
-            amdclangxx_path,
-            f"--hip-path={rocm_path}",
-            f"--hip-device-lib-path={rocm_path}/lib/llvm/amdgcn/bitcode",
-            "-x",
-            "hip",
-            str(THIS_DIR / "hip_check.cpp"),
-            f"--offload-arch={offload_arch}",
-            "-o",
-            hip_check_executable_file,
-        ]
-        if not is_windows():
-            # Windows lld-link does not support rpath.
-            command.extend(["-Xlinker", f"-rpath={THEROCK_BIN_DIR}/../lib/"])
-        run_command(command, cwd=str(THEROCK_BIN_DIR))
+        compile_hip("hip_check.cpp", hip_check_executable_file, offload_arch)
 
-        # Running and checking the executable
+        # Stream output so HIP debug logs are visible if it hangs (TheRock#3199).
         hip_check_executable = str(THEROCK_BIN_DIR / hip_check_executable_file)
-        process = run_command([hip_check_executable], cwd=str(THEROCK_BIN_DIR))
+        process = run_command(
+            [hip_check_executable], cwd=str(THEROCK_BIN_DIR), capture=False
+        )
         check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hip_check_executable_file)), 0
