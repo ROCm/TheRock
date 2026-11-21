@@ -505,7 +505,9 @@ test_matrix = {
         "job_name": "tensilelite-rocjitsu",
         "skip_stages": ["emulation"],
         "fetch_artifact_args": "--blas --tests --rocjitsu",
-        "timeout_minutes": 150,
+        # Shards take ~40 min; the launcher caps each test at 45 min and the
+        # suite at 90, so a hung test still ends with a result summary.
+        "timeout_minutes": 100,
         "additional_requirements_files": [
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
