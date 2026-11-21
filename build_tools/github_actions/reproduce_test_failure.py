@@ -78,6 +78,8 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--amdgpu-family {args.amdgpu_family} "
         f'--test-script "{args.test_script}"'
     )
+    if args.test_component:
+        cmd += f' --test-component "{args.test_component}"'
     if args.amdgpu_targets:
         cmd += f" --amdgpu-targets {args.amdgpu_targets}"
     if args.output_dir != "build":
@@ -96,6 +98,27 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
             f'"{args.additional_requirements_files}"'
         )
     return cmd
+
+
+def ci_test_environment(args: argparse.Namespace) -> list[tuple[str, str]]:
+    """Environment the CI test step sets, as (name, value) pairs.
+
+    The shared test runners exit without TEST_COMPONENT and select tests by
+    AMDGPU_FAMILIES and AMDGPU_TARGETS, so the reproduction must set them too.
+    """
+    env = [
+        ("THEROCK_BIN_DIR", f"{args.output_dir}/bin"),
+        ("OUTPUT_ARTIFACTS_DIR", args.output_dir),
+        ("SHARD_INDEX", args.shard_index),
+        ("TOTAL_SHARDS", args.total_shards),
+        ("TEST_TYPE", args.test_type),
+        ("AMDGPU_FAMILIES", args.amdgpu_family),
+    ]
+    if args.amdgpu_targets:
+        env.append(("AMDGPU_TARGETS", args.amdgpu_targets))
+    if args.test_component:
+        env.append(("TEST_COMPONENT", args.test_component))
+    return env
 
 
 def append_additional_requirements_step(
@@ -145,13 +168,7 @@ def run_linux(args: argparse.Namespace) -> int:
         (
             "Setting environment variables",
             " && ".join(
-                [
-                    f'export THEROCK_BIN_DIR="{args.output_dir}/bin"',
-                    f'export OUTPUT_ARTIFACTS_DIR="{args.output_dir}"',
-                    f"export SHARD_INDEX={args.shard_index}",
-                    f"export TOTAL_SHARDS={args.total_shards}",
-                    f"export TEST_TYPE={args.test_type}",
-                ]
+                f'export {name}="{value}"' for name, value in ci_test_environment(args)
             ),
         ),
     ]
@@ -308,13 +325,8 @@ def run_windows(args: argparse.Namespace) -> int:
             (
                 "Setting environment variables",
                 "; ".join(
-                    [
-                        f"$env:THEROCK_BIN_DIR='{args.output_dir}/bin'",
-                        f"$env:OUTPUT_ARTIFACTS_DIR='{args.output_dir}'",
-                        f"$env:SHARD_INDEX='{args.shard_index}'",
-                        f"$env:TOTAL_SHARDS='{args.total_shards}'",
-                        f"$env:TEST_TYPE='{args.test_type}'",
-                    ]
+                    f"$env:{name}='{value}'"
+                    for name, value in ci_test_environment(args)
                 ),
             ),
         ]
@@ -378,6 +390,11 @@ def main() -> int:
         "per-target kpack-split shards; optional for monolithic runs.",
     )
     parser.add_argument("--test-script", required=True, help="Test script to run")
+    parser.add_argument(
+        "--test-component",
+        default="",
+        help="Component job name (TEST_COMPONENT in CI), e.g. rocblas",
+    )
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
     parser.add_argument("--test-type", default="full", help="Test type")
