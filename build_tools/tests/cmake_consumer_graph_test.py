@@ -410,3 +410,64 @@ def test_subtree_map_covers_direct_source_dirs() -> None:
     missing = sorted(s for s in expected if s not in subtree_map)
     assert missing == [], f"subtree_map missing direct subtrees: {missing}"
     assert len(subtree_map) >= len(expected)
+
+
+def test_superrepo_map_attributes_each_key(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-libraries")
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
+therock_cmake_subproject_declare(hip-clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
+therock_cmake_subproject_declare(ocl-clr
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr)
+therock_cmake_subproject_declare(rocroller
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller)
+therock_cmake_subproject_declare(straddler
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/a)
+therock_cmake_subproject_declare(straddler
+  EXTERNAL_SOURCE_DIR ${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/b)
+therock_cmake_subproject_declare(variable-sourced
+  EXTERNAL_SOURCE_DIR ${THEROCK_UNMODELED_SOURCE_DIR}/projects/x)
+""",
+    )
+
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+
+    assert result.build_superrepo_map() == {
+        "hip-clr": ["rocm-systems"],
+        "ocl-clr": ["rocm-systems"],
+        "rocroller": ["rocm-libraries"],
+        "straddler": ["rocm-libraries", "rocm-systems"],
+    }
+
+
+def test_superrepo_map_on_real_tree() -> None:
+    """Anchor real-tree attribution and pin the monorepos' one-way dependency."""
+    repo_root = Path(__file__).resolve().parents[2]
+    if not ((repo_root / ".git").exists() and (repo_root / "CMakeLists.txt").exists()):
+        pytest.skip("not a TheRock git checkout")
+
+    result = RepositoryAnalyzer(repo_root).analyze()
+    superrepo_map = result.build_superrepo_map()
+
+    assert superrepo_map.get("rocblas") == ["rocm-libraries"]
+    assert superrepo_map.get("miopen") == ["rocm-libraries"]
+    assert superrepo_map.get("hip-tests") == ["rocm-systems"]
+    assert superrepo_map.get("hip-clr") == ["rocm-systems"]
+    assert "amd-llvm" not in superrepo_map
+
+    offenders = [
+        f"{producer} -> {consumer}"
+        for producer, node in result.build_consumer_graph().items()
+        if superrepo_map.get(producer) == ["rocm-libraries"]
+        for consumer in node["consumers"]
+        if superrepo_map.get(consumer) == ["rocm-systems"]
+    ]
+    assert offenders == [], (
+        "rocm-systems now consumes rocm-libraries; scoped selection would "
+        f"under-test these consumers: {offenders}"
+    )
