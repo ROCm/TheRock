@@ -461,6 +461,21 @@ def get_ci_workflow_filenames() -> set[str]:
     return ci_filenames
 
 
+def _paths_from_api_entries(entries: list[dict]) -> list[str]:
+    """Paths touched by GitHub API file entries.
+
+    A renamed file lists both its new ("filename") and old ("previous_filename")
+    path. Both are changes: a file moved out of a project leaves that project.
+    """
+    paths: list[str] = []
+    for entry in entries:
+        paths.append(entry["filename"])
+        previous = entry.get("previous_filename")
+        if previous:
+            paths.append(previous)
+    return paths
+
+
 def get_modified_paths_via_api(
     github_repo: str,
     base_sha: str,
@@ -521,7 +536,7 @@ def get_modified_paths_via_api(
                 )
                 return None
 
-            return [f["filename"] for f in files]
+            return _paths_from_api_entries(files)
 
         except subprocess.TimeoutExpired:
             print(
@@ -570,6 +585,7 @@ def _get_pr_files_via_api(
     import time
 
     all_files: list[str] = []
+    entries_seen = 0
     page = 1
     per_page = 100  # Maximum allowed by GitHub API
 
@@ -594,10 +610,11 @@ def _get_pr_files_via_api(
                 if not files:
                     break
 
-                all_files.extend(f["filename"] for f in files)
+                all_files.extend(_paths_from_api_entries(files))
+                entries_seen += len(files)
 
                 # PR files endpoint returns max 3000 files total
-                if len(all_files) >= 3000:
+                if entries_seen >= 3000:
                     print(
                         f"  GitHub PR files API returned 3000+ files, result may be truncated"
                     )
@@ -630,6 +647,7 @@ def _get_pr_files_via_api(
             time.sleep(delay)
             # Reset pagination for retry
             all_files = []
+            entries_seen = 0
             page = 1
 
     print("  GitHub API request failed after all retries")

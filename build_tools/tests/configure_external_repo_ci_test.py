@@ -327,6 +327,68 @@ class GetModifiedPathsApiTest(unittest.TestCase):
         self.assertIn("compare/base...head", run.call_args[0][0][-1])
 
 
+class RenamedFilesTest(unittest.TestCase):
+    """A renamed file changes both its old and its new path."""
+
+    CONFIG = [
+        RepoEntry(name="rocprim", url="", branch="", category="projects"),
+        RepoEntry(name="hipcub", url="", branch="", category="projects"),
+    ]
+    MOVE = {
+        "filename": "projects/hipcub/a.hpp",
+        "previous_filename": "projects/rocprim/a.hpp",
+        "status": "renamed",
+    }
+
+    def test_pr_files_include_previous_filename(self):
+        out = Mock(stdout=json.dumps([self.MOVE]))
+        with patch("configure_ci_path_filters.subprocess.run", return_value=out):
+            paths = get_modified_paths_api(
+                "ROCm/rocm-libraries", "base", "head", pr_number=1
+            )
+        self.assertEqual(paths, {"projects/hipcub/a.hpp", "projects/rocprim/a.hpp"})
+
+    def test_compare_files_include_previous_filename(self):
+        out = Mock(stdout=json.dumps({"files": [self.MOVE]}))
+        with patch("configure_ci_path_filters.subprocess.run", return_value=out):
+            paths = get_modified_paths_api("ROCm/rocm-libraries", "base", "head")
+        self.assertEqual(paths, {"projects/hipcub/a.hpp", "projects/rocprim/a.hpp"})
+
+    def test_move_between_projects_selects_both_projects(self):
+        out = Mock(stdout=json.dumps([self.MOVE]))
+        with patch("configure_ci_path_filters.subprocess.run", return_value=out), patch(
+            "configure_external_repo_ci.load_repo_config", return_value=self.CONFIG
+        ):
+            result = configure(
+                event_name="pull_request",
+                github_repo="ROCm/rocm-libraries",
+                base_sha="base",
+                head_sha="head",
+                config_path="",
+                pr_number=1,
+            )
+        self.assertEqual(result, "projects/hipcub,projects/rocprim")
+
+    def test_truncation_limit_counts_files_not_paths(self):
+        # 1600 renames list 3200 paths but are only 1600 of the API's 3000 files.
+        moves = [
+            {"filename": f"projects/hipcub/f{i}.hpp",
+             "previous_filename": f"projects/rocprim/f{i}.hpp"}
+            for i in range(1600)
+        ]
+
+        def fake_run(cmd, **kwargs):
+            page = int(cmd[-1].split("&page=")[1])
+            chunk = moves[(page - 1) * 100 : page * 100]
+            return Mock(stdout=json.dumps(chunk))
+
+        with patch("configure_ci_path_filters.subprocess.run", side_effect=fake_run):
+            paths = get_modified_paths_api(
+                "ROCm/rocm-libraries", "base", "head", pr_number=1
+            )
+        self.assertEqual(len(paths), 3200)
+
+
 class LargePrEndToEndTest(unittest.TestCase):
     """configure()/main() with only the `gh` subprocess faked."""
 
