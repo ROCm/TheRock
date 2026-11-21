@@ -38,6 +38,8 @@ def _manifest() -> OwnershipManifest:
                     "public_base": "/rocm/whl-next",
                     "packages": {
                         "rocm-sdk-core": {"owner_path": "core/whl-next"},
+                        "filelock": {"owner_path": "third-party/whl-next"},
+                        "torch": {"owner_path": "pytorch/whl-next"},
                         "jax": {
                             "owner_path": "jax/whl-next",
                             "streams": ["stable"],
@@ -68,8 +70,8 @@ def _package_html(package: str) -> bytes:
     return f'<html><body><a href="{filename}">{filename}</a></body></html>'.encode()
 
 
-def _product_responses(*packages: str) -> dict[str, bytes]:
-    owner_url = f"{ORIGIN}/rocm/core/whl-next"
+def _product_responses(owner_path: str, *packages: str) -> dict[str, bytes]:
+    owner_url = f"{ORIGIN}/rocm/{owner_path}"
     return {
         f"{owner_url}/index.html": _root_html(*packages),
         **{
@@ -94,7 +96,12 @@ def _mock_responses(
 def test_downloads_every_linked_package(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _mock_responses(monkeypatch, _product_responses("extra-core", "rocm-sdk-core"))
+    responses = (
+        _product_responses("core/whl-next", "extra-core", "rocm-sdk-core")
+        | _product_responses("third-party/whl-next", "filelock")
+        | _product_responses("pytorch/whl-next", "torch")
+    )
+    _mock_responses(monkeypatch, responses)
     output_dir = tmp_path / "snapshot"
 
     snapshot.download_snapshot(
@@ -103,6 +110,8 @@ def test_downloads_every_linked_package(
 
     assert (output_dir / "rocm/core/whl-next/extra-core/index.html").is_file()
     assert (output_dir / "rocm/core/whl-next/rocm-sdk-core/index.html").is_file()
+    assert (output_dir / "rocm/third-party/whl-next/filelock/index.html").is_file()
+    assert (output_dir / "rocm/pytorch/whl-next/torch/index.html").is_file()
     assert not (output_dir / "rocm/jax/whl-next/index.html").exists()
 
 
@@ -132,10 +141,15 @@ def test_missing_required_page_does_not_publish_partial_snapshot(
 def test_downloads_inactive_root_when_it_exists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    responses = _product_responses("rocm-sdk-core") | {
-        f"{ORIGIN}/rocm/jax/whl-next/index.html": _root_html("jax"),
-        f"{ORIGIN}/rocm/jax/whl-next/jax/index.html": _package_html("jax"),
-    }
+    responses = (
+        _product_responses("core/whl-next", "rocm-sdk-core")
+        | _product_responses("third-party/whl-next", "filelock")
+        | _product_responses("pytorch/whl-next", "torch")
+        | {
+            f"{ORIGIN}/rocm/jax/whl-next/index.html": _root_html("jax"),
+            f"{ORIGIN}/rocm/jax/whl-next/jax/index.html": _package_html("jax"),
+        }
+    )
     _mock_responses(monkeypatch, responses)
     output_dir = tmp_path / "snapshot"
 

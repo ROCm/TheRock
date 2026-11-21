@@ -36,9 +36,9 @@ _ALLOWED_CPYTHON_TAGS = frozenset(
     {"cp310", "cp311", "cp312", "cp313", "cp314", "cp315"}
 )
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
-_INDEX_NAME = "whl-next"
+_DEPENDENCY_DESTINATION_ROOT = "v5/rocm/third-party/whl-next"
 _MANIFEST_FILENAME = "manifest.json"
-_MANIFEST_SCHEMA_VERSION = 1
+_MANIFEST_SCHEMA_VERSION = 2
 _PYPI_ACCEPT = "application/json"
 _S3_CONTENT_TYPE = "application/octet-stream"
 _NORMALIZED_PACKAGE_PATTERN = re.compile(r"[-_.]+")
@@ -153,9 +153,9 @@ def normalize_package_name(name: str) -> str:
 
 
 def dependency_destination_key(package: str, filename: str) -> str:
-    """Return the structured core ``whl-next`` destination key."""
+    """Return the structured third-party ``whl-next`` destination key."""
     normalized_package = normalize_package_name(package)
-    return f"v5/rocm/core/{_INDEX_NAME}/{normalized_package}/{filename}"
+    return f"{_DEPENDENCY_DESTINATION_ROOT}/{normalized_package}/{filename}"
 
 
 def is_wheel_allowed(filename: str) -> bool:
