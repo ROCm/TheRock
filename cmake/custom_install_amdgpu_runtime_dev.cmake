@@ -21,7 +21,6 @@ file(
   ${STAGING_INSTALL_DIR}/bin/roc-obj
   ${STAGING_INSTALL_DIR}/bin/roc-obj-extract
   ${STAGING_INSTALL_DIR}/bin/roc-obj-ls
-  ${STAGING_INSTALL_DIR}/bin/rocm-smi
   ${STAGING_INSTALL_DIR}/lib/cmake/*
   ${STAGING_INSTALL_DIR}/lib/pkgconfig/*
   ${STAGING_INSTALL_DIR}/libexec/*
