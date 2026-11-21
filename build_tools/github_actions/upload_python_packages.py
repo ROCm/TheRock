@@ -25,6 +25,8 @@ Output Layout:
   {bucket}/{external_repo}{run_id}-{platform}/python/
     *.whl, *.tar.gz   # Host and per-target wheels and sdists
     index.html        # Generated server-side for pip --find-links
+  {bucket}/{external_repo}{run_id}-{platform}/logs/python/
+    *.log             # Per-package setup.py logs, including successes
 
 Installation:
   pip install rocm[libraries,devel] --pre \\
@@ -98,6 +100,40 @@ def upload_packages(
     log(f"[INFO] Uploaded {count} files")
 
 
+def upload_python_package_logs(
+    log_dir: Path, output_root: WorkflowOutputRoot, backend: StorageBackend
+) -> str | None:
+    """Upload per-package setup.py logs from a successful build.
+
+    Logs are ``<packages_dir>/logs/<package>.log``. A missing directory is
+    skipped: PyTorch and JAX uploads use this script and do not write these
+    files.
+
+    Returns:
+        URL to the log index page, or None if no logs were uploaded.
+    """
+    if not log_dir.is_dir():
+        log(
+            f"[INFO] Python package log directory {log_dir} not found. "
+            "Skipping log upload."
+        )
+        return None
+
+    log_files = sorted(path for path in log_dir.glob("*.log") if path.is_file())
+    if not log_files:
+        log(f"[INFO] No Python package logs in {log_dir}. Skipping log upload.")
+        return None
+
+    dest = output_root.python_package_logs()
+    log(f"[INFO] Uploading {len(log_files)} Python package log(s) to {dest.s3_uri}")
+    count = backend.upload_directory(log_dir, dest, include=["*.log"])
+    log(f"[INFO] Uploaded {count} Python package log(s)")
+
+    index_url = output_root.python_package_logs_index().https_url
+    log(f"[INFO] Python package logs uploaded to: {index_url}")
+    return index_url
+
+
 def write_gha_upload_summary(packages_loc: StorageLocation):
     """Write install instructions using one index for all per-target wheels."""
     index_url = f"{packages_loc.https_url}/index.html"
@@ -144,6 +180,15 @@ def run(args: argparse.Namespace):
     log("Uploading packages")
     log("------------------")
     upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
+
+    log("")
+    log("Uploading Python package logs")
+    log("------------------------------")
+    upload_python_package_logs(
+        log_dir=packages_dir / "logs",
+        output_root=output_root,
+        backend=backend,
+    )
 
     if not args.output_dir:
         index_url = f"{packages_loc.https_url}/index.html"
