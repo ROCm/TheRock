@@ -184,6 +184,13 @@ class ResolveComponentPathTest(unittest.TestCase):
             pytest_runner.resolve_component_path("tensilelite", rocm),
         )
 
+    def test_tensilelite_rocjitsu_shares_tensilelite_install_tree(self):
+        rocm = Path("/opt/rocm")
+        self.assertEqual(
+            pytest_runner.resolve_component_path("tensilelite-rocjitsu", rocm),
+            pytest_runner.resolve_component_path("tensilelite", rocm),
+        )
+
 
 class ResolveTestCategoryTest(unittest.TestCase):
     def test_test_category_overrides_test_type(self):
