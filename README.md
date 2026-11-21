@@ -184,6 +184,16 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_WSL=ON`          | Enables WSL-specific artifacts         |
 | `-DTHEROCK_ENABLE_EMULATION=ON`    | Enables emulation tools                |
 
+The Fortran bindings are off by default, even with `-DTHEROCK_ENABLE_ALL=ON`.
+`-DTHEROCK_ENABLE_FORTRAN_BINDINGS=ON` builds all of them, and a single family
+can be enabled with its own flag (`-DTHEROCK_ENABLE_RUNTIME_FORTRAN=ON`,
+`-DTHEROCK_ENABLE_BLAS_FORTRAN=ON`, `-DTHEROCK_ENABLE_SOLVER_FORTRAN=ON`,
+`-DTHEROCK_ENABLE_SPARSE_FORTRAN=ON`, `-DTHEROCK_ENABLE_FFT_FORTRAN=ON` or
+`-DTHEROCK_ENABLE_RAND_FORTRAN=ON`). Each binding is built from its
+`bindings/fortran/<name>/` directory (`hip`, `roctx`, `rocblas`, ...) of the
+rocm-systems or rocm-libraries checkout, and is skipped when that directory is
+absent.
+
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
 minimal build):
