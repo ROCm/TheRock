@@ -548,6 +548,57 @@ class ComponentScannerTest(TmpDirTestCase):
             "artifact should be a copy, not a hardlink",
         )
 
+    def testSameRelpathKeptInEachStage(self):
+        # The same relative path in two stage directories is kept in both.
+        # A file claimed by lib stays out of that stage's dev output.
+        self.write_indented(
+            "descriptor.toml",
+            # Note: in reverse extends order, this ensures that the worklist traverses
+            # properly.
+            r"""
+        [components.dev."a/stage"]
+        [components.dev."b/stage"]
+        [components.lib."a/stage"]
+        [components.lib."b/stage"]
+        """,
+        )
+        ad = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        self.touch("src/a/stage/include/header.h")
+        self.touch("src/b/stage/include/header.h")
+        (self.temp_dir / "src/a/stage/include/header.h").write_text("a")
+        (self.temp_dir / "src/b/stage/include/header.h").write_text("b")
+        self.touch("src/a/stage/lib/libfoo.so")
+        self.touch("src/b/stage/lib/libbar.so")
+
+        scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
+        scanner.verify()
+
+        lib_comp = scanner.components["lib"]
+        pm_a = lib_comp.basedir_contents["a/stage"]
+        pm_b = lib_comp.basedir_contents["b/stage"]
+        self.assertSetEqual(set(pm_a.all.keys()), set(["lib/libfoo.so"]))
+        self.assertSetEqual(set(pm_b.all.keys()), set(["lib/libbar.so"]))
+
+        dev_comp = scanner.components["dev"]
+        dev_a = dev_comp.basedir_contents["a/stage"]
+        dev_b = dev_comp.basedir_contents["b/stage"]
+        self.assertSetEqual(set(dev_a.all.keys()), set(["include", "include/header.h"]))
+        self.assertSetEqual(set(dev_b.all.keys()), set(["include", "include/header.h"]))
+
+        dev_comp.write_artifact(self.temp_dir / "out")
+        out_a = self.temp_dir / "out" / "a" / "stage" / "include" / "header.h"
+        out_b = self.temp_dir / "out" / "b" / "stage" / "include" / "header.h"
+        self.assertEqual(out_a.read_text(), "a")
+        self.assertEqual(out_b.read_text(), "b")
+        self.assertFalse(
+            (self.temp_dir / "out" / "a" / "stage" / "lib" / "libfoo.so").exists()
+        )
+        self.assertFalse(
+            (self.temp_dir / "out" / "b" / "stage" / "lib" / "libbar.so").exists()
+        )
+
     def testNonOptionalNotExists(self):
         self.write_indented(
             "descriptor.toml",
