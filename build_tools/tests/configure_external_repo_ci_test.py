@@ -390,6 +390,42 @@ class RenamedFilesTest(unittest.TestCase):
         self.assertEqual(len(paths), 3200)
 
 
+class ApiFailureTest(unittest.TestCase):
+    def test_exhausted_retries_log_a_warning_and_do_not_scope(self):
+        def fail(cmd, **kwargs):
+            raise subprocess.CalledProcessError(1, cmd, stderr="HTTP 403")
+
+        with patch(
+            "configure_ci_path_filters.subprocess.run", side_effect=fail
+        ) as run, patch("time.sleep"), self.assertLogs(
+            "configure_external_repo_ci", level="WARNING"
+        ) as logs:
+            result = configure(
+                event_name="pull_request",
+                github_repo="ROCm/rocm-libraries",
+                base_sha="base",
+                head_sha="head",
+                config_path="",
+                pr_number=15610,
+            )
+        self.assertEqual(result, "")
+        self.assertEqual(run.call_count, 3)
+        self.assertIn("truncated or unavailable", logs.output[0])
+
+    def test_pull_request_without_number_warns_about_the_compare_cap(self):
+        with patch(
+            "configure_external_repo_ci.get_modified_paths_api", return_value=None
+        ), self.assertLogs("configure_external_repo_ci", level="WARNING") as logs:
+            configure(
+                event_name="pull_request",
+                github_repo="ROCm/rocm-libraries",
+                base_sha="base",
+                head_sha="head",
+                config_path="",
+            )
+        self.assertTrue(any("No PR number" in line for line in logs.output))
+
+
 class PaginationRetryTest(unittest.TestCase):
     def test_retry_restarts_pagination_and_the_entry_count(self):
         # A timeout after 2000 of 2500 files must not leave 2000 counted
@@ -507,6 +543,12 @@ class GetPrNumberFromEventTest(unittest.TestCase):
     def test_missing_file_returns_none(self):
         with patch.dict(os.environ, {"GITHUB_EVENT_PATH": "/nonexistent.json"}):
             self.assertIsNone(get_pr_number_from_event())
+
+    def test_non_object_payload_returns_none(self):
+        self.assertIsNone(self._number(raw="[]"))
+
+    def test_boolean_number_returns_none(self):
+        self.assertIsNone(self._number({"pull_request": {"number": True}}))
 
     def test_malformed_json_returns_none(self):
         self.assertIsNone(self._number(raw="{not json"))

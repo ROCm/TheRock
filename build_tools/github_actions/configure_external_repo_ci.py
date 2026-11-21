@@ -4,7 +4,9 @@
 
 """Configure CI for external repos (rocm-systems, rocm-libraries).
 
-This script determines which projects changed based on git diff.
+This script determines which projects changed, from the changed-file list that
+the GitHub API reports for the event (PR files for pull requests, compare for
+pushes).
 
 Note: Skip-CI logic (for docs-only changes) has been moved to
 configure_multi_arch_ci.py, which uses TOML config files for skip patterns.
@@ -24,7 +26,11 @@ Usage:
         --github-repo ROCm/rocm-libraries \
         --base-sha abc123 \
         --head-sha def456 \
+        --pr-number 123 \
         --config-path .github/repos-config.json
+
+    --pr-number defaults to the number in $GITHUB_EVENT_PATH. Without one, a
+    pull request is diffed with the compare endpoint, which stops at 300 files.
 
 Outputs (to $GITHUB_OUTPUT):
     changed_projects: Comma-separated list of changed project paths. Empty when
@@ -162,8 +168,13 @@ def get_pr_number_from_event() -> Optional[int]:
         event = json.loads(Path(event_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    number = (event.get("pull_request") or {}).get("number")
-    return number if isinstance(number, int) else None
+    if not isinstance(event, dict):
+        return None
+    pull_request = event.get("pull_request")
+    number = pull_request.get("number") if isinstance(pull_request, dict) else None
+    if isinstance(number, int) and not isinstance(number, bool):
+        return number
+    return None
 
 
 def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
@@ -305,6 +316,10 @@ def configure(
         if pr_number:
             logger.info(f"Getting PR diff via API: PR #{pr_number} files")
         else:
+            logger.warning(
+                "No PR number available; using the compare endpoint, which "
+                "returns at most 300 files"
+            )
             logger.info(f"Getting PR diff via API: {base_sha}...{head_sha}")
         modified_paths = get_modified_paths_api(
             github_repo, base_sha, head_sha, pr_number=pr_number
@@ -321,7 +336,10 @@ def configure(
     # A truncated diff (or a failed API call) is incomplete, so it cannot
     # narrow the run.
     if modified_paths is None:
-        logger.info("Changed files truncated or unavailable - not scoping to projects")
+        logger.warning(
+            "Changed files truncated or unavailable (API failure or too many "
+            "files) - not scoping to projects"
+        )
         return ""
 
     if not modified_paths:

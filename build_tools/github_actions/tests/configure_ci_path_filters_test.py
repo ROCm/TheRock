@@ -315,8 +315,21 @@ class TestGetChangedFilesForExternalRepoRenames(unittest.TestCase):
 
 class TestGetGitModifiedPathsRenames(unittest.TestCase):
     def test_rename_lists_old_and_new_path(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+        # Ignore the developer's git config and any inherited GIT_* variables.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, env, clear=True
+        ):
+            git = [
+                "git",
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "commit.gpgsign=false",
+            ]
 
             def run(*args):
                 subprocess.run([*git, *args], cwd=tmp, check=True, capture_output=True)

@@ -403,14 +403,14 @@ def is_ci_run_required(
 
     relevant_paths = [path for path in paths_list if is_relevant(path)]
 
-    print(f"{label}Evaluating {len(paths_list)} changed file(s):")
+    print(f"{label}Evaluating {len(paths_list)} changed path(s):")
     for f in paths_list[:10]:
         print(f"  {'[ci]  ' if is_relevant(f) else '[skip]'} {f}")
     if len(paths_list) > 10:
         print(f"  ... and {len(paths_list) - 10} more")
 
     if relevant_paths:
-        print(f"{label}CI required: {len(relevant_paths)} CI-relevant file(s)")
+        print(f"{label}CI required: {len(relevant_paths)} CI-relevant path(s)")
         return True
     else:
         print(f"{label}All files skippable, CI can be skipped")
