@@ -388,12 +388,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         )
         self.assertIn("Tests/emulation/run_rocjitsu.py -- python", job["test_script"])
         self.assertTrue(job["test_script"].endswith("pytest_runner.py"))
-        self.assertIn("--rocjitsu --mirage", job["fetch_artifact_args"])
+        # bin/rocjitsu launches the simulation; mirage is not needed.
+        self.assertEqual(job["fetch_artifact_args"], "--blas --tests --rocjitsu")
 
     def test_tensilelite_rocjitsu_keeps_root_container_options(self):
         # gfx125X GPU jobs run on Apptainer runners, which drop --user 0:0; this
-        # CPU job runs in Docker and needs root (mirage segfaults the client
-        # as a non-root user).
+        # CPU job runs in Docker and needs root (the client segfaults under
+        # emulation as a non-root user).
         job = self._rocjitsu_lane_job()
         self.assertIn("--user 0:0", job["container_options"])
 

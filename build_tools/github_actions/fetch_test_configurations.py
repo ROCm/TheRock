@@ -490,26 +490,21 @@ test_matrix = {
             ],
         },
     },
-    # TensileLite common GEMM tests for gfx1250 under the rocjitsu emulator, on a
-    # CPU runner (no GPU). rocjitsu emulates non-strict gfx1250, which the
-    # gfx1250-strict hardware runners cannot run; include_family lists the plain
-    # "gfx1250" target, so strict-target runs never select this job.
-    #
-    # The launcher ships in the TensileLite test artifact (like miopen-dbsync's
-    # runner): it starts pytest_runner.py inside `mirage run` with the fetched
-    # rocjitsu/mirage, and the TensileLite pytest plugin it loads selects this
-    # job's shard from SHARD_INDEX/TOTAL_SHARDS (pytest_runner.py does not shard).
-    # The rocjitsu-quick category leaves out configs marked rocjitsu_slow (> 2 h
-    # each under emulation, the per-test cap). The rest measures ~15 test-hours
-    # at 6 emulator threads per xdist worker, so 3 shards keep each one inside
-    # timeout_minutes.
-    #
-    # The container must run as root (mirage crashes the client otherwise), so
-    # _build_container_options keeps --user 0:0 for CPU-only jobs on gfx125X.
-    # Needs a rocm-libraries pin that ships Tests/emulation/run_rocjitsu.py.
+    # TensileLite common GEMM tests for non-strict gfx1250 under the rocjitsu
+    # emulator on a CPU runner; strict targets never match "gfx1250".
+    # The launcher in the TensileLite test artifact runs pytest_runner.py under
+    # bin/rocjitsu, and its pytest plugin picks this job's shard from
+    # SHARD_INDEX/TOTAL_SHARDS (pytest_runner.py does not shard). rocjitsu-quick
+    # leaves out rocjitsu_slow configs (over 45 min each); the rest is ~8.5
+    # test-hours at 6 emulator threads per xdist worker, so 3 shards fit
+    # timeout_minutes. Runs as root (_build_container_options keeps --user 0:0):
+    # the client segfaults under emulation as a non-root user. Needs
+    # Tests/emulation/run_rocjitsu.py in the TensileLite artifact and
+    # bin/rocjitsu in the rocjitsu artifact.
     "tensilelite-rocjitsu": {
         "job_name": "tensilelite-rocjitsu",
-        "fetch_artifact_args": "--blas --tests --rocjitsu --mirage",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--blas --tests --rocjitsu",
         "timeout_minutes": 150,
         "additional_requirements_files": [
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
