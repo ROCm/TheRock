@@ -946,6 +946,8 @@ test_matrix = {
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
     # MI300A (228 CU) -- in a single job, gfx950 (MI355X, 256 CU), and gfx90a (MI210, 104 CU, and
     # MI250X GCD, 110 CU -- also in a single job; advisory, see expect_failure below).
+    # It also covers the Navi targets whose shipped SystemDB passes under rocjitsu: gfx1100
+    # (gfx110060, 96 CU), gfx1200 (gfx120020, 32 CU) and gfx1201 (gfx120140, 64 CU).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
@@ -959,7 +961,8 @@ test_matrix = {
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
         # TEST_TYPE=quick as a backstop). Runs serially (MIOPEN_DBSYNC_MAX_THREADS=1)
         # under rocjitsu; full set (gfx942 304+228, gfx950 256) + artifact fetch + rocjitsu
-        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster.
+        # build measures ~15 min, so 30 gives margin and fails a hung interposer faster. A Navi
+        # job runs at most two CU configs, the same count as the gfx942 job.
         "timeout_minutes": 30,
         "test_script": "python ./build/share/miopen/bin/run_dbsync_rocjitsu.py",
         "platform": ["linux"],
@@ -968,7 +971,16 @@ test_matrix = {
         # StaticFDBSync skips itself at runtime under ASAN.
         "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
-            "linux": ["gfx942", "gfx950", "gfx90a"],
+            "linux": [
+                "gfx942",
+                "gfx950",
+                "gfx90a",
+                # Navi targets with a FAMILY_MAP entry in run_dbsync_rocjitsu.py. gfx1102
+                # and gfx1151 are absent until the runner validates them.
+                "gfx1100",
+                "gfx1200",
+                "gfx1201",
+            ],
         },
         # gfx90a is advisory while dbsync under rocjitsu's cdna2 emulation is qualified.
         "expect_failure": {

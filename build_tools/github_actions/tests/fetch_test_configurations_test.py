@@ -576,11 +576,13 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
             os.environ["TEST_RUNS_ON"] = ""
         target = families.split("-")[0].lower()
+        # gfx_target is the family's fetch-gfx-targets, one target or a list.
+        targets = [gfx_target] if isinstance(gfx_target, str) else list(gfx_target)
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
             target: {
                 "linux": {
                     "test-runs-on": "" if gated_gpu else "some-gpu-runner",
-                    "fetch-gfx-targets": [gfx_target],
+                    "fetch-gfx-targets": targets,
                 }
             }
         }
@@ -588,10 +590,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
         return jobs[0] if jobs else None
 
-    def test_miopen_dbsync_include_family_covers_gfx942_gfx950_and_gfx90a(self):
+    def test_miopen_dbsync_include_family_covers_dcgpu_and_navi(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(
-            config["include_family"]["linux"], ["gfx942", "gfx950", "gfx90a"]
+            config["include_family"]["linux"],
+            ["gfx942", "gfx950", "gfx90a", "gfx1100", "gfx1200", "gfx1201"],
         )
 
     def test_miopen_dbsync_declares_only_gfx90a_advisory(self):
@@ -625,7 +628,68 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertFalse(job.get("expect_failure"))
 
     def test_miopen_dbsync_excluded_on_other_families(self):
-        self.assertIsNone(self._dbsync_job("gfx120X-all", False, "gfx1200"))
+        self.assertIsNone(self._dbsync_job("gfx125X-dcgpu", False, "gfx1250"))
+
+    # -----------------------
+    # miopen-dbsync on the Navi families
+    # -----------------------
+
+    # Each Navi family group the runner validates and the fetch-gfx-targets
+    # amdgpu_family_matrix.py lists for it.
+    _NAVI_DBSYNC_FAMILIES = [
+        ("gfx110X-all", ["gfx1100", "gfx1101", "gfx1102", "gfx1103"]),
+        ("gfx120X-all", ["gfx1200", "gfx1201"]),
+    ]
+    _NAVI_DBSYNC_TARGETS = ["gfx1100", "gfx1200", "gfx1201"]
+
+    def test_miopen_dbsync_selected_on_navi_family_groups(self):
+        # The family group string is what multi_arch_ci passes in AMDGPU_FAMILIES.
+        for family, targets in self._NAVI_DBSYNC_FAMILIES:
+            with self.subTest(family=family):
+                job = self._dbsync_job(family, False, targets)
+                self.assertIsNotNone(job)
+                self.assertTrue(job["linux_cpu_runner"])
+
+    def test_miopen_dbsync_selected_on_navi_gfx_targets(self):
+        # A rocm-libraries PR event can pass the individual target instead.
+        for target in self._NAVI_DBSYNC_TARGETS:
+            with self.subTest(target=target):
+                self.assertIsNotNone(self._dbsync_job(target, False, target))
+
+    def test_miopen_dbsync_not_selected_on_unvalidated_navi_targets(self):
+        # No FAMILY_MAP entry (gfx1101, gfx1103) or not yet validated by the runner
+        # (gfx1102, gfx1151): a job there would check nothing, so none is scheduled.
+        for target in ["gfx1101", "gfx1102", "gfx1103", "gfx1151"]:
+            with self.subTest(target=target):
+                self.assertIsNone(self._dbsync_job(target, False, target))
+
+    def test_miopen_dbsync_navi_is_blocking(self):
+        # test_component.yml reads this boolean, so assert the emitted value, not
+        # just the declaration.
+        cases = self._NAVI_DBSYNC_FAMILIES + [(t, t) for t in self._NAVI_DBSYNC_TARGETS]
+        for family, targets in cases:
+            with self.subTest(family=family):
+                job = self._dbsync_job(family, False, targets)
+                self.assertIs(job["expect_failure"], False)
+
+    def test_miopen_dbsync_navi_scheduled_on_cpu_runner_when_gpu_gated(self):
+        # The Navi families carry tests_on_trigger ["nightly"], so the GPU runner is
+        # blanked on most triggers. The CPU-only component must still be scheduled.
+        for family, targets in self._NAVI_DBSYNC_FAMILIES:
+            with self.subTest(family=family):
+                job = self._dbsync_job(family, True, targets)
+                self.assertIsNotNone(job)
+                self.assertTrue(job["linux_cpu_runner"])
+                self.assertTrue(job["test_runner"])
+
+    def test_miopen_dbsync_not_selected_on_windows_navi(self):
+        # The component is linux-only, so no Windows Navi lane schedules it.
+        for family in ["gfx110X-all", "gfx120X-all"]:
+            with self.subTest(family=family):
+                sys.argv = ["fetch_test_configurations.py", "--platform=windows"]
+                os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+                os.environ["AMDGPU_FAMILIES"] = family
+                self.assertNotIn("miopen-dbsync", self._selected_names())
 
     def test_miopen_dbsync_not_scheduled_on_asan_builds(self):
         # StaticFDBSync is compiled out under ASAN, so the job must not be scheduled.
