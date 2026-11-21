@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="1030" viewBox="0 0 980 1030"><defs><marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z" fill="#8aa0b5"/></marker></defs><rect width="980" height="1030" fill="white"/><rect x="145.0" y="36.0" width="270" height="48" rx="24.0" fill="#FBE6C9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="57" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="280" dy="0">Fingerprints emitted (configure time)</tspan>
+</text>
+<text x="280" y="74" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">build/artifacts/*.fprint</tspan>
+</text>
+<rect x="151.0" y="110.0" width="258" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="132" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="280" dy="0">Scan build tree → units</tspan>
+</text>
+<text x="280" y="151" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">local_cache.py  ·  planner.py (CI)</tspan>
+</text>
+<rect x="151.0" y="186.0" width="258" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="208" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="280" dy="0">Read source fingerprint + build graph</tspan>
+</text>
+<text x="280" y="227" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">cache_key.py  ·  topology_view.py</tspan>
+</text>
+<rect x="151.0" y="262.0" width="258" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="284" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="280" dy="0">Compute cache key</tspan>
+</text>
+<text x="280" y="303" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">cache_key.py</tspan>
+</text>
+<rect x="151.0" y="338.0" width="258" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="360" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="280" dy="0">Look up key (batched) + read policy</tspan>
+</text>
+<text x="280" y="379" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">cache_db.py  ·  manifest.py</tspan>
+</text>
+<line x1="280" y1="84" x2="280" y2="110" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="280" y1="166" x2="280" y2="186" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="280" y1="242" x2="280" y2="262" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<line x1="280" y1="318" x2="280" y2="338" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<polygon points="280,416.0 375.0,462 280,508.0 185.0,462" fill="#FFF3D9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="456" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="280" dy="0">Cache hit?</tspan>
+</text>
+<text x="280" y="472" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="10.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">(cache_db.py)</tspan>
+</text>
+<line x1="280" y1="394" x2="280" y2="416" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="151.0" y="544.0" width="258" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="566" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="280" dy="0">Download objects + verify digests</tspan>
+</text>
+<text x="280" y="585" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">local_store.py  ·  restore.py</tspan>
+</text>
+<line x1="280" y1="508" x2="280" y2="544" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="302" y="530" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="302" dy="0">yes</tspan>
+</text>
+<polygon points="280,626.0 375.0,672 280,718.0 185.0,672" fill="#FFF3D9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="659" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="280" dy="0">Digests</tspan>
+<tspan x="280" dy="14">valid?</tspan>
+</text>
+<text x="280" y="689" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="10.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="280" dy="0">(restore.py)</tspan>
+</text>
+<line x1="280" y1="600" x2="280" y2="626" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="162.0" y="748.0" width="236" height="48" rx="24.0" fill="#DCF0E4" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="280" y="776" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="280" dy="0">REUSE — skip rebuild</tspan>
+</text>
+<line x1="280" y1="718" x2="280" y2="748" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="308" y="742" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="308" dy="0">yes</tspan>
+</text>
+<rect x="605.0" y="438.0" width="210" height="48" rx="24.0" fill="#FBE6C9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="710" y="466" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="710" dy="0">BUILD the unit</tspan>
+</text>
+<line x1="375" y1="462" x2="500" y2="462" stroke="#8aa0b5" stroke-width="1.6"/>
+<line x1="375" y1="672" x2="500" y2="672" stroke="#8aa0b5" stroke-width="1.6"/>
+<line x1="500" y1="672" x2="500" y2="462" stroke="#8aa0b5" stroke-width="1.6"/>
+<line x1="500" y1="462" x2="605" y2="462" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="437.5" y="454" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="437.5" dy="0">no (miss)</tspan>
+</text>
+<text x="437.5" y="664" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="437.5" dy="0">invalid</tspan>
+</text>
+<rect x="595.0" y="528.0" width="230" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="710" y="550" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="710" dy="0">Upload objects FIRST</tspan>
+</text>
+<text x="710" y="569" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="710" dy="0">local_store.py</tspan>
+</text>
+<line x1="710" y1="486" x2="710" y2="528" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<polygon points="710,616.0 805.0,662 710,708.0 615.0,662" fill="#FFF3D9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="710" y="649" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="710" dy="0">Complete &amp;</tspan>
+<tspan x="710" dy="14">policy OK?</tspan>
+</text>
+<text x="710" y="679" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="10.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="710" dy="0">(publish.py)</tspan>
+</text>
+<line x1="710" y1="584" x2="710" y2="616" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="595.0" y="744.0" width="230" height="56" rx="9" fill="#EAF2FB" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="710" y="766" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#17324d" text-anchor="middle">
+<tspan x="710" dy="0">Publish entry LAST</tspan>
+</text>
+<text x="710" y="785" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5" font-weight="400" fill="#1F6FB2" text-anchor="middle">
+<tspan x="710" dy="0">cache_db.py</tspan>
+</text>
+<line x1="710" y1="708" x2="710" y2="744" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="732" y="732" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="732" dy="0">yes</tspan>
+</text>
+<rect x="820.0" y="640.0" width="150" height="44" rx="22.0" fill="#F6DAD9" stroke="#8aa0b5" stroke-width="1.3"/>
+<text x="895" y="666" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="895" dy="0">Do not publish</tspan>
+</text>
+<line x1="805" y1="662" x2="820" y2="662" stroke="#8aa0b5" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="812.5" y="655" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="812.5" dy="0">no</tspan>
+</text>
+<path d="M 710 800 v 34 H 60 V 366 H 151" fill="none" stroke="#555" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<text x="425.0" y="850" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="400" fill="#555" text-anchor="middle">
+<tspan x="425.0" dy="0">entry now in the cache → reused on the next run</tspan>
+</text>
+<rect x="40" y="866" width="420" height="120" rx="8" fill="#F6F8FA" stroke="#8aa0b5"/>
+<text x="54" y="888" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#123A5E" text-anchor="start">
+<tspan x="54" dy="0">Supporting files (not in this runtime flow):</tspan>
+</text>
+<text x="54" y="910" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1b1b1b" text-anchor="start">
+<tspan x="54" dy="0">Cold-start the cache from past CI runs</tspan>
+</text>
+<text x="446" y="910" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#1F6FB2" text-anchor="end">
+<tspan x="446" dy="0">history_ingest.py</tspan>
+</text>
+<text x="54" y="934" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1b1b1b" text-anchor="start">
+<tspan x="54" dy="0">Measure hit-rate vs a naive baseline</tspan>
+</text>
+<text x="446" y="934" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#1F6FB2" text-anchor="end">
+<tspan x="446" dy="0">replay.py</tspan>
+</text>
+<text x="54" y="958" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="400" fill="#1b1b1b" text-anchor="start">
+<tspan x="54" dy="0">Package entry points</tspan>
+</text>
+<text x="446" y="958" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#1F6FB2" text-anchor="end">
+<tspan x="446" dy="0">cli.py · __main__.py · __init__.py</tspan>
+</text>
+<text x="490.0" y="26" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#123A5E" text-anchor="middle">
+<tspan x="490.0" dy="0">Fingerprint cache — flow, and the file behind each step</tspan>
+</text></svg>
