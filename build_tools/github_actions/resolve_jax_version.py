@@ -33,6 +33,11 @@ writes these step outputs to GITHUB_OUTPUT:
 
     ml_wheel_version_suffix=.dev20261002+rocm7.14.0a20261002
     wheels=jax,jaxlib,jax-rocm-plugin,jax-rocm-pjrt
+    bazel_options=
+
+An ASAN `--build-variant` fills `bazel_options` with host-only ASAN flags. The
+version needs no marker of its own: the ASAN ROCm version carries one, e.g.
+`+rocm10.3.0a20261119-asandebug`, as for PyTorch.
 """
 
 import argparse
@@ -44,6 +49,10 @@ from pathlib import Path
 _BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 
+from github_actions.configure_jax_release_matrix import (
+    ASAN_BUILD_VARIANTS,
+    BUILD_VARIANTS,
+)
 from github_actions.determine_version import derive_version_suffix
 from github_actions.github_actions_api import gha_set_output
 
@@ -51,6 +60,15 @@ WHEELS = {
     "release": ("jax-rocm-plugin", "jax-rocm-pjrt"),
     "nightly": ("jax", "jaxlib", "jax-rocm-plugin", "jax-rocm-pjrt"),
 }
+
+# The ROCm toolchain pinned by the JAX release branches has no asan feature, so
+# --config=asan_shared alone does not instrument. GPU kernels stay uninstrumented.
+ASAN_BAZEL_OPTIONS = (
+    "--bazel_options=--config=asan_shared"
+    " --bazel_options=--copt=-fsanitize=address"
+    " --bazel_options=--copt=-fno-gpu-sanitize"
+    " --bazel_options=--linkopt=-fsanitize=address"
+)
 
 
 def commit_date(jax_source_dir: Path) -> str:
@@ -98,6 +116,12 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="JAX checkout being built",
     )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=BUILD_VARIANTS,
+        help="TheRock build variant of the release (default: release)",
+    )
     args = parser.parse_args(argv)
 
     suffix = ml_wheel_version_suffix(
@@ -107,6 +131,9 @@ def main(argv: list[str] | None = None) -> None:
         {
             "ml_wheel_version_suffix": suffix,
             "wheels": ",".join(WHEELS[args.wheel_type]),
+            "bazel_options": (
+                ASAN_BAZEL_OPTIONS if args.build_variant in ASAN_BUILD_VARIANTS else ""
+            ),
         }
     )
 

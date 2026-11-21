@@ -354,3 +354,22 @@ index:
 
 The published wheels are validated by the JAX test workflow as part of the
 nightly release process before being made available for use.
+
+### ASAN wheels
+
+ASAN releases (`multi_arch_release_asan.yml` with `build_jax`) build the plugin
+and PJRT of the CI ref with host-only AddressSanitizer, against that release's
+ASAN ROCm packages, and publish them untested to `whl-next-asan`. As for
+PyTorch, the ASAN ROCm version labels them, e.g.
+`0.12.0+rocm10.3.0a20261119-asandebug`. Run them with ROCm's ASAN runtime and
+HSA preloaded, and `HSA_XNACK=1` on ASAN ROCm packages:
+
+```bash
+core=$(python -c "import _rocm_sdk_core; print(_rocm_sdk_core.__path__[0])")
+LD_PRELOAD="$(echo "$core"/lib/llvm/lib/clang/*/lib/x86_64-unknown-linux-gnu/libclang_rt.asan.so) $core/lib/libhsa-runtime64.so.1" \
+HSA_XNACK=1 ASAN_OPTIONS=detect_leaks=0 ASAN_SYMBOLIZER_PATH="$core/lib/llvm/bin/llvm-symbolizer" \
+python my_program.py
+```
+
+Without HSA in the global scope, the ASAN runtime's `hsa_init` interceptor
+crashes `hipInit`.
