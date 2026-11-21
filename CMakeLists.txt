@@ -248,6 +248,70 @@ option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to t
 # Include generated topology (contains feature definitions)
 include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 
+# Per-distribution toggles for amd-llvm staging (see clang/cmake/caches/ROCm.cmake).
+# Defined after topology so THEROCK_ENABLE_COMPILER exists. Compose
+# THEROCK_AMD_LLVM_DISTRIBUTION; empty aggregate = full cmake --install.
+if(THEROCK_ENABLE_COMPILER)
+  option(THEROCK_ENABLE_COMPILER_DISTRIBUTION
+    "Stage LLVM 'compiler' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION
+    "Stage LLVM 'runtimes' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION
+    "Stage LLVM 'dev' distribution for amd-llvm" ON)
+  option(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION
+    "Stage LLVM 'tools' distribution for amd-llvm" ON)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION
+    "Stage LLVM 'fortran' distribution for amd-llvm" ON
+    "NOT WIN32" OFF)
+  cmake_dependent_option(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION
+    "Stage LLVM 'multilibs' distribution for amd-llvm" OFF
+    "NOT WIN32" OFF)
+  # THEROCK_BUILD_COMGR_TESTS is assigned in compiler/CMakeLists.txt, after
+  # this option is created. Mirror that default so a testing build stages utils.
+  if(DEFINED THEROCK_BUILD_COMGR_TESTS)
+    set(_therock_comgr_tests "${THEROCK_BUILD_COMGR_TESTS}")
+  elseif(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+    set(_therock_comgr_tests OFF)
+  else()
+    set(_therock_comgr_tests "${THEROCK_BUILD_TESTING}")
+  endif()
+  set(_therock_utils_dist_default OFF)
+  if(THEROCK_BUILD_LLVM_TESTS OR THEROCK_BUILD_LLVM_TOOLS OR _therock_comgr_tests)
+    set(_therock_utils_dist_default ON)
+  endif()
+  option(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION
+    "Stage LLVM 'utils' distribution for amd-llvm" ${_therock_utils_dist_default})
+
+  set(_therock_amd_llvm_distribution)
+  if(THEROCK_ENABLE_COMPILER_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution compiler)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_RUNTIMES_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution runtimes)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_DEV_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution dev)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_TOOLS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution tools)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_FORTRAN_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution fortran)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_MULTILIBS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution multilibs)
+  endif()
+  if(THEROCK_ENABLE_COMPILER_UTILS_DISTRIBUTION)
+    list(APPEND _therock_amd_llvm_distribution utils)
+  endif()
+  # FORCE so toggling THEROCK_ENABLE_COMPILER_*_DISTRIBUTION updates the effective
+  # list on reconfigure. Override by flipping the per-distribution options.
+  set(THEROCK_AMD_LLVM_DISTRIBUTION "${_therock_amd_llvm_distribution}" CACHE STRING
+    "Semicolon-separated LLVM distributions to build/stage for amd-llvm (composed from THEROCK_ENABLE_COMPILER_*_DISTRIBUTION). Empty = full cmake --build + cmake --install. See clang/cmake/caches/ROCm.cmake"
+    FORCE)
+  unset(_therock_amd_llvm_distribution)
+endif()
+
 ################################################################################
 # Manual features that don't map to artifacts
 ################################################################################
