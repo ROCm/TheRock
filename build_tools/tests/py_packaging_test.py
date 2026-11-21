@@ -2493,10 +2493,13 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
     def tearDown(self):
         self.temp_context.cleanup()
 
-    def _fake_profiler(self):
+    def _fake_profiler(self, soname_aliases=None):
         import types
 
-        return types.SimpleNamespace(platform_dir=self.platform_dir)
+        return types.SimpleNamespace(
+            platform_dir=self.platform_dir,
+            files=types.SimpleNamespace(soname_aliases=soname_aliases or {}),
+        )
 
     def test_creates_unversioned_symlink_for_libprofiler_hub(self):
         from build_python_packages import ensure_profiler_library_symlinks
@@ -2538,6 +2541,99 @@ class EnsureProfilerLibrarySymlinksTest(unittest.TestCase):
 
         link = self.lib_dir / "libprofiler-hub.so"
         self.assertEqual(os.readlink(link), "libprofiler-hub.so.99")
+
+    def test_restores_dropped_libdyninstAPI_RT_so_link(self):
+        """Check that lib/rocprofiler-systems/libdyninstAPI_RT.so is created
+        and points at ../librocprof-sys-rt.so when soname_aliases records
+        that link as dropped.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "librocprof-sys-rt.so.1").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(
+            self._fake_profiler(
+                {
+                    "lib/rocprofiler-systems/libdyninstAPI_RT.so": "librocprof-sys-rt.so.1",
+                }
+            )
+        )
+
+        link = self.lib_dir / "rocprofiler-systems" / "libdyninstAPI_RT.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "../librocprof-sys-rt.so")
+
+    def test_restores_dropped_link_for_a_non_rocprof_library(self):
+        """Check the same restore for a library outside the librocprof-sys*
+        and libprofiler-hub* globs. lib/vendor/libexample_RT.so should point
+        at ../libexample-rt.so.2.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "libexample-rt.so.2").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(
+            self._fake_profiler(
+                {
+                    "lib/vendor/libexample_RT.so": "libexample-rt.so.2",
+                }
+            )
+        )
+
+        link = self.lib_dir / "vendor" / "libexample_RT.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "../libexample-rt.so.2")
+
+    def test_does_not_restore_fully_versioned_library_filename(self):
+        """Check that librocprof-sys-rt.so.1.2.3 is left absent.
+
+        That fully versioned filename is also in soname_aliases. Recreating
+        it as a symlink would be copied as a second library in the wheel.
+        The differently named libdyninstAPI_RT.so link is still created.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "librocprof-sys-rt.so.1").write_text("fake soname file")
+
+        ensure_profiler_library_symlinks(
+            self._fake_profiler(
+                {
+                    "lib/librocprof-sys-rt.so.1.2.3": "librocprof-sys-rt.so.1",
+                    "lib/rocprofiler-systems/libdyninstAPI_RT.so": "librocprof-sys-rt.so.1",
+                }
+            )
+        )
+
+        versioned = self.lib_dir / "librocprof-sys-rt.so.1.2.3"
+        self.assertFalse(versioned.exists())
+        self.assertFalse(versioned.is_symlink())
+        link = self.lib_dir / "rocprofiler-systems" / "libdyninstAPI_RT.so"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "../librocprof-sys-rt.so")
+
+    def test_keeps_preexisting_libdyninstAPI_RT_so_link(self):
+        """Check that an existing libdyninstAPI_RT.so link is not replaced.
+        It points at ../librocprof-sys-rt.so.99 before the call and still
+        points there after.
+        """
+        from build_python_packages import ensure_profiler_library_symlinks
+
+        (self.lib_dir / "librocprof-sys-rt.so.1").write_text("fake soname file")
+        (self.lib_dir / "librocprof-sys-rt.so.99").write_text("a different target")
+        dyninst_dir = self.lib_dir / "rocprofiler-systems"
+        dyninst_dir.mkdir(parents=True)
+        (dyninst_dir / "libdyninstAPI_RT.so").symlink_to("../librocprof-sys-rt.so.99")
+
+        ensure_profiler_library_symlinks(
+            self._fake_profiler(
+                {
+                    "lib/rocprofiler-systems/libdyninstAPI_RT.so": "librocprof-sys-rt.so.1",
+                }
+            )
+        )
+
+        link = dyninst_dir / "libdyninstAPI_RT.so"
+        self.assertEqual(os.readlink(link), "../librocprof-sys-rt.so.99")
 
 
 class MarkAmdsmiRocmSdkCoreTest(TmpDirTestCase):
