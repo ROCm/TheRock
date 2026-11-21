@@ -1915,6 +1915,7 @@ def run():
                 )
                 continue
 
+        # Follow the runner the job really gets: a manual pin, then whole node.
         manual_runner = (
             ""
             if component.get("linux_cpu_runner")
