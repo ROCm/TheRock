@@ -3,5 +3,9 @@
 
 # Temporary component requirements for the installed rocKE Python tests. Use
 # the copy in the hipkernelprovider test artifact after rocKE installs it.
+# The staged wheels use --no-deps; provision AUTO's compiler separately.
+# Prefer AMD's SDK index over PyPI's placeholder distribution.
+--extra-index-url https://nightly.repo.amd.com/rocm/whl-next/
 numpy>=1.26.0
 ml_dtypes==0.5.4
+rocm-sdk-core>=7.9.0rc1
