@@ -510,7 +510,8 @@ amdgpu_family_info_matrix = {
                 "nightly",
             ],
             "tests_on_trigger": ["nightly"],
-            # Only run tests when gfx90a label is present on PR
+            # Only run tests when gfx90a label is present on PR (or implied by
+            # ci:host-asan on host-asan PRs, see configure_multi_arch_ci.py).
             "trigger_test_label_only": True,
         },
         "windows": {

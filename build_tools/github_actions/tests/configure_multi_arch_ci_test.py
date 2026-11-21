@@ -1418,6 +1418,130 @@ class TestDecideJobs(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
+class TestHostAsanImpliedFamily(unittest.TestCase):
+    """ci:host-asan implies gfx90a (build + test) on host-asan PR runs.
+
+    Goes through the real path: the asan workflow passes build_variant="asan"
+    and the host-asan variant is resolved from the labels later on.
+    """
+
+    def _configs(self, labels, event="pull_request", run_rocm_tests=True, **env):
+        payload = {"pull_request": {"labels": [{"name": n} for n in labels]}}
+        inputs = _run_from_environ(
+            event_name=event,
+            event_payload=payload if event == "pull_request" else {},
+            build_variant="asan",
+            extra_env={
+                "PR_LABELS": ",".join(labels),
+                "BUILD_PYTORCH": "false",
+                "BUILD_JAX": "false",
+                "RUN_ROCM_TESTS": str(run_rocm_tests).lower(),
+                **env,
+            },
+        )
+        targets = cm.select_targets(inputs)
+        jobs = cm.decide_jobs(inputs, cm.GitContext(), targets)
+        configs = cm.expand_build_configs(inputs, cm.GitContext(), targets, jobs)
+        return targets, configs
+
+    @staticmethod
+    def _gfx90a_entries(configs):
+        return [
+            e
+            for e in configs.linux.per_family_info
+            if e["amdgpu_family"].startswith("gfx90a")
+        ]
+
+    def test_host_asan_pr_builds_and_tests_gfx90a(self):
+        targets, configs = self._configs(["ci:host-asan"])
+        self.assertIn("gfx90a", targets.linux_families)
+        (entry,) = self._gfx90a_entries(configs)
+        self.assertEqual(entry["test-runs-on"], "linux-gfx90a-1gpu-ossci-rocm")
+        self.assertEqual(configs.linux.build_variant_label, "host-asan")
+
+    def test_explicit_gfx90a_labels_not_duplicated(self):
+        for explicit in ("ci:gfx90a", "ci:build:gfx90a"):
+            with self.subTest(explicit=explicit):
+                targets, configs = self._configs(["ci:host-asan", explicit])
+                self.assertEqual(targets.linux_families.count("gfx90a"), 1)
+                self.assertEqual(len(self._gfx90a_entries(configs)), 1)
+
+    def test_explicit_test_label_wins_over_implication(self):
+        # ci:test:gfx90a alone lacks a build label; the explicit label is
+        # respected rather than silently completed.
+        with self.assertRaises(ValueError):
+            self._configs(["ci:host-asan", "ci:test:gfx90a"])
+
+    def test_build_only_label_keeps_tests_disabled(self):
+        _, configs = self._configs(["ci:host-asan", "ci:build:gfx90a"])
+        (entry,) = self._gfx90a_entries(configs)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_full_asan_does_not_imply_gfx90a(self):
+        targets, _ = self._configs(["ci:asan", "ci:host-asan"])
+        self.assertNotIn("gfx90a", targets.linux_families)
+
+    def test_exactly_does_not_imply_gfx90a(self):
+        targets, _ = self._configs(["ci:host-asan", "ci:exactly", "ci:gfx950"])
+        self.assertNotIn("gfx90a", targets.linux_families)
+
+    def test_without_host_asan_label_nothing_implied(self):
+        targets, _ = self._configs([])
+        self.assertNotIn("gfx90a", targets.linux_families)
+
+    def test_non_pull_request_event_not_implied(self):
+        targets, _ = self._configs(
+            ["ci:host-asan"],
+            event="workflow_dispatch",
+            LINUX_AMDGPU_FAMILIES="gfx110X",
+        )
+        self.assertNotIn("gfx90a", targets.linux_families)
+
+    def test_missing_gfx90a_in_matrix_does_not_crash(self):
+        with patch.object(cm, "HOST_ASAN_IMPLIED_FAMILY", "gfx-nonexistent"):
+            targets, _ = self._configs(["ci:host-asan"])
+        self.assertNotIn("gfx-nonexistent", targets.linux_families)
+
+    def test_run_all_archs_still_tests_gfx90a(self):
+        _, configs = self._configs(["ci:host-asan", "ci:run-all-archs"])
+        (entry,) = self._gfx90a_entries(configs)
+        self.assertNotEqual(entry["test-runs-on"], "")
+
+    def test_cpu_test_only_builds_without_tests(self):
+        _, configs = self._configs(["ci:host-asan", "ci:cpu-test-only"])
+        (entry,) = self._gfx90a_entries(configs)
+        self.assertEqual(entry["test-runs-on"], "")
+
+    def test_push_event_not_implied(self):
+        # gfx90a is a default push family, so compare against an unlabeled push
+        # and check no duplicate entry is added.
+        targets, _ = self._configs(["ci:host-asan"], event="push")
+        baseline, _ = self._configs([], event="push")
+        self.assertEqual(targets.linux_families, baseline.linux_families)
+
+    def test_suffixed_label_not_duplicated(self):
+        targets, configs = self._configs(["ci:host-asan", "ci:gfx90a-dcgpu"])
+        self.assertEqual(targets.linux_families.count("gfx90a"), 1)
+        self.assertEqual(len(self._gfx90a_entries(configs)), 1)
+
+    def test_windows_matches_explicit_gfx90a_label(self):
+        # Windows has no host-asan config, so no Windows build config is
+        # produced; the implication must behave exactly like ci:gfx90a.
+        implied_targets, implied = self._configs(["ci:host-asan"])
+        explicit_targets, explicit = self._configs(["ci:host-asan", "ci:gfx90a"])
+        self.assertEqual(
+            implied_targets.windows_families, explicit_targets.windows_families
+        )
+        self.assertIsNone(implied.windows)
+        self.assertIsNone(explicit.windows)
+
+    def test_run_rocm_tests_false_disables_tests(self):
+        targets, configs = self._configs(["ci:host-asan"], run_rocm_tests=False)
+        self.assertIn("gfx90a", targets.linux_families)
+        (entry,) = self._gfx90a_entries(configs)
+        self.assertEqual(entry["test-runs-on"], "")
+
+
 class TestSelectTargets(unittest.TestCase):
     """Test target family selection.
 

@@ -1099,6 +1099,53 @@ def _filter_families_by_platform(
     ]
 
 
+# Family implied by ci:host-asan on pull requests: host-asan tests only run on
+# gfx90a, which is otherwise gated behind the ci:gfx90a label.
+HOST_ASAN_IMPLIED_FAMILY = "gfx90a"
+
+
+def _host_asan_label_selects_variant(ci_inputs: CIInputs) -> bool:
+    """True if the ci:host-asan label (not ci:asan) selects the host-asan variant."""
+    return (
+        ci_inputs.build_variant == "asan"
+        and "ci:asan" not in ci_inputs.pr_labels
+        and "ci:host-asan" in ci_inputs.pr_labels
+    )
+
+
+def _resolve_asan_variant(ci_inputs: CIInputs) -> tuple[str, str]:
+    """Resolve the effective build variant for ASAN-capable workflows.
+
+    Returns (build_variant, reason). Only the "asan" entry variant is rewritten:
+
+    1. ci:asan label -> asan (explicit full ASAN, highest priority)
+    2. ci:host-asan label -> host-asan (explicit)
+    3. push/pull_request events -> host-asan (default for pre/postsubmit)
+    4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
+    """
+    if ci_inputs.build_variant != "asan":
+        return ci_inputs.build_variant, ""
+    if "ci:asan" in ci_inputs.pr_labels:
+        return "asan", "ci:asan label"
+    if _host_asan_label_selects_variant(ci_inputs):
+        return "host-asan", "ci:host-asan label"
+    if ci_inputs.is_push or ci_inputs.is_pull_request:
+        return "host-asan", "push/pull_request default"
+    return "asan", ""
+
+
+def _host_asan_implies_family(ci_inputs: CIInputs) -> bool:
+    """True if ci:host-asan on this pull request implies HOST_ASAN_IMPLIED_FAMILY.
+
+    Applies only when the label itself selected the host-asan variant on a
+    pull_request event (so full ASAN via ci:asan, push and dispatch are
+    excluded) and the run is not restricted with ci:exactly.
+    """
+    if not ci_inputs.is_pull_request or ci_inputs.contains_ci_exactly_label:
+        return False
+    return _host_asan_label_selects_variant(ci_inputs)
+
+
 def _apply_arch_labels(
     ci_inputs: CIInputs,
     all_families: dict,
@@ -1115,6 +1162,9 @@ def _apply_arch_labels(
       2. ci:gfx* — adds family to builds AND tests (bypasses trigger gating)
       3. ci:build:gfx* — adds family to builds only
       4. ci:test:gfx* — adds family to tests only (requires build label)
+      5. ci:host-asan on host-asan PRs — implies gfx90a (build + test) unless
+         gfx90a was already selected by a ci:gfx*, ci:build:gfx* or
+         ci:test:gfx* label
 
     Mutates linux_names/windows_names in place and returns the build_only /
     test_only lists.
@@ -1184,6 +1234,20 @@ def _apply_arch_labels(
         linux_test_only.append(target)
         windows_test_only.append(target)
         print(f"  Label '{label}' -> adding test-only target {target}")
+
+    # 5. host-asan PRs imply the gfx90a family (build AND test) unless the user
+    # already selected it explicitly.
+    explicit = {t for _, t in gfx_targets + build_targets + test_targets}
+    family = HOST_ASAN_IMPLIED_FAMILY
+    if _host_asan_implies_family(ci_inputs) and family not in explicit:
+        if family in all_families:
+            linux_names.append(family)
+            windows_names.append(family)
+            linux_test_only.append(family)
+            windows_test_only.append(family)
+            print(f"  Label 'ci:host-asan' implies {family} (build + test)")
+        else:
+            print(f"  Label 'ci:host-asan' implies {family}, but it is unavailable")
 
     return linux_build_only, windows_build_only, linux_test_only, windows_test_only
 
@@ -2348,21 +2412,11 @@ def expand_build_configs(
     #            env var in setup_multi_arch.yml
     # =========================================================================
     all_families = _apply_external_family_overrides(all_families)
-    build_variant = ci_inputs.build_variant
-    # ASAN variant selection:
-    # 1. ci:asan label -> asan (explicit full ASAN, highest priority)
-    # 2. ci:host-asan label -> host-asan (explicit)
-    # 3. push/pull_request events -> host-asan (default for pre/postsubmit)
-    # 4. schedule/workflow_dispatch -> asan (nightly/manual get full ASAN)
-    if build_variant == "asan":
-        if "ci:asan" in ci_inputs.pr_labels:
-            print("  Using full asan variant (ci:asan label)")
-        elif "ci:host-asan" in ci_inputs.pr_labels:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (ci:host-asan label)")
-        elif ci_inputs.is_push or ci_inputs.is_pull_request:
-            build_variant = "host-asan"
-            print("  Using host-asan variant (push/pull_request default)")
+    # ASAN variant selection (see _resolve_asan_variant for precedence).
+    build_variant, reason = _resolve_asan_variant(ci_inputs)
+    if reason:
+        label = "full asan" if build_variant == "asan" else "host-asan"
+        print(f"  Using {label} variant ({reason})")
 
     linux_config: BuildConfig | None = None
     windows_config: BuildConfig | None = None
