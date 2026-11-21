@@ -34,9 +34,9 @@ reverse-edge ``dependency -> {consumers}`` schema).
   never co-occur may still contribute edges.
 - Only the dependency-relevant CMake subset is modeled; unsupported dependency
   expressions should raise and gain a test.
-- Only literal ``therock_cmake_subproject_declare()`` / ``add_subdirectory()``
-  calls are seen — those reached through a wrapping function or macro are
-  invisible.
+- Only literal ``therock_cmake_subproject_declare()`` /
+  ``therock_python_wheel_subproject()`` / ``add_subdirectory()`` calls are seen —
+  those reached through any other wrapping function or macro are invisible.
 - A *defined-but-empty* dependency variable (incl. a ``foreach(... IN LISTS x)``
   where ``x`` is defined but empty) expands to nothing without being flagged,
   silently dropping its edge. An *undefined* ``IN LISTS`` source is treated
@@ -62,7 +62,6 @@ from cmake_parser import CMakeParseError
 from cmake_parser import ast as cmake_ast
 from cmake_parser.lexer import Token
 from cmake_parser.parser import parse_tree
-
 
 _VARIABLE_REFERENCE_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
@@ -107,9 +106,25 @@ _DECLARATION_MULTI_VALUE_ARGS = {
     "FPRINT_FILE_GLOBS",
     "INSTALL_OPTIONAL_COMPONENTS",
 }
+# therock_python_wheel_subproject() (cmake/therock_python_wheel.cmake) forwards
+# its name, BUILD_DEPS, RUNTIME_DEPS, and COMPILER_TOOLCHAIN to
+# therock_cmake_subproject_declare(), so it is modeled as a declaration.
+_PYTHON_WHEEL_SUBPROJECT_ARGS = {
+    "SOURCE_DIR",
+    "FINALIZE_SCRIPT",
+    "ARTIFACT_DESCRIPTOR",
+    "ENV_FROM_VARS",
+}
 _DECLARATION_KEYWORDS = (
-    _DECLARATION_FLAGS | _DECLARATION_ONE_VALUE_ARGS | _DECLARATION_MULTI_VALUE_ARGS
+    _DECLARATION_FLAGS
+    | _DECLARATION_ONE_VALUE_ARGS
+    | _DECLARATION_MULTI_VALUE_ARGS
+    | _PYTHON_WHEEL_SUBPROJECT_ARGS
 )
+_DECLARATION_COMMANDS = {
+    "therock_cmake_subproject_declare",
+    "therock_python_wheel_subproject",
+}
 
 # TODO: mirrors CMake's therock_compiler_toolchain_subproject() (the CMake-side
 # source); share one definition via a data file if a third toolchain is added.
@@ -726,7 +741,7 @@ class RepositoryAnalyzer:
             self._execute_list(node, environment)
         elif identifier == "add_subdirectory":
             self._execute_add_subdirectory(node, environment, relative_path)
-        elif identifier == "therock_cmake_subproject_declare":
+        elif identifier in _DECLARATION_COMMANDS:
             self._record_declaration(node, environment, relative_path)
 
     def _execute_list(self, node: cmake_ast.Command, environment: Environment) -> None:
@@ -997,9 +1012,17 @@ def _contains_declaration(nodes: list[cmake_ast.AstNode]) -> bool:
     for node in nodes:
         if (
             isinstance(node, cmake_ast.Command)
-            and node.identifier.lower() == "therock_cmake_subproject_declare"
+            and node.identifier.lower() in _DECLARATION_COMMANDS
         ):
             return True
+        # A modeled wrapper's own definition forwards to the declaration; its
+        # call sites are what the traversal records.
+        if (
+            isinstance(node, cmake_ast.Function)
+            and node.args
+            and node.args[0].value.lower() in _DECLARATION_COMMANDS
+        ):
+            continue
         child_lists = []
         for attribute in ("body", "if_true", "if_false"):
             children = getattr(node, attribute, None)

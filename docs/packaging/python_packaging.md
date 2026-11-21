@@ -316,6 +316,64 @@ Instead:
 > (for example, `rocm-sdk-device-gfx942`). If it is not available in the selected
 > package index, installation may be incomplete.
 
+## rocshmem4py
+
+The `rocshmem4py` package provides Python bindings for
+[rocSHMEM](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocshmem),
+the OpenSHMEM-style communication library for AMD GPUs. It exposes rocSHMEM
+initialization, symmetric heap allocation, and host- and stream-initiated
+communication to Python, with optional PyTorch and MPI coordination. Its source
+is the standalone
+[`python/rocshmem`](https://github.com/ROCm/rocm-systems/blob/develop/python/rocshmem/README.md)
+project in rocm-systems; see its README for the API and launch instructions.
+
+`rocshmem4py` is published for Linux only, with one wheel per CPython version,
+because it contains a compiled extension.
+
+### Installation
+
+Install it alongside the `rocm-sdk-core` version you want to use:
+
+```bash
+pip install rocshmem4py "rocm-sdk-core==<ROCm version>"
+```
+
+Unlike `rocm-profiler`, `rocshmem4py` is not part of the `rocm` meta package
+and declares its own dependency on `rocm-sdk-core`. Requesting the
+`rocm-sdk-core` version selects the `rocshmem4py` build for that ROCm version;
+without it, pip installs the newest build in the index.
+
+### Versioning and Dependency Model
+
+TheRock keeps the upstream public version and replaces the local version with
+the ROCm build identity described in the [versioning documentation](versioning.md).
+For example, a development wheel can have version
+`0.1.0+devrocm10.1.0.dev0.<commit>`, while release wheels use versions such as
+`0.1.0+rocm10.1.0`. The rocSHMEM version it was built against is available as
+`rocshmem4py.__rocshmem_version__`.
+
+rocSHMEM is linked statically into the extension. The remaining ROCm libraries
+are loaded from `rocm-sdk-core` through RPATH, so each wheel requires exactly
+`rocm-sdk-core==<ROCm version>` to avoid mixing libraries from different builds.
+
+### How It Is Built
+
+`rocshmem4py` is declared in [`comm-libs/CMakeLists.txt`](/comm-libs/CMakeLists.txt)
+with `therock_python_wheel_subproject()` from
+[`cmake/therock_python_wheel.cmake`](/cmake/therock_python_wheel.cmake). The
+helper builds the project's wheels for each detected CPython version and stores
+them in the `rocshmem4py` artifact.
+[`build_tools/build_python_packages.py`](/build_tools/build_python_packages.py)
+then copies them into the package index with the other ROCm packages. Other
+Python projects with compiled extensions can be packaged the same way.
+
+Projects packaged with the helper should accept TheRock's package version,
+`rocm-sdk-core` requirement, and extension RPATH as build inputs. `rocshmem4py`
+does not accept these yet, so
+[`finalize_rocshmem4py_wheel.py`](/build_tools/packaging/python/finalize_rocshmem4py_wheel.py)
+applies the metadata above to the built wheels as a temporary compatibility
+bridge. It will be removed once the upstream build takes these inputs.
+
 ## Using Packages from Frameworks
 
 ### Building Python Based Projects
