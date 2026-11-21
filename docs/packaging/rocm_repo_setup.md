@@ -13,11 +13,18 @@ paths are documented in [native_packaging.md](native_packaging.md).
 `amd-repo-setup` is generated per OS profile and per stream. Every profile writes a
 single repo definition and, for signed streams, the repository signing key:
 
-| OS profile        | Package manager | Repo definition                                    | Signing key                            |
-| ----------------- | --------------- | -------------------------------------------------- | -------------------------------------- |
-| `ubuntu2404`      | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
-| `rhel8`, `rhel10` | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
-| `sles16`          | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| OS profile                               | Package manager | Repo definition                                    | Signing key                            |
+| ---------------------------------------- | --------------- | -------------------------------------------------- | -------------------------------------- |
+| `ubuntu2204`, `ubuntu2404`, `ubuntu2604` | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
+| `debian12`, `debian13`                   | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
+| `rhel8`, `rhel9`, `rhel10`               | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| `sles15`, `sles16`                       | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| `azl3`                                   | `tdnf`          | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+
+On minimal Azure Linux container images, install `ca-certificates` before
+refreshing (`sudo tdnf install ca-certificates`). Those images ship only
+`ca-certificates-base`, which does not trust the repository's TLS certificate.
+Full Azure Linux installs already have it.
 
 The filename and the rpm section id both identify the stream. The stem is
 `amdrocm-<stream>` for every stream except `rc`, whose file is
@@ -141,8 +148,9 @@ that repository configuration too.
 stream. Use Python 3.10 or newer with the `jinja2` Python package, plus the
 native packaging tools for the target format:
 
-- deb (`ubuntu2404`): `debhelper`, `dpkg-dev`, `build-essential`
-- rpm (`rhel8`, `rhel10`, `sles16`): `rpm-build`
+- deb (`ubuntu2204`, `ubuntu2404`, `ubuntu2604`, `debian12`, `debian13`):
+  `debhelper`, `dpkg-dev`, `build-essential`
+- rpm (`rhel8`, `rhel9`, `rhel10`, `sles15`, `sles16`, `azl3`): `rpm-build`
 
 Some rpm base images ship no system `python3` at all — UBI 8, for example — so
 Python may need installing first. `setup_python_cmd.sh --install-runtime` does
@@ -153,7 +161,7 @@ fetches it over the network (see below), so `gpg` and `ca-certificates` must be
 present.
 
 `setup_repo_build_deps.sh` installs that set for a given profile, picking `apt`,
-`zypper` or `dnf` to match:
+`zypper`, or `dnf` (`tdnf` where dnf is missing) to match:
 
 ```bash
 bash build_tools/packaging/linux/setup_repo_build_deps.sh --os-profile ubuntu2404

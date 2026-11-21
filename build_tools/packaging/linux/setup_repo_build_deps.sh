@@ -8,7 +8,13 @@
 #
 # - ubuntu* / debian* -> apt: debhelper-compat, dpkg-dev, build-essential
 # - sles*             -> zypper: rpm-build
-# - else (RHEL-like)  -> dnf: rpm-build
+# - rhel* / azl*      -> dnf, or tdnf where dnf is missing: rpm-build
+#
+# Any other profile is rejected before a package manager runs.
+#
+# The profile names the distro being built for, not the machine running this:
+# CI builds azl3 on UBI 10, which has dnf, while Azure Linux itself has only
+# tdnf. So the rpm branch uses whichever of the two is installed.
 #
 # gpg is installed for every profile: signed streams need it to dearmor
 # the deb keyring and to check the signing key fingerprint.
@@ -58,14 +64,13 @@ OS_PROFILE="${OS_PROFILE%"${OS_PROFILE##*[![:space:]]}"}"
 OS_PLC="${OS_PROFILE,,}"
 
 # Reject an unrecognised profile rather than letting it fall through to a
-# package manager that is not the one it needs. Matched by family so a new
-# release of a supported distro works without editing this script.
+# package manager. Matched by family so a new release of a supported distro
+# works without editing this script.
 case "$OS_PLC" in
-    ubuntu*|debian*|rhel*|sles*) ;;
+    ubuntu*|debian*|rhel*|sles*|azl*) ;;
     *)
         echo "Error: unrecognised --os-profile '$OS_PROFILE'" >&2
-        echo "Expected an ubuntu*, debian*, rhel* or sles* profile" \
-            "(this project builds ubuntu2404, rhel8, rhel10, sles16)" >&2
+        echo "Expected an ubuntu*, debian*, rhel*, sles* or azl* profile" >&2
         exit 1
         ;;
 esac
@@ -96,8 +101,16 @@ elif [[ "$OS_PLC" == sles* ]]; then
         gpg2 \
         rpm-build
 else
-    "${SUDO[@]}" dnf makecache
-    "${SUDO[@]}" dnf install -y \
+    if command -v dnf >/dev/null 2>&1; then
+        PKG_MGR=dnf
+    elif command -v tdnf >/dev/null 2>&1; then
+        PKG_MGR=tdnf
+    else
+        echo "Error: --os-profile '$OS_PROFILE' needs dnf or tdnf, and neither is installed" >&2
+        exit 1
+    fi
+    "${SUDO[@]}" "$PKG_MGR" makecache
+    "${SUDO[@]}" "$PKG_MGR" install -y \
         ca-certificates \
         gnupg2 \
         rpm-build
