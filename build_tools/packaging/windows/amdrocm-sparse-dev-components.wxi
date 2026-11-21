@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_bh" Directory="amdrocm_sparse_dev_bh">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/bin/hipsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ih" Directory="amdrocm_sparse_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/include/hipsparse/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_ir" Directory="amdrocm_sparse_dev_ir">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/include/rocsparse/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_l" Directory="amdrocm_sparse_dev_l">
+    <Component Id="c_amdrocm_sparse_dev_l_h.lib" Guid="*">
+      <File Id="f_amdrocm_sparse_dev_l_h.lib" Source="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/hipsparse.lib" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_sparse_dev_l_r.lib" Guid="*">
+      <File Id="f_amdrocm_sparse_dev_l_r.lib" Source="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/lib/rocsparse.lib" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_lch" Directory="amdrocm_sparse_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/hipSPARSE/dist/lib/cmake/hipsparse/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocsparse -->
+  <ComponentGroup Id="cg_amdrocm_sparse_dev_lcr" Directory="amdrocm_sparse_dev_lcr">
+    <Files Include="$(var.BuildRoot)/math-libs/BLAS/rocSPARSE/dist/lib/cmake/rocsparse/*.*" />
+  </ComponentGroup>
+
+</Include>

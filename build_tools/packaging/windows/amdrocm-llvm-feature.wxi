@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_llvm_llab" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_llb" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2i" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2icw" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2icwu" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2icwb" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2if" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2illw" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2ilow" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2iow" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2io" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2ipw" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2ip" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2is" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2ix" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2izw" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllc2s" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllcA" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllcc" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lllcl" />
+  <ComponentGroupRef Id="cg_amdrocm_llvm_lilllicmll" />
+</Include>
