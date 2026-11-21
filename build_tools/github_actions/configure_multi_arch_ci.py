@@ -2122,6 +2122,7 @@ def _expand_build_config_for_platform(
     )
     build_runs_on_native_package = select_build_runner(
         platform, build_variant, size="native_package", triggers=triggers
+    )
     build_runs_on_tarballs = select_build_runner(
         "linux", build_variant, size="large", triggers=triggers
     )
