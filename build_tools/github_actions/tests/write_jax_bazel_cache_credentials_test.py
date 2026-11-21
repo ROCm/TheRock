@@ -52,6 +52,30 @@ class UsesWriterTokenTest(unittest.TestCase):
             with self.subTest(event_name=event_name, ref=ref, repository=repository):
                 self.assertFalse(uses_writer_token(event_name, ref, repository))
 
+    def test_release_runs_on_main_in_therock_or_rockrel_write(self):
+        for repository in ("ROCm/TheRock", "ROCm/rockrel"):
+            with self.subTest(repository=repository):
+                self.assertTrue(
+                    uses_writer_token(
+                        "workflow_dispatch", "refs/heads/main", repository, "nightly"
+                    )
+                )
+
+    def test_bkc_and_off_main_release_runs_read(self):
+        for ref, repository, release_type in (
+            ("refs/heads/main", "ROCm/TheRock", "nightly-bkc"),
+            ("refs/heads/users/someone/branch", "ROCm/TheRock", "dev"),
+            ("refs/heads/main", "someone/rockrel", "nightly"),
+        ):
+            with self.subTest(
+                ref=ref, repository=repository, release_type=release_type
+            ):
+                self.assertFalse(
+                    uses_writer_token(
+                        "workflow_dispatch", ref, repository, release_type
+                    )
+                )
+
 
 class FetchWriterTokenTest(unittest.TestCase):
     """Tests reading the writer JWT from Secrets Manager."""

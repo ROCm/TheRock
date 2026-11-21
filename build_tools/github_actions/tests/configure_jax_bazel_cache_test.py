@@ -50,9 +50,18 @@ class ResolveCacheUrlTest(unittest.TestCase):
     def test_ci_uses_the_shared_cache(self):
         self.assertEqual(resolve_cache_url("", "ci"), REMOTE_CACHE_URL)
 
-    def test_release_builds_get_no_shared_cache(self):
-        # Release builds need a cache of their own, as nightly has for ccache.
-        for release_type in ("dev", "dev-bkc", "nightly", "nightly-bkc", "prerelease"):
+    def test_release_streams_use_the_cache_in_their_own_silo(self):
+        silos = set()
+        for release_type in ("dev", "nightly", "prerelease"):
+            with self.subTest(release_type=release_type):
+                self.assertEqual(resolve_cache_url("", release_type), REMOTE_CACHE_URL)
+                silos.add(configure_jax_bazel_cache.CACHE_SILOS[release_type])
+        # No stream shares CI's default silo or another stream's.
+        self.assertEqual(len(silos), 3)
+        self.assertNotIn("", silos)
+
+    def test_bkc_releases_get_no_cache(self):
+        for release_type in ("dev-bkc", "nightly-bkc"):
             with self.subTest(release_type=release_type):
                 self.assertEqual(resolve_cache_url("", release_type), "")
 
@@ -67,7 +76,7 @@ class ResolveCacheUrlTest(unittest.TestCase):
     def test_explicit_url_does_not_enable_the_cache(self):
         # The override only moves the cache; a release type that may not use
         # it stays isolated whatever the repository variable says.
-        self.assertEqual(resolve_cache_url("grpcs://cache.example", "prerelease"), "")
+        self.assertEqual(resolve_cache_url("grpcs://cache.example", "nightly-bkc"), "")
 
 
 class UploadAllowedTest(unittest.TestCase):
@@ -86,6 +95,27 @@ class UploadAllowedTest(unittest.TestCase):
         ):
             with self.subTest(event_name=event_name, ref=ref):
                 self.assertFalse(upload_allowed(event_name, ref))
+
+    def test_release_runs_on_main_in_therock_or_rockrel_upload(self):
+        for repository in ("ROCm/TheRock", "ROCm/rockrel"):
+            for event_name in ("workflow_dispatch", "schedule"):
+                with self.subTest(repository=repository, event_name=event_name):
+                    self.assertTrue(
+                        upload_allowed(
+                            event_name, "refs/heads/main", "nightly", repository
+                        )
+                    )
+
+    def test_other_release_runs_read_only(self):
+        for ref, repository in (
+            ("refs/heads/users/someone/branch", "ROCm/TheRock"),
+            ("refs/pull/1/merge", "ROCm/TheRock"),
+            ("refs/heads/main", "someone/TheRock"),
+        ):
+            with self.subTest(ref=ref, repository=repository):
+                self.assertFalse(
+                    upload_allowed("workflow_dispatch", ref, "nightly", repository)
+                )
 
 
 class EndpointAddressTest(unittest.TestCase):
@@ -242,6 +272,20 @@ class BazelCacheOptionsTest(unittest.TestCase):
             self._options(allow_upload=True),
         )
 
+    def test_ci_keeps_the_default_silo(self):
+        self.assertFalse(
+            [option for option in self._options(True) if "cache-silo-key" in option]
+        )
+
+    def test_a_release_silo_namespaces_every_entry(self):
+        self.assertIn(
+            "--bazel_options=--remote_default_exec_properties="
+            "cache-silo-key=jax-release-nightly",
+            bazel_cache_options(
+                REMOTE_CACHE_URL, self.HELPER, True, "jax-release-nightly"
+            ),
+        )
+
 
 class MainTest(unittest.TestCase):
     """Tests that stdout carries options only when the cache is usable."""
@@ -272,7 +316,12 @@ class MainTest(unittest.TestCase):
             k: v
             for k, v in os.environ.items()
             if k
-            not in ("GITHUB_EVENT_NAME", "GITHUB_REF", "JAX_BAZEL_REMOTE_CACHE_URL")
+            not in (
+                "GITHUB_EVENT_NAME",
+                "GITHUB_REF",
+                "GITHUB_REPOSITORY",
+                "JAX_BAZEL_REMOTE_CACHE_URL",
+            )
         }
         stdout = io.StringIO()
         with probe, mock.patch.dict(
@@ -310,7 +359,7 @@ class MainTest(unittest.TestCase):
             self._main(["--release-type", "ci"], reachable=False)
 
     def test_prints_nothing_when_the_release_type_has_no_cache(self):
-        self.assertEqual(self._main(["--release-type", "prerelease"]), "")
+        self.assertEqual(self._main(["--release-type", "nightly-bkc"]), "")
 
     def test_probe_is_skipped_when_no_cache_is_configured(self):
         with mock.patch.object(
@@ -318,7 +367,23 @@ class MainTest(unittest.TestCase):
             "probe_cache",
             side_effect=AssertionError("should not be called"),
         ):
-            main(["--release-type", "prerelease"])
+            main(["--release-type", "nightly-bkc"])
+
+    def test_release_run_writes_its_own_silo(self):
+        output = self._main(
+            [
+                "--release-type",
+                "nightly",
+                "--event-name",
+                "schedule",
+                "--ref",
+                "refs/heads/main",
+                "--repository",
+                "ROCm/rockrel",
+            ]
+        )
+        self.assertIn("cache-silo-key=jax-release-nightly", output)
+        self.assertIn("--bazel_options=--remote_upload_local_results=true", output)
 
     def test_upload_defaults_to_read_only(self):
         output = self._main(["--release-type", "ci"])
