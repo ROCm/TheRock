@@ -449,37 +449,50 @@ instructions in the AMD ROCm documentation.
 
 #### Installing multi-arch JAX Python packages
 
-Install JAX with ROCm support using the unified multi-arch index.
-
-> [!IMPORTANT]
-> Unlike PyTorch, the JAX wheels do **not** automatically install ROCm packages
-> as a dependency. You must install ROCm first by following
-> [Installing multi-arch ROCm Python packages](#installing-multi-arch-rocm-python-packages).
->
-> Always pin `jax`, `jax_rocm<major>_plugin`, and `jax_rocm<major>_pjrt` to the
-> same version.
->
-> The plugin and PJRT package names embed the ROCm major version they were built
-> against, so the name to install depends on the ROCm release: `jax_rocm7_*` for
-> ROCm 7.x and `jax_rocm10_*` for ROCm 10.x.
+JAX 0.12.1 and later can install the ROCm plugin and the TheRock `rocm` wheels
+in one step, the same way `torch[device-gfx1100]` does. `jax` and `jaxlib` come
+from PyPI, and the plugin and `rocm` wheels do not, so add AMD's index with
+`--extra-index-url` instead of replacing PyPI. Name the GPU when you know it;
+the extra without a target downloads device code for every GPU.
 
 ```bash
-# Set the version (currently supported: 0.10.2, 0.11.0, 0.11.1, 0.11.2, and 0.12.0)
+# ROCm 10, gfx942 (MI300). jax[rocm10] is the same install for every target.
+pip install "jax[rocm10-device-gfx942]" \
+    --extra-index-url https://stable.repo.amd.com/rocm/whl-next/
+
+# ROCm 7, gfx950 (MI350). jax[rocm] is another name for jax[rocm7].
+pip install "jax[rocm7-device-gfx950]" \
+    --extra-index-url https://repo.amd.com/rocm/whl-multi-arch/
+```
+
+`jax[rocm7-local]` does not download ROCm. Use it when ROCm is already
+installed, usually under `/opt/rocm`.
+
+The extra selects a plugin wheel of the same JAX version. On that wheel,
+`with-rocm` depends on `rocm[libraries]` and `device-*` depends on
+`rocm[device-...]`. The plugin wheel depends on the matching PJRT wheel, so
+the extra brings that in too. The full list is in
+[external-builds/jax](/external-builds/jax/README.md#installing).
+
+JAX 0.10.2 through 0.12.0 predate the extras. Install those by name, and pin
+`jax`, the plugin, and PJRT to the same version. The package name carries the
+ROCm major the wheel was built against: `jax_rocm7_*` for ROCm 7.x and
+`jax_rocm10_*` for ROCm 10.x.
+
+```bash
 JAX_VERSION=0.12.0
 
-# 1. Install ROCm (replace device-gfx942 with your GPU)
+# 1. Install ROCm (replace device-gfx942 with your GPU).
 pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "rocm[libraries,device-gfx942]"
 
-# 2. Install JAX ROCm wheels
-# Use the ROCm major version the wheels were built against: 7 for ROCm 7.x, 10
-# for ROCm 10.x.
+# 2. Install the plugin and PJRT. 7 for ROCm 7.x, 10 for ROCm 10.x.
 ROCM_MAJOR=10
 pip install --index-url https://nightly.repo.amd.com/rocm/whl-next/ \
     "jax_rocm${ROCM_MAJOR}_plugin==${JAX_VERSION}" \
     "jax_rocm${ROCM_MAJOR}_pjrt==${JAX_VERSION}"
 
-# 3. Install matching jax from PyPI
+# 3. Install matching jax from PyPI.
 pip install "jax==${JAX_VERSION}"
 ```
 
