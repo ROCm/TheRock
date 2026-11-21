@@ -130,6 +130,7 @@ jobs:
             --artifact-run-id "${ARTIFACT_RUN_ID}" \
             --artifact-github-repo "${ARTIFACT_GITHUB_REPO}" \
             --release-type "${RELEASE_TYPE}" \
+            --rocm-version "${ROCM_VERSION}" \
             --packages "${PACKAGES}" \
             --dest-dir "${MSI_DIR}"
 

@@ -674,15 +674,15 @@ def upgrade_code_for(package: PackageDef, version: str) -> str:
     return "{" + str(derived).upper() + "}"
 
 
-def expected_msi_filename(package: str) -> str:
+def expected_msi_filename(package: str, version: str) -> str:
     """Return the MSI filename the generator writes for ``package``.
 
-    The generator names each package's output ``<output_stem>.msi``; the install
-    test imports this so it looks for the same filename the build produced,
-    without duplicating the stem-to-filename rule.
+    The generator names each package's output ``<output_stem>-<version>.msi``;
+    the install test and download script import this so they look for the same
+    filename the build produced, without duplicating the stem-to-filename rule.
     """
     try:
-        return f"{PACKAGES[package].output_stem}.msi"
+        return f"{PACKAGES[package].output_stem}-{version}.msi"
     except KeyError as e:
         raise ValueError(
             f"unknown package {package!r}; choose from {', '.join(PACKAGES)}"
@@ -1376,7 +1376,8 @@ def build_all(args: argparse.Namespace) -> None:
                 if args.output_dir is not None
                 else args.default_output_dir
             )
-            args.output = out_dir / f"{PACKAGES[pkg_name].output_stem}.wxs"
+            stem = f"{PACKAGES[pkg_name].output_stem}-{args.display_version}"
+            args.output = out_dir / f"{stem}.wxs"
         build_wxs(args, artifact_dir)
 
 
