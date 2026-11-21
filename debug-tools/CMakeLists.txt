@@ -293,12 +293,13 @@ if(THEROCK_ENABLE_ROCGDB)
 
   # When ON, download the test_rocgdb.py CI wrapper script, its
   # rocjitsu_emulator.py module and rocgdb_emulate.py from ROCm/ROCgdb
-  # amd-staging if any is missing from the rocgdb source tree, and install
-  # them. Required by TheRock CI when building a rocgdb source tree that is
+  # amd-staging if any is missing from the rocgdb source tree, together with
+  # the sanitizer suppression files test_rocgdb.py uses, and install them.
+  # Required by TheRock CI when building a rocgdb source tree that is
   # not part of the branches exercised by CI.
   # Off by default to avoid a network fetch at configure time.
   option(THEROCK_ROCGDB_DOWNLOAD_CI_SCRIPT
-    "Download test_rocgdb.py, rocjitsu_emulator.py and rocgdb_emulate.py from ROCm/ROCgdb amd-staging if missing in rocgdb source tree"
+    "Download test_rocgdb.py, rocjitsu_emulator.py, rocgdb_emulate.py and the sanitizer suppression files from ROCm/ROCgdb amd-staging if the scripts are missing in rocgdb source tree"
     OFF)
 
   therock_cmake_subproject_declare(rocgdb
