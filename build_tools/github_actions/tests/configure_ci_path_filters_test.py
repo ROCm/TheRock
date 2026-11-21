@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -310,6 +311,26 @@ class TestGetChangedFilesForExternalRepoRenames(unittest.TestCase):
         self.assertEqual(set(paths), {"docs/a.md", "projects/rocprim/a.cpp"})
         # The new path alone is docs-only; the old source path makes CI run.
         self.assertTrue(is_ci_run_required(paths, skip_patterns=["docs/*"]))
+
+
+class TestGetGitModifiedPathsRenames(unittest.TestCase):
+    def test_rename_lists_old_and_new_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+            def run(*args):
+                subprocess.run([*git, *args], cwd=tmp, check=True, capture_output=True)
+
+            run("init", "-q")
+            (Path(tmp) / "src").mkdir()
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "src" / "a.cpp").write_text("int f() { return 1; }\n" * 20)
+            run("add", ".")
+            run("commit", "-q", "-m", "add")
+            run("mv", "src/a.cpp", "docs/a.md")
+            run("commit", "-q", "-m", "move")
+            paths = get_git_modified_paths("HEAD^", cwd=tmp)
+        self.assertEqual(set(paths), {"src/a.cpp", "docs/a.md"})
 
 
 class TestGetGitCommitHash(unittest.TestCase):

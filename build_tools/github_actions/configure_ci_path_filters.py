@@ -269,8 +269,10 @@ def get_git_modified_paths(
 ) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
-    Uses `git diff --name-only` to find files that have changed between the
-    base reference and the current working tree (including any uncommitted changes).
+    Uses `git diff --name-only --no-renames` to find files that have changed
+    between the base reference and the current working tree (including any
+    uncommitted changes). Rename detection is off so a moved file is listed at
+    both its old and new path; by default git lists only the new one.
 
     Args:
         base_ref: Git reference (commit SHA, branch name, or HEAD^1) to compare against
@@ -280,7 +282,10 @@ def get_git_modified_paths(
         List of relative file paths that were modified, or None if the operation times out
     """
     cwd_msg = f" (in {cwd})" if cwd else ""
-    print(f"Computing modified paths with: 'git diff --name-only {base_ref}'{cwd_msg}")
+    print(
+        "Computing modified paths with: "
+        f"'git diff --name-only --no-renames {base_ref}'{cwd_msg}"
+    )
     try:
         # Push events can advance a branch by multiple commits. The setup
         # checkout is intentionally shallow, so event.before may be older than
@@ -292,7 +297,7 @@ def get_git_modified_paths(
 
         # We have the commit, now run the diff.
         return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
+            ["git", "diff", "--name-only", "--no-renames", base_ref],
             stdout=subprocess.PIPE,
             check=True,
             text=True,
