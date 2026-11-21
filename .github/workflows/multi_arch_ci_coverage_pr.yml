@@ -1,0 +1,291 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Multi-Arch CI Coverage - Pull Request
+#
+# Code coverage for pull requests. configure_coverage_pr.py picks the coverage
+# projects the change touches (`test:<project>` labels narrow them) and a
+# non-instrumented baseline from main; multi_arch_ci_coverage_linux.yml then
+# builds those projects instrumented and tests each one against the baseline.
+# patch_coverage_report.py then measures the change itself: how many of the
+# lines it adds the tests run.
+#
+# rocm-libraries and rocm-systems pull request workflows call this through a
+# cross-repo `uses:`, passing changed_projects and external_repo as they do for
+# setup_multi_arch.yml, and their pull requests run coverage whenever they
+# change a project. Only the changed projects are measured. A TheRock pull
+# request changes no project's source, so this has no pull_request trigger of
+# its own; dispatch it with projects_to_test to measure named projects.
+# docs/development/code_coverage.md has a caller to copy.
+#
+# As this runs on lower trust `pull_request` events it forwards no github
+# secrets to child workflows, so reports are kept as run artifacts and on the
+# job summary, and the Codecov upload is skipped.
+
+name: Multi-Arch CI Coverage - Pull Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects to measure (e.g. hiprand)."
+        required: true
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on."
+        default: "gfx94X-dcgpu"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      baseline_run_id:
+        type: string
+        description: "Run id supplying the non-instrumented dependencies. Empty = the newest healthy multi_arch_ci.yml run on main."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to."
+        default: "ci"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Empty means this repository."
+        default: ""
+  workflow_call:
+    inputs:
+      projects_to_test:
+        type: string
+        description: "Comma-separated coverage projects. Overrides changed_projects."
+        default: ""
+      changed_projects:
+        type: string
+        description: "Comma-separated changed project paths from the external repo (e.g. projects/hiprand). The run measures the coverage projects among them; a pull request passing none measures nothing."
+        default: ""
+      amdgpu_families:
+        type: string
+        description: "Comma-separated GPU families to collect coverage on."
+        default: "gfx94X-dcgpu"
+      test_type:
+        type: string
+        description: "Test type to run against the instrumented build."
+        default: "standard"
+      baseline_run_id:
+        type: string
+        description: "Run id supplying the non-instrumented dependencies. Empty = the newest healthy multi_arch_ci.yml run on TheRock main."
+        default: ""
+      baseline_release_type:
+        type: string
+        description: "Release channel baseline_run_id published to."
+        default: "ci"
+      baseline_repository:
+        type: string
+        description: "Repository owning baseline_run_id (owner/repo). Empty means the calling repository."
+        default: ""
+      external_repo:
+        type: string
+        description: "JSON object describing the external repo checkout, as for setup_multi_arch.yml."
+        default: ""
+      pull_request:
+        type: string
+        description: "JSON object with repository, number, base_sha and head_sha naming the pull request whose patch coverage is reported. Empty = the pull request that triggered the caller."
+        default: ""
+      repository:
+        type: string
+        description: "Repository holding this workflow's scripts. Cross-repo callers pass ROCm/TheRock."
+        default: ""
+      ref:
+        type: string
+        description: "Ref/SHA of this workflow's scripts. Cross-repo callers pass the ref they pinned in uses:."
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per pull request; a new push cancels the old run. Events that do not
+  # run coverage (no changed projects, or an unrelated label being added) get a
+  # group of their own so they cannot cancel a run in progress. Keep the
+  # condition in sync with the setup job's `if`. The "coverage-pr" infix keeps
+  # the group apart from a cross-repo caller's own.
+  group: >-
+    ${{ github.workflow }}-coverage-pr-${{
+      github.event_name == 'pull_request' &&
+      inputs.changed_projects != '' &&
+      (github.event.action != 'labeled' ||
+        startsWith(github.event.label.name, 'test:') ||
+        startsWith(github.event.label.name, 'test_filter:')) &&
+      github.head_ref || github.run_id
+    }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup Coverage Plan
+    if: >-
+      ${{
+        github.event_name != 'pull_request' ||
+        (inputs.changed_projects != '' &&
+          (github.event.action != 'labeled' ||
+            startsWith(github.event.label.name, 'test:') ||
+            startsWith(github.event.label.name, 'test_filter:')))
+      }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read # Baseline lookup queries workflow runs and their jobs.
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+      projects_to_test: ${{ steps.plan.outputs.projects_to_test }}
+      amdgpu_families: ${{ steps.plan.outputs.amdgpu_families }}
+      test_type: ${{ steps.plan.outputs.test_type }}
+      baseline_run_id: ${{ steps.plan.outputs.baseline_run_id }}
+      baseline_repository: ${{ steps.plan.outputs.baseline_repository }}
+      rebuild_artifacts: ${{ steps.plan.outputs.rebuild_artifacts }}
+      prebuilt_compiler_runtime: ${{ steps.plan.outputs.prebuilt_compiler_runtime }}
+      external_repo_config: ${{ steps.external_repo_config.outputs.config_json }}
+      ref: ${{ steps.checkout.outputs.commit }}
+    steps:
+      - name: Checking out repository
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          # We need the parent commit to diff the pull request's changes.
+          fetch-depth: 2
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      - name: Install baseline lookup dependencies
+        run: pip install boto3
+
+      # Note: the script reads PR labels from the event payload
+      # (GITHUB_EVENT_PATH), which for cross-repo callers is the caller's event.
+      - name: Plan coverage run
+        id: plan
+        env:
+          PROJECTS_TO_TEST: ${{ inputs.projects_to_test }}
+          CHANGED_PROJECTS: ${{ inputs.changed_projects }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_REPOSITORY: ${{ inputs.baseline_repository }}
+          THEROCK_REPOSITORY: ${{ inputs.repository || github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python ./build_tools/github_actions/configure_coverage_pr.py
+
+      - name: Detect external repo config
+        id: external_repo_config
+        if: ${{ inputs.external_repo != '' }}
+        env:
+          EXTERNAL_REPO: ${{ inputs.external_repo }}
+        run: |
+          python ./build_tools/github_actions/detect_external_repo_config.py \
+            --external-repo-json="${EXTERNAL_REPO}"
+
+  coverage:
+    name: Coverage
+    needs: setup
+    if: ${{ needs.setup.outputs.enabled == 'true' }}
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    with:
+      projects_to_test: ${{ needs.setup.outputs.projects_to_test }}
+      amdgpu_families: ${{ needs.setup.outputs.amdgpu_families }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      baseline_run_id: ${{ needs.setup.outputs.baseline_run_id }}
+      baseline_release_type: ${{ inputs.baseline_release_type || 'ci' }}
+      baseline_repository: ${{ needs.setup.outputs.baseline_repository }}
+      rebuild_artifacts: ${{ needs.setup.outputs.rebuild_artifacts }}
+      prebuilt_compiler_runtime: ${{ needs.setup.outputs.prebuilt_compiler_runtime == 'true' }}
+      external_repo_config: ${{ needs.setup.outputs.external_repo_config }}
+      repository: ${{ inputs.repository }}
+      # The commit setup planned against, so every job builds the same sources.
+      ref: ${{ needs.setup.outputs.ref }}
+    permissions:
+      contents: read
+      id-token: write
+
+  patch_coverage:
+    name: Patch Coverage
+    needs: [setup, coverage]
+    # Also after a failed coverage job: the reports it did produce still
+    # measure the change.
+    if: >-
+      ${{
+        !cancelled() &&
+        (github.event_name == 'pull_request' || inputs.pull_request != '') &&
+        needs.setup.outputs.enabled == 'true'
+      }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read # gh run download lists this run's artifacts.
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ needs.setup.outputs.ref }}
+          sparse-checkout: build_tools/github_actions
+          sparse-checkout-cone-mode: true
+
+      - name: Setting up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12
+
+      # gh rather than download-artifact, which extracts a lone match straight
+      # into the path and so drops the artifact name that names the project.
+      - name: Download coverage reports
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${GITHUB_RUN_ID}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'coverage-report-*' --dir coverage-reports
+
+      # The pull request is the caller's (github.repository) unless the
+      # pull_request input names one; the build compiled its merge commit,
+      # which external_repo names for a cross-repo caller and setup checked
+      # out otherwise.
+      - name: Report patch coverage
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ inputs.pull_request && fromJSON(inputs.pull_request).repository || github.repository }}
+          PR_NUMBER: ${{ inputs.pull_request && fromJSON(inputs.pull_request).number || github.event.pull_request.number }}
+          BASE_SHA: ${{ inputs.pull_request && fromJSON(inputs.pull_request).base_sha || github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ inputs.pull_request && fromJSON(inputs.pull_request).head_sha || github.event.pull_request.head.sha }}
+          BUILT_SHA: >-
+            ${{
+              needs.setup.outputs.external_repo_config != '' &&
+              fromJSON(needs.setup.outputs.external_repo_config).ref ||
+              needs.setup.outputs.ref
+            }}
+        run: |
+          python build_tools/github_actions/patch_coverage_report.py \
+            --repository="${REPOSITORY}" \
+            --pr-number="${PR_NUMBER}" \
+            --base-sha="${BASE_SHA}" \
+            --head-sha="${HEAD_SHA}" \
+            --built-sha="${BUILT_SHA}" \
+            --reports-dir=coverage-reports \
+            --json-output=patch-coverage/patch_coverage.json \
+            --markdown-output=patch-coverage/patch_coverage.md \
+            --html-output=patch-coverage/patch_coverage.html
+
+      - name: Upload patch coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-patch
+          path: patch-coverage
+          if-no-files-found: warn
+          overwrite: true
