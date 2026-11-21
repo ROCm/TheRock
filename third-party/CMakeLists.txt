@@ -34,6 +34,11 @@ if(THEROCK_ENABLE_SPDLOG)
   add_subdirectory(spdlog)
 endif()
 
+# tracelogging depends on lttng-ust (a sysdep, LTTNG feature group).
+if(THEROCK_ENABLE_TRACELOGGING)
+  add_subdirectory(tracelogging)
+endif()
+
 # elfio depends on amd-llvm toolchain.
 if(THEROCK_ENABLE_ELFIO)
   add_subdirectory(elfio)

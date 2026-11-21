@@ -449,6 +449,41 @@ artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl 
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-userspace-rcu]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG); dependency of lttng-ust
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-lttng-ust]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-userspace-rcu"]  # lttng-ust resolves userspace-rcu via pkg-config
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-popt]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG); dependency of lttng-tools
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libxml2]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG); dependency of lttng-tools
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-lttng-tools]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-lttng-ust", "sysdeps-popt", "sysdeps-libxml2"]
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
+disable_platforms = ["windows"]
+
 # --- Third-party libraries ---
 # Unlike third-party-sysdeps, these libraries are not given special treatment for portable distribution.
 
@@ -496,6 +531,13 @@ artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
+
+[artifacts.tracelogging]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = ["sysdeps-lttng-ust"]
+feature_group = "LTTNG"  # Off by default (see THEROCK_ENABLE_LTTNG)
+disable_platforms = ["windows"]  # Windows uses the Windows SDK's TraceLoggingProvider.h
 
 [artifacts.grpc]
 artifact_group = "third-party-libs"
