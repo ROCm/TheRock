@@ -319,9 +319,7 @@ class GetModifiedPathsApiTest(unittest.TestCase):
     def test_without_pr_number_uses_compare_and_caps_at_300(self):
         files = [{"filename": f"f{i}"} for i in range(300)]
         out = Mock(stdout=json.dumps({"files": files}))
-        with patch(
-            "configure_ci_path_filters.subprocess.run", return_value=out
-        ) as run:
+        with patch("configure_ci_path_filters.subprocess.run", return_value=out) as run:
             paths = get_modified_paths_api("ROCm/rocm-libraries", "base", "head")
         self.assertIsNone(paths)
         self.assertIn("compare/base...head", run.call_args[0][0][-1])
@@ -372,8 +370,10 @@ class RenamedFilesTest(unittest.TestCase):
     def test_truncation_limit_counts_files_not_paths(self):
         # 1600 renames list 3200 paths but are only 1600 of the API's 3000 files.
         moves = [
-            {"filename": f"projects/hipcub/f{i}.hpp",
-             "previous_filename": f"projects/rocprim/f{i}.hpp"}
+            {
+                "filename": f"projects/hipcub/f{i}.hpp",
+                "previous_filename": f"projects/rocprim/f{i}.hpp",
+            }
             for i in range(1600)
         ]
 
@@ -441,15 +441,21 @@ class LargePrEndToEndTest(unittest.TestCase):
             ) as output:
                 rc = main(
                     [
-                        "--event-name", "pull_request",
-                        "--github-repo", "ROCm/rocm-libraries",
-                        "--base-sha", "base",
-                        "--head-sha", "head",
+                        "--event-name",
+                        "pull_request",
+                        "--github-repo",
+                        "ROCm/rocm-libraries",
+                        "--base-sha",
+                        "base",
+                        "--head-sha",
+                        "head",
                     ]
                 )
         self.assertEqual(rc, 0)
         self.assertIn("pulls/15610/files", run.call_args_list[0].args[0][-1])
-        output.assert_called_once_with({"changed_projects": "projects/hipccl,projects/hipcub"})
+        output.assert_called_once_with(
+            {"changed_projects": "projects/hipccl,projects/hipcub"}
+        )
 
 
 class GetPrNumberFromEventTest(unittest.TestCase):
