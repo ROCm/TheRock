@@ -37,10 +37,14 @@ import os
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/trunk.yml#L283-L291
 #   inductor (2):
 #     https://github.com/pytorch/pytorch/blob/1ace6e9e198f0221122a81efe39c11eef90b5d80/.github/workflows/inductor-rocm-mi300.yml#L51-L52
+# except slow, which upstream runs as 3 parallel-worker shards on mi350; TheRock
+# runs serially on 1-GPU runners, so it takes one more shard:
+#     https://github.com/pytorch/pytorch/blob/6f531c791e589edc87ae6da153d187829e438b18/.github/workflows/slow.yml#L203-L208
 SHARDS_PER_CONFIG: dict[str, int] = {
     "default": 6,
     "distributed": 3,
     "inductor": 2,
+    "slow": 4,
 }
 DEFAULT_SHARDS = 4
 
