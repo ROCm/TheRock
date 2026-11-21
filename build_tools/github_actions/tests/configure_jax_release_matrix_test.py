@@ -95,6 +95,7 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
                 "jax_label",
                 "jax_repository",
                 "rocm_jax_ref",
+                "build_image",
                 "gfx_arch",
                 "wheel_type",
                 "publish",
@@ -140,9 +141,24 @@ class ConfigureJaxReleaseMatrixTest(unittest.TestCase):
         for row in matrix:
             self.assertEqual(row["rocm_jax_ref"], row["jax_ref"])
 
+    def test_every_row_builds_in_the_same_pinned_image(self):
+        # One image for every ref, named explicitly in each row, so no ref
+        # falls back to an image the workflow picks on its own.
+        for release_type in set(m.RELEASE_TYPES) - {"dev-bkc", "nightly-bkc"}:
+            with self.subTest(release_type=release_type):
+                matrix = m.generate_jax_matrix_for_release_type(
+                    release_type=release_type,
+                    platform="linux",
+                )
+                self.assertGreater(len(matrix), 0)
+                self.assertEqual(
+                    {row["build_image"] for row in matrix}, {m.JAX_BUILD_IMAGE}
+                )
+        self.assertIn("@sha256:", m.JAX_BUILD_IMAGE)
+
     def test_jax_main_ref_builds_upstream_with_rocm_jax_default_branch(self):
         # Upstream main has no rocm-jax ref of the same name, so the tip config
-        # pins the Dockerfile checkout separately and names its own label.
+        # pins the rocm-jax checkout separately and names its own label.
         matrix = m.generate_jax_matrix(
             jax_refs=["fake-tip"],
             python_versions=["3.11", "3.13"],

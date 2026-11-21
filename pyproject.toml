@@ -11,7 +11,8 @@ testpaths = [
     "cmake/tests",
     "external-builds/pytorch/tests",
     "test_tools/tests",
-    "skills/therock_pr_bot/policy_check_test.py",
+    # Every *_test.py under skills/ (skill tooling such as pr-ci-labels/tools/).
+    "skills",
 ]
 python_files = ["*_test.py"]
 addopts = [
@@ -28,7 +29,7 @@ source = [
     "build_tools",
     "external-builds/pytorch",
     "test_tools",
-    "skills/therock_pr_bot",
+    "skills",
 ]
 omit = [
     "build_tools/tests/*",
@@ -50,7 +51,8 @@ omit = [
     "external-builds/pytorch/pytorch_audio/*",
     "external-builds/pytorch/triton/*",
     "test_tools/tests/*",
-    "skills/therock_pr_bot/policy_check_test.py",
+    "skills/*/*_test.py",
+    "skills/*/tools/*_test.py",
     "*/__pycache__/*",
 ]
 
