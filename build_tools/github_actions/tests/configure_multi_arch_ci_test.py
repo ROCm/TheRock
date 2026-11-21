@@ -1229,11 +1229,6 @@ class TestDecideJobs(unittest.TestCase):
                         },
                     ),
                     patch.object(cm, "compute_auto_stage_reuse") as auto_reuse,
-                    patch.object(
-                        cm,
-                        "analyze_artifact_impact_from_projects",
-                        return_value=(["blas"], ["fft"]),
-                    ) as artifact_impact,
                 ):
                     inputs = _run_from_environ(event_name, **event_args)
                     result = cm.decide_jobs(
@@ -1243,7 +1238,6 @@ class TestDecideJobs(unittest.TestCase):
                     )
 
                 auto_reuse.assert_not_called()
-                artifact_impact.assert_not_called()
                 self.assertEqual(result.build_rocm.stage_decisions, {})
                 self.assertEqual(result.build_rocm.baseline_run_id, "")
                 self.assertEqual(result.build_rocm.baseline_repository, "")
@@ -4641,6 +4635,231 @@ class TestCpuTestOnlyLabel(unittest.TestCase):
         # The pools must be distinct, otherwise the split buys nothing.
         self.assertNotEqual(entry["test-runs-on-2gpu"], entry["test-runs-on-multi-gpu"])
         self.assertNotEqual(entry["test-runs-on-4gpu"], entry["test-runs-on-multi-gpu"])
+
+
+class TestResolveChangedProjects(unittest.TestCase):
+    """Project scope derived here, from the caller's diff and repos-config.json."""
+
+    EXTERNAL_REPO = '{"repository":"ROCm/rocm-libraries","ref":"abc123"}'
+
+    def _resolve(self, *, external_changed_files=None, **input_overrides):
+        """Resolve a scope with repos-config.json staged where setup checks it out."""
+        inputs = cm.CIInputs(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="main",
+            base_ref=None,
+            build_variant="release",
+            **input_overrides,
+        )
+        git_context = cm.GitContext.from_external_repo(
+            "rocm-libraries", external_changed_files=external_changed_files
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config = (
+                Path(directory) / cm.EXTERNAL_REPO_CONFIG_DIR / cm.REPOS_CONFIG_PATH
+            )
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                json.dumps(
+                    {
+                        "repositories": [
+                            {
+                                "category": "projects",
+                                "name": name,
+                                "url": f"ROCm/{name}",
+                                "branch": "develop",
+                            }
+                            for name in ("rocblas", "hipblas")
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cwd = os.getcwd()
+            os.chdir(directory)
+            try:
+                return cm.resolve_changed_projects(inputs, git_context, ["*.md"])
+            finally:
+                os.chdir(cwd)
+
+    def test_diff_is_scoped_via_the_checked_out_repos_config(self):
+        """Scoping rules live in determine_changed_projects; this pins the wiring."""
+        self.assertEqual(
+            self._resolve(
+                external_repo=self.EXTERNAL_REPO,
+                external_changed_files=["projects/rocblas/src/rocblas.cpp"],
+            ),
+            ["projects/rocblas"],
+        )
+
+    def test_explicit_input_wins_over_the_derived_scope(self):
+        """TheRock runs have no caller diff, and a caller can still pin the scope."""
+        for case, overrides in {
+            "external repo passing changed_projects": dict(
+                external_repo=self.EXTERNAL_REPO,
+                changed_projects=["projects/hipblas"],
+            ),
+            "TheRock run": dict(changed_projects=["projects/hipblas"]),
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(
+                    self._resolve(
+                        external_changed_files=["projects/rocblas/src/rocblas.cpp"],
+                        **overrides,
+                    ),
+                    ["projects/hipblas"],
+                )
+
+
+class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
+    """A caller's static prebuilt_stages list, narrowed by what this run changed."""
+
+    # rocm-libraries' list: every stage it is assumed never to affect.
+    PREBUILT = [
+        "runtime-tests",
+        "comm-libs",
+        "cv-libs",
+        "storage-libs",
+        "debug-tools",
+        "dctools-core",
+        "profiler-apps",
+        "media-libs",
+        "wsl-rocdxg",
+    ]
+
+    @classmethod
+    def _yaml_rule(cls, changed_projects: list[str]) -> list[str]:
+        """The hand-written conditional this replaces, as it stood in
+        therock-multi-arch-ci.yml:
+
+            contains(format(',{0},', changed_projects), ',projects/rpp,')
+              && '<PREBUILT without cv-libs>'
+              || '<PREBUILT>'
+        """
+        if "projects/rpp" in changed_projects:
+            return [stage for stage in cls.PREBUILT if stage != "cv-libs"]
+        return list(cls.PREBUILT)
+
+    def _drop(self, changed_projects, prebuilt=None):
+        return cm._drop_stages_owned_by_changed_projects(
+            list(self.PREBUILT if prebuilt is None else prebuilt), changed_projects
+        )
+
+    def test_matches_the_yaml_conditional_it_replaces(self):
+        """Same answer as rocm-libraries' rule, across the shapes a scope takes."""
+        for changed_projects in (
+            [],  # scope could not be narrowed; dropping all would end reuse
+            ["projects/rpp"],  # the one case the rule existed for
+            ["projects/rpp", "projects/rocblas"],  # owning plus non-owning
+            ["projects/rocprim"],  # math-libs, which is never prebuilt
+            ["projects/miopen"],
+            ["shared/tensile"],  # shared/* subtree
+            ["dnn-providers/miopen-provider"],
+            ["projects/hipblaslt/tensilelite"],  # nested subtree, owns no artifact
+        ):
+            with self.subTest(changed_projects=changed_projects):
+                self.assertEqual(
+                    self._drop(changed_projects),
+                    self._yaml_rule(changed_projects),
+                )
+
+    def test_every_prebuilt_stage_is_reachable(self):
+        """The YAML conditional only knew cv-libs; the same hazard exists for
+        every stage a caller prebuilds, and other repos change these projects."""
+        for project, stage in {
+            "projects/hip-tests": "runtime-tests",
+            "projects/rccl": "comm-libs",
+            "projects/rpp": "cv-libs",
+            "projects/hipfile": "storage-libs",
+            "projects/rocgdb": "debug-tools",
+            "projects/rdc": "dctools-core",
+            "projects/rocprofiler-compute": "profiler-apps",
+            "projects/rocdecode": "media-libs",
+            "projects/wsl-rocdxg": "wsl-rocdxg",
+        }.items():
+            with self.subTest(project=project):
+                self.assertEqual(
+                    self._drop([project]),
+                    [kept for kept in self.PREBUILT if kept != stage],
+                )
+
+    def test_only_the_owning_stage_is_dropped(self):
+        """Not the dependency closure: RPP needs compiler-runtime but does not
+        invalidate it, so a baseline copy of that stage stays valid."""
+        self.assertEqual(
+            self._drop(["projects/rpp"], prebuilt=["compiler-runtime", "cv-libs"]),
+            ["compiler-runtime"],
+        )
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_decide_jobs_applies_the_rule_to_the_callers_list(self, reuse):
+        """The caller passes its list verbatim; the narrowing happens here."""
+        reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=[],
+            rebuild_stages=[],
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=[],
+            unavailable_stages=[],
+            applied_reuse_stages=[],
+            reasons=[],
+        )
+        jobs = cm.decide_jobs(
+            cm.CIInputs(
+                run_id="1",
+                event_name="pull_request",
+                commit_ref="main",
+                base_ref="develop",
+                build_variant="release",
+                prebuilt_stages=",".join(self.PREBUILT),
+                changed_projects=["projects/rpp"],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+        )
+        self.assertEqual(
+            jobs.build_rocm.prebuilt_stages, self._yaml_rule(["projects/rpp"])
+        )
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_the_scope_does_not_narrow_the_artifact_rebuild_set(self, reuse):
+        """Stage granularity only. changed_projects answers which projects a run
+        is scoped to, not which artifacts consume them: scoping to rocPRIM and
+        rebuilding only `prim` would copy a rocBLAS built against the old
+        rocPRIM. The artifact sets stay whatever the changed-file analysis said.
+        """
+        reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=[],
+            rebuild_stages=[],
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=[],
+            unavailable_stages=[],
+            applied_reuse_stages=[],
+            reasons=[],
+        )
+        jobs = cm.decide_jobs(
+            cm.CIInputs(
+                run_id="1",
+                event_name="pull_request",
+                commit_ref="main",
+                base_ref="develop",
+                build_variant="release",
+                prebuilt_stages=",".join(self.PREBUILT),
+                changed_projects=["projects/rocprim"],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+        )
+        self.assertEqual(jobs.build_rocm.rebuild_artifacts, [])
+        self.assertEqual(jobs.build_rocm.reusable_artifacts, [])
 
 
 if __name__ == "__main__":

@@ -131,10 +131,13 @@ on:
         default: ""
       changed_projects:
         description: >-
-          Comma-separated list of changed project paths from external repos
-          (e.g., 'projects/rocprim'). These project directory names are mapped
-          to artifact names via BUILD_TOPOLOGY.toml source_paths for granular
-          artifact-level reuse (e.g., 'rocprim' -> 'prim' artifact).
+          Comma-separated list of changed project paths (e.g.
+          'projects/rocprim'), pinning the project scope of the run. Leave empty
+          for external repo runs: setup derives the scope from the caller's own
+          diff and repos-config.json, and reports it as the changed_projects
+          output. These project directory names are mapped to artifact names via
+          BUILD_TOPOLOGY.toml source_paths for granular artifact-level reuse
+          (e.g., 'rocprim' -> 'prim' artifact).
         type: string
         default: ""
       quartz_tracking_id:
@@ -157,6 +160,13 @@ on:
       test_type:
         description: "The test type to run (quick, standard, comprehensive, full)."
         value: ${{ jobs.setup.outputs.test_type }}
+      changed_projects:
+        description: >-
+          Comma-separated project paths this run is scoped to. For external repo
+          runs this is derived from the caller's diff; empty means test
+          selection covers every project. Pass this to multi_arch_ci_linux.yml /
+          multi_arch_ci_windows.yml.
+        value: ${{ jobs.setup.outputs.changed_projects }}
       linux_test_labels:
         description: ROCm projects to run Linux tests on. Optional filter.
         value: ${{ jobs.setup.outputs.linux_test_labels }}
@@ -197,6 +207,7 @@ jobs:
       linux_build_config: ${{ steps.configure.outputs.linux_build_config }}
       windows_build_config: ${{ steps.configure.outputs.windows_build_config }}
       test_type: ${{ steps.configure.outputs.test_type }}
+      changed_projects: ${{ steps.configure.outputs.changed_projects }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}

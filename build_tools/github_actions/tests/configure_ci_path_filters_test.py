@@ -11,6 +11,8 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
+    determine_changed_projects,
+    find_matched_subtrees,
     get_ci_workflow_filenames,
     get_jobs_for_changes,
     get_git_commit_hash,
@@ -419,6 +421,102 @@ class IsExternalRepoCIOnlyChangeTest(unittest.TestCase):
     def test_missing_or_empty_diff_is_not_a_ci_only_change(self):
         self.assertFalse(is_external_repo_ci_only_change(None))
         self.assertFalse(is_external_repo_ci_only_change([]))
+
+
+class FindMatchedSubtreesTest(unittest.TestCase):
+    # A nested subtree must stay distinct from its parent; a fixed 2-segment
+    # truncation would collapse both to projects/hipblaslt.
+    PREFIXES = {"projects/hipblaslt", "projects/hipblaslt/tensilelite"}
+
+    def test_each_path_attributes_to_its_longest_prefix(self):
+        for case, (paths, expected) in {
+            "nested wins over parent": (
+                ["projects/hipblaslt/tensilelite/Tensile/KernelWriter.py"],
+                ["projects/hipblaslt/tensilelite"],
+            ),
+            "parent-only change skips nested": (
+                ["projects/hipblaslt/library/src/Handle.cpp"],
+                ["projects/hipblaslt"],
+            ),
+            "mixed changes attribute independently": (
+                [
+                    "projects/hipblaslt/tensilelite/Tensile/KernelWriter.py",
+                    "projects/hipblaslt/library/src/Handle.cpp",
+                ],
+                ["projects/hipblaslt", "projects/hipblaslt/tensilelite"],
+            ),
+            "unregistered paths match nothing": (
+                ["projects/unknown/file.cpp", "random/file.txt", "README.md"],
+                [],
+            ),
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(find_matched_subtrees(paths, self.PREFIXES), expected)
+
+
+class DetermineChangedProjectsTest(unittest.TestCase):
+    """An empty result means "could not narrow", i.e. test every project."""
+
+    PREFIXES = {"projects/rocblas", "projects/hipblas"}
+
+    def scope(self, paths, prefixes=None):
+        return determine_changed_projects(
+            paths,
+            self.PREFIXES if prefixes is None else prefixes,
+            skip_patterns=["*.md"],
+        )
+
+    def test_source_change_narrows_to_its_project(self):
+        self.assertEqual(
+            self.scope(["projects/rocblas/src/rocblas.cpp", "README.md"]),
+            ["projects/rocblas"],
+        )
+
+    def test_caller_workflow_riding_along_narrows_to_the_components(self):
+        """A workflow edit defers to the components changed beside it.
+
+        Alone the workflow covers every project, but only because
+        is_external_repo_ci_only_change() makes that run quick. A component
+        change restores standard depth, where full coverage is far too
+        expensive to buy a workflow edit a breadth it only earns when cheap.
+        """
+        self.assertEqual(
+            self.scope(
+                [
+                    ".github/workflows/therock-ci.yml",
+                    "projects/rocblas/src/rocblas.cpp",
+                    "README.md",
+                ]
+            ),
+            ["projects/rocblas"],
+        )
+
+    def test_unnarrowable_diffs_test_every_project(self):
+        for case, (paths, prefixes) in {
+            "caller workflow alone": ([".github/workflows/therock-ci.yml"], None),
+            "shared CTest logic": (["shared/ctest/categories.yaml"], None),
+            # Test-selection plumbing rewrites the scope a component change
+            # would narrow to, so unlike a caller workflow it keeps full
+            # coverage even with that change beside it.
+            "test-selection plumbing plus source": (
+                ["shared/ctest/categories.yaml", "projects/rocblas/src/x.cpp"],
+                None,
+            ),
+            "caller workflow plus unattributable path": (
+                [".github/workflows/therock-ci.yml", "tools/rocm-build/helper.py"],
+                None,
+            ),
+            "source plus unattributable path": (
+                ["projects/rocblas/src/x.cpp", "tools/rocm-build/helper.py"],
+                None,
+            ),
+            "no configured subtrees": (["projects/rocblas/src/x.cpp"], set()),
+            "docs only": (["README.md"], None),
+            "no diff available": (None, None),
+            "empty diff": ([], None),
+        }.items():
+            with self.subTest(case=case):
+                self.assertEqual(self.scope(paths, prefixes), [])
 
 
 if __name__ == "__main__":

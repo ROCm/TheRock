@@ -4,6 +4,7 @@
 """Tests for _therock_utils.external_repo_config."""
 
 import json
+import tempfile
 from pathlib import Path
 import sys
 import unittest
@@ -12,8 +13,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from _therock_utils.external_repo_config import (
     ExternalRepoInput,
+    load_repos_config,
     parse_and_validate_external_repo_config,
     parse_external_repo,
+    subtree_prefixes,
 )
 
 
@@ -225,6 +228,45 @@ class ParseAndValidateExternalRepoConfigTest(unittest.TestCase):
                     "'ref' must be a non-empty string",
                 ):
                     parse_and_validate_external_repo_config(json.dumps(config))
+
+
+class LoadReposConfigTest(unittest.TestCase):
+    """Tests for load_repos_config() and subtree_prefixes()."""
+
+    def _write(self, directory, text):
+        path = Path(directory) / "repos-config.json"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_parses_entries_into_prefixes(self):
+        """Unknown keys are dropped so a newer schema stays loadable."""
+        entry = {"url": "", "branch": "develop", "future_field": "ignored"}
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write(
+                directory,
+                json.dumps(
+                    {
+                        "repositories": [
+                            {"category": "projects", "name": "rocblas", **entry},
+                            {"category": "shared", "name": "stinkytofu", **entry},
+                        ]
+                    }
+                ),
+            )
+            self.assertEqual(
+                subtree_prefixes(load_repos_config(path)),
+                {"projects/rocblas", "shared/stinkytofu"},
+            )
+
+    def test_unreadable_config_yields_no_entries(self):
+        """No entries means "no subtrees known", which widens the run downstream."""
+        with tempfile.TemporaryDirectory() as directory:
+            for case, path in {
+                "missing": Path(directory) / "absent.json",
+                "malformed": self._write(directory, "{not json"),
+            }.items():
+                with self.subTest(case=case):
+                    self.assertEqual(load_repos_config(path), [])
 
 
 if __name__ == "__main__":
