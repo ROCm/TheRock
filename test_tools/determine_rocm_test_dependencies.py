@@ -131,9 +131,14 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "projects/rocdbgapi": ["amd-dbgapi"],
     "projects/rocm-smi-lib": ["rocm_smi_lib"],
     "projects/rocprofiler": ["rocprofiler-sdk"],
+    # profilers/ is its own top-level namespace, so this neither matches the
+    # "projects/" strip nor any other alias. profiler-hub is also not reachable
+    # as a consumer of any monorepo subtree -- its only producers are amd-llvm
+    # and third-party libs -- so without this entry nothing selects its tests.
+    "profilers/profiler-hub": ["profiler-hub"],
 }
 
-_EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
+_EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/", "profilers/")
 
 _CI_TEST_SELECTOR_ALIASES = {
     # The cuDNN sample corpus is the only CI for hipDNN's cuDNN compatibility
