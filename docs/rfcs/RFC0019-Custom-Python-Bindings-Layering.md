@@ -1,14 +1,14 @@
 ---
 author: Brian Harrison (bharriso)
 created: 2026-06-23
-modified: 2026-11-20
+modified: 2026-11-22
 status: draft
 discussion: https://github.com/ROCm/TheRock/issues/6048
 ---
 
 # Custom Python Bindings: Layering, Packaging, and Validation
 
-This RFC defines where custom Python bindings for ROCm components live, how they build against the ROCm SDK, and how TheRock packages, validates, and releases them. It applies to any ROCm component with a hand-written Python API, starting with Origami, TensileLite, hipDNN, rocSHMEM, and rocjitsu.
+This RFC defines where custom Python bindings for ROCm components live, how they build against the ROCm SDK, and how TheRock packages, validates, and releases them. A custom binding here is a Python package that depends on ROCm's native libraries and that no native library needs in order to build. It applies to any ROCm component with a hand-written Python API, starting with Origami, hipDNN, rocSHMEM, and rocjitsu.
 
 ## Summary
 
@@ -18,7 +18,7 @@ This RFC defines where custom Python bindings for ROCm components live, how they
 - **How it ships.** TheRock builds the wheel in a separate job after the SDK wheels, from the same source revision, and publishes it to the SDK's Python index. Each wheel depends on the SDK build it was built and validated with, relaxed to a patch-compatible range once promoted to stable. Users install the published wheel; source builds are for developers and system ROCm installs.
 - **How it is validated.** Before publishing, TheRock installs the wheel into a fresh environment as a consumer would and checks that it loads the shipped SDK libraries. GPU tests run after publication and gate promotion to stable. Each run records the SDK build, package versions, source revisions, and test inputs.
 - **Python versions.** Native extensions use the CPython Stable ABI, and the Stable ABI floor is the package's minimum Python version. Per-minor builds below the floor are exceptions, agreed before they are added.
-- **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN, rocSHMEM, and TensileLite independently.
+- **Rollout.** `bindings/python/` READMEs first, then an Origami pilot behind a feature flag that is off by default, then hipDNN and rocSHMEM independently.
 
 ## Background
 
@@ -29,6 +29,17 @@ This RFC defines where custom Python bindings for ROCm components live, how they
 | ROCm SDK wheels           | `rocm`, `rocm-sdk-core`, `rocm-sdk-libraries`, `rocm-sdk-devel`          | Native ROCm libraries, plus the `rocm_sdk` helper that locates and preloads them.             |
 | Generated C API bindings  | `hip-python` ([TheRock#5609](https://github.com/ROCm/TheRock/pull/5609)) | 1:1 wrappers generated from ROCm C headers.                                                   |
 | Custom component bindings | `hipdnn-frontend`, `rocm-origami`                                        | Hand-written Python APIs over a component's C++ or higher-level API. The subject of this RFC. |
+
+### Where this fits
+
+ROCm's Python packages take one of four shapes, which set where each builds (adapted from the [staging discussion on TheRock#6050](https://github.com/ROCm/TheRock/pull/6050#discussion_r4648795045)):
+
+1. **Build-time Python packages** that native library builds or later packaging steps use, such as kpack's Python tools, `rocm-bootstrap`, TensileLite's kernel generator, and its `rocisa` extension. They must be available before the step that uses them. Some, such as `rocisa`, are native extensions built against lower-level ROCm libraries.
+1. **Native libraries**, built with the build-time packages they need.
+1. **Python packages built after the native libraries**: the ROCm SDK wheels that package them, and packages that wrap or load them, such as `hip-python` and custom component bindings.
+1. **Standalone Python packages** that nothing in this sequence uses and that use no native ROCm library. They build independently of it.
+
+For each native library, the first three form a sequence: the build-time packages its build and packaging use, then the library, then the Python packages built after it. This RFC covers the custom component bindings in the third shape.
 
 ### Why this matters
 
@@ -43,7 +54,6 @@ The first is a binding that replaces the library under test; the second is a bin
 
 - **hipDNN:** `projects/hipdnn/python/` has a nanobind extension project (Stable ABI, Python 3.12+) and a separate wheel project with a custom packer. The wheel declares no SDK dependency. TheRock does not build it.
 - **Origami:** `shared/origami/python/` is a scikit-build-core project that compiles its own copy of the library by default. [rocm-libraries#10975](https://github.com/ROCm/rocm-libraries/pull/10975) (open) links it against the installed shared `liborigami` instead and renames the package to `rocm-origami`.
-- **TensileLite:** hipBLASLt's kernel generator, a Python package in `projects/hipblaslt/tensilelite` that the native hipBLASLt build also uses. Its `rocisa` extension is built with hipBLASLt and ships in `rocm-sdk-libraries` as an accepted test- and codegen-only exception ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)).
 - **rocSHMEM:** `python/rocshmem/` in rocm-systems is a standalone Python project (`rocshmem4py`, [rocm-systems#9471](https://github.com/ROCm/rocm-systems/pull/9471)). [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) (open) packages it inside TheRock's native build, with one wheel per Python minor version.
 - Neither super-repo has a `bindings/` directory yet.
 
@@ -61,6 +71,8 @@ The first is a binding that replaces the library under test; the second is a bin
 
 ## Non-goals
 
+- Build-time Python packages, such as kpack's Python tools, `rocm-bootstrap`, TensileLite's kernel generator, and `rocisa`. They can be covered in a follow-up separate from this RFC. This RFC does not change how they build or ship today, including `rocisa` in `rocm-sdk-libraries` ([TheRock#5701](https://github.com/ROCm/TheRock/issues/5701)).
+- Standalone Python packages.
 - Generated C API bindings (`hip-python`) and Fortran bindings ([RFC0015](./RFC0015-Fortran-Bindings-Split.md)). Generated bindings can use the same `bindings/` tree if [TheRock#5609](https://github.com/ROCm/TheRock/pull/5609) adopts it.
 - Bindings in other languages.
 - Mandating one binding framework. The choice is the component's, within the Python version policy below.
@@ -92,10 +104,10 @@ rocm-libraries/                     # rocm-systems uses the same layout
 
 ### Mixing generated and custom bindings
 
-A custom binding may depend on `hip-python`. For example, hipFile needs error capture on one or two functions that a generated wrapper does not provide. In order of preference:
+A custom binding may depend on `hip-python`. When a component needs behavior the generated wrappers lack, in order of preference:
 
-1. Extend `hip-python` through its override mechanism, if the behavior is general and its owners agree.
-1. Add a narrow custom extension for only those functions, re-exporting the generated bindings for the rest.
+1. Extend `hip-python`, through its generator or override mechanism, if the behavior is general and its owners agree. hipFile did this: its hand-written `rocm.hipfile` wrapper is packaged with its generated bindings in `hip-python`'s `rocm-bindings-systems` wheel.
+1. Add a narrow custom extension for only the functions that need it, re-exporting the generated bindings for the rest.
 1. Write a full custom binding only when the API is not a C API wrapper, as with hipDNN's graph API.
 
 The custom package owns the user-facing import and ROCm initialization, and follows the same validation.
@@ -144,10 +156,12 @@ super-repo revision + patches
                                                                          └─► GPU tests ─► promote to stable
 ```
 
+Build-time Python packages do not go through the binding wheel build; they build and ship as they do today (see [Non-goals](#non-goals)).
+
 ### Build
 
 - Binding wheel jobs use the SDK wheels built in the same run, from native artifacts of the same revision or reused ones whose native inputs are unchanged ([TheRock#7782](https://github.com/ROCm/TheRock/issues/7782), [TheRock#8651](https://github.com/ROCm/TheRock/issues/8651)); reuse records both revisions. A binding job can be rerun without rerunning the native build.
-- There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed.
+- There is one job per binding package and ABI tag: `abi3`, or one per Python minor under an exception. Job selection runs only the jobs whose component or binding sources changed, except in nightly and prerelease builds, which run every enabled binding job because each wheel pins the exact SDK build.
 - Binding wheels carry no device code of their own. ROCm device code reaches users through the `rocm-sdk-device-*` wheels and the binding's `device-<target>` extras. A binding that needs to ship its own device code requires kpack splitting for binding wheels, which TheRock adds when the first such binding needs it.
 - A feature flag ([`flags.md`](../development/flags.md)), off by default, gates the jobs during rollout. Once it is on, super-repo pull request CI runs the binding jobs for changed components, and a failure blocks the merge.
 
@@ -160,11 +174,11 @@ Before publishing, on CPU runners, for every platform and Python version the whe
 1. **Consumer install.** In a fresh environment with no system ROCm on the loader path, install the wheel with a device extra and let `pip` resolve the SDK wheels. The resolved SDK must be the one the run built or selected.
 1. **No conflicts.** The binding wheel installs no file an SDK wheel owns, no SDK wheel contains a copy of the binding, and the binding wheel contains no device code.
 1. **Shipped libraries.** Import the package and confirm the loaded native libraries come from the SDK wheels. A bundled or substituted copy fails.
-1. **CPU tests.** Run the binding's tests that need no GPU. Tests that generate native code, such as TensileLite kernel generation, are reported separately from tests of the shipped libraries.
+1. **CPU tests.** Run the binding's tests that need no GPU.
 
 After publication, GPU runners run the binding's GPU tests for the targets that TheRock's release testing covers, following [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py), including its release-test bypasses. Their results are reported with the run and gate promotion to stable.
 
-Each run records the SDK build, SDK and binding package versions, source revisions with patches, wheel digests, Python version and environment, loaded library paths and versions, test inputs, generated artifacts, and results. The record is stored with the run's artifacts.
+Each run records the SDK build, SDK and binding package versions, source revisions with patches, wheel digests, Python version and environment, loaded library paths and versions, test inputs, and results. The record is stored with the run's artifacts.
 
 ### Release
 
@@ -195,17 +209,15 @@ Each run records the SDK build, SDK and binding package versions, source revisio
 After the pilot, these proceed independently:
 
 - **hipDNN** moves `projects/hipdnn/python/` to `bindings/python/hipdnn-frontend/` as one project and retires its custom packer.
-- **TensileLite** adopts the packaging and validation rules; its location is an open question.
 - **rocSHMEM** moves `python/rocshmem/` to `bindings/python/rocshmem4py/`, and [TheRock#5638](https://github.com/ROCm/TheRock/pull/5638) moves its wheel build out of the native build into the binding job, building one `abi3` wheel unless a per-minor exception is agreed.
 - **Other components** adopt the layout as they add bindings. Maintainers review the first layouts closely in code review.
 
 ## Stakeholders
 
-Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, rocSHMEM, rocjitsu, hipFile, and `hip-python`; ROCm Core; and TheRock build, CI, and release.
+Agreement is needed from the owners of Origami, hipDNN, rocSHMEM, rocjitsu, and `hip-python`; ROCm Core; and TheRock build, CI, and release.
 
 ## Open questions
 
-- **TensileLite.** The native hipBLASLt build uses TensileLite, and `rocisa` is built with hipBLASLt. Whether the package moves to `bindings/python/`, and whether `rocisa` leaves the native build, is settled with the hipBLASLt maintainers.
 - **Import namespace.** Whether custom bindings use their own top-level import packages or the shared `rocm.*` namespace that `hip-python` keeps open is settled with the `hip-python` owners.
 
 ## Alternatives considered
@@ -234,3 +246,4 @@ Agreement is needed from the owners of hipBLASLt/TensileLite, Origami, hipDNN, r
 - 2026-11-19: Replace the `rocm-bindings` repository with `bindings/python/<package-name>/` in each super-repo, per review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050). TheRock builds, validates, and publishes binding wheels after the SDK, following its SDK-dependent wheel versioning and promotion. Add validation, provenance, and the Stable ABI policy. Name Origami as the pilot (Brian Harrison).
 - 2026-11-19: Merge `main`; renumber as RFC0019, since RFC0017 is claimed by another open pull request and RFC0019 is not on `main` or claimed by one (Brian Harrison).
 - 2026-11-20: Address review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050): CPU checks gate publication and GPU tests gate promotion to stable, for the targets TheRock's release testing covers; binding wheels carry no device code of their own; the Stable ABI floor is the minimum Python version, with per-minor builds below it only by exception, closing the Python open question; release tooling sequence for the pilot; shared library-resolution fixes; `_rocm_init.py` preloads every SDK library the extension uses; packaging guidance in `python_packaging.md` as a pilot exit criterion; generated bindings may use `bindings/` if TheRock#5609 adopts it (Brian Harrison).
+- 2026-11-22: Address review on [TheRock#6050](https://github.com/ROCm/TheRock/pull/6050): narrow the scope to Python packages that depend on ROCm's native libraries and that no native library needs in order to build; describe the four shapes of ROCm Python packages; move TensileLite and `rocisa` out of scope, leaving build-time Python packages to a separate follow-up; nightly and prerelease builds run every enabled binding job; update the hipFile example to its wrapper in `hip-python` (Brian Harrison).
