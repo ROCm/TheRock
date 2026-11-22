@@ -97,12 +97,20 @@ add_custom_target(
     autoreconf -f -i "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../version.lds"
+      # RUNPATH $ORIGIN at link time, as expat and gmp do. Escaping: double $
+      # for CMake, then double $ for configure, then escaped single quotes for
+      # the linker command line.
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../version.lds"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --libdir "${CMAKE_INSTALL_PREFIX}/lib"
       --disable-static
+  COMMAND
+    # The libraries link each other, so libtool would also record the build and
+    # staging directories in their RUNPATH (and relink them at install to
+    # change it). $ORIGIN is all they need.
+    sed -i "s/^hardcode_into_libs=yes/hardcode_into_libs=no/" libtool
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND

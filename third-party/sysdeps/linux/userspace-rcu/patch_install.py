@@ -4,7 +4,6 @@
 from pathlib import Path
 import os
 import platform
-import subprocess
 import sys
 
 repo_root = Path(__file__).resolve().parents[4]
@@ -53,17 +52,6 @@ if platform.system() == "Linux":
         source = lib_dir / source_name
         if source.exists():
             update_library_links(source, linker_name, patchelf_exe)
-            target_lib = lib_dir / linker_name
-            if target_lib.exists():
-                try:
-                    subprocess.run(
-                        [patchelf_exe, "--set-rpath", "$ORIGIN", str(target_lib)],
-                        check=True,
-                    )
-                except subprocess.CalledProcessError as e:
-                    print(
-                        f"Warning: Failed to set RPATH on {target_lib}: {e}", flush=True
-                    )
 
     # Make the shipped .pc files relocatable. Their `Libs:` reference the
     # unprefixed -lurcu* names, which resolve through the dev symlinks above.
