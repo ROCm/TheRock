@@ -7,10 +7,11 @@
 # built; on Windows the same headers come from the Windows SDK.
 therock_subproject_fetch(therock-tracelogging-sources
   # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
-  # Originally from: https://github.com/microsoft/tracelogging/archive/daaff5ffd5e3613f2c1a91f323350e98e93e80b3.tar.gz
-  URL https://github.com/microsoft/tracelogging/archive/daaff5ffd5e3613f2c1a91f323350e98e93e80b3.tar.gz
-  URL_HASH SHA256=64a4f3afe39dabc45d81e885f0193ae075dd804d05b19bdaadb0c01ff3bca839
-  PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/tracelogging
+  # The merge commit of microsoft/tracelogging#85 (installs the find modules the
+  # package config needs), which TheRock used to apply as a patch.
+  # Originally from: https://github.com/microsoft/tracelogging/archive/d8e68c949160e63bde71fc5c815dffdc21c9a358.tar.gz
+  URL https://github.com/microsoft/tracelogging/archive/d8e68c949160e63bde71fc5c815dffdc21c9a358.tar.gz
+  URL_HASH SHA256=c0816a38517f81422768027355ba9e7277320cf7d20776c618dd614e2f9c2557
   # The CMake project is in LTTng/, not at the root (as CMAKE_PROJECT assumes):
   # mark its CMakeLists.txt as the fetch's by-product instead.
   TOUCH "${CMAKE_CURRENT_BINARY_DIR}/source/LTTng/CMakeLists.txt"
