@@ -41,4 +41,16 @@ for lib in "${LIBS[@]}"; do
   sed -i "s/${canon_old}/${newname}_la_/g" "$MAKEFILE_AM"
 done
 
+# Do not build the documentation examples (doc/examples): they are not
+# installed, and their template Makefiles link "-lurcu" by name rather than
+# through the renamed .la files, which fails without a system liburcu (or,
+# worse, links against one). Upstream builds them whenever shared libraries
+# are enabled, with no configure switch.
+DOC_MAKEFILE_AM="$SOURCE_DIR/doc/Makefile.am"
+if ! grep -q '^SUBDIRS = examples$' "$DOC_MAKEFILE_AM"; then
+  echo "error: unexpected doc/Makefile.am (no 'SUBDIRS = examples' line)" >&2
+  exit 1
+fi
+sed -i 's/^SUBDIRS = examples$/SUBDIRS =/' "$DOC_MAKEFILE_AM"
+
 echo "userspace-rcu source patch complete."
