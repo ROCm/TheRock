@@ -14,9 +14,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-lttng-tools-sources
       SOURCE_DIR "${_source_dir}"
-      # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
       # Originally from: https://lttng.org/files/lttng-tools/lttng-tools-2.13.15.tar.bz2
-      URL "https://lttng.org/files/lttng-tools/lttng-tools-2.13.15.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/lttng-tools-2.13.15.tar.bz2"
       URL_HASH "SHA256=96ea42351ee112c19dad9fdc7aae93b583d9f1722b2175664a381d2d337703c4"
       TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE

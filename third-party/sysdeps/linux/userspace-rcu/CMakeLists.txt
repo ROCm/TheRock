@@ -8,9 +8,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-userspace-rcu-sources
       SOURCE_DIR "${_source_dir}"
-      # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
       # Originally from: https://lttng.org/files/urcu/userspace-rcu-0.14.0.tar.bz2
-      URL "https://lttng.org/files/urcu/userspace-rcu-0.14.0.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/userspace-rcu-0.14.0.tar.bz2"
       URL_HASH "SHA256=ca43bf261d4d392cff20dfae440836603bf009fce24fdc9b2697d837a2239d4f"
       TOUCH "${_download_stamp}"
       # Preserve extracted-source timestamps so the build does not spuriously

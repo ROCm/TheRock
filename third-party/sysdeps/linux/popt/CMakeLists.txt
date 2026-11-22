@@ -10,9 +10,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-popt-sources
       SOURCE_DIR "${_source_dir}"
-      # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
       # Originally from: https://ftp.osuosl.org/pub/rpm/popt/releases/popt-1.x/popt-1.19.tar.gz
-      URL "https://ftp.osuosl.org/pub/rpm/popt/releases/popt-1.x/popt-1.19.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/popt-1.19.tar.gz"
       URL_HASH "SHA256=c25a4838fc8e4c1c8aacb8bd620edb3084a3d63bf8987fdad3ca2758c63240f9"
       TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE

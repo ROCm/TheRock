@@ -10,9 +10,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-libxml2-sources
       SOURCE_DIR "${_source_dir}"
-      # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
       # Originally from: https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.8.tar.xz
-      URL "https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.8.tar.xz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libxml2-2.13.8.tar.xz"
       URL_HASH "SHA256=277294cb33119ab71b2bc81f2f445e9bc9435b893ad15bb2cd2b0e859a0ee84a"
       TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE

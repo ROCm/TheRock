@@ -8,9 +8,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-lttng-ust-sources
       SOURCE_DIR "${_source_dir}"
-      # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
       # Originally from: https://lttng.org/files/lttng-ust/lttng-ust-2.13.7.tar.bz2
-      URL "https://lttng.org/files/lttng-ust/lttng-ust-2.13.7.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/lttng-ust-2.13.7.tar.bz2"
       URL_HASH "SHA256=5fb4f17c307c8c1b79c68561e89be9562d07e7425bf40e728c4d66755342a5eb"
       TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
