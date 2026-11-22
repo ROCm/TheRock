@@ -97,7 +97,7 @@ add_custom_target(
     autoreconf -f -i "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/rocm_sysdeps.map"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../version.lds"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"

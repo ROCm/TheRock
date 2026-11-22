@@ -128,7 +128,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=${_pkg_config_path}$ENV{PKG_CONFIG_PATH}"
       "CPPFLAGS=${_cppflags}"
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS}${_ldflags} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/rocm_sysdeps.map"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS}${_ldflags} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../version.lds"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
