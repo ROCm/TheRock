@@ -213,13 +213,10 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 
 ################################################################################
 # Coverage Options
-# Enable code-coverage instrumentation for a whole component group by setting the
-# per-project <PROJECT>_ENABLE_COVERAGE flags. therock_coverage.cmake turns
-# each one into whichever option that subproject actually implements, using the
-# THEROCK_COVERAGE_OPTION_<PROJECT> map generated below. Both the group lists
-# and that map come from the coverage registry (COVERAGE_PROJECTS in
-# build_tools/github_actions/configure_coverage_ci.py) at configure time, and
-# cover only the projects that emit LLVM profile data.
+# -D<PROJECT>_ENABLE_COVERAGE is passed unchanged to the subproject whose
+# upper-cased name is <PROJECT> (see therock_cmake_subproject_activate()). The
+# group options below set it for every subproject in that group's list. An
+# explicit -D<PROJECT>_ENABLE_COVERAGE=OFF still wins.
 ################################################################################
 
 option(THEROCK_COVERAGE_ROCM_LIBRARIES_ALL
@@ -229,17 +226,25 @@ option(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL
 option(THEROCK_COVERAGE_ALL
   "Enable coverage instrumentation for all coverage-enabled projects" OFF)
 
-# Emit the per-group project lists from COVERAGE_PROJECTS. CMAKE_CONFIGURE_DEPENDS
-# re-runs configure when that file changes.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py")
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
-execute_process(
-  COMMAND ${Python3_EXECUTABLE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/github_actions/configure_coverage_ci.py"
-    "--emit-cmake" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake"
-  COMMAND_ERROR_IS_FATAL ANY)
-include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_coverage_projects.cmake")
+# Each listed subproject must implement <PROJECT>_ENABLE_COVERAGE with LLVM
+# source-based coverage. hipBLASLt and hipTensor are left out until their
+# instrumented builds link. Test subprojects built from a library's source read
+# the library's option, so they are not listed either. See
+# docs/development/code_coverage.md.
+set(THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS
+  rocRAND hipRAND
+  hipCCL rocPRIM hipCUB rocThrust
+  rocFFT hipFFT
+  rocBLAS hipBLAS
+  rocSPARSE hipSPARSELt
+  rocSOLVER hipSOLVER
+  rocWMMA
+  hipDNN
+)
+set(THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS
+  rccl
+  rocshmem
+)
 
 set(_therock_coverage_selected "")
 if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_LIBRARIES_ALL)
@@ -247,12 +252,6 @@ if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_LIBRARIES_ALL)
 endif()
 if(THEROCK_COVERAGE_ALL OR THEROCK_COVERAGE_ROCM_SYSTEMS_ALL)
   list(APPEND _therock_coverage_selected ${THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS})
-endif()
-
-if(THEROCK_COVERAGE_ROCM_SYSTEMS_ALL AND NOT THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS)
-  message(WARNING
-    "THEROCK_COVERAGE_ROCM_SYSTEMS_ALL is ON but no rocm-systems projects are "
-    "onboarded to coverage yet; nothing will be instrumented for that group.")
 endif()
 
 foreach(_proj IN LISTS _therock_coverage_selected)

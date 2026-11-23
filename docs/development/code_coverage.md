@@ -10,88 +10,90 @@ gives a meaningful signal.
 ```bash
 cmake -B build -GNinja . \
   -DTHEROCK_AMDGPU_FAMILIES=gfx94X-dcgpu \
-  -DHIPRAND_ENABLE_COVERAGE=ON
+  -DHIPDNN_ENABLE_COVERAGE=ON
 ```
 
-`<PROJECT>_ENABLE_COVERAGE` is TheRock's own flag; upstream option names are
-not standardised (hipRAND: `BUILD_CODE_COVERAGE`, rocRAND: `CODE_COVERAGE`,
-RCCL: `ENABLE_CODE_COVERAGE`), so `therock_coverage.cmake` translates it to
-whichever name `COVERAGE_PROJECTS` registers for that project. Passing the flag
-for an unregistered project is a configure error, not a silent no-op.
+TheRock passes `-D<PROJECT>_ENABLE_COVERAGE` to the matching subproject
+unchanged. `<PROJECT>` is the subproject name in upper case: `hipDNN` reads
+`HIPDNN_ENABLE_COVERAGE`. The subproject implements the option itself; TheRock
+adds no compiler or linker flags. A subproject that doesn't read the option
+builds uninstrumented, and CMake reports the variable as unused at the end of
+that subproject's configure.
 
-Instrumentation requires a subproject compiled with clang from the `amd-llvm`
-toolchain, which is how most ROCm subprojects are built on both Linux and
-Windows (see [Windows support](windows_support.md#cmake-build-usage)). For a
-subproject compiled with MSVC itself, the flag is ignored with a warning rather
-than partially applied.
+A subproject that still uses a legacy option name, such as
+`BUILD_CODE_COVERAGE`, can be instrumented through its per-subproject arguments:
+
+```bash
+  -DhipRAND_CMAKE_ARGS=-DBUILD_CODE_COVERAGE=ON
+```
+
+### Test subprojects
+
+`hipCCL_tests` is built from hipCCL's source, so it reads
+`HIPCCL_ENABLE_COVERAGE`, not `HIPCCL_TESTS_ENABLE_COVERAGE`. The prim libraries
+are header-only, so their coverage comes from the tests build. Pass hipCCL's
+option to it directly:
+
+```bash
+  -DHIPCCL_ENABLE_COVERAGE=ON \
+  -DhipCCL_tests_CMAKE_ARGS=-DHIPCCL_ENABLE_COVERAGE=ON
+```
+
+With `-DTHEROCK_FLAG_BUILD_HIPCCL=OFF`, the same applies to `rocPRIM_tests` and
+`ROCPRIM_ENABLE_COVERAGE`.
 
 ### Enabling a whole group
 
-| Option                                | Instruments                                  |
-| ------------------------------------- | -------------------------------------------- |
-| `THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` | all coverage-enabled rocm-libraries projects |
-| `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL`   | all coverage-enabled rocm-systems projects   |
-| `THEROCK_COVERAGE_ALL`                | both of the above                            |
+| Option                                | Instruments                                                   |
+| ------------------------------------- | ------------------------------------------------------------- |
+| `THEROCK_COVERAGE_ROCM_LIBRARIES_ALL` | the subprojects in `THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS` |
+| `THEROCK_COVERAGE_ROCM_SYSTEMS_ALL`   | the subprojects in `THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS`   |
+| `THEROCK_COVERAGE_ALL`                | both of the above                                             |
 
-Each expands to individual `<PROJECT>_ENABLE_COVERAGE` flags. An explicit
-`-D<PROJECT>_ENABLE_COVERAGE=OFF` wins over a group flag. Membership is
-generated from `COVERAGE_PROJECTS`; these options default `OFF` and have no
-effect on a normal build.
+Both lists are in the top-level `CMakeLists.txt`. Each group option sets
+`<PROJECT>_ENABLE_COVERAGE=ON` for the subprojects in its list. An explicit
+`-D<PROJECT>_ENABLE_COVERAGE=OFF` wins over a group option. These options
+default to `OFF` and have no effect on a normal build. Test subprojects are not
+in the lists, so pass their arguments as shown above.
 
-### Host code only
+## What a project's coverage option must do
 
-Upstream coverage flags are unqualified and the HIP driver forwards them to
-device compilation. Two failures result: the runtime aborts looking up missing
-profiling symbols in the device image, and when readback succeeds it writes a
-profile named after the device target (colons included, breaking CI artifact
-upload). `therock_coverage.cmake` appends the negation scoped to device
-compilation:
+TheRock passes only the flag, so `<PROJECT>_ENABLE_COVERAGE` must be complete in
+the project itself:
 
-```
--Xarch_device -fno-profile-instr-generate -Xarch_device -fno-coverage-mapping
-```
-
-The later of a `-f`/`-fno-` pair wins; the project's own flags arrive after
-`CMAKE_<LANG>_FLAGS`, so the negation is appended to
-`CMAKE_<LANG>_COMPILE_OBJECT` via a generated file passed as
-`CMAKE_PROJECT_INCLUDE`.
-
-### The profile runtime's link dependencies
-
-`libclang_rt.profile_rocm.a` needs `-ldl` and `-lpthread`, which the driver
-does not supply. On the manylinux base these are not in libc, so an instrumented
-shared library gets undefined references and any executable linking it fails
-`--no-allow-shlib-undefined`. On Linux, `therock_coverage.cmake` adds both
-libraries automatically.
+- **LLVM source-based coverage** (`-fprofile-instr-generate -fcoverage-mapping`),
+  not gcov. gcov writes `.gcda` files rather than the `.profraw` files the
+  coverage tooling merges.
+- **Host code only.** For HIP sources, qualify the flags with `-Xarch_host`.
+  Otherwise the HIP driver forwards them to device compilation: the runtime
+  aborts looking up missing profiling symbols in the device image, and when
+  readback succeeds it writes a profile named after the device target (colons
+  included, which breaks CI artifact upload).
+- **The profile runtime's link dependencies.** `libclang_rt.profile_rocm.a`
+  needs `-ldl` and `-lpthread`, which the driver does not supply. On the
+  manylinux base these are not in libc, so an instrumented shared library gets
+  undefined references and any executable linking it fails
+  `--no-allow-shlib-undefined`. Link `${CMAKE_DL_LIBS}` and `Threads::Threads`
+  when coverage is on.
 
 ## Adding a project
 
-Add an entry to `COVERAGE_PROJECTS` in `configure_coverage_ci.py`.
-
-`coverage_option` must name the CMake option the project implements, and it must
-select LLVM instrumentation (not gcov, which writes `.gcda` files this pipeline
-can't read). Names vary: most use `BUILD_CODE_COVERAGE` or `CODE_COVERAGE`;
-RCCL uses `ENABLE_CODE_COVERAGE`.
-
-Verify a local instrumented build produces a non-empty report before committing
-the entry. Set `source_repo` (`ROCM_LIBRARIES` or `ROCM_SYSTEMS`) to route the
-project into the correct group alias; membership lists are generated at configure
-time, so no CMake edit is needed. `object_globs` must match what the project
-actually installs — a miss fails the report job rather than publishing zero.
+1. Implement `<PROJECT>_ENABLE_COVERAGE` upstream as described above. Keep the
+   project's old option name as a deprecated alias for a while.
+1. Bump the submodule in TheRock.
+1. Add the subproject to `THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS` or
+   `THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS` in `CMakeLists.txt`.
+1. Verify that a local instrumented build produces a non-empty report.
 
 ## Blocked projects
 
-A `blocked_reason` alongside `coverage_option` means the instrumented build is
-broken. The project is dropped from the default and group aliases (including
-`--emit-cmake` output) but can still be named explicitly, printing the reason.
-A stage is built as a unit, so one blocked project takes the whole stage down.
-Drop `blocked_reason` once the upstream fix lands.
+These are left out of the group lists because their instrumented builds fail.
 
-`hipblaslt` — its coverage branch links against bare `rocroller` while the rest
+`hipBLASLt` — its coverage branch links against bare `rocroller` while the rest
 of its CMakeLists uses `roc::rocroller`. Under TheRock rocRoller is a separate
 subproject; the bare name reaches the linker as `-lrocroller` with no `-L`.
 
-`hiptensor` — upstream applies coverage as a blanket `add_compile_options` on a
+`hipTensor` — upstream applies coverage as a blanket `add_compile_options` on a
 composable_kernel-based library. The coverage mapping data exceeds 2GB, failing
 the link with out-of-range `R_X86_64_PC32` relocations. A larger code model is
 the likely fix.
