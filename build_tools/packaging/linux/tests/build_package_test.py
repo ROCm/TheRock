@@ -142,6 +142,7 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "pkg_names": None,
         "clean_build": False,
         "build_variant": "",
+        "deb_compression": "xz",
     }
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -768,6 +769,32 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         rules = _read_rules_file(pkg_name=PKG_FFT, config=device_cfg)
         self.assertIn("override_dh_makeshlibs:", rules)
         self.assertIn("dh_makeshlibs -X.co", rules)
+
+        for args in ("-Zxz", "-Zzstd -z9"):
+            with self.subTest(deb_compression_args=args):
+                cfg = replace(device_cfg, deb_compression_args=args)
+                deb_package.create_versioned_deb_package(pkg_name=PKG_FFT, config=cfg)
+                rules = _read_rules_file(pkg_name=PKG_FFT, config=cfg)
+                self.assertIn(f"dh_builddeb -- {args} --root-owner-group", rules)
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "os.sched_getaffinity is Linux-only and DEB packaging only runs on Linux.",
+    )
+    def test_deb_compression_args(self) -> None:
+        """Explicit choice wins; auto/invalid use zstd at <= 4 CPUs, else xz."""
+        for choice, cpus, expected in [
+            ("xz", 2, "-Zxz"),
+            ("zstd", 64, "-Zzstd -z9"),
+            ("auto", 4, "-Zzstd -z9"),
+            ("auto", 5, "-Zxz"),
+            ("gzip", 2, "-Zzstd -z9"),
+        ]:
+            with (
+                self.subTest(choice=choice, cpus=cpus),
+                patch("os.sched_getaffinity", return_value=set(range(cpus))),
+            ):
+                self.assertEqual(deb_package.get_deb_compression_args(choice), expected)
 
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")

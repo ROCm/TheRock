@@ -154,6 +154,7 @@ jobs:
       build_variant: "release"
       release_type: ${{ inputs.release_type }}
       prerelease_version: ${{ inputs.prerelease_version }}
+      run_rocm_tests: true
       build_pytorch: ${{ inputs.build_pytorch }}
       build_jax: ${{ inputs.build_jax }}
       python_version: ${{ inputs.python_version }}

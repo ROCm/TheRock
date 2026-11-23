@@ -1475,7 +1475,7 @@
         "Artifact": "libhipcxx",
         "Artifact_Subdir": [
           {
-            "Name": "libhipcxx",
+            "Name": "libhipcxx_tests",
             "Components": [
               "test"
             ]
@@ -3075,8 +3075,8 @@
       "amdrocm-decode-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocDecode video decoding library test suite and samples",
-    "Description_Long": "Test suite and sample applications for rocDecode library. Includes unit tests, codec validation, and example programs demonstrating GPU-accelerated video decoding workflows. Provides test executables for verifying GPU-accelerated video decode functionality using the VA-API backend.",
+    "Description_Short": "rocDecode video decoding library test suite",
+    "Description_Long": "Test suite for the rocDecode library. Includes the CTest project, test scripts, and media used to verify GPU-accelerated video decode functionality using the VA-API backend. Sample applications and utility sources ship in the rocDecode development package.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3150,8 +3150,8 @@
       "amdrocm-decode"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocDecode development headers and build configuration files",
-    "Description_Long": "Development package for rocDecode video decoding library. Contains C/C++ header files, CMake modules, and API declarations for integrating GPU-accelerated video decode into applications. Provides interfaces for decoder initialization, format configuration, and decoded frame access.",
+    "Description_Short": "rocDecode development headers, samples, and build configuration files",
+    "Description_Long": "Development package for rocDecode video decoding library. Contains C/C++ header files, CMake modules, API declarations, sample applications, and utility sources for integrating GPU-accelerated video decode into applications. Provides interfaces for decoder initialization, format configuration, and decoded frame access.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3186,7 +3186,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "rocJPEG library test suite and validation executables",
-    "Description_Long": "Test suite for rocJPEG library. Includes unit tests, decoding correctness validation, and performance benchmarks for JPEG baseline and progressive formats. Provides test executables for verifying GPU-accelerated JPEG decode functionality using VA-API backend.",
+    "Description_Long": "Test suite for rocJPEG library. Includes unit tests, decoding correctness validation, and performance benchmarks for JPEG baseline and progressive formats. Provides test executables for verifying GPU-accelerated JPEG decode functionality using VA-API backend. Sample applications ship in the rocJPEG development package.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -3260,8 +3260,8 @@
       "amdrocm-jpeg"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "rocJPEG development headers and build configuration",
-    "Description_Long": "Development package for rocJPEG library. Contains C/C++ header files, CMake configuration, and API declarations for integrating GPU-accelerated JPEG decoding. Provides interfaces for decoder configuration, batch processing, and decoded image buffer management.",
+    "Description_Short": "rocJPEG development headers, samples, and build configuration",
+    "Description_Long": "Development package for rocJPEG library. Contains C/C++ header files, CMake configuration, API declarations, and sample applications for integrating GPU-accelerated JPEG decoding. Provides interfaces for decoder configuration, batch processing, and decoded image buffer management.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
