@@ -17,6 +17,7 @@ Components are variable but are typically:
     * dbg: Debug files
     * lib: Files needed to use the artifact as a library
     * run: Files needed to use the artifact as a tool
+    * sys: System config files installed outside the prefix (e.g. /etc)
 
 Each valid artifact directory contains an `artifact_manifest.txt` file, which
 contains one relative path per line. That path represents a path into a TheRock

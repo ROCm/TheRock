@@ -288,7 +288,12 @@ class TestNameNormalization(_FixtureTestCase):
         # rocPRIM/hipCUB/rocThrust are built via the unified hipCCL superbuild,
         # so their standalone subtrees must resolve to the hipccl graph node
         # instead of stripping to non-existent rocprim/hipcub/rocthrust keys.
-        for subtree in ("projects/rocprim", "projects/hipcub", "projects/rocthrust"):
+        for subtree in (
+            "projects/rocprim",
+            "projects/hipcub",
+            "projects/rocthrust",
+            "projects/hipccl",
+        ):
             self.assertEqual(_normalize_changed_project(subtree), ["hipccl"])
 
 
@@ -1091,6 +1096,30 @@ class TestIdentifierSpaceContract(_FixtureTestCase):
             selected = set(json.loads(proc.stdout.strip()))
             self.assertIn("hipdnn-integration-tests", selected)
             self.assertNotIn("hipdnn_integration_tests", selected)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_cli_hipdnn_selects_cudnn_corpus(self) -> None:
+        graph = {"hipdnn": {"consumers": []}}
+        root = _make_fixture(graph=graph, policies="")
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--therock-dir",
+                    str(root),
+                    "--changed-projects",
+                    "projects/hipdnn",
+                    "--level",
+                    "4",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            selected = set(json.loads(proc.stdout.strip()))
+            self.assertEqual(selected, {"hipdnn", "hipdnn-cudnn-samples"})
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
