@@ -46,7 +46,7 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     native windows packages (dev/nightly), with ``--platform windows``:
 
     s3://therock-dev-artifacts/12345-windows/packages/msi/
-      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/win11/20250101-12345/
 
 ASAN build variant:
 
@@ -284,25 +284,24 @@ def publish_native_windows_packages(
     multi_arch_build_native_windows_packages.yml) as loose .msi files.
 
     The destination follows RFC0012: Windows installer artifacts live under
-    ``core/windows-installers/`` (not ``core/packages/``). The current MSI is a
-    single OS-agnostic installer, so it is published to a flat
-    ``windows-installers/`` prefix rather than the per-OS subfolders RFC0012
-    reserves for OS-specific installers.
+    ``core/windows-installers/<os>/`` with one subfolder per supported Windows
+    OS version. The current MSI targets Windows 11, so it is published under
+    ``windows-installers/win11/``.
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-windows/packages/msi/
-          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/win11/20250101-12345/
 
     prerelease example:
         s3://therock-prerelease-artifacts/12345-windows/packages/msi/
-          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/win11/
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
 
     source = artifacts_root.native_windows_packages("msi")
 
-    base_path = "v5/rocm/core/windows-installers"
+    base_path = "v5/rocm/core/windows-installers/win11"
     if release_type == "prerelease":
         dest_prefix = base_path
     else:

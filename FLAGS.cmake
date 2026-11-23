@@ -107,7 +107,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME MIOPEN_ENABLE_HIPDNN_WRAPPER
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build MIOpen as a public wrapper (libMIOpen.so) over a private implementation library (libMIOpen_private.so), with optional runtime forwarding to hipDNN. See rocm-libraries MIOpen RFC 0001."
   CMAKE_VARS
     MIOPEN_ENABLE_HIPDNN_WRAPPER=ON

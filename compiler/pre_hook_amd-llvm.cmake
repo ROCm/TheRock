@@ -229,16 +229,16 @@ if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
       CLANG_OFFLOAD_PACKAGER
       CLANG_OFFLOAD_WRAPPER
       CLANG_LINKER_WRAPPER
+      # Needed on every platform: CMP0155 is NEW once cmake_minimum_required is
+      # 3.28 or later, so CMake scans C++20-or-later sources for module imports
+      # with this tool. LLVM puts it in the runtimes' TOOLCHAIN_TOOLS, but only
+      # if the target exists, so pruning it leaves the scan command unresolved.
+      CLANG_SCAN_DEPS
       CLANG_SHLIB
       DRIVER
       LIBCLANG
       OFFLOAD_ARCH
     )
-    if(WIN32)
-      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-      # we might as well build them from source ourselves.
-      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-    endif()
     therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
   endblock()
 endif()
