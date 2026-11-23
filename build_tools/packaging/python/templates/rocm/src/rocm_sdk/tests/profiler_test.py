@@ -218,6 +218,31 @@ class ROCmProfilerTest(unittest.TestCase):
                         f"{test.script_name} output:\n{output_text}"
                     )
 
+    def test_rocprof_sys_instrument_runtime_mode(self):
+        """Runtime instrumentation must be able to create the target process.
+
+        Runs rocprof-sys-instrument without -o against /bin/true. The runtime
+        library is preloaded under the name libdyninstAPI_RT.so. If the wheel
+        does not provide a library the instrumenter can find, this fails with
+        Dyninst error 68 (create process failed bootstrap).
+        """
+        script_path = utils.find_console_script("rocprof-sys-instrument")
+        self.assertIsNotNone(
+            script_path, msg="Console script rocprof-sys-instrument does not exist"
+        )
+        result = subprocess.run(
+            [script_path, "--", "/bin/true"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding=locale.getpreferredencoding(),
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=f"rocprof-sys-instrument runtime mode failed:\n{result.stdout}",
+        )
+
     def test_rocprof_trace_decoder_python_api(self):
         """The packaged rocprof_trace_decoder API must be importable.
 
