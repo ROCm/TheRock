@@ -759,8 +759,16 @@ amdgpu_family_info_matrix = {
     },
     "amdgcnspirv": {
         "linux": {
-            # Build-only during SPIR-V CI enablement: no test runner / tests yet.
-            "test-runs-on": "",
+            # Physical GPU runner that JIT-executes the SPIR-V kernels (same pool
+            # as gfx94x).
+            "test-runs-on": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+            "test-runs-on-labels": [
+                {"label": "linux-gfx942-1gpu-ccs-ossci-rocm", "count": 5},  # ccs
+                {
+                    "label": "linux-gfx942-1gpu-ccs-csp-ossci-rocm",
+                    "count": 28,
+                },  # ccs-csp
+            ],
             "family": "amdgcnspirv",
             "fetch-gfx-targets": ["amdgcnspirv"],
             "build_variants": ["release"],
@@ -770,7 +778,12 @@ amdgpu_family_info_matrix = {
                 "submodule_bump",
                 "nightly",
             ],
-            "tests_on_trigger": [],
+            "tests_on_trigger": [
+                "presubmit",
+                "postsubmit",
+                "submodule_bump",
+                "nightly",
+            ],
             # TODO: Add issue that enables packaging
             "exclude-from-packaging": True,
         },
