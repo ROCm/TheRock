@@ -259,7 +259,9 @@
     ]
   },
   "mirage": {
-    "consumers": []
+    "consumers": [
+      "miopen"
+    ]
   },
   "mxdatagenerator": {
     "consumers": [
@@ -335,6 +337,7 @@
   },
   "rocjitsu": {
     "consumers": [
+      "miopen",
       "rccl-translate",
       "rocjitsu-hotswap"
     ]

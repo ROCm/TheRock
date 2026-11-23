@@ -266,6 +266,69 @@ class TestExcludeSubtractiveLast(_FixtureTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Regression for ROCm/rocm-systems#16477: a consumer edge that exists only for
+# build ordering (miopen build-depends on rocjitsu/mirage so miopen-dbsync can
+# use them as artifacts) must not make emulator-only changes select miopen. A
+# rocm-systems selective build for such a change builds only the emulation
+# stage, so the selected miopen jobs fail with missing artifacts.
+#
+#   rocjitsu -> [miopen, rccl-translate, rocjitsu-hotswap]
+#   mirage   -> [miopen]
+# ---------------------------------------------------------------------------
+_EMULATOR_GRAPH = {
+    "rocjitsu": {"consumers": ["miopen", "rccl-translate", "rocjitsu-hotswap"]},
+    "mirage": {"consumers": ["miopen"]},
+    "miopen": {"consumers": []},
+    "rccl-translate": {"consumers": []},
+    "rocjitsu-hotswap": {"consumers": ["rccl-translate"]},
+}
+
+# Mirrors [component.rocjitsu] / [component.mirage] in test_tools/test_policies.toml.
+_EMULATOR_POLICIES = """\
+[component.rocjitsu]
+level = 5
+test_include = ["rccl-translate", "rocjitsu-hotswap"]
+
+[component.mirage]
+level = 5
+"""
+
+
+class TestEmulatorChangesDoNotSelectMiopen(unittest.TestCase):
+    def _fixture(self, policies: str) -> Path:
+        root = _make_fixture(graph=_EMULATOR_GRAPH, policies=policies)
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        return root
+
+    def test_edge_selects_miopen_without_the_policy(self) -> None:
+        # Non-vacuous: with the default walk, the build-ordering edge does select
+        # miopen, which is the bug the policy exists to prevent.
+        root = self._fixture(policies="")
+        self.assertIn("miopen", get_subprojects_to_test(["rocjitsu"], root))
+        self.assertIn("miopen", get_subprojects_to_test(["mirage"], root))
+
+    def test_rocjitsu_change_does_not_select_miopen(self) -> None:
+        result = get_subprojects_to_test(
+            ["rocjitsu"], self._fixture(_EMULATOR_POLICIES)
+        )
+        self.assertNotIn("miopen", result)
+        # Self plus the consumers selected before the miopen edge existed.
+        self.assertEqual(result, {"rocjitsu", "rccl-translate", "rocjitsu-hotswap"})
+
+    def test_mirage_change_does_not_select_miopen(self) -> None:
+        result = get_subprojects_to_test(["mirage"], self._fixture(_EMULATOR_POLICIES))
+        self.assertEqual(result, {"mirage"})
+
+    def test_miopen_still_selected_when_it_changes_alongside_rocjitsu(self) -> None:
+        # The policy limits what rocjitsu selects; it must not hide a project that
+        # changed itself.
+        result = get_subprojects_to_test(
+            ["rocjitsu", "miopen"], self._fixture(_EMULATOR_POLICIES)
+        )
+        self.assertIn("miopen", result)
+
+
+# ---------------------------------------------------------------------------
 # Name normalization + projects/ prefix strip + comma-split input (CLI).
 # ---------------------------------------------------------------------------
 class TestNameNormalization(_FixtureTestCase):
