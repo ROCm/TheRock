@@ -20,14 +20,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   endif()
 
   set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
-  # The post hooks install FFTW3Config.cmake.in. Ninja must reconfigure when
-  # those files change; the tarball hash alone does not cover them.
-  set(_fftw3_relocatable_depends
-    "${CMAKE_CURRENT_LIST_DIR}/FFTW3Config.cmake.in"
-    "${CMAKE_CURRENT_LIST_DIR}/fftw3_install_relocatable_package.cmake"
-    "${CMAKE_CURRENT_LIST_DIR}/post_hook_therock-fftw3.cmake"
-    "${CMAKE_CURRENT_LIST_DIR}/post_hook_therock-fftw3f.cmake"
-  )
 
   # FFTW leaves SIMD codelets out unless they are requested. Enable them on
   # Linux x86_64. FFTW picks the ISA at runtime.
@@ -60,7 +52,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       HARDENING_DEFERRED "FFTW (autotools)"
       FPRINT_SOURCE_DIR "${_source_dir}"
       FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
-      EXTRA_DEPENDS "${_download_stamp}" ${_fftw3_relocatable_depends}
+      EXTRA_DEPENDS "${_download_stamp}"
     )
   else()
     therock_subproject_fetch(therock-fftw3-sources
@@ -91,10 +83,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DENABLE_AVX2=ON
       )
     endif()
-    set(_fftw3_extra_declare_args
-      FPRINT_FILE_GLOBS ${_fftw3_relocatable_depends}
-      EXTRA_DEPENDS ${_fftw3_relocatable_depends}
-    )
+    set(_fftw3_extra_declare_args)
   endif()
 
   therock_cmake_subproject_declare(therock-fftw3
@@ -181,11 +170,15 @@ if(ENABLE_X86_SIMD)
 endif()
 if(ENABLE_FLOAT)
   list(APPEND _configure_args --enable-float)
+  set(_package_name FFTW3f)
+  set(_library_name fftw3f)
+else()
+  set(_package_name FFTW3)
+  set(_library_name fftw3)
 endif()
 
 # cmake_DATA= skips the CMake package files from FFTW's Makefile.
-# post_hook_therock-fftw3.cmake installs third-party/fftw3/FFTW3Config.cmake.in
-# for this autotools driver and for the upstream CMake build.
+# This project installs its own below.
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -193,4 +186,16 @@ add_custom_target(
   COMMAND make -j ${_parallel_jobs}
   COMMAND make install cmake_DATA=
   VERBATIM
+)
+
+# Generate under cmake-package/. FFTW's Makefile writes a file of the same
+# name in the build directory.
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/FFTW3Config.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/cmake-package/${_package_name}Config.cmake"
+  @ONLY
+)
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/cmake-package/${_package_name}Config.cmake"
+  DESTINATION "lib/cmake/${_library_name}"
 )
