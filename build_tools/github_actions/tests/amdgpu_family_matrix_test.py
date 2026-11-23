@@ -636,9 +636,10 @@ class TestBuildRunnerSelection(unittest.TestCase):
             # (platform, variant, size, expected_runner_label)
             ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
             ("windows", "release", "large", "aws-windows-scale-rocm-prod-mix"),
-            # Sanitizer builds always use the large runner regardless of requested size
-            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
-            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            # Sanitizer large stages use the dedicated sanitizer pool;
+            # small/medium stages fall through to their normal pools
+            ("linux", "asan", "small", "aws-linux-scale-rocm-small"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-medium"),
             ("linux", "release", "small", "aws-linux-scale-rocm-small"),
             # Windows has no small/medium pool — falls back to the Windows default
             ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),
