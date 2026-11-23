@@ -249,6 +249,7 @@ jobs:
           HIP_TEST_REPEAT: ${{ inputs.hip_test_repeat }}
           AMD_LOG_LEVEL: '1'
           ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
+          ROCDDI_HSA_MEMORY_DIAGNOSTICS: '1'
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           export PATH="$PWD/candidate/bin:$PWD/candidate/lib/llvm/bin:$PATH"
@@ -267,6 +268,7 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
           ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
+          ROCDDI_HSA_MEMORY_DIAGNOSTICS: '1'
         run: >-
           python3 build_tools/github_actions/rocddi_hsa_diagnostics.py
           --candidate "$PWD/candidate" --output "$PWD/diagnostics/hsa"
