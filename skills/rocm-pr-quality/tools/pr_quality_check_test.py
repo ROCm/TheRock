@@ -530,5 +530,17 @@ class TheRockProfileTest(unittest.TestCase):
         self.assertEqual(_sev(findings, "M2"), [])
 
 
+class RepoFromPrUrlTest(unittest.TestCase):
+    def test_repo_comes_from_the_pr_url(self):
+        # A --pr URL for another repository must not fall back to the checkout's repo.
+        self.assertEqual(
+            pq.repo_from_pr_url("https://github.com/ROCm/rocm-libraries/pull/15973"),
+            "ROCm/rocm-libraries",
+        )
+
+    def test_non_url_gives_none(self):
+        self.assertIsNone(pq.repo_from_pr_url("15973"))
+
+
 if __name__ == "__main__":
     unittest.main()

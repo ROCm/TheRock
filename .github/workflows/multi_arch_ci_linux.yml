@@ -468,6 +468,7 @@ jobs:
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      build_image: ${{ matrix.build_image }}
       wheel_type: ${{ matrix.wheel_type }}
       # CI setup selects this run's built version or resolves a published version.
       rocm_version: ${{ fromJSON(inputs.build_config).framework_rocm_version }}

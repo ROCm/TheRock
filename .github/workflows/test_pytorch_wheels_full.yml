@@ -274,19 +274,6 @@ jobs:
           git config fetch.parallel 10
           git config --global core.longpaths true
 
-      # Here we checkout the same version of PyTorch that wheels were built from
-      # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY, apply patches, or fetch submodules, so we skip those
-      # steps to save time.
-      - name: Checkout PyTorch Source
-        timeout-minutes: 30
-        run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/"${PYTORCH_GIT_REPO}".git \
-            --repo-hashtag "${PYTORCH_GIT_REF}" \
-            --no-hipify \
-            --no-submodules
-
       - name: Set up virtual environment
         timeout-minutes: 15
         env:
@@ -296,6 +283,21 @@ jobs:
             --packages "torch[${DEVICE_EXTRAS}]==${TORCH_VERSION} rocm[devel,${DEVICE_EXTRAS}]" \
             --index-url="${PACKAGE_INDEX_URL}" \
             --activate-in-future-github-actions-steps
+
+      # Check out the exact PyTorch commit the installed wheel was built from so
+      # the test sources match it. PYTORCH_GIT_REF is a moving branch (e.g.
+      # "nightly"), so pin to the wheel's torch.version.git_version instead.
+      # HIPIFY, patches and submodules are skipped to save time.
+      - name: Checkout PyTorch Source
+        timeout-minutes: 30
+        run: |
+          TORCH_SHA=$(python -c "import torch; print(torch.version.git_version)")
+          echo "Pinning pytorch test source to wheel commit: ${TORCH_SHA} (ref: ${PYTORCH_GIT_REF})"
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin https://github.com/"${PYTORCH_GIT_REPO}".git \
+            --repo-hashtag "${TORCH_SHA}" \
+            --no-hipify \
+            --no-submodules
 
       - name: Initialize ROCm SDK and configure environment
         run: |
@@ -441,7 +443,9 @@ jobs:
           persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
-          sparse-checkout: external-builds/pytorch/summarize_test_results.py
+          sparse-checkout: |
+            external-builds/pytorch/summarize_test_results.py
+            build_tools/github_actions
 
       - name: Download all test report artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

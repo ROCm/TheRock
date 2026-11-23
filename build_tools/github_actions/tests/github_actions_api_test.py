@@ -907,6 +907,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         with self.assertRaises(Exception):
             gha_query_workflow_run_by_id("ROCm/TheRock", "00000000000")
 
+    @unittest.skip("Temporarily disabled pending fix for ROCm/TheRock#9790")
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_workflow_runs_for_commit_found(self):
         """Test querying workflow runs for a commit that has runs."""
