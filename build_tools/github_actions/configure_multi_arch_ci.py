@@ -887,6 +887,10 @@ class BuildConfig:
     build_runs_on_large: str = ""
     build_runs_on_small: str = ""
     build_runs_on_medium: str = ""
+    # CPU runner for the platform-wide generic tests, empty when disabled.
+    generic_test_runner: str = ""
+    # One entry per test-eligible family. None means use the global test labels.
+    generic_test_label_overrides: list[list[str] | None] = field(default_factory=list)
     # Release tarballs use a Linux container, including for Windows artifacts.
     build_runs_on_tarballs: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
@@ -1943,6 +1947,7 @@ def _expand_build_config_for_platform(
 
     per_family_info: list[dict] = []
     wsl_per_family_info: list[dict] = []
+    generic_test_label_overrides: list[list[str] | None] = []
     for family_name in families:
         # select_targets already validates family names and filters by
         # platform availability. Family name uniqueness is validated by
@@ -2008,7 +2013,10 @@ def _expand_build_config_for_platform(
         # Handle build-only labels (ci:build:gfx*).
         # These allow verifying compilation without running tests.
         # Note: if ci:test:gfx* is also present, test-only wins (user wants tests).
-        if family_name in build_only_families and family_name not in test_only_families:
+        build_only = (
+            family_name in build_only_families and family_name not in test_only_families
+        )
+        if build_only:
             if test_runs_on:
                 print(f"  {family_name}: tests disabled (ci:build:{family_name} label)")
             test_runs_on = ""
@@ -2086,6 +2094,11 @@ def _expand_build_config_for_platform(
                 "test_labels_for_family"
             ]
         per_family_info.append(family_info)
+
+        if platform == "linux" and not build_only:
+            generic_test_label_overrides.append(
+                family_info.get("test_labels_for_family")
+            )
 
         test_runs_on_wsl = get_wsl_test_runner(
             platform_info,
@@ -2275,6 +2288,14 @@ def _expand_build_config_for_platform(
         build_runs_on_large=build_runs_on_large,
         build_runs_on_small=build_runs_on_small,
         build_runs_on_medium=build_runs_on_medium,
+        generic_test_runner=(
+            get_cpu_test_runner(platform)
+            if generic_test_label_overrides
+            and build_rocm
+            and jobs.test_rocm.action == JobAction.RUN
+            else ""
+        ),
+        generic_test_label_overrides=generic_test_label_overrides,
         build_runs_on_tarballs=build_runs_on_tarballs,
         test_python_packages_matrix=test_python_packages_matrix,
         prebuilt_stages=jobs.build_rocm.prebuilt_stages,

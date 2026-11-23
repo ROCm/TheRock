@@ -635,13 +635,49 @@ jobs:
           echo "under a unique run_id, preventing mixing with release artifacts."
 
   # ==========================================================================
-  # Phase 3 - Testing: gfx94x (Linux) and gfx110x (Windows) only
+  # Phase 3 - Testing: generic Linux and selected GPU families
   # ==========================================================================
+  trigger-linux-generic-tests:
+    name: Trigger Generic Linux Artifact Tests
+    needs: [setup-linux, build-linux]
+    if: >-
+      ${{
+        inputs.dry_run != true &&
+        inputs.build_only != true &&
+        needs.build-linux.result == 'success' &&
+        fromJSON(needs.setup-linux.outputs.linux_build_config || '{}').generic_test_runner != ''
+      }}
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: write # Dispatch downstream workflows.
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger test_artifacts for generic artifacts
+        id: trigger-tests
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          wait-for-completion: false
+          inputs: |
+            {
+              "artifact_group": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).artifact_group }}",
+              "artifact_run_id": "${{ github.run_id }}",
+              "test_runs_on_cpu": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).generic_test_runner }}",
+              "test_scope": "generic",
+              "test_type": "${{ inputs.test_type || 'standard' }}",
+              "skip_stages": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).skip_stages }}",
+              "release_type": "dev",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ needs.setup-linux.outputs.ref }}",
+              "build_variant": "release"
+            }
+
   trigger-linux-tests:
     permissions:
       actions: write # Dispatch downstream workflows.
     name: Trigger Linux Tests (gfx94X-dcgpu)
-    needs: [create-branch, setup-linux, build-linux]
+    needs: [setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' && ((inputs.linux_amdgpu_families || 'all') == 'all' || contains(inputs.linux_amdgpu_families, 'gfx94X-dcgpu')) }}
     runs-on: ubuntu-26.04
     outputs:
@@ -669,10 +705,11 @@ jobs:
               "amdgpu_families": "gfx94X-dcgpu",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
+              "test_scope": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).generic_test_label_overrides != null && 'family' || 'all' }}",
               "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "ref": "${{ needs.setup-linux.outputs.ref }}",
               "build_variant": "release"
             }
 
@@ -688,7 +725,7 @@ jobs:
     permissions:
       actions: write # Dispatch downstream workflows.
     name: Trigger Linux Tests (${{ matrix.amdgpu_family }})
-    needs: [create-branch, setup-linux, build-linux]
+    needs: [setup-linux, build-linux]
     if: ${{ inputs.dry_run != true && inputs.build_only != true && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-26.04
     strategy:
@@ -749,10 +786,11 @@ jobs:
               "amdgpu_families": "${{ matrix.amdgpu_family }}",
               "amdgpu_targets": "${{ steps.family-info.outputs.amdgpu_targets }}",
               "test_runs_on": "${{ steps.family-info.outputs.test_runs_on }}",
+              "test_scope": "${{ fromJSON(needs.setup-linux.outputs.linux_build_config).generic_test_label_overrides != null && 'family' || 'all' }}",
               "test_type": "${{ inputs.test_type || 'standard' }}",
               "release_type": "dev",
               "repository": "${{ github.repository }}",
-              "ref": "${{ needs.create-branch.outputs.branch_name }}",
+              "ref": "${{ needs.setup-linux.outputs.ref }}",
               "build_variant": "release"
             }
 
@@ -856,6 +894,7 @@ jobs:
       - dispatch-asan-build
       - trigger-linux-tests
       - trigger-linux-tests-extra
+      - trigger-linux-generic-tests
       - trigger-windows-tests
       - rccl-coco
     if: always()
@@ -905,6 +944,8 @@ jobs:
         env:
           ASAN_URL: ${{ needs.dispatch-asan-build.outputs.run_url }}
           BRANCH_NAME: ${{ needs.create-branch.outputs.branch_name }}
+          GENERIC_TEST_RUN_URL: ${{ needs.trigger-linux-generic-tests.outputs.test_run_url }}
+          GENERIC_TEST_DISPATCH_RESULT: ${{ needs.trigger-linux-generic-tests.result }}
           LINUX_TEST_RUN_URL: ${{ needs.trigger-linux-tests.outputs.test_run_url }}
           WINDOWS_TEST_RUN_URL: ${{ needs.trigger-windows-tests.outputs.test_run_url }}
           LINUX_ARTIFACT_URL: ${{ steps.artifact-urls.outputs.linux_artifact_url }}
@@ -961,6 +1002,12 @@ jobs:
             echo "- :x: Publishing failed" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ needs.publish-linux-artifacts.result }}" == "skipped" ]; then
             echo "- :fast_forward: Publishing skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -n "$GENERIC_TEST_RUN_URL" ]; then
+            echo "- Generic Linux test dispatch ($GENERIC_TEST_DISPATCH_RESULT): [View Run]($GENERIC_TEST_RUN_URL)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Generic Linux test dispatch: $GENERIC_TEST_DISPATCH_RESULT" >> "$GITHUB_STEP_SUMMARY"
           fi
 
           # Linux tests (gfx94X-dcgpu)
