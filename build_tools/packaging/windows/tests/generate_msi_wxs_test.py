@@ -37,6 +37,7 @@ from generate_msi_wxs import (
     upgrade_code_for,
     expected_msi_filename,
     install_subdir_for,
+    msi_file_version,
     _stable_guid,
     _read_rocm_version,
 )
@@ -1045,12 +1046,28 @@ class TestBuildWxsHelpers(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_major_minor("")
 
+    def test_msi_file_version_release(self):
+        self.assertEqual(msi_file_version("10.2.0"), "10.2.0")
+        self.assertEqual(msi_file_version("10.3.0a20261123"), "10.3.0a20261123")
+
+    def test_msi_file_version_dev(self):
+        self.assertEqual(
+            msi_file_version("10.3.0.dev0+57fb8b55d6ed167d3241a3d5c9290d59dfd14001"),
+            "10.3.0.dev-57fb8b55",
+        )
+
     def test_expected_msi_filename(self):
         self.assertEqual(
             expected_msi_filename("runtime", "10.2.0"), "amdrocm-runtime-10.2.0.msi"
         )
         self.assertEqual(
             expected_msi_filename("core", "7.0.1"), "amdrocm-core-7.0.1.msi"
+        )
+        self.assertEqual(
+            expected_msi_filename(
+                "runtime", "10.3.0.dev0+57fb8b55d6ed167d3241a3d5c9290d59dfd14001"
+            ),
+            "amdrocm-runtime-10.3.0.dev-57fb8b55.msi",
         )
         with self.assertRaises(ValueError):
             expected_msi_filename("bogus", "10.2.0")

@@ -36,6 +36,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -674,6 +675,22 @@ def upgrade_code_for(package: PackageDef, version: str) -> str:
     return "{" + str(derived).upper() + "}"
 
 
+def msi_file_version(display_version: str) -> str:
+    """Return a filename-safe version string from a display version.
+
+    PEP 440 local identifiers (the ``+<sha>`` suffix) contain characters that
+    can confuse msiexec path parsing. For dev builds this converts
+    ``10.3.0.dev0+57fb8b55d6ed...`` to ``10.3.0.dev-57fb8b55`` (short SHA,
+    dash-separated). Release and nightly versions are returned unchanged.
+    """
+    if "+" not in display_version:
+        return display_version
+    base, local = display_version.split("+", 1)
+    # Strip trailing numeric suffix from the pre-release tag (e.g. .dev0 -> .dev)
+    base = re.sub(r"\.dev\d+$", ".dev", base)
+    return f"{base}-{local[:8]}"
+
+
 def expected_msi_filename(package: str, version: str) -> str:
     """Return the MSI filename the generator writes for ``package``.
 
@@ -682,7 +699,7 @@ def expected_msi_filename(package: str, version: str) -> str:
     filename the build produced, without duplicating the stem-to-filename rule.
     """
     try:
-        return f"{PACKAGES[package].output_stem}-{version}.msi"
+        return f"{PACKAGES[package].output_stem}-{msi_file_version(version)}.msi"
     except KeyError as e:
         raise ValueError(
             f"unknown package {package!r}; choose from {', '.join(PACKAGES)}"
@@ -1376,7 +1393,7 @@ def build_all(args: argparse.Namespace) -> None:
                 if args.output_dir is not None
                 else args.default_output_dir
             )
-            stem = f"{PACKAGES[pkg_name].output_stem}-{args.display_version}"
+            stem = f"{PACKAGES[pkg_name].output_stem}-{msi_file_version(args.display_version)}"
             args.output = out_dir / f"{stem}.wxs"
         build_wxs(args, artifact_dir)
 
