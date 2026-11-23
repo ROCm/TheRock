@@ -427,7 +427,7 @@ class TestEnvironmentTest(unittest.TestCase):
             {"PYTEST_ADDOPTS": "--from-the-caller"}, "", "", 0
         )
 
-        self.assertEqual(env["PYTEST_ADDOPTS"], "--from-the-caller")
+        self.assertEqual(env["PYTEST_ADDOPTS"], "--capture=sys --from-the-caller")
 
 
 class RetryCommandTest(unittest.TestCase):
@@ -1010,6 +1010,15 @@ class UnsetVarsTest(unittest.TestCase):
             "JAX_ROCM_PLUGIN_INTERNAL_LLD_PATH",
         ]:
             self.assertIn(name, runner.UNSET_VARS)
+
+
+class DiagnosticsTest(unittest.TestCase):
+    def test_runtime_errors_are_not_captured(self):
+        env = runner.test_environment({}, "0.11.0", GFX94_FAMILY, 2)
+        self.assertEqual(env["AMD_LOG_LEVEL"], "1")
+        opts = shlex.split(env["PYTEST_ADDOPTS"])
+        self.assertEqual(opts[0], "--capture=sys")
+        self.assertIn("--reruns", opts)
 
 
 if __name__ == "__main__":

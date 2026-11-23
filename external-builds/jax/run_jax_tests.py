@@ -172,6 +172,12 @@ THEROCK_ENV = {
     "HSA_NO_SCRATCH_RECLAIM": "1",
 }
 
+# Pytest workers on ROCm 10.3 builds intermittently die with "Fatal Python error:
+# Aborted" and no reason. The runtime prints one to fd 2, which pytest's default
+# fd capture swallows with the dying worker; --capture=sys leaves fd 2 alone.
+DIAGNOSTIC_ENV = {"AMD_LOG_LEVEL": "1"}
+DIAGNOSTIC_PYTEST_ADDOPTS = "--capture=sys"
+
 # A test runner is often a single-device slice of a shared host, where these hide
 # the other devices but not other tenants. Logged next to the device serials from
 # print_driver_gpu_info.py, they tell a noisy neighbour apart from a fault.
@@ -521,16 +527,15 @@ def test_environment(
     ignore: list[str] | None = None,
 ) -> dict[str, str]:
     """The environment variables the suite and the retry pass need."""
-    env = {**suite_env, **THEROCK_ENV}
+    env = {**suite_env, **THEROCK_ENV, **DIAGNOSTIC_ENV}
     if cpus:
         env["OPENBLAS_NUM_THREADS"] = str(openblas_threads(cpus))
-    # Left alone when there is nothing to add, so that --no-retries does not wipe
-    # options the caller set.
+    # With nothing of ours to add, the caller's options are kept, so that
+    # --no-retries does not wipe them.
     addopts = pytest_addopts(
         jax_version, amdgpu_family, in_process_reruns, debug, ignore
-    )
-    if addopts:
-        env["PYTEST_ADDOPTS"] = addopts
+    ) or suite_env.get("PYTEST_ADDOPTS", "")
+    env["PYTEST_ADDOPTS"] = f"{DIAGNOSTIC_PYTEST_ADDOPTS} {addopts}".strip()
     return env
 
 
