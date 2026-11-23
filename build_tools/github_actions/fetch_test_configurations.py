@@ -448,6 +448,9 @@ test_matrix = {
         "total_shards_dict": {
             "linux": 1,
         },
+        # The HRR CPU tests use the same target-neutral artifact for every
+        # family, so run them once rather than once per family.
+        "include_family": {"linux": ["gfx94X-dcgpu"]},
     },
     # BLAS tests
     "rocblas": {
