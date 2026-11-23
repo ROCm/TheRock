@@ -250,6 +250,8 @@ jobs:
           AMD_LOG_LEVEL: '1'
           ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
           ROCDDI_HSA_MEMORY_DIAGNOSTICS: '1'
+          ROCDDI_HSA_QUEUE_DIAGNOSTICS: '1'
+          ROCDDI_CODE_CACHE_DIAGNOSTICS: '1'
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           export PATH="$PWD/candidate/bin:$PWD/candidate/lib/llvm/bin:$PATH"
@@ -269,6 +271,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
           ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
           ROCDDI_HSA_MEMORY_DIAGNOSTICS: '1'
+          ROCDDI_HSA_QUEUE_DIAGNOSTICS: '1'
+          ROCDDI_CODE_CACHE_DIAGNOSTICS: '1'
         run: >-
           python3 build_tools/github_actions/rocddi_hsa_diagnostics.py
           --candidate "$PWD/candidate" --output "$PWD/diagnostics/hsa"

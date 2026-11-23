@@ -38,6 +38,7 @@ HSA_DEVICE_TYPE_CPU = 0
 HSA_DEVICE_TYPE_GPU = 1
 HSA_AMD_VMEM_ADDRESS_NO_REGISTER = 1
 HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE = 0x200
+MODULE_IDENTITY_BYTE_LIMIT = 4096
 ENVIRONMENT_KEYS = (
     "ROCR_VISIBLE_DEVICES",
     "HIP_VISIBLE_DEVICES",
@@ -133,11 +134,39 @@ def selected_image(candidate: Path) -> Path:
     return image.resolve(strict=True)
 
 
-def read_record(path: Path) -> None:
+def read_record(
+    path: Path, *, byte_limit: int | None = None, binary: bool = False
+) -> None:
+    """Retain a file or its read error; data_hex stores raw bytes without parsing."""
     try:
-        emit("file", path=str(path), text=path.read_text())
+        with path.open("rb") as stream:
+            data = stream.read(-1 if byte_limit is None else byte_limit + 1)
+        details = {}
+        if byte_limit is not None:
+            details = {"byte_limit": byte_limit, "truncated": len(data) > byte_limit}
+            data = data[:byte_limit]
+        if binary:
+            emit("file", path=str(path), data_hex=data.hex(), **details)
+        else:
+            emit("file", path=str(path), text=data.decode(errors="replace"), **details)
     except OSError as error:
         emit("file", path=str(path), errno=error.errno, error=str(error))
+
+
+def capture_driver_identity(root: Path = Path("/sys/module")) -> None:
+    """Observe module metadata, which built-in drivers may not expose.
+
+    GNU build-id data_hex is the raw ELF note, including its header and padding,
+    rather than a parsed build ID. Missing metadata does not identify a source
+    revision or establish whether a driver is built in or not loaded.
+    """
+    for module in ("amdgpu", "amdkfd"):
+        for name in ("version", "srcversion", "notes/.note.gnu.build-id"):
+            read_record(
+                root / module / name,
+                byte_limit=MODULE_IDENTITY_BYTE_LIMIT,
+                binary=name == "notes/.note.gnu.build-id",
+            )
 
 
 def child_directories(path: Path) -> list[Path]:
@@ -149,6 +178,7 @@ def child_directories(path: Path) -> list[Path]:
 
 
 def capture_topology() -> None:
+    capture_driver_identity()
     emit("credentials", uid=os.getuid(), gid=os.getgid(), groups=os.getgroups())
     for device in [Path("/dev/kfd"), *child_directories(Path("/dev/dri"))]:
         try:

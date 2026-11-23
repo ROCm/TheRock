@@ -4,6 +4,7 @@
 """Host-only tests for diagnostic isolation, retention and reservation cleanup."""
 
 import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -40,6 +41,109 @@ def test_candidate_identity_uses_the_selected_manifest(tmp_path):
     (candidate / "lib/libhsa-runtime64.so.1").write_bytes(b"changed")
     with pytest.raises(ValueError, match="SHA-256"):
         diagnostics.selected_image(candidate)
+
+
+@pytest.fixture
+def module_metadata(tmp_path):
+    root = tmp_path / "module"
+    # Keep the ELF note header, GNU owner, non-UTF-8 descriptor and padding.
+    note = bytes.fromhex("040000000500000003000000474e5500007f80ff01000000")
+    contents = {
+        "version": b"1.0\n",
+        "srcversion": b"ABC0123456789\n",
+        "notes/.note.gnu.build-id": note,
+    }
+    for module in ("amdgpu", "amdkfd"):
+        for name, data in contents.items():
+            path = root / module / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+    return root, contents
+
+
+def test_driver_identity_retains_text_and_lossless_raw_elf_notes(
+    module_metadata, capsys
+):
+    root, contents = module_metadata
+    diagnostics.capture_driver_identity(root)
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(records) == 6
+    for record in records:
+        path = Path(record["path"]).relative_to(root)
+        assert path.parts[0] in ("amdgpu", "amdkfd")
+        data = contents[str(Path(*path.parts[1:]))]
+        assert record["kind"] == "file"
+        assert record["byte_limit"] == 4096
+        assert record["truncated"] is False
+        if path.name == ".note.gnu.build-id":
+            assert bytes.fromhex(record["data_hex"]) == data
+            assert "text" not in record
+        else:
+            assert record["text"] == data.decode()
+            assert "data_hex" not in record
+
+
+@pytest.mark.parametrize("module_directories", [False, True])
+def test_absent_driver_metadata_records_each_missing_attribute(
+    tmp_path, capsys, module_directories
+):
+    root = tmp_path / "module"
+    if module_directories:
+        # A built-in driver may expose a module directory without identity files.
+        for module in ("amdgpu", "amdkfd"):
+            (root / module).mkdir(parents=True)
+    diagnostics.capture_driver_identity(root)
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert {str(Path(record["path"]).relative_to(root)) for record in records} == {
+        f"{module}/{name}"
+        for module in ("amdgpu", "amdkfd")
+        for name in ("version", "srcversion", "notes/.note.gnu.build-id")
+    }
+    assert all(
+        record["errno"] == errno.ENOENT and record["error"] for record in records
+    )
+    assert all("text" not in record and "data_hex" not in record for record in records)
+
+
+def test_denied_driver_metadata_does_not_stop_remaining_reads(
+    module_metadata, monkeypatch, capsys
+):
+    root, contents = module_metadata
+    denied = root / "amdgpu/version"
+    original_open = Path.open
+
+    def open_file(path, *arguments, **keywords):
+        if path == denied:
+            raise PermissionError(errno.EACCES, "Permission denied", str(path))
+        return original_open(path, *arguments, **keywords)
+
+    monkeypatch.setattr(Path, "open", open_file)
+    diagnostics.capture_driver_identity(root)
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(records) == 6
+    assert records[0]["path"] == str(denied)
+    assert records[0]["errno"] == errno.EACCES
+    assert "Permission denied" in records[0]["error"]
+    assert records[1]["text"] == contents["srcversion"].decode()
+    assert (
+        bytes.fromhex(records[-1]["data_hex"]) == contents["notes/.note.gnu.build-id"]
+    )
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("extra_bytes", [0, 1])
+def test_driver_identity_read_limit_marks_only_truncated_content(
+    tmp_path, capsys, binary, extra_bytes
+):
+    path = tmp_path / "metadata"
+    path.write_bytes(b"A" * (4096 + extra_bytes))
+    diagnostics.read_record(path, byte_limit=4096, binary=binary)
+    record = json.loads(capsys.readouterr().out)
+    assert record["byte_limit"] == 4096
+    assert record["truncated"] is bool(extra_bytes)
+    assert (
+        bytes.fromhex(record["data_hex"]) if binary else record["text"].encode()
+    ) == b"A" * 4096
 
 
 def test_failed_shutdown_retains_runtime_and_callbacks():
