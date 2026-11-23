@@ -1,8 +1,13 @@
 # rocjpeg
 [components.lib."media-libs/rocjpeg/stage"]
 [components.dbg."media-libs/rocjpeg/stage"]
+# Sample sources ship in the dev package, alongside the headers.
 [components.dev."media-libs/rocjpeg/stage"]
+include = [
+  "share/rocjpeg/samples/**",
+]
 [components.doc."media-libs/rocjpeg/stage"]
+# Test package: test scripts and media.
 [components.test."media-libs/rocjpeg/stage"]
 include = [
   "share/rocjpeg/**",

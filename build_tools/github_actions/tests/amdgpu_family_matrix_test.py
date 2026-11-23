@@ -236,6 +236,48 @@ class TestTriggerFiltering(unittest.TestCase):
         self.assertIn("gfx900", all_families)  # nightly-only family
 
 
+class TestBuildVariantDataFlow(unittest.TestCase):
+    """Tests that build_variants flow through family parsing unchanged."""
+
+    VARIANTS = ["release", "asan-debug", "host-asan"]
+
+    def test_variants_survive_external_runner_overlay(self):
+        """An external runner overlay must not clobber build_variants."""
+        fake_families = {
+            "mock-family": {
+                "linux": {
+                    "test-runs-on": "local-runner",
+                    "family": "mock-family",
+                    "fetch-gfx-targets": ["gfx0000"],
+                    "build_variants": list(self.VARIANTS),
+                    "builds_on_trigger": ["presubmit"],
+                    "tests_on_trigger": ["presubmit"],
+                }
+            }
+        }
+        fake_external = {
+            "runner_labels": {
+                "mock-family": {"linux": {"test-runs-on": "external-runner"}}
+            }
+        }
+        with (
+            mock.patch.object(
+                amdgpu_family_matrix,
+                "_get_local_families_for_trigger_types",
+                return_value=fake_families,
+            ),
+            mock.patch.object(
+                amdgpu_family_matrix,
+                "load_external_runner_config",
+                return_value=fake_external,
+            ),
+        ):
+            result = get_all_families_for_trigger_types(["presubmit"])
+        self.assertEqual(
+            result["mock-family"]["linux"]["build_variants"], self.VARIANTS
+        )
+
+
 class TestExternalConfig(unittest.TestCase):
     """Tests for external config loading functionality."""
 
@@ -415,6 +457,80 @@ class TestExternalConfig(unittest.TestCase):
                 )
                 self.assertEqual(runners["family"], "gfx94X-dcgpu")
                 self.assertIn("release", runners["build_variants"])
+
+    def test_onboarding_runners_are_drawn_only_by_listed_repositories(self):
+        """Other callers read the same config, but no manager may watch their jobs."""
+        ossci = {"label": "ossci-1gpu", "count": 9}
+        crusoe = {"label": "crusoe-1gpu", "count": 3}
+        crusoe_8gpu = {"label": "crusoe-8gpu", "count": 4}
+        cases = [
+            (["ROCm/TheRock"], "ROCm/TheRock", True),
+            (["ROCm/TheRock"], "ROCm/rocm-libraries", False),
+            (["ROCm/TheRock"], "ROCm/rockrel", False),
+            (["ROCm/TheRock", "ROCm/rocm-libraries"], "ROCm/rocm-libraries", True),
+            (None, "ROCm/rockrel", True),
+        ]
+        for repositories, repository, drawn in cases:
+            linux = {
+                "test-runs-on": "ossci-1gpu",
+                # Docker CSPs join the shared pool, Apptainer ones their own.
+                "test-runs-on-labels": [ossci, crusoe],
+                "test-runs-on-multi-gpu-apptainer-labels": [crusoe_8gpu],
+            }
+            if repositories is not None:
+                linux["onboarding-runners"] = {
+                    "labels": ["crusoe-1gpu", "crusoe-8gpu"],
+                    "repositories": repositories,
+                }
+            fake_config = {"runner_labels": {"gfx950": {"linux": linux}}}
+            os.environ["GITHUB_REPOSITORY"] = repository
+            with self.subTest(
+                repositories=repositories, repository=repository
+            ), mock.patch.object(
+                amdgpu_family_matrix,
+                "load_external_runner_config",
+                return_value=fake_config,
+            ):
+                runners = get_all_families_for_trigger_types([])["gfx950"]["linux"]
+                if drawn:
+                    self.assertEqual(runners["test-runs-on-labels"], [ossci, crusoe])
+                    self.assertEqual(
+                        runners["test-runs-on-multi-gpu-apptainer-labels"],
+                        [crusoe_8gpu],
+                    )
+                else:
+                    self.assertEqual(runners["test-runs-on-labels"], [ossci])
+                    self.assertNotIn("test-runs-on-multi-gpu-apptainer-labels", runners)
+
+    def test_pool_with_apptainer(self):
+        ossci = [{"label": "ossci-1gpu", "count": 9}]
+        crusoe = [{"label": "crusoe-1gpu", "count": 3}]
+        cases = [
+            ({"test-runs-on-labels": ossci}, ossci),
+            (
+                {
+                    "test-runs-on-labels": ossci,
+                    "test-runs-on-apptainer-labels": crusoe,
+                },
+                ossci + crusoe,
+            ),
+            # Never a pool of Apptainer runners alone.
+            ({"test-runs-on-apptainer-labels": crusoe}, None),
+        ]
+        for runners, expected in cases:
+            with self.subTest(runners=runners):
+                self.assertEqual(
+                    amdgpu_family_matrix.pool_with_apptainer(
+                        runners, "test-runs-on-labels"
+                    ),
+                    expected,
+                )
+        self.assertEqual(
+            amdgpu_family_matrix.pool_with_apptainer(
+                {"test-runs-on-2gpu-labels": ossci}, "test-runs-on-2gpu-labels"
+            ),
+            ossci,
+        )
 
     def test_v1_external_config_extracts_runner_labels(self):
         """V1 config format (gpu_families) is handled for backward compatibility."""

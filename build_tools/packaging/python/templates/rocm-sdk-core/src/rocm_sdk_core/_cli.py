@@ -161,6 +161,10 @@ def amdlld():
     _exec("lib/llvm/bin/amdlld")
 
 
+def clang_offload_bundler():
+    _exec("lib/llvm/bin/clang-offload-bundler")
+
+
 def amd_smi():
     _exec("bin/amd-smi", init_devel=False)
 

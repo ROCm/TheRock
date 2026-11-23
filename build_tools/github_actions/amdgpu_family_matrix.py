@@ -35,6 +35,37 @@ from pathlib import Path
 # when manually triggered, so it's not included in the explicit trigger lists.
 VALID_TRIGGERS = frozenset(["presubmit", "postsubmit", "submodule_bump", "nightly"])
 
+# Pool names a component may request via "multi_gpu_pool" in
+# fetch_test_configurations.py. Omitting the field requests the default 8-GPU
+# pool, which has no name here because it is not opt-in.
+MULTI_GPU_POOL_NAMES = frozenset(["2gpu", "4gpu"])
+
+# Family keys holding a multi-GPU runner pool: the default pool
+# ("test-runs-on-multi-gpu") and each named pool above, each with an optional
+# "-labels" weighted list variant. When adding a pool, add it to both this list
+# and MULTI_GPU_POOL_NAMES or its key will not be forwarded to the test matrix.
+MULTI_GPU_RUNNER_KEYS = [
+    "test-runs-on-multi-gpu",
+    "test-runs-on-multi-gpu-labels",
+    "test-runs-on-2gpu",
+    "test-runs-on-2gpu-labels",
+    "test-runs-on-4gpu",
+    "test-runs-on-4gpu-labels",
+]
+
+# Apptainer runner pools (e.g. Crusoe), joined to the pool on the left only by
+# component tests (fetch_test_configurations.py), which set Apptainer container
+# options. Older TheRock checkouts read the same config file and do not read
+# these keys.
+APPTAINER_POOL_KEYS = {
+    "test-runs-on-labels": "test-runs-on-apptainer-labels",
+    "test-runs-on-multi-gpu-labels": "test-runs-on-multi-gpu-apptainer-labels",
+}
+# Optional {"labels": [...], "repositories": [...]}: runners still being
+# onboarded (e.g. a new CSP), drawn only by jobs of these repositories, where
+# their runner manager watches for jobs. Absent means no restriction.
+ONBOARDING_RUNNERS_KEY = "onboarding-runners"
+
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -238,9 +269,22 @@ amdgpu_family_info_matrix dictionary fields:
 - test-runs-on-labels: (optional) List of runner label configs for load balancing across pools.
     Each entry is a dict with "label" and "count" (number of available runners).
     When present, overrides test-runs-on for runner selection.
-- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
+- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture.
+    This is the default (8-GPU) multi-GPU pool.
 - test-runs-on-multi-gpu-labels: (optional) List of runner label configs for multi-GPU load balancing.
     Same format as test-runs-on-labels.
+- test-runs-on-<N>gpu / test-runs-on-<N>gpu-labels: (optional) pool for multi-GPU components that
+    only need N GPUs, e.g. "test-runs-on-2gpu" for rccl. A component opts in with
+    "multi_gpu_pool" in fetch_test_configurations.py. Pools never fall back to one another: a
+    family without the named pool skips those components, so 2-GPU-capable jobs stay off the
+    scarce 8-GPU nodes and jobs needing 8 GPUs never land on a 2-GPU node.
+- test-runs-on-apptainer-labels / test-runs-on-multi-gpu-apptainer-labels: (optional) Apptainer
+    runner pools (e.g. Crusoe), same format as test-runs-on-labels. Only component tests draw
+    them, joined to test-runs-on-labels / test-runs-on-multi-gpu-labels; they get Apptainer
+    container options. Python and package tests, and older TheRock, ignore them.
+- onboarding-runners: (optional) {"labels": [...], "repositories": [...]}: runners still being
+    onboarded. For jobs of other repositories, those labels are removed from every *-labels pool.
+    Delete it to open the runners to every repository.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
     ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
@@ -278,11 +322,21 @@ amdgpu_family_info_matrix = {
                     "count": 28,
                 },  # ccs-csp
             ],
-            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            # Sandbox runner for ASAN test jobs. Blank or absent falls back to
+            # the regular runner.
             "test-runs-on-sandbox": "linux-gfx942-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx942-8gpu-ossci-rocm",
             "test-runs-on-multi-gpu-labels": [
                 {"label": "linux-gfx942-8gpu-ossci-rocm", "count": 10},
+            ],
+            # 2-GPU and 4-GPU slices of the 8-GPU hosts (ROCm/TheRock#5623).
+            "test-runs-on-2gpu": "linux-gfx942-2gpu-ossci-rocm",
+            "test-runs-on-2gpu-labels": [
+                {"label": "linux-gfx942-2gpu-ossci-rocm", "count": 2},
+            ],
+            "test-runs-on-4gpu": "linux-gfx942-4gpu-ossci-rocm",
+            "test-runs-on-4gpu-labels": [
+                {"label": "linux-gfx942-4gpu-ossci-rocm", "count": 2},
             ],
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
@@ -449,7 +503,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx90a-1gpu-ossci-rocm",
             "family": "gfx90a",
             "fetch-gfx-targets": ["gfx90a"],
-            "build_variants": ["release", "asan-debug"],
+            "build_variants": ["release", "asan-debug", "host-asan"],
             "builds_on_trigger": [
                 "postsubmit",
                 "submodule_bump",
@@ -478,6 +532,8 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
             "test-runs-on-sandbox": "linux-gfx950-1gpu-asan-sandbox-rocm",
             "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+            # No 2-GPU pool yet, so components asking for one (rccl) are skipped
+            # on this family rather than taking an 8-GPU node.
             "family": "gfx950-dcgpu",
             "fetch-gfx-targets": ["gfx950"],
             "build_variants": [
@@ -688,7 +744,7 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
-            "disabled_framework_tests": ["pytorch", "jax"],
+            "disabled_framework_tests": ["jax"],
         },
         "windows": {
             "test-runs-on": "windows-gfx117x-gpu-rocm",
@@ -698,7 +754,7 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
-            "disabled_framework_tests": ["pytorch", "jax"],
+            "disabled_framework_tests": ["jax"],
         },
     },
 }
@@ -773,8 +829,7 @@ def _extract_runner_labels_from_v1(external_config: dict) -> dict:
         "test-runs-on",
         "test-runs-on-labels",
         "test-runs-on-sandbox",
-        "test-runs-on-multi-gpu",
-        "test-runs-on-multi-gpu-labels",
+        *MULTI_GPU_RUNNER_KEYS,
         "test-runs-on-kernel",
         "test-runs-on-wsl",
     }
@@ -873,7 +928,53 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
                 runners["test-runs-on-sandbox"] = ""
                 runners["test-runs-on-sandbox-labels"] = []
 
+    _withhold_onboarding_runners(result, os.environ.get("GITHUB_REPOSITORY"))
     return result
+
+
+def _withhold_onboarding_runners(families: dict, repository: str | None) -> None:
+    """Drop each platform's onboarding-runners labels from its pools, in place,
+    unless `repository` is one that may use them."""
+    for family_config in families.values():
+        for runners in family_config.values():
+            if not isinstance(runners, dict):
+                continue
+            onboarding = runners.get(ONBOARDING_RUNNERS_KEY)
+            if not onboarding or repository in onboarding.get("repositories", []):
+                continue
+            withheld = set(onboarding.get("labels", []))
+            for key, pool in list(runners.items()):
+                if key.endswith("-labels") and isinstance(pool, list):
+                    kept = [e for e in pool if e.get("label") not in withheld]
+                    if kept:
+                        runners[key] = kept
+                    else:
+                        del runners[key]
+
+
+def pool_with_apptainer(runners: dict, pool_key: str) -> list[dict] | None:
+    """The `pool_key` label pool, widened by its Apptainer pool when present.
+
+    Only an existing pool is widened: an Apptainer pool alone would replace the
+    family's default runner.
+
+    `pool` is the Docker list for `pool_key`, not yet joined with Apptainer.
+    For gfx950 Linux and pool_key "test-runs-on-labels" it is:
+
+        [{"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "weight": 1.0, "count": 9}]
+
+    `extra` is the matching Apptainer list (see APPTAINER_POOL_KEYS), e.g.:
+
+        [{"label": "linux-gfx950-1gpu-crusoe-rocm", "weight": 1.0, "count": 3}]
+
+    Both present returns pool + extra. "test-runs-on-multi-gpu-labels" is the
+    same shape: OSSCI count 2, then Crusoe count 4. A missing key is None.
+    """
+    pool = runners.get(pool_key)
+    extra = runners.get(APPTAINER_POOL_KEYS.get(pool_key, ""))
+    if pool and extra:
+        return [*pool, *extra]
+    return pool
 
 
 def get_build_runner_labels():
