@@ -535,6 +535,62 @@ test_matrix = {
             "linux": 3,
         },
     },
+    # EXPERIMENT (not for merge): hipBLASLt quick tier (the same gtest filter as its
+    # test_categories.yaml quick tier) under the rocjitsu emulator on a CPU runner,
+    # one process per shard with every core, gtest-sharded across the job's shards.
+    "hipblaslt-rocjitsu": {
+        "job_name": "hipblaslt-rocjitsu",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--blas --tests --rocjitsu",
+        "timeout_minutes": 100,
+        "test_script": (
+            "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
+            "ROCJITSU_REPORT_DIR=rocjitsu-report python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
+            "./hipblaslt-test --gtest_filter='*smoke*:*HostUnit*:*TuningStore.*-*known_bug*'"
+        ),
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "ignore_test_type_for_family": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx1250"],
+        },
+        "expect_failure": {
+            "linux": ["gfx1250"],
+        },
+        "total_shards_dict": {
+            "linux": 4,
+        },
+    },
+    # EXPERIMENT (not for merge): hipSPARSELt quick tier (the same gtest filter as its
+    # test_categories.yaml quick tier) under the rocjitsu emulator on a CPU runner,
+    # one process per shard with every core, gtest-sharded across the job's shards.
+    "hipsparselt-rocjitsu": {
+        "job_name": "hipsparselt-rocjitsu",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--sparse --blas --tests --rocjitsu",
+        "timeout_minutes": 100,
+        "test_script": (
+            "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
+            "ROCJITSU_REPORT_DIR=rocjitsu-report python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
+            "./hipsparselt-test --gtest_filter='*smoke*-*known_bug*'"
+        ),
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "ignore_test_type_for_family": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx1250"],
+        },
+        "expect_failure": {
+            "linux": ["gfx1250"],
+        },
+        "total_shards_dict": {
+            "linux": 2,
+        },
+    },
     "origami": {
         "job_name": "origami",
         "fetch_artifact_args": "--blas --tests",
