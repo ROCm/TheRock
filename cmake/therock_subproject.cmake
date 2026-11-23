@@ -1980,9 +1980,13 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
     file(READ "${_smrev_file}" fprint)
   endif()
 
-  # Determine if a git repo.
+  # Determine if Git tracks this source directory. Merely finding an enclosing
+  # repository with rev-parse also matches downloaded sources in an ignored
+  # build directory, incorrectly applying the parent repository's dirty state.
+  # Checking tracked files also supports subdirectories of monorepos, submodules,
+  # and worktrees, which need not have a .git directory of their own.
   execute_process(
-      COMMAND git rev-parse --git-dir
+      COMMAND git ls-files --error-unmatch -- .
       WORKING_DIRECTORY "${dir}"
       RESULT_VARIABLE GIT_CHECK_RESULT
       OUTPUT_QUIET
