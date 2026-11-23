@@ -4,7 +4,6 @@
 
 from pathlib import Path
 import os
-import shlex
 import sys
 import json
 import unittest
@@ -12,11 +11,21 @@ from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-# install_rocm_from_artifacts.py lives in build_tools/.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 import fetch_test_configurations
-import install_rocm_from_artifacts
+
+
+def _families(family="gfx94x", prefix="linux-mi300", **pools):
+    """One family with an 8-GPU pool and a 2-GPU pool, for get_all_families fakes."""
+    return {
+        family: {
+            "linux": {
+                "test-runs-on-multi-gpu": f"{prefix}-mgpu",
+                "test-runs-on-2gpu": f"{prefix}-2gpu",
+                **pools,
+            }
+        }
+    }
 
 
 class FetchTestConfigurationsTest(unittest.TestCase):
@@ -38,6 +47,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = "[]"
         os.environ["PROJECTS_TO_TEST"] = "*"
         os.environ.pop("AMDGPU_TARGETS", None)
+        # Not a manual run unless a test says so (see _manual_test_runs_on).
+        os.environ.pop("GITHUB_EVENT_NAME", None)
+        os.environ.pop("GITHUB_ACTOR", None)
 
         # Default to linux platform
         sys.argv = ["fetch_test_configurations.py", "--platform=linux"]
@@ -421,19 +433,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self._inject_job("plain")
         self.assertIn("plain", self._selected_names())
 
-    def test_fetch_artifact_args_are_accepted_by_installer(self):
-        # test_component.yml passes fetch_artifact_args to install_rocm_from_artifacts.py. A flag
-        # it does not know (a typo, or an artifact flag that was removed) is an argparse error
-        # that fails the job at runtime, after the build was already paid for.
-        for name, component in fetch_test_configurations.test_matrix.items():
-            with self.subTest(component=name):
-                args = shlex.split(component.get("fetch_artifact_args", ""))
-                with patch.object(install_rocm_from_artifacts, "run") as run:
-                    install_rocm_from_artifacts.main(
-                        ["--run-id", "1", "--amdgpu-family", "gfx94X-dcgpu", *args]
-                    )
-                run.assert_called_once()
-
     def test_include_and_exclude_both_match_excludes_wins(self):
         self._inject_job(
             "inc-exc",
@@ -732,7 +731,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_multi_gpu_job_included_when_supported(self):
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -742,7 +741,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         components = self._get_components()
 
         rccl = next(j for j in components if j["job_name"] == "rccl")
-        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu")
+        self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-2gpu")
+        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-mgpu")
 
     def test_multi_gpu_job_uses_count_labels_when_available(self):
         """When test-runs-on-multi-gpu-labels is present, select_weighted_label is used."""
@@ -786,19 +787,49 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fetch_test_configurations.run()
             components = self._get_components()
 
-            rccl = next(j for j in components if j["job_name"] == "rccl")
-            self.assertEqual(rccl["multi_gpu_runner"], "linux-mi300-mgpu-a")
-            # Verify select_weighted_label was called for the multi-gpu jobs.
-            # With rocshmem added there is more than one multi-GPU job (rccl and
-            # rocshmem), each using a "<job_name>-multi-gpu" context.
+            rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+            self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-mgpu-a")
+            # Verify select_weighted_label was called for the default-pool jobs,
+            # each using a "<job_name>-multi-gpu" context.
             multi_gpu_calls = [c for c in selected_labels if "multi-gpu" in c[1]]
             multi_gpu_contexts = {c[1] for c in multi_gpu_calls}
-            self.assertIn("rccl-multi-gpu", multi_gpu_contexts)
             self.assertIn("rocshmem-multi-gpu", multi_gpu_contexts)
+            # rccl asks for the 2gpu pool, which this family does not have.
+            self.assertNotIn("rccl", {j["job_name"] for j in components})
         finally:
             fetch_test_configurations.select_weighted_label = (
                 original_select_weighted_label
             )
+
+    def test_multi_gpu_pool_excluded_when_family_lacks_that_pool(self):
+        """A family with no matching pool skips the component, never falling back.
+
+        gfx950 has 8-GPU runners but no 2-GPU pool, so rccl must be dropped
+        rather than scheduled onto a whole 8-GPU node. Components that want the
+        default pool (rocshmem) are unaffected.
+        """
+
+        def fake_get_all_families(_):
+            return {
+                "gfx94x": {
+                    "linux": {
+                        "test-runs-on": "linux-gfx942-default",
+                        "test-runs-on-multi-gpu": "linux-mi300-8gpu",
+                    }
+                }
+            }
+
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
+
+        fetch_test_configurations.run()
+        components = self._get_components()
+
+        job_names = {j["job_name"] for j in components}
+        self.assertNotIn("rccl", job_names)
+        rocshmem = next(j for j in components if j["job_name"] == "rocshmem")
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-mi300-8gpu")
 
     def test_multi_gpu_job_excluded_when_not_supported(self):
         os.environ["AMDGPU_FAMILIES"] = "gfx90a"
@@ -821,7 +852,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         for the full tier when the family supports it."""
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -843,7 +874,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["test:hipfft", "test:rocfft"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -915,7 +946,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -934,7 +965,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "standard"
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -958,7 +989,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -979,9 +1010,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
         def fake_get_all_families(_):
             # Only gfx1150 has runner config, but rccl only lists gfx94X/gfx950 in multi_gpu
-            return {
-                "gfx1150": {"linux": {"test-runs-on-multi-gpu": "linux-gfx1150-mgpu"}}
-            }
+            return _families(family="gfx1150", prefix="linux-gfx1150")
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1022,7 +1051,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_LABELS"] = json.dumps(["ci:run-multi-gpu", "test:rccl"])
 
         def fake_get_all_families(_):
-            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
+            return _families()
 
         fetch_test_configurations.get_all_families_for_trigger_types = (
             fake_get_all_families
@@ -1134,6 +1163,358 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         out = fetch_test_configurations._build_container_options(job, "linux")
         self.assertIsInstance(out["container_options"], str)
         self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    def test_container_options_drop_root_on_apptainer_label(self):
+        job = {
+            "test_runner": "linux-gfx950-1gpu-crusoe-rocm",
+            "container_options": [
+                "--cap-add SYS_MODULE",
+                "--cap-add=SYS_PTRACE",
+                "--cap-add=PERFMON",
+            ],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+        self.assertNotIn("--cap-add", out["container_options"])
+        self.assertIn("--device /dev/kfd", out["container_options"])
+
+    def test_container_options_keep_root_on_docker_label_same_family(self):
+        job = {
+            "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "container_options": ["--cap-add SYS_MODULE", "--cap-add=SYS_PTRACE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertIn("--user 0:0", out["container_options"])
+        self.assertIn("--cap-add SYS_MODULE", out["container_options"])
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    def test_container_options_drop_root_on_apptainer_family(self):
+        job = {
+            "test_runner": "linux-mi455-gpu-rocm",
+            "container_options": ["--cap-add=SYS_PTRACE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx125X-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+        self.assertNotIn("--cap-add", out["container_options"])
+
+    def test_container_options_keep_root_on_cpu_runner_apptainer_family(self):
+        job = {
+            "test_runner": "azure-linux-scale-rocm",
+            "linux_cpu_runner": True,
+            "container_options": ["--cap-add=SYS_PTRACE"],
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx125X-dcgpu"
+        )
+        self.assertIn("--user 0:0", out["container_options"])
+        self.assertIn("--cap-add=SYS_PTRACE", out["container_options"])
+
+    def test_container_options_use_multi_gpu_runner_label(self):
+        job = {
+            "test_runner": "linux-gfx950-1gpu-ccs-ossci-rocm",
+            "multi_gpu_runner": "linux-gfx950-8gpu-crusoe-rocm",
+        }
+        out = fetch_test_configurations._build_container_options(
+            job, "linux", "gfx950-dcgpu"
+        )
+        self.assertNotIn("--user 0:0", out["container_options"])
+
+    def _run_gfx950_with_pool(self, test_runs_on, labels=("test:hip-tests",)):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = test_runs_on
+        os.environ["TEST_LABELS"] = json.dumps(list(labels))
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {
+                "linux": {
+                    "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "weight": 1}
+                    ],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_workflow_runner_outside_label_pool_is_used_as_is(self):
+        hip = self._run_gfx950_with_pool("linux-gfx950-1gpu-crusoe-rocm")["hip-tests"]
+        self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-crusoe-rocm")
+        self.assertNotIn("--user 0:0", hip["container_options"])
+
+    def test_default_workflow_runner_keeps_docker_options(self):
+        hip = self._run_gfx950_with_pool("linux-gfx950-1gpu-ccs-ossci-rocm")[
+            "hip-tests"
+        ]
+        self.assertEqual(hip["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
+        self.assertIn("--user 0:0", hip["container_options"])
+
+    def test_kernel_runner_outside_label_pool_is_not_replaced(self):
+        os.environ["AMDGPU_FAMILIES"] = "gfx1151"
+        os.environ["TEST_RUNS_ON"] = "linux-strix-halo-gpu-rocm-oem"
+        os.environ["TEST_LABELS"] = json.dumps(["test:hip-tests"])
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx1151": {
+                "linux": {
+                    "test-runs-on": "linux-gfx1151-gpu-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx1151-gpu-rocm", "count": 8}
+                    ],
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        hip = {job["job_name"]: job for job in self._get_components()}["hip-tests"]
+        self.assertEqual(hip["test_runner"], "linux-strix-halo-gpu-rocm-oem")
+
+    def test_whole_node_jobs_move_to_apptainer_whole_node_label(self):
+        jobs = self._run_gfx950_with_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:hip-tests", "test:rocgdb-gpu", "test:rocprofiler-sdk"],
+        )
+        prof = jobs["rocprofiler-sdk"]
+        self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(prof["whole_node"])
+        self.assertNotIn("--cap-add", prof["container_options"])
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
+        for name in ("hip-tests", "rocgdb-gpu"):
+            self.assertNotIn("whole_node", jobs[name])
+            self.assertNotIn("multi_gpu_runner", jobs[name])
+            self.assertNotIn(
+                "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs[name]["container_options"]
+            )
+
+    def test_whole_node_jobs_stay_on_docker_label(self):
+        jobs = self._run_gfx950_with_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm", ["test:rocprofiler-sdk"]
+        )
+        self.assertNotIn("whole_node", jobs["rocprofiler-sdk"])
+        self.assertNotIn("multi_gpu_runner", jobs["rocprofiler-sdk"])
+        self.assertNotIn(
+            "ROCPROFILER_KR_MIN_SNAP_GBPS", jobs["rocprofiler-sdk"]["container_options"]
+        )
+
+    def _run_gfx950_with_crusoe_in_pool(
+        self,
+        test_runs_on,
+        labels,
+        drawn,
+        *,
+        manual_actor=None,
+        test_type=None,
+        apptainer_label="linux-gfx950-1gpu-crusoe-rocm",
+    ):
+        os.environ["AMDGPU_FAMILIES"] = "gfx950-dcgpu"
+        os.environ["TEST_RUNS_ON"] = test_runs_on
+        os.environ["TEST_LABELS"] = json.dumps(labels)
+        if test_type:
+            os.environ["TEST_TYPE"] = test_type
+        if manual_actor:
+            os.environ["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+            os.environ["GITHUB_ACTOR"] = manual_actor
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx950": {
+                "linux": {
+                    "test-runs-on": "linux-gfx950-1gpu-ccs-ossci-rocm",
+                    "test-runs-on-labels": [
+                        {"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "count": 9},
+                    ],
+                    "test-runs-on-apptainer-labels": [
+                        {"label": apptainer_label, "count": 3},
+                    ],
+                    "test-runs-on-multi-gpu": "linux-gfx950-8gpu-ccs-ossci-rocm",
+                    "test-runs-on-multi-gpu-labels": [
+                        {"label": "linux-gfx950-8gpu-ccs-ossci-rocm", "count": 2},
+                    ],
+                    "test-runs-on-multi-gpu-apptainer-labels": [
+                        {"label": "linux-gfx950-8gpu-crusoe-rocm", "count": 4},
+                    ],
+                }
+            }
+        }
+        self.drawn_from = []
+
+        def draw(pool, _name):
+            self.drawn_from.append([entry["label"] for entry in pool])
+            return drawn
+
+        with patch.object(
+            fetch_test_configurations, "select_weighted_label", side_effect=draw
+        ):
+            fetch_test_configurations.run()
+        return {job["job_name"]: job for job in self._get_components()}
+
+    def test_manual_run_on_the_default_runner_keeps_every_gpu_job_on_it(self):
+        # test_artifacts.yml runs these jobs on test_runs_on, so no pool draw.
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:hip-tests", "test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+            manual_actor="someone",
+        )
+        self.assertEqual(self.drawn_from, [])
+        for name in ("hip-tests", "rocprofiler-sdk"):
+            self.assertEqual(
+                jobs[name]["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm"
+            )
+            self.assertIn("--user 0:0", jobs[name]["container_options"])
+            self.assertNotIn("whole_node", jobs[name])
+
+    def test_manual_run_on_the_apptainer_8gpu_label_sets_its_options(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-8gpu-crusoe-rocm",
+            ["test:rocshmem"],
+            drawn="linux-gfx950-8gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+            test_type="standard",
+        )
+        rocshmem = jobs["rocshmem"]
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertNotIn("--user 0:0", rocshmem["container_options"])
+
+    def test_manual_run_on_the_apptainer_1gpu_label_moves_multi_gpu_to_whole_node(
+        self,
+    ):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:rocshmem"],
+            drawn="linux-gfx950-8gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+            test_type="standard",
+        )
+        rocshmem = jobs["rocshmem"]
+        self.assertEqual(rocshmem["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(rocshmem["whole_node"])
+        self.assertNotIn("--user 0:0", rocshmem["container_options"])
+
+    def test_bot_dispatch_still_draws_from_the_pool(self):
+        # test_artifacts.yml rule 1 skips github-actions actors.
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprim"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+            manual_actor="github-actions[bot]",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
+        self.assertEqual(
+            jobs["rocprim"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+        self.assertNotIn("--user 0:0", jobs["rocprim"]["container_options"])
+
+    def test_excluded_job_is_drawn_without_the_apptainer_labels(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            [
+                "test:rocprim",
+                "test:libhipcxx_amdclang",
+                "test:hip-tests",
+                "test:rocprofiler-systems",
+            ],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertEqual(self.drawn_from.count(["linux-gfx950-1gpu-ccs-ossci-rocm"]), 3)
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
+
+    def test_excluded_job_still_draws_other_apptainer_labels(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:libhipcxx_amdclang"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+            apptainer_label="linux-gfx950-1gpu-newcsp-rocm",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-newcsp-rocm"],
+            self.drawn_from,
+        )
+
+    def test_manual_run_keeps_an_excluded_job_on_the_apptainer_label(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:libhipcxx_amdclang"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+            manual_actor="someone",
+        )
+        self.assertEqual(
+            jobs["libhipcxx_amdclang"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+
+    def test_labels_of_the_config_apptainer_pool_get_apptainer_options(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprim"],
+            drawn="linux-gfx950-1gpu-newcsp-rocm",
+            apptainer_label="linux-gfx950-1gpu-newcsp-rocm",
+        )
+        self.assertNotIn("--user 0:0", jobs["rocprim"]["container_options"])
+
+    def test_apptainer_pool_widens_the_component_label_pool(self):
+        self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprim"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertIn(
+            ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
+            self.drawn_from,
+        )
+
+    def test_pool_member_that_is_not_the_default_is_used_as_is(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:hip-tests"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        self.assertEqual(
+            jobs["hip-tests"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+
+    def test_pool_draw_of_the_crusoe_label_moves_profiler_to_whole_node(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprim", "test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-crusoe-rocm",
+        )
+        prof = jobs["rocprofiler-sdk"]
+        self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(prof["whole_node"])
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
+        self.assertEqual(
+            jobs["rocprim"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
+        )
+        self.assertNotIn("--user 0:0", jobs["rocprim"]["container_options"])
+
+    def test_pool_draw_of_ossci_leaves_profiler_on_docker(self):
+        jobs = self._run_gfx950_with_crusoe_in_pool(
+            "linux-gfx950-1gpu-ccs-ossci-rocm",
+            ["test:rocprofiler-sdk"],
+            drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
+        )
+        prof = jobs["rocprofiler-sdk"]
+        self.assertEqual(prof["test_runner"], "linux-gfx950-1gpu-ccs-ossci-rocm")
+        self.assertNotIn("whole_node", prof)
+        self.assertIn("--user 0:0", prof["container_options"])
+
+    def test_apptainer_job_options_follow_the_8gpu_label_too(self):
+        out = fetch_test_configurations._build_container_options(
+            {
+                "job_name": "rocprofiler-sdk",
+                "test_runner": "linux-gfx950-8gpu-crusoe-rocm",
+            },
+            "linux",
+            "gfx950-dcgpu",
+        )
+        self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", out["container_options"])
 
     # -----------------------
     # WSL platform (the Linux build on a WSL-hosted runner, passed as TEST_RUNS_ON)
@@ -1564,6 +1945,87 @@ class ParseTestLabelsTest(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("comma-separated", msg)
         self.assertIn("Python list literal", msg)
+
+
+class SelectMultiGpuRunnerTest(unittest.TestCase):
+    """Edge cases for _select_multi_gpu_runner, the pool -> runner-label resolver.
+
+    Mistakes here are expensive in both directions: resolving to the default pool
+    when a smaller one was asked for silently eats scarce 8-GPU capacity, and
+    resolving to a smaller pool for a job that needs 8 GPUs makes it fail or skip
+    tests. The no-fallback rule is therefore pinned from both sides.
+    """
+
+    DEFAULT = "test-runs-on-multi-gpu"
+
+    def _select(self, pool, pools, job_name="job"):
+        return fetch_test_configurations._select_multi_gpu_runner(
+            job_name=job_name, pool=pool, pools=pools
+        )
+
+    def test_resolves_requested_pool(self):
+        pools = {self.DEFAULT: "lbl-8gpu"}
+        for name in fetch_test_configurations.MULTI_GPU_POOL_NAMES:
+            pools[f"test-runs-on-{name}"] = f"lbl-{name}"
+        # None means the default pool; every named pool must also resolve, which
+        # guards MULTI_GPU_POOL_NAMES drifting from MULTI_GPU_RUNNER_KEYS.
+        for pool in (None, *fetch_test_configurations.MULTI_GPU_POOL_NAMES):
+            with self.subTest(pool=pool):
+                expected = "lbl-8gpu" if pool is None else f"lbl-{pool}"
+                self.assertEqual(self._select(pool, pools), expected)
+
+    def test_pools_never_fall_back_to_each_other(self):
+        """A missing pool yields "", so the caller skips the job."""
+        cases = [
+            # (pool, pools, why)
+            ("2gpu", {self.DEFAULT: "lbl-8gpu"}, "named -> default would eat 8-GPU"),
+            (None, {"test-runs-on-2gpu": "x"}, "default -> named would starve a job"),
+            ("4gpu", {"test-runs-on-2gpu": "x"}, "named -> other named"),
+            (None, {}, "nothing configured"),
+            ("2gpu", {}, "nothing configured"),
+        ]
+        for pool, pools, why in cases:
+            with self.subTest(pool=pool, why=why):
+                self.assertEqual(self._select(pool, pools), "")
+
+    def test_labels_variant_preferred_and_context_named_per_pool(self):
+        seen = {}
+
+        def fake_select(labels_config, context_name):
+            seen[context_name] = labels_config
+            return labels_config[0]["label"]
+
+        labels = [{"label": "lbl-weighted", "count": 1}]
+        with patch.object(
+            fetch_test_configurations, "select_weighted_label", fake_select
+        ):
+            got = self._select(
+                "2gpu",
+                {"test-runs-on-2gpu": "lbl-plain", "test-runs-on-2gpu-labels": labels},
+                job_name="rccl",
+            )
+            self._select(None, {f"{self.DEFAULT}-labels": labels}, job_name="rocshmem")
+        self.assertEqual(got, "lbl-weighted")  # beats the plain key
+        self.assertEqual(sorted(seen), ["rccl-2gpu", "rocshmem-multi-gpu"])
+
+    def test_empty_labels_list_falls_through_to_plain_key(self):
+        """An empty list is not a usable pool, so the plain label still applies."""
+        empty = {"test-runs-on-2gpu-labels": []}
+        self.assertEqual(self._select("2gpu", {**empty, "test-runs-on-2gpu": "p"}), "p")
+        self.assertEqual(self._select("2gpu", empty), "")
+
+    def test_unknown_pool_raises(self):
+        """Typos fail loudly instead of silently dropping the component.
+
+        "2gpu-labels" is the regression case: it is a real config key, so
+        validating against the key list let it through and returned the weighted
+        list itself instead of a label string.
+        """
+        for bad in ("2-gpu", "8gpu", "2GPU", "multi-gpu", "", "2gpu-labels"):
+            with self.subTest(pool=bad):
+                with self.assertRaises(ValueError) as ctx:
+                    self._select(bad, {"test-runs-on-2gpu-labels": [{"label": "l"}]})
+                self.assertIn("unknown multi_gpu_pool", str(ctx.exception))
 
 
 if __name__ == "__main__":

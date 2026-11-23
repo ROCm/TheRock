@@ -13,6 +13,7 @@ against typos and structural mistakes when a new version skip list (e.g.
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKIP_DIR = Path(__file__).resolve().parent.parent / "skip_tests"
 
@@ -68,12 +69,20 @@ class SkipTestsTest(unittest.TestCase):
 
     def test_platform_gpu_filters_require_both_matches(self):
         create_skip_tests = _load_module(SKIP_DIR / "create_skip_tests.py")
-        skips = _load_skip_tests(SKIP_DIR / "pytorch_2.15.py")
-        linux_only = skips["linux-gfx1201"]["transformers"][0]
-        windows_only = skips["windows-gfx1201"]["transformers"][0]
+        linux_only = "test_linux_gfx1201_only"
+        windows_only = "test_windows_gfx1201_only"
+        fixture = {
+            "fixture": {
+                "linux-gfx1201": {"transformers": [linux_only]},
+                "windows-gfx1201": {"transformers": [windows_only]},
+            }
+        }
 
-        linux = create_skip_tests.create_list(["gfx1201"], "2.15", "Linux")
-        windows = create_skip_tests.create_list(["gfx1201"], "2.15", "Windows")
+        with mock.patch.object(
+            create_skip_tests, "import_skip_tests", return_value=fixture
+        ):
+            linux = create_skip_tests.create_list(["gfx1201"], "2.15", "Linux")
+            windows = create_skip_tests.create_list(["gfx1201"], "2.15", "Windows")
 
         self.assertIn(linux_only, linux)
         self.assertNotIn(windows_only, linux)

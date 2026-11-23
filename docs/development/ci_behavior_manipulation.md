@@ -80,6 +80,41 @@ run.
 
 `push`, `schedule`, and `workflow_dispatch` runs are unaffected.
 
+#### Per-workflow label inputs
+
+Workflows that call
+[`setup_multi_arch.yml`](../../.github/workflows/setup_multi_arch.yml) can set
+these inputs. They apply only to `pull_request` events and are ignored on
+`push`, `schedule` and `workflow_dispatch`.
+
+| Input                        | Description                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `pull_request_opt_in_label`  | Skip the run unless the pull request has this label (case-sensitive). Empty by default, which disables the check. |
+| `pull_request_opt_out_label` | Skip the run if the pull request has this label (case-sensitive). Empty by default, which disables the check.     |
+
+CI is skipped by the first matching check:
+
+1. The `ci:skip` label is present.
+1. The pull request is a draft without the `ci:run-on-draft` label.
+1. `pull_request_opt_in_label` is set and the pull request lacks it.
+1. `pull_request_opt_out_label` is set and the pull request has it. The opt-out
+   label takes precedence over the opt-in label.
+1. Only skippable files changed (see [Pull request](#pull-request)).
+1. The `asan` variant is built without the `ci:asan` or `ci:host-asan` label.
+
+For example, with `pull_request_opt_in_label: "ci:asan"`, a pull request
+without the `ci:asan` label is skipped even if it has `ci:gfx...` or
+`ci:run-all-archs` labels.
+
+TheRock's own workflows set the inputs as follows:
+
+- [`multi_arch_ci.yml`](../../.github/workflows/multi_arch_ci.yml) passes empty
+  values for both, so only the common skip checks apply.
+- [`multi_arch_ci_asan.yml`](../../.github/workflows/multi_arch_ci_asan.yml)
+  passes `pull_request_opt_in_label: "ci:asan"` and an empty opt-out label.
+  Because the opt-in check runs before the `asan` variant check, a pull request
+  with only `ci:host-asan` is skipped by this workflow. Add `ci:asan` to run it.
+
 #### Build/Test-specific architecture labels
 
 For fine-grained control over which architectures build vs. test, you can use
@@ -133,6 +168,43 @@ Only the architecture selection is narrowed. Package builds, `test:...`,
 `test_filter:...`, and `ci:platform:...` keep their usual meaning. `ci:exactly`
 also works on `workflow_dispatch` through the `pr_labels` input, where it drops
 the caller-supplied `linux_amdgpu_families` / `windows_amdgpu_families`.
+
+#### Disabling ROCm tests (`run_rocm_tests`)
+
+Callers of `setup_multi_arch.yml` can set the boolean input `run_rocm_tests`
+(default `true`). Like `build_pytorch` and `build_jax`, it maps to a job group
+decided in the setup job (`test_rocm`). Setting it to `false` skips the ROCm
+tests for the whole workflow: no GPU or CPU test runners are configured for any
+family, and builds are unaffected.
+
+`multi_arch_ci.yml` exposes this as a `workflow_dispatch` input of the same name
+(default `true`); set it to `false` for a build-only run.
+
+With the default (`true`):
+
+- The sanitizer nightly-only test gates no longer exist. `asan`, `host-asan` and
+  their `-debug` variants run tests on pull request, push, schedule and
+  `workflow_dispatch` events wherever `tests_on_trigger` and runners allow.
+- `tests_on_trigger`, `ci:test:gfx...`, `ci:build:gfx...`, `ci:cpu-test-only`
+  and `run-full-tests-only` behave as described elsewhere in this document.
+
+Callers that want build-only runs on pull requests can pass an expression, as
+[`multi_arch_ci_asan.yml`](../../.github/workflows/multi_arch_ci_asan.yml) does:
+
+```yaml
+with:
+  build_variant: "asan"
+  run_rocm_tests: ${{ github.event_name != 'pull_request' }}
+```
+
+> [!IMPORTANT]
+> Behavior change: asan-family workflows previously had tests disabled whenever
+> the family's sandbox runner was blank, which is the case outside rocm-systems
+> pull requests, including nightly and `workflow_dispatch` runs. With
+> `run_rocm_tests` defaulting to `true`, they now run on the regular runner.
+> Callers that want the old behavior set `run_rocm_tests: false`; TheRock's
+> [`multi_arch_release_asan.yml`](../../.github/workflows/multi_arch_release_asan.yml)
+> does so.
 
 #### Building frameworks with published ROCm
 
