@@ -247,6 +247,7 @@ jobs:
               "amdgpu_families": "${{ matrix.family_info.amdgpu_family }}",
               "amdgpu_targets": "${{ matrix.family_info.amdgpu_targets }}",
               "test_runs_on": "${{ matrix.family_info.test-runs-on }}",
+              "test_scope": "${{ fromJSON(inputs.build_config).generic_test_label_overrides != null && 'family' || 'all' }}",
               "test_type": "${{ matrix.family_info.test_type || inputs.test_type }}",
               "release_type": "${{ inputs.release_type }}",
               "repository": "${{ inputs.repository }}",
@@ -254,6 +255,43 @@ jobs:
               "build_variant": "${{ inputs.build_variant }}",
               "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
             }
+
+  # Dispatch separately so CPU runner queues do not hold up the release (#5212).
+  trigger_test_artifacts_generic:
+    name: Trigger Generic Artifact Tests
+    needs: [build_artifacts]
+    if: ${{ fromJSON(inputs.build_config).generic_test_runner != '' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: write
+    outputs:
+      test_run_url: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+    steps:
+      - name: Trigger test_artifacts for generic artifacts
+        id: trigger-tests
+        uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
+        with:
+          workflow: test_artifacts.yml
+          wait-for-completion: false
+          inputs: |
+            { "artifact_group": "${{ fromJSON(inputs.build_config).artifact_group }}",
+              "artifact_run_id": "${{ github.run_id }}",
+              "test_runs_on_cpu": "${{ fromJSON(inputs.build_config).generic_test_runner }}",
+              "test_scope": "generic",
+              "test_type": "${{ inputs.test_type }}",
+              "skip_stages": "${{ fromJSON(inputs.build_config).skip_stages }}",
+              "release_type": "${{ inputs.release_type }}",
+              "repository": "${{ inputs.repository }}",
+              "ref": "${{ inputs.ref }}",
+              "build_variant": "${{ inputs.build_variant }}",
+              "quartz_tracking_id": "${{ inputs.quartz_tracking_id }}"
+            }
+
+      - name: Record generic test dispatch
+        if: ${{ steps.trigger-tests.outputs.runUrlHtml != '' }}
+        env:
+          TEST_RUN_URL: ${{ steps.trigger-tests.outputs.runUrlHtml }}
+        run: echo "Generic artifact tests dispatched at $TEST_RUN_URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Install tests are dispatched asynchronously (sanity) so publish
   # is not blocked on GPU runner queues. See https://github.com/ROCm/TheRock/issues/5212
@@ -346,7 +384,7 @@ jobs:
 
   notify_quartz_completed:
     if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
+    needs: [build_artifacts, build_tarballs, build_python_packages, build_native_deb_packages, build_native_rpm_packages, publish_to_release_buckets, trigger_test_artifacts_per_family, trigger_test_artifacts_generic, trigger_test_native_install, trigger_release_pytorch_wheels, trigger_release_jax_wheels]
     name: "Quartz - completed - release Linux"
     runs-on: ubuntu-26.04
     timeout-minutes: 10

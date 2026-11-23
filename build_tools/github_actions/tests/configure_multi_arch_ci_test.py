@@ -3318,6 +3318,25 @@ class TestExpandBuildConfigs(unittest.TestCase):
         self.assertEqual(entry["test-runs-on-cpu"], "")
         self.assertFalse(entry["tests_enabled"])
 
+    def test_generic_runner_follows_platform_test_policy(self) -> None:
+        for action, runner, expected in [
+            (cm.JobAction.RUN, "linux-cpu-runner", "linux-cpu-runner"),
+            (cm.JobAction.RUN, "", ""),
+            (cm.JobAction.SKIP, "linux-cpu-runner", ""),
+        ]:
+            with self.subTest(action=action, cpu_runner=runner):
+                with patch.object(cm, "get_cpu_test_runner", return_value=runner):
+                    builds = cm.expand_build_configs(
+                        ci_inputs=self._inputs(
+                            event_name="pull_request", pr_labels=["ci:cpu-test-only"]
+                        ),
+                        git_context=cm.GitContext(),
+                        targets=cm.TargetSelection(linux_families=["gfx94x"]),
+                        jobs=_jobs(build_pytorch=False, test_rocm_action=action),
+                    )
+                self.assertEqual(builds.linux.generic_test_runner, expected)
+                self.assertEqual(builds.linux.per_family_info[0]["test-runs-on"], "")
+
     def test_test_rocm_skip_is_not_overridden_by_test_label(self):
         entry = self._expand_mock_family(
             "release",
@@ -3831,13 +3850,15 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         # build_native_linux is Linux-only. JAX builds are release-only and
         # Linux-only for now, so Windows CI workflows do not consume them.
         # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
-        # Tarballs are release-only.
+        # The generic CPU test job is Linux-only. Tarballs are release-only.
         unused_fields = {
             "build_native_linux",
             "build_jax",
             "jax_build_matrix",
             "wsl_per_family_info",
             "build_runs_on_tarballs",
+            "generic_test_runner",
+            "generic_test_label_overrides",
         }
         self.assertEqual(
             yaml_fields,

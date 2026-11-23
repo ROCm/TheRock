@@ -10,7 +10,8 @@ on:
         type: string
         description: >-
           JSON object with build configuration for this platform. Fields:
-          artifact_group, per_family_info, dist_amdgpu_families,
+          artifact_group, per_family_info, dist_amdgpu_families, generic_test_runner,
+          generic_test_label_overrides,
           build_variant_label, build_variant_cmake_preset,
           build_variant_suffix, build_pytorch, build_jax,
           build_native_linux, test_python_packages_matrix,
@@ -178,11 +179,44 @@ jobs:
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       test_runs_on_cpu: ${{ matrix.family_info.test-runs-on-cpu }}
       tests_enabled: ${{ matrix.family_info.tests_enabled }}
+      # Old source refs produce a build config without generic test policy.
+      test_scope: ${{ fromJSON(inputs.build_config).generic_test_label_overrides != null && 'family' || 'all' }}
       test_type: ${{ matrix.family_info.test_type || inputs.test_type }}
       # Per-family test_labels override global test_labels when specified
       # Convert array to JSON string for workflow input compatibility
       test_labels: ${{ matrix.family_info.test_labels_for_family && toJSON(matrix.family_info.test_labels_for_family) || inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+      skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
+      changed_projects: ${{ inputs.changed_projects }}
+      release_type: ${{ inputs.release_type }}
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
+
+  test_artifacts_generic:
+    name: Test Generic Artifacts
+    needs: [copy_prebuilt_stages, build_multi_arch_stages]
+    # A fully reused build gets its artifacts from the copy job alone.
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        !contains(needs.*.result, 'cancelled') &&
+        (
+          needs.build_multi_arch_stages.result == 'success' ||
+          (needs.build_multi_arch_stages.result == 'skipped' &&
+            needs.copy_prebuilt_stages.result == 'success')
+        ) &&
+        fromJSON(inputs.build_config).generic_test_runner != ''
+      }}
+    uses: ./.github/workflows/test_artifacts.yml
+    with:
+      artifact_group: ${{ fromJSON(inputs.build_config).artifact_group }}
+      test_runs_on_cpu: ${{ fromJSON(inputs.build_config).generic_test_runner }}
+      test_scope: generic
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      generic_test_label_overrides: ${{ toJSON(fromJSON(inputs.build_config).generic_test_label_overrides) }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       changed_projects: ${{ inputs.changed_projects }}
       release_type: ${{ inputs.release_type }}

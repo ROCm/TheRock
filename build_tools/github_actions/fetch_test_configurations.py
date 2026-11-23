@@ -329,9 +329,16 @@ _rocgdb_common = {
 # GPU core-dump support enabled, identified by the label
 # "linux-gfx942-gpu-rocm-mathlib", which is registered separately in the runner pool.
 #
-# Similarly, "linux_cpu_runner: True" routes a component to a CPU-only machine
-# (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
-# expression. "multi_gpu_runner" routes to multi-GPU machines.
+# "linux_cpu_runner: True" routes a component to the configured CPU test pool.
+# CPU tests run per family by default, as miopen-dbsync needs each family's
+# artifacts. Set "run_per_family: False" for a CPU test of generic artifacts,
+# such as rocgdb-cpu and hipfile. Multi-arch callers run these tests once per
+# build in a separate generic invocation using the global tier. Linux CI
+# selects a generic component if any test-eligible family's effective labels
+# select it. Standalone callers can use the default "all" scope to retain
+# single-call selection.
+# Generic tests require CPU routing and cannot set family-specific filters
+# or failure expectations. "multi_gpu_runner" routes to multi-GPU machines.
 #
 # "whole_node" is set by the loop below, not in test_matrix: on a 1-GPU
 # Apptainer label (see _APPTAINER_WHOLE_NODE_LABELS), multi-GPU components and
@@ -433,6 +440,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipfile.py')}",
         "platform": ["linux"],
         "linux_cpu_runner": True,
+        "run_per_family": False,
+        "skip_stages": ["compiler-runtime", "storage-libs"],
         "total_shards_dict": {
             "linux": 1,
         },
@@ -674,6 +683,8 @@ test_matrix = {
         "job_name": "rocgdb-cpu",
         "test_script": "python ./build/tests/rocgdb/test_rocgdb.py --parallel -f 0.25 --tests gdb.dwarf2",
         "linux_cpu_runner": True,
+        "run_per_family": False,
+        "skip_stages": ["compiler-runtime", "debug-tools"],
     },
     "rocgdb-gpu": {
         **_rocgdb_common,
@@ -1488,7 +1499,31 @@ test_matrix = {
 }
 
 
-def run():
+def _expand_component_labels(labels: list[str]) -> set[str]:
+    """Resolve component selectors and group aliases from test labels."""
+    names = [
+        label.split("test:")[-1] for label in labels if not label.startswith("ci:")
+    ]
+    return {member for name in names for member in TEST_LABEL_GROUPS.get(name, [name])}
+
+
+def _select_component_labels(
+    test_labels: list[str], generic_overrides: list[list[str] | None]
+) -> set[str]:
+    """Combine effective family label filters for a single generic run."""
+    global_labels = _expand_component_labels(test_labels)
+    if not generic_overrides:
+        return global_labels
+
+    family_labels = [
+        global_labels if labels is None else _expand_component_labels(labels)
+        for labels in generic_overrides
+    ]
+    # An unfiltered family selects every component allowed by the other filters.
+    return set().union(*family_labels) if all(family_labels) else set()
+
+
+def run() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--platform",
@@ -1499,16 +1534,58 @@ def run():
             " build on a WSL-hosted runner, passed as TEST_RUNS_ON)"
         ),
     )
+    parser.add_argument(
+        "--test-scope",
+        choices=("all", "family", "generic"),
+        default="all",
+        help=(
+            "Select all tests (default), per-family tests, or CPU tests of "
+            "generic artifacts. Family scope requires a family. Generic scope "
+            "requires empty family and targets."
+        ),
+    )
     args, _ = parser.parse_known_args()
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES", "").strip()
     # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
     amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
+    test_scope = args.test_scope
+    if test_scope == "family" and not amdgpu_families:
+        parser.error("--test-scope=family requires a non-empty AMDGPU_FAMILIES")
+    if test_scope == "family" and amdgpu_families.lower() == "generic":
+        parser.error("--test-scope=family cannot use AMDGPU_FAMILIES=generic")
+    if test_scope == "generic" and (amdgpu_families or amdgpu_targets):
+        parser.error(
+            "--test-scope=generic requires empty AMDGPU_FAMILIES and AMDGPU_TARGETS"
+        )
+    if test_scope == "generic" and os.getenv("TEST_RUNS_ON", "").strip():
+        parser.error("--test-scope=generic requires empty TEST_RUNS_ON")
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
-    skip_stages = os.getenv("SKIP_STAGES", "").split(",")
+    skip_stages = [stage.strip() for stage in os.getenv("SKIP_STAGES", "").split(",")]
+
+    generic_overrides = []
+    if raw_overrides := os.getenv("GENERIC_TEST_LABEL_OVERRIDES"):
+        if test_scope != "generic":
+            parser.error("GENERIC_TEST_LABEL_OVERRIDES requires --test-scope=generic")
+        try:
+            generic_overrides = json.loads(raw_overrides)
+        except json.JSONDecodeError as exc:
+            parser.error(f"Invalid GENERIC_TEST_LABEL_OVERRIDES JSON: {exc}")
+        if not isinstance(generic_overrides, list) or any(
+            labels is not None
+            and (
+                not isinstance(labels, list)
+                or not all(isinstance(label, str) for label in labels)
+            )
+            for labels in generic_overrides
+        ):
+            parser.error(
+                "GENERIC_TEST_LABEL_OVERRIDES must be a list of label lists or nulls"
+            )
+    component_labels = _select_component_labels(test_labels, generic_overrides)
 
     # Check for ci:run-multi-gpu label to force multi-GPU tests
     enable_multi_gpu_by_label = "ci:run-multi-gpu" in test_labels
@@ -1619,8 +1696,27 @@ def run():
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
     all_components = []
-    for key in test_matrix:
-        job_name = test_matrix[key]["job_name"]
+    for key, definition in test_matrix.items():
+        job_name = definition["job_name"]
+        run_per_family = definition.get("run_per_family", True)
+        if not isinstance(run_per_family, bool):
+            raise ValueError(f"{job_name}: run_per_family must be a boolean")
+        if not run_per_family and (
+            not definition.get("linux_cpu_runner")
+            or {
+                "include_family",
+                "exclude_family",
+                "expect_failure",
+                "multi_gpu",
+            }.intersection(definition)
+        ):
+            raise ValueError(
+                f"{job_name}: run_per_family=False requires a CPU-only component "
+                "without family-specific settings"
+            )
+        component_scope = "family" if run_per_family else "generic"
+        if test_scope not in ("all", component_scope):
+            continue
 
         excluded_stages = set(skip_stages).intersection(
             test_matrix[key].get("skip_stages", [])
@@ -1684,20 +1780,10 @@ def run():
         # up the variant, which otherwise has no matching label of its own.
         selection_key = test_matrix[key].get("base_project", key)
 
-        # If test labels are populated, and the test job name is not in the test labels, skip the test
-        # Note: Benchmarks never use test_labels (always empty list)
-        # Filter out ci: control labels - they're not test component selectors
-        component_test_labels = [c for c in test_labels if not c.startswith("ci:")]
-        parsed_test_labels = [c.split("test:")[-1] for c in component_test_labels]
-        expanded_test_labels = [
-            member
-            for label in parsed_test_labels
-            for member in TEST_LABEL_GROUPS.get(label, [label])
-        ]
         if (
             key != "sanity"
-            and expanded_test_labels
-            and selection_key not in expanded_test_labels
+            and component_labels
+            and selection_key not in component_labels
         ):
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
@@ -1960,6 +2046,9 @@ def run():
             "sanity_component": json.dumps(sanity_component),
             "components": json.dumps(output_matrix),
             "platform": platform,
+            "artifact_family": (
+                "generic" if test_scope == "generic" else amdgpu_families
+            ),
         }
     )
 
