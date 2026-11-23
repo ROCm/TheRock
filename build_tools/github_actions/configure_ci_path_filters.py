@@ -752,6 +752,8 @@ def get_changed_files_for_external_repo(
 # confined to them covers every project.
 EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS = [
     ".github/workflows/therock*",
+    # Pins the TheRock ref, Docker image and runner labels.
+    ".github/actions/ci-env/*",
 ]
 
 # CI plumbing that decides *which* tests run: project discovery, the subtree

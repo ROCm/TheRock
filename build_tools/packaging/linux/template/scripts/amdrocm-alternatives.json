@@ -98,10 +98,12 @@
   "amdrocm-opencl": {
     "scripts": [
       "postinst",
-      "prerm"
+      "prerm",
+      "postrm"
     ],
     "binaries": [
       "clinfo"
-    ]
+    ],
+    "enable_ldconfig": "True"
   }
 }
