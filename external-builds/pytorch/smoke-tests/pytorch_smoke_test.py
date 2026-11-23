@@ -241,6 +241,62 @@ class TestSDPA:
         logging.info(f"max_abs_error={(actual_cpu - expected).abs().max().item()}")
         torch.testing.assert_close(actual_cpu, expected, atol=0.03, rtol=0.03)
 
+    @pytest.mark.parametrize(
+        "backend",
+        [None, SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION],
+        ids=["default", "flash", "efficient"],
+    )
+    @pytest.mark.parametrize(
+        "dtype", [torch.float16, torch.bfloat16], ids=["fp16", "bf16"]
+    )
+    @pytest.mark.parametrize("head_dim", [288, 320, 384, 512])
+    def test_large_head_dim(self, head_dim, dtype, backend):
+        """SDPA with head_dim > 256 must not return wrong values or raise.
+
+        AOTriton has no gfx11 kernels for head_dim > 256. Torch builds that
+        still sent these inputs to the fused backends returned uninitialized
+        output (e.g. 512.0 or NaN) or raised hipErrorProfilerNotInitialized
+        (issue #6561). PyTorch now caps the fused backends at head_dim 256 on
+        gfx11, so the default dispatch falls back to MATH. The default case checks
+        that whichever backend the dispatcher selects returns the right result.
+        The fused cases force a backend only where the dispatcher says it can
+        run these inputs, and then require it to be correct.
+        """
+        shape = (1, 1, 256, head_dim)
+        generator = torch.Generator(device="cpu").manual_seed(6561)
+        q, k, v = [torch.randn(shape, generator=generator).to(dtype) for _ in range(3)]
+        # Independent CPU reference: same quantized input values, FP32 arithmetic.
+        scores = (q.float() @ k.float().transpose(-2, -1)) / math.sqrt(head_dim)
+        expected = torch.softmax(scores, dim=-1) @ v.float()
+
+        q_gpu, k_gpu, v_gpu = (q.to("cuda"), k.to("cuda"), v.to("cuda"))
+        if backend is None:
+            actual = torch.nn.functional.scaled_dot_product_attention(
+                q_gpu, k_gpu, v_gpu
+            )
+        else:
+            params = SDPAParams(q_gpu, k_gpu, v_gpu, None, 0.0, False, False)
+            can_use = (
+                can_use_flash_attention
+                if backend == SDPBackend.FLASH_ATTENTION
+                else can_use_efficient_attention
+            )
+            if not can_use(params):
+                pytest.skip(f"{backend.name} cannot run head_dim {head_dim}")
+            with sdpa_kernel([backend]):
+                actual = torch.nn.functional.scaled_dot_product_attention(
+                    q_gpu, k_gpu, v_gpu
+                )
+        actual_cpu = actual.cpu().float()
+
+        assert actual.shape == shape
+        assert actual.dtype == dtype
+        assert torch.isfinite(actual_cpu).all()
+        logging.info(f"max_abs_error={(actual_cpu - expected).abs().max().item()}")
+        # Same tolerance as test_fused_sdpa: covers BF16 rounding, while the
+        # wrong outputs in #6561 are off by 0.5 to 512, or NaN.
+        torch.testing.assert_close(actual_cpu, expected, atol=0.03, rtol=0.03)
+
 
 class TestOpenBLASAvailability:
     def test_openblas_is_selected_blas(self):

@@ -22,12 +22,17 @@ import json
 import logging
 import os
 import platform as platform_module
+from collections.abc import Collection
 from pathlib import Path
 
 from github_actions_api import *
 from amdgpu_family_matrix import (
+    APPTAINER_POOL_KEYS,
+    MULTI_GPU_POOL_NAMES,
+    MULTI_GPU_RUNNER_KEYS,
     get_all_families_for_trigger_types,
     get_cpu_test_runner,
+    pool_with_apptainer,
     select_weighted_label,
 )
 
@@ -131,22 +136,66 @@ _GPU_CONTAINER_OPTIONS = {
     ],
 }
 
-# Options that Apptainer-backed runners cannot honor: they always run as the
+# Options that Apptainer-backed runners do not support: they always run as the
 # invoking user and cannot grant capabilities, so requesting them fails the job.
 _APPTAINER_FAMILIES = ["gfx125X-dcgpu"]
-_APPTAINER_UNSUPPORTED_OPTIONS = ["--user 0:0", "--cap-add SYS_MODULE"]
+# Only use: container options. A job whose runner is one of these labels drops
+# --user 0:0 and --cap-add. This list does not choose the runner; the draw pool
+# is read from the config file. gfx950 also has OSSCI Docker runners, so those
+# options stay for an OSSCI Docker runner.
+_APPTAINER_RUNNER_LABELS = [
+    "linux-gfx950-1gpu-crusoe-rocm",
+    "linux-gfx950-8gpu-crusoe-rocm",
+]
+_APPTAINER_UNSUPPORTED_OPTIONS = [
+    "--user 0:0",  # _BASE_CONTAINER_OPTIONS: root inside the container
+    "--cap-add SYS_MODULE",  # sanity: amd-smi reads kernel modules
+    "--cap-add=SYS_PTRACE",  # rocgdb, rocprofiler-sdk: ptrace other processes
+    "--cap-add=PERFMON",  # rocprofiler-systems: perf_event sampling
+]
+# A 1-GPU job on these labels cannot see the node's other GPUs, so components
+# that need them run on the same cluster's whole-node label instead.
+_APPTAINER_WHOLE_NODE_LABELS = {
+    "linux-gfx950-1gpu-crusoe-rocm": "linux-gfx950-8gpu-crusoe-rocm",
+}
+# The profiler tests read every GPU's KFD topology in /sys.
+_APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
+# Extra options per job on _APPTAINER_RUNNER_LABELS. Crusoe nodes are VMs: the
+# kernel-replay pageable copy runs ~3 GB/s there (hipMemcpy itself 42-57 GB/s).
+_APPTAINER_JOB_OPTIONS = {
+    "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
+}
+# Labels that pool draws skip for these jobs (single-GPU draws only; a manual run
+# can still pick them). Their managed-memory / KFD SVM tests fail only on Crusoe
+# (amdgpu 6.16.13; OSSCI 6.19.14 passes).
+# TODO(#10157): remove these entries once the tests pass on Crusoe.
+# Same strings as _APPTAINER_RUNNER_LABELS, but a separate list used only here.
+_CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
+_POOL_EXCLUDED_LABELS = {
+    "hip-tests": _CRUSOE_LABELS,
+    "libhipcxx_amdclang": _CRUSOE_LABELS,
+    "rocprofiler-systems": _CRUSOE_LABELS,
+}
 
 
 def _build_container_options(
-    job_config: dict, platform: str, amdgpu_families: str = ""
+    job_config: dict,
+    platform: str,
+    amdgpu_families: str = "",
+    apptainer_labels: Collection[str] = _APPTAINER_RUNNER_LABELS,
 ) -> dict:
     """
     Build the final container_options string by concatenating base, GPU, and job-specific options.
 
     Args:
-        job_config: The job configuration dictionary
+        job_config: The job configuration dictionary. Its multi_gpu_runner or
+            test_runner label also decides whether Apptainer options apply.
         platform: The platform (e.g., "linux", "windows", "wsl")
         amdgpu_families: The AMDGPU family string being tested
+            (e.g. "gfx950-dcgpu", "gfx125X-dcgpu")
+        apptainer_labels: Runner labels backed by Apptainer
+            (e.g. "linux-gfx950-1gpu-crusoe-rocm",
+            "linux-gfx950-8gpu-crusoe-rocm")
 
     Returns:
         The modified job_config with updated container_options
@@ -171,11 +220,20 @@ def _build_container_options(
     if "container_options" in job_config:
         options_parts.extend(job_config["container_options"])
 
-    # Drop options the Apptainer runners for this family cannot honor
-    if any(family in amdgpu_families for family in _APPTAINER_FAMILIES):
+    # Same runner choice as test_runs_on in test_artifacts.yml
+    runner = job_config.get("multi_gpu_runner") or job_config.get("test_runner")
+
+    # Drop options the Apptainer runners for this family or label do not support.
+    # CPU-only jobs run on docker runners whatever the family, so keep theirs.
+    if (
+        not job_config.get("linux_cpu_runner", False)
+        and any(family in amdgpu_families for family in _APPTAINER_FAMILIES)
+    ) or runner in apptainer_labels:
         options_parts = [
             opt for opt in options_parts if opt not in _APPTAINER_UNSUPPORTED_OPTIONS
         ]
+    if runner in apptainer_labels:
+        options_parts.extend(_APPTAINER_JOB_OPTIONS.get(job_config.get("job_name"), []))
 
     # Concatenate all parts with a space separator
     job_config["container_options"] = " ".join(options_parts)
@@ -195,6 +253,51 @@ def _family_matches(
     return amdgpu_families in family_list or any(
         t in family_list for t in family_gfx_targets
     )
+
+
+def _manual_test_runs_on(*, sanity: bool = False) -> str:
+    """The runner test_artifacts.yml forces on a GPU job of a manual run, or "".
+
+    Mirrors its test_runs_on rules: a user's workflow_dispatch with test_runs_on
+    set runs every GPU job there (the sanity job even for bot actors), whatever
+    this script picked. Container options and whole-node routing must follow it.
+    """
+    # pull_request, push, schedule, workflow_call: not a manual dispatch.
+    if os.getenv("GITHUB_EVENT_NAME") != "workflow_dispatch":
+        return ""
+    # Bot dispatch (actor contains "github-actions", e.g. rockrel). A bot's
+    # sanity job skips this and still returns TEST_RUNS_ON below.
+    if not sanity and "github-actions" in os.getenv("GITHUB_ACTOR", ""):
+        return ""
+    return os.getenv("TEST_RUNS_ON", "")
+
+
+def _select_multi_gpu_runner(*, job_name: str, pool: str | None, pools: dict) -> str:
+    """Pick the runner label for a multi-GPU component, or "" if none is configured.
+
+    `pools` holds the family's multi-GPU runner pools keyed by config key (see
+    MULTI_GPU_RUNNER_KEYS). `pool` is the component's "multi_gpu_pool" (e.g.
+    "2gpu"), or None for the default 8-GPU pool.
+    """
+    if pool is not None and pool not in MULTI_GPU_POOL_NAMES:
+        # Catch typos here: an unknown pool would otherwise match nothing and
+        # silently drop the component from every family.
+        raise ValueError(
+            f"{job_name}: unknown multi_gpu_pool {pool!r}. "
+            f"Known pools: {sorted(MULTI_GPU_POOL_NAMES)}"
+        )
+    key = f"test-runs-on-{pool}" if pool else "test-runs-on-multi-gpu"
+
+    # e.g. "rccl-2gpu", "rocshmem-multi-gpu"
+    context_name = f"{job_name}-{pool or 'multi-gpu'}"
+    labels = pools.get(f"{key}-labels")
+    if labels:
+        return select_weighted_label(labels, context_name)
+    default = pools.get(key)
+    if default:
+        print(f"  {context_name}: selected runner: {default}")
+        return default
+    return ""
 
 
 # Common settings applied to all jobs
@@ -230,6 +333,15 @@ _rocgdb_common = {
 # (currently aws-linux-scale-rocm-prod) via the test_artifacts.yml routing
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
 #
+# "whole_node" is set by the loop below, not in test_matrix: on a 1-GPU
+# Apptainer label (see _APPTAINER_WHOLE_NODE_LABELS), multi-GPU components and
+# _APPTAINER_WHOLE_NODE_JOBS move to the same cluster's whole-node label, and
+# test_artifacts.yml keeps them there even when a manual test_runs_on is set.
+#
+# A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
+# pool by default. Add "multi_gpu_pool": "2gpu" to use the family's 2-GPU pool
+# instead; families without that pool skip the component rather than falling back.
+#
 # A component may also restrict which GPU families it runs on via "include_family"
 # (opt-in) and "exclude_family" (opt-out). Each is a map keyed by platform
 # ("linux" and/or "windows") whose value is a list of family entries. A job runs
@@ -247,7 +359,8 @@ _rocgdb_common = {
 # (e.g. "gfx120X-all", "gfx950-dcgpu") or one of the individual gfx targets within
 # that family (e.g. "gfx1200", "gfx1201"). Some families expose no individual
 # targets, so those must be matched by the group string (e.g. "gfx1150",
-# "gfx125X-dcgpu"). Examples:
+# "gfx125X-dcgpu"). Targets = AMDGPU_TARGETS if set, else the static fetch-gfx-targets.
+# Examples:
 #   "exclude_family": {"linux": ["gfx1030"]}                # skip a single target
 #   "include_family": {"linux": ["gfx908", "gfx90a", "gfx942"]}  # opt in to a set
 #
@@ -403,7 +516,8 @@ test_matrix = {
             "linux": [
                 # CRITICAL FAILURE (hang): test causes hang during execution
                 # https://github.com/ROCm/TheRock/actions/runs/36185080189/job/108239321671
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -437,7 +551,13 @@ test_matrix = {
             "linux": 1,
         },
         "include_family": {
-            "linux": ["gfx90a", "gfx94X-dcgpu", "gfx950-dcgpu", "gfx120X-all"],
+            "linux": [
+                "gfx90a",
+                "gfx94X-dcgpu",
+                "gfx950-dcgpu",
+                "gfx120X-all",
+                "gfx1250-strict",
+            ],
         },
     },
     "origami": {
@@ -489,7 +609,8 @@ test_matrix = {
                 "gfx1030",
                 # FAILURE (3275+ gtest failures - too many to filter individually)
                 # https://github.com/ROCm/TheRock/actions/runs/35816223373/job/107038470972
-                "gfx125X-dcgpu",
+                # gfx1250 only; gfx1250-strict runs.
+                "gfx1250",
             ],
         },
     },
@@ -796,7 +917,7 @@ test_matrix = {
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
-        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --rand --tests",
         # GHA step timeout: sized to allow nightly comprehensive runs (~2 hr).
         # Per-test CTest TIMEOUT in rocm-libraries/projects/miopen/test/gtest/
         # test_categories.yaml bounds individual tests (quick: 10 min,
@@ -823,12 +944,16 @@ test_matrix = {
     # list from AMDGPU_FAMILIES, sparse-builds the pinned rocjitsu KMD, and runs StaticFDBSync once
     # per CU with a CU-corrected config. include_family restricts it to the arches rocjitsu has a
     # KMD config for: gfx942, whose FAMILY_MAP entry covers both CU variants -- MI300X (304 CU) and
-    # MI300A (228 CU) -- in a single job, and gfx950 (MI355X, 256 CU).
+    # MI300A (228 CU) -- in a single job, gfx950 (MI355X, 256 CU), and gfx90a (MI210, 104 CU, and
+    # MI250X GCD, 110 CU -- also in a single job; advisory, see expect_failure below).
     # linux_cpu_runner: no scarce GPU test runner needed; uses the default no_rocm Ubuntu container
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
         "job_name": "miopen-dbsync",
-        "fetch_artifact_args": "--blas --miopen --rand --tests",
+        # --rocjitsu/--mirage ship the emulator so the runner can use it from the dist instead
+        # of building rocjitsu itself. Until the runner script switches over it still builds its
+        # own copy and ignores these.
+        "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu --mirage",
         # Standard/comprehensive/full only: "test_types" makes the framework skip this
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on
@@ -843,7 +968,11 @@ test_matrix = {
         # StaticFDBSync skips itself at runtime under ASAN.
         "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
         "include_family": {
-            "linux": ["gfx942", "gfx950"],
+            "linux": ["gfx942", "gfx950", "gfx90a"],
+        },
+        # gfx90a is advisory while dbsync under rocjitsu's cdna2 emulation is qualified.
+        "expect_failure": {
+            "linux": ["gfx90a"],
         },
         "total_shards_dict": {
             "linux": 1,
@@ -862,6 +991,7 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu", "gfx950-dcgpu"]},
+        "multi_gpu_pool": "2gpu",
         # RCCL collective ops use cross-process shared memory via /dev/shm
         "container_options": ["--ipc host"],
     },
@@ -1288,15 +1418,8 @@ test_matrix = {
     "rpp": {
         "job_name": "rpp",
         "fetch_artifact_args": "--rpp --tests",
-        # Sized for comprehensive/full, which runs the perf suites serially and
-        # upstream allows 4000s each. quick and standard are far under this.
-        # TODO(ROCm/rocm-libraries#10187): lower once perf tests are split out
-        # of the correctness suite.
-        "timeout_minutes": 60,
-        "additional_requirements_files": [
-            _get_script_path("requirements-test-ninja.txt"),
-        ],
-        "test_script": f"python {_get_script_path('test_rpp.py')}",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux"],
         "total_shards_dict": {
             "linux": 1,
@@ -1383,6 +1506,8 @@ def run():
     platform = args.platform
     projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    # configure_multi_arch_ci.py passes ",".join(fetch-gfx-targets): no spaces to strip.
+    amdgpu_targets = [t for t in os.getenv("AMDGPU_TARGETS", "").split(",") if t]
     test_type = os.getenv("TEST_TYPE", "standard")
     test_labels = _parse_test_labels(os.getenv("TEST_LABELS") or "[]")
     build_variant = os.getenv("BUILD_VARIANT", "release")
@@ -1397,10 +1522,14 @@ def run():
     # This enables better load distribution across runner pools
     test_runs_on_labels = None
     test_runs_on_default = None
-    test_runs_on_multi_gpu_labels = None
-    test_runs_on_multi_gpu_default = None
+    # Multi-GPU runner pools for this family, keyed by their config key
+    # (e.g. "test-runs-on-multi-gpu-labels", "test-runs-on-2gpu").
+    multi_gpu_pools = {}
     # For ASAN builds, use the sandbox runner if available
     test_runs_on_sandbox = None
+    # Labels whose jobs get Apptainer container options: the known ones plus
+    # every label in the family's Apptainer pools.
+    apptainer_labels = set(_APPTAINER_RUNNER_LABELS)
 
     # Check if GPU runner was passed from configure_multi_arch_ci.py via workflow.
     # This carries the policy decision (e.g., trigger gating). When set to empty,
@@ -1428,28 +1557,50 @@ def run():
                 # This includes multi-GPU runners since they are also GPU tests
                 test_runs_on_labels = None
                 test_runs_on_default = ""
-                test_runs_on_multi_gpu_labels = None
-                test_runs_on_multi_gpu_default = ""
-            elif test_runs_on_from_workflow is not None:
-                # Workflow provided a non-empty runner - use it but allow label distribution
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = test_runs_on_from_workflow
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
             else:
-                # Fallback to static matrix (backward compatibility)
-                test_runs_on_labels = platform_info.get("test-runs-on-labels")
-                test_runs_on_default = platform_info.get("test-runs-on", "")
-                test_runs_on_multi_gpu_labels = platform_info.get(
-                    "test-runs-on-multi-gpu-labels"
-                )
-                test_runs_on_multi_gpu_default = platform_info.get(
-                    "test-runs-on-multi-gpu", ""
-                )
+                if test_runs_on_from_workflow is not None:
+                    # Open the weighted pool only when TEST_RUNS_ON is the family
+                    # default, and not a manual dispatch. PR/push/nightly spread
+                    # by count. A manual dispatch, kernel/test label, or one pool
+                    # entry was chosen on purpose; spreading would ignore it.
+                    if (
+                        test_runs_on_from_workflow == platform_info.get("test-runs-on")
+                        and not _manual_test_runs_on()
+                    ):
+                        test_runs_on_labels = pool_with_apptainer(
+                            platform_info, "test-runs-on-labels"
+                        )
+                    # Pool stays empty: every GPU job uses TEST_RUNS_ON.
+                    test_runs_on_default = test_runs_on_from_workflow
+                else:
+                    # Fallback to static matrix (backward compatibility)
+                    test_runs_on_labels = pool_with_apptainer(
+                        platform_info, "test-runs-on-labels"
+                    )
+                    test_runs_on_default = platform_info.get("test-runs-on", "")
+                multi_gpu_pools = {
+                    key: (
+                        pool_with_apptainer(platform_info, key)
+                        if key in APPTAINER_POOL_KEYS
+                        else platform_info[key]
+                    )
+                    for key in MULTI_GPU_RUNNER_KEYS
+                    if key in platform_info
+                }
+                # Union of the hardcoded set (linux-gfx950-{1,8}gpu-crusoe-rocm)
+                # and labels read from the config file
+                # (test-runs-on-apptainer-labels, test-runs-on-multi-gpu-apptainer-labels).
+                # A label in both stays one entry. Hardcoded labels still drop
+                # "--user 0:0" on a manual linux-gfx950-1gpu-crusoe-rocm pin when
+                # the config file has no Apptainer pools. A config-only label,
+                # e.g. linux-gfx950-1gpu-newcsp-rocm, must be added here, or its
+                # job keeps using the Docker options (--user 0:0, --cap-add)
+                # instead of the Apptainer ones and fails on that runner.
+                apptainer_labels |= {
+                    entry["label"]
+                    for key in APPTAINER_POOL_KEYS.values()
+                    for entry in platform_info.get(key, [])
+                }
             test_runs_on_sandbox = platform_info.get("test-runs-on-sandbox", "")
 
             # Enforce test_type_for_family if set in the family matrix.
@@ -1492,9 +1643,15 @@ def run():
         # Resolve the individual gfx targets for the current family once, so both
         # include_family and exclude_family can match either the family group
         # string (e.g. "gfx120X-all") passed via AMDGPU_FAMILIES or the individual
-        # gfx targets within that family (e.g. "gfx1200", "gfx1201").
-        _family_gfx_targets = []
-        if amdgpu_families and shortened_family and shortened_family in all_families:
+        # gfx targets within that family (e.g. "gfx1200", "gfx1201"). AMDGPU_TARGETS
+        # (fetch-gfx-targets after the caller's family overrides) wins over the matrix.
+        _family_gfx_targets = amdgpu_targets
+        if (
+            not _family_gfx_targets
+            and amdgpu_families
+            and shortened_family
+            and shortened_family in all_families
+        ):
             _family_gfx_targets = (
                 all_families[shortened_family]
                 .get(platform, {})
@@ -1703,19 +1860,23 @@ def run():
     for component in all_components:
         job_name = component.get("job_name", "unknown")
         if "multi_gpu_runner" in component:
-            # Multi-GPU components use multi-GPU runner labels
-            if test_runs_on_multi_gpu_labels:
-                component["multi_gpu_runner"] = select_weighted_label(
-                    test_runs_on_multi_gpu_labels, f"{job_name}-multi-gpu"
-                )
-            elif test_runs_on_multi_gpu_default:
-                component["multi_gpu_runner"] = test_runs_on_multi_gpu_default
-            else:
-                # No multi-GPU runner configured for this family; skip the component
+            # Multi-GPU components use multi-GPU runner labels, from the tier
+            # matching their "gpu_count" when the family configures one.
+            pool = component.get("multi_gpu_pool")
+            runner = _select_multi_gpu_runner(
+                job_name=job_name,
+                pool=pool,
+                pools=multi_gpu_pools,
+            )
+            if not runner:
+                # No matching runner for this family; skip the component rather
+                # than moving it onto a pool with a different GPU count.
                 logging.info(
-                    f"  Excluding {job_name}: multi-GPU required but no multi-GPU runner configured"
+                    f"  Excluding {job_name}: multi-GPU required but no "
+                    f"{pool or 'multi-gpu'} runner configured"
                 )
                 continue
+            component["multi_gpu_runner"] = runner
         elif "test_runner" not in component:
             # Regular components use standard runner labels.
             # Skip if test_runner is already pre-pinned (e.g. rocgdb-corefile).
@@ -1738,8 +1899,12 @@ def run():
                     f"  {job_name}: using ASAN sandbox runner: {test_runs_on_sandbox}"
                 )
             elif test_runs_on_labels:
-                component["test_runner"] = select_weighted_label(
-                    test_runs_on_labels, job_name
+                excluded = _POOL_EXCLUDED_LABELS.get(job_name, [])
+                pool = [e for e in test_runs_on_labels if e["label"] not in excluded]
+                component["test_runner"] = (
+                    select_weighted_label(pool, job_name)
+                    if pool
+                    else test_runs_on_default
                 )
             elif test_runs_on_default:
                 component["test_runner"] = test_runs_on_default
@@ -1749,11 +1914,41 @@ def run():
                     f"  Excluding {job_name}: GPU runner required but none configured"
                 )
                 continue
+
+        # Follow the runner the job really gets: a manual pin, then whole node.
+        manual_runner = (
+            ""
+            if component.get("linux_cpu_runner")
+            else _manual_test_runs_on(sanity=job_name == "sanity")
+        )
+        if manual_runner:
+            # test_artifacts.yml will run the job on the label typed in the
+            # dispatch form, so replace the machine picked above with that one.
+            runner_key = (
+                "multi_gpu_runner" if "multi_gpu_runner" in component else "test_runner"
+            )
+            component[runner_key] = manual_runner
+            logging.info(f"  {job_name}: manual run, using runner: {manual_runner}")
+        # 1-GPU Crusoe hides the other GPUs. Map
+        # linux-gfx950-1gpu-crusoe-rocm to linux-gfx950-8gpu-crusoe-rocm
+        # from the label this job got: manual pin, else drawn test_runner
+        # (a pool pick counts), else the family default. OSSCI is absent
+        # from the map, so those jobs stay put.
+        whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(
+            manual_runner or component.get("test_runner") or test_runs_on_default
+        )
+        if whole_node_runner and (
+            "multi_gpu_runner" in component or job_name in _APPTAINER_WHOLE_NODE_JOBS
+        ):
+            component["multi_gpu_runner"] = whole_node_runner
+            # Tells test_artifacts.yml not to replace it with the test_runs_on input.
+            component["whole_node"] = True
+            logging.info(f"  {job_name}: whole node, using runner: {whole_node_runner}")
         components_with_runners.append(component)
 
     # Build container options for all components (concatenates base, GPU, and job-specific options)
     all_components = [
-        _build_container_options(c, platform, amdgpu_families)
+        _build_container_options(c, platform, amdgpu_families, apptainer_labels)
         for c in components_with_runners
     ]
 
