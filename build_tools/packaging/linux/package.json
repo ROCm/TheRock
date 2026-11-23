@@ -2002,6 +2002,7 @@
       }
     ],
     "Postinstall": "True",
+    "Install_Etc": "True",
     "Gfxarch": "False"
   },
   {
