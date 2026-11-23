@@ -665,6 +665,7 @@ source_paths = ["rocfft", "hipfft"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+split_databases = ["libhipcxx"]
 
 [artifacts.prim]
 artifact_group = "math-libs"
