@@ -148,7 +148,7 @@ _CI_TEST_SELECTOR_ALIASES = {
     # test_include on [component.tensilelite], selects it wherever the
     # tensilelite key lands in the result, not only when tensilelite itself
     # is the changed project.
-    "tensilelite": ["tensilelite", "tensilelite-common"],
+    "tensilelite": ["tensilelite", "tensilelite-common", "tensilelite-rocjitsu"],
     # rocPRIM, hipCUB and rocThrust build as one subproject (hipccl) but still
     # run as three separate test jobs against the shared prim artifact.
     "hipccl": ["rocprim", "hipcub", "rocthrust"],
