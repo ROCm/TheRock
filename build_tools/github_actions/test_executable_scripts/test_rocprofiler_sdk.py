@@ -26,6 +26,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 from configure_asan_env import get_asan_runtime_path
+from libhipcxx_utils import get_gpu_architecture_portable
 
 # Base Paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -147,6 +148,11 @@ def get_cmake_config_cmd() -> list[str]:
         f"-DCMAKE_CXX_COMPILER={THEROCK_CLANG_PLUS_PATH}",
         f"-DPython3_EXECUTABLE={sys.executable}",
     ]
+    # Tests load <gfx>_copy.hsaco; HIP's own amdgpu-arch prints the full target ID
+    # (gfx950:sramecc+:xnack-) when the other GPUs are hidden, so pass the gfx name.
+    gpu_targets = get_gpu_architecture_portable(THEROCK_PATH)
+    if gpu_targets:
+        cmake_config_cmd.append(f"-DGPU_TARGETS={gpu_targets}")
     if is_asan():
         # Preload ASan for standalone tests loading instrumented ROCm libraries.
         asan_runtime_library = get_asan_runtime_library()
