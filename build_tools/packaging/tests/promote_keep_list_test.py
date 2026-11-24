@@ -18,6 +18,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from packaging.metadata import Metadata
@@ -580,6 +581,26 @@ class ComputeNewVersionStrTest(unittest.TestCase):
             "rocm7.13.0",
         )
 
+    def test_build_variant_and_git_sha_are_kept(self):
+        # Only the prerelease right after a release number is rewritten, so a
+        # build variant (`+asan`) or a git sha keeps its letters.
+        for version, src, dest, expected in (
+            ("10.3.0rc1+asan", "rc", "release", "10.3.0+asan"),
+            ("10.3.0a20261111+asan", "a", "rc1", "10.3.0rc1+asan"),
+            ("10.3.0a20261111+hostasan", "a", "rc1", "10.3.0rc1+hostasan"),
+            ("rocm10.3.0a20261111.asan", "a", "rc1", "rocm10.3.0rc1.asan"),
+            (
+                "git669b31ac.rocm10.3.0a20261111",
+                "a",
+                "rc1",
+                "git669b31ac.rocm10.3.0rc1",
+            ),
+        ):
+            with self.subTest(version=version, src=src, dest=dest):
+                self.assertEqual(
+                    ptf.compute_new_version_str(version, src, dest), expected
+                )
+
     def test_nothing_to_promote_returns_none(self):
         for version, src, dest in (
             ("7.13.0", "rc", "release"),
@@ -588,6 +609,76 @@ class ComputeNewVersionStrTest(unittest.TestCase):
         ):
             with self.subTest(version=version, src=src, dest=dest):
                 self.assertIsNone(ptf.compute_new_version_str(version, src, dest))
+
+
+class BuildVariantPromotionTest(unittest.TestCase):
+    """ASAN build variants: ROCm `10.3.0rc1+asan`, torch `2.10.0+rocm10.3.0rc1.asan`."""
+
+    def test_promote_wheel_version(self):
+        # (wheel name, version, src, dest, expected version)
+        cases = [
+            ("rocm", "10.3.0rc1+asan", "rc", "release", "10.3.0+asan"),
+            ("rocm", "10.3.0a20261111+hostasan", "a", "rc1", "10.3.0rc1+hostasan"),
+            ("rocm", "10.3.0rc1", "rc", "release", "10.3.0"),
+            (
+                "torch",
+                "2.10.0+rocm10.3.0rc1.asan",
+                "rc",
+                "release",
+                "2.10.0+rocm10.3.0.asan",
+            ),
+            ("torch", "2.10.0+rocm10.3.0rc1", "rc", "release", "2.10.0+rocm10.3.0"),
+            # Non-ASAN: the `a5` in triton's git sha must not be read as a prerelease.
+            (
+                "triton",
+                "3.9.0+gitfc8d31a5.rocm10.3.0a20261024",
+                "a",
+                "rc1",
+                "3.9.0+gitfc8d31a5.rocm10.3.0rc1",
+            ),
+        ]
+        for name, version, src, dest, expected in cases:
+            with (
+                self.subTest(name=name, version=version, src=src, dest=dest),
+                mock.patch.object(ptf, "Wheel") as wheel,
+                mock.patch.object(
+                    ptf.change_wheel_version, "change_wheel_version"
+                ) as change_version,
+                mock.patch("builtins.print"),
+            ):
+                wheel.return_value.name = name
+                wheel.return_value.version = version
+                self.assertTrue(ptf.promote_wheel(Path("in.whl"), src, dest))
+                base, local = change_version.call_args.args[1:3]
+                self.assertEqual(f"{base}+{local}" if local else str(base), expected)
+
+    def test_wheel_change_extra_files(self):
+        # The variant is spelled `-asan` in version.py and `+asan` in pins; both
+        # are promoted and stay exact (no floating for variant builds).
+        old, new = "2.10.0+rocm10.3.0rc1.asan", "2.10.0+rocm10.3.0.asan"
+        files = {
+            "torch/version.py": (
+                "__version__ = '2.10.0+rocm10.3.0rc1-asan'\n",
+                "__version__ = '2.10.0+rocm10.3.0-asan'\n",
+            ),
+            "torch/_rocm_init.py": (
+                "check_version='10.3.0rc1+asan')\n",
+                "check_version='10.3.0+asan')\n",
+            ),
+            f"torch-{old}.dist-info/METADATA": (
+                "Name: torch\nRequires-Dist: rocm[libraries]==10.3.0rc1+asan\n",
+                "Name: torch\nRequires-Dist: rocm[libraries]==10.3.0+asan\n",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            new_dir = Path(tmp) / f"torch-{new}"
+            for rel, (before, _) in files.items():
+                (new_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+                (new_dir / rel).write_text(before, encoding="utf-8")
+            ptf.wheel_change_extra_files(new_dir, Version(old), Version(new), "release")
+            for rel, (_, after) in files.items():
+                with self.subTest(file=rel):
+                    self.assertEqual((new_dir / rel).read_text(encoding="utf-8"), after)
 
 
 DEV_SHA = "2a7253fc74e48c0b30163e378833f082a32eb3c9"
@@ -627,6 +718,13 @@ class DevVersionTest(unittest.TestCase):
             ),
             ("2.10.0+rocm7.13.0a20260430", False, "2.10.0+rocm7.13.0"),
             (f"10.2.0.dev0+{DEV_SHA}", False, "10.2.0"),
+            # ASAN build variant after the sha keeps its `+` (ROCm) or `.` (torch).
+            (f"10.3.0.dev0+{DEV_SHA}.asandebug", False, "10.3.0+asandebug"),
+            (
+                f"2.13.0+git64d1fb86.devrocm10.3.0.dev0.{DEV_SHA}.asandebug",
+                False,
+                "2.13.0+rocm10.3.0.asandebug",
+            ),
             # Nothing to strip: skipped, not an error.
             ("1.12.0+rocm10.0.0", False, None),
             ("3.8.0+git669b31ac.rocm10.0.0", True, None),
@@ -658,6 +756,22 @@ class DevVersionTest(unittest.TestCase):
                 None,
             ),
             ("check_version='10.0.0rc4')", False, None),
+            # ASAN build variant: pins and check_version keep the `+`.
+            (
+                f"check_version='10.3.0.dev0+{DEV_SHA}.asandebug')",
+                False,
+                "check_version='10.3.0+asandebug')",
+            ),
+            (
+                f"Requires-Dist: rocm[libraries]==10.3.0.dev0+{DEV_SHA}.asandebug",
+                False,
+                "Requires-Dist: rocm[libraries]==10.3.0+asandebug",
+            ),
+            (
+                f"__version__ = '2.13.0+git64d1fb86.devrocm10.3.0.dev0-{DEV_SHA}.asandebug'",
+                False,
+                "__version__ = '2.13.0+rocm10.3.0.asandebug'",
+            ),
         ]
         for line, keep_git, expected in cases:
             with self.subTest(line=line):
