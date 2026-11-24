@@ -122,7 +122,7 @@ CI_JAX_REFS = {
 # as xla is a pythong agnostic cpp library we do not need to run it for each
 # python version.
 XLA_TEST_PYTHON_VERSION = "3.12"
-XLA_TEST_JAX_REF = "rocm-jaxlib-v0.12.0"
+XLA_TEST_JAX_REF = "rocm-jaxlib-v0.11.2"
 
 
 def _split_values(raw: str) -> list[str]:

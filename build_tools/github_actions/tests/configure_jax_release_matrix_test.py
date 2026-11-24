@@ -435,9 +435,12 @@ class ConfiguredJaxReleaseMatrixTest(unittest.TestCase):
     def test_trigger_xla_tests_false_when_representative_cell_is_excluded(self):
         # A caller that narrows the matrix away from the representative cell
         # gets no XLA signal at all, rather than a KeyError or a wrong row.
+        other_ref = next(
+            ref for ref in m.JAX_REF_CONFIGS if ref != m.XLA_TEST_JAX_REF
+        )
         matrix = m.generate_jax_matrix(
-            jax_refs=["rocm-jaxlib-v0.11.2"],
-            python_versions=["3.12"],
+            jax_refs=[other_ref],
+            python_versions=[m.XLA_TEST_PYTHON_VERSION],
         )
 
         self.assertGreater(len(matrix), 0)
