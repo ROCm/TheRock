@@ -701,10 +701,11 @@ generates on the device.
 ASan packages are currently available for **Linux only** (not Windows) and are
 published for the following GPU families:
 
-| GPU Family | Targets                |
-| ---------- | ---------------------- |
-| gfx94X     | gfx942 (MI300X/MI300A) |
-| gfx950     | gfx950 (MI350X/MI355X) |
+| GPU Family | Targets                     |
+| ---------- | --------------------------- |
+| gfx90a     | gfx90a (MI250X/MI250/MI210) |
+| gfx94X     | gfx942 (MI300X/MI300A)      |
+| gfx950     | gfx950 (MI350X/MI355X)      |
 
 > [!NOTE]
 > The ROCm compiler toolchain (`amdclang` / `amdclang++`) supports ASan
@@ -841,6 +842,65 @@ tar -xzf therock-dist-linux-gfx94X-dcgpu-${ROCM_VERSION}.tar.gz -C <EXTRACT_PATH
 >     ├── libhsa-runtime64.so*
 >     └── ...   # additional instrumented ROCm libraries
 > ```
+
+#### Installing ASan-instrumented ROCm Python wheels
+
+ASan-instrumented `rocm-sdk-*` wheels are published nightly under a separate
+index. As with the PyTorch wheels below, the ASan index is not an aggregate
+index — it only carries ASan-instrumented packages — so it relies on the
+regular ROCm index to supply any component not yet published with ASan
+instrumentation:
+
+```bash
+# Single device (replace device-gfx942 with your GPU, see table above):
+pip install \
+    --index-url https://nightly.repo.amd.com/rocm/core/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next/ \
+    "rocm[libraries,device-gfx942]"
+
+# All supported ASan GPU families:
+pip install \
+    --index-url https://nightly.repo.amd.com/rocm/core/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next/ \
+    "rocm[libraries,device-all]"
+```
+
+See [Using ASan-instrumented libraries](#using-asan-instrumented-libraries)
+below for how to configure your environment once installed via wheel.
+
+#### Installing ASan-instrumented PyTorch wheels
+
+ASan-instrumented PyTorch wheels are published nightly via `pip`. Only
+`torch` itself is currently built with ASan instrumentation — packages such
+as `torchvision` and `torchaudio`, along with some ROCm dependencies, are
+not. As above, the install command passes both the ASan ROCm index and the
+regular ROCm index as extra indexes alongside the ASan PyTorch index, so
+pip can resolve any dependency not yet published with ASan instrumentation.
+
+```bash
+# Single device (replace device-gfx942 with your GPU, see table above):
+pip install \
+    --index-url https://nightly.repo.amd.com/rocm/pytorch/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next/ \
+    "torch[device-gfx942]"
+
+# All supported ASan GPU families:
+pip install \
+    --index-url https://nightly.repo.amd.com/rocm/pytorch/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next-asan/ \
+    --extra-index-url https://nightly.repo.amd.com/rocm/core/whl-next/ \
+    "torch[device-all]"
+```
+
+> [!NOTE]
+> Only `torch` is ASan-instrumented today. `torchvision`, `torchaudio`, and
+> other PyTorch ecosystem packages are not yet published under the ASan
+> index, so installing them alongside `torch` here will pull their regular
+> (non-instrumented) builds.
+
+See [Using ASan-instrumented libraries](#using-asan-instrumented-libraries)
+below for how to configure your environment once installed via wheel.
 
 ### Using ASan-instrumented libraries
 
