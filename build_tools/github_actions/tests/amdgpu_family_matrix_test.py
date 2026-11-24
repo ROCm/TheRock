@@ -649,10 +649,6 @@ class TestBuildRunnerSelection(unittest.TestCase):
             ("linux", "release", "native_package", "aws-linux-scale-rocm-small"),
             ("linux", "asan", "native_package", "aws-linux-scale-rocm-medium"),
             ("linux", "tsan", "native_package", "aws-linux-scale-rocm-medium"),
-            # emulation: always medium regardless of variant
-            ("linux", "release", "emulation", "aws-linux-scale-rocm-medium"),
-            ("linux", "asan", "emulation", "aws-linux-scale-rocm-medium"),
-            ("linux", "tsan", "emulation", "aws-linux-scale-rocm-medium"),
         ]
         with patch("random.SystemRandom.random", return_value=0.5):
             for platform, variant, size, expected in cases:

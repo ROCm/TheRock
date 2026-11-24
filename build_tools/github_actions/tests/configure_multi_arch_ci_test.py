@@ -3839,7 +3839,6 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             "wsl_per_family_info",
             "build_runs_on_tarballs",
             "build_runs_on_native_package",
-            "build_runs_on_emulation",
         }
         self.assertEqual(
             yaml_fields,

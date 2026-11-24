@@ -183,7 +183,7 @@ def select_build_runner(
         platform: "linux" or "windows"
         build_variant: build variant string (e.g. "release", "asan", "tsan")
         size: job size key — "small", "medium", "large" (default),
-              "native_package", or "emulation".
+              or "native_package".
         triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
                   When "submodule_bump" is present, uses the "bump" runner pool if
                   configured, to isolate bump PRs from the weighted Azure/AWS split.
@@ -205,7 +205,7 @@ def select_build_runner(
             pool = "sanitizer" if is_sanitizer else "default"
         elif size == "native_package":
             pool = "medium" if is_sanitizer else "small"
-        elif size in ("emulation", "medium"):
+        elif size == "medium":
             pool = "medium"
         elif size == "small":
             pool = "small"
