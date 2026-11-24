@@ -253,6 +253,12 @@ EXACTLY_LABEL = "ci:exactly"
 # ready for review. This label opts a draft back in to the normal CI behavior.
 RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
 
+# Opt-in to fingerprint-based artifact reuse (experimental, RFC0017). When
+# present, the Linux build workflow runs an artifact-cache lookup before
+# building and reuses cached restore groups (artifacts) from a prior run.
+# Absent, CI behaves exactly as before. Release builds never consume the cache.
+REUSE_FPRINT_LABEL = "ci:reuse-fprint"
+
 
 def _apply_stage_test_labels(
     platform: str,
@@ -892,6 +898,11 @@ class BuildConfig:
     build_runs_on_tarballs: str = ""
     # Prebuilt stage configuration — set by configure() from JobDecisions.
     prebuilt_stages: list[str] = field(default_factory=list)
+    # Experimental (RFC0017): opt-in flag (ci:reuse-fprint) telling the build
+    # workflow to run a fingerprint cache lookup before building. Default False
+    # keeps the existing path untouched; it only gates the new fingerprint_reuse
+    # job, which drives the existing reusable_artifacts/rebuild_artifacts levers.
+    reuse_fprint: bool = False
     # Stages excluded from the build graph entirely (no build, no artifact copy).
     skip_stages: list[str] = field(default_factory=list)
     baseline_run_id: str = ""
@@ -2288,6 +2299,7 @@ def _expand_build_config_for_platform(
         baseline_repository=jobs.build_rocm.baseline_repository,
         rebuild_artifacts=jobs.build_rocm.rebuild_artifacts,
         reusable_artifacts=jobs.build_rocm.reusable_artifacts,
+        reuse_fprint=REUSE_FPRINT_LABEL in ci_inputs.pr_labels,
     )
 
 
