@@ -16,7 +16,7 @@ Until ROCm 7.14, part of hipfort was written by hand, so it drifted from the hea
 This RFC moves the bindings into the repositories of those headers: HIP and ROCTx to `rocm-systems`' `bindings/fortran/hip/` and `bindings/fortran/roctx/`, and each math library to `rocm-libraries`' `bindings/fortran/<lib>/`.
 A binding is a consumer of its library's public API, so it is a standalone project, built against the installed library and never wired into the library's build.
 
-A standalone tool, `rocm-fortran-generator`, generates the bindings from the C headers, and the generated files are committed.
+A standalone tool, `rocm-fortran-generator`, written in Julia, generates the bindings from the C headers, and the generated files are committed.
 Regeneration workflows regenerate them daily from the default branch, and a bot opens a pull request when a binding has changed (see [Keeping the bindings in sync](#keeping-the-bindings-in-sync)).
 Once a TheRock feature flag flips, targeted for 10.5, a pull request that changes a public header carries the regenerated bindings, its own and those that depend on its headers, applied from a patch that a required check attaches (one command, no Julia; D10).
 What a header cannot say, such as whether `double* alpha` is one scalar or an array, on the host or on the device, lives in a `metadata/` directory in each binding.
@@ -30,7 +30,8 @@ Each library ships:
 - a CMake package, `<lib>-fortran`, exporting `roc::rocblas_fortran`, `hip::hip_fortran`, and so on
 
 A `.mod` file can only be read by the compiler version that wrote it, so ROCm ships the bindings precompiled for its own compiler, `amdflang`, and users of other compilers compile the installed `.F90` source with their own compiler.
-That needs only the compiler, never Julia, which only the CI that regenerates the bindings uses.
+That needs only the compiler.
+Julia is only a dependency of the generator, which runs in the CI that regenerates the bindings.
 `amdflang` is the reference compiler: TheRock builds the bindings and their tests with it and runs the tests on GPUs.
 In CI, gfortran is used only where `amdflang` cannot be: the header check on library pull requests (see [Keeping the bindings in sync](#keeping-the-bindings-in-sync)), which runs on a CPU-only runner without a ROCm install, and a planned standard-conformance check, since `amdflang` accepts only `-std=f2018`.
 TheRock takes the bindings in stages: build support, off by default, then a CI stage that builds them after the libraries they wrap and runs their tests on a GPU, then release builds and packaging.
@@ -712,6 +713,7 @@ Within a major series, a binding only grows: new routines, new specifics in a ge
 An existing Fortran signature changes only when its C function does, or at a major release, even when the change would come from the generator or a metadata entry.
 The one exception is a fix.
 An interface that does not match its C function (a wrong type or kind, a scalar bound as an array) is corrected in the release that finds it, since code compiled against it was already calling the library incorrectly.
+Because the bindings are checked in, any change to a binding shows in a pull request's diff, and the check lists removed names and changed signatures (D8), so a change that would break the promise is visible and decided before it merges.
 
 The compatibility track covers only one of the four ways users get hipfort today, and the table lists all four.
 
@@ -882,17 +884,24 @@ These are the risks to watch:
   Once TheRock's CI builds the bindings, their test jobs are to be required, and they pass as long as the C API only grows (see [What this means for a library maintainer](#what-this-means-for-a-library-maintainer) and [Decisions requested](#decisions-requested)).
   A binding test fails only when a change breaks the C API or ABI.
   If a binding test fails for a reason the bindings team cannot fix quickly, TheRock can mark that job `expect_failure` until it is fixed, as for any component's test.
+  The C libraries' tests do not cover the Fortran interfaces (how arguments are passed, host or device pointers, symbol names), so the overlap is small.
+  Part of the coverage needs no GPU.
+  Compiling every binding and checking that each symbol it binds exists in the built libraries catches a missing or renamed function on a CPU runner, so the GPU jobs can be a smaller set.
   The regeneration workflow's header check on library pull requests is informative until the feature flag flips, targeted for 10.5, and then required (D10).
 - **CI cost.**
   TheRock's CI adds the `fortran-bindings` build stage and twelve GPU test jobs, one per binding subproject (hipFFT's job covers hipFFTW).
   Consumer-based test selection runs only the jobs of the bindings whose library a pull request changes, once TheRock's committed consumer graph includes the bindings, which needs the graph's drift check to configure with the bindings on.
   The jobs' wall time is measured during the CI step, before the releases step enables the bindings.
+  The bindings' jobs could also sit beside the packaging jobs rather than form a build stage.
+  Where they fit in TheRock's job split is settled together with the job selection and artifact caching work (TheRock#7782, TheRock#8651).
 - **Building the bindings in a generic stage.**
   TheRock builds the math libraries once per GPU architecture, but the bindings are host-only and are built once, in a generic stage.
   That stage builds against the generic part of the math libraries' artifacts, which their split into generic and architecture-specific components provides.
   It is the first generic stage to depend on artifacts built per architecture: their subprojects are declared there as pre-built, with no AMDGPU target selected.
   TheRock's CI change for the bindings allows that, and is not merged yet, so this precedent is for TheRock's maintainers to accept.
   If the split is ever turned off, the stage needs another source for the libraries' headers and host libraries.
+  The bindings keep artifacts of their own, because a `fortran` component type in each library's artifacts would mean building them with each library, once per GPU architecture, while they are host-only.
+  The generic stage and its interplay with job selection and caching are to be tried on a shared feature branch.
 - **`--gc-sections` and OpenMP offload.**
   The compatibility promise and the bindings' tests rely on `-Wl,--gc-sections`.
   With `amdflang` and `ld.lld`, that option removes the OpenMP offload entry table, so an OpenMP offload program aborts at its first target construct.
@@ -1313,6 +1322,7 @@ TheRock enables the bindings in steps, each a change of its own that starts once
 
 1. **CI.**
    Each monorepo declares its bindings in `.github/repos-config.json`, so its CI reports a change under `bindings/fortran/` as a changed project.
+   Once TheRock derives the changed subprojects from its build system (TheRock#7782), these entries are no longer needed.
    TheRock maps `bindings/<name>/` paths like `projects/` and `shared/` ones, and every binding artifact belongs to the `fortran-bindings` stage, so such a change rebuilds that stage.
    The stage is part of TheRock's Linux multi-arch CI.
    `rocm-libraries`' CI does not reuse the stage from a baseline, since it depends on the math libraries it rebuilds.
@@ -1351,4 +1361,4 @@ The 10.4 tech preview ships the bindings in neither the tarballs nor the OS pack
 - 2026-11-07: Alexis Montoison: hipFFT's binding split into `hipfft` and `hipfftxt`; each CMake package installs in `lib/cmake/<lib>-fortran`.
 - 2026-11-12: Alexis Montoison: Brought in line with the implementation: staged TheRock rollout (off by default, then CI, then releases, which skip the stage until then); required binding test jobs; the regeneration workflows as merged in both monorepos; merge order; hand-written modules deprecated at 10.3 and removed no earlier than 11.0; packaging, release gate, review target and compatibility promise written as proposals, collected in Decisions requested; the generic stage on per-architecture artifacts; the `-Wl,--gc-sections` and OpenMP offload risk, with `-Wl,-z,nostart-stop-gc`; a header workaround only for `hipfftXt.h`; HIP and ROCTx in separate projects, `bindings/fortran/hip/` and `bindings/fortran/roctx/`, with twelve TheRock test jobs; review fallback after ten business days; one approval from either team, `metadata/` included.
 - 2026-11-20: Alexis Montoison: `amdflang` named the reference compiler, with gfortran only for the CPU-only header check and the standard-conformance check; one documentation table per library, with the CMake variables; `<lib>_FORTRAN_LIBRARIES` and `<lib>_FORTRAN_INCLUDE_DIRS` in each CMake package; the labeler rules for `bindings/fortran/`; the HIP tests that build GPU code skipped without an architecture, and built for a bare `gfxNNN`; ROCTx's install component; how to add a binding for another library; the bindings everywhere, generated from each release's headers, to keep one API on several ROCm versions; the tech preview moved to 10.4 and production to 10.5, with the deprecations and the compatibility promise.
-- 2026-11-23: Alexis Montoison: After the review with TheRock: the bindings stay checked in, never generated at build time, and the header check becomes blocking behind a TheRock feature flag, targeted for 10.5 (D10), with the regenerated diff attached as a patch; the release gate (D2), the review target (D4) and the optional regeneration (D7) apply until then; users of other compilers compile the installed `.F90` and never need Julia; a feature flag in `FLAGS.cmake` replaces skipping the stage in the release workflow; consistency pass: the 10.4 tech preview ships in neither the tarballs nor the packages, 10.3 gets hipfort only, the `rocm-systems` bindings are two projects (`bindings/fortran/hip/`, `bindings/fortran/roctx/`) with their own CODEOWNERS lines, and twelve bindings give fourteen modules.
+- 2026-11-23: Alexis Montoison: After the review with TheRock: the bindings stay checked in, never generated at build time, and the header check becomes blocking behind a TheRock feature flag, targeted for 10.5 (D10), with the regenerated diff attached as a patch; the release gate (D2), the review target (D4) and the optional regeneration (D7) apply until then; users of other compilers compile the installed `.F90` and never need Julia; a feature flag in `FLAGS.cmake` replaces skipping the stage in the release workflow; consistency pass: the 10.4 tech preview ships in neither the tarballs nor the packages, 10.3 gets hipfort only, the `rocm-systems` bindings are two projects (`bindings/fortran/hip/`, `bindings/fortran/roctx/`) with their own CODEOWNERS lines, and twelve bindings give fourteen modules; the generator's Julia dependency named in the Summary; how the checked-in diff enforces the compatibility promise; a CPU check that every bound symbol exists, so the GPU jobs can be fewer; the bindings' own artifacts rather than a `fortran` component type; and TheRock#7782 and #8651 for job selection and caching.
