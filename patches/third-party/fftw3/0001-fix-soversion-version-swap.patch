@@ -1,10 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: AMD TheRock <noreply@amd.com>
 Date: Fri, 20 Nov 2026 00:00:00 +0000
-Subject: [PATCH] Fix swapped SOVERSION/VERSION arguments
+Subject: [PATCH] Fix swapped SOVERSION/VERSION arguments and stale
+ FFTW_VERSION
 
 set_target_properties()'s VERSION and SOVERSION are swapped: VERSION is
-meant to control the full installed filename (libfftw3.so.3.6.9) and
+meant to control the full installed filename (libfftw3.so.X.Y.Z) and
 SOVERSION the embedded -soname the dynamic loader actually resolves
 against (libfftw3.so.3). Upstream has them backwards, so the linker
 embeds "3.6.9" as the SONAME instead of "3".
@@ -15,21 +16,50 @@ binary linked against this build's fftw3 can never resolve its runtime
 dependency against the system-provided library -- the two SONAMEs never
 match.
 
+The replacement VERSION is bumped to 3.6.10 (not the upstream CMake
+file's own "3.6.9") to match what the autotools build this replaces
+actually produces: autotools derives its libtool version-info
+independently of CMake's hardcoded constant, and currently emits
+libfftw3.so.3.6.10. The embedded SONAME ("libfftw3.so.3") is identical
+either way; only the full installed filename differs, and matching it
+avoids anything that looks like a downgrade to whatever already expects
+the autotools build's exact filename.
+
+Also bumps FFTW_VERSION, which upstream's CMakeLists.txt still hardcodes
+as 3.3.9 even though this project pins and builds the 3.3.10 release
+tarball (upstream never bumped this string when 3.3.10 was tagged; the
+autotools build derives its own version correctly from the release, so
+only the CMake path is affected). FFTW_VERSION feeds the generated
+fftw3.pc/fftw3f.pc pkg-config "Version:" field, so anything that checks
+`pkg-config --modversion fftw3` or `find_package(FFTW3 3.3.10)` would
+see 3.3.9 and could mistake this build for a downgrade relative to the
+autotools build it replaces.
+
 See-also: https://github.com/ROCm/TheRock/pull/8527
+See-also: https://github.com/ROCm/TheRock/pull/10209
 See-also: ROCM-30893
 ---
- CMakeLists.txt | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
+@@ -279,7 +279,7 @@ if (HAVE_AVX2)
+   list (APPEND SOURCEFILES ${fftw_dft_simd_avx2_SOURCE} ${fftw_rdft_simd_avx2_SOURCE})
+ endif ()
+ 
+-set (FFTW_VERSION 3.3.9)
++set (FFTW_VERSION 3.3.10)
+ 
+ set (PREC_SUFFIX)
+ if (ENABLE_FLOAT)
 @@ -356,7 +356,7 @@ if (OPENMP_FOUND)
  endif ()
  
  foreach(subtarget ${subtargets})
 -  set_target_properties (${subtarget} PROPERTIES SOVERSION 3.6.9 VERSION 3)
-+  set_target_properties (${subtarget} PROPERTIES SOVERSION 3 VERSION 3.6.9)
++  set_target_properties (${subtarget} PROPERTIES SOVERSION 3 VERSION 3.6.10)
    install (TARGETS ${subtarget}
  	  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
  	  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
