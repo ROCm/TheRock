@@ -66,7 +66,12 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.build_topology import get_topology
-from _therock_utils.external_repo_config import parse_external_repo
+from _therock_utils.external_repo_config import (
+    REPOS_CONFIG_PATH,
+    load_repos_config,
+    parse_external_repo,
+    subtree_prefixes,
+)
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
@@ -79,6 +84,8 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    EXTERNAL_REPO_CONFIG_DIR,
+    determine_changed_projects,
     get_changed_files_for_external_repo,
     get_jobs_for_changes,
     get_git_commit_hash,
@@ -949,6 +956,9 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Project paths this run is scoped to. Empty means test selection covers
+    # every project.
+    changed_projects: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -973,6 +983,32 @@ def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     if not skip_ci_config:
         return None
     return load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+
+def resolve_changed_projects(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    external_skip_patterns: list[str] | None = None,
+) -> list[str]:
+    """Project scope for this run, narrowing which tests downstream selects.
+
+    An explicit CHANGED_PROJECTS input wins, so a caller that already computed a
+    scope keeps it. Otherwise an external repo run derives the scope from its
+    own diff and repos-config.json. TheRock-native runs have no subtree registry
+    to attribute against and stay unscoped.
+    """
+    if ci_inputs.changed_projects:
+        return ci_inputs.changed_projects
+    if not ci_inputs.external_repo:
+        return []
+
+    config_path = Path(EXTERNAL_REPO_CONFIG_DIR) / REPOS_CONFIG_PATH
+    prefixes = subtree_prefixes(load_repos_config(config_path))
+    return determine_changed_projects(
+        git_context.external_changed_files,
+        prefixes,
+        external_skip_patterns,
+    )
 
 
 def should_skip_ci(
@@ -2473,6 +2509,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "changed_projects": ",".join(outputs.changed_projects),
     }
     gha_set_output(output_vars)
 
@@ -2546,12 +2583,20 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     )
     builds.log()
 
+    print("\n=== Scoping test selection to changed projects ===")
+    changed_projects = resolve_changed_projects(
+        ci_inputs=ci_inputs,
+        git_context=git_context,
+        external_skip_patterns=external_skip_patterns,
+    )
+
     return CIOutputs(
         is_ci_enabled=True,
         builds=builds,
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        changed_projects=changed_projects,
     )
 
 

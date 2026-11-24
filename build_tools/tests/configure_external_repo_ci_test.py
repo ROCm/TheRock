@@ -19,40 +19,16 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "github_actions"))
 
-from configure_external_repo_ci import (
+from configure_ci_path_filters import (
     CI_RELEVANT_NON_SUBTREE_PREFIXES,
+    find_matched_subtrees,
+)
+from configure_external_repo_ci import (
     RepoEntry,
     configure,
-    find_matched_subtrees,
-    get_unclassified_paths,
     get_valid_prefixes,
-    is_skippable,
     load_repo_config,
 )
-
-
-class IsSkippableTest(unittest.TestCase):
-    """Tests for is_skippable()."""
-
-    def test_markdown_files_are_skippable(self):
-        self.assertTrue(is_skippable("README.md"))
-        self.assertTrue(is_skippable("docs/guide.md"))
-
-    def test_rst_files_are_skippable(self):
-        self.assertTrue(is_skippable("index.rst"))
-
-    def test_codeowners_files_are_skippable(self):
-        self.assertTrue(is_skippable(".github/CODEOWNERS"))
-        self.assertTrue(is_skippable("projects/rocblas/.github/CODEOWNERS"))
-
-    def test_docs_directory_is_skippable(self):
-        self.assertTrue(is_skippable("docs/api.txt"))
-        self.assertTrue(is_skippable("projects/rocblas/docs/readme.md"))
-
-    def test_source_files_are_not_skippable(self):
-        self.assertFalse(is_skippable("src/main.cpp"))
-        self.assertFalse(is_skippable("projects/rocblas/src/blas.cpp"))
-        self.assertFalse(is_skippable("CMakeLists.txt"))
 
 
 class FindMatchedSubtreesTest(unittest.TestCase):
@@ -197,7 +173,8 @@ class ConfigureTest(unittest.TestCase):
         self.assertEqual(result, "")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
-    def test_ci_workflow_changed_is_not_scoped(self, mock_api):
+    def test_missing_repos_config_leaves_nothing_to_scope_to(self, mock_api):
+        """Without the subtree registry there are no prefixes to attribute to."""
         mock_api.return_value = {".github/workflows/therock-ci.yml"}
         result = configure(
             event_name="pull_request",
@@ -207,6 +184,31 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result, "")
+
+    @patch("configure_external_repo_ci.get_modified_paths_api")
+    @patch("configure_external_repo_ci.load_repo_config")
+    def test_ci_workflow_changed_scopes_to_the_callers_own_projects(
+        self, mock_config, mock_api
+    ):
+        """A workflow edit cannot reach a project outside its own repo.
+
+        The companion to the test above: given a registry to attribute against,
+        the same diff narrows instead of widening to every project TheRock
+        builds. Keeps downstream suites of other repos out of the run.
+        """
+        mock_api.return_value = {".github/workflows/therock-ci.yml"}
+        mock_config.return_value = [
+            RepoEntry(name="rocblas", url="", branch="", category="projects"),
+            RepoEntry(name="hipblas", url="", branch="", category="projects"),
+        ]
+        result = configure(
+            event_name="pull_request",
+            github_repo="ROCm/rocm-libraries",
+            base_sha="abc123",
+            head_sha="def456",
+            config_path=".github/repos-config.json",
+        )
+        self.assertEqual(result, "projects/hipblas,projects/rocblas")
 
     @patch("configure_external_repo_ci.get_modified_paths_api")
     @patch("configure_external_repo_ci.load_repo_config")
@@ -256,24 +258,6 @@ class ConfigureTest(unittest.TestCase):
             config_path="",
         )
         self.assertEqual(result, "")
-
-
-class GetUnclassifiedPathsTest(unittest.TestCase):
-    """Tests for get_unclassified_paths()."""
-
-    def test_unmapped_nonskippable_is_unclassified(self):
-        valid = {"projects/rocblas"}
-        self.assertEqual(
-            get_unclassified_paths(["tools/build/x.py"], valid),
-            ["tools/build/x.py"],
-        )
-
-    def test_recognized_and_skippable_are_not_unclassified(self):
-        valid = {"projects/rocblas"}
-        self.assertEqual(
-            get_unclassified_paths(["projects/rocblas/src/a.cpp", "README.md"], valid),
-            [],
-        )
 
 
 class ConfigureNonSubtreeTest(unittest.TestCase):

@@ -9,6 +9,7 @@ This module provides utilities to:
 - Identify CI-related workflow files
 - Decide whether CI should run based on the modified paths
 - Identify diffs confined to an external repo's TheRock CI plumbing
+- Attribute an external repo's diff to the projects it changed
 
 Skip-CI patterns are loaded from TOML config files:
 - skip-ci-base.toml: Universal patterns that apply to all repos
@@ -22,6 +23,7 @@ Public API:
     is_ci_run_required() - Check if CI run is required based on modified paths
     get_jobs_for_changes() - Identify job groups directly affected by changed paths
     is_external_repo_ci_only_change() - Check if an external repo diff is confined to TheRock CI plumbing
+    determine_changed_projects() - Scope an external repo run to the projects its diff changed
     load_skip_ci_config() - Load skip-CI patterns from TOML config files
     load_skip_ci_patterns_for_external_repo() - Load skip-CI patterns for external repos
 """
@@ -205,7 +207,7 @@ def _get_job_paths() -> dict[str, list[str]]:
 
 
 # Default path where external repo config is checked out in setup_multi_arch.yml
-_EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
+EXTERNAL_REPO_CONFIG_DIR = "external-repo-config"
 
 
 def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | None:
@@ -231,7 +233,7 @@ def load_skip_ci_patterns_for_external_repo(config_path: str) -> list[str] | Non
         could be loaded.
     """
     # The external repo config is checked out to external-repo-config/
-    full_path = Path(_EXTERNAL_REPO_CONFIG_DIR) / config_path
+    full_path = Path(EXTERNAL_REPO_CONFIG_DIR) / config_path
     if not full_path.exists():
         print(f"  Skip CI config not found: {full_path}")
         # Still load base patterns even if extension config is missing
@@ -641,6 +643,11 @@ def _get_pr_files_via_api(
 # ============================================================================
 
 
+def _matches_pattern(path: str, patterns: Iterable[str]) -> bool:
+    """Whether a path matches any of the given glob patterns."""
+    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+
+
 def _is_path_unrelated_to_ci(
     path: str, skip_patterns: list[str], ci_workflow_filenames: set[str]
 ) -> bool:
@@ -719,7 +726,7 @@ def get_changed_files_for_external_repo(
         return changed_files
 
     # Fallback to git diff if SHAs not provided (legacy path)
-    external_repo_path = Path(_EXTERNAL_REPO_CONFIG_DIR)
+    external_repo_path = Path(EXTERNAL_REPO_CONFIG_DIR)
     base_ref = external_repo.get("base_ref")
     if external_repo_path.exists() and external_repo_path.is_dir():
         if not base_ref:
@@ -739,21 +746,25 @@ def get_changed_files_for_external_repo(
 # External repo CI-plumbing detection
 # ============================================================================
 
-# TheRock CI plumbing inside a calling repository (rocm-libraries,
-# rocm-systems). These paths configure *how* a run happens -- which workflow
-# calls into TheRock, how a diff is attributed to projects, how CTest
-# categorizes tests -- rather than changing any library source.
+# Workflows in a calling repository (rocm-libraries, rocm-systems) that invoke
+# TheRock's reusable workflows. They configure *how* a run happens rather than
+# changing any library source, and they belong to no single project.
 #
-# A change here can alter test selection for every project at once, so the run
-# cannot be narrowed to a subset of projects and instead covers all of them.
-# That breadth is decided separately, by the calling repo's
-# configure_external_repo_ci.py; these patterns only drive test *depth*.
-EXTERNAL_REPO_CI_PATTERNS = [
-    # Workflows in the calling repo that invoke TheRock's reusable workflows.
+# They do not, however, belong to any project *outside* the calling repo either,
+# so a diff confined to them is scoped to that repo's own configured subtrees
+# rather than to every project TheRock builds. See determine_changed_projects().
+EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS = [
     ".github/workflows/therock*",
     # Pins the TheRock ref, Docker image and runner labels.
     ".github/actions/ci-env/*",
-    # Project discovery and shared CI helper scripts.
+]
+
+# CI plumbing that decides *which* tests run: project discovery, the subtree
+# registry, and the CTest categorization every project's tests consume. A change
+# here can alter test selection for every project at once, so unlike a caller
+# workflow it keeps full coverage -- the scope it would narrow to is itself what
+# the change rewrites.
+EXTERNAL_REPO_TEST_SELECTION_PATTERNS = [
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",
     ".github/scripts/ci_utils.py",
@@ -761,10 +772,15 @@ EXTERNAL_REPO_CI_PATTERNS = [
     ".github/scripts/repo_config_model.py",
     ".github/scripts/pr_detect_changed_subtrees.py",
     ".github/repos-config.json",
-    # shared/ctest holds the CTest categorization logic that every project's
-    # tests consume, so a change there can alter selection everywhere.
     "shared/ctest/*",
 ]
+
+# Every path that is TheRock CI plumbing rather than library source. Test
+# *depth* reads this whole set via is_external_repo_ci_only_change(); test
+# *breadth* distinguishes the two halves in determine_changed_projects().
+EXTERNAL_REPO_CI_PATTERNS = (
+    EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS + EXTERNAL_REPO_TEST_SELECTION_PATTERNS
+)
 
 
 def is_external_repo_ci_only_change(
@@ -777,8 +793,9 @@ def is_external_repo_ci_only_change(
     can be tested at quick depth, mirroring TheRock's own CI-workflow changes.
     The test is deliberately strict: a diff that also edits library source
     returns False, so that source keeps its normal (standard) depth. Such a
-    change is CI-*affecting* but not CI-*only* -- it still widens the run to
-    every project, but widening breadth is not a reason to shrink depth.
+    change is CI-*affecting* but not CI-*only*. Breadth for that case is decided
+    by determine_changed_projects(); widening breadth is not a reason to shrink
+    depth.
 
     Args:
         changed_files: Paths changed in the calling repository, or None when
@@ -803,6 +820,129 @@ def is_external_repo_ci_only_change(
     if not relevant_paths:
         return False
     return all(
-        any(fnmatch.fnmatch(path, pattern) for pattern in EXTERNAL_REPO_CI_PATTERNS)
-        for path in relevant_paths
+        _matches_pattern(path, EXTERNAL_REPO_CI_PATTERNS) for path in relevant_paths
     )
+
+
+# ============================================================================
+# External repo project scoping
+# ============================================================================
+
+# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
+# absent from a calling repo's repos-config.json. Without these, a diff confined
+# to one of them matches no subtree, which would fall back to testing every
+# project. Each entry MUST have a corresponding mapping in TheRock (a
+# BUILD_TOPOLOGY.toml alias plus _EXTERNAL_SUBTREE_ALIASES in
+# determine_rocm_test_dependencies.py), so keep this list in lock-step when
+# adding directories.
+CI_RELEVANT_NON_SUBTREE_PREFIXES = {
+    # hipCCL is monorepo-native (projects/hipccl/hipccl3, the unified
+    # rocPRIM+hipCUB+rocThrust superbuild); it has no upstream repo to
+    # subtree-sync. Resolves to the hipccl graph node -> prim test jobs.
+    "projects/hipccl",
+    "dnn-providers/cmake",
+    "shared/amdgpu-windows-interop",
+    "shared/kpack",
+    "shared/machine-readable-isa",
+    "shared/primbench",
+    "emulation/mirage",
+    "emulation/rocjitsu",
+}
+
+
+def find_matched_subtrees(paths: Iterable[str], prefixes: set[str]) -> list[str]:
+    """Attribute each path to the longest registered prefix containing it.
+
+    Longest-prefix-first, rather than a fixed 2-segment truncation, so a nested
+    subtree in repos-config.json (`hipblaslt/tensilelite`) stays distinct from
+    its parent (`hipblaslt`) instead of both collapsing to the same prefix.
+    """
+    # Longest prefixes first, so a nested subtree wins over its parent.
+    by_specificity = sorted(prefixes, key=lambda p: p.count("/"), reverse=True)
+    matched: set[str] = set()
+    for path in paths:
+        segments = path.split("/")
+        for prefix in by_specificity:
+            prefix_segments = prefix.split("/")
+            if segments[: len(prefix_segments)] == prefix_segments:
+                matched.add(prefix)
+                break
+    return sorted(matched)
+
+
+def determine_changed_projects(
+    changed_files: Optional[Iterable[str]],
+    subtree_prefixes: set[str],
+    skip_patterns: Optional[list[str]] = None,
+) -> list[str]:
+    """Projects an external repo's diff changed, scoping which tests run.
+
+    Decides test *breadth*, the companion to is_external_repo_ci_only_change()'s
+    *depth*; both read the same diff and skip patterns, so they agree on which
+    paths are docs-only noise. subtree_prefixes comes from the caller's
+    repos-config.json via external_repo_config.subtree_prefixes().
+
+    Returns the prefixes to scope the run to. Empty means the diff could not be
+    narrowed safely, which downstream means "test every project".
+    """
+    if not changed_files:
+        print("  Project scope: no diff available, testing every project")
+        return []
+
+    relevant_paths = [
+        path
+        for path in changed_files
+        if not _is_path_unrelated_to_ci(path, skip_patterns or [], set())
+    ]
+    if not relevant_paths:
+        print("  Project scope: no CI-relevant paths changed")
+        return []
+
+    # A change to test-selection plumbing rewrites the project scope itself, so
+    # the scope it would narrow to cannot be trusted.
+    if any(
+        _matches_pattern(path, EXTERNAL_REPO_TEST_SELECTION_PATTERNS)
+        for path in relevant_paths
+    ):
+        print("  Project scope: test-selection plumbing changed, testing every project")
+        return []
+
+    if not subtree_prefixes:
+        print("  Project scope: no configured subtrees, testing every project")
+        return []
+
+    known_prefixes = subtree_prefixes | CI_RELEVANT_NON_SUBTREE_PREFIXES
+
+    # A caller workflow belongs to no single project, but it also belongs to no
+    # project outside the calling repo. Scoping it to the caller's own subtrees
+    # keeps every project it could plausibly affect while dropping the
+    # downstream suites of other repos -- a workflow edit in rocm-libraries has
+    # no way to break rocm-systems' RCCL tests. Riding along with component
+    # changes it adds nothing: those changes already select a narrower scope
+    # within the same repo, so the workflow contributes no project of its own.
+    component_paths = [
+        path
+        for path in relevant_paths
+        if not _matches_pattern(path, EXTERNAL_REPO_CALLER_WORKFLOW_PATTERNS)
+    ]
+    if not component_paths:
+        scope = sorted(subtree_prefixes)
+        print(
+            f"  Project scope: caller workflow changed, testing {len(scope)} own projects"
+        )
+        return scope
+
+    # find_matched_subtrees() silently drops paths it cannot attribute, so
+    # narrowing on the rest would miss their impact. Run everything instead.
+    unclassified = [
+        path
+        for path in component_paths
+        if "/".join(path.split("/", 2)[:2]) not in known_prefixes
+    ]
+    if unclassified:
+        print(f"  Project scope: unclassified {sorted(unclassified)[:5]}, testing all")
+        return []
+
+    matched = find_matched_subtrees(component_paths, known_prefixes)
+    print(f"  Project scope: {matched}")
+    return matched

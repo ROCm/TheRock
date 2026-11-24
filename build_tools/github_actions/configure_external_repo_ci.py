@@ -59,6 +59,9 @@ from typing import (
     TypeVar,
 )
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from configure_ci_path_filters import determine_changed_projects
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -74,55 +77,9 @@ SKIPPABLE_PATH_PATTERNS = [
     "shared/*/docs/*",
 ]
 
-# Repositories that scope TheRock workflow changes to configured projects.
-# Repositories absent from this map retain full-test coverage.
-WORKFLOW_TEST_SCOPE_BY_REPO = {
-    "rocm/rocm-libraries": "configured-projects",
-}
-
-# Patterns for TheRock workflow changes in the calling repository.
-CALLER_WORKFLOW_TRIGGER_PATTERNS = [
-    ".github/workflows/therock*",
-]
-
-# Changes to project discovery or shared test logic retain global coverage.
-FULL_TEST_TRIGGER_PATTERNS = [
-    ".github/scripts/therock*",
-    ".github/scripts/get_changed_projects.py",
-    ".github/scripts/ci_utils.py",
-    ".github/scripts/config_loader.py",
-    ".github/scripts/repo_config_model.py",
-    ".github/scripts/pr_detect_changed_subtrees.py",
-    ".github/repos-config.json",
-    # shared/ctest holds the CTest categorization logic consumed by every
-    # project's tests; a change there can alter selection everywhere, so treat
-    # it as a full-test trigger rather than a single surfaced component.
-    "shared/ctest/*",
-]
-
-# CI-relevant monorepo directories that are NOT subtree-synced repos and so are
-# absent from an external repo's repos-config.json. Without these, a PR confined
-# to one of these paths yields no matched subtree -> empty changed_projects ->
-# TheRock falls back to building and testing everything. Each entry MUST have a
-# corresponding mapping in TheRock (build-topology alias + the test selector's
-# _EXTERNAL_SUBTREE_ALIASES), so keep this list in lock-step with TheRock when
-# adding directories.
-CI_RELEVANT_NON_SUBTREE_PREFIXES = {
-    # hipCCL is a monorepo-native project (projects/hipccl/hipccl3, the unified
-    # rocPRIM+hipCUB+rocThrust superbuild); it has no upstream repo to subtree-
-    # sync, so it is absent from rocm-libraries repos-config.json. Without this,
-    # edits under projects/hipccl are unclassified and fall back to the full
-    # test suite. Resolves to the hipccl graph node -> prim test jobs via
-    # _EXTERNAL_SUBTREE_ALIASES in determine_rocm_test_dependencies.py.
-    "projects/hipccl",
-    "dnn-providers/cmake",
-    "shared/amdgpu-windows-interop",
-    "shared/kpack",
-    "shared/machine-readable-isa",
-    "shared/primbench",
-    "emulation/mirage",
-    "emulation/rocjitsu",
-}
+# Full-test triggers, caller-workflow scoping and the non-subtree prefix list
+# all live in configure_ci_path_filters.determine_changed_projects(), which
+# configure_multi_arch_ci.py uses for the same decision.
 
 
 @dataclass
@@ -196,25 +153,6 @@ def get_modified_paths_api(
     return {f["filename"] for f in files}
 
 
-def matches_patterns(paths: Iterable[str], patterns: Iterable[str]) -> bool:
-    """Check if any path matches any pattern."""
-    for path in paths:
-        for pattern in patterns:
-            if fnmatch.fnmatch(path, pattern):
-                return True
-    return False
-
-
-def is_skippable(path: str) -> bool:
-    """Check if path is skippable (docs, etc.)."""
-    return any(fnmatch.fnmatch(path, p) for p in SKIPPABLE_PATH_PATTERNS)
-
-
-def has_non_skippable(paths: Iterable[str]) -> bool:
-    """Check if any path is non-skippable."""
-    return any(not is_skippable(p) for p in paths)
-
-
 def load_repo_config(config_path: str) -> List[RepoEntry]:
     """Load repository config from JSON."""
     try:
@@ -240,37 +178,6 @@ def get_valid_prefixes(config: List[RepoEntry]) -> Set[str]:
     return {f"{entry.category}/{entry.name}" for entry in config}
 
 
-def find_matched_subtrees(
-    changed_files: Iterable[str], valid_prefixes: Set[str]
-) -> List[str]:
-    """Find subtrees matching changed files via longest-prefix match.
-
-    A changed file's subtree is the LONGEST registered prefix (`category/name`,
-    or a nested `category/name/subname`) that matches its path -- checked from
-    most to least specific -- not a fixed 2-segment truncation. A fixed
-    2-segment truncation would make a nested subtree registered in
-    repos-config.json (e.g. `hipblaslt/tensilelite`, nested inside `hipblaslt`)
-    indistinguishable from a change to its parent: both collapse to
-    `projects/hipblaslt`, silently losing the more specific match. Matching
-    longest-prefix-first, and attributing each changed file to exactly one
-    subtree, keeps a tensilelite-only change from also firing hipblaslt-proper's
-    (potentially different) test selection.
-    """
-    # Longest prefixes first, so a nested subtree wins over its parent.
-    prefixes_by_specificity = sorted(
-        valid_prefixes, key=lambda p: p.count("/"), reverse=True
-    )
-    matched: Set[str] = set()
-    for path in changed_files:
-        segments = path.split("/")
-        for prefix in prefixes_by_specificity:
-            prefix_segments = prefix.split("/")
-            if segments[: len(prefix_segments)] == prefix_segments:
-                matched.add(prefix)
-                break
-    return sorted(matched)
-
-
 def set_github_output(outputs: Mapping[str, str]) -> None:
     """Write outputs to $GITHUB_OUTPUT or print if not in CI."""
     logger.info(f"Outputs: {dict(outputs)}")
@@ -282,28 +189,6 @@ def set_github_output(outputs: Mapping[str, str]) -> None:
     with open(output_file, "a") as f:
         for k, v in outputs.items():
             f.write(f"{k}={v}\n")
-
-
-def _subtree_prefix(path: str) -> str:
-    """First two path components, matching find_matched_subtrees()."""
-    return "/".join(path.split("/", 2)[:2])
-
-
-def get_unclassified_paths(paths: Iterable[str], valid_prefixes: Set[str]) -> List[str]:
-    """Non-skippable changed paths that map to no known subtree.
-
-    A PR can mix a recognized path (e.g. ``projects/rdc/...``) with a path we
-    cannot classify (a top-level file, or a directory absent from both
-    repos-config.json and CI_RELEVANT_NON_SUBTREE_PREFIXES). find_matched_subtrees
-    silently drops the unclassified path, which would let CI narrow the build to
-    the recognized subset and miss the impact of the unclassified change. Callers
-    should treat any such path conservatively (run the full suite).
-    """
-    return [
-        p
-        for p in paths
-        if not is_skippable(p) and _subtree_prefix(p) not in valid_prefixes
-    ]
 
 
 def configure(
@@ -347,78 +232,18 @@ def configure(
         logger.info("Truncated API response - not scoping to projects")
         return ""
 
-    if not modified_paths:
-        logger.info("No modified paths - no projects changed")
-        return ""
-
     logger.info(f"Modified paths: {len(modified_paths)} files")
 
-    # Shared CI and test-selection changes can affect other repositories.
-    if matches_patterns(modified_paths, FULL_TEST_TRIGGER_PATTERNS):
-        logger.info("Shared CI files changed - not scoping to projects")
-        return ""
-
-    # Apply the calling repository's workflow test policy.
-    if matches_patterns(modified_paths, CALLER_WORKFLOW_TRIGGER_PATTERNS):
-        workflow_test_scope = WORKFLOW_TEST_SCOPE_BY_REPO.get(github_repo.lower())
-        if workflow_test_scope != "configured-projects":
-            logger.info(
-                "Workflow changed in %s - not scoping to projects",
-                github_repo,
-            )
-            return ""
-
-        config = load_repo_config(config_path)
-        if not config:
-            logger.warning("No config loaded - not scoping to projects")
-            return ""
-
-        own_projects = get_valid_prefixes(config)
-
-        # A second, unknown change must retain the conservative full run.
-        other_paths = {
-            path
-            for path in modified_paths
-            if not matches_patterns([path], CALLER_WORKFLOW_TRIGGER_PATTERNS)
-        }
-        unclassified = get_unclassified_paths(other_paths, own_projects)
-        if unclassified:
-            logger.info(
-                f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-                " - not scoping to projects"
-            )
-            return ""
-
-        logger.info(
-            "Workflow changed in %s - testing configured projects",
-            github_repo,
+    # Attribution is TheRock's, shared with configure_multi_arch_ci.py so both
+    # ends of the handoff classify a diff identically. This script only supplies
+    # the inputs: the caller's diff and its subtree registry.
+    return ",".join(
+        determine_changed_projects(
+            modified_paths,
+            get_valid_prefixes(load_repo_config(config_path)),
+            SKIPPABLE_PATH_PATTERNS,
         )
-        return ",".join(sorted(own_projects))
-
-    # Find changed projects from config
-    config = load_repo_config(config_path)
-    if not config:
-        logger.warning("No config loaded - not scoping to projects")
-        return ""
-
-    valid_prefixes = get_valid_prefixes(config) | CI_RELEVANT_NON_SUBTREE_PREFIXES
-
-    # Conservative guard: if any non-skippable change cannot be classified to a
-    # known subtree, we cannot reason about its build/test impact. Narrowing on
-    # just the recognized subset would silently drop the unclassified change, so
-    # fall back to a full run instead.
-    unclassified = get_unclassified_paths(modified_paths, valid_prefixes)
-    if unclassified:
-        logger.info(
-            f"Unclassified non-skippable change(s) {sorted(unclassified)[:5]}"
-            " - not scoping to projects"
-        )
-        return ""
-
-    matched = find_matched_subtrees(modified_paths, valid_prefixes)
-    logger.info(f"Matched projects: {matched}")
-
-    return ",".join(matched)
+    )
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
