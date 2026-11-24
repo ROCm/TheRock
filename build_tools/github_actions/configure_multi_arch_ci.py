@@ -218,8 +218,6 @@ STAGE_TO_TEST_LABELS: dict[str, list[str]] = {
         "composable-kernel",
         "hipthreads",
         "hipthreads_examples",
-        "libhipcxx_amdclang",
-        "libhipcxx_hiprtc",
     ],
     "ml-libs": ["miopen", "hipdnn", "miopenprovider", "hipblasltprovider"],
     "comm-libs": ["rccl", "rocshmem"],
