@@ -500,8 +500,10 @@ class ComponentScannerTest(TmpDirTestCase):
                     ("b/stage", "lib/libbar.so.1"),
                 ]
             )
-            | sys_relpaths
-            | usr_doc_relpaths,
+            | {
+                ("a/stage", relpath)
+                for relpath in sys_relpaths | usr_doc_relpaths
+            },
         )
         self.assertSetEqual(
             set(relpath for relpath, _ in scanner.unmatched_files),
