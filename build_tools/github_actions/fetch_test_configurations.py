@@ -164,12 +164,14 @@ _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
 # Labels that pool draws skip for these jobs (single-GPU draws only; a manual run
-# can still pick them). Their managed-memory / KFD SVM tests fail only on Crusoe
-# (amdgpu 6.16.13; OSSCI 6.19.14 passes).
-# TODO(#10157): remove these entries once the tests pass on Crusoe.
+# can still pick them). Every entry is temporary: its TODO names the issue that
+# decides when it can be removed.
 # Same strings as _APPTAINER_RUNNER_LABELS, but a separate list used only here.
 _CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
 _POOL_EXCLUDED_LABELS = {
+    # Managed-memory / KFD SVM tests: SVM is off on Crusoe (amdgpu 6.16.13;
+    # OSSCI 6.19.14 passes).
+    # TODO(#10157, ITAISE-3492): remove once the tests pass on Crusoe.
     "hip-tests": _CRUSOE_LABELS,
     "libhipcxx_amdclang": _CRUSOE_LABELS,
     "rocprofiler-systems": _CRUSOE_LABELS,
