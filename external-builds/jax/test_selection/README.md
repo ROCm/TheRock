@@ -59,6 +59,9 @@ python external-builds/jax/run_jax_e2e.py --jax-lab-dir jax-lab \
   reaches these runs through a PR here.
 - Each workload gets 60 minutes, as in jax-lab's CI, and the step's budget is
   their sum.
+- They share the job's venv, where jax-lab's CI gives each a fresh container,
+  so `USE_TF=0` keeps `transformers` off the TensorFlow `flax_release`
+  installs.
 
 `large` runs every jax-lab workload that fits a gfx942. `medium` runs two
 MaxText ones: `llama3_1_8b`, the dense baseline, and `deepseek2_16b`, which adds

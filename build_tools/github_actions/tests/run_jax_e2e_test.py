@@ -165,6 +165,7 @@ class WorkloadEnvTest(unittest.TestCase):
         self.assertEqual(env["ROCM_TAG"], "therock-10.2.0a20261016")
         self.assertEqual(env["HIP_VISIBLE_DEVICES"], "0,1,2,3")
         self.assertEqual(env["PATH"], "/usr/bin")
+        self.assertEqual(env["USE_TF"], "0")
         self.assertEqual(env["PYTHON"], sys.executable)
 
 

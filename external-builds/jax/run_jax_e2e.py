@@ -153,6 +153,9 @@ def workload_env(
             "HIP_VISIBLE_DEVICES": visible_devices(base, workload.gpus),
             # The whole log rather than jax-lab's two-line tail on failure.
             "JAX_LAB_VERBOSE": "1",
+            # The workloads share one venv, where jax-lab CI gives each a fresh
+            # container: keeps transformers off the TensorFlow flax_release installs.
+            "USE_TF": "0",
         }
     )
     return env
