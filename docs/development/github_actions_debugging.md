@@ -2,9 +2,17 @@
 
 Table of contents:
 
+- [Re-running jobs with debug logging](#re-running-jobs-with-debug-logging)
 - [Testing release workflows](#testing-release-workflows)
 - [Connecting to Kubernetes runners for interactive debugging](#connecting-to-kubernetes-runners-for-interactive-debugging)
 - [Working effectively from forks](#working-effectively-from-forks)
+
+## Re-running jobs with debug logging
+
+Re-running a job with the "Enable debug logging" checkbox selected sets
+`THEROCK_CI_DEBUG=1`, which turns on extra debug options for test jobs (such as
+`ROCM_KPACK_DEBUG`) even for components that normally opt out of them. See
+[Re-running failed test jobs with debug logging](./test_debugging.md#re-running-failed-test-jobs-with-debug-logging).
 
 ## Testing release workflows
 
