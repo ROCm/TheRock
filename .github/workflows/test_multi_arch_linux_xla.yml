@@ -166,7 +166,7 @@ jobs:
         --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
         --test_filter="${XLA_TEST_FILTER}"
-        --jobs=50
+        --jobs=150
         --bes_keywords=nightly
         --bes_keywords=therock_xla
 
