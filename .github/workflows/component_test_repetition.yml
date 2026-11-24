@@ -1,0 +1,17 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Component Test Repetition
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "Placeholder—component tests are not implemented yet."
