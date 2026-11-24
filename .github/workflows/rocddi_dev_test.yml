@@ -49,6 +49,10 @@ on:
         description: "Run each selected HIP test up to this many times, stopping on failure (integer 1–10000)"
         type: string
         default: '1'
+      hip_gdb_on_failure:
+        description: "Capture bounded supplementary GDB stacks for failed executed HIP cases"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -239,6 +243,15 @@ jobs:
           resolved_hsa=$(awk '$1 == "libhsa-runtime64.so.1" {print $3}' diagnostics/hip-dependencies.txt)
           test -n "$resolved_hsa"
           cmp "$resolved_hsa" candidate/lib/libhsa-runtime64.so.1
+      - name: Install optional HIP failure debugger
+        if: ${{ inputs.hip_gdb_on_failure }}
+        # Installation failure must not suppress the original HIP test run.
+        # The runner records a missing debugger as unavailable diagnostics.
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends gdb
       - name: Run selected upstream HIP tests
         env:
           THEROCK_BIN_DIR: ${{ github.workspace }}/candidate/bin
@@ -247,6 +260,7 @@ jobs:
           HIP_TEST_LABEL: ${{ inputs.hip_test_label }}
           HIP_TEST_FILTER: ${{ inputs.hip_test_filter }}
           HIP_TEST_REPEAT: ${{ inputs.hip_test_repeat }}
+          HIP_GDB_ON_FAILURE: ${{ inputs.hip_gdb_on_failure }}
           AMD_LOG_LEVEL: '1'
           ROCDDI_HSA_STARTUP_DIAGNOSTICS: '1'
           ROCDDI_HSA_MEMORY_DIAGNOSTICS: '1'
@@ -258,9 +272,14 @@ jobs:
           if [[ "$HIP_TEST_LABEL" == all ]]; then
             HIP_TEST_LABEL=''
           fi
+          debug_args=()
+          if [[ "$HIP_GDB_ON_FAILURE" == true ]]; then
+            debug_args+=(--gdb-on-failure)
+          fi
           python3 build_tools/github_actions/test_executable_scripts/test_hiptests.py \
             --label-regex "$HIP_TEST_LABEL" --test-regex "$HIP_TEST_FILTER" \
             --repeat "$HIP_TEST_REPEAT" \
+            "${debug_args[@]}" \
             --junit "$PWD/diagnostics/hip-tests.xml" \
             2>&1 | tee diagnostics/hip-tests.txt
       - name: Capture candidate HSA observations

@@ -93,12 +93,13 @@ needed by tests, rather than a hand-picked vector-add payload.
 
 Inputs:
 
-| Input             | Default       | Meaning                                                  |
-| ----------------- | ------------- | -------------------------------------------------------- |
-| `hip_test_label`  | `smoke`       | CTest label regex; `all` disables label filtering        |
-| `hip_test_filter` | empty         | Additional CTest test-name regex                         |
-| `hip_test_level`  | `level_0`     | Upstream workload parameters, independently of selection |
-| `baseline_run_id` | `43537534946` | Explicit prebuilt LLVM/base/sysdeps dependency run       |
+| Input                | Default       | Meaning                                                             |
+| -------------------- | ------------- | ------------------------------------------------------------------- |
+| `hip_test_label`     | `smoke`       | CTest label regex; `all` disables label filtering                   |
+| `hip_test_filter`    | empty         | Additional CTest test-name regex                                    |
+| `hip_test_level`     | `level_0`     | Upstream workload parameters, independently of selection            |
+| `hip_gdb_on_failure` | `false`       | Collect supplementary GDB observations of failed executed HIP cases |
+| `baseline_run_id`    | `43537534946` | Explicit prebuilt LLVM/base/sysdeps dependency run                  |
 
 For a focused subset of existing cases:
 
@@ -123,6 +124,27 @@ inspect the recorded inventory when assessing coverage. No rocddi-specific
 failure exclusions are added. `level_0` changes workload parameters; it does
 not by itself select fewer tests. Build failures and runtime failures remain
 separately visible.
+
+For supplementary crash diagnostics, dispatch with `-f hip_gdb_on_failure=true`
+or add `--gdb-on-failure` to the runner CLI with `--junit`. GDB is installed only
+for the opted-in HIP job. The original CTest exit status, JUnit and diagnostics
+remain authoritative. `hip-tests-gdb/report.json` and per-case logs appear in
+the HIP diagnostic artifact. Only failed, executed cases from that original
+JUnit report are eligible; passing, skipped and disabled cases are not rerun.
+Each eligible case runs at most once under batch GDB, within eight-case,
+120-second-per-case, 600-second debugger budget and 2 MiB-per-log limits. The
+CTest JSON inventory has a separate 30-second bound. The report records
+timeouts, exhausted budgets and unavailable observations.
+
+These are observations of the top-level CTest command, with its recorded
+arguments, working directory and environment properties. Direct Linux ELF
+executables inside the installed `catch_tests` tree are supported; scripts,
+fixtures, resource allocation, affinity and other unsupported CTest properties
+are reported as unavailable. CTest JSON flattens launcher commands, so these
+observations do not qualify launcher or descendant-process behavior. GDB changes
+timing; a rerun cannot establish the original failure's cause or reproducibility.
+Logs request the first SIGSEGV stop's thread stacks, shared-library mappings,
+registers and program-counter instruction even when binaries are stripped.
 
 ## CTS coverage and execution subjects
 

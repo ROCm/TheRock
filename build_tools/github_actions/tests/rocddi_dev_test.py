@@ -199,6 +199,36 @@ def test_repeat_input_defaults_and_forwarding():
     )
 
 
+def test_debugger_is_optional_and_installed_only_in_the_hip_job():
+    caller = load_workflow(WORKFLOWS_DIR / "rocddi_cts_dev.yml")
+    reusable = load_workflow(WORKFLOWS_DIR / "rocddi_dev_test.yml")
+    for inputs in (
+        (caller.get("on") or caller[True])["workflow_dispatch"]["inputs"],
+        (reusable.get("on") or reusable[True])["workflow_call"]["inputs"],
+    ):
+        assert inputs["hip_gdb_on_failure"]["type"] == "boolean"
+        assert inputs["hip_gdb_on_failure"]["default"] is False
+        assert not inputs["hip_gdb_on_failure"].get("required", False)
+    assert caller["jobs"]["test"]["with"]["hip_gdb_on_failure"] == (
+        "${{ inputs.hip_gdb_on_failure || false }}"
+    )
+    installs = [
+        (job, step)
+        for job, config in reusable["jobs"].items()
+        for step in config["steps"]
+        if "apt-get install" in step.get("run", "")
+    ]
+    assert len(installs) == 1 and installs[0][0] == "hip"
+    assert installs[0][1]["if"] == "${{ inputs.hip_gdb_on_failure }}"
+    run = next(
+        step
+        for step in reusable["jobs"]["hip"]["steps"]
+        if step.get("name") == "Run selected upstream HIP tests"
+    )
+    assert not run.get("continue-on-error", False)
+    assert run["env"]["HIP_GDB_ON_FAILURE"] == "${{ inputs.hip_gdb_on_failure }}"
+
+
 @pytest.mark.parametrize(
     "test_filter, repeat, returncode",
     [

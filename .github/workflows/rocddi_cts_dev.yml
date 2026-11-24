@@ -42,6 +42,10 @@ on:
         description: "Run each selected HIP test up to this many times, stopping on failure (integer 1–10000)"
         type: string
         default: '1'
+      hip_gdb_on_failure:
+        description: "Capture bounded supplementary GDB stacks for failed executed HIP cases"
+        type: boolean
+        default: false
       baseline_run_id:
         description: "Prebuilt LLVM/base/sysdeps run"
         type: string
@@ -110,4 +114,5 @@ jobs:
       hip_test_filter: ${{ inputs.hip_test_filter }}
       hip_test_level: ${{ inputs.hip_test_level || 'level_0' }}
       hip_test_repeat: ${{ github.event_name == 'push' && '1' || inputs.hip_test_repeat }}
+      hip_gdb_on_failure: ${{ inputs.hip_gdb_on_failure || false }}
       baseline_run_id: ${{ inputs.baseline_run_id || '43537534946' }}

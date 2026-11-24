@@ -34,6 +34,7 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from amdgpu_family_matrix import is_asan
 from configure_asan_env import get_asan_runtime_path
+from hip_failure_debugger import capture_failures, collect_inventory
 
 env = os.environ.copy()
 
@@ -196,7 +197,13 @@ def parse_repeat_count(value: str) -> int:
 
 
 def execute_tests(
-    env, *, label_regex=None, test_regex=None, junit=None, repeat: int = 1
+    env,
+    *,
+    label_regex=None,
+    test_regex=None,
+    junit=None,
+    repeat: int = 1,
+    gdb_on_failure: bool = False,
 ):
     # Allow for more time in ASAN mode to run the tests.
     timeout = 1500 if is_asan() else 600
@@ -220,19 +227,54 @@ def execute_tests(
         cmd.extend(["-L", "smoke"])
     if test_regex:
         cmd.extend(["-R", test_regex])
-    if junit:
-        cmd.extend(["--output-junit", str(junit)])
-    if repeat > 1:
-        cmd.extend(["--repeat", f"until-fail:{repeat}"])
-
     ignored_tests = list(GENERIC_TEST_TO_IGNORE)
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests += TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
     if ignored_tests:
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
+    inventory_command = [*cmd, "--show-only=json-v1"]
+    if junit:
+        cmd.extend(["--output-junit", str(junit)])
+    if repeat > 1:
+        cmd.extend(["--repeat", f"until-fail:{repeat}"])
+    # Do not consume a stale report when CTest cannot write a new one.
+    previous_report = junit.stat() if gdb_on_failure and junit.exists() else None
+    if gdb_on_failure:
+        try:
+            inventory, inventory_status = collect_inventory(
+                inventory_command, cwd=THEROCK_DIR, env=env
+            )
+        except Exception as error:
+            logging.exception("++ GDB CTest inventory unavailable")
+            inventory = b""
+            inventory_status = {"status": "unavailable", "error": str(error)}
+
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    try:
+        subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    except subprocess.CalledProcessError:
+        if gdb_on_failure:
+            try:
+                if previous_report is not None and junit.stat() == previous_report:
+                    raise RuntimeError(
+                        "CTest did not replace the original JUnit report"
+                    )
+                capture_failures(
+                    junit=junit,
+                    inventory=inventory,
+                    inventory_status=inventory_status,
+                    test_root=Path(CATCH_TESTS_PATH),
+                    env=env,
+                )
+                logging.error(
+                    "++ Supplementary GDB report: %s",
+                    junit.parent / f"{junit.stem}-gdb/report.json",
+                )
+            except Exception:
+                # Supplementary diagnostics cannot replace the original CTest failure.
+                logging.exception("++ GDB failure diagnostics unavailable")
+        raise
     if junit:
         cases = list(ET.parse(junit).iter("testcase"))
         if not any(
@@ -251,6 +293,11 @@ if __name__ == "__main__":
     parser.add_argument("--test-regex", help="CTest test-name filter")
     parser.add_argument("--junit", type=Path, help="JUnit output path")
     parser.add_argument(
+        "--gdb-on-failure",
+        action="store_true",
+        help="Capture bounded, supplementary GDB observations of failed executed cases (Linux; requires --junit)",
+    )
+    parser.add_argument(
         "--repeat",
         type=parse_repeat_count,
         default=1,
@@ -258,6 +305,8 @@ if __name__ == "__main__":
         metavar="N",
     )
     args = parser.parse_args()
+    if args.gdb_on_failure and (not args.junit or platform.system() != "Linux"):
+        parser.error("--gdb-on-failure requires Linux and --junit")
     setup_env(env)
     execute_tests(
         env,
@@ -265,4 +314,5 @@ if __name__ == "__main__":
         test_regex=args.test_regex,
         junit=args.junit,
         repeat=args.repeat,
+        gdb_on_failure=args.gdb_on_failure,
     )
