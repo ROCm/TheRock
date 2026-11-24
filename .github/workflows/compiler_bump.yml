@@ -476,6 +476,7 @@ jobs:
       release_type: dev
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
+      comgr_dll_name: amd_comgr_3.dll
       llvm_sha: ${{ needs.create-branch.outputs.llvm_sha }}
       hipify_sha: ${{ needs.create-branch.outputs.hipify_sha }}
       spirv_sha: ${{ needs.create-branch.outputs.spirv_sha }}

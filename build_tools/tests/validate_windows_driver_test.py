@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from validate_windows_driver import validate_artifacts
+from validate_windows_driver import main, validate_artifacts
 
 
 ARTIFACT_PATHS = (
@@ -64,3 +64,41 @@ def test_stale_runtime_version_is_rejected(staged_build: Path) -> None:
 def test_missing_build_tree(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="found 0"):
         validate_artifacts(tmp_path / "missing-build")
+
+
+def test_custom_comgr_name_cli(staged_build: Path) -> None:
+    comgr_bin = staged_build / "compiler/amd-comgr/stage/bin"
+    (comgr_bin / "amd_comgr.dll").rename(comgr_bin / "amd_comgr_3.dll")
+    (comgr_bin / "amd_comgr.pdb").rename(comgr_bin / "amd_comgr_3.pdb")
+    main(["--build-dir", str(staged_build), "--comgr-dll-name", "amd_comgr_3.dll"])
+
+
+def test_default_comgr_does_not_satisfy_custom_name(staged_build: Path) -> None:
+    with pytest.raises(ValueError, match=r"amd_comgr_3\.dll, found 0"):
+        validate_artifacts(staged_build, comgr_dll_name="amd_comgr_3.dll")
+
+
+def test_custom_comgr_requires_matching_pdb(staged_build: Path) -> None:
+    comgr_bin = staged_build / "compiler/amd-comgr/stage/bin"
+    (comgr_bin / "amd_comgr.dll").rename(comgr_bin / "amd_comgr_3.dll")
+    with pytest.raises(ValueError, match=r"amd_comgr_3\.pdb, found 0"):
+        validate_artifacts(staged_build, comgr_dll_name="amd_comgr_3.dll")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        ".dll",
+        "amd_comgr_3",
+        "amd_comgr_3.pdb",
+        "../amd_comgr_3.dll",
+        r"dir\amd_comgr_3.dll",
+        "C:/amd_comgr_3.dll",
+        "amd_comgr_*.dll",
+        "amd_comgr_[3].dll",
+    ],
+)
+def test_invalid_comgr_name(staged_build: Path, name: str) -> None:
+    with pytest.raises(ValueError, match="Invalid Comgr DLL filename"):
+        validate_artifacts(staged_build, comgr_dll_name=name)
