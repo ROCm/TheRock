@@ -47,8 +47,15 @@ class AddLibhipcxxIncludePathTest(unittest.TestCase):
         self.assertEqual(env["CPATH"], os.pathsep.join([hipccl, "/b"]))
 
 
-class TorchvisionBuildEnvTest(unittest.TestCase):
-    def test_torchvision_build_gets_libhipcxx_on_cpath(self):
+class ExtensionBuildEnvTest(unittest.TestCase):
+    """torchaudio and torchvision compile HIP code with a bare hipcc."""
+
+    def test_extension_builds_get_libhipcxx_on_cpath(self):
+        for build_name in ("do_build_pytorch_audio", "do_build_pytorch_vision"):
+            with self.subTest(build=build_name):
+                self._check_build(build_name)
+
+    def _check_build(self, build_name):
         seen_envs = []
 
         def record_env(*args, **kwargs):
@@ -81,7 +88,7 @@ class TorchvisionBuildEnvTest(unittest.TestCase):
             ), patch.dict(
                 os.environ, {}, clear=True
             ):
-                build_prod_wheels.do_build_pytorch_vision(args, Path(tmp), env)
+                getattr(build_prod_wheels, build_name)(args, Path(tmp), env)
         self.assertEqual(len(seen_envs), 1)
         self.assertEqual(seen_envs[0]["CPATH"], os.fspath(rocm / "include" / "hipccl"))
 

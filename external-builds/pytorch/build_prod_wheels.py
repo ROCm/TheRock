@@ -661,7 +661,7 @@ def add_libhipcxx_include_path(env: dict[str, str]) -> None:
 
     libhipcxx installs under <rocm>/include/hipccl and is normally reached through
     the libhipcxx::libhipcxx CMake target. rocThrust's headers need it, so a
-    direct hipcc build that includes them (torchvision) must see it too.
+    direct hipcc build that includes them (torchaudio, torchvision) must see it too.
     """
     include_dir = Path(env["ROCM_PATH"]) / "include" / "hipccl"
     if not include_dir.is_dir():
@@ -1423,6 +1423,7 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
+    add_libhipcxx_include_path(env)
 
     if is_windows:
         env.update(
