@@ -285,4 +285,5 @@ jobs:
             candidate/SOURCE.json
             diagnostics/
             candidate/share/hip/catch_tests/Testing/
+            candidate/share/hip/catch_tests/hip_aql_barrier_*.log
           retention-days: 7
