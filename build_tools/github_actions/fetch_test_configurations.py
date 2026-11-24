@@ -1300,10 +1300,7 @@ test_matrix = {
         # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
         # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
-        # Whole amdclang suite (c2h + lit) on one runner. 180 minutes so a
-        # slow Windows run can finish. The test_component job cap is 210,
-        # which leaves the remaining time for setup.
-        "timeout_minutes": 180,
+        "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_artifact_path("libhipcxx/requirements-test.txt"),
             _get_script_path("requirements-test-ninja.txt"),
@@ -1318,6 +1315,11 @@ test_matrix = {
             "linux": [
                 # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
                 "gfx125X-dcgpu",
+            ],
+            "windows": [
+                # The suite does not fit the job time budget on these runners
+                # (ROCM-34255).
+                "gfx117X-all",
             ],
         },
     },

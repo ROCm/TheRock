@@ -70,11 +70,8 @@ logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
 logging.info(f"PATH: {environ_vars['PATH']}")
 
 LIBHIPCXX_BUILD_DIR = OUTPUT_ARTIFACTS_PATH / "libhipcxx"
-# Twice libhipcxx's LIBCUDACXX_TEST_TIMEOUT default (200s). Applied only on
-# Windows, via ArtifactBinExecutor; Linux keeps the upstream default.
-LIBHIPCXX_TEST_TIMEOUT = 400
-# Twice the previous 300s cap for the non-lit (c2h) Windows ctest tests.
-LIBHIPCXX_WINDOWS_CTEST_TIMEOUT = 600
+# Matches the LIBCUDACXX_TEST_TIMEOUT default in libhipcxx's test CMakeLists.
+LIBHIPCXX_TEST_TIMEOUT = 200
 
 try:
     os.chdir(LIBHIPCXX_BUILD_DIR)
@@ -160,14 +157,7 @@ if is_windows:
         except OSError:
             shutil.copy2(dll, target)
     steps = [
-        [
-            "ctest",
-            "--output-on-failure",
-            "--timeout",
-            str(LIBHIPCXX_WINDOWS_CTEST_TIMEOUT),
-            "-E",
-            LIT_CTEST_NAME,
-        ],
+        ["ctest", "--output-on-failure", "--timeout", "300", "-E", LIT_CTEST_NAME],
         ["ctest", "-V", "-R", LIT_CTEST_NAME],
     ]
     for cmd in steps:
