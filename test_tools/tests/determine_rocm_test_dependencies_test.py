@@ -346,6 +346,7 @@ class TestCliInputParsing(_FixtureTestCase):
                     "tensilelite-common",
                     "tensilelite-rocjitsu",
                     "hipblaslt",
+                    "hipblaslt-rocjitsu",
                 },
             )
             # Clean stderr is part of the assertion: the regression was a
@@ -380,6 +381,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "shared/mxdatagenerator": {
                     "hipblas",
                     "hipblaslt",
+                    "hipblaslt-rocjitsu",
                     "rocblas",
                     "rocroller",
                     "tensilelite",
