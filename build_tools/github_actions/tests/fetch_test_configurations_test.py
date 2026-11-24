@@ -1273,15 +1273,10 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertEqual(hip["test_runner"], "linux-strix-halo-gpu-rocm-oem")
 
     def test_whole_node_jobs_move_to_apptainer_whole_node_label(self):
-        with patch.object(
-            fetch_test_configurations,
-            "_APPTAINER_WHOLE_NODE_JOBS",
-            ["rocprofiler-sdk"],
-        ):
-            jobs = self._run_gfx950_with_pool(
-                "linux-gfx950-1gpu-crusoe-rocm",
-                ["test:hip-tests", "test:rocgdb-gpu", "test:rocprofiler-sdk"],
-            )
+        jobs = self._run_gfx950_with_pool(
+            "linux-gfx950-1gpu-crusoe-rocm",
+            ["test:hip-tests", "test:rocgdb-gpu", "test:rocprofiler-sdk"],
+        )
         prof = jobs["rocprofiler-sdk"]
         self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
         self.assertTrue(prof["whole_node"])
@@ -1486,16 +1481,15 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             jobs["hip-tests"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
         )
 
-    def test_pool_draw_of_the_crusoe_label_keeps_profiler_on_1gpu(self):
+    def test_pool_draw_of_the_crusoe_label_moves_profiler_to_whole_node(self):
         jobs = self._run_gfx950_with_crusoe_in_pool(
             "linux-gfx950-1gpu-ccs-ossci-rocm",
             ["test:rocprim", "test:rocprofiler-sdk"],
             drawn="linux-gfx950-1gpu-crusoe-rocm",
         )
         prof = jobs["rocprofiler-sdk"]
-        self.assertEqual(prof["test_runner"], "linux-gfx950-1gpu-crusoe-rocm")
-        self.assertNotIn("whole_node", prof)
-        self.assertNotIn("multi_gpu_runner", prof)
+        self.assertEqual(prof["multi_gpu_runner"], "linux-gfx950-8gpu-crusoe-rocm")
+        self.assertTrue(prof["whole_node"])
         self.assertIn("-e ROCPROFILER_KR_MIN_SNAP_GBPS=2", prof["container_options"])
         self.assertEqual(
             jobs["rocprim"]["test_runner"], "linux-gfx950-1gpu-crusoe-rocm"
