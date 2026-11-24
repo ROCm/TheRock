@@ -182,8 +182,9 @@ def select_build_runner(
     Args:
         platform: "linux" or "windows"
         build_variant: build variant string (e.g. "release", "asan", "tsan")
-        size: job size key — "small", "medium", "large" (default),
-              or "native_package".
+        size: runner pool size — "small", "medium", or "large" (default).
+              Sanitizer variants always use the sanitizer (large) pool regardless
+              of size. Platforms without a size-specific pool fall back to default.
         triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
                   When "submodule_bump" is present, uses the "bump" runner pool if
                   configured, to isolate bump PRs from the weighted Azure/AWS split.
@@ -195,24 +196,28 @@ def select_build_runner(
 
     platform_config = build_runner_labels[platform]
 
-    # Trigger-based overrides take highest precedence.
-    if triggers and "submodule_bump" in triggers and "bump" in platform_config:
+    # Sanitizer builds are memory-intensive; large stages use a dedicated
+    # sanitizer runner pool. Small/medium stages use their normal pools since
+    # they don't require the extra memory headroom.
+    if "san" in build_variant and size not in ("small", "medium", "native_package"):
+        labels_config = platform_config.get("sanitizer", platform_config["default"])
+        context_name = f"build-runner ({platform}, {build_variant})"
+    elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
         labels_config = platform_config["bump"]
         context_name = f"build-runner-bump ({platform})"
+    elif size == "native_package":
+        # Native package jobs (deb/rpm) need medium runners for sanitizer builds
+        # due to artifact extraction disk pressure (see TheRock#10095). All other
+        # variants use small.
+        resolved = "medium" if "san" in build_variant else "small"
+        labels_config = platform_config.get(resolved, platform_config["default"])
+        context_name = f"build-runner-native-package ({platform}, →{resolved})"
+    elif size in ("small", "medium"):
+        labels_config = platform_config.get(size, platform_config["default"])
+        context_name = f"build-runner-{size} ({platform})"
     else:
-        is_sanitizer = "san" in build_variant
-        if size == "large":
-            pool = "sanitizer" if is_sanitizer else "default"
-        elif size == "native_package":
-            pool = "medium" if is_sanitizer else "small"
-        elif size == "medium":
-            pool = "medium"
-        elif size == "small":
-            pool = "small"
-        else:
-            pool = "default"
-        labels_config = platform_config.get(pool, platform_config["default"])
-        context_name = f"build-runner-{size} ({platform}, →{pool})"
+        labels_config = platform_config["default"]
+        context_name = f"build-runner ({platform})"
 
     return select_weighted_label(labels_config, context_name)
 
