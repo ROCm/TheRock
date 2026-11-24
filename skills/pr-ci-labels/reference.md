@@ -93,13 +93,15 @@ Add these where the diff needs them, even on a narrowed run:
 - `ci:exactly` needs at least one `ci:gfx...` or `ci:build:gfx...` label; a `ci:test:gfx...` label
   alone is an error.
 - `ci:skip` wins over `ci:run-on-draft`.
-- Draft PRs skip CI. Iterate in draft, and add `ci:run-on-draft` only when a run is wanted. When a
-  PR is a draft, report that CI is not running yet; `ci:run-on-draft` is about when CI runs, not
-  what it covers, so do not suggest it as coverage.
-- Adding or removing a label starts a new run, and a run uses the labels present when it was
-  triggered. Apply labels before marking the PR ready (or before the push that should be tested),
-  so the first full run is the right one. Adding several labels one at a time starts one run per
-  label; concurrency cancels all but the last.
+- Draft PRs skip CI, and the Multi-Arch summary check fails on a draft skip so it never passes a
+  required check without a build. Iterate in draft, and add `ci:run-on-draft` only when a run is
+  wanted. When a PR is a draft, report that CI is not running yet (a red summary on a draft is
+  expected, not a defect); `ci:run-on-draft` is about when CI runs, not what it covers, so do not
+  suggest it as coverage.
+- Adding or removing a label starts a new run. Multi-Arch CI setup reads the PR's labels and draft
+  state when it starts, not from the triggering event. Apply labels before marking the PR ready (or
+  before the push that should be tested), so the first full run is the right one. Adding several
+  labels one at a time starts one run per label; concurrency cancels all but the last.
 
 ______________________________________________________________________
 

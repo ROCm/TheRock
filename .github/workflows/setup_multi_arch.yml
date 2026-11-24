@@ -163,6 +163,13 @@ on:
       windows_test_labels:
         description: ROCm projects to run Windows tests on. Optional filter.
         value: ${{ jobs.setup.outputs.windows_test_labels }}
+      summary_failure_reason:
+        description: >-
+          Non-empty when the caller's summary job must fail even though no job
+          failed (set when a draft pull request skips builds and tests).
+          workflow_summary.py reads it from toJSON(needs), so callers that pass
+          their needs context to that script need no changes.
+        value: ${{ jobs.setup.outputs.summary_failure_reason }}
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
@@ -199,6 +206,7 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      summary_failure_reason: ${{ steps.configure.outputs.summary_failure_reason }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       rocm_deb_package_version: ${{ steps.rocm_package_version.outputs.rocm_deb_package_version }}
       rocm_rpm_package_version: ${{ steps.rocm_package_version.outputs.rocm_rpm_package_version }}
@@ -283,10 +291,12 @@ jobs:
             --override-git-sha="${CHECKOUT_COMMIT}" \
             --build-variant="${BUILD_VARIANT}"
 
-      # Note: the script reads PR labels, the base ref, etc. from the event
-      # payload (GITHUB_EVENT_PATH). That is the original event that started
-      # the workflow run, which may not directly map to the "inputs" on
-      # the "workflow_call" trigger for this file.
+      # Note: the script reads the base ref, etc. from the event payload
+      # (GITHUB_EVENT_PATH). That is the original event that started the
+      # workflow run, which may not directly map to the "inputs" on the
+      # "workflow_call" trigger for this file. Pull request draft state and
+      # labels are read live from the GitHub API (with GITHUB_TOKEN below)
+      # because the payload can be stale by the time the run starts.
       - name: Configuring CI options
         id: configure
         env:

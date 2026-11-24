@@ -776,6 +776,37 @@ def gha_query_prs_for_commit(
     return response
 
 
+def gha_query_pull_request(
+    github_repository: str, pr_number: int | str, timeout_seconds: int = 30
+) -> dict:
+    """Gets the current state of a pull request.
+
+    Uses the GitHub REST API endpoint: /pulls/{pull_number}
+
+    Unlike the ``pull_request`` object in a workflow's event payload, which is
+    a snapshot from when the event fired, this returns the pull request as it
+    is now (draft state, labels, head SHA, and so on).
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g. "ROCm/TheRock").
+        pr_number: Pull request number.
+        timeout_seconds: Request timeout in seconds (default 30).
+
+    Returns:
+        Pull request object from the GitHub API.
+
+    See: https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request
+    """
+    url = f"https://api.github.com/repos/{github_repository}/pulls/{pr_number}"
+    response = gha_send_request(url, timeout_seconds=timeout_seconds)
+    if not isinstance(response, dict):
+        raise GitHubAPIError(
+            f"Expected a pull request object for {github_repository}#{pr_number}, "
+            f"got {type(response).__name__}"
+        )
+    return response
+
+
 def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -> dict:
     """Gets metadata for a workflow run by its run ID.
 

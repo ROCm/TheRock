@@ -59,7 +59,23 @@ The following labels may be added to a pull request to modify CI behavior:
 Multi-Arch CI skips builds and tests on draft pull requests. A draft is usually
 not ready for review, and every push to one would otherwise cost a full CI run
 (builds plus GPU test time). The setup job still runs, logs why CI was skipped,
-and reports the reason in the job summary, so required status checks still pass.
+and reports the reason in the job summary.
+
+The workflow's summary check (for example `Multi-Arch CI Summary`) **fails** on
+a draft skip, with a message saying why. This is on purpose: a run that built
+and tested nothing must never satisfy a required check. A draft cannot be
+merged anyway, and the failure clears as soon as a run builds and tests.
+Skips for other reasons (`ci:skip`, docs-only changes, the per-workflow labels
+below) still pass. That includes a draft that would skip for one of those
+reasons once it is ready; for example, the ASAN workflow's summary stays green
+on a draft without the `ci:asan` label.
+
+The setup job reads the draft state and labels from the GitHub API when it
+starts, not from the event that triggered the run. GitHub does not guarantee the
+order in which runs start, so a run for a push made while the pull request was
+a draft can start after the pull request is marked ready. Reading the live state
+means that run builds instead of skipping. If the API lookup fails, setup falls
+back to the event's values and logs why.
 
 To get CI signal on a draft:
 
@@ -68,6 +84,8 @@ To get CI signal on a draft:
 - **Add the `ci:run-on-draft` label.** CI starts immediately (the workflows
   trigger on `labeled`) and keeps running on every subsequent push while the
   pull request stays a draft.
+- **Re-run the skipped run** after doing either of the above. Setup reads the
+  current state, so the re-run builds and tests.
 
 If a pull request has both `ci:skip` and `ci:run-on-draft`, `ci:skip` wins and
 nothing runs.

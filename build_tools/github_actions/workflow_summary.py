@@ -38,6 +38,11 @@ Notes:
     This ensures that required checks can be added in the github UI without
     the ambiguity of names overlapping.
   * Jobs skipped by "if" conditions are okay - they will not fail here.
+  * A job can force this summary to fail, even though it and every other job
+    passed or was skipped, by setting a non-empty ``summary_failure_reason``
+    output. The message is printed as the reason. For example, Multi-Arch CI
+    setup sets it when a draft pull request skips builds and tests, so a run
+    that tested nothing never satisfies a required check.
 """
 
 import argparse
@@ -61,6 +66,7 @@ class JobResult:
     name: str
     result: str
     continue_on_error: bool
+    summary_failure_reason: str = ""
 
 
 @dataclass
@@ -103,11 +109,13 @@ def parse_needs_json(needs_json: str) -> list[JobResult]:
         # The continue_on_error flag is conveyed as a job output string.
         outputs = job_info.get("outputs") or {}
         continue_on_error = str2bool(outputs.get("continue_on_error"))
+        summary_failure_reason = str(outputs.get("summary_failure_reason") or "")
         results.append(
             JobResult(
                 name=job_name,
                 result=result,
                 continue_on_error=continue_on_error,
+                summary_failure_reason=summary_failure_reason.strip(),
             )
         )
     return results
@@ -253,6 +261,14 @@ def main(argv: list[str]) -> int:
         color = _RESULT_COLORS.get(job.result, _RED)
         print(f"  {color}{job.name}: {job.result}{_RESET}")
 
+    flagged = [job for job in jobs if job.summary_failure_reason]
+    for job in flagged:
+        print(f"\n{_RED}{job.name} requires this summary to fail:{_RESET}")
+        print(f"  {job.summary_failure_reason}")
+        # Also surface the reason as an annotation on the run's summary page.
+        # Workflow commands end at a newline, so flatten the message.
+        print(f"::error::{' '.join(job.summary_failure_reason.split())}")
+
     if failed:
         print(f"\n{_RED}The following job(s) failed:{_RESET}")
         for job in failed:
@@ -262,6 +278,9 @@ def main(argv: list[str]) -> int:
         if args.github_repository and args.github_run_id:
             _print_failed_sub_job_urls(args.github_repository, args.github_run_id)
 
+        return 1
+
+    if flagged:
         return 1
 
     print(f"\n{_GREEN}All required jobs succeeded.{_RESET}")

@@ -50,6 +50,8 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    summary_failure_reason: Message that fails the workflow summary job (set
+                            for draft skips), or "" otherwise
 """
 
 import enum
@@ -92,8 +94,10 @@ from configure_jax_release_matrix import generate_jax_matrix_for_release_type
 from configure_pytorch_release_matrix import generate_pytorch_matrix_for_release_type
 from configure_rocm_python_test_matrix import build_rocm_python_test_matrix
 from github_actions_api import (
+    GitHubAPIError,
     gha_append_step_summary,
     gha_load_github_event,
+    gha_query_pull_request,
     gha_set_output,
     str2bool,
 )
@@ -130,6 +134,68 @@ def _parse_comma_list(raw: str) -> list[str]:
     Example: "gfx94X, gfx120X" → ["gfx94x", "gfx120x"]
     """
     return [name.strip().lower() for name in raw.split(",") if name.strip()]
+
+
+def _label_names(pr_obj: dict) -> list[str]:
+    """Extract label name strings from a pull request object's label objects.
+
+    Sample input:  {"labels": [{"name": "ci:skip", "color": "fff", ...}, ...]}
+    Sample output: ["ci:skip", ...]
+    """
+    return [label["name"] for label in pr_obj.get("labels", [])]
+
+
+def _resolve_pull_request_state(event: dict) -> tuple[bool, list[str]]:
+    """Return the pull request's (is_draft, labels), read live when possible.
+
+    The event payload is a snapshot from when the event fired, and GitHub does
+    not guarantee the order in which runs start. A ``synchronize`` run for a
+    push made while the pull request was a draft can start after the
+    ``ready_for_review`` run that followed it, still carrying ``draft: true``,
+    and cancel that run through the concurrency group. Labels added right
+    after a push have the same problem. Both decide whether CI runs at all, so
+    read them from the API and fall back to the payload only when the lookup
+    is not possible.
+    """
+    pr_obj = event.get("pull_request", {})
+    payload_draft = bool(pr_obj.get("draft", False))
+    payload_labels = _label_names(pr_obj)
+
+    # GITHUB_REPOSITORY is the repository whose event started the run, which
+    # is the caller (e.g. ROCm/rocm-libraries) when another repository calls
+    # these workflows.
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    pr_number = pr_obj.get("number") or event.get("number")
+    if not repository or not pr_number:
+        print(
+            "  Pull request state: from the event payload (no repository or pull "
+            "request number to look up)"
+        )
+        return payload_draft, payload_labels
+
+    try:
+        live_pr = gha_query_pull_request(repository, pr_number)
+    except GitHubAPIError as e:
+        print(
+            f"  Pull request state: from the event payload (live lookup of "
+            f"{repository}#{pr_number} failed: {e})"
+        )
+        return payload_draft, payload_labels
+
+    is_draft = bool(live_pr.get("draft", False))
+    labels = _label_names(live_pr)
+    print(f"  Pull request state: read live from {repository}#{pr_number}")
+    if is_draft != payload_draft:
+        print(
+            f"  Draft state changed after the event fired: draft={payload_draft} "
+            f"in the event payload, draft={is_draft} now. Using the live value."
+        )
+    if sorted(labels) != sorted(payload_labels):
+        print(
+            f"  Labels changed after the event fired: {sorted(payload_labels)} in "
+            f"the event payload, {sorted(labels)} now. Using the live labels."
+        )
+    return is_draft, labels
 
 
 def _parse_prebuilt_stages(raw: str) -> list[str]:
@@ -253,6 +319,18 @@ EXACTLY_LABEL = "ci:exactly"
 # ready for review. This label opts a draft back in to the normal CI behavior.
 RUN_ON_DRAFT_LABEL = "ci:run-on-draft"
 
+# A draft skip fails the summary job (when the pull request would otherwise run
+# CI) so a run that built and tested nothing can never satisfy a required
+# check. Callers splice the summary_failure_reason output into single-quoted
+# shell strings via toJSON(needs), so this message must not contain single
+# quotes or apostrophes.
+DRAFT_SKIP_SUMMARY_FAILURE = (
+    "Builds and tests were skipped because the pull request is a draft, so this "
+    "run tested nothing. Mark the pull request ready for review, or add the "
+    f"{RUN_ON_DRAFT_LABEL} label, to start a run that builds and tests. "
+    "Re-running this workflow after the pull request is ready also works."
+)
+
 
 def _apply_stage_test_labels(
     platform: str,
@@ -312,14 +390,15 @@ class CIInputs:
     build_native_windows: bool = True
     python_versions: list[str] = field(default_factory=list)
 
-    # Labels from the PR event payload or workflow_dispatch pr_labels input.
+    # Labels from the pull request (read live, falling back to the event
+    # payload) or the workflow_dispatch pr_labels input.
     pr_labels: list[str] = field(default_factory=list)
     pull_request_opt_in_label: str = ""  # Skip PRs lacking this label; "" disables
     pull_request_opt_out_label: str = ""  # Skip PRs with this label; "" disables
     pr_base_ref: str = ""  # PR target branch, distinct from the git diff base_ref
     checkout_ref: str = ""  # Source ref used for TheRock (CI code and scripts)
     checkout_commit: str = ""  # Resolved TheRock commit from actions/checkout
-    is_draft_pr: bool = False  # pull_request.draft from the event payload
+    is_draft_pr: bool = False  # Live pull request draft state (payload fallback)
 
     # Per-platform GPU family selections parsed from reusable workflow inputs.
     linux_amdgpu_families: list[str] = field(default_factory=list)
@@ -434,6 +513,18 @@ class CIInputs:
         return self.event_name == "workflow_dispatch"
 
     @property
+    def is_skipped_as_draft(self) -> bool:
+        """True when CI is skipped because the pull request is a draft.
+
+        'ci:skip' is checked before the draft state, so it wins when both apply.
+        """
+        return (
+            self.is_draft_pr
+            and RUN_ON_DRAFT_LABEL not in self.pr_labels
+            and "ci:skip" not in self.pr_labels
+        )
+
+    @property
     def contains_ci_exactly_label(self) -> bool:
         """True when ci:exactly should suppress the default GPU families."""
         return EXACTLY_LABEL in self.pr_labels
@@ -449,8 +540,9 @@ class CIInputs:
         event = gha_load_github_event()
 
         # Workflow inputs are passed as environment variables by
-        # setup_multi_arch.yml. GitHub-specific context (PR labels,
-        # push before-commit) comes from the event payload.
+        # setup_multi_arch.yml. GitHub-specific context (PR base ref, push
+        # before-commit) comes from the event payload. PR draft state and
+        # labels are read live (see _resolve_pull_request_state).
         build_variant = os.environ.get("BUILD_VARIANT", "release")
         release_type = os.environ.get("RELEASE_TYPE", "ci")
         # str2bool("") is False, so an unset variable must default to "true".
@@ -473,13 +565,9 @@ class CIInputs:
         is_draft_pr = False
         base_ref: str | None = "HEAD^1"
         if event_name == "pull_request":
-            # Extract label name strings from the event payload's label objects:
-            #   Sample input:  [{"name": "ci:skip", "color": "fff", ...}, ...]
-            #   Sample output: ["ci:skip", ...]
             pr_obj = event.get("pull_request", {})
-            pr_labels = [label["name"] for label in pr_obj.get("labels", [])]
             pr_base_ref = pr_obj.get("base", {}).get("ref", "")
-            is_draft_pr = bool(pr_obj.get("draft", False))
+            is_draft_pr, pr_labels = _resolve_pull_request_state(event)
 
             # The merge commit's first parent is the PR base.
             base_ref = "HEAD^"
@@ -949,11 +1037,16 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Non-empty when the workflow's summary job must fail even though every job
+    # passed or was skipped. Read by workflow_summary.py.
+    summary_failure_reason: str = ""
 
     @staticmethod
-    def skipped() -> "CIOutputs":
+    def skipped(summary_failure_reason: str = "") -> "CIOutputs":
         """Produce empty outputs when CI is skipped."""
-        return CIOutputs(is_ci_enabled=False)
+        return CIOutputs(
+            is_ci_enabled=False, summary_failure_reason=summary_failure_reason
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1004,7 +1097,7 @@ def should_skip_ci(
     #     skipped by default. Marking the PR ready for review re-triggers CI,
     #     and the opt-in label runs CI on the draft as-is. 'ci:skip' is checked
     #     first so it wins when both labels are present.
-    if ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+    if ci_inputs.is_skipped_as_draft:
         print(
             f"  Skipping: pull request is a draft (add '{RUN_ON_DRAFT_LABEL}' or mark "
             "the pull request ready for review to run CI)"
@@ -1067,6 +1160,32 @@ def should_skip_ci(
         print("  Running: ASAN CI triggered by PR label")
 
     return False
+
+
+def draft_skip_summary_failure(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    external_skip_patterns: list[str] | None = None,
+) -> str:
+    """Return the summary failure message when only the draft state skipped CI.
+
+    Called after should_skip_ci() skipped the run. The summary fails only when
+    the same pull request would run CI once it is ready. If it would skip
+    anyway (a missing opt-in label such as ci:asan, docs-only changes), the
+    summary passes, as it does for those skips on ready pull requests.
+    """
+    if not ci_inputs.is_skipped_as_draft:
+        return ""
+    print("\n=== Checking whether CI would run if the pull request were ready ===")
+    if should_skip_ci(
+        ci_inputs=replace(ci_inputs, is_draft_pr=False),
+        git_context=git_context,
+        external_skip_patterns=external_skip_patterns,
+    ):
+        print("Result: CI would skip anyway, so the summary passes")
+        return ""
+    print("Result: CI would run, so the summary fails until a run builds and tests")
+    return DRAFT_SKIP_SUMMARY_FAILURE
 
 
 # ---------------------------------------------------------------------------
@@ -2473,6 +2592,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "summary_failure_reason": outputs.summary_failure_reason,
     }
     gha_set_output(output_vars)
 
@@ -2519,7 +2639,13 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         git_context=git_context,
         external_skip_patterns=external_skip_patterns,
     ):
-        return CIOutputs.skipped()
+        return CIOutputs.skipped(
+            summary_failure_reason=draft_skip_summary_failure(
+                ci_inputs=ci_inputs,
+                git_context=git_context,
+                external_skip_patterns=external_skip_patterns,
+            )
+        )
     print("Result: CI will run")
 
     print("\n=== Selecting GPU target families ===")
