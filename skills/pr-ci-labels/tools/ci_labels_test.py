@@ -220,7 +220,7 @@ class CiLabelAnalysisTest(unittest.TestCase):
         # testing anything, so A stays the baseline and B's code is uncovered.
         runs = [
             {**_ci_run(SHA_A, "2026-11-01T10:00:00Z"), "tested": True},
-            _ci_run(SHA_B, "2026-11-01T12:00:00Z"),
+            _ci_run(SHA_B, "2026-11-01T12:00:00Z", tested=False),
         ]
         report = cl.analyze_ci_labels(
             runs,
@@ -252,7 +252,7 @@ class CiLabelAnalysisTest(unittest.TestCase):
         self.assertEqual(report["verdict"], "go")
 
     def test_code_with_no_tested_run_and_ci_skip_is_hold(self):
-        runs = [_ci_run(SHA_A, "2026-11-01T10:00:00Z")]
+        runs = [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=False)]
         report = cl.analyze_ci_labels(
             runs,
             [_label("labeled", "ci:skip", "2026-11-01T09:00:00Z")],
@@ -361,6 +361,35 @@ class CiLabelAnalysisTest(unittest.TestCase):
         )
         self.assertEqual(report["verdict"], "go")
 
+    def test_rerun_uses_labels_present_when_it_started(self):
+        # Created at 10:00, re-run at 14:00 after ci:gfx950 was added at 12:00. Setup reads
+        # labels when the attempt starts, so the re-run used ci:gfx950.
+        run = {
+            **_ci_run(SHA_A, "2026-11-01T10:00:00Z"),
+            "labels_read_at": "2026-11-01T14:00:00Z",
+        }
+        report = cl.analyze_ci_labels(
+            [run],
+            [_label("labeled", "ci:gfx950", "2026-11-01T12:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["runs"][0]["labels"], ["ci:gfx950"])
+        self.assertEqual(report["label_changes_since"], [])
+        self.assertEqual(report["verdict"], "go")
+
+    def test_job_evidence_counts_even_if_replayed_labels_say_ci_skip(self):
+        # Replayed labels are an estimate; a run with a successful build job built.
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=True)],
+            [_label("labeled", "ci:skip", "2026-11-01T09:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["last_passing_run"]["head_sha"], SHA_A)
+
 
 class GhApiPagesTest(unittest.TestCase):
     def test_failed_page_is_none_not_empty(self):
@@ -422,7 +451,8 @@ class CiLabelFetchTest(unittest.TestCase):
                         "id": 7,
                         "name": "TheRock Multi-Arch CI",
                         "head_sha": SHA_A,
-                        # A re-run: run_started_at is later, but labels come from created_at.
+                        # Created under ci:skip, re-run after the label was removed. Setup
+                        # reads labels when the attempt starts, so the re-run built.
                         "created_at": "2026-11-01T10:00:00Z",
                         "run_started_at": "2026-11-01T14:00:00Z",
                         "status": "completed",
@@ -459,6 +489,11 @@ class CiLabelFetchTest(unittest.TestCase):
         events = [
             {
                 "event": "labeled",
+                "label": {"name": "ci:skip"},
+                "created_at": "2026-11-01T09:00:00Z",
+            },
+            {
+                "event": "unlabeled",
                 "label": {"name": "ci:skip"},
                 "created_at": "2026-11-01T12:00:00Z",
             },

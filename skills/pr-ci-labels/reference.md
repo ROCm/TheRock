@@ -118,13 +118,14 @@ ______________________________________________________________________
 
 ## Which labels did a run use?
 
-CI reads labels from the pull-request event that triggered a run, and a re-run reuses that event.
-The API does not expose the event, so reconstruct it: compare the PR's label events
+Multi-Arch CI setup reads the PR's labels from the GitHub API when it starts, so a re-run uses the
+labels present at the re-run, not the ones present when the run was first created. The API does not
+record which labels setup saw, so reconstruct them: compare the PR's label events
 (`gh api repos/<owner>/<repo>/issues/<n>/events --paginate`, the `labeled` and `unlabeled` entries
-with their timestamps) against each CI run's creation time and head commit (the Actions runs API,
-filtered by `head_sha`). The result is exact only when no label changed within about a minute of
-the run being created. Otherwise treat it as uncertain and confirm in the run's setup log, which
-prints a `Label '...'` line for each label it acted on.
+with their timestamps) against when each CI run's latest attempt started (`run_started_at` in the
+Actions runs API, filtered by `head_sha`). The result is exact only when no label changed within
+about a minute of that start. Otherwise treat it as uncertain and confirm in the run's setup log,
+which prints the labels it read (`pr_labels`) and a `Label '...'` line for each label it acted on.
 
 ## A passing run is not always a tested run
 
@@ -142,13 +143,14 @@ ______________________________________________________________________
 the PR's main CI workflow (`Multi-Arch CI` in TheRock, `TheRock Multi-Arch CI` in repositories that
 call it). It:
 
-1. Replays the PR's label events to give each run the labels it used, and flags labels that changed
-   within 60 seconds of a run's creation as uncertain. If the label history cannot be read, it uses
-   the PR's current labels, marks every run's labels as unknown, and never gives a go that depends
-   on them.
+1. Replays the PR's label events to give each run the labels it used, as of the start of its latest
+   attempt, and flags labels that changed within 60 seconds of that start as uncertain. If the label
+   history cannot be read, it uses the PR's current labels, marks every run's labels as unknown, and
+   never gives a go that depends on them.
 1. Reads the jobs of passing runs, newest first (up to 10), to find the last one with a successful
-   build or test job. `ci:skip` runs never count, and neither does a run whose jobs cannot be read;
-   the report says how many it could not check.
+   build or test job. The jobs decide, not the replayed labels: a `ci:skip` run has no build or test
+   jobs, so it never counts, and neither does a run whose jobs cannot be read; the report says how
+   many it could not check.
 1. Lists every commit after that run with its changed files (all pages), classified with the
    repository's skip patterns. A commit whose files cannot be read counts as code.
 1. Gives a verdict:

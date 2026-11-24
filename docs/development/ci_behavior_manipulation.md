@@ -84,8 +84,10 @@ To get CI signal on a draft:
 - **Add the `ci:run-on-draft` label.** CI starts immediately (the workflows
   trigger on `labeled`) and keeps running on every subsequent push while the
   pull request stays a draft.
-- **Re-run the skipped run** after doing either of the above. Setup reads the
-  current state, so the re-run builds and tests.
+- **Re-run all jobs** on the skipped run after doing either of the above.
+  Setup reads the current state, so the re-run builds and tests. **Re-run
+  failed jobs** does not work here: it re-runs only the failed summary, which
+  reuses the setup job's earlier draft-skip result and fails again.
 
 If a pull request has both `ci:skip` and `ci:run-on-draft`, `ci:skip` wins and
 nothing runs.

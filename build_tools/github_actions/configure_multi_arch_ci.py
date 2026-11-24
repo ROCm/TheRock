@@ -328,7 +328,8 @@ DRAFT_SKIP_SUMMARY_FAILURE = (
     "Builds and tests were skipped because the pull request is a draft, so this "
     "run tested nothing. Mark the pull request ready for review, or add the "
     f"{RUN_ON_DRAFT_LABEL} label, to start a run that builds and tests. "
-    "Re-running this workflow after the pull request is ready also works."
+    "After the pull request is ready, Re-run all jobs on this run also works. "
+    "Re-run failed jobs does not, because it keeps the setup result that skipped."
 )
 
 

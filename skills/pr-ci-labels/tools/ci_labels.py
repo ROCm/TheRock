@@ -137,7 +137,8 @@ SKIP_CI_THEROCK = "build_tools/github_actions/skip-ci-config.toml"
 SKIP_CI_EXTERNAL = ".github/skip-ci-config.toml"
 # Used only when no skip-ci config can be read.
 HEURISTIC_SKIP_SUFFIXES = (".md", ".rst")
-# A label change this close to a run's creation may or may not be in its event payload.
+# A label change this close to a run's start may or may not be among the labels its setup
+# job read.
 LABEL_RACE_SECONDS = 60
 # Multi-Arch CI build and test jobs ("Linux::release / Build Multi-Arch Stages / ...",
 # "Linux::release / Test gfx94X-dcgpu / ..."). Skip-only runs have only setup and summary jobs.
@@ -239,8 +240,9 @@ def load_skip_patterns(
 def uncertain_labels(events: list[dict], when: str | None) -> list[str]:
     """CI labels that changed within LABEL_RACE_SECONDS of `when`.
 
-    A run's labels come from its triggering event, which the API does not expose. Replaying
-    label events up to the run's creation is exact only when no label changed close to it.
+    Multi-Arch CI setup reads the PR's labels when it starts, and the API does not say which
+    labels it saw. Replaying label events up to the run's start is exact only when no label
+    changed close to it.
     """
     created = _parse_timestamp(when)
     if not created:
@@ -258,18 +260,23 @@ def uncertain_labels(events: list[dict], when: str | None) -> list[str]:
     return sorted(near)
 
 
+def labels_read_at(ci_run: dict) -> str | None:
+    """When the run's setup job read the PR's labels: the start of its latest attempt.
+
+    A re-run reads the labels present when it starts, not when the run was created.
+    """
+    return ci_run.get("labels_read_at") or ci_run.get("created_at")
+
+
 def is_coverage_baseline(ci_run: dict) -> bool:
     """A passing run with job evidence that it built or tested something.
 
     Under `ci:skip`, or when every path is auto-skipped, the setup and summary jobs still
     succeed, so a passing conclusion alone is not evidence of coverage, and neither is a run
-    whose jobs could not be read.
+    whose jobs could not be read. The job evidence decides, not the replayed labels, which
+    are an estimate.
     """
-    return (
-        ci_run.get("conclusion") == "success"
-        and "ci:skip" not in ci_run.get("labels", [])
-        and ci_run.get("tested") is True
-    )
+    return ci_run.get("conclusion") == "success" and ci_run.get("tested") is True
 
 
 def analyze_ci_labels(
@@ -282,8 +289,9 @@ def analyze_ci_labels(
 ) -> dict:
     """Which labels each CI run used, and whether anything since the last tested pass escaped CI.
 
-    `runs` are the PR's main-CI runs (id, name, head_sha, created_at, status, conclusion, url,
-    and `tested`: True or False from job evidence, None or absent when unknown). `events` are
+    `runs` are the PR's main-CI runs (id, name, head_sha, created_at, labels_read_at (when the
+    latest attempt started; created_at when absent), status, conclusion, url, and `tested`:
+    True or False from job evidence, None or absent when unknown). `events` are
     label events (see labels_at), or None when the label history could not be read; then
     `current_labels` (the PR's labels now) stands in and no run's labels are known.
     `commits` are the PR's commits, oldest first. `commit_files` maps a commit to its changed
@@ -295,8 +303,8 @@ def analyze_ci_labels(
     timeline = [
         {
             **r,
-            "labels": labels_at(events, r.get("created_at")),
-            "uncertain_labels": uncertain_labels(events, r.get("created_at")),
+            "labels": labels_at(events, labels_read_at(r)),
+            "uncertain_labels": uncertain_labels(events, labels_read_at(r)),
             "labels_unknown": not history,
         }
         for r in sorted(runs, key=lambda r: r.get("created_at") or "")
@@ -370,7 +378,7 @@ def analyze_ci_labels(
             report["reason"] = "No passing CI run built or tested this PR's code."
         return _note_gaps(report, history, unverified)
 
-    started = _parse_timestamp(last.get("created_at"))
+    started = _parse_timestamp(labels_read_at(last))
     report["label_changes_since"] = [
         e
         for e in sorted(events, key=lambda e: e.get("created_at") or "")
@@ -424,7 +432,7 @@ def analyze_ci_labels(
         report["verdict"] = "caution"
         report["reason"] += (
             f" But {', '.join(unsure)} changed within {LABEL_RACE_SECONDS} seconds of that "
-            "run being created, so it may not have used them. Check the run's setup log for "
+            "run starting, so it may not have used them. Check the run's setup log for "
             "the matching \"Label '...'\" line, or re-run CI."
         )
     return _note_gaps(report, history, unverified)
@@ -540,9 +548,10 @@ def fetch_ci_label_report(
                     "id": r.get("id"),
                     "name": r.get("name"),
                     "head_sha": r.get("head_sha"),
-                    # A re-run reuses its original event payload, so the labels it used are
-                    # the ones present when the run was created, not when it was re-run.
                     "created_at": r.get("created_at"),
+                    # Setup reads the PR's labels when each attempt starts, so a re-run
+                    # uses the labels present at the re-run.
+                    "labels_read_at": r.get("run_started_at") or r.get("created_at"),
                     "status": r.get("status"),
                     "conclusion": r.get("conclusion"),
                     "url": r.get("html_url"),
@@ -553,8 +562,6 @@ def fetch_ci_label_report(
     checked = 0
     for r in sorted(runs, key=lambda r: r.get("created_at") or "", reverse=True):
         if r["conclusion"] != "success":
-            continue
-        if events is not None and "ci:skip" in labels_at(events, r["created_at"]):
             continue
         if checked >= JOBS_MAX_RUNS:
             break
