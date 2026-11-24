@@ -180,6 +180,7 @@
       "cacheVariables": {
         "THEROCK_FLAG_WINDOWS_DRIVER_BUILD": "ON",
         "THEROCK_ENABLE_ALL": "OFF",
+        "THEROCK_ENABLE_BASE": "ON",
         "THEROCK_ENABLE_COMPILER": "ON",
         "THEROCK_ENABLE_HIP_RUNTIME": "ON",
         "THEROCK_ENABLE_OCL_RUNTIME": "ON",
