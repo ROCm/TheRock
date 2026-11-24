@@ -156,6 +156,7 @@ class ArtifactCatalog:
 
 
 def _identical_entries(first: os.DirEntry[str], second: os.DirEntry[str]) -> bool:
+    """Whether two entries can safely occupy the same flattened path."""
     first_type = stat.S_IFMT(first.stat(follow_symlinks=False).st_mode)
     second_type = stat.S_IFMT(second.stat(follow_symlinks=False).st_mode)
     if first_type != second_type:
@@ -173,6 +174,8 @@ def _identical_entries(first: os.DirEntry[str], second: os.DirEntry[str]) -> boo
             return first_path == second_path
         return filecmp.cmp(first_path, second_path, shallow=False)
     if stat.S_ISREG(first_type):
+        if (first.stat().st_mode & 0o111) != (second.stat().st_mode & 0o111):
+            return False
         return filecmp.cmp(first.path, second.path, shallow=False)
     raise ValueError(f"Unsupported device entry type: {first.path}")
 
