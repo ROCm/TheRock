@@ -598,6 +598,13 @@ or `ref` input is rejected. Cross-repository callers must dispatch into TheRock
 instead of enabling this option in their own workflow run. The compiler bumper
 supplies its three compiler SHAs separately, changing only their submodule pins.
 
+The reusable workflow's `comgr_dll_name` input defaults to `amd_comgr.dll`.
+It sets `THEROCK_COMGR_DLL_NAME` for Comgr and the HIP/OpenCL runtime loaders,
+and validates the matching DLL and PDB. Compiler bump driver builds select
+`amd_comgr_3.dll`. For local builds, pass the same filename to CMake with
+`-DTHEROCK_COMGR_DLL_NAME=amd_comgr_3.dll` and to the validator with
+`--comgr-dll-name amd_comgr_3.dll`.
+
 The workflow attaches `windows-driver-comgr` (including the Comgr PDB),
 `windows-driver-runtime`, and `windows-driver-logs` to its GitHub Actions run.
 These downloads have separate names and storage from the standard Windows

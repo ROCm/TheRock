@@ -13,6 +13,10 @@ on:
       rocm_package_version:
         type: string
         required: true
+      comgr_dll_name:
+        description: "Comgr DLL filename used by the build, runtime loaders, and artifact validation."
+        type: string
+        default: "amd_comgr.dll"
       build_runs_on:
         type: string
         default: "aws-windows-scale-rocm-prod-mix"
@@ -74,6 +78,7 @@ jobs:
       BUILD_DIR: B:/build
       DIST_AMDGPU_FAMILIES: ${{ inputs.dist_amdgpu_families }}
       ROCM_PACKAGE_VERSION: ${{ inputs.rocm_package_version }}
+      COMGR_DLL_NAME: ${{ inputs.comgr_dll_name }}
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
@@ -166,6 +171,7 @@ jobs:
           cmake -B "${BUILD_DIR}" -S . --preset windows-release-driver \
             -DTHEROCK_DIST_AMDGPU_FAMILIES="${DIST_AMDGPU_FAMILIES}" \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
+            -DTHEROCK_COMGR_DLL_NAME="${COMGR_DLL_NAME}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
@@ -177,7 +183,9 @@ jobs:
             --target amd-comgr+stage hip-clr+stage ocl-clr+stage -- -k 0
 
       - name: Validate driver artifacts
-        run: python build_tools/validate_windows_driver.py --build-dir "${BUILD_DIR}"
+        run: |
+          python build_tools/validate_windows_driver.py \
+            --build-dir "${BUILD_DIR}" --comgr-dll-name "${COMGR_DLL_NAME}"
 
       - name: Upload driver Comgr
         id: upload-comgr
