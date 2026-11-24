@@ -104,40 +104,13 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, ...]] = {
     ("profiler-hub", "profiler-hub-install-test", "test"),  # bin/test_profiler-hub
 }
 
-# Manifest subdir names that don't literally match their package.json
-# Artifact_Subdir "Name". Comparison is already case-insensitive, so this is
-# only for genuine naming drift. Keys and values lowercase.
-SUBDIR_PACKAGE_ALIASES: dict[str, str] = {}
-
-# "strict" (default): subdir-level gaps fail.
-# "warn": subdir-level gaps log only; artifact-level gaps still fail.
-# One-release escape hatch while the first-run backlog is triaged.
-VALID_COVERAGE_MODES = ("strict", "warn")
-
 # Trailing prefix segments that are build-layout noise, not a subproject name.
 _PREFIX_LEAF_IGNORE = {"stage", "dist", "build"}
 
 
-def parse_coverage_mode(value: str | None) -> str:
-    """Normalize and validate THEROCK_SUBDIR_COVERAGE.
-
-    Fails loudly on typos: silently falling back to a default would make the
-    env var untrustworthy in CI (a misspelled 'stict' would appear to work).
-    """
-    mode = (value or "strict").strip().lower()
-    if mode not in VALID_COVERAGE_MODES:
-        raise ValueError(
-            f"THEROCK_SUBDIR_COVERAGE must be one of "
-            f"{', '.join(VALID_COVERAGE_MODES)}; got {value!r}"
-        )
-    return mode
-
-
-SUBDIR_COVERAGE_MODE = parse_coverage_mode(os.getenv("THEROCK_SUBDIR_COVERAGE"))
-
-
 def subdir_from_prefix(prefix: str) -> str:
-    """Derive the package.json Artifact_Subdir name from a manifest prefix.
+    """Short subproject name for a manifest prefix, used for reporting and
+    KNOWN_UNCOVERED_COMPONENTS keys.
 
     e.g. "math-libs/BLAS/origami/stage" -> "origami"
     """
@@ -162,21 +135,17 @@ def artifacts_dir() -> Path:
     return path
 
 
-def list_archive_files(archive_path: Path) -> tuple[list[str], list[tuple[str, str]]]:
+def list_archive_files(archive_path: Path) -> list[tuple[str, str]]:
     """List the flattened file paths in an artifact archive.
 
     Reads artifact_manifest.txt (must be the first tar member) to get basedir
     prefixes, then strips those prefixes from each file member to produce
-    the flattened output path. The prefix that matched is retained as the
-    originating subdir, so coverage can be checked per subproject (#9049).
+    the flattened output path. The matching prefix is kept so coverage can be
+    checked per manifest line, the same way packaging_utils.py does (#9049).
 
     Returns:
-        (manifest_prefixes, [(subdir_name, flattened_path), ...])
-
-    manifest_prefixes is returned in manifest order; matching internally uses
-    longest-first order so nested prefixes win over their parents.
+        [(manifest_prefix, flattened_path), ...]
     """
-    prefixes: list[str] = []
     entries: list[tuple[str, str]] = []
 
     with open_archive_for_read(archive_path) as tf:
@@ -196,14 +165,6 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[tuple[str, s
                 line for line in mf.read().decode().splitlines() if line.strip()
             ]
 
-        # Precompute prefix -> subdir once: few prefixes, many members.
-        prefix_subdirs = {p: subdir_from_prefix(p) for p in prefixes}
-
-        # Longest-first: if one prefix is a path-prefix of another (e.g.
-        # "math-libs/BLAS/stage" vs "math-libs/BLAS/hipBLAS/stage"), the more
-        # specific one must win.
-        match_prefixes = sorted(prefixes, key=len, reverse=True)
-
         # Strip prefixes from each file member to produce flattened paths.
         # For example:
         #   prefix:     math-libs/BLAS/hipBLAS/stage
@@ -213,15 +174,15 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[tuple[str, s
             if member.isdir():
                 continue
             name = member.name
-            for prefix in match_prefixes:
+            for prefix in prefixes:
                 prefix_slash = prefix + "/"
                 if name.startswith(prefix_slash):
                     flattened_path = name[len(prefix_slash) :]
                     if flattened_path:
-                        entries.append((prefix_subdirs[prefix], flattened_path))
+                        entries.append((prefix, flattened_path))
                     break
 
-    return prefixes, entries
+    return entries
 
 
 def discover_archives(artifacts_dir: Path) -> list[Path]:
@@ -239,29 +200,14 @@ class ArchiveInfo:
     artifact_name: str
     component: str
     filename: str
-    # subdir name (from the manifest prefix) -> flattened paths contributed by
-    # that subdir. Only subdirs that actually contribute files to THIS
-    # component archive appear, so a subdir that legitimately ships nothing
-    # for a component is never flagged.
-    subdir_paths: dict[str, set[str]]
-
-    # subdir name -> the manifest prefix line it was derived from.
-    # packaging_utils.py matches Artifact_Subdir "Name" as a SUBSTRING of the
-    # whole manifest line, not against the derived leaf, so the full line must
-    # survive to replay that rule faithfully.
-    subdir_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
+    # manifest prefix line -> flattened paths it contributes to THIS archive.
+    # Prefixes that ship nothing for this component are absent, so they are
+    # never flagged.
+    prefix_paths: dict[str, set[str]]
 
     @functools.cached_property
     def flattened_paths(self) -> set[str]:
-        """Union of all subdirs' paths (the pre-#9049 view)."""
-        out: set[str] = set()
-        for paths in self.subdir_paths.values():
-            out |= paths
-        return out
-
-    @property
-    def subdir_names(self) -> list[str]:
-        return sorted(self.subdir_paths)
+        return set().union(*self.prefix_paths.values())
 
 
 @dataclasses.dataclass
@@ -302,229 +248,107 @@ def _clean_components(components) -> list[str]:
 
 @dataclasses.dataclass
 class PackageCoverage:
-    """Components declared by package.json, keyed by subdir AND by artifact."""
+    """Components declared by package.json."""
 
-    components: dict[str, set[str]]
-    # Artifacts declaring Artifact_Subdir entries. For these the collapsed
-    # top-level bucket is NOT a valid coverage source — that collapsing is
-    # the #9049 bug. Retained only for diagnostics / flat entries.
-    subdir_declared_artifacts: set[str]
-    # artifact -> [(Name, {components})], in package.json declaration order.
-    artifact_subdirs: dict[str, list[tuple[str, set[str]]]] = dataclasses.field(
-        default_factory=dict
-    )
+    # Flat (non-Artifact_Subdir) entries: artifact -> {components}.
+    flat: dict[str, set[str]]
+    # artifact -> [(Name lowercased, {components})] for Artifact_Subdir entries.
+    subdirs: dict[str, list[tuple[str, set[str]]]]
 
-    def components_for(self, key: str) -> set[str]:
-        return self.components.get(key.lower(), set())
+    def matching_subdirs(self, artifact: str, prefix: str) -> list[set[str]]:
+        """Components of every Artifact_Subdir entry whose Name the packager
+        would match against this manifest line.
 
-    def has_subdir_granularity(self, artifact_name: str) -> bool:
-        return artifact_name.lower() in self.subdir_declared_artifacts
-
-    def packager_match(
-        self, artifact: str, prefix_line: str, component: str
-    ) -> str | None:
-        """Replicate packaging_utils.py: (Name + "/") in manifest_line.
-
-        Deliberately mirrors the packager rather than being stricter, so a
-        finding means "these files land in no package", not merely "the
-        declaration looks unusual". The rule is loose in places --
-        Name="sysdeps" legitimately covers "third-party/sysdeps/zlib/stage" --
-        but tightening the packager is a separate change.
+        Mirrors packaging_utils.py: (Name + "/") in manifest_line.
         """
-        line = prefix_line.lower()
-        for name, comps in self.artifact_subdirs.get(artifact.lower(), []):
-            if component in comps and (name.lower() + "/") in line:
-                return name
-        return None
+        line = prefix.lower()
+        return [
+            comps
+            for name, comps in self.subdirs.get(artifact, [])
+            if (name + "/") in line
+        ]
 
 
 def build_packaged_components(package_data: list) -> PackageCoverage:
-    """Map each packaged artifact name (lowercased) to the components it ships.
-
-    Handles both the nested ``Artifact_Subdir`` structure and the older flat
-    structure, mirroring build_tools/packaging/linux/package.json.
-
-    Returns:
-        PackageCoverage, with components keyed by BOTH subdir name and
-        top-level artifact name. For artifacts that declare Artifact_Subdir
-        entries, only the per-subdir keys are valid for coverage decisions —
-        the collapsed artifact key is diagnostics-only (see #9049).
+    """Collect package.json coverage for both the nested ``Artifact_Subdir``
+    structure and the older flat structure.
 
     Raises:
-        ValueError: if an Artifact_Subdir entry has no usable "Name".
+        ValueError: if an Artifact_Subdir entry has no "Name" (the packager
+            would treat it as matching every manifest line).
     """
-    packaged: dict[str, set[str]] = defaultdict(set)
-    subdir_declared: set[str] = set()
-    artifact_subdirs: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
+    flat: dict[str, set[str]] = defaultdict(set)
+    subdirs: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
 
-    all_packages = []
     for item in package_data:
-        if "Artifactory" in item:
-            all_packages.extend(item["Artifactory"])
+        for pkg in item.get("Artifactory", []):
+            artifact = (pkg.get("Artifact") or "").lower()
+            if "Artifact_Subdir" in pkg:
+                for subdir in pkg["Artifact_Subdir"]:
+                    name = (subdir.get("Name") or "").lower()
+                    if not name:
+                        raise ValueError(
+                            f"package.json: Artifact_Subdir entry under "
+                            f"Artifact={artifact!r} has no 'Name'"
+                        )
+                    components = _clean_components(subdir.get("Components", ["run"]))
+                    subdirs[artifact].append((name, set(components)))
+            else:
+                # Old flat structure without Artifact_Subdir.
+                key = artifact or (pkg.get("Name") or "").lower()
+                flat[key].update(_clean_components(pkg.get("Components", ["run"])))
 
-    for pkg in all_packages:
-        artifact = pkg.get("Artifact")
-
-        if "Artifact_Subdir" in pkg:
-            if artifact:
-                subdir_declared.add(artifact.lower())
-            # Nested structure: each subdir has its own Name + Components.
-            for subdir in pkg["Artifact_Subdir"]:
-                subdir_name = (subdir.get("Name") or "").lower()
-                if not subdir_name:
-                    # An empty key would become a catch-all that any archive
-                    # with an undetectable subdir could match — reintroducing
-                    # the #9049 "unknown means covered" hole.
-                    raise ValueError(
-                        f"package.json: Artifact_Subdir entry under "
-                        f"Artifact={artifact!r} has no 'Name'; cannot resolve "
-                        f"per-subdir package coverage"
-                    )
-                components = _clean_components(subdir.get("Components", ["run"]))
-                if artifact:
-                    artifact_subdirs[artifact.lower()].append(
-                        (subdir["Name"], set(components))
-                    )
-                for component in components:
-                    packaged[subdir_name].add(component)
-                    # Collapsed bucket: diagnostics + flat artifacts only.
-                    # NOT used to satisfy coverage for subdir-declared
-                    # artifacts (see #9049).
-                    if artifact:
-                        packaged[artifact.lower()].add(component)
-        else:
-            # Old flat structure without Artifact_Subdir.
-            pkg_name = pkg.get("Name", artifact)
-            key = (artifact or pkg_name or "").lower()
-            for component in _clean_components(pkg.get("Components", ["run"])):
-                packaged[key].add(component)
-
-    return PackageCoverage(
-        components=dict(packaged),
-        subdir_declared_artifacts=subdir_declared,
-        artifact_subdirs=dict(artifact_subdirs),
-    )
+    return PackageCoverage(flat=dict(flat), subdirs=dict(subdirs))
 
 
-@dataclasses.dataclass(frozen=True)
-class UncoveredComponent:
-    """One artifact/subdir/component present in archives but not packaged."""
-
-    artifact_name: str
-    subdir: str
-    component: str
-    filename: str
-    # "artifact": missing from the artifact entirely (old check caught these).
-    # "subdir":   only this subdir lacks it; siblings provide it. New.
-    level: str
-    reason: str
-
-    @property
-    def sort_key(self) -> tuple[str, str, str]:
-        return (self.artifact_name, self.subdir, self.component)
-
-    def describe(self) -> str:
-        return (
-            f"{self.artifact_name}/{self.subdir} [{self.component}] "
-            f"({self.filename}): {self.reason}"
-        )
-
-
-def _is_known_uncovered(artifact: str, subdir: str | None, component: str) -> bool:
-    if (artifact, component) in KNOWN_UNCOVERED_COMPONENTS:
-        return True
-    if subdir is not None:
-        return (artifact, subdir, component) in KNOWN_UNCOVERED_COMPONENTS
-    return False
+def _is_known_uncovered(artifact: str, subdir: str, component: str) -> bool:
+    return (artifact, component) in KNOWN_UNCOVERED_COMPONENTS or (
+        artifact,
+        subdir,
+        component,
+    ) in KNOWN_UNCOVERED_COMPONENTS
 
 
 def find_uncovered_components(
     archive_index: list["ArchiveInfo"], coverage: PackageCoverage
-) -> list[UncoveredComponent]:
-    """Return artifact/subdir/components not covered by any package.
+) -> list[str]:
+    """Describe each artifact/subdir/component not covered by any package.
 
-    For artifacts declared with Artifact_Subdir entries, coverage resolves per
-    subdir. The collapsed top-level bucket is deliberately NOT a fallback:
-    consulting it is precisely what let origami/dev ship uncovered (#9049)
-    behind hipBLAS/rocBLAS/hipBLASLt's dev entries.
+    Subdir-declared artifacts are checked per manifest line, so one subdir's
+    gap cannot hide behind a sibling's entry (#9049).
     """
-    uncovered: list[UncoveredComponent] = []
+    uncovered: list[str] = []
     for info in archive_index:
         if info.component in IGNORED_COMPONENTS:
             continue
-        artifact_key = info.artifact_name.lower()
-        if _is_known_uncovered(artifact_key, None, info.component):
-            continue
+        artifact = info.artifact_name.lower()
 
-        artifact_covered = info.component in coverage.components_for(artifact_key)
-
-        if not coverage.has_subdir_granularity(artifact_key):
-            # Flat package entry: no finer granularity exists to check.
-            if not artifact_covered:
-                uncovered.append(
-                    UncoveredComponent(
-                        info.artifact_name,
-                        "*",
-                        info.component,
-                        info.filename,
-                        "artifact",
-                        "artifact/component has no package.json entry",
-                    )
-                )
-            continue
-
-        for subdir in info.subdir_names:
-            raw_key = subdir.lower()
-            if not raw_key:
-                # The manifest prefix yielded no subproject name (e.g. a bare
-                # "stage" prefix). Degrade to the artifact-level verdict rather
-                # than resolving against an empty package.json key.
-                if not artifact_covered:
+        if artifact not in coverage.subdirs:
+            if info.component not in coverage.flat.get(artifact, set()):
+                if not _is_known_uncovered(artifact, "*", info.component):
                     uncovered.append(
-                        UncoveredComponent(
-                            info.artifact_name,
-                            "*",
-                            info.component,
-                            info.filename,
-                            "artifact",
-                            "artifact/component has no package.json entry "
-                            "(manifest prefix yielded no subdir name)",
-                        )
+                        f"{info.artifact_name} [{info.component}] "
+                        f"({info.filename}): no package.json entry"
                     )
-                continue
-            subdir_key = SUBDIR_PACKAGE_ALIASES.get(raw_key, raw_key)
-            if _is_known_uncovered(artifact_key, subdir_key, info.component):
-                continue
+            continue
 
-            # Authoritative check: would packaging_utils.py pick these files
-            # up? Fall back to the subdir name when no prefix was recorded.
-            prefix_line = info.subdir_prefixes.get(subdir, subdir)
-            if coverage.packager_match(artifact_key, prefix_line, info.component):
+        for prefix in info.prefix_paths:
+            subdir = subdir_from_prefix(prefix).lower()
+            if _is_known_uncovered(artifact, subdir, info.component):
                 continue
-
-            declared = coverage.components.get(subdir_key)
-            if declared is None:
-                reason = (
-                    f"no Artifact_Subdir entry matches manifest prefix "
-                    f"{prefix_line!r} for component {info.component!r} "
-                    f"(add an entry, or an alias in SUBDIR_PACKAGE_ALIASES)"
-                )
-            else:
-                reason = (
-                    f"subdir {subdir!r} ships files for component "
-                    f"{info.component!r} but does not list it in Components"
-                )
-            uncovered.append(
-                UncoveredComponent(
-                    info.artifact_name,
-                    subdir,
-                    info.component,
-                    info.filename,
-                    "artifact" if not artifact_covered else "subdir",
-                    reason,
-                )
+            matches = coverage.matching_subdirs(artifact, prefix)
+            if any(info.component in comps for comps in matches):
+                continue
+            reason = (
+                f"matching Artifact_Subdir does not list {info.component!r}"
+                if matches
+                else f"no Artifact_Subdir Name matches {prefix!r}"
             )
-    return uncovered
+            uncovered.append(
+                f"{info.artifact_name}/{subdir} [{info.component}] "
+                f"({info.filename}): {reason}"
+            )
+    return sorted(uncovered)
 
 
 @pytest.fixture(scope="session")
@@ -547,32 +371,22 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
 
         logger.info("Listing %s ...", archive_name)
         try:
-            prefixes, entries = list_archive_files(archive_path)
+            entries = list_archive_files(archive_path)
         except Exception:
             logger.exception("Failed to read %s", archive_name)
             skipped.append(archive_name)
             continue
 
-        subdir_paths: dict[str, set[str]] = defaultdict(set)
-        for subdir, fpath in entries:
-            subdir_paths[subdir].add(fpath)
-
-        # One manifest prefix per contributing subdir. If two prefixes reduce
-        # to the same leaf, first-in-manifest wins -- deterministic, and either
-        # line matches the same Artifact_Subdir entry anyway.
-        subdir_prefixes: dict[str, str] = {}
-        for prefix in prefixes:
-            leaf = subdir_from_prefix(prefix)
-            if leaf in subdir_paths:
-                subdir_prefixes.setdefault(leaf, prefix)
+        prefix_paths: dict[str, set[str]] = defaultdict(set)
+        for prefix, fpath in entries:
+            prefix_paths[prefix].add(fpath)
 
         index.append(
             ArchiveInfo(
                 artifact_name=an.name,
                 component=an.component,
                 filename=archive_name,
-                subdir_paths=dict(subdir_paths),
-                subdir_prefixes=subdir_prefixes,
+                prefix_paths=dict(prefix_paths),
             )
         )
 
@@ -730,35 +544,22 @@ class TestArtifactStructure:
         coverage = build_packaged_components(load_package_data())
         uncovered = find_uncovered_components(archive_index, coverage)
 
-        if SUBDIR_COVERAGE_MODE == "warn":
-            fatal = [u for u in uncovered if u.level == "artifact"]
-            warn_only = [u for u in uncovered if u.level == "subdir"]
-        else:
-            fatal, warn_only = uncovered, []
+        for line in uncovered:
+            logger.error("MISSING package coverage: %s", line)
 
-        for u in sorted(warn_only, key=lambda u: u.sort_key):
-            logger.warning("SUBDIR package coverage gap (warn mode): %s", u.describe())
-        for u in sorted(fatal, key=lambda u: u.sort_key):
-            logger.error("MISSING package coverage: %s", u.describe())
-
-        if fatal:
-            summary = "\n".join(
-                f"  [{u.level}] {u.describe()}"
-                for u in sorted(fatal, key=lambda u: u.sort_key)
-            )
+        if uncovered:
+            summary = "\n".join(f"  {line}" for line in uncovered)
             pytest.fail(
-                f"Found {len(fatal)} artifact component(s) not covered by "
+                f"Found {len(uncovered)} artifact component(s) not covered by "
                 f"package.json (see https://github.com/ROCm/TheRock/issues/9049):"
                 f"\n{summary}\n"
-                f"Fix: add the component to the subdir's Components list in "
+                f"Fix: add the component to the matching Artifact_Subdir in "
                 f"build_tools/packaging/linux/package.json, or add a triaged "
                 f"(artifact, subdir, component) entry to "
                 f"KNOWN_UNCOVERED_COMPONENTS with a tracking issue."
             )
 
         logger.info(
-            "Checked %d archives (%d subdir-level warnings), all fatal "
-            "components covered by package.json",
+            "Checked %d archives, all components covered by package.json",
             len(archive_index),
-            len(warn_only),
         )
