@@ -379,13 +379,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         self.assertIsNotNone(job)
         self.assertTrue(job["linux_cpu_runner"])
         self.assertTrue(job["expect_failure"])
-        self.assertEqual(job["shard_arr"], [1, 2, 3])
+        self.assertEqual(job["shard_arr"], [1, 2])
 
     def test_tensilelite_rocjitsu_wraps_pytest_runner_in_launcher(self):
         job = self._rocjitsu_lane_job()
-        self.assertTrue(
-            job["test_script"].startswith("TEST_CATEGORY=rocjitsu-quick python ")
-        )
+        self.assertTrue(job["test_script"].startswith("TEST_CATEGORY=rocjitsu-quick "))
         self.assertIn("Tests/emulation/run_rocjitsu.py -- python", job["test_script"])
         self.assertTrue(job["test_script"].endswith("pytest_runner.py"))
         # bin/rocjitsu launches the simulation; mirage is not needed.

@@ -505,12 +505,12 @@ test_matrix = {
         "job_name": "tensilelite-rocjitsu",
         "skip_stages": ["emulation"],
         "fetch_artifact_args": "--blas --tests --rocjitsu",
-        "timeout_minutes": 150,
+        "timeout_minutes": 210,
         "additional_requirements_files": [
             _get_artifact_path("share/hipblaslt/tensilelite/requirements-test.txt"),
         ],
         "test_script": (
-            "TEST_CATEGORY=rocjitsu-quick python "
+            "TEST_CATEGORY=rocjitsu-quick ROCJITSU_SUITE_TIMEOUT=11700 python "
             + _get_artifact_path(
                 "share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py"
             )
@@ -532,21 +532,23 @@ test_matrix = {
             "linux": ["gfx1250"],
         },
         "total_shards_dict": {
-            "linux": 3,
+            "linux": 2,
         },
     },
-    # EXPERIMENT (not for merge): hipBLASLt quick tier (the same gtest filter as its
-    # test_categories.yaml quick tier) under the rocjitsu emulator on a CPU runner,
-    # one process per shard with every core, gtest-sharded across the job's shards.
+    # EXPERIMENT (not for merge): the whole hipBLASLt binary (like the gfx1250
+    # hardware nightly) under rocjitsu, 5 shards, near the 210-min job cap. Skips
+    # AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace (46 min).
     "hipblaslt-rocjitsu": {
         "job_name": "hipblaslt-rocjitsu",
         "skip_stages": ["emulation"],
         "fetch_artifact_args": "--blas --tests --rocjitsu",
-        "timeout_minutes": 100,
+        "timeout_minutes": 210,
         "test_script": (
             "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
-            "ROCJITSU_REPORT_DIR=rocjitsu-report python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
-            "./hipblaslt-test --gtest_filter='*smoke*:*HostUnit*:*TuningStore.*-*known_bug*'"
+            "ROCJITSU_SUITE_TIMEOUT=11700 ROCJITSU_REPORT_DIR=rocjitsu-report "
+            "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
+            "./hipblaslt-test "
+            "--gtest_filter=-AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace"
         ),
         "platform": ["linux"],
         "linux_cpu_runner": True,
@@ -560,21 +562,20 @@ test_matrix = {
             "linux": ["gfx1250"],
         },
         "total_shards_dict": {
-            "linux": 4,
+            "linux": 5,
         },
     },
-    # EXPERIMENT (not for merge): hipSPARSELt quick tier (the same gtest filter as its
-    # test_categories.yaml quick tier) under the rocjitsu emulator on a CPU runner,
-    # one process per shard with every core, gtest-sharded across the job's shards.
+    # EXPERIMENT (not for merge): the whole hipSPARSELt binary (no filter, like the
+    # gfx1250 hardware nightly) under rocjitsu, 5 shards, near the 210-min job cap.
     "hipsparselt-rocjitsu": {
         "job_name": "hipsparselt-rocjitsu",
         "skip_stages": ["emulation"],
         "fetch_artifact_args": "--sparse --blas --tests --rocjitsu",
-        "timeout_minutes": 100,
+        "timeout_minutes": 210,
         "test_script": (
             "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
-            "ROCJITSU_REPORT_DIR=rocjitsu-report python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
-            "./hipsparselt-test --gtest_filter='*smoke*-*known_bug*'"
+            "ROCJITSU_SUITE_TIMEOUT=11700 ROCJITSU_REPORT_DIR=rocjitsu-report "
+            "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- ./hipsparselt-test"
         ),
         "platform": ["linux"],
         "linux_cpu_runner": True,
@@ -588,7 +589,7 @@ test_matrix = {
             "linux": ["gfx1250"],
         },
         "total_shards_dict": {
-            "linux": 2,
+            "linux": 5,
         },
     },
     "origami": {
