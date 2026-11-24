@@ -1,6 +1,6 @@
-From 51875c15ed571b549c13ebacceaee38b17ebd8d9 Mon Sep 17 00:00:00 2001
+From 607979108255d49a236c08cf05e11d9037909817 Mon Sep 17 00:00:00 2001
 From: benrichard-amd <ben.richard@amd.com>
-Date: Tue, 27 Oct 2026 17:55:44 +0000
+Date: Mon, 23 Nov 2026 19:42:02 +0000
 Subject: [PATCH] fix(rccl): guard x86 cpuid and arch assertions in xml-test.cc
 
 xml-test.cc unconditionally includes <cpuid.h> and uses __cpuid()
@@ -13,15 +13,18 @@ attribute, but the SUT correctly returns the host arch (e.g. "ppc64").
 Add a NCCL_HOST_ARCH macro that mirrors the SUT logic from xml.cc
 so these tests pass on any architecture.
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Refreshed after upstream #15356 moved the host tests from
+test/host/xml-test.cc to test/host/graph/xml-test.cc.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 ---
- projects/rccl/test/host/xml-test.cc | 21 +++++++++++++++++++--
+ projects/rccl/test/host/graph/xml-test.cc | 21 +++++++++++++++++++--
  1 file changed, 19 insertions(+), 2 deletions(-)
 
-diff --git a/projects/rccl/test/host/xml-test.cc b/projects/rccl/test/host/xml-test.cc
-index 9682cfcf6d..92076c30f5 100644
---- a/projects/rccl/test/host/xml-test.cc
-+++ b/projects/rccl/test/host/xml-test.cc
+diff --git a/projects/rccl/test/host/graph/xml-test.cc b/projects/rccl/test/host/graph/xml-test.cc
+index ceea8c31452..f319e78ea9c 100644
+--- a/projects/rccl/test/host/graph/xml-test.cc
++++ b/projects/rccl/test/host/graph/xml-test.cc
 @@ -9,7 +9,19 @@
  
  #include <gtest/gtest.h>
@@ -42,7 +45,7 @@ index 9682cfcf6d..92076c30f5 100644
  
  #include <map>
  #include <string>
-@@ -589,6 +601,7 @@ TEST_F(XmlMicrotest, CheckBDFFormat_NeedsTwelveHexCharsWithSeparators) {
+@@ -697,6 +709,7 @@ TEST_F(XmlMicrotest, CheckBDFFormat_NeedsTwelveHexCharsWithSeparators) {
  
  // --- Autodetection: CPU and sysfs
  
@@ -50,7 +53,7 @@ index 9682cfcf6d..92076c30f5 100644
  struct CpuId {
    std::string vendor;
    int family;
-@@ -609,6 +622,7 @@ CpuId HostCpuId() {
+@@ -717,6 +730,7 @@ CpuId HostCpuId() {
    if (family == 15) family += (eax >> 20) & 0xff;
    return {vendor, family, model};
  }
@@ -58,7 +61,7 @@ index 9682cfcf6d..92076c30f5 100644
  
  class XmlSysfsMicrotest : public XmlMicrotest {
   protected:
-@@ -641,6 +655,7 @@ class XmlSysfsMicrotest : public XmlMicrotest {
+@@ -749,6 +763,7 @@ class XmlSysfsMicrotest : public XmlMicrotest {
    }
  };
  
@@ -66,7 +69,7 @@ index 9682cfcf6d..92076c30f5 100644
  TEST_F(XmlSysfsMicrotest, GetXmlFromCpu_FillsAffinityArchAndCpuid) {
    ncclXmlNode* cpu = Add(system_, "cpu", {{"numaid", "3"}});
    g_numaCpumap[3] = "0000ffff";
-@@ -657,6 +672,8 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromCpu_FillsAffinityArchAndCpuid) {
+@@ -765,6 +780,8 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromCpu_FillsAffinityArchAndCpuid) {
    EXPECT_EQ(std::to_string(host.model), Attr(cpu, "modelid"));
  }
  
@@ -75,7 +78,7 @@ index 9682cfcf6d..92076c30f5 100644
  TEST_F(XmlSysfsMicrotest, GetXmlFromCpu_KeepsWhatTheTopologyFileProvides) {
    ncclXmlNode* cpu = Add(system_, "cpu", {{"affinity", "1"}, {"arch", "arm64"}, {"vendor", "V"}, {"familyid", "7"}});
    g_numaCpumap[0] = "ffff";
-@@ -794,7 +811,7 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromSys_NoSysfsAttachesToTheUnknownCpu) {
+@@ -902,7 +919,7 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromSys_NoSysfsAttachesToTheUnknownCpu) {
    ASSERT_NE(nullptr, cpu);
    EXPECT_EQ(cpu, b->parent);
    EXPECT_EQ("-1", Attr(cpu, "numaid"));
@@ -84,7 +87,7 @@ index 9682cfcf6d..92076c30f5 100644
    ASSERT_EQ(2, cpu->nSubs);
    EXPECT_EQ(a, cpu->subs[0]);  // ordered by bus id, not by arrival
    EXPECT_EQ(b, cpu->subs[1]);
-@@ -876,7 +893,7 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromSys_ExistingParentIsFilledInTurn) {
+@@ -984,7 +1001,7 @@ TEST_F(XmlSysfsMicrotest, GetXmlFromSys_ExistingParentIsFilledInTurn) {
    ASSERT_EQ(ncclSuccess, ncclTopoGetXmlFromSys(pci, xml_.get()));
    ASSERT_EQ(ncclSuccess, ncclTopoGetXmlFromSys(orphan, xml_.get()));
  
