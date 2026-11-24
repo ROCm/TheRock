@@ -13,6 +13,8 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parents[2] / "packaging" / "linux"))
 
+import build_repo_setup_package
+import compute_rocm_package_version
 from get_url_repo_params import nightly_sub_folder, parse_build_date
 from github_actions.publish_rocm_to_release_buckets import main
 from _therock_utils.storage_backend import LocalStorageBackend
@@ -191,6 +193,8 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                         "linux",
                         "--release-type",
                         release_type,
+                        "--build-date",
+                        "20260102",
                         "--dry-run",
                     ]
                 )
@@ -201,11 +205,17 @@ class TestPublishRocmToReleaseBuckets(unittest.TestCase):
                 self.assertEqual(source.relative_path, "123-linux/amd-repo-setup")
                 self.assertEqual(dest.bucket, dest_bucket)
                 self.assertEqual(dest.relative_path, "v5/amd-repo-setup")
-                # Only the packages are copied, and a published package is
-                # never replaced by default.
+                # Only the packages are copied (outside prerelease, only those
+                # built on the build date), and a published package is never
+                # replaced by default.
+                include = (
+                    ["*.deb", "*.rpm"]
+                    if release_type == "prerelease"
+                    else ["*~20260102*.deb", "*~dev20260102*.deb", "*~20260102*.rpm"]
+                )
                 self.assertEqual(
                     mock_copy.call_args_list[-1].kwargs,
-                    {"include": ["*.deb", "*.rpm"], "skip_existing": True},
+                    {"include": include, "skip_existing": True},
                 )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.copy_directory")
@@ -576,7 +586,15 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
 
-    def _publish(self, release_type, run_id, packages, *extra_args, contents=b"X"):
+    def _publish(
+        self,
+        release_type,
+        run_id,
+        packages,
+        *extra_args,
+        contents=b"X",
+        build_date="20260101",
+    ):
         """Seed one run's outputs, run the real publish, return what it wrote.
 
         Returns the published paths below `v5/`, relative to the staging
@@ -623,7 +641,7 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
                     "--release-type",
                     release_type,
                     "--build-date",
-                    "20260101",
+                    build_date,
                     *extra_args,
                 ]
             )
@@ -691,6 +709,48 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
         published, _ = self._republish_the_same_rc("--overwrite-repo-setup-packages")
 
         self.assertEqual(published, {b"RUN-2"})
+
+    @staticmethod
+    def _built_names(release_type, run_id, build_date):
+        """The file names the builder gives a run's packages built on a date."""
+        rocm = {
+            pkg: compute_rocm_package_version.compute_version(
+                package_type=pkg,
+                release_type=release_type,
+                override_git_sha="abcdef12",
+                version_data={"rocm-version": "10.1.0"},
+                build_date=build_date,
+            )
+            for pkg in ("deb", "rpm")
+        }
+        deb = build_repo_setup_package.deb_version(rocm["deb"], run_id, "ubuntu2404")
+        version, release = build_repo_setup_package.rpm_version_release(
+            release_type, rocm["rpm"], run_id, ".el10"
+        )
+        return (
+            f"ubuntu2404/amd-repo-setup_{deb}_all.deb",
+            f"rhel10/amd-repo-setup-{version}-{release}.noarch.rpm",
+        )
+
+    def test_a_rerun_on_a_later_day_publishes_only_its_own_packages(self):
+        # Re-running all jobs the next day leaves the first attempt's packages
+        # in the run's upload folder. They point at a build folder that is
+        # never published, so only the rerun's packages are. The run id holds
+        # the rerun's date too, so only the date in the version tells them apart.
+        run_id = "120260102"
+        for release_type in ("nightly", "dev"):
+            with self.subTest(release_type=release_type):
+                self.setUp()
+                first = self._built_names(release_type, run_id, "20260101")
+                rerun = self._built_names(release_type, run_id, "20260102")
+                written = self._publish(
+                    release_type, run_id, first + rerun, build_date="20260102"
+                )
+
+                self.assertEqual(
+                    self._below(written, "v5/amd-repo-setup/"),
+                    {f"v5/amd-repo-setup/{p}" for p in rerun},
+                )
 
     def test_publishes_none_when_there_are_none_to_publish(self):
         cases = {

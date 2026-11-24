@@ -814,6 +814,31 @@ class MainFunctionTest(unittest.TestCase):
         self.assertEqual(outputs["rocm_build_date"], "20261106")
         self.assertIn("20260811", outputs["rocm_deb_package_version"])
 
+    def test_versions_and_build_date_share_one_date_across_midnight(self):
+        # Later reads return the next day, as if the clock passed midnight.
+        dates = iter(["20261106"] + ["20261107"] * 10)
+        with (
+            mock.patch.object(
+                compute_rocm_package_version,
+                "get_current_date",
+                side_effect=lambda: next(dates),
+            ),
+            mock.patch.object(
+                compute_rocm_package_version,
+                "load_version_file",
+                return_value={"rocm-version": "7.99.0"},
+            ),
+            mock.patch.object(
+                compute_rocm_package_version, "gha_set_output"
+            ) as gha_set_output,
+        ):
+            compute_rocm_package_version.main(["--release-type", "nightly"])
+
+        outputs = gha_set_output.call_args.args[0]
+        self.assertEqual(outputs["rocm_build_date"], "20261106")
+        self.assertEqual(outputs["rocm_deb_package_version"], "7.99.0~20261106")
+        self.assertEqual(outputs["rocm_rpm_package_version"], "7.99.0~20261106")
+
     def test_build_variant_suffix_varies_by_local_version(self):
         """Build variant suffix uses + (no local) or . (has local version)."""
         test_cases = [

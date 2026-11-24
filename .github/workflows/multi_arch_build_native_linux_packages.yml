@@ -151,7 +151,7 @@ jobs:
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
             --run-id "${ARTIFACT_RUN_ID}" \
-            --build-date "${BUILD_DATE}"
+            ${BUILD_DATE:+--build-date "${BUILD_DATE}"}
 
   build_native_packages:
     permissions:

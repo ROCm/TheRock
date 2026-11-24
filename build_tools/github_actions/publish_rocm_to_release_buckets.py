@@ -304,6 +304,7 @@ def publish_repo_setup_packages(
     release_type: str,
     backend: StorageBackend,
     overwrite: bool = False,
+    build_date: str | None = None,
 ) -> None:
     """Copy the amd-repo-setup packages from the artifacts bucket to the release bucket.
 
@@ -313,15 +314,27 @@ def publish_repo_setup_packages(
 
     Only the packages are copied. The artifacts bucket also has an index.html
     in each folder, which lists only this run's packages.
+
+    Outside prerelease, each package points at the run's dated folder, so only
+    packages built on `build_date` (today if none is given) are copied. A rerun
+    of all jobs on a later day leaves the earlier attempt's packages in the
+    upload folder, and their folder is never published, so they're skipped.
     """
     source = artifacts_root.repo_setup_packages()
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     dest = StorageLocation(dest_bucket.name, "v5/amd-repo-setup")
     logger.info("amd-repo-setup packages: %s -> %s", source.s3_uri, dest.s3_uri)
+    include = ["*.deb", "*.rpm"]
+    if release_type != "prerelease":
+        date = build_date or datetime.date.today().strftime("%Y%m%d")
+        # The date follows the "~" in the version: `~<date>-` (nightly),
+        # `~dev<date>-` (dev deb) or `~<date>g<sha>-` (dev rpm).
+        include = [f"*~{date}*.deb", f"*~dev{date}*.deb", f"*~{date}*.rpm"]
+        logger.info("Publishing only amd-repo-setup packages built on %s", date)
     if overwrite:
         logger.warning("Replacing any amd-repo-setup packages already published")
     count = backend.copy_directory(
-        source, dest, include=["*.deb", "*.rpm"], skip_existing=not overwrite
+        source, dest, include=include, skip_existing=not overwrite
     )
     logger.info("Copied %d amd-repo-setup packages", count)
 
@@ -482,6 +495,7 @@ def main(argv: list[str]) -> None:
                 args.release_type,
                 backend,
                 overwrite=args.overwrite_repo_setup_packages,
+                build_date=args.build_date,
             )
         else:
             logger.info("Skipping amd-repo-setup packages for ASAN build variant")

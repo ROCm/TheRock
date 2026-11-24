@@ -200,6 +200,7 @@ def compute_version(
     override_base_version: str | None = None,
     override_git_sha: str | None = None,
     version_data: Mapping[str, Any] | None = None,
+    build_date: str | None = None,
 ) -> str:
     """Compute package version based on package type and release type.
 
@@ -216,6 +217,7 @@ def compute_version(
         override_git_sha: Explicit git SHA override, forwarded to get_git_sha().
             See get_git_sha() for details on when this is needed.
         version_data: Contents of version.json. Loaded automatically when required.
+        build_date: Build date as YYYYMMDD. Defaults to today.
 
     Returns:
         Computed version string appropriate for the package type
@@ -231,7 +233,7 @@ def compute_version(
             raise ValueError("rocm-version must be set in version.json")
     _log(f"Base version  : '{base_version}'")
     _log(f"Package type  : '{package_type}'")
-    current_date = get_current_date()
+    current_date = build_date or get_current_date()
 
     if release_type in ("dev-bkc", "nightly-bkc"):
         release_metadata = version_data.get("release-metadata", {})
@@ -363,7 +365,9 @@ def compute_version(
                 f"{base_version!r})"
             )
         major, minor = parts[0], parts[1]
-        build_field = compute_msi_build_field()
+        build_field = compute_msi_build_field(
+            datetime.strptime(current_date, "%Y%m%d").date()
+        )
         rocm_package_version = f"{major}.{minor}.{build_field}.0"
         _log(f"Full version  : '{rocm_package_version}'")
         return rocm_package_version
@@ -438,6 +442,9 @@ def main(argv):
         _log("Warning: --build-variant is ignored when --custom-version-suffix is set")
 
     version_data = load_version_file()
+    # Read the date once, so every version and rocm_build_date agree even if
+    # the clock passes midnight while this runs.
+    build_date = get_current_date()
 
     # Compute versions for all package types: wheel, deb, rpm, and msi.
     outputs = {}
@@ -451,6 +458,7 @@ def main(argv):
             override_base_version=args.override_base_version,
             override_git_sha=args.override_git_sha,
             version_data=version_data,
+            build_date=build_date,
         )
 
         # Set appropriate output variable based on package type
@@ -461,7 +469,7 @@ def main(argv):
 
     # The run's build date, so later jobs can share one date (e.g. the dated
     # nightly package folders) instead of each reading the clock.
-    outputs["rocm_build_date"] = get_current_date()
+    outputs["rocm_build_date"] = build_date
     gha_set_output(outputs)
 
 

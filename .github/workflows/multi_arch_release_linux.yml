@@ -223,6 +223,8 @@ jobs:
           release_type: ${{ inputs.release_type }}
           product: core # 'core' for the rocm-sdk, as opposed to 'pytorch', 'jax', etc.
 
+      # Older source (an older `ref`) has no build date and no --build-date
+      # option, so pass it only when setup produced one.
       - name: Copy to release buckets
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
@@ -231,7 +233,7 @@ jobs:
             --release-type="${BUILD_RELEASE_TYPE}" \
             --structured \
             --build-variant="${BUILD_VARIANT}" \
-            --build-date="${BUILD_DATE}"
+            ${BUILD_DATE:+--build-date="${BUILD_DATE}"}
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]
