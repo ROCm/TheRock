@@ -27,6 +27,7 @@
       "hipthreads",
       "kfdtest",
       "libhipcxx",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests",
       "mxdatagenerator",
       "ocl-clr",
@@ -49,6 +50,7 @@
       "hipccl_tests",
       "hipsparselt",
       "libhipcxx",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests",
       "rccl",
       "rdc",
@@ -97,6 +99,7 @@
       "hipthreads",
       "hrr",
       "libhipcxx",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests",
       "miopen",
       "miopenprovider",
@@ -161,6 +164,7 @@
   "hipccl": {
     "consumers": [
       "hipccl_tests",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests",
       "rocalution",
       "rocsolver",
@@ -242,8 +246,12 @@
       "hipccl",
       "hipccl_tests",
       "hipthreads",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests"
     ]
+  },
+  "libhipcxx_hiprtc_tests": {
+    "consumers": []
   },
   "libhipcxx_tests": {
     "consumers": []
@@ -372,6 +380,7 @@
       "hiptensor",
       "hipthreads",
       "libhipcxx",
+      "libhipcxx_hiprtc_tests",
       "libhipcxx_tests",
       "miopen",
       "ocl-clr",

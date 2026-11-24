@@ -286,6 +286,8 @@ therock_add_amdgpu_target(amdgcnspirv "AMDGPU portable SPIR-V" FAMILY gpu-generi
     hipdnn_integration_tests # https://github.com/ROCm/TheRock/issues/6918
     hipkernelprovider # https://github.com/ROCm/TheRock/issues/6918
     libhipcxx # https://github.com/ROCm/TheRock/issues/6918
+    libhipcxx_tests # https://github.com/ROCm/TheRock/issues/6918
+    libhipcxx_hiprtc_tests # https://github.com/ROCm/TheRock/issues/6918
     mxDataGenerator # https://github.com/ROCm/TheRock/issues/6918
     ocl-clr # https://github.com/ROCm/TheRock/issues/6918
     rccl # https://github.com/ROCm/TheRock/issues/6918
