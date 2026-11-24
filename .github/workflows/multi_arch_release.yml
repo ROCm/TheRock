@@ -72,6 +72,10 @@ on:
         description: "Enable Quartz release-lineage tracking (off by default)."
         type: boolean
         default: false
+      enable_repo_setup_package:
+        description: "Build and publish the amd-repo-setup package (dev, nightly, prerelease; off by default)."
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       release_type:
@@ -119,6 +123,10 @@ on:
       # dispatch has no effect on Quartz tracking.
       enable_quartz_tracking:
         description: "Enable Quartz release-lineage tracking (off by default)."
+        type: boolean
+        default: false
+      enable_repo_setup_package:
+        description: "Build and publish the amd-repo-setup package (off by default)."
         type: boolean
         default: false
 
@@ -179,6 +187,7 @@ jobs:
       build_date: ${{ needs.setup.outputs.rocm_build_date }}
       test_type: ${{ needs.setup.outputs.test_type }}
       release_type: ${{ inputs.release_type }}
+      enable_repo_setup_package: ${{ inputs.enable_repo_setup_package }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ needs.setup.outputs.ref }}
       run_full_pytorch_tests: ${{ inputs.run_full_pytorch_tests }}
