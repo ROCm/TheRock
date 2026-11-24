@@ -212,6 +212,12 @@ def select_build_runner(
         resolved = "medium" if "san" in build_variant else "small"
         labels_config = platform_config.get(resolved, platform_config["default"])
         context_name = f"build-runner-native-package ({platform}, →{resolved})"
+    elif size == "emulation":
+        # Emulation stage needs medium runners for sanitizer builds due to the
+        # large artifact set produced by ASAN variants. All other variants use small.
+        resolved = "medium" if "san" in build_variant else "small"
+        labels_config = platform_config.get(resolved, platform_config["default"])
+        context_name = f"build-runner-emulation ({platform}, →{resolved})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"

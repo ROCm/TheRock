@@ -645,6 +645,14 @@ class TestBuildRunnerSelection(unittest.TestCase):
             ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),
             ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
             ("windows", "release", "medium", "aws-windows-scale-rocm-prod-mix"),
+            # native_package: medium for sanitizer, small otherwise
+            ("linux", "release", "native_package", "aws-linux-scale-rocm-small"),
+            ("linux", "asan", "native_package", "aws-linux-scale-rocm-medium"),
+            ("linux", "tsan", "native_package", "aws-linux-scale-rocm-medium"),
+            # emulation: medium for sanitizer, small otherwise
+            ("linux", "release", "emulation", "aws-linux-scale-rocm-small"),
+            ("linux", "asan", "emulation", "aws-linux-scale-rocm-medium"),
+            ("linux", "tsan", "emulation", "aws-linux-scale-rocm-medium"),
         ]
         with patch("random.SystemRandom.random", return_value=0.5):
             for platform, variant, size, expected in cases:
