@@ -201,9 +201,9 @@ therock_declare_flag(
 #   EXPIRES  2027-05-24
 #   STAGE    default-off
 # Builds and tests the Fortran bindings of rocm-systems and rocm-libraries
-# (bindings/fortran/, see RFC0015). It gates the bindings while they land in
-# TheRock and in the CI of both monorepos; once they have landed, it becomes a
-# standard THEROCK_ENABLE_FORTRAN_BINDINGS option again.
+# (bindings/fortran/, see RFC0015). Once they have landed in TheRock and in the
+# CI of both monorepos, this becomes a THEROCK_ENABLE_FORTRAN_BINDINGS option
+# again.
 therock_declare_flag(
   NAME FORTRAN_BINDINGS
   TYPE BOOL
