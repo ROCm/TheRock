@@ -145,21 +145,6 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     return selected["label"]
 
 
-# Maps each build size to a runner pool, optionally based on build variant.
-# Sanitizer builds (variants containing "san") use dedicated high-memory runners
-# for large stages. native_package routes to medium under sanitizer to avoid
-# disk pressure from large artifact sets. emulation always routes to medium
-# regardless of variant — the build graph is wide enough that small (2 vCPU)
-# runners are cost-ineffective even with ccache.
-# To add a new job type: add an entry here — no changes to select_build_runner needed.
-SIZE_POOL_MAP = {
-    "large":          lambda variant: "sanitizer" if "san" in variant else "default",
-    "medium":         lambda variant: "medium",
-    "small":          lambda variant: "small",
-    "native_package": lambda variant: "medium" if "san" in variant else "small",
-    "emulation":      lambda variant: "medium",
-}
-
 # Build runner configuration for Linux builds
 # Uses weight-based distribution (0.0-1.0 probability)
 # Sanitizer builds (asan/tsan) use large runners with ramdisk support
@@ -194,14 +179,11 @@ def select_build_runner(
 ) -> str:
     """Select a build runner label based on platform, build variant, and size.
 
-    Routing is driven by SIZE_POOL_MAP, which maps each size to a pool resolver.
-    Trigger-based overrides (e.g. submodule_bump) take highest precedence.
-
     Args:
         platform: "linux" or "windows"
         build_variant: build variant string (e.g. "release", "asan", "tsan")
-        size: job size key — "small", "medium", "large" (default), "native_package",
-              or "emulation". See SIZE_POOL_MAP for the full routing table.
+        size: job size key — "small", "medium", "large" (default),
+              "native_package", or "emulation".
         triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
                   When "submodule_bump" is present, uses the "bump" runner pool if
                   configured, to isolate bump PRs from the weighted Azure/AWS split.
@@ -218,7 +200,17 @@ def select_build_runner(
         labels_config = platform_config["bump"]
         context_name = f"build-runner-bump ({platform})"
     else:
-        pool = SIZE_POOL_MAP.get(size, lambda v: "default")(build_variant)
+        is_sanitizer = "san" in build_variant
+        if size == "large":
+            pool = "sanitizer" if is_sanitizer else "default"
+        elif size == "native_package":
+            pool = "medium" if is_sanitizer else "small"
+        elif size in ("emulation", "medium"):
+            pool = "medium"
+        elif size == "small":
+            pool = "small"
+        else:
+            pool = "default"
         labels_config = platform_config.get(pool, platform_config["default"])
         context_name = f"build-runner-{size} ({platform}, →{pool})"
 
