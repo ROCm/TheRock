@@ -271,6 +271,21 @@ Further flags allow to build components with specific features enabled.
 > pre-installed until [issue #1284](https://github.com/ROCm/TheRock/issues/1284)
 > is resolved.
 
+#### Bindings support
+
+The Fortran bindings for the ROCm libraries (see
+[RFC0015](docs/rfcs/RFC0015-Fortran-Bindings-Split.md)) are off by default,
+even with `-DTHEROCK_ENABLE_ALL=ON`, while they land in rocm-systems and
+rocm-libraries. The build flag `-DTHEROCK_FLAG_FORTRAN_BINDINGS=ON` (see
+[build flags](docs/development/flags.md)) builds all of them, and a single
+family can be enabled with its own feature (`-DTHEROCK_ENABLE_RUNTIME_FORTRAN=ON`,
+`-DTHEROCK_ENABLE_BLAS_FORTRAN=ON`, `-DTHEROCK_ENABLE_SOLVER_FORTRAN=ON`,
+`-DTHEROCK_ENABLE_SPARSE_FORTRAN=ON`, `-DTHEROCK_ENABLE_FFT_FORTRAN=ON` or
+`-DTHEROCK_ENABLE_RAND_FORTRAN=ON`). Each binding is built from its
+`bindings/fortran/<name>/` directory (`hip`, `roctx`, `rocblas`, ...) of the
+rocm-systems or rocm-libraries checkout, and is skipped when that directory is
+absent.
+
 ### CMake build usage
 
 For workflows that demand frequent rebuilds, it is _recommended to build it with ccache_ enabled to speed up the build.
