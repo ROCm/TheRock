@@ -49,6 +49,12 @@ class AddLibhipcxxIncludePathTest(unittest.TestCase):
 
 class TorchvisionBuildEnvTest(unittest.TestCase):
     def test_torchvision_build_gets_libhipcxx_on_cpath(self):
+        seen_envs = []
+
+        def record_env(*args, **kwargs):
+            # Snapshot at call time: later mutations of the dict must not count.
+            seen_envs.append(dict(kwargs["env"]))
+
         with tempfile.TemporaryDirectory() as tmp:
             rocm = Path(tmp) / "rocm"
             (rocm / "include" / "hipccl").mkdir(parents=True)
@@ -71,11 +77,13 @@ class TorchvisionBuildEnvTest(unittest.TestCase):
             ), patch.object(
                 build_prod_wheels, "copy_to_output"
             ), patch.object(
-                build_prod_wheels, "run_command"
-            ) as run_command:
+                build_prod_wheels, "run_command", side_effect=record_env
+            ), patch.dict(
+                os.environ, {}, clear=True
+            ):
                 build_prod_wheels.do_build_pytorch_vision(args, Path(tmp), env)
-        run_env = run_command.call_args.kwargs["env"]
-        self.assertIn(os.fspath(rocm / "include" / "hipccl"), run_env["CPATH"])
+        self.assertEqual(len(seen_envs), 1)
+        self.assertEqual(seen_envs[0]["CPATH"], os.fspath(rocm / "include" / "hipccl"))
 
 
 if __name__ == "__main__":
