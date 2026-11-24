@@ -178,6 +178,10 @@ _POOL_EXCLUDED_LABELS = {
     # GetGpuCpuLinks* cannot read other GPUs' KFD topology under the per-GPU
     # device cgroup. TODO(ROCm/rocm-systems#16410): remove once amdsmi is fixed.
     "amdsmi": _CRUSOE_LABELS,
+    # Intermittent wrong results (spmm_batched_csr, axpyi) only on Crusoe, on
+    # several nodes; OSSCI passes the same commit.
+    # TODO: remove once the Crusoe-side cause is found.
+    "rocsparse": _CRUSOE_LABELS,
 }
 
 

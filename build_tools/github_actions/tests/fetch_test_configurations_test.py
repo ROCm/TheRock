@@ -1418,10 +1418,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "test:hip-tests",
                 "test:rocprofiler-systems",
                 "test:amdsmi",
+                "test:rocsparse",
             ],
             drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
         )
-        self.assertEqual(self.drawn_from.count(["linux-gfx950-1gpu-ccs-ossci-rocm"]), 4)
+        self.assertEqual(self.drawn_from.count(["linux-gfx950-1gpu-ccs-ossci-rocm"]), 5)
         self.assertIn(
             ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
             self.drawn_from,
