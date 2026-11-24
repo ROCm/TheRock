@@ -180,7 +180,7 @@ _POOL_EXCLUDED_LABELS = {
     "amdsmi": _CRUSOE_LABELS,
     # Intermittent wrong results (spmm_batched_csr, axpyi) only on Crusoe, on
     # several nodes; OSSCI passes the same commit.
-    # TODO: remove once the Crusoe-side cause is found.
+    # TODO(ITAISE-3501): remove once the Crusoe-side cause is found.
     "rocsparse": _CRUSOE_LABELS,
 }
 
