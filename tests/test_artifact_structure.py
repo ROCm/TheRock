@@ -15,6 +15,8 @@ Tests:
   - Within-artifact component overlaps: different components (lib, run,
     test, etc.) of the same artifact should contain disjoint files (the
     component scanner should enforce this via the extends chain).
+  - Within-archive duplicates: stage files that flatten to the same path
+    must have equivalent payloads.
   - Manifest validation: every archive should have artifact_manifest.txt
     as its first member.
   - Package coverage: every artifact/component present in the fetched
@@ -30,12 +32,14 @@ THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 """
 
 import dataclasses
+import hashlib
 import json
 import logging
 import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+import tarfile
 
 import pytest
 
@@ -106,6 +110,7 @@ def artifacts_dir() -> Path:
 def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
     """List the flattened file paths in an artifact archive.
 
+    Rejects conflicting entries that flatten to the same path within an archive.
     Reads artifact_manifest.txt (must be the first tar member) to get basedir
     prefixes, then strips those prefixes from each file member to produce
     the flattened output path.
@@ -115,6 +120,7 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
     """
     prefixes: list[str] = []
     flattened: list[str] = []
+    entries: dict[str, tarfile.TarInfo] = {}
 
     with open_archive_for_read(archive_path) as tf:
         # Extract prefixes from the artifact manifest.
@@ -139,18 +145,46 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
         #   member:     math-libs/BLAS/hipBLAS/stage/include/hipblas/hipblas.h
         #   flattened:  include/hipblas/hipblas.h
         while member := tf.next():
-            if member.isdir():
-                continue
             name = member.name
             for prefix in prefixes:
                 prefix_slash = prefix + "/"
                 if name.startswith(prefix_slash):
                     flattened_path = name[len(prefix_slash) :]
                     if flattened_path:
-                        flattened.append(flattened_path)
+                        previous = entries.get(flattened_path)
+                        if previous is not None and not _identical_archive_entries(
+                            tf, previous, member
+                        ):
+                            raise ValueError(
+                                f"{archive_path.name}: conflicting flattened path "
+                                f"{flattened_path}: {previous.name} and {member.name}"
+                            )
+                        entries[flattened_path] = member
+                        if not member.isdir():
+                            flattened.append(flattened_path)
                     break
 
     return prefixes, flattened
+
+
+def _identical_archive_entries(
+    tf: tarfile.TarFile, first: tarfile.TarInfo, second: tarfile.TarInfo
+) -> bool:
+    if first.isdir() and second.isdir():
+        return True
+    if (first.isfile() or first.islnk()) and (second.isfile() or second.islnk()):
+        if (first.mode & 0o111) != (second.mode & 0o111):
+            return False
+        if first.isfile() and second.isfile() and first.size != second.size:
+            return False
+        # Read payloads only for duplicate paths, keeping the usual scan cheap.
+        with tf.extractfile(first) as first_file:
+            first_digest = hashlib.file_digest(first_file, "sha256").digest()
+        with tf.extractfile(second) as second_file:
+            return first_digest == hashlib.file_digest(second_file, "sha256").digest()
+    if first.issym() and second.issym():
+        return first.linkname == second.linkname
+    return False
 
 
 def discover_archives(artifacts_dir: Path) -> list[Path]:
@@ -284,10 +318,8 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
         logger.info("Listing %s ...", archive_name)
         try:
             _prefixes, flattened_paths = list_archive_files(archive_path)
-        except Exception:
-            logger.exception("Failed to read %s", archive_name)
-            skipped.append(archive_name)
-            continue
+        except Exception as exc:
+            pytest.fail(f"Invalid artifact archive {archive_name}: {exc}")
 
         index.append(
             ArchiveInfo(

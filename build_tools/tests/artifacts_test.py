@@ -548,7 +548,7 @@ class ComponentScannerTest(TmpDirTestCase):
         )
 
     def testSameRelpathKeptInEachStage(self):
-        # The same relative path in two stage directories is kept in both.
+        # Identical files at the same relative path are kept in both stages.
         # A file claimed by lib stays out of that stage's dev output.
         self.write_indented(
             "descriptor.toml",
@@ -566,8 +566,8 @@ class ComponentScannerTest(TmpDirTestCase):
         )
         self.touch("src/a/stage/include/header.h")
         self.touch("src/b/stage/include/header.h")
-        (self.temp_dir / "src/a/stage/include/header.h").write_text("a")
-        (self.temp_dir / "src/b/stage/include/header.h").write_text("b")
+        (self.temp_dir / "src/a/stage/include/header.h").write_text("shared")
+        (self.temp_dir / "src/b/stage/include/header.h").write_text("shared")
         self.touch("src/a/stage/lib/libfoo.so")
         self.touch("src/b/stage/lib/libbar.so")
 
@@ -589,8 +589,8 @@ class ComponentScannerTest(TmpDirTestCase):
         dev_comp.write_artifact(self.temp_dir / "out")
         out_a = self.temp_dir / "out" / "a" / "stage" / "include" / "header.h"
         out_b = self.temp_dir / "out" / "b" / "stage" / "include" / "header.h"
-        self.assertEqual(out_a.read_text(), "a")
-        self.assertEqual(out_b.read_text(), "b")
+        self.assertEqual(out_a.read_text(), "shared")
+        self.assertEqual(out_b.read_text(), "shared")
         self.assertFalse(
             (self.temp_dir / "out" / "a" / "stage" / "lib" / "libfoo.so").exists()
         )
@@ -619,6 +619,67 @@ class ComponentScannerTest(TmpDirTestCase):
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         with self.assertRaisesRegex(ValueError, "Unmatched artifact files"):
             scanner.verify()
+
+    def testSharedRelpathOwnedByOneComponent(self):
+        self.write_indented(
+            "descriptor.toml",
+            """
+            [components.lib."a/stage"]
+            include = "include/**"
+            [components.dev."a/stage"]
+            [components.dev."b/stage"]
+            """,
+        )
+        for stage in ("a", "b"):
+            self.write_indented(f"src/{stage}/stage/include/header.h", "shared")
+        ad = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
+        scanner.verify()
+        self.assertIn(
+            "include/header.h",
+            scanner.components["lib"].basedir_contents["a/stage"].all,
+        )
+        for matcher in scanner.components["dev"].basedir_contents.values():
+            self.assertNotIn("include/header.h", matcher.all)
+
+    def testConflictingSharedRelpathRejected(self):
+        self.write_indented(
+            "descriptor.toml",
+            """
+            [components.dev."a/stage"]
+            [components.dev."b/stage"]
+            """,
+        )
+        ad = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        self.write_indented("src/a/stage/include/header.h", "a")
+        other = "src/b/stage/include/header.h"
+        for kind in ("file", "directory", "symlink"):
+            with self.subTest(kind=kind):
+                path = self.temp_dir / other
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if kind == "file":
+                    path.write_text("b")
+                elif kind == "directory":
+                    path.mkdir()
+                else:
+                    path.symlink_to("../../../a/stage/include/header.h")
+                with self.assertRaisesRegex(
+                    ValueError, "Conflicting artifact path include/header.h"
+                ) as error:
+                    builder.ComponentScanner(self.temp_dir / "src", ad)
+                self.assertIn(
+                    str(self.temp_dir / "src/a/stage/include/header.h"),
+                    str(error.exception),
+                )
+                self.assertIn(str(path), str(error.exception))
+                if kind == "directory":
+                    path.rmdir()
+                else:
+                    path.unlink()
 
     def testNonOptionalNotExists(self):
         self.write_indented(

@@ -12,6 +12,7 @@ from pathlib import Path
 import platform
 
 from _therock_utils.pattern_match import PatternMatcher, MatchPredicate
+from _therock_utils.artifacts import _identical_entries
 
 
 class ComponentDefaults:
@@ -309,11 +310,6 @@ class ComponentBasedirDescriptor:
 class ComponentContents:
     def __init__(self, cd: ComponentDescriptor):
         self.component_descriptor = cd
-        # Paths already claimed, keyed by stage directory. A path claimed in
-        # one stage does not hide the same path in another stage. Within one
-        # stage, a path claimed by an earlier component is skipped here.
-        self.transitive_relpaths: dict[str, set[str]] = {}
-
         # We poke any files that we want in this component directly into this
         # pattern matcher.
         self.basedir_contents: dict[str, PatternMatcher] = dict()
@@ -344,6 +340,10 @@ class ComponentScanner:
 
         # As we resolve a component, store it here.
         self.components: dict[str, ComponentContents] = dict()
+
+        # A flattened path belongs to one component. That component may retain
+        # equivalent copies from multiple stages for prebuilt restoration.
+        self.path_owners: dict[str, tuple[str, os.DirEntry[str]]] = {}
 
         # Map of the first stage/relpath pair to the DirEntry that we have seen
         # across all components.
@@ -384,7 +384,7 @@ class ComponentScanner:
                     next_worklist.append(cd)
                     continue
 
-                self._populate_component(cd, extends)
+                self._populate_component(cd)
                 forward_progress = True
 
             # Swap worklist.
@@ -427,36 +427,37 @@ class ComponentScanner:
     def all_basedirs(self) -> list[str]:
         return list(self.basedir_cache.keys())
 
-    def _populate_component(
-        self, cd: ComponentDescriptor, extends: set[ComponentContents]
-    ):
+    def _populate_component(self, cd: ComponentDescriptor):
         contents = ComponentContents(cd)
-
-        # Anything that we are extending goes in the hitlist that we will skip
-        # as part of this one. The hitlist stays split by stage directory.
-        for extend_contents in extends:
-            for basedir, paths in extend_contents.transitive_relpaths.items():
-                contents.transitive_relpaths.setdefault(basedir, set()).update(paths)
 
         # Process each basedir.
         for bd in cd.basedirs.values():
             pm = self._get_basedir(bd.basedir_relpath)
             dest_pm = PatternMatcher()
             contents.basedir_contents[bd.basedir_relpath] = dest_pm
-            claimed = contents.transitive_relpaths.setdefault(bd.basedir_relpath, set())
             for relpath, direntry in pm.matches():
                 entry_key = (bd.basedir_relpath, relpath)
-                if relpath in claimed:
-                    # Ignore - implicit no match because we have already seen it
-                    # in this stage directory.
-                    continue
                 if entry_key not in self.all_entries:
                     self.all_entries[entry_key] = direntry
                 if bd.predicate.matches(relpath, direntry):
+                    owner = self.path_owners.get(relpath)
+                    if owner is not None:
+                        owner_name, previous = owner
+                        if previous.path != direntry.path and not _identical_entries(
+                            previous, direntry
+                        ):
+                            raise ValueError(
+                                f"Conflicting artifact path {relpath}: "
+                                f"{previous.path} and {direntry.path}"
+                            )
+                        self.matched_relpaths.add(entry_key)
+                        if owner_name != cd.name:
+                            continue
+                    else:
+                        self.path_owners[relpath] = (cd.name, direntry)
                     # Match. Add it.
                     self.matched_relpaths.add(entry_key)
                     dest_pm.add_entry(relpath, direntry)
-                    claimed.add(relpath)
 
         # Memorize that we have processed this descriptor.
         self.components[cd.name] = contents
