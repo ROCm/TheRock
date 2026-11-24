@@ -649,8 +649,8 @@ class TestBuildRunnerSelection(unittest.TestCase):
             ("linux", "release", "native_package", "aws-linux-scale-rocm-small"),
             ("linux", "asan", "native_package", "aws-linux-scale-rocm-medium"),
             ("linux", "tsan", "native_package", "aws-linux-scale-rocm-medium"),
-            # emulation: medium for sanitizer, small otherwise
-            ("linux", "release", "emulation", "aws-linux-scale-rocm-small"),
+            # emulation: always medium regardless of variant
+            ("linux", "release", "emulation", "aws-linux-scale-rocm-medium"),
             ("linux", "asan", "emulation", "aws-linux-scale-rocm-medium"),
             ("linux", "tsan", "emulation", "aws-linux-scale-rocm-medium"),
         ]

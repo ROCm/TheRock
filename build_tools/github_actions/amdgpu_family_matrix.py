@@ -147,15 +147,17 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
 
 # Maps each build size to a runner pool, optionally based on build variant.
 # Sanitizer builds (variants containing "san") use dedicated high-memory runners
-# for large stages. Some job types (native_package, emulation) also route to
-# medium under sanitizer to avoid disk pressure from large artifact sets.
+# for large stages. native_package routes to medium under sanitizer to avoid
+# disk pressure from large artifact sets. emulation always routes to medium
+# regardless of variant — the build graph is wide enough that small (2 vCPU)
+# runners are cost-ineffective even with ccache.
 # To add a new job type: add an entry here — no changes to select_build_runner needed.
 SIZE_POOL_MAP = {
     "large":          lambda variant: "sanitizer" if "san" in variant else "default",
     "medium":         lambda variant: "medium",
     "small":          lambda variant: "small",
     "native_package": lambda variant: "medium" if "san" in variant else "small",
-    "emulation":      lambda variant: "medium" if "san" in variant else "small",
+    "emulation":      lambda variant: "medium",
 }
 
 # Build runner configuration for Linux builds
