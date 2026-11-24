@@ -95,7 +95,7 @@ Sub-project directories:
 - [`profiler/`](/profiler/) : Profiler sub-projects
 - [`bindings/fortran/`](/bindings/fortran/) : Fortran bindings for the ROCm
   libraries, built after the libraries they wrap. They are off by default;
-  enable them with `-DTHEROCK_ENABLE_FORTRAN_BINDINGS=ON`.
+  enable them with the build flag `-DTHEROCK_FLAG_FORTRAN_BINDINGS=ON`.
 
 Note that there is nothing in the build system which ensures naming consistency,
 however, we try to name leaf directories after their global sub-project

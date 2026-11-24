@@ -232,7 +232,9 @@ option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THERO
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_EMULATION "Enable building of emulation tools" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_FORTRAN_BINDINGS "Enable building of the Fortran bindings" OFF)
+# The Fortran bindings are gated by THEROCK_FLAG_FORTRAN_BINDINGS (FLAGS.cmake)
+# while they land; their per-family features take it as their default.
+set(THEROCK_ENABLE_FORTRAN_BINDINGS "${THEROCK_FLAG_FORTRAN_BINDINGS}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_ENABLE_WSL "Enable building WSL-specific artifacts" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)

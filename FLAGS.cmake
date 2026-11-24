@@ -194,6 +194,23 @@ therock_declare_flag(
   ISSUE AIPRIMS-251
 )
 
+# RFC0018 flag metadata (recorded here as a comment until therock_declare_flag
+# grows dedicated OWNER/CREATED/EXPIRES/STAGE keywords):
+#   OWNER    rocm-fortran-maintainers
+#   CREATED  2026-11-24
+#   EXPIRES  2027-05-24
+#   STAGE    default-off
+# Builds and tests the Fortran bindings of rocm-systems and rocm-libraries
+# (bindings/fortran/, see RFC0015). It gates the bindings while they land in
+# TheRock and in the CI of both monorepos; once they have landed, it becomes a
+# standard THEROCK_ENABLE_FORTRAN_BINDINGS option again.
+therock_declare_flag(
+  NAME FORTRAN_BINDINGS
+  TYPE BOOL
+  DEFAULT_VALUE OFF
+  DESCRIPTION "Build and test the Fortran bindings from bindings/fortran in rocm-systems and rocm-libraries"
+)
+
 ###############################################################################
 # Branch-specific flag overrides.
 # BRANCH_FLAGS.cmake is .gitignored on main but can be committed on
