@@ -35,10 +35,6 @@ on:
         description: "Optional source assertion; must match github.sha. Dispatch at the desired TheRock revision."
         type: string
         default: ""
-      external_repo_config:
-        description: "JSON source identity and build options for an external source override."
-        type: string
-        default: ""
       llvm_sha:
         description: "Optional compiler gitlink override; supply all three compiler SHAs together."
         type: string
@@ -83,7 +79,6 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.cache
       TEATIME_FORCE_INTERACTIVE: 0
       RELEASE_TYPE: ${{ inputs.release_type }}
-      EXTERNAL_REPO_CONFIG: ${{ inputs.external_repo_config }}
     outputs:
       comgr_artifact_url: ${{ steps.upload-comgr.outputs.artifact-url }}
       runtime_artifact_url: ${{ steps.upload-runtime.outputs.artifact-url }}
@@ -166,16 +161,14 @@ jobs:
 
       # Kpack links the driver's static zstd, so its preset uses the same CRT.
       - name: Configure Windows driver build
-        # External source options are caller-supplied build configuration.
-        run: | # zizmor: ignore[template-injection]
+        run: |
           cmake -B "${BUILD_DIR}" -S . --preset windows-release-driver \
             -DTHEROCK_DIST_AMDGPU_FAMILIES="${DIST_AMDGPU_FAMILIES}" \
             -DTHEROCK_PACKAGE_VERSION="${ROCM_PACKAGE_VERSION}" \
             -DTHEROCK_COMGR_DLL_NAME="${COMGR_DLL_NAME}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache \
-            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }}
+            -DCMAKE_HIP_COMPILER_LAUNCHER=ccache
 
       - name: Build Comgr and runtimes
         run: |
