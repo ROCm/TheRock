@@ -536,8 +536,9 @@ test_matrix = {
         },
     },
     # EXPERIMENT (not for merge): the whole hipBLASLt binary (like the gfx1250
-    # hardware nightly) under rocjitsu, 5 shards, near the 210-min job cap. Skips
-    # AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace (46 min).
+    # hardware nightly) under rocjitsu, 5 shards, blocking. Skips the 46-min
+    # AlgoWorkspace test, TuningTune (hours each under emulation) and the host
+    # memory estimate check (emulated device memory lives in host memory).
     "hipblaslt-rocjitsu": {
         "job_name": "hipblaslt-rocjitsu",
         "skip_stages": ["emulation"],
@@ -548,7 +549,9 @@ test_matrix = {
             "ROCJITSU_SUITE_TIMEOUT=11700 ROCJITSU_REPORT_DIR=rocjitsu-report "
             "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
             "./hipblaslt-test "
-            "--gtest_filter=-AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace"
+            "--gtest_filter=-AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace:"
+            "*TuningTune*:"
+            "MatmulMemory_pre_checkin.host_estimate_matches_what_a_unit_check_case_uses"
         ),
         "platform": ["linux"],
         "linux_cpu_runner": True,
@@ -558,15 +561,12 @@ test_matrix = {
         "include_family": {
             "linux": ["gfx1250"],
         },
-        "expect_failure": {
-            "linux": ["gfx1250"],
-        },
         "total_shards_dict": {
             "linux": 5,
         },
     },
     # EXPERIMENT (not for merge): the whole hipSPARSELt binary (no filter, like the
-    # gfx1250 hardware nightly) under rocjitsu, 5 shards, near the 210-min job cap.
+    # gfx1250 hardware nightly) under rocjitsu, 7 shards, blocking.
     "hipsparselt-rocjitsu": {
         "job_name": "hipsparselt-rocjitsu",
         "skip_stages": ["emulation"],
@@ -585,11 +585,8 @@ test_matrix = {
         "include_family": {
             "linux": ["gfx1250"],
         },
-        "expect_failure": {
-            "linux": ["gfx1250"],
-        },
         "total_shards_dict": {
-            "linux": 5,
+            "linux": 7,
         },
     },
     "origami": {
