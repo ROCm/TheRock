@@ -1,246 +1,313 @@
 ---
 author: Ameya Mallya (ammallya), Erman Gurses (erman-gurses)
 created: 2026-10-26
-modified: 2026-11-20
+modified: 2026-11-23
 status: draft
 discussion: https://github.com/ROCm/TheRock/issues/8651
 ---
 
 # Fingerprint-Based CI Artifact Cache
 
-This RFC proposes caching CI build artifacts by content, keyed on the
-`THEROCK_FPRINT` that CMake already computes for each artifact. A run computes
-the fingerprint of every artifact it would build, looks those fingerprints up in
-a shared database in one query, and downloads the matching prebuilt artifacts
-instead of rebuilding them. This replaces the "baseline run" stage-reuse
-mechanism, which picks a prior run by commit ancestry and S3-filename presence
-rather than by what the sources actually produce. Tracks
-[#8651](https://github.com/ROCm/TheRock/issues/8651).
-
 ## Problem
 
-Reuse today walks workflow history to find a baseline run, then trusts it based on
-commit ancestry, S3 archive filenames, and job health
-(`baseline_runs.py`, `stage_reuse_decision.py`). Fingerprints are never
-consulted. This is O(N) over runs, spends a lot of GitHub API calls, can't express
-rocm-libraries → rocm-libraries dependencies or arbitrary build-graph subsets, and
-is brittle on release branches ([#8454](https://github.com/ROCm/TheRock/issues/8454)).
+Today reuse walks recent workflow runs to select a single baseline run, then decides
+per build stage using change-impact analysis plus commit-compatibility, job-health,
+and artifact-availability checks (`baseline_runs.py`, `stage_reuse_decision.py`).
+Fingerprints are never consulted. Reuse is therefore limited to whole stages from one
+run, cannot combine compatible artifacts from different runs, and costs GitHub API
+queries for runs and jobs plus artifact listings on every selection. Release
+branches disable reuse
+([#8454](https://github.com/ROCm/TheRock/issues/8454)).
 
-`THEROCK_FPRINT` already hashes the inputs that determine an artifact's output —
-its sources, its dependencies' fingerprints, the toolchain, and the build flags.
-If two builds compute the same fingerprint, they would produce the same artifact,
-so we can reuse it. That makes the fingerprint the natural cache key and removes
-the history walk entirely.
+## Proposed solution
+
+Select reusable artifacts by the fingerprints computed during build configuration.
+CI queries the artifact cache index, verifies and restores usable matches, and
+builds artifacts without usable matches. Compatible artifacts may come from
+different producer runs.
+
+Trusted producer runs upload archives, checksums, and fingerprints, then publish
+entries to the remote cache database. The database records artifact locations;
+archives remain in the existing S3 buckets.
 
 ## Goals
 
-- Look reuse up by content in one batched query, independent of run history.
-- Reuse unchanged artifacts across pin bumps and component commits; rebuild only
-  what actually changed.
-- Verify every reused object; anything missing or unverifiable falls back to a
-  build.
-- Compose with [RFC0013](./RFC0013-Consumer-Based-Test-Selection.md) — a cache
-  hit never suppresses a test.
+- Preserve reuse when unrelated sources or repository commits change.
+- Rebuild artifacts when relevant sources, configuration, selected files, or
+  dependency fingerprints change.
+- Support partial reuse within stages and across the build graph.
+- Once all projects in a source set are enabled, a PR that changes only ROCm
+  Libraries hits the cache for every ROCm Systems project.
+- Fall back to building when cached artifacts cannot be restored safely.
+- Keep test selection independent of reuse: a hit does not suppress tests selected
+  by [RFC0013](./RFC0013-Consumer-Based-Test-Selection.md).
 
 ## Non-goals
 
-- Test selection — that stays in RFC0013.
-- Replacing `ccache`, which caches compiler calls; this caches whole artifacts
-  and stacks on top of it.
-- New object storage — artifacts already live in the `ci-artifacts` S3 buckets;
-  the cache stores pointers, not copies.
+- Replacing `ccache` or `sccache`, which cache individual compilation operations.
+- Introducing new artifact object storage.
+- Adding automatic remote-cache access to ordinary CMake invocations.
+- Requiring byte-identical outputs for the explicitly accepted metadata
+  differences described below.
 
-## Design
+## Overall architecture
 
-### The key
+The build system defines compatibility, the remote cache database finds candidate
+artifacts, and CI verifies and restores them.
 
-The key is the artifact's source fingerprint plus the recipe inputs and output
-identity, under a global epoch we can bump to invalidate everything at once:
+![Fingerprint-based artifact cache flow](../assets/RFC0017-cache-flow.svg)
+
+### 1. Build system: artifact fingerprints
+
+TheRock computes fingerprints during CMake configuration. Input changes require
+reconfiguration before building or querying the cache.
+
+| Term                   | Meaning                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source identity        | Identity of a selected source directory, using its applicable `.smrev` marker or Git tree. Additional source inputs are declared explicitly. |
+| Subproject fingerprint | Combines source identity, selected configuration values and file hashes, and dependency fingerprints.                                        |
+| Artifact fingerprint   | Accounts for the artifact's contributing subprojects and is used for artifact lookup.                                                        |
+| Archive checksum       | Verifies the bytes of a particular archive; it does not establish build compatibility.                                                       |
+
+Equal artifact fingerprints should identify interchangeable artifacts, ideally
+with identical bytes. Validation must detect both false hits (changed relevant
+inputs retain a fingerprint) and false misses (equivalent inputs produce different
+fingerprints). Invalid fingerprints must not authorize reuse, although local
+source builds may continue.
+
+A **restore group** contains the components required to restore one artifact name
+and target. For example, restoring the complete generic `amd-llvm` bundle requires
+its `dbg`, `dev`, `doc`, `lib`, and `run` components, containing outputs from
+`amd-llvm`, `amd-comgr`, and `hipcc`. For generic reuse, those components must share
+one fingerprint and be restored together. This differs from `artifact_group` in
+`BUILD_TOPOLOGY.toml`, which organizes artifacts for stage planning.
+
+Dependencies follow declared inputs, including inputs across repository
+boundaries. LLVM's additional inputs include the SPIR-V translator and, on
+applicable platforms, HSA headers. See
+[#9907](https://github.com/ROCm/TheRock/pull/9907) for source scoping and additional
+inputs.
+
+#### Coverage and stability
+
+Fingerprint correctness, stability, and robustness are tracked in
+[#9525](https://github.com/ROCm/TheRock/issues/9525).
+
+Generic artifacts provide the initial implementation path. Device-specific and
+split artifacts need fingerprint generation, target identification, and validated
+restoration rules before reuse is enabled. This includes outputs described in
+[RFC0008](./RFC0008-Multi-Arch-Packaging.md).
+
+#### Accepted metadata differences
+
+Non-release CI may reuse unchanged HIPCC inputs with the producer's original
+changelog timestamp. Relevant HIPCC source changes must invalidate the applicable
+fingerprints. Making changelog bytes reproducible across fresh builds is optional
+and non-blocking under this policy; see
+[#10011](https://github.com/ROCm/TheRock/issues/10011). Other metadata differences
+require explicit justification. Release builds do not consume cached artifacts.
+
+### 2. CI system: cache consumption and publication
+
+#### Read and write policy
+
+Non-release CI may read artifacts enabled for reuse. Only trusted producer runs
+may publish to the shared cache. CI identity and permissions must prevent
+untrusted jobs from modifying either the database or trusted artifact objects.
+An unrelated test failure does not by itself make a successfully produced artifact
+unusable; complete matching outputs and trusted provenance are required.
+
+Release builds build from source. Artifact reuse does not change which tests run.
+The cache does not need per-entry trust or test-validation states: only complete
+entries from authorized producers become visible to readers.
+
+#### Consumer flow
+
+The stage job that uses restored outputs also computes fingerprints and builds
+misses. It must use the same stage configuration procedure as producer builds,
+such as `configure_stage.py`, with equivalent fingerprint-relevant settings.
+Different configuration modes can produce different fingerprints from the same
+sources.
+
+1. Configure the prepared sources and save the expected artifact fingerprints.
+1. Query the artifact cache index in a batch and produce a hit/miss plan.
+1. Populate the current run's artifact location, checking required components,
+   fingerprints, and archive checksums.
+1. Restore verified artifacts through the prebuilt-stage mechanism.
+1. Configure again so CMake recognizes the prebuilt stages. Require selected
+   fingerprints to match their values before restoration.
+1. Build uncached projects and run the selected downstream work and tests.
+
+A lookup hit is only a candidate. Missing objects, transfer errors, invalid
+checksums, restoration failures, or changed post-restoration fingerprints must fall back to a source build for the affected restore group: remove its restored state and prebuilt markers, then reconfigure. Failed reuse must not leave prebuilt state that suppresses that build.
+
+Population copies objects into the current run's artifact location so downstream
+jobs can continue fetching from that run. The database retains pointers to the
+original objects. The transfer and storage costs are part of reuse measurements.
+
+#### Producer flow
+
+1. Build and package the artifact.
+1. Upload its archives, checksums, and matching fingerprints.
+1. Publish an entry only after all required uploads succeed.
+
+Publish newly built outputs. Restored artifacts retain their original producer
+information; copying them does not make the current run their producer.
+
+#### Rollout and local use
+
+Use one `stage_reuse_mode` control during migration, with exactly one reuse
+implementation owning each restore group. Migrated restore groups use fingerprint
+reuse; others may continue baseline-run reuse. The two paths must not restore the
+same outputs or let baseline reuse override a fingerprint rejection.
+
+For automatic reuse, `off` disables restoration, `dry-run` reports decisions, and
+`reuse-stage` permits restoration. Preserve explicit manual reuse through
+`prebuilt_stages` and `baseline_run_id` in `dry-run`, as described in the
+[stage reuse documentation](../development/stage_reuse.md). Release policy excludes
+cache consumption, including manual reuse. Migrated restore groups do not require
+a baseline run ID. Detailed mode precedence and workflow wiring belong in the CI
+implementation plan.
+
+Local use remains an explicit script-driven lookup and bootstrap operation.
+Ordinary CMake invocations do not automatically access the remote cache.
+
+### 3. Remote cache database: storage and lookup
+
+The **artifact cache index** is the lookup interface, implemented first by a
+static JSON file and later by the remote cache database. The static prototype
+([#10026](https://github.com/ROCm/TheRock/pull/10026)) is easy to inspect and edit
+for experiments; it is not the production design.
+
+The remote cache database must support batched lookup, automated trusted
+publication, and historical queries relating artifacts and fingerprints to
+producer runs. Replacing the static backend should not require rewriting
+restoration logic.
+
+#### Lookup identity and records
+
+Conceptually, lookup uses:
 
 ```text
-cache_key = e{CACHE_EPOCH}:SHA256(source_fingerprint, recipe_inputs, output_identity)
+(epoch, compatibility scope, artifact name, component, target,
+ artifact fingerprint)
 ```
 
-Most of what the key needs is already inside `THEROCK_FPRINT`:
+The artifact fingerprint comes from the build system; the client must not
+independently rehash its inputs. Compatibility scope retains required distinctions
+such as platform until they are demonstrably covered by the fingerprint.
+Manually supplied build-variant labels should not duplicate configuration already
+represented. Target identity identifies the requested output even when its
+fingerprint is target-specific.
 
-| Input                                                                               | In `THEROCK_FPRINT`? | Notes                                                            |
-| ----------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------- |
-| Source identity (project-scoped Git tree + declared extra inputs; invalid if dirty) | yes                  | see below                                                        |
-| Dependency fingerprints                                                             | yes                  | a dependency change propagates to its consumers                  |
-| Toolchain file                                                                      | yes                  |                                                                  |
-| Build flags (including the variant, e.g. release vs. ASan)                          | yes                  | already folded in, so the variant is not a separate key term     |
-| Output identity (`name`, `component`, `target`)                                     | partial              | needed only until split artifacts fingerprint per target (below) |
-| Container image digest                                                              | no                   | add, so a different build image invalidates                      |
-| Compiler id + version                                                               | indirect             | add explicitly                                                   |
+Each record contains object locations, archive names, checksums, and original
+producer information (repository and run). This producer information is
+**provenance**, not an additional build input. A global epoch permits invalidation
+when the fingerprint contract or compatibility assumptions change.
 
-A note on **targets vs. target families**: multi-arch CI builds a *family* like
-`gfx110X-all`, which expands to the *targets* `gfx1100`–`gfx1103`, and split
-artifacts are named per target (`fft_lib_gfx1100.tar.zst`). So the key has to
-distinguish targets, not families. This is only load-bearing while every target
-of a split artifact shares one fingerprint; once split artifacts emit a `.fprint`
-per target, the fingerprint already differs per target and this term goes away.
+#### Publication and recovery
 
-### Fingerprint computation and stability
+Publish complete records after uploads finish. Readers must handle stale records
+whose objects have expired by falling back to building. The database must be
+recoverable from artifact storage or producer history while preserving trusted
+provenance and validating required metadata. A `.fprint` file alone is not enough
+to establish a reusable entry.
 
-The fingerprint is only useful if a fresh build reproduces it. Source identity is
-scoped to a subproject's Git tree plus declared extra inputs
-([#9907](https://github.com/ROCm/TheRock/pull/9907)), so a repo-wide commit
-doesn't invalidate a subproject whose own sources didn't change, and a dirty tree
-produces an invalid fingerprint that is never cached.
+Database technology, schema, retry/concurrency behavior, retention, recovery, and
+authorization need an implementation plan before production enablement.
 
-The failure to avoid is a *false hit* — reusing an artifact that should have been
-rebuilt — which can only happen if the fingerprint misses a real input. A
-*false miss* (a fingerprint that doesn't reproduce) is merely wasteful. So
-fingerprint stability gates the whole feature, and we track it under #8651: MLIR
-reconfiguration stability ([#9936](https://github.com/ROCm/TheRock/pull/9936))
-and the hipcc changelog timestamp
-([llvm-project#5411](https://github.com/ROCm/llvm-project/pull/5411)) are fixed;
-hipcc fresh-build reproducibility is the open item.
+## Alternatives considered
 
-### The value
+- **Continue baseline-run reuse:** retains workflow-history and stage-level
+  selection instead of direct artifact-input matching.
+- **Use a Git-maintained artifact cache index in production:** useful for
+  experiments, but continuous publication would create excessive repository
+  updates.
+- **Store only a fingerprint-to-URL mapping:** insufficient for required-component
+  completeness, checksums, and producer traceability.
+- **Rely only on compiler caches:** helps compilation but does not reuse complete
+  installed and packaged artifacts.
 
-The database maps a key to the objects that make up the artifact, plus enough
-provenance to debug a reuse:
+## Implementation Plan
 
-```text
-cache_key -> {
-  artifact:   (name, component, target)
-  outputs:    [ {object_key, s3_uri, sha256, size_bytes} ]
-  provenance: {repository, run_id, commit, created_at}
-}
-```
+Start with AMD LLVM using the static artifact cache index. Connect the remote
+cache database and revalidate AMD LLVM before expanding outward through the build
+graph.
 
-That's deliberately all of it. We don't store trust, validation, or publication
-state: only trusted runs (push/scheduled on a protected branch) write to the
-cache, so a PR can't poison it without us recording a "trust" flag; whether tests
-passed is irrelevant to a build cache; and a key existing in the database is what
-"published" means.
+### Enablement checklist
 
-### Flows
+For **each milestone from 2 through 7**:
 
-![Cache flow and the file behind each step](../assets/RFC0017-cache-flow.svg)
+1. First validate fingerprint correctness and stability under
+   [#9525](https://github.com/ROCm/TheRock/issues/9525): equivalent inputs match,
+   relevant changes invalidate affected artifacts, and unaffected controls remain
+   stable.
+1. Verify complete producer metadata and lookup/population in an independent
+   consumer run.
+1. Restore into fresh build directories, configure again, and require unchanged
+   expected fingerprints, skipped compilation of restored projects, and successful
+   downstream builds and selected tests.
+1. Exercise fallback, report useful diagnostics, and measure total reuse cost.
 
-- **Plan** (per run): from the changed paths, compute the fingerprint of each
-  artifact the run would build and look them all up in one query. Changed
-  artifacts are forced misses. Hits are reuse candidates; misses get built.
-- **Restore** (per hit): download the objects and re-verify their SHA-256
-  digests. A missing object or a digest mismatch demotes the hit to a build, so
-  storage drift can never hand back a wrong artifact.
-- **Publish** (per built artifact, trusted runs only): upload the objects, then
-  write the entry.
+| Milestone                                                        | Deliverable                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. Fingerprint generation and upload**                         | Generate fingerprints and upload them with archives and checksums; [#9921](https://github.com/ROCm/TheRock/pull/9921).                                                                                                                                                                                         |
+| **2. Validate AMD LLVM with the static artifact cache index**    | Integrate lookup, population, verification, and restoration of the `amd-llvm` artifact (subprojects `amd-llvm`, `amd-comgr`, and `hipcc`) in the compiler/runtime stage job. Use manually recorded entries and keep uncached projects building normally; [#10026](https://github.com/ROCm/TheRock/pull/10026). |
+| **3. Connect the remote cache database and revalidate AMD LLVM** | Replace static lookup with automated trusted publication and remote lookup. Repeat validation across independent CI runs, including authorization, history queries, recovery, and operational ownership.                                                                                                       |
+| **4. Expand to base projects and upstream dependencies**         | Enable the base subprojects `rocm-cmake` and `rocm-half`, fetched dependencies/sysdeps, and base helpers such as `therock-aux-overlay`. Audit fetch recipes, wrappers, and patches.                                                                                                                            |
+| **5. Expand to remaining compiler and supporting projects**      | Enable `hipify` and other eligible separate Git checkouts or subtrees in dependency order.                                                                                                                                                                                                                     |
+| **6. Expand to ROCm Systems**                                    | Enable runtime/HIP, profiler, debugger, emulation, and communication projects, including their shared sources, wrappers, and helpers.                                                                                                                                                                          |
+| **7. Expand to ROCm Libraries and device-specific artifacts**    | Enable libraries and providers, accounting for shared generators and target-specific inputs. Implement required split/device fingerprint and restoration support.                                                                                                                                              |
+| **8. Retire baseline-run reuse**                                 | Remove legacy selection and stage-copy decisions after required workflows demonstrate reliable reuse, fallback, downstream tests, and measurable savings.                                                                                                                                                      |
 
-### The database
+AMD LLVM's upstream dependencies must contribute correctly to its fingerprints
+from milestone 2, even while those dependencies build from source. Milestone 4
+enables reuse of their own artifacts. Later expansion follows declared
+dependencies, including cross-repository inputs. In-tree helpers are validated
+with the artifacts containing their outputs.
 
-Objects stay in the S3 buckets; the index stores pointers and tolerates objects
-being retention-deleted (a dangling entry just falls back to a build).
+Use the input fixes applicable to each tested configuration. A same-location
+prototype does not demonstrate cross-location stability. Track implementation
+work under [#8651](https://github.com/ROCm/TheRock/issues/8651), linking component
+issues as their scope and ownership are agreed.
 
-The index needs to be a **server-side database** that is written as artifacts are
-uploaded and can be rebuilt from a cold start by backfilling from S3 or replaying
-run history. A file checked into Git is fine for an early proof of concept but
-won't scale: a real cache writes an entry per artifact per trusted run, which is
-far too many commits for a Git repo (Quartz is already ~60k commits). We put a
-small `lookup(fingerprints)` / `publish(entries)` interface in front of it so the
-first LLVM-only prototype can use a checked-in JSON
-([#10026](https://github.com/ROCm/TheRock/pull/10026)) and switch to the
-server-side store without touching callers. Fingerprints are already uploaded
-next to their artifacts ([#9921](https://github.com/ROCm/TheRock/pull/9921)), so
-populating the database just records existing sidecars.
+## Example test scenarios
 
-### Using it
+Use fresh top-level TheRock and per-subproject build directories. These are
+acceptance criteria, not claims that every scenario is implemented. A predicted
+hit assumes a compatible entry exists and its objects are available. Check both
+affected projects and unaffected controls.
 
-Reuse is driven by small scripts over the database, in the spirit of the existing
-[`find_latest_artifacts.py`](https://github.com/ROCm/TheRock/blob/main/build_tools/find_latest_artifacts.py):
-one that asks the database which artifacts match the current sources, and a
-bootstrap script that fetches them and marks their stages prebuilt. CI runs these
-in its build-planning step; a developer can run the same scripts to start a local
-build from cached artifacts. There is no cache on/off switch in the build system
-itself — this is a CI feature plus opt-in scripts.
+| Scenario                                                                        | Expected result                                                                                                                                                                    |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identical fresh runs                                                            | Fingerprints match and complete matching artifacts can be reused.                                                                                                                  |
+| Reconfigure after restoration                                                   | Selected fingerprints match their pre-restoration values; CMake skips compilation of restored projects and downstream builds succeed.                                              |
+| ROCm Libraries PR changes only rocFFT sources                                   | Once its artifact support is enabled in milestone 7, rocFFT and affected consumers change. Eligible unchanged compiler and ROCm Systems artifacts remain reusable.                 |
+| ROCm Systems PR changes runtime code outside LLVM's inputs                      | Runtime and affected consumers change; compiler fingerprints remain stable if none of their inputs changed.                                                                        |
+| ROCm Systems PR changes HSA headers consumed by LLVM                            | LLVM and affected consumers change; old compiler entries must not be reused.                                                                                                       |
+| TheRock PR changes an LLVM argument or selected recipe file                     | LLVM and affected consumers change; unaffected controls remain stable.                                                                                                             |
+| TheRock PR changes documentation outside build inputs                           | Fingerprints remain stable if the workflow runs.                                                                                                                                   |
+| Enabled upstream dependency changes, such as rocm-cmake or bundled zlib         | Its fingerprint and affected transitive consumers change. Restoring all inputs returns fingerprints to their previous values.                                                      |
+| Identical HIPCC inputs at different times, then a relevant source change        | Time alone preserves fingerprints despite possible changelog differences. The source change invalidates affected fingerprints.                                                     |
+| Checkout path, environment, or target changes                                   | Equivalent supported inputs remain stable; compatibility-relevant changes invalidate affected entries. Cross-location and device/split reuse require validation before enablement. |
+| Invalid fingerprint, incomplete objects, transfer failure, or checksum mismatch | The affected restore group builds from source. Independent complete restore groups may still be reused.                                                                            |
+| Reuse controls and migration                                                    | Automatic reuse follows the selected mode; each restore group has one owner. Manual inputs follow the documented policy, and releases consume no cached artifacts.                 |
+| Untrusted publication or epoch change                                           | Unauthorized publication is rejected. Previous-epoch entries cannot match the new epoch.                                                                                           |
 
-## Controlling reuse
+The repository examples follow actual dependencies, not blanket repository rules.
+Detailed dirty/untracked-source checks belong to the fingerprint audit in #9525;
+no unrepresented input may silently authorize incompatible reuse.
 
-- CI picks a **reuse mode**: `off` (build everything), `dry-run` (compute and
-  report the plan but still build — how we validate predictions before trusting
-  them), or `on`.
-- **Release builds** build everything from source and don't read the cache. This
-  is a normal mode we run regularly, not a kill switch.
-- **`CACHE_EPOCH`** is the one global lever: bump it to invalidate every key, for
-  a schema change or an environment change the fingerprint doesn't capture.
+Record the tested revision, configuration, and coverage. Measure configuration,
+lookup, transfer, verification, restoration, remaining compilation, and total
+workflow time. A fast lookup alone does not demonstrate an equivalent reduction
+in end-to-end build time.
 
-Per-entry controls — ignoring a specific hit, revoking a bad entry — are left as
-future ideas; we don't need them to start.
+## Open implementation decisions
 
-## What we measured
-
-A benchmark harness drove a real `gfx110X-all` build against a real database:
-
-- **Reuse works and tracks the dependency graph.** An unchanged rebuild is a 100%
-  hit. Changing a leaf tool (`compiler/hipify`) invalidates 2 artifacts; changing
-  the compiler (`compiler/amd-llvm`) invalidates its whole downstream cone, 132 of
-  206 — which is correct, since everything builds with it.
-- **The big gap is split artifacts.** Of 349 artifacts, 206 are cacheable and
-  143 (~41%) are not: the per-target split artifacts emit no `.fprint`
-  (`if(NOT _should_split)` in `cmake/therock_artifacts.cmake`), and that set
-  includes the expensive libraries (`blas`, `fft`, `composable-kernel`,
-  `hipkernelprovider`). Fingerprinting them is the largest win on the table.
-- **The payoff is real.** On a full run the cold build took ~100 min and an
-  unchanged warm rerun ~3 s.
-
-Two caveats on these numbers: the per-component rows perturb a non-compiled file,
-so they measure invalidation scope rather than rebuild time; and lookups ran from
-the build host to an external ClickHouse Cloud instance (~100 ms per query), an
-upper bound that an in-region database would beat.
-
-## What this needs
-
-1. Emit a `.fprint` for split (Kpack, [RFC0008](./RFC0008-Multi-Arch-Packaging.md))
-   artifacts. Biggest reuse unlock, and it also retires the per-target key term.
-1. Add the container image digest and explicit compiler id+version to the key,
-   then freeze the composition under `CACHE_EPOCH`.
-1. Stand up the server-side database with populate-on-upload and cold-start
-   backfill.
-
-## Plan
-
-Start where a wrong reuse is cheapest to catch and the savings are largest — the
-compiler — and widen only as each stage proves out, following the staged rollout
-from when fingerprints were first added
-([#2432](https://github.com/ROCm/TheRock/pull/2432)). Each step is gated on
-evidence that a false hit can't happen before the next begins.
-
-1. **Reproducible fingerprints** (gating, in progress): MLIR stability fixed
-   (#9936), source scoping landed (#9907), hipcc reproducibility open.
-1. **Fingerprints available** (landed): emit and upload `.fprint` next to each
-   archive (#9921). Additive; nothing consumes them yet.
-1. **LLVM index + lookup** (in review): a database of known-good `amd-llvm`
-   producers and a lookup that turns a build's fingerprints into a hit/miss plan
-   (#10026). Read-only.
-1. **Populate from cache**: download the matched `amd-llvm` artifact, verify
-   checksums, place it.
-1. **Reuse LLVM in multi-arch CI**: consume the plan to skip the compiler stage,
-   `dry-run` first with the baseline path as fallback, then on.
-1. **Widen and retire the legacy path**: more base libraries, then dependent
-   stages; move to the server-side database; drop the `baseline_runs.py` checks
-   and the "Copy Prebuilt Stages" path in `multi_arch_ci_linux.yml` once at parity.
-
-## Test scenarios
-
-| Scenario                         | Expected                                              |
-| -------------------------------- | ----------------------------------------------------- |
-| Rebuild, no changes              | 100% reuse                                            |
-| Committed edit of one subproject | that artifact and its consumers rebuild, nothing else |
-| Dirty (uncommitted) tree         | fingerprint invalid; not cached                       |
-| Compiler/toolchain change        | the downstream cone rebuilds                          |
-| Container image change           | invalidation (once the digest is in the key)          |
-| Split/per-arch artifact          | uncacheable today; closed by this RFC                 |
-| Same source, different build dir | same key                                              |
-| PR (untrusted) run               | reads the cache, never writes it                      |
-| Object missing / digest mismatch | builds, no failure                                    |
-
-## Alternatives
-
-- **Keep extending the baseline-run search** — O(N), API-heavy, can't express
-  arbitrary subsets, brittle on release branches.
-- **Map a key to a single S3 URL** instead of an object set with digests — loses
-  per-object verification and multi-object artifacts.
-- **Check the index into Git for production** — the write volume makes this
-  unworkable; it's only for the first prototype.
+- Remaining input coverage and split/device-specific fingerprint support (#9525).
+- Database deployment, schema, compatibility scope, epoch handling, and ownership.
+- Trusted producer eligibility, write permissions, publication retries/concurrency,
+  retention, and recovery.
+- CI mode precedence, restore ownership, and fallback implementation.
+- Quantitative rollout criteria and conditions for retiring baseline-run reuse.
