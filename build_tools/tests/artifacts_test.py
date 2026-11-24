@@ -466,14 +466,14 @@ class ComponentScannerTest(TmpDirTestCase):
             scanner.matched_relpaths,
             set(
                 [
-                    "bin/abc.exe",
-                    "bin/def.exe",
-                    "lib/libbar.so.1",
-                    "lib/libfoo.a",
-                    "lib/libfoo.so.1",
-                    "share/doc/README.md",
-                    "share/doc",
-                    ".build-id/999999999/88888.debug",
+                    ("a/stage", "bin/abc.exe"),
+                    ("a/stage", "bin/def.exe"),
+                    ("a/stage", "lib/libfoo.a"),
+                    ("a/stage", "lib/libfoo.so.1"),
+                    ("a/stage", "share/doc"),
+                    ("a/stage", "share/doc/README.md"),
+                    ("a/stage", ".build-id/999999999/88888.debug"),
+                    ("b/stage", "lib/libbar.so.1"),
                 ]
             ),
         )
@@ -564,6 +564,28 @@ class ComponentScannerTest(TmpDirTestCase):
         self.assertFalse(
             (self.temp_dir / "out" / "b" / "stage" / "lib" / "libbar.so").exists()
         )
+
+    def testUnmatchedSharedRelpathDetectedPerStage(self):
+        self.write_indented(
+            "descriptor.toml",
+            # The header is matched in one stage but not the other. Both stages
+            # must still be checked independently for unmatched files.
+            r"""
+        [components.dev."a/stage"]
+        include = "include/**"
+        [components.lib."b/stage"]
+        include = "lib/**"
+        """,
+        )
+        ad = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        self.touch("src/a/stage/include/header.h")
+        self.touch("src/b/stage/include/header.h")
+
+        scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
+        with self.assertRaisesRegex(ValueError, "Unmatched artifact files"):
+            scanner.verify()
 
     def testNonOptionalNotExists(self):
         self.write_indented(
