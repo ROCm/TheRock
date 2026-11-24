@@ -210,6 +210,7 @@ jobs:
       release_type: dev
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || 'all' }}
       windows_amdgpu_families: "none"
+      run_rocm_tests: true
       build_pytorch: true
       build_jax: true
       repository: ${{ github.repository }}
@@ -422,6 +423,7 @@ jobs:
       release_type: dev
       linux_amdgpu_families: "none"
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || 'all' }}
+      run_rocm_tests: true
       build_pytorch: true
       build_jax: true
       repository: ${{ github.repository }}
@@ -466,6 +468,7 @@ jobs:
       platform: windows
       package_version: ${{ needs.setup-windows.outputs.rocm_package_version }}
       release_type: dev
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_tarballs }}
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
 
@@ -507,6 +510,7 @@ jobs:
       release_type: dev
       repository: ${{ github.repository }}
       ref: ${{ needs.setup-windows.outputs.ref }}
+      build_runs_on: ${{ fromJSON(needs.setup-windows.outputs.windows_build_config).build_runs_on_large }}
 
   publish-windows-artifacts:
     permissions:

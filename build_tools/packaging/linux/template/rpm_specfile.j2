@@ -62,8 +62,18 @@ mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 }
 {% endfor %}
 
+{% if etc_files %}
+# etc/ files are staged with their final names; install them at /etc.
+rm -rf "$RPM_BUILD_ROOT{{ install_prefix }}/etc"
+mkdir -p $RPM_BUILD_ROOT/etc
+cp -R "{{ etc_staging_dir }}"/. $RPM_BUILD_ROOT/etc/
+{% endif %}
+
 %files
 %defattr(-, root, root, -)
+{%- for entry in etc_files %}
+{{ entry }}
+{%- endfor %}
 {{ install_prefix }}
 
 %clean

@@ -154,7 +154,7 @@ jobs:
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
       build_variant: ${{ inputs.build_variant }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -174,7 +174,7 @@ jobs:
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
       build_variant: ${{ inputs.build_variant }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -306,6 +306,7 @@ jobs:
             { "amdgpu_families": "${{ fromJSON(inputs.build_config).dist_amdgpu_families }}",
               "rocm_version": "${{ inputs.rocm_package_version }}",
               "rocm_package_find_links_url": "${{ needs.build_python_packages.outputs.package_find_links_url }}",
+              "build_variant": "${{ inputs.build_variant }}",
               "release_type": "${{ inputs.release_type }}",
               "run_full_pytorch_tests": "${{ inputs.run_full_pytorch_tests }}",
               "ref": "${{ inputs.ref || '' }}",

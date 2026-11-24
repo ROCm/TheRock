@@ -93,6 +93,17 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         self.assertNotIn("prim_test", argv)
         self.assertIn("libhipcxx_test", argv)
 
+    def test_prim_with_dev_includes_libhipcxx_dev(self):
+        argv = self._run_main(["--prim", "--dev"])
+        self.assertIn("prim_dev", argv)
+        self.assertIn("libhipcxx_dev", argv)
+
+    def test_prim_without_dev_omits_libhipcxx(self):
+        argv = self._run_main(["--prim"])
+        self.assertIn("prim_lib", argv)
+        self.assertNotIn("libhipcxx_dev", argv)
+        self.assertNotIn("libhipcxx_test", argv)
+
     def test_libhipcxx_without_tests_omits_prim_dev(self):
         argv = self._run_main(["--libhipcxx"])
         self.assertNotIn("prim_dev", argv)

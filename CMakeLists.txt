@@ -118,10 +118,6 @@ cmake_dependent_option(THEROCK_ENABLE_MPI
   "Enables building components with Message Passing Interface (MPI) support"
   OFF "NOT WIN32" OFF)
 
-option(THEROCK_COMPOSABLE_KERNEL_FOR_MIOPEN_ONLY
-  "Builds composable_kernel with only the targets required for MIOpen"
-  OFF)
-
 option(THEROCK_BUILD_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_BUILD_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 option(THEROCK_USE_NEW_HOSTCALL_IMPL "Use the new phase/occupancy-based hostcall implementation in device-libs and clr" OFF)
@@ -517,6 +513,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     if(THEROCK_ENABLE_SYSDEPS)
       set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+      set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
       set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
       set(THEROCK_BUNDLED_ZLIB therock-zlib)
       set(THEROCK_BUNDLED_ZSTD therock-zstd)

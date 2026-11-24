@@ -237,7 +237,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_deb_package_version }}
       native_package_type: deb
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -260,7 +260,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
       native_package_type: rpm
       build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
     permissions:
@@ -468,6 +468,7 @@ jobs:
       gfx_arch: ${{ matrix.gfx_arch }}
       jax_ref: ${{ matrix.jax_ref }}
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      build_image: ${{ matrix.build_image }}
       wheel_type: ${{ matrix.wheel_type }}
       # CI setup selects this run's built version or resolves a published version.
       rocm_version: ${{ fromJSON(inputs.build_config).framework_rocm_version }}

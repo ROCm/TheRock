@@ -17,6 +17,8 @@ import os
 import stat
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -27,7 +29,12 @@ import sys
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifacts import ArtifactCatalog
-from _therock_utils.py_packaging import Parameters, PopulatedDistPackage, PopulatedFiles
+from _therock_utils.py_packaging import (
+    Parameters,
+    PopulatedDistPackage,
+    PopulatedFiles,
+    build_packages,
+)
 from build_python_packages import (
     _artifact_catalog_has_matches,
     _run_kpack_split,
@@ -58,6 +65,96 @@ class TmpDirTestCase(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
         return p
+
+
+# ---------------------------------------------------------------------------
+# Package build concurrency
+# ---------------------------------------------------------------------------
+
+
+class BuildPackagesConcurrencyTest(TmpDirTestCase):
+    def _make_package_dirs(self, count: int) -> list[Path]:
+        package_dirs = []
+        for i in range(count):
+            package_dir = self.temp_dir / f"package-{i}"
+            package_dir.mkdir()
+            (package_dir / "setup.py").write_text("# test fixture\n")
+            package_dirs.append(package_dir)
+        return package_dirs
+
+    def test_builds_independent_packages_concurrently(self):
+        """Both subprocesses must start before either is allowed to finish."""
+        package_dirs = self._make_package_dirs(2)
+        both_started = threading.Barrier(2, timeout=5)
+
+        def check_call(*args, **kwargs):
+            both_started.wait()
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ) as check_call_mock:
+            build_packages(
+                self.temp_dir,
+                package_dirs=package_dirs,
+                max_workers=2,
+            )
+
+        self.assertEqual(check_call_mock.call_count, 2)
+
+    def test_each_package_logs_to_its_own_file(self):
+        """Concurrent setup.py output lands in separate per-package logs."""
+        package_dirs = self._make_package_dirs(2)
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            kwargs["stdout"].write(f"output of {name}\n")
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        log_dir = self.temp_dir / "logs"
+        for name in ("package-0", "package-1"):
+            self.assertEqual(
+                (log_dir / f"{name}.log").read_text(), f"output of {name}\n"
+            )
+
+    def test_failure_stops_queued_packages(self):
+        """A failing package re-raises; a package still queued never starts."""
+        package_dirs = self._make_package_dirs(3)
+        failed = threading.Event()
+        started: list[str] = []
+        started_lock = threading.Lock()
+
+        def check_call(*args, **kwargs):
+            name = Path(kwargs["cwd"]).name
+            with started_lock:
+                started.append(name)
+            if name == "package-0":
+                failed.set()
+                raise subprocess.CalledProcessError(1, args[0])
+            if name == "package-1":
+                # Stay busy until package-0 has failed, so the abort flag is
+                # set before a worker can take package-2.
+                failed.wait(timeout=5)
+                time.sleep(0.2)
+
+        with mock.patch(
+            "_therock_utils.py_packaging.subprocess.check_call",
+            side_effect=check_call,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                build_packages(self.temp_dir, package_dirs=package_dirs, max_workers=2)
+
+        self.assertIn("package-0", started)
+        self.assertNotIn("package-2", started)
+
+    def test_rejects_nonpositive_workers(self):
+        with self.assertRaisesRegex(ValueError, "max_workers must be at least 1"):
+            build_packages(self.temp_dir, package_dirs=[], max_workers=0)
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +264,9 @@ class MultiArchPackagingTest(TmpDirTestCase):
             f.write_text(content)
         (subdir / "artifact_manifest.txt").write_text("stage\n")
 
-    def _make_params(self, artifact_dir: Path) -> Parameters:
+    def _make_params(
+        self, artifact_dir: Path, *, kpack_split: bool = False
+    ) -> Parameters:
         dest_dir = self.temp_dir / "packages"
         dest_dir.mkdir(parents=True, exist_ok=True)
         return Parameters(
@@ -175,6 +274,7 @@ class MultiArchPackagingTest(TmpDirTestCase):
             version="0.0.1.test",
             version_suffix="",
             artifacts=ArtifactCatalog(artifact_dir),
+            kpack_split=kpack_split,
         )
 
     def test_each_library_package_independently_owns_shared_relpaths(self):
@@ -455,6 +555,46 @@ class MultiArchPackagingTest(TmpDirTestCase):
         owner, _ = result
         self.assertIs(owner, lib_gfx94, "gfx94X devel must link to gfx94X libraries")
 
+    def test_devel_manifest_uses_matching_target_family(self):
+        """The final devel manifest names its target-specific runtime package."""
+        # Create a target-specific runtime artifact.
+        artifact_dir = self.temp_dir / "artifacts"
+        shared_relpath = "lib/librocblas.txt"
+        self._add_artifact(
+            artifact_dir,
+            "blas",
+            "lib",
+            "gfx94X-dcgpu",
+            {shared_relpath: "gfx94X rocblas"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir)
+        lib_gfx94 = PopulatedDistPackage(
+            params, logical_name="libraries", target_family="gfx94X-dcgpu"
+        )
+        lib_gfx94.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.target_family == "gfx94X-dcgpu")
+        )
+        devel_gfx94 = PopulatedDistPackage(
+            params, logical_name="devel", target_family="gfx94X-dcgpu"
+        )
+        devel_gfx94.populate_devel_files()
+
+        # Verify the manifest targets the matching runtime package.
+        manifest = json.loads(
+            (devel_gfx94.pure_dir / ".devel_links/devel.json").read_text()
+        )
+        self.assertEqual(
+            manifest["links"],
+            [
+                {
+                    "relpath": shared_relpath,
+                    "target": "../../_rocm_sdk_libraries_gfx94X_dcgpu/lib/librocblas.txt",
+                }
+            ],
+        )
+
     def test_find_populated_falls_back_to_generic_package(self):
         """A target-specific devel package can find files from a generic (core) package.
 
@@ -504,6 +644,111 @@ class MultiArchPackagingTest(TmpDirTestCase):
             owner,
             core,
             "core (generic) file must be reachable from arch-specific devel",
+        )
+
+    def test_devel_package_keeps_files_and_records_runtime_links(self):
+        """Keep devel files in wheel staging and record runtime links."""
+        # Create runtime and devel artifacts.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "lib",
+            "generic",
+            {"lib/libshared.txt": "runtime payload"},
+        )
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+
+        # Package the runtime and devel artifacts.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        runtime = PopulatedDistPackage(params, logical_name="libraries")
+        runtime.populate_runtime_files(
+            params.filter_artifacts(lambda an: an.component == "lib")
+        )
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files()
+
+        # Verify files remain in the wheel and runtime links move to the manifest.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "lib/libshared.txt"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest,
+            {
+                "version": "0.0.1.test",
+                "links": [
+                    {
+                        "relpath": "lib/libshared.txt",
+                        "target": "../../_rocm_sdk_libraries/lib/libshared.txt",
+                    }
+                ],
+            },
+        )
+
+    def test_devel_package_preserves_direct_file_mode(self):
+        """A representative direct devel executable retains its source mode."""
+        # Create an executable development file.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"bin/direct-tool": "#!/bin/sh\n"},
+        )
+        source_tool = artifact_dir / "sdk_dev_generic/stage/bin/direct-tool"
+        source_tool.chmod(0o755)
+
+        # Package the development artifact.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the staged executable retains its source mode.
+        self.assertEqual(
+            stat.S_IMODE((devel.platform_dir / "bin/direct-tool").stat().st_mode),
+            stat.S_IMODE(source_tool.stat().st_mode),
+        )
+
+    def test_devel_package_serializes_source_symlink(self):
+        """A source symlink is serialized without entering wheel staging."""
+        # Create a development artifact containing a source symlink.
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(
+            artifact_dir,
+            "sdk",
+            "dev",
+            "generic",
+            {"include/direct.h": "development payload"},
+        )
+        source_link = artifact_dir / "sdk_dev_generic/stage/include/direct-link.h"
+        source_link.symlink_to("direct.h")
+
+        # Package the artifact and inspect the generated link metadata.
+        params = self._make_params(artifact_dir, kpack_split=True)
+        devel = PopulatedDistPackage(params, logical_name="devel")
+        devel.populate_devel_files(addl_artifact_names=("sdk",))
+
+        # Verify the wheel staging tree contains only the target file and the
+        # source link is represented by its original path and target.
+        self.assertEqual(
+            (devel.platform_dir / "include/direct.h").read_text(),
+            "development payload",
+        )
+        self.assertFalse(os.path.lexists(devel.platform_dir / "include/direct-link.h"))
+        manifest = json.loads((devel.pure_dir / ".devel_links/devel.json").read_text())
+        self.assertEqual(
+            manifest["links"],
+            [{"relpath": "include/direct-link.h", "target": "direct.h"}],
         )
 
 
@@ -907,12 +1152,31 @@ class DevicePackagingTest(TmpDirTestCase):
         args = argparse.Namespace(
             build_packages=False,
             dest_dir=params.dest_dir,
-            devel_tarball_compression=False,
         )
         _run_kpack_split(args, params, core, None)
         devices = [p for p in params.populated_packages if p.logical_name == "device"]
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0].target_family, "gfx1250")
+
+    def test_split_batches_device_packages_for_parallel_build(self):
+        artifact_dir = self._setup_kpack_split_artifacts(("gfx942", "gfx1100"))
+        params = self._make_params(artifact_dir, kpack_split=True)
+        core = PopulatedDistPackage(params, logical_name="core")
+        args = argparse.Namespace(
+            build_packages=True,
+            dest_dir=params.dest_dir,
+            devel_tarball_compression=False,
+            wheel_build_workers=4,
+            wheel_compression=True,
+        )
+
+        with mock.patch("build_python_packages.build_packages") as build_mock:
+            _run_kpack_split(args, params, core, None)
+
+        device_call = build_mock.call_args_list[1]
+        device_package_dirs = device_call.kwargs["package_dirs"]
+        self.assertEqual(len(device_package_dirs), 2)
+        self.assertEqual(device_call.kwargs["max_workers"], 4)
 
     def test_conflicting_payloads_fail_before_population(self):
         artifact_dir = self.temp_dir / "artifacts"

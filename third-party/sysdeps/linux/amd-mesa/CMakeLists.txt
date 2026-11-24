@@ -9,6 +9,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       HARDENING_DEFERRED "amd-mesa (Meson)"
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
+      FPRINT_SOURCE_DIR "${_source_dir}"
+      FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
       BACKGROUND_BUILD
@@ -36,7 +38,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libgallium_drv_video.so radeonsi_drv_video.so libva.so libva-drm.so
+      LIB_NAMES
+        librocm_sysdeps_gallium_drv_video.so
+        librocm_sysdeps_va.so.2
+        librocm_sysdeps_va-drm.so.2
+        libgallium_drv_video.so
+        radeonsi_drv_video.so
+        libva.so
+        libva-drm.so
     )
 
     return()

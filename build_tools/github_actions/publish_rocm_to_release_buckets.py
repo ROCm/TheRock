@@ -46,15 +46,19 @@ Example with ``--run-id 12345 --platform linux --release-type dev``:
     native windows packages (dev/nightly), with ``--platform windows``:
 
     s3://therock-dev-artifacts/12345-windows/packages/msi/
-      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/win11/20250101-12345/
 
 ASAN build variant:
 
-    For ASAN builds (--build-variant asan), python packages are skipped and
-    tarballs/native packages are published to separate paths:
+    For ASAN builds (--build-variant asan), all artifacts are published to
+    separate ASAN-specific paths (python packages only with --structured):
 
     s3://therock-dev-artifacts/12345-linux/tarballs/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/tarball-asan/
+
+    s3://therock-dev-artifacts/12345-linux/python/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+      -> s3://therock-repo-amd-dev-core/v5/rocm/core/whl-next-asan/rocm-sdk-core/rocm_sdk_core-7.13.0-py3-none-linux_x86_64.whl
+
     s3://therock-dev-artifacts/12345-linux/packages/deb/
       -> s3://therock-repo-amd-dev-core/v5/rocm/core/packages-asan/deb/20250101-12345/
     s3://therock-dev-artifacts/12345-linux/packages/rpm/
@@ -82,6 +86,13 @@ from _therock_utils.s3_buckets import (
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.python_package_paths import plan_key_copies
+from _therock_utils.python_package_publishing import (
+    BUILD_VARIANTS,
+    DEFAULT_INDEX_TYPE,
+    INDEX_TYPES,
+    build_variant_index_suffix,
+    get_python_index,
+)
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 logger = logging.getLogger(__name__)
@@ -91,8 +102,9 @@ def _is_asan_variant(build_variant: str) -> bool:
     """True if build_variant is any ASAN-family variant: "asan", "host-asan",
     "asan-debug" (RelWithDebInfo + line-number debug info, see
     amdgpu_family_matrix.py's all_build_variants), or "host-asan-debug".
+    Uses the same rule as the python index (build_variant_index_suffix).
     """
-    return "asan" in build_variant
+    return build_variant_index_suffix(build_variant) == "asan"
 
 
 def publish_tarballs(
@@ -272,25 +284,24 @@ def publish_native_windows_packages(
     multi_arch_build_native_windows_packages.yml) as loose .msi files.
 
     The destination follows RFC0012: Windows installer artifacts live under
-    ``core/windows-installers/`` (not ``core/packages/``). The current MSI is a
-    single OS-agnostic installer, so it is published to a flat
-    ``windows-installers/`` prefix rather than the per-OS subfolders RFC0012
-    reserves for OS-specific installers.
+    ``core/windows-installers/<os>/`` with one subfolder per supported Windows
+    OS version. The current MSI targets Windows 11, so it is published under
+    ``windows-installers/win11/``.
 
     dev/nightly example:
         s3://therock-dev-artifacts/12345-windows/packages/msi/
-          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/20250101-12345/
+          -> s3://therock-repo-amd-dev-core/v5/rocm/core/windows-installers/win11/20250101-12345/
 
     prerelease example:
         s3://therock-prerelease-artifacts/12345-windows/packages/msi/
-          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/
+          -> s3://therock-repo-amd-rc-core/v5/rocm/core/windows-installers/win11/
     """
     dest_bucket = get_product_release_bucket_config(release_type, "core")
     today = datetime.date.today().strftime("%Y%m%d")
 
     source = artifacts_root.native_windows_packages("msi")
 
-    base_path = "v5/rocm/core/windows-installers"
+    base_path = "v5/rocm/core/windows-installers/win11"
     if release_type == "prerelease":
         dest_prefix = base_path
     else:
@@ -328,11 +339,12 @@ def main(argv: list[str]) -> None:
         "(v5/rocm/core/<index>/<package>/) instead of the flat v4/whl prefix.",
     )
     parser.add_argument(
-        "--python-index",
-        default="whl-next",
-        choices=["whl", "whl-next"],
-        help="Product-local index name for structured Python publishing "
-        "(default: whl-next). Selects the v5/rocm/core/<index>/ path segment.",
+        "--index-type",
+        default=DEFAULT_INDEX_TYPE,
+        choices=INDEX_TYPES,
+        help=f"Python index type for structured publishing (default: "
+        f"{DEFAULT_INDEX_TYPE}). Combined with --build-variant to select the "
+        "v5/rocm/core/<index>/ path segment, e.g. whl-next or whl-next-asan.",
     )
     parser.add_argument(
         "--skip-native-packages",
@@ -345,13 +357,23 @@ def main(argv: list[str]) -> None:
     parser.add_argument(
         "--build-variant",
         default="release",
-        choices=["release", "asan", "asan-debug", "host-asan", "host-asan-debug"],
-        help="Build variant (default: release). ASAN builds skip python packages "
-        "and publish native packages to separate paths. The '-debug' variants "
+        choices=BUILD_VARIANTS,
+        help="Build variant (default: release). ASAN builds publish python packages "
+        "to the whl-next-asan index and native packages to separate paths. "
+        "The '-debug' variants "
         "(RelWithDebInfo + line-number debug info) publish to the same paths "
         "as their non-debug counterpart.",
     )
     args = parser.parse_args(argv)
+    # Resolve the python index before publishing anything, so an unsupported
+    # combination (e.g. a build variant without release paths yet, such as
+    # tsan) fails without copying anything.
+    try:
+        python_index = get_python_index(
+            args.index_type, build_variant_index_suffix(args.build_variant)
+        )
+    except ValueError as e:
+        parser.error(str(e))
 
     artifacts_root = WorkflowOutputRoot.from_workflow_run(
         run_id=args.run_id, platform=args.platform, release_type=args.release_type
@@ -360,16 +382,20 @@ def main(argv: list[str]) -> None:
     is_asan = _is_asan_variant(args.build_variant)
 
     publish_tarballs(artifacts_root, args.release_type, backend, args.build_variant)
-    if not is_asan:
+    # ASAN python packages require --structured for proper variant isolation
+    # (whl-next-asan index). In legacy mode, skip to avoid mixing with standard wheels.
+    if is_asan and not args.structured:
+        logger.info(
+            "Skipping python packages for ASAN build (use --structured for ASAN wheels)"
+        )
+    else:
         publish_python_packages(
             artifacts_root,
             args.release_type,
             backend,
             structured=args.structured,
-            index=args.python_index,
+            index=python_index,
         )
-    else:
-        logger.info("Skipping python packages for ASAN build variant")
     if artifacts_root.platform == "linux" and not args.skip_native_packages:
         publish_native_linux_packages(
             artifacts_root, args.release_type, backend, args.build_variant
