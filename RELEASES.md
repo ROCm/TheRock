@@ -845,6 +845,14 @@ tar -xzf therock-dist-linux-gfx94X-dcgpu-${ROCM_VERSION}.tar.gz -C <EXTRACT_PATH
 
 #### Installing ASan-instrumented ROCm Python wheels
 
+> [!TIP]
+> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
+>
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate
+> ```
+
 ASan-instrumented `rocm-sdk-*` wheels are published nightly under a separate
 index. As with the PyTorch wheels below, the ASan index is not an aggregate
 index — it only carries ASan-instrumented packages — so it relies on the
