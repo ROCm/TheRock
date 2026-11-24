@@ -204,6 +204,13 @@ mix/match build steps.
     --output-dir %HOME%/tmp/pyout
   ```
 
+> [!NOTE]
+> With a ROCm SDK that installs libhipcxx under `include/hipccl` (hipCCL 3.1 and
+> later), the torchvision step adds that directory to `CPATH`. Building torchvision
+> or another extension with `hipcc` outside `build_prod_wheels.py` needs
+> `CPATH=<rocm>/include/hipccl` too, or rocThrust's headers fail with
+> `Could not find libhipcxx!`.
+
 ## Running/testing PyTorch
 
 ### Prerequisites
