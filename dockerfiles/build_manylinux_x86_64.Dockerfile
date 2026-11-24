@@ -88,7 +88,6 @@ RUN yum install -y epel-release && \
       gcc-toolset-13-libatomic-devel \
       gcc-toolset-13-libstdc++-devel \
       glibc-gconv-extra \
-      libicu \
       vim-common \
       git-lfs \
     && yum install -y \

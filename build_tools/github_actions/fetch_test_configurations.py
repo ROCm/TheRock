@@ -158,20 +158,20 @@ _APPTAINER_UNSUPPORTED_OPTIONS = [
 _APPTAINER_WHOLE_NODE_LABELS = {
     "linux-gfx950-1gpu-crusoe-rocm": "linux-gfx950-8gpu-crusoe-rocm",
 }
-# The profiler tests read every GPU's KFD topology in /sys.
-_APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
 # Extra options per job on _APPTAINER_RUNNER_LABELS. Crusoe nodes are VMs: the
 # kernel-replay pageable copy runs ~3 GB/s there (hipMemcpy itself 42-57 GB/s).
 _APPTAINER_JOB_OPTIONS = {
     "rocprofiler-sdk": ["-e ROCPROFILER_KR_MIN_SNAP_GBPS=2"],
 }
 # Labels that pool draws skip for these jobs (single-GPU draws only; a manual run
-# can still pick them). Their managed-memory / KFD SVM tests fail only on Crusoe
-# (amdgpu 6.16.13; OSSCI 6.19.14 passes).
-# TODO(#10157): remove these entries once the tests pass on Crusoe.
+# can still pick them). Every entry is temporary: its TODO names the issue that
+# decides when it can be removed.
 # Same strings as _APPTAINER_RUNNER_LABELS, but a separate list used only here.
 _CRUSOE_LABELS = ["linux-gfx950-1gpu-crusoe-rocm", "linux-gfx950-8gpu-crusoe-rocm"]
 _POOL_EXCLUDED_LABELS = {
+    # Managed-memory / KFD SVM tests: SVM is off on Crusoe (amdgpu 6.16.13;
+    # OSSCI 6.19.14 passes).
+    # TODO(#10157, ITAISE-3492): remove once the tests pass on Crusoe.
     "hip-tests": _CRUSOE_LABELS,
     "libhipcxx_amdclang": _CRUSOE_LABELS,
     "rocprofiler-systems": _CRUSOE_LABELS,
@@ -337,8 +337,8 @@ _rocgdb_common = {
 # expression. "multi_gpu_runner" routes to multi-GPU machines.
 #
 # "whole_node" is set by the loop below, not in test_matrix: on a 1-GPU
-# Apptainer label (see _APPTAINER_WHOLE_NODE_LABELS), multi-GPU components and
-# _APPTAINER_WHOLE_NODE_JOBS move to the same cluster's whole-node label, and
+# Apptainer label (see _APPTAINER_WHOLE_NODE_LABELS), multi-GPU components move
+# to the same cluster's whole-node label, and
 # test_artifacts.yml keeps them there even when a manual test_runs_on is set.
 #
 # A multi-GPU component ("multi_gpu" in its entry) draws from the family's 8-GPU
@@ -1937,9 +1937,7 @@ def run():
         whole_node_runner = _APPTAINER_WHOLE_NODE_LABELS.get(
             manual_runner or component.get("test_runner") or test_runs_on_default
         )
-        if whole_node_runner and (
-            "multi_gpu_runner" in component or job_name in _APPTAINER_WHOLE_NODE_JOBS
-        ):
+        if whole_node_runner and "multi_gpu_runner" in component:
             component["multi_gpu_runner"] = whole_node_runner
             # Tells test_artifacts.yml not to replace it with the test_runs_on input.
             component["whole_node"] = True
