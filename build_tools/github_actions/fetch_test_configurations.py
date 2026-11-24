@@ -175,6 +175,9 @@ _POOL_EXCLUDED_LABELS = {
     "hip-tests": _CRUSOE_LABELS,
     "libhipcxx_amdclang": _CRUSOE_LABELS,
     "rocprofiler-systems": _CRUSOE_LABELS,
+    # GetGpuCpuLinks* cannot read other GPUs' KFD topology under the per-GPU
+    # device cgroup. TODO(ROCm/rocm-systems#16410): remove once amdsmi is fixed.
+    "amdsmi": _CRUSOE_LABELS,
 }
 
 
@@ -950,10 +953,7 @@ test_matrix = {
     # (the runner sudo-apt-installs cmake/build-essential/libdrm-dev to build rocjitsu).
     "miopen-dbsync": {
         "job_name": "miopen-dbsync",
-        # --rocjitsu/--mirage ship the emulator so the runner can use it from the dist instead
-        # of building rocjitsu itself. Until the runner script switches over it still builds its
-        # own copy and ignores these.
-        "fetch_artifact_args": "--blas --miopen --rand --tests --rocjitsu --mirage",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
         # Standard/comprehensive/full only: "test_types" makes the framework skip this
         # job entirely on the `quick` tier -- no job is scheduled, so no artifact fetch
         # or rocjitsu build is paid for on quick (the runner script also self-skips on

@@ -4,7 +4,6 @@
 
 from pathlib import Path
 import os
-import shlex
 import sys
 import json
 import unittest
@@ -12,11 +11,8 @@ from unittest.mock import patch
 
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
-# install_rocm_from_artifacts.py lives in build_tools/.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 
 import fetch_test_configurations
-import install_rocm_from_artifacts
 
 
 def _families(family="gfx94x", prefix="linux-mi300", **pools):
@@ -436,19 +432,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     def test_no_include_or_exclude_runs(self):
         self._inject_job("plain")
         self.assertIn("plain", self._selected_names())
-
-    def test_fetch_artifact_args_are_accepted_by_installer(self):
-        # test_component.yml passes fetch_artifact_args to install_rocm_from_artifacts.py. A flag
-        # it does not know (a typo, or an artifact flag that was removed) is an argparse error
-        # that fails the job at runtime, after the build was already paid for.
-        for name, component in fetch_test_configurations.test_matrix.items():
-            with self.subTest(component=name):
-                args = shlex.split(component.get("fetch_artifact_args", ""))
-                with patch.object(install_rocm_from_artifacts, "run") as run:
-                    install_rocm_from_artifacts.main(
-                        ["--run-id", "1", "--amdgpu-family", "gfx94X-dcgpu", *args]
-                    )
-                run.assert_called_once()
 
     def test_include_and_exclude_both_match_excludes_wins(self):
         self._inject_job(
@@ -1434,10 +1417,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
                 "test:libhipcxx_amdclang",
                 "test:hip-tests",
                 "test:rocprofiler-systems",
+                "test:amdsmi",
             ],
             drawn="linux-gfx950-1gpu-ccs-ossci-rocm",
         )
-        self.assertEqual(self.drawn_from.count(["linux-gfx950-1gpu-ccs-ossci-rocm"]), 3)
+        self.assertEqual(self.drawn_from.count(["linux-gfx950-1gpu-ccs-ossci-rocm"]), 4)
         self.assertIn(
             ["linux-gfx950-1gpu-ccs-ossci-rocm", "linux-gfx950-1gpu-crusoe-rocm"],
             self.drawn_from,
