@@ -401,6 +401,41 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         job = self._rocjitsu_lane_job()
         self.assertIn("--user 0:0", job["container_options"])
 
+    def _gtest_lane_job(self, job_name):
+        """Run gfx1250 selection for a rocjitsu gtest lane; return its job or None."""
+        os.environ["PROJECTS_TO_TEST"] = job_name
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        os.environ["AMDGPU_TARGETS"] = "gfx1250"
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == job_name]
+        return jobs[0] if jobs else None
+
+    def test_rocjitsu_gtest_lanes_run_on_cpu_runner_for_gfx1250(self):
+        for job_name, shards, fetch in (
+            ("hipblaslt-rocjitsu", [1, 2, 3], "--blas --tests --rocjitsu"),
+            (
+                "hipsparselt-rocjitsu",
+                [1, 2, 3, 4, 5, 6],
+                "--sparse --blas --tests --rocjitsu",
+            ),
+        ):
+            with self.subTest(job_name=job_name):
+                job = self._gtest_lane_job(job_name)
+                self.assertIsNotNone(job)
+                self.assertTrue(job["linux_cpu_runner"])
+                self.assertTrue(job["expect_failure"])
+                self.assertEqual(job["shard_arr"], shards)
+                self.assertEqual(job["fetch_artifact_args"], fetch)
+                self.assertIn("ROCJITSU_GTEST=1", job["test_script"])
+                self.assertIn("--user 0:0", job["container_options"])
+
+    def test_hipblaslt_rocjitsu_skips_the_46_minute_test(self):
+        job = self._gtest_lane_job("hipblaslt-rocjitsu")
+        self.assertIn(
+            "-*known_bug*:AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace",
+            job["test_script"],
+        )
+
     def test_other_cpu_components_keep_family_test_type(self):
         # Only components that opt out ignore test_type_for_family (gfx125X: quick).
         os.environ["PROJECTS_TO_TEST"] = "hipfile,tensilelite-rocjitsu"

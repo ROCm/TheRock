@@ -612,6 +612,63 @@ test_matrix = {
             "linux": 3,
         },
     },
+    # hipBLASLt and hipSPARSELt quick tiers for non-strict gfx1250 under the
+    # rocjitsu emulator on a CPU runner: the launcher's gtest mode runs each
+    # binary as one process with every core, gtest-sharded across the job's
+    # shards (~10 min each). The filters copy each project's quick tier in
+    # test_categories.yaml; keep them in sync. Excluded from hipBLASLt:
+    # AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace, 46 min
+    # under emulation.
+    "hipblaslt-rocjitsu": {
+        "job_name": "hipblaslt-rocjitsu",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--blas --tests --rocjitsu",
+        "timeout_minutes": 30,
+        "test_script": (
+            "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
+            "ROCJITSU_SUITE_TIMEOUT=1500 ROCJITSU_REPORT_DIR=rocjitsu-report "
+            "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- ./hipblaslt-test --gtest_filter='*smoke*:*HostUnit*:*TuningStore.*:*OnlineTuner.*-*known_bug*:AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace'"
+        ),
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "ignore_test_type_for_family": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx1250"],
+        },
+        "expect_failure": {
+            "linux": ["gfx1250"],
+        },
+        "total_shards_dict": {
+            "linux": 3,
+        },
+    },
+    "hipsparselt-rocjitsu": {
+        "job_name": "hipsparselt-rocjitsu",
+        "skip_stages": ["emulation"],
+        "fetch_artifact_args": "--sparse --blas --tests --rocjitsu",
+        "timeout_minutes": 30,
+        "test_script": (
+            "cd build/bin && THEROCK_BIN_DIR=. ROCJITSU_GTEST=1 "
+            "ROCJITSU_SUITE_TIMEOUT=1500 ROCJITSU_REPORT_DIR=rocjitsu-report "
+            "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- ./hipsparselt-test --gtest_filter='*smoke*-*known_bug*'"
+        ),
+        "platform": ["linux"],
+        "linux_cpu_runner": True,
+        "test_types": ["standard", "comprehensive", "full"],
+        "ignore_test_type_for_family": True,
+        "skip_build_variant": ["asan", "host-asan", "asan-debug", "host-asan-debug"],
+        "include_family": {
+            "linux": ["gfx1250"],
+        },
+        "expect_failure": {
+            "linux": ["gfx1250"],
+        },
+        "total_shards_dict": {
+            "linux": 6,
+        },
+    },
     "origami": {
         "job_name": "origami",
         "fetch_artifact_args": "--blas --tests",
