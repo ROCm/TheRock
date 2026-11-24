@@ -158,8 +158,9 @@ _APPTAINER_UNSUPPORTED_OPTIONS = [
 _APPTAINER_WHOLE_NODE_LABELS = {
     "linux-gfx950-1gpu-crusoe-rocm": "linux-gfx950-8gpu-crusoe-rocm",
 }
-# The profiler tests read every GPU's KFD topology in /sys.
-_APPTAINER_WHOLE_NODE_JOBS = ["rocprofiler-sdk"]
+# Single-GPU jobs that still need to see every GPU of the node. None today:
+# rocprofiler-sdk runs on 1 GPU since #10206.
+_APPTAINER_WHOLE_NODE_JOBS: list[str] = []
 # Extra options per job on _APPTAINER_RUNNER_LABELS. Crusoe nodes are VMs: the
 # kernel-replay pageable copy runs ~3 GB/s there (hipMemcpy itself 42-57 GB/s).
 _APPTAINER_JOB_OPTIONS = {
