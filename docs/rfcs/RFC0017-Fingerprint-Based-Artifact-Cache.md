@@ -79,8 +79,11 @@ A **restore group** contains the components required to restore one artifact nam
 and target. For example, restoring the complete generic `amd-llvm` bundle requires
 its `dbg`, `dev`, `doc`, `lib`, and `run` components, containing outputs from
 `amd-llvm`, `amd-comgr`, and `hipcc`. For generic reuse, those components must share
-one fingerprint and be restored together. This differs from `artifact_group` in
-`BUILD_TOPOLOGY.toml`, which organizes artifacts for stage planning.
+one fingerprint and be restored together. A device-specific or split artifact
+forms one restore group per `target`; a target-family request expands to one
+restore group per target, each restored or rebuilt independently (see
+[RFC0008](./RFC0008-Multi-Arch-Packaging.md)). This differs from `artifact_group`
+in `BUILD_TOPOLOGY.toml`, which organizes artifacts for stage planning.
 
 Dependencies follow declared inputs, including inputs across repository
 boundaries. LLVM's additional inputs include the SPIR-V translator and, on
@@ -98,6 +101,15 @@ split artifacts need fingerprint generation, target identification, and validate
 restoration rules before reuse is enabled. This includes outputs described in
 [RFC0008](./RFC0008-Multi-Arch-Packaging.md).
 
+`target` is a lookup-key coordinate, not a fingerprint input: archives built from
+the same inputs for different targets share one fingerprint and are distinguished
+by `target` in the key. `target_family` is a dispatch and planning concept only
+and never enters the fingerprint or the key. This keeps reuse independent of build
+granularity, so a `gfx110X-all` producer can serve a later single-`gfx1100` build,
+provided a target's output does not depend on which sibling targets were built
+alongside it; that independence is validated per target class under
+[#9525](https://github.com/ROCm/TheRock/issues/9525) before enablement.
+
 #### Accepted metadata differences
 
 Non-release CI may reuse unchanged HIPCC inputs with the producer's original
@@ -112,7 +124,11 @@ require explicit justification. Release builds do not consume cached artifacts.
 #### Read and write policy
 
 Non-release CI may read artifacts enabled for reuse. Only trusted producer runs
-may publish to the shared cache. CI identity and permissions must prevent
+may publish to the shared cache. A trusted run is a push or scheduled run on a
+protected branch; its publish credentials are issued through CI identity (for
+example OIDC to a scoped writer role) and are not available to `pull_request`
+jobs, which therefore can read but never write. Readers accept any existing entry
+because only trusted jobs can create one. CI identity and permissions must prevent
 untrusted jobs from modifying either the database or trusted artifact objects.
 An unrelated test failure does not by itself make a successfully produced artifact
 unusable; complete matching outputs and trusted provenance are required.
@@ -125,9 +141,10 @@ entries from authorized producers become visible to readers.
 
 The stage job that uses restored outputs also computes fingerprints and builds
 misses. It must use the same stage configuration procedure as producer builds,
-such as `configure_stage.py`, with equivalent fingerprint-relevant settings.
-Different configuration modes can produce different fingerprints from the same
-sources.
+such as `configure_stage.py`, with an identical, pinned set of
+fingerprint-relevant settings rather than merely "equivalent" ones. Different
+configuration modes can produce different fingerprints from the same sources, so
+the consumer treats any fingerprint it cannot reproduce as a miss.
 
 1. Configure the prepared sources and save the expected artifact fingerprints.
 1. Query the artifact cache index in a batch and produce a hit/miss plan.
@@ -139,11 +156,14 @@ sources.
 1. Build uncached projects and run the selected downstream work and tests.
 
 A lookup hit is only a candidate. Missing objects, transfer errors, invalid
-checksums, restoration failures, or changed post-restoration fingerprints must fall back to a source build for the affected restore group: remove its restored state and prebuilt markers, then reconfigure. Failed reuse must not leave prebuilt state that suppresses that build.
+checksums, restoration failures, or changed post-restoration fingerprints must fall back to a source build for the affected restore group: remove its restored state and prebuilt markers, then reconfigure. Restoration of a restore group is all-or-nothing; if the fallback itself is interrupted, the next configure must detect and clear any orphaned prebuilt markers before building. Failed reuse must not leave prebuilt state that suppresses that build.
 
 Population copies objects into the current run's artifact location so downstream
-jobs can continue fetching from that run. The database retains pointers to the
-original objects. The transfer and storage costs are part of reuse measurements.
+jobs can keep fetching by run id through the existing artifact mechanism, rather
+than teaching every consumer to resolve database pointers. A hit therefore still
+pays archive transfer and saves only compute; this is a deliberate cost, measured
+alongside reuse, and a candidate future optimization once downstream jobs can
+fetch from the original object pointers the database retains.
 
 #### Producer flow
 
@@ -194,16 +214,22 @@ Conceptually, lookup uses:
 ```
 
 The artifact fingerprint comes from the build system; the client must not
-independently rehash its inputs. Compatibility scope retains required distinctions
-such as platform until they are demonstrably covered by the fingerprint.
-Manually supplied build-variant labels should not duplicate configuration already
-represented. Target identity identifies the requested output even when its
-fingerprint is target-specific.
+independently rehash its inputs. Compatibility scope is the explicit, enumerated
+set of distinctions not yet proven to be covered by the fingerprint; it currently
+holds `platform` (and a built target set only for any artifact class with
+target-set coupling). A distinction is removed from compatibility scope, and the
+epoch is bumped, once [#9525](https://github.com/ROCm/TheRock/issues/9525) shows
+the fingerprint covers it. Manually supplied build-variant labels should not
+duplicate configuration already represented. `target` distinguishes records in the
+key; it is not folded into the fingerprint.
 
 Each record contains object locations, archive names, checksums, and original
 producer information (repository and run). This producer information is
 **provenance**, not an additional build input. A global epoch permits invalidation
-when the fingerprint contract or compatibility assumptions change.
+when the fingerprint contract or compatibility assumptions change: the cache owner
+bumps it (for example when retiring a compatibility-scope distinction), after
+which previous-epoch entries simply stop matching and are left to expire rather
+than being deleted.
 
 #### Publication and recovery
 
@@ -230,13 +256,16 @@ authorization need an implementation plan before production enablement.
 
 ## Implementation Plan
 
-Start with AMD LLVM using the static artifact cache index. Connect the remote
-cache database and revalidate AMD LLVM before expanding outward through the build
-graph.
+Start with AMD LLVM using the static artifact cache index. The compiler is chosen
+first because it is self-contained and the risk of accidental cache poisoning
+grows the further out the build graph is enabled (see
+[#2432](https://github.com/ROCm/TheRock/pull/2432)); coverage therefore expands
+outward only after each layer is validated. Connect the remote cache database and
+revalidate AMD LLVM before expanding outward through the build graph.
 
 ### Enablement checklist
 
-For **each milestone from 2 through 7**:
+For **each milestone from 2 through 8**:
 
 1. First validate fingerprint correctness and stability under
    [#9525](https://github.com/ROCm/TheRock/issues/9525): equivalent inputs match,
@@ -248,6 +277,10 @@ For **each milestone from 2 through 7**:
    expected fingerprints, skipped compilation of restored projects, and successful
    downstream builds and selected tests.
 1. Exercise fallback, report useful diagnostics, and measure total reuse cost.
+   A milestone is "enabled" only when it clears a quantitative bar: a measured
+   cache hit-rate on representative PRs and a net end-to-end wall-time reduction
+   versus a source build, with fallback demonstrated — not merely a successful
+   restore.
 
 | Milestone                                                        | Deliverable                                                                                                                                                                                                                                                                                                    |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -257,8 +290,9 @@ For **each milestone from 2 through 7**:
 | **4. Expand to base projects and upstream dependencies**         | Enable the base subprojects `rocm-cmake` and `rocm-half`, fetched dependencies/sysdeps, and base helpers such as `therock-aux-overlay`. Audit fetch recipes, wrappers, and patches.                                                                                                                            |
 | **5. Expand to remaining compiler and supporting projects**      | Enable `hipify` and other eligible separate Git checkouts or subtrees in dependency order.                                                                                                                                                                                                                     |
 | **6. Expand to ROCm Systems**                                    | Enable runtime/HIP, profiler, debugger, emulation, and communication projects, including their shared sources, wrappers, and helpers.                                                                                                                                                                          |
-| **7. Expand to ROCm Libraries and device-specific artifacts**    | Enable libraries and providers, accounting for shared generators and target-specific inputs. Implement required split/device fingerprint and restoration support.                                                                                                                                              |
-| **8. Retire baseline-run reuse**                                 | Remove legacy selection and stage-copy decisions after required workflows demonstrate reliable reuse, fallback, downstream tests, and measurable savings.                                                                                                                                                      |
+| **7. Expand to ROCm Libraries (generic artifacts)**              | Enable libraries and providers for generic outputs, accounting for shared generators. Device/split outputs are out of scope for this milestone.                                                                                                                                                                |
+| **8. Device-specific and split artifact support**                | Implement split/device fingerprint generation and restoration rules. Gated on the `target`-as-key-coordinate model above and its per-class no-coupling validation under [#9525](https://github.com/ROCm/TheRock/issues/9525).                                                                                   |
+| **9. Retire baseline-run reuse**                                 | Remove legacy selection and stage-copy decisions after required workflows demonstrate reliable reuse, fallback, downstream tests, and measurable savings.                                                                                                                                                      |
 
 AMD LLVM's upstream dependencies must contribute correctly to its fingerprints
 from milestone 2, even while those dependencies build from source. Milestone 4
