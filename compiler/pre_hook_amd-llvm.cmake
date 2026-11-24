@@ -34,6 +34,10 @@ else()
   #    a different header path is taken.
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang;mlir" CACHE STRING "Enable LLVM projects" FORCE)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  # Now that the CIR build is default on, mlir objects get installed and exported in clang config.
+  # TheRock explictly excludes llvm objects in artifact-amd-llvm.toml, which causes a failure
+  # when the clang config is used as those files are not present. Disable their install.
+  set(MLIR_INSTALL_AGGREGATE_OBJECTS OFF CACHE BOOL "Disable installation of MLIR aggregate object libraries" FORCE)
   if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
     set(OPENMP_ENABLE_LIBOMPTARGET ON)
     set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
@@ -59,11 +63,11 @@ else()
     # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
-      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      set(LLVM_RUNTIME_TARGETS "default;amdgpu-amd-amdhsa")
+      set(RUNTIMES_amdgpu-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+      set(RUNTIMES_amdgpu-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../compiler-rt/cmake/caches/AMDGPU.cmake;${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
       # Hosts whose C long double is already IEEE-754 binary128 (ppc64le,
       # riscv64) do not need libquadmath: flang-rt folds the F128 entry points
       # into libflang_rt.runtime instead of building libflang_rt.quadmath.
@@ -223,16 +227,16 @@ if(NOT THEROCK_BUILD_LLVM_TESTS AND NOT THEROCK_BUILD_LLVM_TOOLS)
       CLANG_OFFLOAD_PACKAGER
       CLANG_OFFLOAD_WRAPPER
       CLANG_LINKER_WRAPPER
+      # Needed on every platform: CMP0155 is NEW once cmake_minimum_required is
+      # 3.28 or later, so CMake scans C++20-or-later sources for module imports
+      # with this tool. LLVM puts it in the runtimes' TOOLCHAIN_TOOLS, but only
+      # if the target exists, so pruning it leaves the scan command unresolved.
+      CLANG_SCAN_DEPS
       CLANG_SHLIB
       DRIVER
       LIBCLANG
       OFFLOAD_ARCH
     )
-    if(WIN32)
-      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-      # we might as well build them from source ourselves.
-      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-    endif()
     therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
   endblock()
 endif()
