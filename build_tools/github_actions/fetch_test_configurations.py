@@ -1317,8 +1317,11 @@ test_matrix = {
                 "gfx125X-dcgpu",
             ],
             "windows": [
-                # The suite does not fit the job time budget on these runners
-                # (ROCM-34255).
+                # Windows gfx117X runs currently hit the job timeout before
+                # the suite finishes (ROCM-34255). A successful run took about
+                # 100 minutes, so this is most likely slow runners at the
+                # moment rather than an architecture-specific problem.
+                # https://github.com/ROCm/TheRock/actions/runs/44302932875/job/134878504093
                 "gfx117X-all",
             ],
         },
