@@ -145,6 +145,19 @@ def select_weighted_label(labels_config: list[dict], context_name: str) -> str:
     return selected["label"]
 
 
+# Maps each build size to a runner pool, optionally based on build variant.
+# Sanitizer builds (variants containing "san") use dedicated high-memory runners
+# for large stages. Some job types (native_package, emulation) also route to
+# medium under sanitizer to avoid disk pressure from large artifact sets.
+# To add a new job type: add an entry here — no changes to select_build_runner needed.
+SIZE_POOL_MAP = {
+    "large":          lambda variant: "sanitizer" if "san" in variant else "default",
+    "medium":         lambda variant: "medium",
+    "small":          lambda variant: "small",
+    "native_package": lambda variant: "medium" if "san" in variant else "small",
+    "emulation":      lambda variant: "medium" if "san" in variant else "small",
+}
+
 # Build runner configuration for Linux builds
 # Uses weight-based distribution (0.0-1.0 probability)
 # Sanitizer builds (asan/tsan) use large runners with ramdisk support
@@ -179,12 +192,14 @@ def select_build_runner(
 ) -> str:
     """Select a build runner label based on platform, build variant, and size.
 
+    Routing is driven by SIZE_POOL_MAP, which maps each size to a pool resolver.
+    Trigger-based overrides (e.g. submodule_bump) take highest precedence.
+
     Args:
         platform: "linux" or "windows"
         build_variant: build variant string (e.g. "release", "asan", "tsan")
-        size: runner pool size — "small", "medium", or "large" (default).
-              Sanitizer variants always use the sanitizer (large) pool regardless
-              of size. Platforms without a size-specific pool fall back to default.
+        size: job size key — "small", "medium", "large" (default), "native_package",
+              or "emulation". See SIZE_POOL_MAP for the full routing table.
         triggers: set of active CI trigger names (e.g. {"presubmit", "submodule_bump"}).
                   When "submodule_bump" is present, uses the "bump" runner pool if
                   configured, to isolate bump PRs from the weighted Azure/AWS split.
@@ -196,34 +211,14 @@ def select_build_runner(
 
     platform_config = build_runner_labels[platform]
 
-    # Sanitizer builds are memory-intensive; large stages use a dedicated
-    # sanitizer runner pool. Small/medium stages use their normal pools since
-    # they don't require the extra memory headroom.
-    if "san" in build_variant and size not in ("small", "medium"):
-        labels_config = platform_config.get("sanitizer", platform_config["default"])
-        context_name = f"build-runner ({platform}, {build_variant})"
-    elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
+    # Trigger-based overrides take highest precedence.
+    if triggers and "submodule_bump" in triggers and "bump" in platform_config:
         labels_config = platform_config["bump"]
         context_name = f"build-runner-bump ({platform})"
-    elif size == "native_package":
-        # Native package jobs (deb/rpm) need medium runners for sanitizer builds
-        # due to artifact extraction disk pressure (see TheRock#10095). All other
-        # variants use small.
-        resolved = "medium" if "san" in build_variant else "small"
-        labels_config = platform_config.get(resolved, platform_config["default"])
-        context_name = f"build-runner-native-package ({platform}, →{resolved})"
-    elif size == "emulation":
-        # Emulation stage needs medium runners for sanitizer builds due to the
-        # large artifact set produced by ASAN variants. All other variants use small.
-        resolved = "medium" if "san" in build_variant else "small"
-        labels_config = platform_config.get(resolved, platform_config["default"])
-        context_name = f"build-runner-emulation ({platform}, →{resolved})"
-    elif size in ("small", "medium"):
-        labels_config = platform_config.get(size, platform_config["default"])
-        context_name = f"build-runner-{size} ({platform})"
     else:
-        labels_config = platform_config["default"]
-        context_name = f"build-runner ({platform})"
+        pool = SIZE_POOL_MAP.get(size, lambda v: "default")(build_variant)
+        labels_config = platform_config.get(pool, platform_config["default"])
+        context_name = f"build-runner-{size} ({platform}, →{pool})"
 
     return select_weighted_label(labels_config, context_name)
 
