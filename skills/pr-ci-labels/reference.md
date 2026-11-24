@@ -118,14 +118,18 @@ ______________________________________________________________________
 
 ## Which labels did a run use?
 
-Multi-Arch CI setup reads the PR's labels from the GitHub API when it starts, so a re-run uses the
-labels present at the re-run, not the ones present when the run was first created. The API does not
-record which labels setup saw, so reconstruct them: compare the PR's label events
-(`gh api repos/<owner>/<repo>/issues/<n>/events --paginate`, the `labeled` and `unlabeled` entries
-with their timestamps) against when each CI run's latest attempt started (`run_started_at` in the
-Actions runs API, filtered by `head_sha`). The result is exact only when no label changed within
-about a minute of that start. Otherwise treat it as uncertain and confirm in the run's setup log,
-which prints the labels it read (`pr_labels`) and a `Label '...'` line for each label it acted on.
+Multi-Arch CI setup reads the PR's labels from the GitHub API when the setup job starts. **Re-run
+all jobs** runs setup again, so that re-run uses the labels present at the re-run. **Re-run failed
+jobs** keeps the earlier setup and the build matrix it chose, so labels added between attempts are
+not used. The API does not record which labels setup saw, so reconstruct them: compare the PR's
+label events (`gh api repos/<owner>/<repo>/issues/<n>/events --paginate`, the `labeled` and
+`unlabeled` entries with their timestamps) against the setup job's `started_at`
+(`gh api repos/<owner>/<repo>/actions/runs/<id>/jobs?filter=latest`; a setup job kept by Re-run
+failed jobs reports its original start time). The result is exact only when no label changed
+within about a minute of that time. If the setup job can't be read, a re-run's labels are uncertain
+anywhere between the run's creation and its latest attempt (`created_at` and `run_started_at` in
+the Actions runs API). Confirm uncertain labels in the run's setup log, which prints the labels it
+read (`pr_labels`) and a `Label '...'` line for each label it acted on.
 
 ## A passing run is not always a tested run
 
@@ -143,10 +147,12 @@ ______________________________________________________________________
 the PR's main CI workflow (`Multi-Arch CI` in TheRock, `TheRock Multi-Arch CI` in repositories that
 call it). It:
 
-1. Replays the PR's label events to give each run the labels it used, as of the start of its latest
-   attempt, and flags labels that changed within 60 seconds of that start as uncertain. If the label
-   history cannot be read, it uses the PR's current labels, marks every run's labels as unknown, and
-   never gives a go that depends on them.
+1. Replays the PR's label events to give each run the labels it used, as of its setup job's start
+   (read from the run's jobs when it checks them; otherwise the latest attempt's start), and flags
+   labels that changed within 60 seconds of that time as uncertain. For a re-run whose setup job it
+   did not read, every label change between the run's creation and its latest attempt is uncertain.
+   If the label history cannot be read, it uses the PR's current labels, marks every run's labels as
+   unknown, and never gives a go that depends on them.
 1. Reads the jobs of passing runs, newest first (up to 10), to find the last one with a successful
    build or test job. The jobs decide, not the replayed labels: a `ci:skip` run has no build or test
    jobs, so it never counts, and neither does a run whose jobs cannot be read; the report says how

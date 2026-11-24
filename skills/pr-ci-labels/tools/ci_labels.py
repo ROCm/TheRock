@@ -143,6 +143,9 @@ LABEL_RACE_SECONDS = 60
 # Multi-Arch CI build and test jobs ("Linux::release / Build Multi-Arch Stages / ...",
 # "Linux::release / Test gfx94X-dcgpu / ..."). Skip-only runs have only setup and summary jobs.
 BUILD_TEST_JOB_RE = re.compile(r"::\S+ / (Build|Test)\b")
+# The setup job that reads the PR's labels: "setup / setup" (setup_multi_arch.yml called as
+# the caller's `setup` job).
+SETUP_JOB_RE = re.compile(r"setup / setup$")
 JOBS_PAGE_SIZE = 30  # larger pages of a big run's jobs can time out (HTTP 502)
 JOBS_MAX_PAGES = 10
 JOBS_MAX_RUNS = 10  # passing runs to check, newest first, for build or test evidence
@@ -237,15 +240,18 @@ def load_skip_patterns(
     )
 
 
-def uncertain_labels(events: list[dict], when: str | None) -> list[str]:
-    """CI labels that changed within LABEL_RACE_SECONDS of `when`.
+def uncertain_labels(
+    events: list[dict], start: str | None, end: str | None = None
+) -> list[str]:
+    """CI labels that changed between `start` and `end`, give or take LABEL_RACE_SECONDS.
 
     Multi-Arch CI setup reads the PR's labels when it starts, and the API does not say which
-    labels it saw. Replaying label events up to the run's start is exact only when no label
-    changed close to it.
+    labels it saw. Replaying label events up to that moment is exact only when no label
+    changed close to it. `end` defaults to `start`.
     """
-    created = _parse_timestamp(when)
-    if not created:
+    lo = _parse_timestamp(start)
+    hi = _parse_timestamp(end) or lo
+    if not lo or not hi:
         return []
     near = set()
     for ev in events:
@@ -254,18 +260,38 @@ def uncertain_labels(events: list[dict], when: str | None) -> list[str]:
         if (
             ts
             and is_ci_label(label)
-            and abs((ts - created).total_seconds()) <= LABEL_RACE_SECONDS
+            and (lo - ts).total_seconds() <= LABEL_RACE_SECONDS
+            and (ts - hi).total_seconds() <= LABEL_RACE_SECONDS
         ):
             near.add(label)
     return sorted(near)
 
 
 def labels_read_at(ci_run: dict) -> str | None:
-    """When the run's setup job read the PR's labels: the start of its latest attempt.
+    """When the run's setup job read the PR's labels.
 
-    A re-run reads the labels present when it starts, not when the run was created.
+    The setup job's own start time when known. Re-run all jobs runs setup again, but Re-run
+    failed jobs keeps an earlier attempt's setup, so the latest attempt's start time is only
+    a fallback (see label_read_window).
     """
-    return ci_run.get("labels_read_at") or ci_run.get("created_at")
+    return (
+        ci_run.get("setup_started_at")
+        or ci_run.get("run_started_at")
+        or ci_run.get("created_at")
+    )
+
+
+def label_read_window(ci_run: dict) -> tuple[str | None, str | None]:
+    """The earliest and latest times the run's setup job could have read the PR's labels.
+
+    Without the setup job's start time, a re-run's setup may come from any attempt, so the
+    window spans the run's creation to its latest attempt.
+    """
+    if ci_run.get("setup_started_at"):
+        return ci_run["setup_started_at"], ci_run["setup_started_at"]
+    if (ci_run.get("run_attempt") or 1) > 1:
+        return ci_run.get("created_at"), labels_read_at(ci_run)
+    return labels_read_at(ci_run), labels_read_at(ci_run)
 
 
 def is_coverage_baseline(ci_run: dict) -> bool:
@@ -289,9 +315,9 @@ def analyze_ci_labels(
 ) -> dict:
     """Which labels each CI run used, and whether anything since the last tested pass escaped CI.
 
-    `runs` are the PR's main-CI runs (id, name, head_sha, created_at, labels_read_at (when the
-    latest attempt started; created_at when absent), status, conclusion, url, and `tested`:
-    True or False from job evidence, None or absent when unknown). `events` are
+    `runs` are the PR's main-CI runs (id, name, head_sha, created_at, run_started_at and
+    run_attempt (the latest attempt), setup_started_at (when known), status, conclusion, url,
+    and `tested`: True or False from job evidence, None or absent when unknown). `events` are
     label events (see labels_at), or None when the label history could not be read; then
     `current_labels` (the PR's labels now) stands in and no run's labels are known.
     `commits` are the PR's commits, oldest first. `commit_files` maps a commit to its changed
@@ -304,7 +330,7 @@ def analyze_ci_labels(
         {
             **r,
             "labels": labels_at(events, labels_read_at(r)),
-            "uncertain_labels": uncertain_labels(events, labels_read_at(r)),
+            "uncertain_labels": uncertain_labels(events, *label_read_window(r)),
             "labels_unknown": not history,
         }
         for r in sorted(runs, key=lambda r: r.get("created_at") or "")
@@ -431,8 +457,9 @@ def analyze_ci_labels(
     if report["verdict"] == "go" and unsure:
         report["verdict"] = "caution"
         report["reason"] += (
-            f" But {', '.join(unsure)} changed within {LABEL_RACE_SECONDS} seconds of that "
-            "run starting, so it may not have used them. Check the run's setup log for "
+            f" But {', '.join(unsure)} changed close to when that run's setup read the "
+            "labels (or between attempts of a re-run whose setup time is unknown), so it "
+            "may not have used them. Check the run's setup log for "
             "the matching \"Label '...'\" line, or re-run CI."
         )
     return _note_gaps(report, history, unverified)
@@ -459,25 +486,46 @@ def _note_gaps(report: dict, history: bool, unverified: list[dict]) -> dict:
     return report
 
 
-def run_built_or_tested(repo: str, run_id) -> bool | None:
-    """Whether a run has a successful build or test job; None if the jobs can't be read."""
+def read_run_jobs(repo: str, run_id) -> tuple[bool | None, str | None]:
+    """(built or tested, setup job start time) for a run.
+
+    The first value is whether a build or test job succeeded, or None if the jobs can't be
+    read. The second is when the setup job that produced the run's configuration started,
+    or None if it wasn't found. With filter=latest, a setup job kept by Re-run failed jobs
+    reports its original start time.
+    """
+    setup_started = None
     for page in range(1, JOBS_MAX_PAGES + 1):
         data = gh_api_json(
             f"repos/{repo}/actions/runs/{run_id}/jobs?filter=latest"
             f"&per_page={JOBS_PAGE_SIZE}&page={page}"
         )
         if not isinstance(data, dict):
-            return None
+            return None, setup_started
         jobs = data.get("jobs") or []
+        if setup_started is None:
+            setup_started = next(
+                (
+                    j.get("started_at")
+                    for j in jobs
+                    if SETUP_JOB_RE.match(j.get("name", ""))
+                ),
+                None,
+            )
         if any(
             j.get("conclusion") == "success"
             and BUILD_TEST_JOB_RE.search(j.get("name", ""))
             for j in jobs
         ):
-            return True
+            return True, setup_started
         if len(jobs) < JOBS_PAGE_SIZE:
-            return False
-    return None
+            return False, setup_started
+    return None, setup_started
+
+
+def run_built_or_tested(repo: str, run_id) -> bool | None:
+    """Whether a run has a successful build or test job; None if the jobs can't be read."""
+    return read_run_jobs(repo, run_id)[0]
 
 
 def fetch_commit_files(repo: str, oid: str) -> list[str] | None:
@@ -549,9 +597,8 @@ def fetch_ci_label_report(
                     "name": r.get("name"),
                     "head_sha": r.get("head_sha"),
                     "created_at": r.get("created_at"),
-                    # Setup reads the PR's labels when each attempt starts, so a re-run
-                    # uses the labels present at the re-run.
-                    "labels_read_at": r.get("run_started_at") or r.get("created_at"),
+                    "run_started_at": r.get("run_started_at"),
+                    "run_attempt": r.get("run_attempt"),
                     "status": r.get("status"),
                     "conclusion": r.get("conclusion"),
                     "url": r.get("html_url"),
@@ -566,7 +613,7 @@ def fetch_ci_label_report(
         if checked >= JOBS_MAX_RUNS:
             break
         checked += 1
-        r["tested"] = run_built_or_tested(repo, r["id"])
+        r["tested"], r["setup_started_at"] = read_run_jobs(repo, r["id"])
         if r["tested"] is True:
             break
     patterns, method = load_skip_patterns(repo, data.get("baseRefName"), repo_path)
