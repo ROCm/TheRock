@@ -160,8 +160,8 @@ jobs:
         -StreamExecutorGpuClientTest.NumaNode:PrngTest.PassInGlobalRngSeed:HloOpProfilerTest*:CommandBufferTests/CommandBufferTest.Convolutions*
       ROCM_COMMON_BAZEL_ARGS: >-
         --config=rocm_ci_hermetic
-        --config=rocm_rbe_dynamic
         --config=rocm_rbe_dev
+        --config=rocm_rbe_dynamic
         --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="ghcr.io/rocm/jax-build-ubu24.rocmless@sha256:68854ed30b800d3e8c390f6e651721e2bead58830da1c59e1b828354eb8f077f"
         --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
