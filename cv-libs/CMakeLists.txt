@@ -12,6 +12,9 @@ if(THEROCK_ENABLE_RPP)
     NO_MERGE_COMPILE_COMMANDS
     OUTPUT_ON_FAILURE
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rpp"
+    # rpp installs TestCategories.cmake and parse_ctest_categories.py from
+    # shared/ctest into its test component even when tests are not built.
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rpp"
     COMPILER_TOOLCHAIN
       amd-hip

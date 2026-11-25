@@ -19,6 +19,8 @@ if(THEROCK_ENABLE_ROCJITSU)
   therock_cmake_subproject_declare(rocjitsu
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/emulation/rocjitsu"
+    # Adds runtimes/api-headers (HSA and Linux UAPI headers) as a subdirectory.
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/api-headers"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocjitsu"
     CMAKE_ARGS
       -DBUILD_TESTING=${THEROCK_BUILD_TESTING}

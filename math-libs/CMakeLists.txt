@@ -15,6 +15,12 @@ if(NOT WIN32)
     set(_primlibs_benchmark_deps amdsmi)
   endif()
 endif()
+# Benchmarks include the shared primbench sources from the monorepo.
+set(_primlibs_benchmark_source_inputs)
+if(_primlibs_benchmark_enable)
+  list(APPEND _primlibs_benchmark_source_inputs
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/primbench")
+endif()
 
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
@@ -24,6 +30,7 @@ if(THEROCK_ENABLE_RAND)
 
   therock_cmake_subproject_declare(rocRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand"
+    ADDITIONAL_SOURCE_INPUTS ${_primlibs_benchmark_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -230,6 +237,7 @@ if(THEROCK_ENABLE_PRIM)
       # the critical path of libraries that only need the prim headers.
       therock_cmake_subproject_declare(hipCCL_tests
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
+        ADDITIONAL_SOURCE_INPUTS ${_primlibs_benchmark_source_inputs}
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL_tests"
         BACKGROUND_BUILD
         CMAKE_ARGS
@@ -317,6 +325,7 @@ if(THEROCK_ENABLE_PRIM)
       # Passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding.
       therock_cmake_subproject_declare(rocPRIM_tests
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
+        ADDITIONAL_SOURCE_INPUTS ${_primlibs_benchmark_source_inputs}
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
         BACKGROUND_BUILD
         CMAKE_ARGS
@@ -352,6 +361,7 @@ if(THEROCK_ENABLE_PRIM)
 
     therock_cmake_subproject_declare(hipCUB
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
+      ADDITIONAL_SOURCE_INPUTS ${_primlibs_benchmark_source_inputs}
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
       BACKGROUND_BUILD
       CMAKE_ARGS
@@ -386,6 +396,7 @@ if(THEROCK_ENABLE_PRIM)
 
     therock_cmake_subproject_declare(rocThrust
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
+      ADDITIONAL_SOURCE_INPUTS ${_primlibs_benchmark_source_inputs}
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
       BACKGROUND_BUILD
       CMAKE_ARGS

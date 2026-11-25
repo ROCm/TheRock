@@ -157,6 +157,9 @@ endif()
 
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
+  # TensileLite's Python bindings build stinkytofu from the monorepo. Origami,
+  # rocRoller and mxDataGenerator are separate subprojects found as packages.
+  ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/stinkytofu"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
   DEFAULT_GPU_TARGETS
@@ -237,6 +240,8 @@ endif()
 
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
+  # Passed as Tensile_TEST_LOCAL_PATH below.
+  ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
   BACKGROUND_BUILD
   CMAKE_ARGS

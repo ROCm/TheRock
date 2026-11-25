@@ -358,12 +358,21 @@ endfunction()
 #   all files hashed instead of querying the source control system. This is used for
 #   certain small, in-tree directories where we don't want them fingerprinted from
 #   TheRock's commit but based on content.
+# ADDITIONAL_SOURCE_INPUTS: Additional source directories read directly by this sub-project.
+#   Relative paths are resolved against the declaring CMake source directory.
+#   Each directory uses the usual source identity helper (sibling .smrev or Git),
+#   independently of FPRINT_SOURCE_HASH for the primary source directory. A missing
+#   directory or invalid identity invalidates the sub-project fingerprint. These
+#   are source inputs, not BUILD_DEPS/RUNTIME_DEPS or build-order edges. When
+#   THEROCK_BUILD_TESTING is ON, a sub-project whose sources are inside the
+#   rocm-libraries or rocm-systems checkout also gets that checkout's shared/ctest
+#   directory automatically.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED"
+    "BUILD_DEPS;RUNTIME_DEPS;ADDITIONAL_SOURCE_INPUTS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS;HARDENING_DEFERRED"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -391,6 +400,12 @@ function(therock_cmake_subproject_declare target_name)
   if(ARG_CMAKE_LISTS_RELPATH)
     cmake_path(APPEND _cmake_source_dir "${ARG_CMAKE_LISTS_RELPATH}")
   endif()
+
+  set(_additional_source_inputs "${ARG_ADDITIONAL_SOURCE_INPUTS}")
+  _therock_cmake_subproject_absolutize(_additional_source_inputs "${CMAKE_CURRENT_SOURCE_DIR}")
+  _therock_cmake_subproject_superrepo_test_inputs(_superrepo_test_inputs "${_cmake_source_dir}")
+  list(APPEND _additional_source_inputs ${_superrepo_test_inputs})
+  list(REMOVE_DUPLICATES _additional_source_inputs)
 
   message(STATUS "Including subproject ${target_name} (from ${_cmake_source_dir})")
   add_custom_target("${target_name}" COMMENT "Top level target to build the ${target_name} sub-project")
@@ -571,6 +586,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_FPRINT_SOURCE_DIR "${ARG_FPRINT_SOURCE_DIR}"
     THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
     THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
+    THEROCK_ADDITIONAL_SOURCE_INPUTS "${_additional_source_inputs}"
   )
 
   # Record direct-consumer edges for the consumer graph emitted by
@@ -682,6 +698,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_fprint_source_dir "${target_name}" THEROCK_FPRINT_SOURCE_DIR)
   get_target_property(_fprint_file_globs "${target_name}" THEROCK_FPRINT_FILE_GLOBS)
   get_target_property(_fprint_source_hash "${target_name}" THEROCK_FPRINT_SOURCE_HASH)
+  get_target_property(_additional_source_inputs "${target_name}" THEROCK_ADDITIONAL_SOURCE_INPUTS)
   if(NOT _fprint_source_dir)
     set(_fprint_source_dir "${_external_source_dir}")
   endif()
@@ -716,6 +733,29 @@ function(therock_cmake_subproject_activate target_name)
     file(GLOB_RECURSE _fprint_source_globs "${_fprint_source_dir}/*")
     list(APPEND _fprint_files ${_fprint_source_globs})
   endif()
+  # Include sources outside the primary source directory, also for prebuilts.
+  foreach(_additional_source_input IN LISTS _additional_source_inputs)
+    set(_additional_source_input_fprint)
+    if(IS_DIRECTORY "${_additional_source_input}")
+      _therock_subproject_fprint_source_dir(_additional_source_input_fprint "${_additional_source_input}")
+    endif()
+    if(_additional_source_input_fprint)
+      cmake_path(RELATIVE_PATH _additional_source_input BASE_DIRECTORY "${THEROCK_SOURCE_DIR}"
+        OUTPUT_VARIABLE _additional_source_input_relative)
+      # Hash the path and identity separately to preserve their boundaries,
+      # including when a marker contains newlines or CMake list separators.
+      string(SHA256 _additional_source_input_path_hash "${_additional_source_input_relative}")
+      string(SHA256 _additional_source_input_identity_hash "${_additional_source_input_fprint}")
+      list(APPEND _fprint_content
+        "SOURCE_DEP_V1=${_additional_source_input_path_hash}:${_additional_source_input_identity_hash}")
+    else()
+      set(_fprint_is_valid FALSE)
+      message(STATUS
+        "Fingerprint invalid: cannot determine a valid source identity for "
+        "additional source input '${_additional_source_input}'. "
+        "Fingerprint-based cache reuse is unavailable for this subproject.")
+    endif()
+  endforeach()
   if(_fprint_file_globs)
     file(GLOB_RECURSE _fprint_file_globs_resolved ${_fprint_file_globs})
     list(APPEND _fprint_files ${_fprint_file_globs_resolved})
@@ -1650,6 +1690,26 @@ function(_therock_cmake_subproject_collect_runtime_deps
   set("${out_transitive_deps}" "${_transitive_deps}" PARENT_SCOPE)
 endfunction()
 
+# Projects in the rocm-libraries and rocm-systems monorepos include
+# shared/ctest/TestCategories.cmake from their superrepo root when tests are
+# built. Sets out_var to that directory if source_dir is inside one of them and
+# the directory exists, otherwise to an empty list.
+function(_therock_cmake_subproject_superrepo_test_inputs out_var source_dir)
+  set(_inputs)
+  if(THEROCK_BUILD_TESTING)
+    foreach(_superrepo_var IN ITEMS THEROCK_ROCM_LIBRARIES_SOURCE_DIR THEROCK_ROCM_SYSTEMS_SOURCE_DIR)
+      set(_superrepo_dir "${${_superrepo_var}}")
+      if(_superrepo_dir)
+        cmake_path(IS_PREFIX _superrepo_dir "${source_dir}" NORMALIZE _in_superrepo)
+        if(_in_superrepo AND IS_DIRECTORY "${_superrepo_dir}/shared/ctest")
+          list(APPEND _inputs "${_superrepo_dir}/shared/ctest")
+        endif()
+      endif()
+    endforeach()
+  endif()
+  set("${out_var}" "${_inputs}" PARENT_SCOPE)
+endfunction()
+
 # Transforms a list to be absolute paths if not already.
 function(_therock_cmake_subproject_absolutize list_var relative_to)
   set(_dirs "${${list_var}}")
@@ -2002,31 +2062,30 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
   if(IN_GIT_REPO)
     if(NOT fprint)
       # Process as git directory.
-      # Get the HEAD commit hash
+      # Use the committed tree of this directory, so commits outside the
+      # selected source directory do not change its identity.
       execute_process(
-        COMMAND git rev-parse HEAD
+        COMMAND git rev-parse HEAD:./
         WORKING_DIRECTORY "${dir}"
-        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_VARIABLE GIT_TREE_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE GIT_HASH_RESULT
         ERROR_QUIET
       )
       if(GIT_HASH_RESULT EQUAL 0)
-        set(fprint "${GIT_COMMIT_HASH}")
+        set(fprint "${GIT_TREE_HASH}")
       else()
         if(THEROCK_VERBOSE)
-          message(STATUS "  FPRINT: Could not read git commit")
+          message(STATUS "  FPRINT: Could not read git tree")
         endif()
         set(fprint)
       endif()
     endif()
 
-    # Check if working tree is pristine (no modified tracked files)
-    # TODO: Consider changing this incantation to instead consider the
-    # sub-tree, not the whole repo. See comments on:
-    # https://github.com/ROCm/TheRock/pull/2432
+    # Check tracked changes within the same directory used for the identity.
+    # Untracked files and submodule working trees are not checked here.
     execute_process(
-      COMMAND git diff --quiet --ignore-submodules HEAD
+      COMMAND git diff --quiet --ignore-submodules HEAD -- .
       WORKING_DIRECTORY "${dir}"
       RESULT_VARIABLE GIT_DIFF_RESULT
     )

@@ -75,6 +75,13 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 
     therock_cmake_subproject_declare(amdsmi
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+      # Built from the monorepo when no installed libamdcuid is found, and
+      # libamdcuid builds the shared sha256 sources. The WSL backend (enabled
+      # below) includes the libhsakmt headers from rocr-runtime.
+      ADDITIONAL_SOURCE_INPUTS
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/cuid"
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/include"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
       USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
@@ -133,9 +140,17 @@ if(_therock_enable_hsa_runtime)
     list(APPEND _rocr_optional_deps rocprofiler-register)
   endif()
 
+  set(_rocr_additional_source_inputs)
+  if(WIN32)
+    # libhsakmt uses the prebuilt WKMI library and headers from this tree.
+    list(APPEND _rocr_additional_source_inputs
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
+  endif()
+
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+    ADDITIONAL_SOURCE_INPUTS ${_rocr_additional_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ROCR-Runtime"
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN
@@ -210,6 +225,7 @@ if(_therock_enable_hsa_runtime)
     therock_cmake_subproject_declare(hrx
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/optional-sources/hrx"
+      ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile/src/core/include"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrx"
       BACKGROUND_BUILD
       COMPILER_TOOLCHAIN
@@ -268,10 +284,21 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
+  # CLR reads HIP's VERSION, cmake, include and bin (passed as HIP_COMMON_DIR),
+  # the hrr headers (hipamd/src/hrr) and the shared api-headers.
+  set(HIP_CLR_ADDITIONAL_SOURCE_INPUTS
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr/include"
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/api-headers/include")
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
     cmake_path(NORMAL_PATH _compute_pal_dir)
+    list(APPEND HIP_CLR_ADDITIONAL_SOURCE_INPUTS "${_compute_pal_dir}")
+    # With AMD_COMPUTE_WIN, ROCclr builds hsa-runtime64 from projects/rocr-runtime
+    # as a subdirectory, so those sources are inputs even without ROCR-Runtime.
+    list(APPEND HIP_CLR_ADDITIONAL_SOURCE_INPUTS
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
     list(APPEND HIP_CLR_CMAKE_ARGS
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
@@ -297,6 +324,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    ADDITIONAL_SOURCE_INPUTS ${HIP_CLR_ADDITIONAL_SOURCE_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/clr"
     INTERFACE_PROGRAM_DIRS
       bin
@@ -406,6 +434,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
     therock_cmake_subproject_declare(hipInfo
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "hipInfo"
+      ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/samples"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
       COMPILER_TOOLCHAIN
@@ -489,6 +518,8 @@ if(THEROCK_ENABLE_OCL_ICD)
   EXTERNAL_SOURCE_DIR
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
+  ADDITIONAL_SOURCE_INPUTS
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-icd"
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -521,10 +552,18 @@ endif()
 if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
+  # ROCclr reads the ABCE headers from the shared api-headers for OpenCL too.
+  set(OCL_CLR_ADDITIONAL_SOURCE_INPUTS
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/api-headers/include")
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
     cmake_path(NORMAL_PATH _compute_pal_dir)
+    list(APPEND OCL_CLR_ADDITIONAL_SOURCE_INPUTS "${_compute_pal_dir}")
+    # With AMD_COMPUTE_WIN, ROCclr builds hsa-runtime64 from projects/rocr-runtime
+    # as a subdirectory, so those sources are inputs even without ROCR-Runtime.
+    list(APPEND OCL_CLR_ADDITIONAL_SOURCE_INPUTS
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
     list(APPEND OCL_CLR_CMAKE_ARGS
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
@@ -554,6 +593,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME AND _ocl_clr_enabled)
   therock_cmake_subproject_declare(ocl-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    ADDITIONAL_SOURCE_INPUTS ${OCL_CLR_ADDITIONAL_SOURCE_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-clr"
     INTERFACE_PROGRAM_DIRS
       bin
@@ -638,6 +678,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled
   therock_cmake_subproject_declare(hip-tests
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN

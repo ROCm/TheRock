@@ -110,6 +110,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     # contains .hsaco files for all architectures, not just dist archs.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -305,6 +306,9 @@ if(THEROCK_ENABLE_PROFILER_HUB)
     DISABLE_AMDGPU_TARGETS
     COMPILER_TOOLCHAIN amd-llvm
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/profilers/profiler-hub"
+    # The rocpd schema (versions.yml) is read from rocprofiler-sdk's sources.
+    ADDITIONAL_SOURCE_INPUTS
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk/source/share/rocprofiler-sdk-rocpd"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/profiler-hub"
     BACKGROUND_BUILD
     CMAKE_ARGS

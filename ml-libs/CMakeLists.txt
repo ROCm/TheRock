@@ -1,6 +1,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+# The dnn-provider subprojects include shared CMake modules (toolchain, version
+# utilities, test helpers) from dnn-providers/cmake, outside their own directory.
+set(_dnn_providers_source_inputs
+  "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/cmake")
+
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
 set(optional_profiler_deps)
@@ -174,6 +179,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   therock_cmake_subproject_declare(hipdnn_integration_tests
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -224,6 +230,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
   therock_cmake_subproject_declare(miopenprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/miopen-provider"
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopenprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -272,6 +279,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
   therock_cmake_subproject_declare(hipblasltprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblasltprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -325,6 +333,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   therock_cmake_subproject_declare(hipkernelprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
