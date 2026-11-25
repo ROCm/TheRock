@@ -13,23 +13,29 @@ import re
 import sys
 from pathlib import Path
 
+import boto3
+import botocore.exceptions
 import pytest
+from botocore.stub import Stubber
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+import manage_structured
 from manage_structured import (
     _MULTIPART_CHECKSUM_RE,
     IndexPage,
     PackageDir,
     PackageFile,
     build_index_pages,
+    create_parser,
     discover_packages,
     fetch_metadata,
+    generate_structured_index,
+    list_package_dirs,
     pep503_normalize,
     render_package_page,
     render_root_page,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,6 +59,111 @@ def _file(
         pep658=pep658,
         size=None,
     )
+
+
+_ListPage = dict[str, list[dict[str, str]]]
+
+
+class _InMemoryS3Client:
+    """S3 stand-in serving list_objects_v2 pages from a fixed set of keys.
+
+    Listing follows S3 delimiter semantics: keys with the delimiter after the
+    prefix collapse into CommonPrefixes, the rest are returned as Contents.
+    Each page holds at most `page_size` entries. head_object returns a fixed
+    size for existing keys and raises a 404 ClientError otherwise.
+    """
+
+    def __init__(self, keys: list[str], page_size: int = 1000) -> None:
+        self._keys = sorted(keys)
+        self._page_size = page_size
+        self.list_calls: list[dict[str, str | None]] = []
+        self.head_keys: list[str] = []
+        self.put_calls: list[dict[str, object]] = []
+
+    def get_paginator(self, operation_name: str) -> "_InMemoryS3Client":
+        assert operation_name == "list_objects_v2"
+        return self
+
+    def paginate(
+        self, *, Bucket: str, Prefix: str, Delimiter: str | None = None
+    ) -> list[_ListPage]:
+        self.list_calls.append(
+            {"Bucket": Bucket, "Prefix": Prefix, "Delimiter": Delimiter}
+        )
+        entries: list[tuple[str, str]] = []
+        seen_prefixes: set[str] = set()
+        for key in self._keys:
+            if not key.startswith(Prefix):
+                continue
+            remainder = key[len(Prefix) :]
+            if Delimiter and Delimiter in remainder:
+                common = Prefix + remainder.split(Delimiter, 1)[0] + Delimiter
+                if common not in seen_prefixes:
+                    seen_prefixes.add(common)
+                    entries.append(("CommonPrefixes", common))
+            else:
+                entries.append(("Contents", key))
+
+        pages: list[_ListPage] = []
+        for start in range(0, len(entries), self._page_size):
+            page: _ListPage = {}
+            for kind, value in entries[start : start + self._page_size]:
+                field = "Prefix" if kind == "CommonPrefixes" else "Key"
+                page.setdefault(kind, []).append({field: value})
+            pages.append(page)
+        return pages or [{}]
+
+    def head_object(
+        self, *, Bucket: str, Key: str, ChecksumMode: str | None = None
+    ) -> dict[str, object]:
+        self.head_keys.append(Key)
+        if Key not in self._keys:
+            raise botocore.exceptions.ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+            )
+        return {"ContentLength": 1}
+
+    def put_object(self, **kwargs: object) -> None:
+        self.put_calls.append(kwargs)
+
+
+class _CannedListClient:
+    """Returns fixed CommonPrefixes pages, for prefixes S3 itself never emits."""
+
+    def __init__(self, prefixes: list[str]) -> None:
+        self._prefixes = prefixes
+
+    def get_paginator(self, operation_name: str) -> "_CannedListClient":
+        return self
+
+    def paginate(self, **kwargs: str) -> list[_ListPage]:
+        return [{"CommonPrefixes": [{"Prefix": p} for p in self._prefixes]}]
+
+
+def _put_bodies(client: _InMemoryS3Client) -> dict[str, str]:
+    bodies: dict[str, str] = {}
+    for call in client.put_calls:
+        body = call["Body"]
+        assert isinstance(body, bytes)
+        bodies[str(call["Key"])] = body.decode("utf-8")
+    return bodies
+
+
+# A product root shaped like nightly pytorch whl-next: several packages, each
+# with wheels and PEP 658 sidecars, plus the generated index pages.
+_PYTORCH_ROOT = "v5/rocm/pytorch/whl-next"
+_PYTORCH_KEYS = [
+    f"{_PYTORCH_ROOT}/index.html",
+    f"{_PYTORCH_ROOT}/torch/index.html",
+    f"{_PYTORCH_ROOT}/torch/torch-2.10.0+rocm7.14.0-cp310-cp310-linux_x86_64.whl",
+    f"{_PYTORCH_ROOT}/torch/torch-2.10.0+rocm7.14.0-cp310-cp310-linux_x86_64.whl.metadata",
+    f"{_PYTORCH_ROOT}/torch/torch-2.10.0+rocm7.14.0-cp312-cp312-linux_x86_64.whl",
+    f"{_PYTORCH_ROOT}/torchvision/index.html",
+    f"{_PYTORCH_ROOT}/torchvision/torchvision-0.25.0-cp310-cp310-linux_x86_64.whl",
+    f"{_PYTORCH_ROOT}/amd-torch-device-gfx1170/index.html",
+    f"{_PYTORCH_ROOT}/amd-torch-device-gfx1170/"
+    "amd_torch_device_gfx1170-2.10.0-py3-none-any.whl",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +459,351 @@ def test_root_page_lists_local_packages() -> None:
     html = render_root_page(packages)
     hrefs = _hrefs(html)
     assert hrefs == ["torch/", "torchvision/"]
+
+
+# ---------------------------------------------------------------------------
+# Root-only generation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("root", [_PYTORCH_ROOT, f"{_PYTORCH_ROOT}/"])
+def test_list_package_dirs_uses_single_delimited_listing(root: str) -> None:
+    client = _InMemoryS3Client(_PYTORCH_KEYS)
+
+    packages = list_package_dirs(client, "bucket", root)
+
+    assert [p.name for p in packages] == [
+        "amd-torch-device-gfx1170",
+        "torch",
+        "torchvision",
+    ]
+    assert all(p.files == [] for p in packages)
+    assert client.list_calls == [
+        {"Bucket": "bucket", "Prefix": f"{_PYTORCH_ROOT}/", "Delimiter": "/"}
+    ]
+
+
+def test_list_package_dirs_merges_and_sorts_across_pages() -> None:
+    keys = [f"core/whl/pkg-{i:03d}/pkg_{i:03d}-1.0-py3-none-any.whl" for i in range(7)]
+    client = _InMemoryS3Client(list(reversed(keys)), page_size=2)
+
+    packages = list_package_dirs(client, "bucket", "core/whl")
+
+    assert [p.name for p in packages] == [f"pkg-{i:03d}" for i in range(7)]
+
+
+def test_list_package_dirs_follows_s3_continuation_tokens() -> None:
+    # Exercises the real botocore paginator: the second request must carry
+    # the continuation token and keep the delimiter.
+    client = boto3.client(
+        "s3",
+        region_name="us-east-1",
+        aws_access_key_id="testing",
+        aws_secret_access_key="testing",
+    )
+    request = {"Bucket": "bucket", "Prefix": "core/whl/", "Delimiter": "/"}
+    with Stubber(client) as stubber:
+        stubber.add_response(
+            "list_objects_v2",
+            {
+                "IsTruncated": True,
+                "NextContinuationToken": "token-1",
+                "CommonPrefixes": [{"Prefix": "core/whl/rocm-sdk-core/"}],
+            },
+            request,
+        )
+        stubber.add_response(
+            "list_objects_v2",
+            {
+                "IsTruncated": False,
+                "CommonPrefixes": [{"Prefix": "core/whl/numpy/"}],
+            },
+            {**request, "ContinuationToken": "token-1"},
+        )
+
+        packages = list_package_dirs(client, "bucket", "core/whl")
+
+        stubber.assert_no_pending_responses()
+    assert [p.name for p in packages] == ["numpy", "rocm-sdk-core"]
+
+
+def test_list_package_dirs_empty_root() -> None:
+    client = _InMemoryS3Client(["other/whl/torch/torch-2.10.0-py3-none-any.whl"])
+
+    assert list_package_dirs(client, "bucket", "pytorch/whl") == []
+
+
+def test_list_package_dirs_ignores_objects_directly_under_root() -> None:
+    client = _InMemoryS3Client(
+        [
+            "pytorch/whl/index.html",
+            "pytorch/whl/torch-2.10.0-cp310-cp310-linux_x86_64.whl",
+            "pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl",
+        ]
+    )
+
+    packages = list_package_dirs(client, "bucket", "pytorch/whl")
+
+    assert [p.name for p in packages] == ["torch"]
+
+
+def test_list_package_dirs_does_not_match_sibling_roots() -> None:
+    # "whl/" must not pick up directories under the sibling "whl-next/" root.
+    client = _InMemoryS3Client(
+        [
+            "pytorch/whl/torch/torch-2.10.0-py3-none-any.whl",
+            "pytorch/whl-next/torchaudio/torchaudio-2.10.0-py3-none-any.whl",
+        ]
+    )
+
+    packages = list_package_dirs(client, "bucket", "pytorch/whl")
+
+    assert [p.name for p in packages] == ["torch"]
+
+
+def test_list_package_dirs_lists_directories_without_artifacts() -> None:
+    # Directory existence is the only signal: a directory holding just an
+    # index page, sidecars, or nested objects is still listed.
+    client = _InMemoryS3Client(
+        [
+            "pytorch/whl/torch/torch-2.10.0-cp310-cp310-linux_x86_64.whl",
+            "pytorch/whl/only-index/index.html",
+            "pytorch/whl/only-sidecar/only_sidecar-1.0-py3-none-any.whl.metadata",
+            "pytorch/whl/only-nested/sub/only_nested-1.0-py3-none-any.whl",
+        ]
+    )
+
+    packages = list_package_dirs(client, "bucket", "pytorch/whl")
+
+    assert [p.name for p in packages] == [
+        "only-index",
+        "only-nested",
+        "only-sidecar",
+        "torch",
+    ]
+
+
+@pytest.mark.parametrize("dir_name", ["Torch", "torch_vision", "torch.vision"])
+def test_list_package_dirs_rejects_non_normalized_name(dir_name: str) -> None:
+    client = _InMemoryS3Client([f"pytorch/whl/{dir_name}/index.html"])
+
+    with pytest.raises(ValueError, match="not normalized"):
+        list_package_dirs(client, "bucket", "pytorch/whl")
+
+
+@pytest.mark.parametrize(
+    "dir_name",
+    [
+        "torch vision",
+        'torch"vision',
+        "<torch>",
+        "-torch",
+        "torch-",
+        "torch+rocm",
+        "torch\n",
+    ],
+)
+def test_list_package_dirs_rejects_invalid_name(dir_name: str) -> None:
+    client = _InMemoryS3Client([f"pytorch/whl/{dir_name}/index.html"])
+
+    with pytest.raises(ValueError, match="Invalid package directory name"):
+        list_package_dirs(client, "bucket", "pytorch/whl")
+
+
+def test_list_package_dirs_rejects_empty_directory_name() -> None:
+    # "pytorch/whl//x" yields the CommonPrefix "pytorch/whl//".
+    client = _InMemoryS3Client(["pytorch/whl//torch-2.10.0-py3-none-any.whl"])
+
+    with pytest.raises(ValueError, match="Malformed package directory prefix"):
+        list_package_dirs(client, "bucket", "pytorch/whl")
+
+
+@pytest.mark.parametrize("prefix", ["other/whl/torch/", "pytorch/whl/torch"])
+def test_list_package_dirs_rejects_unexpected_prefix(prefix: str) -> None:
+    client = _CannedListClient([prefix])
+
+    with pytest.raises(ValueError, match="Malformed package directory prefix"):
+        list_package_dirs(client, "bucket", "pytorch/whl")
+
+
+def test_list_package_dirs_propagates_s3_errors() -> None:
+    client = boto3.client(
+        "s3",
+        region_name="us-east-1",
+        aws_access_key_id="testing",
+        aws_secret_access_key="testing",
+    )
+    with Stubber(client) as stubber:
+        stubber.add_client_error(
+            "list_objects_v2", service_error_code="AccessDenied", http_status_code=403
+        )
+        with pytest.raises(botocore.exceptions.ClientError, match="AccessDenied"):
+            list_package_dirs(client, "bucket", "core/whl")
+
+
+def test_generate_root_only_uploads_only_root_page() -> None:
+    client = _InMemoryS3Client(_PYTORCH_KEYS)
+
+    count = generate_structured_index(
+        client=client,
+        bucket_name="bucket",
+        root=_PYTORCH_ROOT,
+        root_only=True,
+    )
+
+    assert count == 3
+    assert client.head_keys == []
+    assert [call["Delimiter"] for call in client.list_calls] == ["/"]
+    assert len(client.put_calls) == 1
+    put = client.put_calls[0]
+    assert put["Bucket"] == "bucket"
+    assert put["Key"] == f"{_PYTORCH_ROOT}/index.html"
+    assert put["ContentType"] == "text/html"
+    assert put["CacheControl"] == "no-cache,no-store,must-revalidate"
+    assert _hrefs(_put_bodies(client)[f"{_PYTORCH_ROOT}/index.html"]) == [
+        "amd-torch-device-gfx1170/",
+        "torch/",
+        "torchvision/",
+    ]
+
+
+def test_generate_root_only_matches_full_mode_root_page() -> None:
+    full_client = _InMemoryS3Client(_PYTORCH_KEYS)
+    generate_structured_index(
+        client=full_client, bucket_name="bucket", root=_PYTORCH_ROOT
+    )
+    root_only_client = _InMemoryS3Client(_PYTORCH_KEYS)
+    generate_structured_index(
+        client=root_only_client,
+        bucket_name="bucket",
+        root=_PYTORCH_ROOT,
+        root_only=True,
+    )
+
+    root_key = f"{_PYTORCH_ROOT}/index.html"
+    full_root = _put_bodies(full_client)[root_key]
+    root_only_root = _put_bodies(root_only_client)[root_key]
+    assert _hrefs(root_only_root) == _hrefs(full_root)
+    # Full mode does a HEAD per artifact and sidecar and rewrites every
+    # package page; root-only does neither.
+    assert full_client.head_keys
+    assert len(full_client.put_calls) == 4
+    assert root_only_client.head_keys == []
+    assert len(root_only_client.put_calls) == 1
+
+
+def test_generate_root_only_empty_root_writes_empty_page() -> None:
+    client = _InMemoryS3Client([])
+
+    count = generate_structured_index(
+        client=client, bucket_name="bucket", root="pytorch/whl", root_only=True
+    )
+
+    assert count == 0
+    assert _hrefs(_put_bodies(client)["pytorch/whl/index.html"]) == []
+
+
+def test_generate_root_only_invalid_directory_uploads_nothing() -> None:
+    client = _InMemoryS3Client(
+        [
+            "pytorch/whl/torch/torch-2.10.0-py3-none-any.whl",
+            "pytorch/whl/Torch/torch-2.10.0-py3-none-any.whl",
+        ]
+    )
+
+    with pytest.raises(ValueError, match="not normalized"):
+        generate_structured_index(
+            client=client, bucket_name="bucket", root="pytorch/whl", root_only=True
+        )
+    assert client.put_calls == []
+
+
+def test_generate_root_only_saves_only_root_page_locally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    client = _InMemoryS3Client(_PYTORCH_KEYS)
+
+    generate_structured_index(
+        client=client,
+        bucket_name="bucket",
+        root=_PYTORCH_ROOT,
+        root_only=True,
+        upload=False,
+    )
+
+    written = sorted(
+        p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
+    )
+    assert written == [f"{_PYTORCH_ROOT}/index.html"]
+    assert client.put_calls == []
+    html = (tmp_path / _PYTORCH_ROOT / "index.html").read_text(encoding="utf-8")
+    assert _hrefs(html) == ["amd-torch-device-gfx1170/", "torch/", "torchvision/"]
+
+
+def test_generate_rejects_root_only_with_package() -> None:
+    client = _InMemoryS3Client(_PYTORCH_KEYS)
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        generate_structured_index(
+            client=client,
+            bucket_name="bucket",
+            root=_PYTORCH_ROOT,
+            package="torch",
+            root_only=True,
+        )
+    assert client.list_calls == []
+    assert client.put_calls == []
+
+
+def test_parser_root_only_defaults_off() -> None:
+    args = create_parser().parse_args(["pytorch/whl"])
+
+    assert args.root_only is False
+    assert args.package is None
+
+
+def test_parser_accepts_root_only() -> None:
+    args = create_parser().parse_args(["pytorch/whl", "--root-only"])
+
+    assert args.root_only is True
+    assert args.package is None
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["pytorch/whl", "--root-only", "--package", "torch"],
+        ["pytorch/whl", "--package=torch", "--root-only"],
+    ],
+)
+def test_parser_rejects_root_only_with_package(argv: list[str]) -> None:
+    with pytest.raises(SystemExit):
+        create_parser().parse_args(argv)
+
+
+def test_main_root_only_uploads_only_root_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _InMemoryS3Client(_PYTORCH_KEYS)
+    monkeypatch.setattr(manage_structured.boto3, "client", lambda service: client)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "manage_structured.py",
+            _PYTORCH_ROOT,
+            "--bucket",
+            "bucket",
+            "--upload",
+            "--root-only",
+        ],
+    )
+
+    manage_structured.main()
+
+    assert client.head_keys == []
+    assert [call["Key"] for call in client.put_calls] == [f"{_PYTORCH_ROOT}/index.html"]
 
 
 # ---------------------------------------------------------------------------
