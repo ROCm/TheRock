@@ -753,6 +753,8 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
+            # due to limited resources for gfx117X, we are forcing quick
+            "test_type_for_family": "quick",
             "disabled_framework_tests": ["jax"],
         },
         "windows": {
@@ -763,6 +765,8 @@ amdgpu_family_info_matrix = {
             "builds_on_trigger": ["nightly", "submodule_bump"],
             "bypass_tests_for_releases": True,
             "tests_on_trigger": ["nightly"],
+            # due to limited resources for gfx117X, we are forcing quick
+            "test_type_for_family": "quick",
             "disabled_framework_tests": ["jax"],
         },
     },
