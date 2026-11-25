@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Component Test Repetition
+name: Test Component Repetition
 
 on:
   workflow_dispatch:
