@@ -53,6 +53,14 @@ on:
         description: "Build variant (release, asan). Affects publish paths."
         type: string
         default: "release"
+      build_date:
+        description: "Build date (YYYYMMDD) for the run's dated package folders; empty means today"
+        type: string
+        default: ""
+      enable_repo_setup_package:
+        description: "Build and publish the amd-repo-setup package (dev, nightly, prerelease)"
+        type: boolean
+        default: false
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -151,10 +159,12 @@ jobs:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_deb_package_version }}
+      build_date: ${{ inputs.build_date }}
       native_package_type: deb
       release_type: ${{ inputs.release_type }}
+      enable_repo_setup_package: ${{ inputs.enable_repo_setup_package }}
       build_variant: ${{ inputs.build_variant }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -171,10 +181,12 @@ jobs:
       dist_amdgpu_families: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
       artifact_run_id: ${{ github.run_id }}
       rocm_version: ${{ inputs.rocm_rpm_package_version }}
+      build_date: ${{ inputs.build_date }}
       native_package_type: rpm
       release_type: ${{ inputs.release_type }}
+      enable_repo_setup_package: ${{ inputs.enable_repo_setup_package }}
       build_variant: ${{ inputs.build_variant }}
-      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
+      build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_native_package }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
       quartz_tracking_id: ${{ inputs.quartz_tracking_id }}
@@ -192,6 +204,7 @@ jobs:
     env:
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
+      BUILD_DATE: ${{ inputs.build_date }}
 
     steps:
       - name: Checkout
@@ -216,6 +229,8 @@ jobs:
           release_type: ${{ inputs.release_type }}
           product: core # 'core' for the rocm-sdk, as opposed to 'pytorch', 'jax', etc.
 
+      # Older source (an older `ref`) has no build date and no --build-date
+      # option, so pass it only when setup produced one.
       - name: Copy to release buckets
         run: |
           python build_tools/github_actions/publish_rocm_to_release_buckets.py \
@@ -223,7 +238,8 @@ jobs:
             --platform=linux \
             --release-type="${BUILD_RELEASE_TYPE}" \
             --structured \
-            --build-variant="${BUILD_VARIANT}"
+            --build-variant="${BUILD_VARIANT}" \
+            ${BUILD_DATE:+--build-date="${BUILD_DATE}"}
 
   trigger_test_artifacts_per_family:
     needs: [build_artifacts]

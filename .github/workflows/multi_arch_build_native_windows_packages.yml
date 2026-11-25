@@ -15,7 +15,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-windows-scale-rocm-prod-mix"
+        default: "az-windows-scale-rocm-default-prod"
       artifact_github_repo:
         description: "GitHub repository for artifact_run_id"
         type: string
@@ -60,7 +60,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-windows-scale-rocm-prod-mix"
+        default: "az-windows-scale-rocm-default-prod"
       artifact_github_repo:
         type: string
         default: ROCm/TheRock

@@ -127,6 +127,50 @@ class DashboardGenerationTest(unittest.TestCase):
         self.assertIn("checkout_sha: abc123", notes)
 
 
+class CmakeConfigGpuTargetsTest(unittest.TestCase):
+    def _config_cmd(self, detected_arch):
+        with (
+            patch.object(test_rocprofiler_sdk, "is_asan", return_value=False),
+            patch.object(
+                test_rocprofiler_sdk,
+                "get_gpu_architecture_portable",
+                return_value=detected_arch,
+            ) as detect,
+        ):
+            command = test_rocprofiler_sdk.get_cmake_config_cmd()
+        detect.assert_called_once_with(test_rocprofiler_sdk.THEROCK_PATH)
+        return command
+
+    def test_detected_arch_is_passed_as_gpu_targets(self):
+        self.assertIn("-DGPU_TARGETS=gfx950", self._config_cmd("gfx950"))
+
+    def test_target_list_is_passed_as_is(self):
+        self.assertIn(
+            "-DGPU_TARGETS=gfx1100;gfx1101", self._config_cmd("gfx1100;gfx1101")
+        )
+
+    def test_no_gpu_targets_when_detection_fails(self):
+        command = self._config_cmd(None)
+        self.assertFalse([arg for arg in command if arg.startswith("-DGPU_TARGETS")])
+
+    def test_dashboard_configure_command_has_gpu_targets(self):
+        with (
+            patch.object(test_rocprofiler_sdk, "is_asan", return_value=False),
+            patch.object(
+                test_rocprofiler_sdk,
+                "get_gpu_architecture_portable",
+                return_value="gfx950",
+            ),
+        ):
+            dashboard = test_rocprofiler_sdk._generate_dashboard(
+                model="Continuous",
+                group="TheRock",
+                require_cdash_submission=False,
+                notes_file=Path(tempfile.gettempdir()) / "dashboard-notes.txt",
+            )
+        self.assertIn("-DGPU_TARGETS=gfx950", dashboard)
+
+
 class MainTest(unittest.TestCase):
     def test_default_path_keeps_mainline_direct_runner(self):
         with (

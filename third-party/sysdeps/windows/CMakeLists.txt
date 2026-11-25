@@ -17,6 +17,7 @@ if(THEROCK_ENABLE_SYSDEPS)
       lib
     SUBPROJECT_DEPS
       therock-bzip2
+      therock-liblzma
       therock-sqlite3
       therock-zlib
       therock-zstd

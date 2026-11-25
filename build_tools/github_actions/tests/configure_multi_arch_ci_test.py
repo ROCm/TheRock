@@ -3832,6 +3832,7 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             "jax_build_matrix",
             "wsl_per_family_info",
             "build_runs_on_tarballs",
+            "build_runs_on_native_package",
         }
         self.assertEqual(
             yaml_fields,
