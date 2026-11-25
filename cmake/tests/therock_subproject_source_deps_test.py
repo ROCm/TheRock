@@ -15,8 +15,8 @@ Fixture subprojects:
 The inputs are a whole separate checkout (whole-repo) and a directory inside a
 larger checkout (monorepo/inputs/first).
 
-Real declarations are exercised on a full checkout by
-cmake/tests/therock_source_inputs_real_tree_test.py.
+These tests cover the mechanism with fixture subprojects; they do not check
+which inputs TheRock's real subprojects declare.
 """
 
 import unittest
