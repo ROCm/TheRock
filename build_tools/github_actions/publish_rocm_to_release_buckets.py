@@ -81,6 +81,7 @@ Test usage:
 import argparse
 import datetime
 import logging
+import os
 import platform as platform_module
 import sys
 from pathlib import Path
@@ -310,7 +311,10 @@ def publish_repo_setup_packages(
 
     Files already published are left in place unless `overwrite` is set (for
     re-publishing a corrected package by hand). Not every build uploads
-    packages, so finding none is not an error.
+    packages, so finding none is only an error when the release workflow says
+    this run built them (`REPO_SETUP_PACKAGES_EXPECTED=true`). It's an
+    environment variable, not an option, so an older publish script, which
+    doesn't know it, still runs.
 
     Only the packages are copied. The artifacts bucket also has an index.html
     in each folder, which lists only this run's packages.
@@ -331,6 +335,13 @@ def publish_repo_setup_packages(
         # `~dev<date>-` (dev deb) or `~<date>g<sha>-` (dev rpm).
         include = [f"*~{date}*.deb", f"*~dev{date}*.deb", f"*~{date}*.rpm"]
         logger.info("Publishing only amd-repo-setup packages built on %s", date)
+    # Check the source, not the copy count: a rerun copies 0 because its
+    # packages are already published.
+    if os.environ.get("REPO_SETUP_PACKAGES_EXPECTED") == "true":
+        if not backend.list_files(source, include=include):
+            raise FileNotFoundError(
+                f"This run built amd-repo-setup packages, but none are in {source.s3_uri}"
+            )
     if overwrite:
         logger.warning("Replacing any amd-repo-setup packages already published")
     count = backend.copy_directory(

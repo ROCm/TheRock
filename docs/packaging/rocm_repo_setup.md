@@ -280,7 +280,8 @@ See `build_repo_setup_package.py --help` for the full option list.
 
 ## Installing and using the repository
 
-Release runs can build and publish `amd-repo-setup`, but there is no public
+Release runs (dev, nightly and prerelease) build and publish `amd-repo-setup`
+by default, but there is no public
 download URL for it yet, so build it for your distro first using the previous
 section. Then install the resulting file, refresh the package manager's
 metadata, and install ROCm packages.

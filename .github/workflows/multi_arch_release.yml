@@ -73,9 +73,9 @@ on:
         type: boolean
         default: false
       enable_repo_setup_package:
-        description: "Build and publish the amd-repo-setup package (dev, nightly, prerelease; off by default)."
+        description: "Build and publish the amd-repo-setup package (dev, nightly, prerelease; on by default)."
         type: boolean
-        default: false
+        default: true
   workflow_dispatch:
     inputs:
       release_type:
@@ -126,9 +126,9 @@ on:
         type: boolean
         default: false
       enable_repo_setup_package:
-        description: "Build and publish the amd-repo-setup package (off by default)."
+        description: "Build and publish the amd-repo-setup package (on by default)."
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
