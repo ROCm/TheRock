@@ -6,11 +6,10 @@
 # events through liblttng-ust. Only the LTTng/ project of the repository is
 # built; on Windows the same headers come from the Windows SDK.
 therock_subproject_fetch(therock-tracelogging-sources
-  # TODO(sysdeps-mirror): mirror to rocm-third-party-deps S3 before merge.
   # The merge commit of microsoft/tracelogging#85 (installs the find modules the
   # package config needs), which TheRock used to apply as a patch.
   # Originally from: https://github.com/microsoft/tracelogging/archive/d8e68c949160e63bde71fc5c815dffdc21c9a358.tar.gz
-  URL https://github.com/microsoft/tracelogging/archive/d8e68c949160e63bde71fc5c815dffdc21c9a358.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/tracelogging-d8e68c949160e63bde71fc5c815dffdc21c9a358.tar.gz
   URL_HASH SHA256=c0816a38517f81422768027355ba9e7277320cf7d20776c618dd614e2f9c2557
   # The CMake project is in LTTng/, not at the root (as CMAKE_PROJECT assumes):
   # mark its CMakeLists.txt as the fetch's by-product instead.
