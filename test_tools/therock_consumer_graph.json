@@ -867,6 +867,7 @@
     "consumers": [
       "amd-llvm",
       "kfdtest",
+      "profiler-hub",
       "rdc",
       "rocgdb",
       "rocprofiler-compute",
