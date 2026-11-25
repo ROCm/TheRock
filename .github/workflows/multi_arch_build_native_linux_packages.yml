@@ -59,7 +59,7 @@ on:
         description: "Runner label for the build job"
         type: string
         required: false
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
       enable_pre_upload_build_verify:
         description: >-
           After build_package.py, verify Created Packages listed in

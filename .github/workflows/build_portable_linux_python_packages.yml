@@ -54,7 +54,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-medium"
+        default: "az-linux-scale-rocm-medium-prod"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -92,7 +92,7 @@ on:
       build_runs_on:
         description: "Runner label for the build job"
         type: string
-        default: "aws-linux-scale-rocm-medium"
+        default: "az-linux-scale-rocm-medium-prod"
     outputs:
       package_find_links_url:
         description: URL for pip --find-links to install built packages
