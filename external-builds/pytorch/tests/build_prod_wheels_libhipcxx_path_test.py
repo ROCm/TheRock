@@ -52,10 +52,11 @@ class ExtensionBuildEnvTest(unittest.TestCase):
 
     def test_extension_builds_get_libhipcxx_on_cpath(self):
         for build_name in ("do_build_pytorch_audio", "do_build_pytorch_vision"):
-            with self.subTest(build=build_name):
-                self._check_build(build_name)
+            for windows in (False, True):
+                with self.subTest(build=build_name, windows=windows):
+                    self._check_build(build_name, windows)
 
-    def _check_build(self, build_name):
+    def _check_build(self, build_name, windows):
         seen_envs = []
 
         def record_env(*args, **kwargs):
@@ -72,8 +73,11 @@ class ExtensionBuildEnvTest(unittest.TestCase):
                 pytorch_build_number="1",
                 clean=False,
             )
-            env = {"ROCM_PATH": os.fspath(rocm)}
-            with patch.object(
+            env = {
+                "ROCM_PATH": os.fspath(rocm),
+                "HIPCC_COMPILE_FLAGS_APPEND": "-DEXISTING_FLAG=1",
+            }
+            with patch.object(build_prod_wheels, "is_windows", windows), patch.object(
                 build_prod_wheels, "compute_build_version", return_value="1.0"
             ), patch.object(
                 build_prod_wheels, "get_installed_package_version", return_value="2"
@@ -91,6 +95,16 @@ class ExtensionBuildEnvTest(unittest.TestCase):
                 getattr(build_prod_wheels, build_name)(args, Path(tmp), env)
         self.assertEqual(len(seen_envs), 1)
         self.assertEqual(seen_envs[0]["CPATH"], os.fspath(rocm / "include" / "hipccl"))
+        expected_flags = "-DEXISTING_FLAG=1"
+        if windows:
+            expected_flags += " -DNOMINMAX"
+        self.assertEqual(seen_envs[0]["HIPCC_COMPILE_FLAGS_APPEND"], expected_flags)
+
+    def test_nominmax_preserves_inherited_hipcc_flags(self):
+        env = {}
+        with patch.dict(os.environ, {"HIPCC_COMPILE_FLAGS_APPEND": "-DINHERITED=1"}):
+            build_prod_wheels.add_windows_hipcc_nominmax(env)
+        self.assertEqual(env["HIPCC_COMPILE_FLAGS_APPEND"], "-DINHERITED=1 -DNOMINMAX")
 
 
 if __name__ == "__main__":
