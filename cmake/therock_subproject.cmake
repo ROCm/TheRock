@@ -363,10 +363,8 @@ endfunction()
 #   Each directory uses the usual source identity helper (sibling .smrev or Git),
 #   independently of FPRINT_SOURCE_HASH for the primary source directory. A missing
 #   directory or invalid identity invalidates the sub-project fingerprint. These
-#   are source inputs, not BUILD_DEPS/RUNTIME_DEPS or build-order edges. When
-#   THEROCK_BUILD_TESTING is ON, a sub-project whose sources are inside the
-#   rocm-libraries or rocm-systems checkout also gets that checkout's shared/ctest
-#   directory automatically.
+#   are source inputs, not BUILD_DEPS/RUNTIME_DEPS or build-order edges. See
+#   "Sources outside the sub-project directory" in docs/development/build_system.md.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG

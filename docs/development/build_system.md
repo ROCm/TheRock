@@ -489,3 +489,117 @@ therock_cmake_subproject_provide_package(ROCR-Runtime hsa-runtime64 lib/cmake/hs
 # to `FetchContent_MakeAvailable()` for that facility.
 therock_cmake_subproject_activate(ROCR-Runtime)
 ```
+
+### Sources outside the sub-project directory
+
+Each sub-project has a fingerprint, computed at configure time, that build
+caching uses to decide whether the sub-project's outputs can be reused. Its
+source part is the Git tree of the sub-project's source directory
+(`EXTERNAL_SOURCE_DIR`, or `FPRINT_SOURCE_DIR` if given). Commits elsewhere in
+the same checkout, for example to another project in rocm-systems, do not change
+it. Uncommitted changes to tracked files in the directory make the fingerprint
+invalid. A sibling `.<dirname>.smrev` file, written by some source fetch steps,
+takes priority over Git.
+
+Because only that directory is fingerprinted, a sub-project that reads files
+outside it must declare those directories in `ADDITIONAL_SOURCE_INPUTS`.
+Otherwise a change there does not change the fingerprint, and a cached build
+made from the old files can be reused. Typical reads are:
+
+- CMake code that reaches outside the directory, for example `../` paths,
+  `include()` or `add_subdirectory()`.
+- Paths passed in `CMAKE_ARGS`, for example `-DHIP_COMMON_DIR=...`.
+- Sources or headers compiled from a shared directory, for example
+  `rocm-systems/shared/sha256`, including relative `#include "../..."` lines.
+
+```cmake
+therock_cmake_subproject_declare(therock-example
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/example"
+  # Builds the shared sha256 sources.
+  ADDITIONAL_SOURCE_INPUTS
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
+    ${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}
+  # Other subproject arguments...
+)
+```
+
+Each entry is a directory. Relative paths are resolved against the directory of
+the `CMakeLists.txt` that declares the sub-project; prefer the
+`THEROCK_*_SOURCE_DIR` variables. Each directory gets its own source identity
+from Git or a `.smrev` file, so a directory outside Git needs a `.smrev` file.
+The path is hashed with the identity, so pointing at a different directory
+changes the fingerprint.
+
+If an input is missing or has no valid identity, configure continues but prints
+`Fingerprint invalid: ...`, and the sub-project has no fingerprint. Sub-projects
+that depend on it then have no fingerprint either, so treat this message as an
+error in the declaration.
+
+Declare a directory under the same condition as the read. For example, hip-clr
+declares `shared/amdgpu-windows-interop` inside `if(WIN32)`. The rocm-systems
+and rocm-libraries test helpers in `shared/ctest` are usually included only when
+tests are built. Declare them with `${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}` or
+`${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}`, which are empty unless
+`THEROCK_BUILD_TESTING` is on. If a project includes `shared/ctest` in every
+build, declare the path directly.
+
+Some reads need no declaration:
+
+- The staged or installed output of a `BUILD_DEPS` or `RUNTIME_DEPS`
+  sub-project. That sub-project's fingerprint is already part of this one.
+  Reading the other sub-project's source tree still needs a declaration.
+- `pre_hook_*.cmake` and `post_hook_*.cmake` files next to the declaration.
+  They are already fingerprinted.
+
+`ADDITIONAL_SOURCE_INPUTS` only affects the fingerprint. It does not add a
+dependency or change the build order.
+
+To check a declaration, configure with `-DTHEROCK_VERBOSE=ON` and note the
+`FPRINT` line printed after `Including subproject <name>`. Commit a change to a file inside the
+declared directory, reconfigure, and check that the `FPRINT` line changed. The
+artifact fingerprints in `build/artifacts/*.fprint` change in the same way, but
+they are not written for target-specific artifacts when
+the `KPACK_SPLIT_ARTIFACTS` flag is on, which is the default. Fingerprints are computed when CMake
+configures, so a change to an input needs a reconfigure.
+
+#### Current declarations
+
+The table lists the directories that sub-projects declare today, relative to
+the TheRock source directory. "Tests" means the directory is declared only when
+`THEROCK_BUILD_TESTING` is on. Update the table when you add, remove or change a
+declaration.
+
+| Sub-project                                                                    | Directories                                                                                                      | When                                          |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| amd-llvm                                                                       | `compiler/spirv-llvm-translator`                                                                                 | Always                                        |
+| amd-llvm                                                                       | `rocm-systems/projects/rocr-runtime/runtime/hsa-runtime/inc`                                                     | Not Windows                                   |
+| therock-aux-overlay                                                            | `compiler/amd-llvm/cmake/Modules`                                                                                | Not Windows                                   |
+| amdsmi                                                                         | `rocm-systems/shared/cuid`, `rocm-systems/shared/sha256`, `rocm-systems/projects/rocr-runtime/libhsakmt/include` | Always (amdsmi is not built on Windows)       |
+| ROCR-Runtime                                                                   | `rocm-systems/shared/amdgpu-windows-interop`                                                                     | Windows                                       |
+| hrx                                                                            | `rocm-systems/projects/aqlprofile/src/core/include`                                                              | Always                                        |
+| hip-clr                                                                        | `rocm-systems/projects/hip`, `rocm-systems/projects/hrr/include`, `rocm-systems/runtimes/api-headers/include`    | Always                                        |
+| hip-clr, ocl-clr                                                               | `rocm-systems/shared/amdgpu-windows-interop`, `rocm-systems/projects/rocr-runtime`                               | Windows                                       |
+| hipInfo                                                                        | `rocm-systems/projects/hip-tests/samples`                                                                        | Always                                        |
+| ocl-icd                                                                        | `rocm-systems/projects/clr/opencl/khronos/headers`                                                               | Always                                        |
+| ocl-clr                                                                        | `rocm-systems/runtimes/api-headers/include`                                                                      | Always                                        |
+| hip-tests                                                                      | `rocm-systems/projects/hip-tests`                                                                                | Always                                        |
+| rccl                                                                           | `rocm-systems/projects/rccl-tests/src`                                                                           | Tests                                         |
+| rocjitsu                                                                       | `rocm-systems/runtimes/api-headers`                                                                              | Always                                        |
+| rocprofiler-sdk                                                                | `rocm-systems/shared/sha256`                                                                                     | Always                                        |
+| rocprofiler-compute                                                            | `rocm-systems/shared/ctest`                                                                                      | Always                                        |
+| profiler-hub                                                                   | `rocm-systems/projects/rocprofiler-sdk/source/share/rocprofiler-sdk-rocpd`                                       | Always                                        |
+| rocBLAS                                                                        | `rocm-libraries/shared/tensile`                                                                                  | Always                                        |
+| hipBLASLt                                                                      | `rocm-libraries/shared/stinkytofu`                                                                               | Always                                        |
+| rocRAND, hipCCL_tests, rocPRIM_tests, hipCUB, rocThrust                        | `rocm-libraries/shared/primbench`                                                                                | Tests, and on Linux only when amdsmi is built |
+| hipdnn_integration_tests, miopenprovider, hipblasltprovider, hipkernelprovider | `rocm-libraries/dnn-providers/cmake`                                                                             | Always                                        |
+| rpp, hipdnn_integration_tests, hipDNN_samples                                  | `rocm-libraries/shared/ctest`                                                                                    | Always                                        |
+
+These sub-projects declare `shared/ctest` through the test input variables, so
+only when tests are built:
+
+- `${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}`: rccl, rocshmem, rocrtst.
+- `${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}`: hipBLAS, hipBLASLt,
+  hipblasltprovider, hipCCL_tests, hipCUB, hipDNN, hipFFT, hipkernelprovider,
+  hipRAND, hipSOLVER, hipSPARSE, hipSPARSELt, hipTensor, MIOpen,
+  miopenprovider, rocALUTION, rocBLAS, rocFFT, rocPRIM_tests, rocRAND,
+  rocRoller, rocSOLVER, rocSPARSE, rocThrust, rocWMMA.
