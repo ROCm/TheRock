@@ -627,10 +627,15 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         out = _outputs(output)
         self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
-        self.assertEqual(json.loads(out["os_profiles"]), ["rhel8", "rhel10", "sles16"])
+        self.assertEqual(
+            json.loads(out["os_profiles"]),
+            ["rhel8", "rhel10", "sles16", "rhel9", "sles15", "azl3"],
+        )
         self.assertEqual(
             json.loads(out["images"]),
-            get_url_repo_params.get_container_image_map(["rhel8", "rhel10", "sles16"]),
+            get_url_repo_params.get_container_image_map(
+                ["rhel8", "rhel10", "sles16", "rhel9", "sles15", "azl3"]
+            ),
         )
         self.assertEqual(out["stream"], "nightly")
         self.assertEqual(
@@ -667,7 +672,10 @@ class GetRepoSetupParamsTest(unittest.TestCase):
                 self.assertEqual(code, 0)
                 out = _outputs(output)
                 self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
-                self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
+                self.assertEqual(
+                    json.loads(out["os_profiles"]),
+                    ["ubuntu2404", "ubuntu2204", "ubuntu2604", "debian12", "debian13"],
+                )
                 self.assertEqual(out["stream"], stream)
                 self.assertEqual(out["repo_base_url"], f"{root}/core/packages")
                 self.assertEqual(out["gpg_key_url"], f"{root}/gpg/packages.gpg")
@@ -680,7 +688,10 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         out = _outputs(output)
         self.assertEqual(set(out), _REPO_SETUP_PARAMS_KEYS)
-        self.assertEqual(json.loads(out["os_profiles"]), ["ubuntu2404"])
+        self.assertEqual(
+            json.loads(out["os_profiles"]),
+            ["ubuntu2404", "ubuntu2204", "ubuntu2604", "debian12", "debian13"],
+        )
         for key in (
             "stream",
             "repo_base_url",

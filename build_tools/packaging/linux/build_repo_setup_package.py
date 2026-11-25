@@ -262,12 +262,13 @@ def _stream_id(stream: str, key: str) -> str:
 # identically named package. Stated per profile rather than taken from rpm's
 # %{?dist}, which reads the *build host* rather than the target (a rhel8 build
 # in a RHEL 9 container would stamp ".el9") and is empty on SUSE, so every SUSE
-# profile would share one Release -- invisible while sles16 is the only one.
+# profile would share one Release.
 #
-# ".el8"/".el10" reproduce what %{?dist} yields there, so RHEL names do not
-# change. ".sles16" is a deliberate departure from SUSE's own convention, which
-# leads the Release with a numeric code (160000.2.2 on SLE 16.0): that is a
-# prefix where RHEL's is a suffix, so no single placement satisfies both.
+# ".el8"/".el9"/".el10" and ".azl3" reproduce what %{?dist} yields there, so
+# those names do not change. The SUSE tags (".sles15", ".sles16") are a
+# deliberate departure from SUSE's own convention, which leads the Release with
+# a numeric code (160000.2.2 on SLE 16.0): that is a prefix where RHEL's is a
+# suffix, so no single placement satisfies both.
 #
 # deb profiles carry no dist_tag -- deb_version() puts the profile in the
 # version -- so read it with .get(); build_context() runs for both types.
@@ -300,6 +301,50 @@ OS_PROFILES = {
         "rpm_refresh_cmd": "sudo zypper refresh",
         "dist_tag": ".sles16",
         "description": "SLES 16",
+    },
+    "ubuntu2204": {
+        "family": "debian",
+        "pkg_type": "deb",
+        "description": "Ubuntu 22.04",
+    },
+    "ubuntu2604": {
+        "family": "debian",
+        "pkg_type": "deb",
+        "description": "Ubuntu 26.04",
+    },
+    "debian12": {
+        "family": "debian",
+        "pkg_type": "deb",
+        "description": "Debian 12",
+    },
+    "debian13": {
+        "family": "debian",
+        "pkg_type": "deb",
+        "description": "Debian 13",
+    },
+    "rhel9": {
+        "family": "rhel",
+        "pkg_type": "rpm",
+        "rpm_repo_dir": "/etc/yum.repos.d",
+        "rpm_refresh_cmd": "sudo dnf makecache",
+        "dist_tag": ".el9",
+        "description": "RHEL/Rocky/OL 9",
+    },
+    "sles15": {
+        "family": "sles",
+        "pkg_type": "rpm",
+        "rpm_repo_dir": "/etc/zypp/repos.d",
+        "rpm_refresh_cmd": "sudo zypper refresh",
+        "dist_tag": ".sles15",
+        "description": "SLES 15",
+    },
+    "azl3": {
+        "family": "azl",
+        "pkg_type": "rpm",
+        "rpm_repo_dir": "/etc/yum.repos.d",
+        "rpm_refresh_cmd": "sudo tdnf makecache",
+        "dist_tag": ".azl3",
+        "description": "Azure Linux 3",
     },
 }
 
