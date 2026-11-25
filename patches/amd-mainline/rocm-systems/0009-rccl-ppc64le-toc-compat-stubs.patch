@@ -1,0 +1,85 @@
+From 90596f8318482720160314cf320643974bc5b2c7 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Tue, 24 Nov 2026 20:41:47 +0000
+Subject: [PATCH] rccl: add ppc64le weak TOC stubs for host microtest linking
+
+On ppc64le the TOC (Table of Contents) entry for a symbol survives
+--gc-sections even when the code section that references it is dead.
+dev_runtime.cc's file-scope devCommCompat[] array takes the address of every
+ncclDevCommCompat_vNNNNN version, and the debug/alloc inlines reference
+ncclDebugMask / ncclDebugLevelMask / allocTracker. Host microtests that link
+dev_runtime.cc (or those inlines) but only a subset of the defining .cc files
+therefore fail to link with "undefined symbol" on ppc64le, even though the
+referencing path is dead. x86 is unaffected because its relocation model lets
+--gc-sections eliminate the dead references entirely.
+
+Add test/common/toc_compat_stubs.cc with weak, zero-initialized fallback
+definitions, and link it into every host microtest binary on ppc64le only
+(guarded in rccl_add_unit_micro_binary). Where a test links the real
+definition it is strong and overrides the weak stub, so behavior is unchanged;
+x86 link lines are byte-for-byte identical.
+
+This follows the same approach as the earlier netTransport stub (upstreamed as
+PR #11460), generalized to the symbols exposed by the host-microtest refactor.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ projects/rccl/test/common/toc_compat_stubs.cc | 28 +++++++++++++++++++
+ projects/rccl/test/host/CMakeLists.txt        |  6 ++++
+ 2 files changed, 34 insertions(+)
+ create mode 100644 projects/rccl/test/common/toc_compat_stubs.cc
+
+diff --git a/projects/rccl/test/common/toc_compat_stubs.cc b/projects/rccl/test/common/toc_compat_stubs.cc
+new file mode 100644
+index 00000000000..5085f9536d8
+--- /dev/null
++++ b/projects/rccl/test/common/toc_compat_stubs.cc
+@@ -0,0 +1,28 @@
++/*************************************************************************
++ * Copyright (c) 2026 Advanced Micro Devices, Inc. All rights reserved.
++ *
++ * See LICENSE.txt for license information
++ ************************************************************************/
++
++// ppc64le TOC references survive --gc-sections, so host microtests that link
++// dev_runtime.cc or the debug/alloc inlines but not every defining .cc file
++// fail to link. Provide weak fallbacks; the real definitions override them
++// where linked. Added to the link on ppc64le only (see the test CMake).
++
++#if defined(__powerpc64__) || defined(__PPC64__)
++
++#include <cstdint>
++
++#include "dev_runtime.h"  // struct ncclDevCommCompat
++#include "alloc.h"        // struct allocationTracker, MAX_ALLOC_TRACK_NGPU
++
++__attribute__((weak)) struct ncclDevCommCompat ncclDevCommCompat_v22902 = {};
++__attribute__((weak)) struct ncclDevCommCompat ncclDevCommCompat_v22907 = {};
++__attribute__((weak)) struct ncclDevCommCompat ncclDevCommCompat_v23000 = {};
++__attribute__((weak)) struct ncclDevCommCompat ncclDevCommCompat_v23100 = {};
++__attribute__((weak)) struct ncclDevCommCompat ncclDevCommCompat_v23204 = {};
++__attribute__((weak)) struct allocationTracker allocTracker[MAX_ALLOC_TRACK_NGPU] = {};
++__attribute__((weak)) std::uint32_t ncclDebugLevelMask = 0;
++__attribute__((weak)) std::uint64_t ncclDebugMask = 0;
++
++#endif  // ppc64le
+diff --git a/projects/rccl/test/host/CMakeLists.txt b/projects/rccl/test/host/CMakeLists.txt
+index 1d812e8af75..e3cd2eb33a5 100644
+--- a/projects/rccl/test/host/CMakeLists.txt
++++ b/projects/rccl/test/host/CMakeLists.txt
+@@ -518,6 +518,12 @@ function(rccl_add_unit_micro_binary _name _test)
+     message(FATAL_ERROR "rccl_add_unit_micro_binary(${_name}): unknown arguments: ${_raumb_UNPARSED_ARGUMENTS}")
+   endif()
+   set(_raumb_shared ${_raumb_SOURCES} ../common/main_altrsmi.cpp)
++  # ppc64le: TOC entries survive --gc-sections, so dead references to the
++  # devComm-compat / debug / allocTracker symbols fail to link. Add weak
++  # fallback definitions on POWER only; x86 link lines are unchanged.
++  if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64|powerpc")
++    list(APPEND _raumb_shared ../common/toc_compat_stubs.cc)
++  endif()
+   if(_raumb_PROCESS_ISOLATED)
+     # GpuCountProbe.cpp resolves the runner's gpuCountViaFreshImage(); the two always link together.
+     list(APPEND _raumb_shared ../common/GpuCountProbe.cpp ../common/ProcessIsolatedTestRunner.cpp)
+-- 
+2.52.0
+
