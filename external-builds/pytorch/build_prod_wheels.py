@@ -672,6 +672,16 @@ def add_libhipcxx_include_path(env: dict[str, str]) -> None:
     print(f"-- CPATH={env['CPATH']}")
 
 
+def add_windows_hipcc_nominmax(env: dict[str, str]) -> None:
+    # Temporary workaround until libhipcxx/PyTorch protect HIP extensions from
+    # Windows min/max macros: https://github.com/ROCm/TheRock/issues/10275
+    # hipcc applies this to compilation, including the HIP host pass.
+    flagname = "HIPCC_COMPILE_FLAGS_APPEND"
+    existing = env.get(flagname, os.environ.get(flagname, ""))
+    env[flagname] = f"{existing} -DNOMINMAX".strip()
+    print(f"-- {flagname}={env[flagname]}")
+
+
 def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     for path in possible_paths:
         if (path / file_name).exists():
@@ -1426,6 +1436,7 @@ def do_build_pytorch_audio(
     add_libhipcxx_include_path(env)
 
     if is_windows:
+        add_windows_hipcc_nominmax(env)
         env.update(
             {
                 "DISTUTILS_USE_SDK": "1",
@@ -1471,6 +1482,7 @@ def do_build_pytorch_vision(
     add_libhipcxx_include_path(env)
 
     if is_windows:
+        add_windows_hipcc_nominmax(env)
         env.update(
             {
                 "DISTUTILS_USE_SDK": "1",
