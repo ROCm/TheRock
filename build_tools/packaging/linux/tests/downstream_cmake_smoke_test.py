@@ -42,11 +42,35 @@ class CommandTests(unittest.TestCase):
             command[-2:], ["-P", "/src/examples/clean_configure_test_project.cmake"]
         )
 
+    def test_hip_architecture_is_passed_before_the_driver(self) -> None:
+        """Pin ``CMAKE_HIP_ARCHITECTURES`` so CMake does not look for a GPU.
+
+        The flag sits before ``-P``, where the driver can see it and forward it.
+        Leaving it unset adds nothing, so a machine with a GPU still detects one.
+        """
+        common = dict(
+            cmake="cmake",
+            source_dir=Path("/src/examples/cpp-sdk-user"),
+            binary_dir=Path("/tmp/cpp-sdk-user"),
+            driver=Path("/src/examples/clean_configure_test_project.cmake"),
+            prefix=Path("/opt/rocm/core"),
+            generator="Unix Makefiles",
+        )
+        pinned = sdk.build_command(**common, hip_architecture="gfx942")
+        self.assertIn("-DCMAKE_HIP_ARCHITECTURES=gfx942", pinned)
+        self.assertLess(
+            pinned.index("-DCMAKE_HIP_ARCHITECTURES=gfx942"), pinned.index("-P")
+        )
+        unpinned = sdk.build_command(**common)
+        self.assertFalse(
+            any(arg.startswith("-DCMAKE_HIP_ARCHITECTURES") for arg in unpinned)
+        )
+
     def test_prefix_clang_is_the_host_compiler(self) -> None:
         """Use prefix Clang when ``--cxx-compiler`` is omitted.
 
         A file at ``<prefix>/lib/llvm/bin/clang++`` is the host compiler.
-        An explicit compiler replaces that default and is returned unchanged.
+        An explicit compiler that can run replaces that default.
         """
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp)
@@ -54,9 +78,26 @@ class CommandTests(unittest.TestCase):
             clangxx.parent.mkdir(parents=True)
             clangxx.write_text("")
             self.assertEqual(sdk.host_cxx_compiler(prefix), clangxx.as_posix())
-            self.assertEqual(
-                sdk.host_cxx_compiler(prefix, "/usr/bin/g++"), "/usr/bin/g++"
-            )
+            custom = prefix / "custom-g++"
+            custom.write_text("#!/bin/sh\n")
+            os.chmod(custom, 0o700)
+            self.assertEqual(sdk.host_cxx_compiler(prefix, str(custom)), str(custom))
+
+    def test_missing_cxx_compiler_override_is_rejected(self) -> None:
+        """A ``--cxx-compiler`` that does not exist fails before cmake runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"PATH": ""}):
+                with self.assertRaisesRegex(ValueError, "C\\+\\+ compiler not found"):
+                    sdk.host_cxx_compiler(Path(tmp), str(Path(tmp) / "no-such-g++"))
+
+    def test_directory_is_rejected_as_cxx_compiler(self) -> None:
+        """A directory is not a compiler on any platform."""
+        with tempfile.TemporaryDirectory() as tmp:
+            compiler = Path(tmp) / "g++"
+            compiler.mkdir()
+            with patch.dict(os.environ, {"PATH": ""}):
+                with self.assertRaisesRegex(ValueError, "C\\+\\+ compiler not found"):
+                    sdk.host_cxx_compiler(Path(tmp), str(compiler))
 
     def test_missing_prefix_clang_leaves_the_compiler_unset(self) -> None:
         """Leave the host compiler unset when the prefix has no Clang.
@@ -135,6 +176,50 @@ class ArgumentAndRunTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 sdk.parse_args(["--prefix", ""])
         self.assertEqual(raised.exception.code, 2)
+
+    def test_blank_hip_architecture_is_rejected(self) -> None:
+        """A blank ``--hip-architecture`` must not become an empty CMake value."""
+        with patch("sys.stderr", new=io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                sdk.parse_args(
+                    ["--prefix", "/opt/rocm/core", "--hip-architecture", " "]
+                )
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_main_passes_the_hip_architecture_to_cmake(self) -> None:
+        """``--hip-architecture`` reaches the cmake command that ``main`` runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            prefix = root / "prefix"
+            prefix.mkdir()
+            source = root / "cpp-sdk-user"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text("project(cpp_sdk_user)\n")
+            driver = root / "clean_configure_test_project.cmake"
+            driver.write_text("# driver\n")
+            cmake = root / "cmake"
+            cmake.write_text("#!/bin/sh\n")
+            os.chmod(cmake, 0o700)
+            with patch.object(sdk.subprocess, "run") as run:
+                run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                code = sdk.main(
+                    [
+                        "--prefix",
+                        str(prefix),
+                        "--source-dir",
+                        str(source),
+                        "--driver",
+                        str(driver),
+                        "--cmake",
+                        str(cmake),
+                        "--binary-dir",
+                        str(root / "build"),
+                        "--hip-architecture",
+                        "gfx942",
+                    ]
+                )
+        self.assertEqual(code, 0)
+        self.assertIn("-DCMAKE_HIP_ARCHITECTURES=gfx942", run.call_args.args[0])
 
     def test_main_returns_one_when_cmake_cannot_start(self) -> None:
         """An OSError from subprocess is reported, not raised as a traceback."""

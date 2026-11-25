@@ -12,6 +12,10 @@ or pass those flags.
 The host file ``hip-host-test.cpp`` includes the installed HIP headers. Those
 headers need a compiler newer than RHEL 8's GCC 8, so the host compile uses
 the prefix Clang unless ``--cxx-compiler`` is set.
+
+The example enables the HIP language. Without ``--hip-architecture``, CMake
+looks for a GPU on the machine at configure time. Pass a device target such as
+``gfx942`` so the run does not depend on the runner having a GPU.
 """
 
 import argparse
@@ -52,6 +56,21 @@ def _cmake_path(path: Path | str) -> str:
     return Path(path).as_posix()
 
 
+def _resolve_executable(command: str) -> str | None:
+    """Return the path of an executable, or None when it cannot be run.
+
+    Args:
+        command: Path to an executable file, or a name looked up on ``PATH``.
+
+    Returns:
+        The executable path, or None when nothing runnable matches.
+    """
+    candidate = Path(command)
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return shutil.which(command)
+
+
 def host_cxx_compiler(prefix: Path, override: str | None = None) -> str | None:
     """Choose the compiler that builds ``hip-host-test``.
 
@@ -66,9 +85,15 @@ def host_cxx_compiler(prefix: Path, override: str | None = None) -> str | None:
 
     Returns:
         A compiler path, or None to leave the choice to cmake.
+
+    Raises:
+        ValueError: ``override`` is set and is not a runnable compiler.
     """
     if override:
-        return override
+        found = _resolve_executable(override)
+        if not found:
+            raise ValueError(f"C++ compiler not found: {override}")
+        return found
     clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
     if clangxx.is_file():
         return _cmake_path(clangxx)
@@ -84,12 +109,17 @@ def build_command(
     prefix: Path,
     generator: str,
     cxx_compiler: str | None = None,
+    hip_architecture: str | None = None,
 ) -> list[str]:
     """Build the ``cmake -E env`` invocation of the existing driver.
 
     ``CMAKE_PREFIX_PATH`` is an environment variable, matching
     ``examples/CMakeLists.txt``. ``THEROCK_ENABLE_*`` stays at the project
     default, so this command does not pass those flags.
+
+    The example enables the HIP language. Without ``CMAKE_HIP_ARCHITECTURES``,
+    CMake looks for a GPU on the machine at configure time. The driver
+    forwards that variable to the example when it is defined here.
 
     Args:
         cmake: cmake executable.
@@ -99,6 +129,8 @@ def build_command(
         prefix: Installed ROCm prefix.
         generator: CMake generator. The install job uses ``Unix Makefiles``.
         cxx_compiler: Host C++ compiler. None leaves the choice to cmake.
+        hip_architecture: Device target for ``CMAKE_HIP_ARCHITECTURES``, such
+            as ``gfx942``. None leaves CMake to detect a GPU.
 
     Returns:
         The argv list, with no shell quoting.
@@ -111,6 +143,8 @@ def build_command(
     ]
     if cxx_compiler:
         child.append(f"-DCMAKE_CXX_COMPILER={_cmake_path(cxx_compiler)}")
+    if hip_architecture:
+        child.append(f"-DCMAKE_HIP_ARCHITECTURES={hip_architecture}")
     child.extend(["-P", _cmake_path(driver)])
     return [
         cmake,
@@ -177,10 +211,7 @@ def resolve_cmake(cmake: str) -> str:
     Raises:
         ValueError: No executable exists at that path and ``PATH`` has no match.
     """
-    candidate = Path(cmake)
-    if candidate.is_file() and os.access(candidate, os.X_OK):
-        return str(candidate)
-    found = shutil.which(cmake)
+    found = _resolve_executable(cmake)
     if not found:
         raise ValueError(f"cmake executable not found: {cmake}")
     return found
@@ -192,6 +223,14 @@ def _nonempty_path(value: str) -> Path:
     if not stripped:
         raise argparse.ArgumentTypeError("path must not be empty")
     return Path(stripped)
+
+
+def _nonempty_text(value: str) -> str:
+    """Return a CLI text argument with whitespace trimmed, rejecting a blank."""
+    stripped = value.strip()
+    if not stripped:
+        raise argparse.ArgumentTypeError("value must not be empty")
+    return stripped
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -242,6 +281,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Clang, which can compile the HIP headers on RHEL 8."
         ),
     )
+    parser.add_argument(
+        "--hip-architecture",
+        type=_nonempty_text,
+        help=(
+            "Device target for CMAKE_HIP_ARCHITECTURES, such as gfx942. Use a "
+            "device target, not a family such as gfx94X. Omit to let CMake "
+            "detect a GPU, which needs one on the machine."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -252,9 +300,10 @@ def main(argv: list[str] | None = None) -> int:
         argv: Argument vector without the program name. None reads ``sys.argv``.
 
     Returns:
-        Zero when the existing CMake driver passes. One when the prefix or the
-        project path is unusable, or when cmake cannot be started. The driver's
-        own exit code when CMake runs and fails.
+        Zero when the existing CMake driver passes. One when the prefix, the
+        project path, cmake, or an explicit compiler is unusable, or when cmake
+        cannot be started. The driver's own exit code when CMake runs and
+        fails.
     """
     args = parse_args(argv)
     binary_dir = args.binary_dir
@@ -275,6 +324,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Installed cpp-sdk-user prefix: {args.prefix}", flush=True)
     if cxx_compiler:
         print(f"CMAKE_CXX_COMPILER={cxx_compiler}", flush=True)
+    if args.hip_architecture:
+        print(f"CMAKE_HIP_ARCHITECTURES={args.hip_architecture}", flush=True)
     command = build_command(
         cmake=cmake,
         source_dir=source_dir,
@@ -283,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
         prefix=args.prefix,
         generator=args.generator,
         cxx_compiler=cxx_compiler,
+        hip_architecture=args.hip_architecture,
     )
     print("Running:", shlex.join(command), flush=True)
     try:
