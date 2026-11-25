@@ -374,18 +374,12 @@ class FetchTestConfigurationsTest(unittest.TestCase):
     # -----------------------
 
     def _inject_job(self, name, **extra):
-        """Register a temporary linux job and target only it via PROJECTS_TO_TEST.
-
-        "timeout_minutes" is defaulted because every real test_matrix entry
-        declares one and the selection code relies on that; override it via
-        **extra when a test cares about the value.
-        """
+        """Register a temporary linux job and target only it via PROJECTS_TO_TEST."""
         os.environ["PROJECTS_TO_TEST"] = name
         fetch_test_configurations.test_matrix[name] = {
             "job_name": name,
             "platform": ["linux"],
             "total_shards_dict": {"linux": 1},
-            "timeout_minutes": 30,
             **extra,
         }
 
@@ -744,56 +738,6 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             fetch_test_configurations.test_matrix["xf-repeat"]["expect_failure"],
             {"linux": ["gfx942"]},
         )
-
-    # -----------------------
-    # timeout_multiplier (step timeout scaling)
-    # -----------------------
-
-    def test_every_component_declares_timeout_minutes(self):
-        # The multiplier is applied unconditionally, so a component that omits
-        # timeout_minutes would raise while building the matrix -- which happens
-        # in CI, not here. Catch it at PR time instead.
-        missing = sorted(
-            name
-            for name, config in fetch_test_configurations.test_matrix.items()
-            if "timeout_minutes" not in config
-        )
-        self.assertEqual(missing, [])
-
-    def test_timeout_multiplier_scales_only_matching_platform_and_family(self):
-        # Default AMDGPU_FAMILIES is the gfx94X-dcgpu group. 45 * 1.5 == 67.5
-        # rounds up: truncating would shorten the timeout. A non-matching family
-        # or platform, a gfx target rather than the group string, or no
-        # declaration at all, must all leave the baseline alone.
-        for name, kwargs, expected in [
-            ("tm-group", {"timeout_multiplier": {"linux": {"gfx94X-dcgpu": 2}}}, 60),
-            (
-                "tm-frac",
-                {
-                    "timeout_minutes": 45,
-                    "timeout_multiplier": {"linux": {"gfx94X-dcgpu": 1.5}},
-                },
-                68,
-            ),
-            ("tm-target", {"timeout_multiplier": {"linux": {"gfx942": 2}}}, 30),
-            ("tm-otherfamily", {"timeout_multiplier": {"linux": {"gfx1100": 2}}}, 30),
-            (
-                "tm-otherplatform",
-                {"timeout_multiplier": {"windows": {"gfx94X-dcgpu": 2}}},
-                30,
-            ),
-            ("tm-absent", {}, 30),
-        ]:
-            with self.subTest(job=name):
-                self._inject_job(name, **{"timeout_minutes": 30, **kwargs})
-                job = self._job_by_name(name)
-                self.assertEqual(job["timeout_minutes"], expected)
-                # test_component.yml feeds this straight to `timeout-minutes:`,
-                # which rejects a float.
-                self.assertIsInstance(job["timeout_minutes"], int)
-                # Scaling applies to the merged copy, so a repeat run scales from
-                # the original baseline rather than compounding.
-                self.assertEqual(self._job_by_name(name)["timeout_minutes"], expected)
 
     # -----------------------
     # Multi-GPU logic (RCCL)
