@@ -105,7 +105,10 @@ def upload_python_package_logs(
 ) -> str | None:
     """Upload per-package setup.py logs from a successful build.
 
-    Logs are ``<packages_dir>/logs/<package>.log``. A missing directory is
+    ``log_dir`` is the local source, ``<packages_dir>/logs/``, holding one
+    ``<package>.log`` per package. The S3 destination is set by
+    ``WorkflowOutputRoot.python_package_logs_dir()``, which is
+    ``logs/packaging/wheels`` under the run prefix. A missing directory is
     skipped: PyTorch and JAX uploads use this script and do not write these
     files.
 
