@@ -57,7 +57,8 @@ common = [
     # Artifact cache tooling is not yet integrated into CI.
     "build_tools/artifact_cache/*",
 
-    # pytest and coverage settings for the unit tests above; nothing else reads it.
+    # pytest helpers and coverage settings for the unit tests above.
+    "build_tools/_therock_utils/pytest_git_config_plugin.py",
     "pyproject.toml",
 ]
 

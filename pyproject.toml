@@ -15,7 +15,9 @@ testpaths = [
     "skills",
 ]
 python_files = ["*_test.py"]
+pythonpath = ["build_tools"]
 addopts = [
+    "-p", "_therock_utils.pytest_git_config_plugin",
     "-ra",
     "-m", "not manual",
 ]
