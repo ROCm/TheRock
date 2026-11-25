@@ -391,29 +391,38 @@ feature_group = "MEDIA_LIBS" # Controlled by THEROCK_ENABLE_MEDIA_LIBS
 # THEROCK_ENABLE_DEBUG_TOOLS instead of CORE decides whether they are built by
 # default.  If anything else starts linking one, it belongs with the core
 # sysdeps instead.
+#
+# On Windows, MSYS2's gcc builds them, libiconv and rocgdb, so all six are built
+# there only with THEROCK_FLAG_ROCGDB_WINDOWS.  Without the flag, neither a
+# default build nor CI's debug-tools stage builds them on Windows, and neither
+# needs MSYS2.
 [artifacts.sysdeps-expat]
 artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "DEBUG_TOOLS"
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 [artifacts.sysdeps-gmp]
 artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "DEBUG_TOOLS"
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 [artifacts.sysdeps-mpfr]
 artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
 feature_group = "DEBUG_TOOLS"
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 [artifacts.sysdeps-ncurses]
 artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "DEBUG_TOOLS"
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 # Windows-only.  Linux and macOS have iconv in libc, so only Windows needs a
 # bundled libiconv (rocgdb links it statically).  Grouped with the debug tools
@@ -424,6 +433,7 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "DEBUG_TOOLS"
 disable_platforms = ["linux"]
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 [artifacts.sysdeps-libmnl]
 artifact_group = "third-party-sysdeps"
@@ -920,6 +930,8 @@ artifact_group = "debug-tools"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses", "sysdeps-libiconv"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+# MSYS2's gcc builds it on Windows, see the sysdeps it links above.
+disable_platforms_if_flags_not_set = { windows = "ROCGDB_WINDOWS" }
 
 # --- ROCm Emulation Tools ---
 

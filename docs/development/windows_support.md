@@ -56,7 +56,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |                |           |                                                            |
 | debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ✅        |                                                            |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                                |
-| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ✅        | Needs MSYS2, see [Install tools](#install-tools)           |
+| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ✅        | Opt-in, needs MSYS2, see [Install tools](#install-tools)   |
 |                     |                                                                                                                          |                |           |                                                            |
 | profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | rocm-systems   | ❌        | Unsupported                                                |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | rocm-systems   | ❌        | Unsupported                                                |
@@ -128,7 +128,7 @@ powershell.exe .\build_tools\validate_windows_install.ps1
 The script checks RAM, disk space, long path support, symlink capability, MSVC,
 CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
 configuration. It is safe to re-run at any time. It does not check MSYS2, which
-the debug tools need: run `build_tools\setup_msys2.ps1` with no arguments for
+building rocgdb needs: run `build_tools\setup_msys2.ps1` with no arguments for
 that (see [Install tools](#install-tools)).
 
 ### Prerequisites
@@ -246,9 +246,11 @@ If you prefer to install tools manually, you will need:
   Meson uses when building Mesa's gallium/D3D12 driver. Not needed if
   `THEROCK_ENABLE_SYSDEPS_AMD_MESA` is `OFF`.
 
-- MSYS2 (**required for the debug tools**): https://www.msys2.org/.
+- MSYS2 (**required to build rocgdb**): https://www.msys2.org/.
   rocgdb and the autotools sysdeps it links (gmp, mpfr, expat, ncurses and
-  libiconv) are built by MSYS2's UCRT64 gcc. `build_tools/setup_msys2.ps1`
+  libiconv) are built by MSYS2's UCRT64 gcc. They are built on Windows only
+  when configured with `-DTHEROCK_FLAG_ROCGDB_WINDOWS=ON`, so a build without
+  that flag needs no MSYS2. `build_tools/setup_msys2.ps1`
   installs MSYS2 with the packages the build uses, in `C:\msys64` by
   default:
 
@@ -272,12 +274,10 @@ If you prefer to install tools manually, you will need:
   install them. `-Install` leaves such an installation alone unless given
   `-Force`. Run the script with `-Help` for the details.
 
-  Needed whenever `THEROCK_ENABLE_ROCGDB` or one of the five
-  `THEROCK_ENABLE_SYSDEPS_*` features for those libraries is enabled, as
-  `THEROCK_ENABLE_DEBUG_TOOLS`, on by default, does. To build without MSYS2,
-  configure with `-DTHEROCK_ENABLE_DEBUG_TOOLS=OFF`, which also turns off
-  amd-dbgapi. `-DTHEROCK_ENABLE_ROCGDB=OFF` alone keeps the sysdeps, and so
-  still needs MSYS2.
+  With the flag, rocgdb and those sysdeps follow the usual feature switches,
+  as on Linux: `THEROCK_ENABLE_DEBUG_TOOLS`, on by default, turns them all on.
+  `-DTHEROCK_ENABLE_ROCGDB=OFF` alone keeps the sysdeps, and so still needs
+  MSYS2.
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
