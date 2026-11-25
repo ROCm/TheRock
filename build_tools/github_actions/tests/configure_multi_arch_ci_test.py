@@ -4679,7 +4679,12 @@ class TestResolveChangedProjects(unittest.TestCase):
             cwd = os.getcwd()
             os.chdir(directory)
             try:
-                return cm.resolve_changed_projects(inputs, git_context, ["*.md"])
+                return cm.resolve_changed_projects(
+                    inputs,
+                    git_context,
+                    ["*.md"],
+                    cm.resolve_repo_projects(inputs),
+                )
             finally:
                 os.chdir(cwd)
 
@@ -4728,6 +4733,16 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
         "wsl-rocdxg",
     ]
 
+    # An abridged rocm-libraries registry: the scope a run falls back to when it
+    # could not be narrowed. projects/rpp is the only entry owning a prebuilt
+    # stage, which is what made cv-libs the YAML conditional's special case.
+    REPO_PROJECTS = [
+        "projects/rocblas",
+        "projects/rocprim",
+        "projects/rpp",
+        "shared/tensile",
+    ]
+
     @classmethod
     def _yaml_rule(cls, changed_projects: list[str]) -> list[str]:
         """The hand-written conditional this replaces, as it stood in
@@ -4741,15 +4756,16 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
             return [stage for stage in cls.PREBUILT if stage != "cv-libs"]
         return list(cls.PREBUILT)
 
-    def _drop(self, changed_projects, prebuilt=None):
+    def _drop(self, changed_projects, prebuilt=None, repo_projects=None):
         return cm._drop_stages_owned_by_changed_projects(
-            list(self.PREBUILT if prebuilt is None else prebuilt), changed_projects
+            list(self.PREBUILT if prebuilt is None else prebuilt),
+            changed_projects,
+            list(self.REPO_PROJECTS if repo_projects is None else repo_projects),
         )
 
     def test_matches_the_yaml_conditional_it_replaces(self):
         """Same answer as rocm-libraries' rule, across the shapes a scope takes."""
         for changed_projects in (
-            [],  # scope could not be narrowed; dropping all would end reuse
             ["projects/rpp"],  # the one case the rule existed for
             ["projects/rpp", "projects/rocblas"],  # owning plus non-owning
             ["projects/rocprim"],  # math-libs, which is never prebuilt
@@ -4783,6 +4799,23 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
                     self._drop([project]),
                     [kept for kept in self.PREBUILT if kept != stage],
                 )
+
+    def test_an_unnarrowable_scope_falls_back_to_the_whole_repo(self):
+        """Empty means "could not narrow", not "nothing changed".
+
+        A diff touching RPP plus one unattributable path lands here, so reading
+        it as "no stage was invalidated" would copy cv-libs from the baseline
+        and ship an RPP that does not match the run.
+        """
+        self.assertEqual(self._drop([]), self._yaml_rule(["projects/rpp"]))
+
+    def test_the_fallback_is_the_repos_reach_not_a_blanket_rebuild(self):
+        """A repo owning none of the prebuilt stages keeps its whole list, so
+        the conservative path still costs nothing where nothing is at risk."""
+        self.assertEqual(
+            self._drop([], repo_projects=["projects/rocblas", "projects/rocprim"]),
+            self.PREBUILT,
+        )
 
     def test_only_the_owning_stage_is_dropped(self):
         """Not the dependency closure: RPP needs compiler-runtime but does not
@@ -4820,6 +4853,42 @@ class TestDropStagesOwnedByChangedProjects(unittest.TestCase):
             ),
             git_context=cm.GitContext.from_external_repo("rocm-libraries"),
             targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            repo_projects=self.REPO_PROJECTS,
+        )
+        self.assertEqual(
+            jobs.build_rocm.prebuilt_stages, self._yaml_rule(["projects/rpp"])
+        )
+
+    @patch("configure_multi_arch_ci.compute_auto_stage_reuse")
+    def test_decide_jobs_falls_back_to_repo_projects(self, reuse):
+        """configure() resolves the registry once and hands it down, so an
+        unnarrowable scope still rebuilds what the caller could have changed."""
+        reuse.return_value = cm.AutoStageReuse(
+            mode=cm.StageReuseMode.REUSE_STAGE,
+            candidate_stages=[],
+            rebuild_stages=[],
+            full_rebuild_required=False,
+            baseline_run_id="",
+            baseline_html_url="",
+            available_stages=[],
+            unavailable_stages=[],
+            applied_reuse_stages=[],
+            reasons=[],
+        )
+        jobs = cm.decide_jobs(
+            cm.CIInputs(
+                run_id="1",
+                event_name="pull_request",
+                commit_ref="main",
+                base_ref="develop",
+                build_variant="release",
+                prebuilt_stages=",".join(self.PREBUILT),
+                changed_projects=[],
+                external_repo='{"repository":"ROCm/rocm-libraries","ref":"abc"}',
+            ),
+            git_context=cm.GitContext.from_external_repo("rocm-libraries"),
+            targets=cm.TargetSelection(linux_families=["gfx94x"]),
+            repo_projects=self.REPO_PROJECTS,
         )
         self.assertEqual(
             jobs.build_rocm.prebuilt_stages, self._yaml_rule(["projects/rpp"])

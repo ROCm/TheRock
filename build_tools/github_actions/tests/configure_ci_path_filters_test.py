@@ -473,32 +473,18 @@ class DetermineChangedProjectsTest(unittest.TestCase):
             ["projects/rocblas"],
         )
 
-    def test_caller_workflow_riding_along_narrows_to_the_components(self):
-        """A workflow edit defers to the components changed beside it.
-
-        Alone the workflow covers every project, but only because
-        is_external_repo_ci_only_change() makes that run quick. A component
-        change restores standard depth, where full coverage is far too
-        expensive to buy a workflow edit a breadth it only earns when cheap.
-        """
-        self.assertEqual(
-            self.scope(
-                [
-                    ".github/workflows/therock-ci.yml",
-                    "projects/rocblas/src/rocblas.cpp",
-                    "README.md",
-                ]
-            ),
-            ["projects/rocblas"],
-        )
-
     def test_unnarrowable_diffs_test_every_project(self):
         for case, (paths, prefixes) in {
             "caller workflow alone": ([".github/workflows/therock-ci.yml"], None),
+            "ci-env action alone": ([".github/actions/ci-env/action.yml"], None),
             "shared CTest logic": (["shared/ctest/categories.yaml"], None),
-            # Test-selection plumbing rewrites the scope a component change
-            # would narrow to, so unlike a caller workflow it keeps full
-            # coverage even with that change beside it.
+            # CI plumbing rewrites the very scope a component change would
+            # narrow to, so it keeps full coverage even with that change
+            # beside it.
+            "caller workflow plus source": (
+                [".github/workflows/therock-ci.yml", "projects/rocblas/src/x.cpp"],
+                None,
+            ),
             "test-selection plumbing plus source": (
                 ["shared/ctest/categories.yaml", "projects/rocblas/src/x.cpp"],
                 None,

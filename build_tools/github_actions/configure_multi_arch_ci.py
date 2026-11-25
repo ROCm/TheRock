@@ -156,7 +156,9 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
 
 
 def _drop_stages_owned_by_changed_projects(
-    prebuilt_stages: list[str], changed_projects: list[str]
+    prebuilt_stages: list[str],
+    changed_projects: list[str],
+    repo_projects: list[str],
 ) -> list[str]:
     """Remove prebuilt stages that a changed project compiles into.
 
@@ -172,20 +174,23 @@ def _drop_stages_owned_by_changed_projects(
     caller's prebuilt_stages a plain static list.
 
     An empty changed_projects means the scope could not be narrowed, not that
-    nothing changed, so nothing is dropped and the caller's list stands. That is
-    the pre-existing behavior of the YAML conditional this replaces, and the gap
-    closes once stage reuse keys on a content fingerprint (TheRock#3399).
+    nothing changed, so it cannot be read as "no stage was invalidated" -- a
+    diff touching RPP and one unattributable path lands here, and honoring the
+    caller's list would copy cv-libs and ship the wrong RPP. repo_projects, the
+    whole registry of projects the caller owns, is the sound upper bound on what
+    such a run may have changed, so it stands in for the scope.
     """
-    if not changed_projects:
-        return prebuilt_stages
-
-    owned = stages_owned_by_projects(changed_projects)
+    owned = stages_owned_by_projects(changed_projects or repo_projects)
     dropped = [stage for stage in prebuilt_stages if stage in owned]
     if dropped:
         logging.info(
-            "[STAGE-REUSE] rebuilding %s: owned by changed projects %s",
+            "[STAGE-REUSE] rebuilding %s: owned by %s",
             ", ".join(dropped),
-            ", ".join(changed_projects),
+            (
+                f"changed projects {', '.join(changed_projects)}"
+                if changed_projects
+                else "the calling repo, whose scope could not be narrowed"
+            ),
         )
     return [stage for stage in prebuilt_stages if stage not in owned]
 
@@ -1021,10 +1026,28 @@ def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     return load_skip_ci_patterns_for_external_repo(skip_ci_config)
 
 
+def resolve_repo_projects(ci_inputs: CIInputs) -> list[str]:
+    """Every project the calling repository owns.
+
+    The upper bound on what one of its runs can change, so it stands in for
+    changed_projects wherever a run could not be narrowed. setup_multi_arch.yml
+    sparse-checks out the caller's .github directory, which carries this subtree
+    registry alongside the skip-CI config.
+    """
+    if not ci_inputs.external_repo:
+        return []
+    return sorted(
+        subtree_prefixes(
+            load_repos_config(Path(EXTERNAL_REPO_CONFIG_DIR) / REPOS_CONFIG_PATH)
+        )
+    )
+
+
 def resolve_changed_projects(
     ci_inputs: CIInputs,
     git_context: GitContext,
     external_skip_patterns: list[str] | None,
+    repo_projects: list[str],
 ) -> list[str]:
     """Project scope for this run, derived from the calling repo's diff.
 
@@ -1036,13 +1059,8 @@ def resolve_changed_projects(
     if not ci_inputs.external_repo or ci_inputs.changed_projects:
         return ci_inputs.changed_projects
 
-    # setup_multi_arch.yml sparse-checks out the caller's .github directory,
-    # which carries its subtree registry alongside the skip-CI config.
-    prefixes = subtree_prefixes(
-        load_repos_config(Path(EXTERNAL_REPO_CONFIG_DIR) / REPOS_CONFIG_PATH)
-    )
     return determine_changed_projects(
-        git_context.external_changed_files, prefixes, external_skip_patterns
+        git_context.external_changed_files, set(repo_projects), external_skip_patterns
     )
 
 
@@ -1574,10 +1592,9 @@ def _determine_test_type(
     # Confined is the operative word. A diff that edits CI plumbing *and*
     # library source is not eligible: it falls through to Priority 5 and keeps
     # "standard" depth, because the source change still needs real testing.
-    # determine_changed_projects() reads the same diff and narrows such a run to
-    # the projects that source belongs to, so the two decisions compose into
-    # "every project, quick" or "the changed projects, standard" -- never the
-    # prohibitive "every project, standard".
+    # determine_changed_projects() reads the same diff and the same patterns,
+    # so such a run keeps full breadth too: CI plumbing in the diff always
+    # means every project, and only being *confined* to it makes that quick.
     #
     # This check must precede the submodule check below because
     # from_external_repo() synthesizes changed_files=[repo_name] and
@@ -1650,6 +1667,7 @@ def decide_jobs(
     git_context: GitContext,
     targets: TargetSelection,
     external_skip_patterns: list[str] | None = None,
+    repo_projects: list[str] | None = None,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
     ``targets`` (the per-platform family selection from ``select_targets()``)
@@ -1765,6 +1783,7 @@ def decide_jobs(
             explicit_prebuilt_stages = _drop_stages_owned_by_changed_projects(
                 _parse_prebuilt_stages(ci_inputs.prebuilt_stages),
                 ci_inputs.changed_projects,
+                repo_projects or [],
             )
             for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
@@ -2590,10 +2609,13 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
     print("Result: CI will run")
 
     print("\n=== Scoping the run to changed projects ===")
+    # The caller's full project registry backs both the narrowing itself and the
+    # prebuilt-stage fallback for when narrowing fails.
+    repo_projects = resolve_repo_projects(ci_inputs)
     ci_inputs = replace(
         ci_inputs,
         changed_projects=resolve_changed_projects(
-            ci_inputs, git_context, external_skip_patterns
+            ci_inputs, git_context, external_skip_patterns, repo_projects
         ),
     )
 
@@ -2609,6 +2631,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         git_context=git_context,
         targets=targets,
         external_skip_patterns=external_skip_patterns,
+        repo_projects=repo_projects,
     )
     jobs.log()
 
