@@ -25,7 +25,10 @@ LD_LIBRARY_PATH, which cannot be derived from PATH.
 Which steps consume these values is left to the workflow; this script only
 exports them. Leak detection stays on: LSAN_OPTIONS points at a suppressions
 file that silences the uninstrumented interpreter without hiding leaks in ROCm
-libraries.
+libraries. Callers with their own suppressions pass `--lsan-suppressions`.
+
+HSA_XNACK=1 is needed for device-side ASAN. Host-only ASAN builds do not
+instrument device code and can pass `--hsa-xnack=0`.
 
 Used by `test_component.yml` and `test_rocm_wheels.yml`.
 """
@@ -60,7 +63,6 @@ STATIC_ASAN_ENV = {
     "ASAN_OPTIONS": (
         "detect_odr_violation=0:quarantine_size_mb=600:verify_asan_link_order=0"
     ),
-    "HSA_XNACK": "1",
 }
 
 # Which of these exists depends on LLVM_ENABLE_PER_TARGET_RUNTIME_DIR: ON
@@ -186,12 +188,17 @@ def _resolve_library_path(artifacts_dir: Path, runtime: Path | None = None) -> s
 
 def resolve_asan_env(
     artifacts_dir: Optional[Path] = None,
+    *,
+    hsa_xnack: str = "1",
+    lsan_suppressions: Path = LSAN_SUPPRESSIONS,
 ) -> tuple[dict[str, str], list[str]]:
     """Returns (environment variables to export, warnings to surface).
 
-    Raises AsanEnvironmentError if the runtime cannot be resolved.
+    Raises AsanEnvironmentError if the runtime or the suppressions file cannot
+    be resolved.
     """
     env = dict(STATIC_ASAN_ENV)
+    env["HSA_XNACK"] = hsa_xnack
     warnings: list[str] = []
 
     clang = _resolve_compiler(artifacts_dir)
@@ -209,7 +216,11 @@ def resolve_asan_env(
     if artifacts_dir is not None:
         env["LD_LIBRARY_PATH"] = _resolve_library_path(artifacts_dir, runtime)
 
-    env["LSAN_OPTIONS"] = f"suppressions={LSAN_SUPPRESSIONS}"
+    if not lsan_suppressions.is_file():
+        raise AsanEnvironmentError(
+            f"LSan suppressions file not found: {lsan_suppressions}"
+        )
+    env["LSAN_OPTIONS"] = f"suppressions={lsan_suppressions.resolve()}"
 
     return env, warnings
 
@@ -225,9 +236,31 @@ def main(argv=None) -> int:
             "ROCm is installed as Python packages, which carry their own RPATH."
         ),
     )
+    parser.add_argument(
+        "--hsa-xnack",
+        choices=("0", "1"),
+        default="1",
+        help=(
+            "Value to export as HSA_XNACK (default: %(default)s). Device-side "
+            "ASAN needs 1; host-only ASAN builds can use 0."
+        ),
+    )
+    parser.add_argument(
+        "--lsan-suppressions",
+        type=Path,
+        default=LSAN_SUPPRESSIONS,
+        help=(
+            "LeakSanitizer suppressions file to export in LSAN_OPTIONS "
+            "(default: %(default)s)."
+        ),
+    )
     args = parser.parse_args(argv)
 
-    env, warnings = resolve_asan_env(args.artifacts_dir)
+    env, warnings = resolve_asan_env(
+        args.artifacts_dir,
+        hsa_xnack=args.hsa_xnack,
+        lsan_suppressions=args.lsan_suppressions,
+    )
 
     for warning in warnings:
         print(f"::warning::{warning}")

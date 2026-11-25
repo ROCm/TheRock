@@ -177,6 +177,26 @@ class TestArtifactTree(unittest.TestCase):
             for key, value in STATIC_ASAN_ENV.items():
                 self.assertEqual(env[key], value)
 
+    @requires_posix
+    def test_xnack_is_enabled_by_default(self):
+        """Device-side ASAN needs XNACK."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, _ = resolve_asan_env(artifacts)
+
+            self.assertEqual(env["HSA_XNACK"], "1")
+
+    @requires_posix
+    def test_xnack_can_be_disabled(self):
+        """Host-only ASAN does not instrument device code."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                env, _ = resolve_asan_env(artifacts, hsa_xnack="0")
+
+            self.assertEqual(env["HSA_XNACK"], "0")
+
     def test_link_order_check_is_disabled(self):
         """Uninstrumented tools (amdclang++) abort without this."""
         self.assertIn("verify_asan_link_order=0", STATIC_ASAN_ENV["ASAN_OPTIONS"])
@@ -239,6 +259,18 @@ class TestFailFast(unittest.TestCase):
                     AsanEnvironmentError, "not ASAN-instrumented"
                 ):
                     resolve_asan_env(artifacts)
+
+    @requires_posix
+    def test_missing_suppressions_file_raises(self):
+        """LSan only reads the file once it finds a leak, then reports the
+        missing file instead of the leak."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                with self.assertRaisesRegex(AsanEnvironmentError, "suppressions"):
+                    resolve_asan_env(
+                        artifacts, lsan_suppressions=Path(tmp) / "absent.supp"
+                    )
 
     def test_missing_compiler_on_path_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -316,6 +348,26 @@ class TestLeakSuppressions(unittest.TestCase):
             env, _ = resolve_asan_env(artifacts)
 
             self.assertEqual(env["LSAN_OPTIONS"], f"suppressions={LSAN_SUPPRESSIONS}")
+
+    @requires_posix
+    def test_lsan_options_points_at_a_custom_suppressions_file(self):
+        """Exported absolute, since tests run from other working directories."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            (Path(tmp) / "lsan.supp").write_text("")
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                env, _ = resolve_asan_env(
+                    artifacts, lsan_suppressions=Path("lsan.supp")
+                )
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(
+                env["LSAN_OPTIONS"],
+                f"suppressions={(Path(tmp) / 'lsan.supp').resolve()}",
+            )
 
     def test_interpreter_allocator_is_suppressed(self):
         """_PyMem_RawMalloc is what rocm-sdk wheel tests actually report."""
