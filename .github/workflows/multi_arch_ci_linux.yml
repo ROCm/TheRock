@@ -439,6 +439,7 @@ jobs:
       rocm_package_find_links_url: ${{ fromJSON(inputs.build_config).rocm_package_find_links_url }}
       rocm_package_index_url: ${{ fromJSON(inputs.build_config).rocm_package_index_url }}
       rocm_version: ${{ fromJSON(inputs.build_config).framework_rocm_version }}
+      build_variant: ${{ fromJSON(inputs.build_config).build_variant_label }}
       build_runs_on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
