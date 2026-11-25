@@ -540,8 +540,11 @@ test_matrix = {
     # Skips the 46-min AlgoWorkspace test, TuningTune (hours each under
     # emulation), the host memory estimate check (emulated device memory lives
     # in host memory) and the stress category (size_t overflow GEMMs needing
-    # 4-16 GiB, ~4.7 min each; hipBLASLt runs them in no CI tier). The launcher
-    # stops any test after 300 s and continues.
+    # 4-16 GiB, ~4.7 min each; hipBLASLt runs them in no CI tier), the
+    # fast_check / sdc_hunt large-problem checks and RowUniformity Control
+    # (71 of them hit the 300 s per-test limit under rocjitsu; the hardware
+    # nightly runs all in 62 s). The launcher stops any test after 300 s and
+    # continues.
     "hipblaslt-rocjitsu": {
         "job_name": "hipblaslt-rocjitsu",
         "skip_stages": ["emulation"],
@@ -555,7 +558,7 @@ test_matrix = {
             "--gtest_filter=-AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace:"
             "*TuningTune*:"
             "MatmulMemory_pre_checkin.host_estimate_matches_what_a_unit_check_case_uses:"
-            "*stress*"
+            "*stress*:*fast_check*:*sdc_hunt*:RowUniformity_pre_checkin.Control_*"
         ),
         "platform": ["linux"],
         "linux_cpu_runner": True,
