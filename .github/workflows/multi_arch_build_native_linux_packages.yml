@@ -75,6 +75,9 @@ on:
       package_repository_url:
         description: "Public repository URL for package installation"
         value: ${{ jobs.build_native_packages.outputs.package_repository_url }}
+      repo_setup_package_built:
+        description: "Whether this run built amd-repo-setup packages, so publish must find them"
+        value: ${{ jobs.resolve_repo_setup_params.outputs.repo_base_url != '' }}
 
 permissions:
   contents: read
@@ -146,9 +149,18 @@ jobs:
       - name: Install Python requirements
         run: pip install jinja2==3.1.6
 
+      # Source older than amd-repo-setup (an older `ref`) has no setup-package
+      # scripts. Skip it then: the outputs stay empty, the stage job skips and
+      # the release carries on. This only checks that the code exists, so a
+      # broken script still fails.
       - name: Derive amd-repo-setup parameters
         id: derive
         run: |
+          if [ ! -f build_tools/packaging/linux/build_repo_setup_package.py ] ||
+             ! grep -q get-repo-setup-params build_tools/packaging/linux/get_url_repo_params.py 2>/dev/null; then
+            echo "::notice::This source predates amd-repo-setup, so the package is skipped."
+            exit 0
+          fi
           python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-setup-params \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
@@ -428,7 +440,8 @@ jobs:
   # their start, so this runs only when that job ran.
   notify_quartz_completed:
     name: "Quartz - completed - build amd-repo-setup"
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' }}
+    # Not for older source, whose resolve job succeeds without resolving a stream.
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' && (needs.resolve_repo_setup_params.result != 'success' || needs.resolve_repo_setup_params.outputs.repo_base_url != '') }}
     needs: [resolve_repo_setup_params, stage_repo_setup_package]
     runs-on: ubuntu-26.04
     timeout-minutes: 10

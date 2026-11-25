@@ -766,6 +766,51 @@ class TestRepoSetupPackagesArePublished(unittest.TestCase):
 
                 self.assertEqual(self._below(written, "v5/amd-repo-setup/"), set())
 
+    def _publish_expected(self, *args, **kwargs):
+        """Publish as a release run that built the packages."""
+        with mock.patch.dict(os.environ, {"REPO_SETUP_PACKAGES_EXPECTED": "true"}):
+            return self._publish(*args, **kwargs)
+
+    def test_finding_none_is_an_error_when_the_run_built_them(self):
+        cases = {
+            "none uploaded": (),
+            # Dated 20260101, but this run's build date is 20260102.
+            "only a previous day's": self.NIGHTLY_111,
+        }
+        for case, packages in cases.items():
+            with self.subTest(case=case):
+                self.setUp()
+                with self.assertRaisesRegex(FileNotFoundError, "none are in"):
+                    self._publish_expected(
+                        "nightly", "111", packages, build_date="20260102"
+                    )
+
+    def test_expected_packages_are_published(self):
+        cases = {
+            "nightly": ("nightly", self.NIGHTLY_111),
+            "prerelease": ("prerelease", self.RC),
+            "deb only": ("nightly", self.NIGHTLY_111[:1]),
+            "rpm only": ("nightly", self.NIGHTLY_111[1:]),
+        }
+        for case, (release_type, packages) in cases.items():
+            with self.subTest(case=case):
+                self.setUp()
+                written = self._publish_expected(release_type, "111", packages)
+
+                self.assertEqual(
+                    self._below(written, "v5/amd-repo-setup/"),
+                    {f"v5/amd-repo-setup/{p}" for p in packages},
+                )
+
+    def test_a_rerun_of_a_run_that_built_them_passes(self):
+        # A rerun copies 0 because its packages are already published, so the
+        # check must look at the upload folder, not the copy count.
+        self._publish_expected("nightly", "111", self.NIGHTLY_111)
+        with self.assertLogs(level="INFO") as logs:
+            self._publish_expected("nightly", "111", self.NIGHTLY_111)
+
+        self.assertIn("Copied 0 amd-repo-setup packages", "\n".join(logs.output))
+
 
 if __name__ == "__main__":
     unittest.main()
