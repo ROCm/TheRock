@@ -212,6 +212,14 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         second = self.configure((self.monorepo / "inputs/second",))
         self.assert_changed(first, second, INPUT_USERS)
 
+    def test_empty_input_list_adds_nothing(self) -> None:
+        # As with THEROCK_ROCM_*_TEST_INPUTS when tests are not built, the
+        # declaration names a list variable that is empty.
+        baseline = self.configure(())
+        self.assert_valid(baseline)
+        self.edit_and_commit(self.whole_repo, "input.txt")
+        self.assertEqual(baseline, self.configure(()))
+
     def test_dirty_and_staged_inputs_invalidate_consumers(self) -> None:
         baseline = self.configure()
         write(self.whole_repo / "input.txt", "dirty\n")
@@ -235,6 +243,16 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.whole_repo.rename(self.root / "removed-whole-repo")
         write(self.sources / ".whole-repo.smrev", "stale\n")
         self.assert_valid(self.configure(), invalid=INPUT_USERS)
+
+    def test_non_git_input_requires_a_marker(self) -> None:
+        directory = self.root / "unversioned"
+        directory.mkdir()
+        self.assert_valid(self.configure((directory,)), invalid=INPUT_USERS)
+        marker = self.root / ".unversioned.smrev"
+        write(marker, "first\n")
+        baseline = self.configure((directory,))
+        write(marker, "second\n")
+        self.assert_changed(baseline, self.configure((directory,)), INPUT_USERS)
 
     def test_file_input_is_rejected_as_not_a_directory(self) -> None:
         self.assert_valid(
