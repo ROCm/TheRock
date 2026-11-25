@@ -403,6 +403,9 @@ function(therock_cmake_subproject_declare target_name)
 
   set(_additional_source_inputs "${ARG_ADDITIONAL_SOURCE_INPUTS}")
   _therock_cmake_subproject_absolutize(_additional_source_inputs "${CMAKE_CURRENT_SOURCE_DIR}")
+  # The same directory may be named twice (for example once relative, once
+  # through a variable); count it once so the fingerprint does not depend on it.
+  list(REMOVE_DUPLICATES _additional_source_inputs)
 
   message(STATUS "Including subproject ${target_name} (from ${_cmake_source_dir})")
   add_custom_target("${target_name}" COMMENT "Top level target to build the ${target_name} sub-project")

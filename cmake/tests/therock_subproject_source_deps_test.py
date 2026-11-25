@@ -220,6 +220,12 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.edit_and_commit(self.whole_repo, "input.txt")
         self.assertEqual(baseline, self.configure(()))
 
+    def test_input_declared_twice_counts_once(self) -> None:
+        once = self.configure((self.whole_repo,))
+        # The same directory, absolute and relative to the declaring directory.
+        relative = Path("../sources with spaces/whole-repo")
+        self.assertEqual(once, self.configure((self.whole_repo, relative)))
+
     def test_dirty_and_staged_inputs_invalidate_consumers(self) -> None:
         baseline = self.configure()
         write(self.whole_repo / "input.txt", "dirty\n")
