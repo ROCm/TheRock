@@ -274,17 +274,22 @@ class WorkflowOutputRoot:
         """Location for the shared Python packages directory."""
         return StorageLocation(self.bucket, f"{self.prefix}/python")
 
-    def python_package_logs(self) -> StorageLocation:
-        """Location for ROCm Python package build logs.
+    def python_package_logs_dir(self) -> StorageLocation:
+        """Location for ROCm Python package (wheel) build logs.
+
+        Returns ``StorageLocation`` at ``{run_id}-{platform}/logs/packaging/wheels``,
+        next to the native package logs under ``logs/packaging/{pkg_type}``.
 
         ``build_packages()`` writes one ``<package>.log`` per package. A
         successful CI upload places those files here, outside ``python/``.
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/python")
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/packaging/wheels")
 
     def python_package_logs_index(self) -> StorageLocation:
         """Location for the Python package log index (server-side generated)."""
-        return StorageLocation(self.bucket, f"{self.prefix}/logs/python/index.html")
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/logs/packaging/wheels/index.html"
+        )
 
     # -- Tarballs ---------------------------------------------------------------
 

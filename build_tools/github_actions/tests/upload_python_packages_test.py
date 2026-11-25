@@ -130,9 +130,10 @@ class TestUploadPythonPackageLogs(unittest.TestCase):
             )
 
             base = Path(staging) / "12345-linux"
-            uploaded = base / "logs" / "python" / "rocm_sdk_core.log"
+            wheel_logs = base / "logs" / "packaging" / "wheels"
+            uploaded = wheel_logs / "rocm_sdk_core.log"
             self.assertEqual(uploaded.read_text(encoding="utf-8"), "core log")
-            self.assertFalse((base / "logs" / "python" / "notes.txt").exists())
+            self.assertFalse((wheel_logs / "notes.txt").exists())
             self.assertFalse((base / "python").exists())
 
     def test_missing_log_dir_skips(self):

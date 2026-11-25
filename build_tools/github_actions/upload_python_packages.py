@@ -25,7 +25,7 @@ Output Layout:
   {bucket}/{external_repo}{run_id}-{platform}/python/
     *.whl, *.tar.gz   # Host and per-target wheels and sdists
     index.html        # Generated server-side for pip --find-links
-  {bucket}/{external_repo}{run_id}-{platform}/logs/python/
+  {bucket}/{external_repo}{run_id}-{platform}/logs/packaging/wheels/
     *.log             # Per-package setup.py logs, including successes
 
 Installation:
@@ -124,7 +124,7 @@ def upload_python_package_logs(
         log(f"[INFO] No Python package logs in {log_dir}. Skipping log upload.")
         return None
 
-    dest = output_root.python_package_logs()
+    dest = output_root.python_package_logs_dir()
     log(f"[INFO] Uploading {len(log_files)} Python package log(s) to {dest.s3_uri}")
     count = backend.upload_directory(log_dir, dest, include=["*.log"])
     log(f"[INFO] Uploaded {count} Python package log(s)")
