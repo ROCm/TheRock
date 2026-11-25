@@ -218,6 +218,38 @@ class ROCmProfilerTest(unittest.TestCase):
                         f"{test.script_name} output:\n{output_text}"
                     )
 
+    def test_rocprof_sys_instrument_runtime_mode(self):
+        """Runtime instrumentation must be able to create the target process.
+
+        Runs rocprof-sys-instrument without -o against hipconfig from the core
+        wheel. The target must be an ELF binary that ships with the wheels:
+        /bin/true is a coreutils script on RHEL-family systems, which
+        rocprof-sys rejects before it creates a process. If the wheel does not
+        provide a runtime library the instrumenter can find, this fails with
+        Dyninst error 68 (create process failed bootstrap).
+        """
+        script_path = utils.find_console_script("rocprof-sys-instrument")
+        self.assertIsNotNone(
+            script_path, msg="Console script rocprof-sys-instrument does not exist"
+        )
+        core_mod = importlib.import_module(
+            di.ALL_PACKAGES["core"].get_py_package_name()
+        )
+        target = Path(core_mod.__file__).parent / "bin" / "hipconfig"
+        self.assertTrue(target.is_file(), msg=f"{target} does not exist")
+        result = subprocess.run(
+            [script_path, "--", str(target), "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding=locale.getpreferredencoding(),
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=f"rocprof-sys-instrument runtime mode failed:\n{result.stdout}",
+        )
+
     def test_rocprof_trace_decoder_python_api(self):
         """The packaged rocprof_trace_decoder API must be importable.
 
