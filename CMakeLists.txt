@@ -151,6 +151,17 @@ set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems"
 set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 
+# Test helpers (shared/ctest) that rocm-libraries and rocm-systems projects
+# include when their tests are built. Subprojects that include them add these
+# to ADDITIONAL_SOURCE_INPUTS, so a change to the helpers changes their
+# fingerprints.
+set(THEROCK_ROCM_LIBRARIES_TEST_INPUTS)
+set(THEROCK_ROCM_SYSTEMS_TEST_INPUTS)
+if(THEROCK_BUILD_TESTING)
+  set(THEROCK_ROCM_LIBRARIES_TEST_INPUTS "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest")
+  set(THEROCK_ROCM_SYSTEMS_TEST_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest")
+endif()
+
 # Allow specifying alternative source locations for ROCgdb, amd-dbgapi
 # and rocr-debug-agent (and rocr-debug-agent-tests as a consequence).
 therock_enable_external_source("rocgdb" "${THEROCK_SOURCE_DIR}/debug-tools/rocgdb/source" OFF)

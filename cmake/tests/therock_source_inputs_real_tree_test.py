@@ -144,6 +144,14 @@ class RealSourceInputsTest(unittest.TestCase):
     def test_shared_sha256_reaches_amdsmi(self) -> None:
         self.assert_input_reaches_artifact("rocm-systems/shared/sha256", "core-amdsmi")
 
+    @unittest.skipIf(
+        sys.platform == "win32", "rocprofiler-compute is not built on Windows"
+    )
+    def test_shared_ctest_reaches_rocprofiler_compute(self) -> None:
+        self.assert_input_reaches_artifact(
+            "rocm-systems/shared/ctest", "rocprofiler-compute"
+        )
+
     def test_spirv_translator_reaches_the_compiler(self) -> None:
         self.assert_input_reaches_artifact("compiler/spirv-llvm-translator", "amd-llvm")
 

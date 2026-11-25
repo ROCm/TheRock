@@ -403,9 +403,6 @@ function(therock_cmake_subproject_declare target_name)
 
   set(_additional_source_inputs "${ARG_ADDITIONAL_SOURCE_INPUTS}")
   _therock_cmake_subproject_absolutize(_additional_source_inputs "${CMAKE_CURRENT_SOURCE_DIR}")
-  _therock_cmake_subproject_superrepo_test_inputs(_superrepo_test_inputs "${_cmake_source_dir}")
-  list(APPEND _additional_source_inputs ${_superrepo_test_inputs})
-  list(REMOVE_DUPLICATES _additional_source_inputs)
 
   message(STATUS "Including subproject ${target_name} (from ${_cmake_source_dir})")
   add_custom_target("${target_name}" COMMENT "Top level target to build the ${target_name} sub-project")
@@ -1694,26 +1691,6 @@ function(_therock_cmake_subproject_collect_runtime_deps
   endforeach()
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_transitive_deps}" "${_transitive_deps}" PARENT_SCOPE)
-endfunction()
-
-# Projects in the rocm-libraries and rocm-systems monorepos include
-# shared/ctest/TestCategories.cmake from their superrepo root when tests are
-# built. Sets out_var to that directory if source_dir is inside one of them and
-# the directory exists, otherwise to an empty list.
-function(_therock_cmake_subproject_superrepo_test_inputs out_var source_dir)
-  set(_inputs)
-  if(THEROCK_BUILD_TESTING)
-    foreach(_superrepo_var IN ITEMS THEROCK_ROCM_LIBRARIES_SOURCE_DIR THEROCK_ROCM_SYSTEMS_SOURCE_DIR)
-      set(_superrepo_dir "${${_superrepo_var}}")
-      if(_superrepo_dir)
-        cmake_path(IS_PREFIX _superrepo_dir "${source_dir}" NORMALIZE _in_superrepo)
-        if(_in_superrepo AND IS_DIRECTORY "${_superrepo_dir}/shared/ctest")
-          list(APPEND _inputs "${_superrepo_dir}/shared/ctest")
-        endif()
-      endif()
-    endforeach()
-  endif()
-  set("${out_var}" "${_inputs}" PARENT_SCOPE)
 endfunction()
 
 # Transforms a list to be absolute paths if not already.

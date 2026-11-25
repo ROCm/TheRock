@@ -21,6 +21,7 @@ if(THEROCK_ENABLE_HIPDNN)
   therock_cmake_subproject_declare(hipDNN
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn"
+    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipDNN"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -118,6 +119,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
   therock_cmake_subproject_declare(MIOpen
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
+    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -179,7 +181,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   therock_cmake_subproject_declare(hipdnn_integration_tests
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
-    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
+    # Includes shared/ctest in every build, not only with tests.
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs} "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_integration_tests"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -230,7 +233,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
 
   therock_cmake_subproject_declare(miopenprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/miopen-provider"
-    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs} ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopenprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -279,7 +282,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
   therock_cmake_subproject_declare(hipblasltprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
-    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs} ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblasltprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -333,7 +336,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER AND _hipkernelprovider_enabled)
   ##############################################################################
   therock_cmake_subproject_declare(hipkernelprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hip-kernel-provider"
-    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs}
+    ADDITIONAL_SOURCE_INPUTS ${_dnn_providers_source_inputs} ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipkernelprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -388,6 +391,8 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES AND _hipdnn_samples_enabled)
 
   therock_cmake_subproject_declare(hipDNN_samples
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/samples"
+    # Includes shared/ctest in every build, not only with tests.
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_samples"
     BACKGROUND_BUILD
     CMAKE_ARGS

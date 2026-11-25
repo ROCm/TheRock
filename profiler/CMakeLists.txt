@@ -243,6 +243,8 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
   therock_cmake_subproject_declare(rocprofiler-compute
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
+    # Includes shared/ctest in every build, not only with tests.
+    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
     DEFAULT_GPU_TARGETS

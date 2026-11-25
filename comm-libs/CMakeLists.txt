@@ -44,7 +44,7 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
     # host code isn't fully target agnostic.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
-    ADDITIONAL_SOURCE_INPUTS ${_rccl_additional_source_inputs}
+    ADDITIONAL_SOURCE_INPUTS ${_rccl_additional_source_inputs} ${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
@@ -205,6 +205,7 @@ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
     # Build all GPU targets in a single target-neutral artifact as a workaround.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
+    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
