@@ -192,6 +192,11 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --dest-dir ./repo-setup-package-out
 ```
 
+Both URLs must be https, with no credentials, query or fragment: the base URL is
+written into the installed repo file, and the key is trusted. The package is
+built in a temporary directory, and only the finished `.deb` or `.rpm` is written
+to `--dest-dir`; nothing else there is touched.
+
 `--gpg-key-url` is the full URL of the key, used verbatim. It is a separate
 option because the key is not under `--repo-base-url`, and its path differs by
 stream, so one cannot be derived from the other. Taking it whole rather than

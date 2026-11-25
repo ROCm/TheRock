@@ -439,6 +439,93 @@ def test_main_dispatches_on_the_profile_package_type(
     assert built == [expected]
 
 
+# --- error reporting ----------------------------------------------------------
+
+
+def _stable_argv(dest: Path) -> list[str]:
+    return [
+        "--os-profile",
+        "rhel10",
+        "--stream",
+        "stable",
+        "--repo-base-url",
+        STABLE_BASE,
+        "--gpg-key-url",
+        STABLE_KEY_URL,
+        "--rocm-version",
+        "10.0.0",
+        "--dest-dir",
+        str(dest),
+    ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("fetched signing key must be exactly the pinned key"),
+        RuntimeError("failed to fetch signing key: HTTP 404"),
+        PermissionError(13, "Permission denied"),
+        subprocess.CalledProcessError(1, ["rpmbuild"]),
+    ],
+    ids=lambda e: type(e).__name__,
+)
+def test_a_user_facing_failure_is_one_error_line(monkeypatch, tmp_path, error):
+    def fail(*a, **k):
+        raise error
+
+    monkeypatch.setattr(brp, "build_rpm_package", fail)
+    with pytest.raises(SystemExit) as exc:
+        brp.main(_stable_argv(tmp_path))
+
+    # sys.exit(<str>) prints the message to stderr and exits 1.
+    message = str(exc.value.code)
+    assert message.startswith(
+        f"build_repo_setup_package.py: error: {type(error).__name__}: "
+    )
+    assert "\n" not in message
+
+
+def test_an_unexpected_error_keeps_its_traceback(monkeypatch, tmp_path):
+    def bug(*a, **k):
+        raise KeyError("bug")
+
+    monkeypatch.setattr(brp, "build_context", bug)
+    with pytest.raises(KeyError):
+        brp.main(_stable_argv(tmp_path))
+
+
+@pytest.mark.parametrize(
+    "os_profile, tool, package",
+    [
+        ("ubuntu2404", "dpkg-buildpackage", "dpkg-dev"),
+        ("rhel10", "rpmbuild", "rpm-build"),
+    ],
+)
+def test_a_missing_build_tool_names_the_package_to_install(
+    monkeypatch, tmp_path, os_profile, tool, package
+):
+    monkeypatch.setattr(brp.shutil, "which", lambda name: None)
+    # Checked before the key is fetched.
+    monkeypatch.setattr(brp, "load_signing_key", mock.Mock(side_effect=AssertionError))
+    argv = _stable_argv(tmp_path)
+    argv[argv.index("rhel10")] = os_profile
+
+    with pytest.raises(SystemExit) as exc:
+        brp.main(argv)
+
+    assert f"{tool} is required to build this package; install {package}" in str(
+        exc.value.code
+    )
+
+
+def test_a_missing_gpg_key_file_is_a_usage_error(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        _args("--gpg-key-file", str(tmp_path / "missing.gpg"))
+
+    assert exc.value.code == 2
+    assert "--gpg-key-file is not a file" in capsys.readouterr().err
+
+
 # --- context wiring -----------------------------------------------------------
 
 
@@ -1218,8 +1305,56 @@ def test_repo_base_url_rejects_bad(bad_url):
         _args("--repo-base-url", bad_url)
 
 
+# Both URLs end up in the package: the base URL in a repo file every user can
+# read, and the key behind the other is trusted.
+_NOT_PLAIN_HTTPS = [
+    "http://stable.repo.amd.com/rocm/core/packages",  # not https
+    "https://user@stable.repo.amd.com/rocm/core/packages",  # credentials
+    "https://user:pass@stable.repo.amd.com/rocm/core/packages",
+    "https://@stable.repo.amd.com/rocm/core/packages",  # empty user
+    "https://stable.repo.amd.com/rocm/core/packages?x=1",  # query
+    "https://stable.repo.amd.com/rocm/core/packages#frag",  # fragment
+    "https://[::1/rocm/core/packages",  # malformed host
+]
+
+
+@pytest.mark.parametrize("flag", ["--repo-base-url", "--gpg-key-url"])
+@pytest.mark.parametrize("url", _NOT_PLAIN_HTTPS)
+def test_urls_must_be_plain_https(capsys, flag, url):
+    with pytest.raises(SystemExit) as exc:
+        _args(flag, url)
+
+    assert exc.value.code == 2
+    assert f"{flag} must be an https URL with no credentials, query or fragment" in (
+        capsys.readouterr().err
+    )
+
+
+@pytest.mark.parametrize("flag", ["--repo-base-url", "--gpg-key-url"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://tok3n@stable.repo.amd.com/rocm",
+        "https://us3r:s3cr3t@stable.repo.amd.com/rocm",
+        "https://us3r:s3c@r3t@stable.repo.amd.com/rocm",  # "@" in the password
+    ],
+)
+def test_rejected_urls_do_not_echo_credentials(capsys, flag, url):
+    with pytest.raises(SystemExit):
+        _args(flag, url)
+
+    err = capsys.readouterr().err
+    assert "//***@stable.repo.amd.com/rocm" in err
+    for secret in ("tok3n", "us3r", "s3cr3t", "r3t"):
+        assert secret not in err
+
+
 def test_repo_base_url_accepts_https():
     assert _args("--repo-base-url", STABLE_BASE).repo_base_url == STABLE_BASE
+
+
+def test_gpg_key_url_accepts_https():
+    assert _args("--gpg-key-url", STABLE_KEY_URL).gpg_key_url == STABLE_KEY_URL
 
 
 def test_repo_sub_folder_rejects_bad_format():
@@ -1709,8 +1844,7 @@ def test_main_dispatches_list_profiles(capsys):
 
 
 def test_relative_dest_dir_is_resolved_to_absolute():
-    # rpmbuild needs an absolute _topdir, so a relative --dest-dir must be
-    # normalized to absolute at parse time.
+    # Normalized at parse time, so the printed package paths are absolute.
     args = brp.parse_args(
         [
             "--os-profile",
@@ -1735,6 +1869,108 @@ def test_absolute_dest_dir_stays_absolute():
     args = _args("--dest-dir", "/tmp/somewhere")
     assert args.dest_dir.is_absolute()
     assert args.dest_dir.name == "somewhere"
+
+
+# --- build directory ----------------------------------------------------------
+#
+# The build runs in a private scratch directory; only the finished package is
+# moved into --dest-dir. The package tools are faked: each writes a package
+# where the real one would. The dev stream is unsigned, so no gpg is needed and
+# these also run on Windows.
+
+
+def _dev_argv(os_profile: str, dest: str) -> list[str]:
+    return [
+        "--os-profile",
+        os_profile,
+        "--stream",
+        "dev",
+        "--repo-base-url",
+        DEV_BASE,
+        "--repo-sub-folder",
+        NIGHTLY_SUB,
+        "--rocm-version",
+        "10.0.0",
+        "--dest-dir",
+        dest,
+    ]
+
+
+def _fake_package_tools(monkeypatch, *, fail: bool = False) -> list[Path]:
+    """Fake rpmbuild and dpkg-buildpackage; return the scratch dirs they used."""
+    scratch_dirs = []
+
+    def run(argv, cwd=None, **kwargs):
+        if argv[0] == "rpmbuild":
+            topdir = Path(argv[argv.index("--define") + 1].split(" ", 1)[1])
+            scratch_dirs.append(topdir)
+            out = topdir / "RPMS" / "noarch" / "amd-repo-setup-1.noarch.rpm"
+        else:
+            scratch_dirs.append(Path(cwd).parent)
+            out = Path(cwd).parent / "amd-repo-setup_1_all.deb"
+            (Path(cwd).parent / "amd-repo-setup_1_amd64.buildinfo").write_text("x")
+        if fail:
+            raise subprocess.CalledProcessError(2, argv)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"package")
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(brp.subprocess, "run", run)
+    monkeypatch.setattr(brp.shutil, "which", lambda name: f"/usr/bin/{name}")
+    return scratch_dirs
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        p.relative_to(root).as_posix(): p.read_bytes()
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+
+
+@pytest.mark.parametrize(
+    "os_profile, package",
+    [
+        ("ubuntu2404", "amd-repo-setup_1_all.deb"),
+        ("rhel10", "amd-repo-setup-1.noarch.rpm"),
+    ],
+)
+def test_only_the_package_lands_in_dest_dir(monkeypatch, tmp_path, os_profile, package):
+    # Earlier versions built under <dest>/deb and <dest>/rpm, then deleted those
+    # folders and moved any .deb found there into <dest>.
+    dest = tmp_path / "out"
+    for name in ("deb/other.deb", "deb/notes.txt", "rpm/other.rpm", "keep.txt"):
+        (dest / name).parent.mkdir(parents=True, exist_ok=True)
+        (dest / name).write_bytes(name.encode())
+    before = _tree(dest)
+    scratch_dirs = _fake_package_tools(monkeypatch)
+
+    brp.main(_dev_argv(os_profile, str(dest)))
+
+    assert _tree(dest) == {**before, package: b"package"}
+    assert scratch_dirs and not any(d.exists() for d in scratch_dirs)
+    assert not any(dest in d.parents for d in scratch_dirs)
+
+
+@pytest.mark.parametrize("os_profile", ["ubuntu2404", "rhel10"])
+def test_a_failed_build_leaves_nothing_behind(monkeypatch, tmp_path, os_profile):
+    dest = tmp_path / "out"
+    scratch_dirs = _fake_package_tools(monkeypatch, fail=True)
+
+    with pytest.raises(SystemExit):
+        brp.main(_dev_argv(os_profile, str(dest)))
+
+    assert _tree(dest) == {}
+    assert scratch_dirs and not any(d.exists() for d in scratch_dirs)
+
+
+def test_a_relative_dest_dir_receives_the_package(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _fake_package_tools(monkeypatch)
+
+    brp.main(_dev_argv("rhel10", "relout"))
+
+    assert _tree(tmp_path / "relout") == {"amd-repo-setup-1.noarch.rpm": b"package"}
 
 
 # --- installed-file naming ----------------------------------------------------

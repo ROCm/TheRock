@@ -528,16 +528,32 @@ def _require_https(url: str, what: str) -> None:
 
 
 def _valid_repo_base_url(url: str) -> bool:
-    """Whether a repo base URL is a well-formed http(s) URL with no control chars.
+    """Whether a URL is fit for --repo-base-url or --gpg-key-url.
 
-    The value is concatenated into the generated repo files, so whitespace or
-    control characters (e.g. a newline) that could inject extra directives are
-    rejected here.
+    Both end up in the installed package: the base URL in the repo file, which
+    every user can read, and the key behind the URL is trusted. So the URL must
+    be plain https: no credentials (any "@" in the host part, even an empty
+    user), no query or fragment, and no whitespace or control characters, which
+    could inject extra directives into the repo file.
     """
     if any(c.isspace() or ord(c) < 0x20 for c in url):
         return False
-    parts = urllib.parse.urlsplit(url)
-    return parts.scheme in ("http", "https") and bool(parts.netloc)
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:  # e.g. an unclosed IPv6 bracket
+        return False
+    return (
+        parts.scheme == "https"
+        and bool(parts.hostname)
+        and "@" not in parts.netloc
+        and not parts.query
+        and not parts.fragment
+    )
+
+
+def _redact_credentials(url: str) -> str:
+    """Hide any user or password in a URL, so an error message never prints them."""
+    return re.sub(r"//[^/]*@", "//***@", url)
 
 
 def rpm_version_release(
@@ -774,10 +790,10 @@ def load_signing_key(args: argparse.Namespace) -> bytes:
     runs; callers supplying their own key are responsible for it being the
     right one.
 
-    ``--gpg-key-url`` is still checked for http(s) shape by ``parse_args``
-    whenever it is non-empty, including alongside ``--gpg-key-file``. That is a
-    separate, earlier check -- it rejects a malformed value rather than
-    vouching for the key.
+    ``--gpg-key-url`` is still checked by ``parse_args`` (https only, no
+    credentials, query or fragment) whenever it is non-empty, including
+    alongside ``--gpg-key-file``. That is a separate, earlier check -- it
+    rejects a malformed value rather than vouching for the key.
     """
     if args.gpg_key_file:
         return args.gpg_key_file.read_bytes()
@@ -891,16 +907,40 @@ def build_context(args: argparse.Namespace, profile: dict) -> dict:
     }
 
 
+def _require_build_tool(tool: str, package: str) -> None:
+    """Fail with an install hint if the package build tool is missing."""
+    if shutil.which(tool) is None:
+        raise RuntimeError(
+            f"{tool} is required to build this package; install {package}"
+        )
+
+
 # --- rpm build ---------------------------------------------------------------
 
 
 def build_rpm_package(
     args: argparse.Namespace, profile: dict, context: dict, dest_dir: Path
 ) -> None:
+    # Checked before the signing key is fetched, so a missing tool fails fast.
+    _require_build_tool("rpmbuild", "rpm-build")
+    # Build in a private scratch directory and move only the finished package
+    # into dest_dir, so nothing else there is touched and nothing is left
+    # behind if the build fails. Failing to remove the scratch directory must
+    # not fail a build whose package is already in dest_dir.
+    with tempfile.TemporaryDirectory(
+        prefix="amd-repo-setup-", ignore_cleanup_errors=True
+    ) as scratch:
+        _build_rpm_package(args, profile, context, Path(scratch), dest_dir)
+
+
+def _build_rpm_package(
+    args: argparse.Namespace,
+    profile: dict,
+    context: dict,
+    build_dir: Path,
+    dest_dir: Path,
+) -> None:
     env = get_jinja_env()
-    build_dir = dest_dir / "rpm" / PACKAGE_NAME
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
     for subdir in ("SOURCES", "SPECS", "BUILD", "RPMS", "SRPMS"):
         (build_dir / subdir).mkdir(parents=True, exist_ok=True)
     sources_dir = build_dir / "SOURCES"
@@ -943,11 +983,6 @@ def build_rpm_package(
         shutil.move(str(rpm_file), str(target))
         print(f"Package created: {target}")
 
-    # Leave only the built packages behind. The rpmbuild tree is scratch, and
-    # CI publishes this directory, so anything left here ships with the
-    # package. Failing to clean up must not fail a build that succeeded.
-    shutil.rmtree(build_dir.parent, ignore_errors=True)
-
 
 # --- deb build ---------------------------------------------------------------
 
@@ -955,12 +990,26 @@ def build_rpm_package(
 def build_deb_package(
     args: argparse.Namespace, profile: dict, context: dict, dest_dir: Path
 ) -> None:
+    _require_build_tool("dpkg-buildpackage", "dpkg-dev")
+    # As for rpm: build in a private scratch directory, which also takes the
+    # .buildinfo and .changes dpkg-buildpackage writes next to the package.
+    with tempfile.TemporaryDirectory(
+        prefix="amd-repo-setup-", ignore_cleanup_errors=True
+    ) as scratch:
+        _build_deb_package(args, profile, context, Path(scratch), dest_dir)
+
+
+def _build_deb_package(
+    args: argparse.Namespace,
+    profile: dict,
+    context: dict,
+    scratch: Path,
+    dest_dir: Path,
+) -> None:
     env = get_jinja_env()
-    package_dir = dest_dir / "deb" / PACKAGE_NAME
+    package_dir = scratch / PACKAGE_NAME
     deb_dir = package_dir / "debian"
-    if package_dir.exists():
-        shutil.rmtree(package_dir)
-    deb_dir.mkdir(parents=True, exist_ok=True)
+    deb_dir.mkdir(parents=True)
 
     deb_context = {
         **context,
@@ -1013,14 +1062,10 @@ def build_deb_package(
         check=True,
     )
     # dpkg-buildpackage writes the .deb to the parent of the package directory.
-    for deb_file in package_dir.parent.glob("*.deb"):
+    for deb_file in scratch.glob("*.deb"):
         target = dest_dir / deb_file.name
         shutil.move(str(deb_file), str(target))
         print(f"Package created: {target}")
-
-    # As for rpm: drop the build tree, and with it the .buildinfo and .changes
-    # dpkg-buildpackage leaves alongside the package.
-    shutil.rmtree(package_dir.parent, ignore_errors=True)
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -1063,7 +1108,9 @@ def parse_args(argv=None) -> argparse.Namespace:
         required=True,
         help=(
             "Stream repository base URL, e.g. "
-            "https://stable.repo.amd.com/rocm/core/packages"
+            "https://stable.repo.amd.com/rocm/core/packages. Must be https, "
+            "with no credentials, query or fragment: it is written into the "
+            "installed repo file"
         ),
     )
     p.add_argument(
@@ -1116,7 +1163,8 @@ def parse_args(argv=None) -> argparse.Namespace:
             "stable.repo.amd.com/rocm/gpg/packages.gpg. Given whole rather "
             "than derived: the key is not under --repo-base-url, its path "
             "differs by stream, and where it sits is the publisher's choice, "
-            "not this tool's. The fetch is https-only and the file must hold "
+            "not this tool's. It must be https, with no credentials, query or "
+            "fragment, and the file must hold "
             "only the key pinned for the stream. "
             "Required for a signed stream unless --gpg-key-file is given"
         ),
@@ -1135,8 +1183,12 @@ def parse_args(argv=None) -> argparse.Namespace:
         p.error(
             f"--gpg-key-url or --gpg-key-file is required for --stream {args.stream}"
         )
+    if args.gpg_key_file and not args.gpg_key_file.is_file():
+        p.error(f"--gpg-key-file is not a file: {str(args.gpg_key_file)!r}")
     if args.gpg_key_url and not _valid_repo_base_url(args.gpg_key_url):
-        p.error(f"--gpg-key-url is not a valid http(s) URL: {args.gpg_key_url!r}")
+        p.error(
+            f"--gpg-key-url must be an https URL with no credentials, query or fragment: {_redact_credentials(args.gpg_key_url)!r}"
+        )
     build_id_shape = stream_shape(args.stream) == _BUILD_ID
     if build_id_shape and not args.repo_sub_folder:
         p.error(f"--repo-sub-folder is required for --stream {args.stream}")
@@ -1149,10 +1201,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     if not _VERSION_SUFFIX_RE.match(args.version_suffix):
         p.error(f"--version-suffix has an unexpected format: {args.version_suffix!r}")
     if not _valid_repo_base_url(args.repo_base_url):
-        p.error(f"--repo-base-url is not a valid http(s) URL: {args.repo_base_url!r}")
+        p.error(
+            f"--repo-base-url must be an https URL with no credentials, query or fragment: {_redact_credentials(args.repo_base_url)!r}"
+        )
     if args.repo_sub_folder and not _SUB_FOLDER_RE.match(args.repo_sub_folder):
         p.error(f"--repo-sub-folder has an unexpected format: {args.repo_sub_folder!r}")
-    # rpmbuild requires an absolute _topdir; normalize so a relative --dest-dir works.
+    # Absolute, so the "Package created:" paths printed by the build are too.
     args.dest_dir = args.dest_dir.resolve()
     return args
 
@@ -1164,6 +1218,17 @@ def main(argv=None) -> None:
         run_list_profiles(argv[1:])
         return
     args = parse_args(argv)
+    try:
+        _build(args)
+    # The failures a user can cause or fix: a bad key or URL, an unreachable
+    # repository, a missing tool, an unwritable --dest-dir, a failed package
+    # build (whose own output is already printed). Report them in one line.
+    # Anything else is a bug here, and keeps its traceback.
+    except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as e:
+        sys.exit(f"{Path(__file__).name}: error: {type(e).__name__}: {e}")
+
+
+def _build(args: argparse.Namespace) -> None:
     profile = OS_PROFILES[args.os_profile]
     args.dest_dir.mkdir(parents=True, exist_ok=True)
     context = build_context(args, profile)
