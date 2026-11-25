@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AMD TheRock <noreply@amd.com>
+Date: Sat, 21 Nov 2026 00:00:00 +0000
+Subject: [PATCH] Make the installed FFTW3Config.cmake relocatable
+
+Upstream's FFTW3Config.cmake.in bakes @CMAKE_INSTALL_FULL_LIBDIR@ and
+@CMAKE_INSTALL_FULL_INCLUDEDIR@ -- absolute, build-machine-specific
+paths -- into the two legacy FFTW3_LIBRARY_DIRS/FFTW3_INCLUDE_DIRS
+variables it sets. Once the staged install is copied to another
+machine or build location, those paths no longer exist and consumers
+fail with "fftw3.h file not found" (ROCm/TheRock#7781).
+
+This is the only actual defect: upstream's install(EXPORT
+FFTW3LibraryDepends ...) -- reached via this file's untouched
+include("${CMAKE_CURRENT_LIST_DIR}/FFTW3LibraryDepends.cmake") -- is
+already relocatable by construction. CMake auto-generates that export
+file with an _IMPORT_PREFIX computed relative to its own install
+location, with correct per-configuration paths and Windows
+IMPORTED_IMPLIB handling, derived from the real built target. That
+mechanism was never broken and needs no changes.
+
+Fixes only the two broken lines, using CMake's own
+configure_package_config_file()/PATH_VARS machinery (added to the
+configure_file() call in CMakeLists.txt) instead of the raw absolute
+substitutions, and leaves everything else in the template -- the
+FFTW3LibraryDepends.cmake include, FFTW3_CONFIG_FILE, the legacy
+CMake-2.8.3 compatibility shim -- exactly as upstream wrote it.
+
+The CMakeLists.txt hunk uses a wider-than-default context (8 lines
+instead of 3) to avoid patch fuzz from a nearby repeated line
+("COMPONENT Development)" appears twice close together).
+
+See-also: https://github.com/ROCm/TheRock/issues/7781
+---
+ CMakeLists.txt       | 6 +++++-
+ FFTW3Config.cmake.in | 10 ++++++----
+ 2 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -413,18 +413,22 @@
+ set (VERSION ${FFTW_VERSION})
+ configure_file (fftw.pc.in fftw3${PREC_SUFFIX}.pc @ONLY)
+ install (FILES
+           ${CMAKE_CURRENT_BINARY_DIR}/fftw3${PREC_SUFFIX}.pc
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+          COMPONENT Development)
+ 
+ # cmake file
++include (CMakePackageConfigHelpers)
+ set (FFTW3_LIBRARIES "FFTW3::${fftw3_lib}")
+-configure_file (FFTW3Config.cmake.in FFTW3${PREC_SUFFIX}Config.cmake @ONLY)
++configure_package_config_file (FFTW3Config.cmake.in FFTW3${PREC_SUFFIX}Config.cmake
++  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fftw3${PREC_SUFFIX}
++  PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR
++)
+ configure_file (FFTW3ConfigVersion.cmake.in FFTW3${PREC_SUFFIX}ConfigVersion.cmake @ONLY)
+ install (FILES
+           ${CMAKE_CURRENT_BINARY_DIR}/FFTW3${PREC_SUFFIX}Config.cmake
+           ${CMAKE_CURRENT_BINARY_DIR}/FFTW3${PREC_SUFFIX}ConfigVersion.cmake
+ 	  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fftw3${PREC_SUFFIX}
+          COMPONENT Development)
+ 
+ export (TARGETS ${fftw3_lib} NAMESPACE FFTW3:: FILE ${PROJECT_BINARY_DIR}/FFTW3LibraryDepends.cmake)
+diff --git a/FFTW3Config.cmake.in b/FFTW3Config.cmake.in
+--- a/FFTW3Config.cmake.in
++++ b/FFTW3Config.cmake.in
+@@ -3,12 +3,14 @@
+   get_filename_component (CMAKE_CURRENT_LIST_DIR ${CMAKE_CURRENT_LIST_FILE} PATH)
+ endif ()
+ 
++@PACKAGE_INIT@
++
+ # Allows loading FFTW3 settings from another project
+ set (FFTW3_CONFIG_FILE "${CMAKE_CURRENT_LIST_FILE}")
+ 
+ set (FFTW3@PREC_SUFFIX@_LIBRARIES fftw3@PREC_SUFFIX@)
+-set (FFTW3@PREC_SUFFIX@_LIBRARY_DIRS @CMAKE_INSTALL_FULL_LIBDIR@)
+-set (FFTW3@PREC_SUFFIX@_INCLUDE_DIRS @CMAKE_INSTALL_FULL_INCLUDEDIR@)
++set (FFTW3@PREC_SUFFIX@_LIBRARY_DIRS "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
++set (FFTW3@PREC_SUFFIX@_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+ 
+ include ("${CMAKE_CURRENT_LIST_DIR}/FFTW3LibraryDepends.cmake")
+ 
+--
+2.43.0
