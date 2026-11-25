@@ -26,6 +26,14 @@ refreshing (`sudo tdnf install ca-certificates`). Those images ship only
 `ca-certificates-base`, which does not trust the repository's TLS certificate.
 Full Azure Linux installs already have it.
 
+On Azure Linux, installing the first ROCm package from a signed stream fails with `RPM is signed but failed to match with known keys`: `tdnf` checks the package before it
+imports the key that `gpgkey=` names. Import the key once beforehand, or run
+the install again:
+
+```bash
+sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm
+```
+
 The filename and the rpm section id both identify the stream. The stem is
 `amdrocm-<stream>` for every stream except `rc`, whose file is
 `amdrocm-stablerc` — see [Streams](#streams). To change streams, see
@@ -49,7 +57,7 @@ repository serves x86_64 (`amd64`) packages only.
 | --------- | ------------------------------------------------- | ------ | --------------------------------- |
 | `stable`  | `https://stable.repo.amd.com/rocm/core/packages`  | yes    | `amdrocm-stable.{sources,repo}`   |
 | `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
-| `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
+| `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | yes    | `amdrocm-nightly.{sources,repo}`  |
 | `dev`     | `https://dev.repo.amd.com/rocm/core/packages`     | no     | `amdrocm-dev.{sources,repo}`      |
 
 `rc` is the release-candidate stream for the next GA release. Its package carries
@@ -73,16 +81,19 @@ identifier appears in the path:
 | `nightly` | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
 | `dev`     | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
 
-The signing key is at `<stream-root>/gpg/packages.gpg` — for example
-`https://stable.repo.amd.com/rocm/gpg/packages.gpg`. Note that this is *not*
-under the repository base: packages live under `<stream-root>/core/packages/`
-while the key sits beside `core/`, so the two are supplied separately when
-building the package.
+The signing key is *not* under the repository base, and where it sits differs by
+stream, so the two are supplied separately when building the package:
 
-> **Nightly and dev packages don't check signatures yet, and they expire.** Dev
-> repositories are unsigned. Nightly repositories are now signed, but the
-> `amd-repo-setup` package for both still disables signature verification
-> (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
+| Stream         | Signing key                                              |
+| -------------- | -------------------------------------------------------- |
+| `stable`, `rc` | `https://<stream>.repo.amd.com/rocm/gpg/packages.gpg`    |
+| `nightly`      | `https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg` |
+
+`stable` and `rc` share one key; `nightly` is signed with its own.
+
+> **Dev packages don't check signatures, and nightly and dev packages expire.**
+> Dev repositories are unsigned, so the dev package disables signature
+> verification (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
 >
 > More importantly, a nightly or dev repo file names **one specific build**.
 > Retention prunes old builds, so the package stops resolving once the build it
@@ -182,13 +193,13 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
 ```
 
 `--gpg-key-url` is the full URL of the key, used verbatim. It is a separate
-option because the key is not under `--repo-base-url` — packages live under
-`<root>/core/packages/` and the key beside `core/` — so one cannot be derived
-from the other. Taking it whole rather than assembling it from a root also keeps
-where the key lives a property of the repository rather than an assumption in
-this tool. The fetch is https-only, and the fetched file must hold only the key
-pinned in `build_repo_setup_package.py`, so a wrong, tampered or added key fails the
-build regardless of the URL it came from.
+option because the key is not under `--repo-base-url`, and its path differs by
+stream, so one cannot be derived from the other. Taking it whole rather than
+assembling it from a root also keeps where the key lives a property of the
+repository rather than an assumption in this tool. The fetch is https-only, and
+the fetched file must hold only the key pinned for the stream in
+`build_repo_setup_package.py`, so a wrong, tampered or added key fails the build
+regardless of the URL it came from.
 
 For a signed stream the key is fetched over the network at build time. To build
 offline, pass a key file you already trust instead. It is embedded as provided;
@@ -204,8 +215,8 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --dest-dir ./repo-setup-package-out
 ```
 
-The nightly stream is pinned to a single build; pass its identifier. No key is
-needed, since the nightly package doesn't check signatures yet:
+The nightly stream is pinned to a single build; pass its identifier, and the
+nightly key:
 
 ```bash
 python3 build_tools/packaging/linux/build_repo_setup_package.py \
@@ -213,6 +224,7 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
     --repo-sub-folder 20260722-123456789 \
+    --gpg-key-url https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg \
     --rocm-version 10.0.0~20260722 \
     --dest-dir ./repo-setup-package-out
 ```
@@ -346,9 +358,11 @@ sudo apt install ./repo-setup-package-out/amd-repo-setup_*_all.deb
 Installing over the current package keeps the old stream's `.sources` file,
 because `dpkg` does not delete a configuration file that the version being
 installed no longer ships. The old repository stays active: after moving from `rc` to
-`stable`, `apt` keeps resolving `amdrocm` to the higher rc version, and after
-moving from a signed stream to `nightly`, `apt-get update` can no longer
-refresh the old repository, whose signing key was removed.
+`stable`, `apt` keeps resolving `amdrocm` to the higher rc version. Between
+`nightly` and `rc` or `stable`, which are signed with different keys, the old
+file still names the shared keyring, which now holds the new stream's key, so
+`apt-get update` warns `NO_PUBKEY` and can no longer refresh the old repository.
+Moving to `dev`, which ships no key, does the same.
 
 On RHEL, `dnf install` switches directly, reporting a move to a lower-versioned
 stream as a downgrade. On SLES, pass `--oldpackage` (without it, `zypper` skips a

@@ -10,6 +10,7 @@ Importing the module is side-effect-free thanks to its ``__main__`` guard.
 
 import json
 import locale
+import re
 import shutil
 import subprocess
 import sys
@@ -29,9 +30,10 @@ STABLE_BASE = "https://stable.repo.amd.com/rocm/core/packages"
 RC_BASE = "https://rc.repo.amd.com/rocm/core/packages"
 NIGHTLY_BASE = "https://nightly.repo.amd.com/rocm/core/packages"
 DEV_BASE = "https://dev.repo.amd.com/rocm/core/packages"
-# The signing key, supplied whole. It sits beside core/ rather than under
-# STABLE_BASE, which is why it is a separate input rather than derived from it.
+# The signing key, supplied whole. It is not under the packages base, and where
+# it sits differs by stream, which is why it is a separate input.
 STABLE_KEY_URL = "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
+NIGHTLY_KEY_URL = "https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg"
 NIGHTLY_SUB = "20260716-12345"
 
 
@@ -145,12 +147,14 @@ def test_rc_baseurl_is_per_distro(profile, expected):
 
 
 def test_gpg_key_url_is_outside_the_packages_base():
-    # The key sits beside core/ while packages live under core/packages/, so it
+    # Packages live under core/packages/, and the key is not under it: the
+    # stable key sits beside core/, the nightly key under core/gpg/. So it
     # cannot be reached by appending to the base. This is the whole reason the
     # key URL is its own argument, so pin the relationship rather than trusting
     # the comment that says so.
     assert not STABLE_KEY_URL.startswith(STABLE_BASE)
-    # Nor by trimming: the key is not under the base's parent either.
+    assert not NIGHTLY_KEY_URL.startswith(NIGHTLY_BASE)
+    # Nor by trimming the stable base: its key is not under the parent either.
     assert not STABLE_KEY_URL.startswith(STABLE_BASE.rsplit("/", 1)[0])
 
 
@@ -160,7 +164,7 @@ def test_key_url_is_used_verbatim(monkeypatch):
     # builder that still derived the tail would fetch a different URL here.
     seen = []
     monkeypatch.setattr(brp, "_fetch_signing_key", lambda url: seen.append(url) or b"k")
-    monkeypatch.setattr(brp, "_extract_pinned_key", lambda key: key)
+    monkeypatch.setattr(brp, "_extract_pinned_key", lambda key, fingerprint: key)
     args = _args()
     args.gpg_key_url = "https://example.invalid/somewhere/else/custom-key.gpg"
     brp.load_signing_key(args)
@@ -197,13 +201,12 @@ def test_only_the_build_id_shape_carries_a_sub_folder():
         assert NIGHTLY_SUB not in _baseurl(profile, "stable", STABLE_BASE)
 
 
-def test_signedness_follows_the_shape():
-    # Not an independent axis: the flat streams are the ones publishing
-    # InRelease/Release.gpg and repomd.xml.asc.
-    for stream in brp.STREAMS:
-        assert brp.is_signed(stream) is (brp.stream_shape(stream) == brp._FLAT)
-    assert brp.is_signed("stable") is True
-    assert brp.is_signed("nightly") is False
+def test_signed_streams():
+    # Not the shape: nightly is a build_id stream and is signed, dev is not.
+    assert {s for s in brp.STREAMS if brp.is_signed(s)} == {"stable", "rc", "nightly"}
+    assert brp.is_signed("dev") is False
+    with pytest.raises(ValueError):
+        brp.is_signed("bogus")
 
 
 def test_unknown_stream_is_rejected_before_it_reaches_a_url():
@@ -383,6 +386,8 @@ def test_main_skips_verification_for_nightly(monkeypatch, tmp_path):
             NIGHTLY_BASE,
             "--repo-sub-folder",
             NIGHTLY_SUB,
+            "--gpg-key-url",
+            NIGHTLY_KEY_URL,
             "--rocm-version",
             "10.0.0",
             "--dest-dir",
@@ -456,10 +461,15 @@ def test_build_context_threads_profile_and_stream(profile):
 # --- signing ------------------------------------------------------------------
 
 
-def test_signed_lines():
-    assert brp.is_signed("stable") is True
-    assert brp.is_signed("stable") is True
-    assert brp.is_signed("nightly") is False
+def test_each_signed_stream_pins_its_own_key():
+    # Literal on purpose: these are the keys users end up trusting. stable and
+    # rc share the AMD ROCm key; nightly is signed with a separate one.
+    rocm = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
+    assert brp.SIGNING_KEY_FINGERPRINTS == {
+        "stable": rocm,
+        "rc": rocm,
+        "nightly": "D9F214268303204E0029B8AB7515E2D780D8952B",
+    }
 
 
 # --- signing-key fetch hardening ----------------------------------------------
@@ -542,10 +552,40 @@ def test_load_signing_key_embeds_only_the_extracted_key(monkeypatch):
     # The pinned-key extraction runs gpg; the real-gpg tests below cover it.
     seen = []
     monkeypatch.setattr(
-        brp, "_extract_pinned_key", lambda key: seen.append(key) or b"PINNED KEY"
+        brp,
+        "_extract_pinned_key",
+        lambda key, fingerprint: seen.append((key, fingerprint)) or b"PINNED KEY",
     )
     assert brp.load_signing_key(_args()) == b"PINNED KEY"
-    assert seen == [b"ARMORED KEY"]
+    assert seen == [(b"ARMORED KEY", brp.SIGNING_KEY_FINGERPRINTS["stable"])]
+
+
+def test_load_signing_key_pins_the_streams_own_key(monkeypatch):
+    # A nightly build must check the fetched key against the nightly key, not
+    # the ROCm key the other signed streams use.
+    monkeypatch.setattr(
+        brp.urllib.request,
+        "urlopen",
+        lambda *a, **k: _FakeResponse(b"ARMORED KEY", NIGHTLY_KEY_URL),
+    )
+    seen = []
+    monkeypatch.setattr(
+        brp,
+        "_extract_pinned_key",
+        lambda key, fingerprint: seen.append(fingerprint) or b"PINNED KEY",
+    )
+    args = _args(
+        "--stream",
+        "nightly",
+        "--repo-base-url",
+        NIGHTLY_BASE,
+        "--repo-sub-folder",
+        NIGHTLY_SUB,
+        "--gpg-key-url",
+        NIGHTLY_KEY_URL,
+    )
+    brp.load_signing_key(args)
+    assert seen == ["D9F214268303204E0029B8AB7515E2D780D8952B"]
 
 
 def test_load_signing_key_prefers_key_file(monkeypatch, tmp_path):
@@ -626,10 +666,9 @@ def signing_keys(tmp_path_factory):
 
 
 @_needs_gpg
-def test_extract_pinned_key_accepts_the_pinned_key_alone(monkeypatch, signing_keys):
+def test_extract_pinned_key_accepts_the_pinned_key_alone(signing_keys):
     fingerprint, armored = signing_keys["pinned"]
-    monkeypatch.setattr(brp, "EXPECTED_KEY_FINGERPRINT", fingerprint)
-    out = brp._extract_pinned_key(armored)
+    out = brp._extract_pinned_key(armored, fingerprint)
     listing = subprocess.run(
         [_GPG, "--with-colons", "--show-keys"],
         input=out,
@@ -646,11 +685,10 @@ def test_extract_pinned_key_accepts_the_pinned_key_alone(monkeypatch, signing_ke
     [("pinned", "extra"), ("extra", "pinned"), ("extra",)],
     ids=["pinned+extra", "extra+pinned", "extra"],
 )
-def test_extract_pinned_key_rejects_any_other_key(monkeypatch, signing_keys, order):
-    monkeypatch.setattr(brp, "EXPECTED_KEY_FINGERPRINT", signing_keys["pinned"][0])
+def test_extract_pinned_key_rejects_any_other_key(signing_keys, order):
     armored = b"".join(signing_keys[name][1] for name in order)
     with pytest.raises(ValueError):
-        brp._extract_pinned_key(armored)
+        brp._extract_pinned_key(armored, signing_keys["pinned"][0])
 
 
 def test_fetch_signing_key_retries_then_succeeds(monkeypatch):
@@ -736,7 +774,7 @@ def test_extract_pinned_key_reports_gpg_error_for_a_non_key():
     # A key URL that serves something else (an HTML error page with a 200, say)
     # must fail with real gpg's own explanation.
     with pytest.raises(RuntimeError, match="no valid OpenPGP data found"):
-        brp._extract_pinned_key(b"not a key\n")
+        brp._extract_pinned_key(b"not a key\n", "A" * 40)
 
 
 # --- versioning ---------------------------------------------------------------
@@ -1263,8 +1301,14 @@ def test_rpm_repo_signed_has_gpgcheck_and_gpgkey():
     assert f"baseurl={STABLE_EXPECTED['rhel10']}" in out
 
 
-def test_rpm_repo_nightly_unsigned_no_gpgkey():
+def test_rpm_repo_nightly_signed_has_gpgcheck_and_gpgkey():
     out = _rpm_repo("nightly", NIGHTLY_BASE, NIGHTLY_SUB)
+    assert "gpgcheck=1" in out
+    assert "gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm" in out
+
+
+def test_rpm_repo_dev_unsigned_no_gpgkey():
+    out = _rpm_repo("dev", DEV_BASE, NIGHTLY_SUB)
     assert "gpgcheck=0" in out
     assert "gpgkey" not in out
 
@@ -1312,8 +1356,14 @@ def test_deb_sources_signed_fields():
     assert "Trusted:" not in out
 
 
-def test_deb_sources_nightly_trusted_not_signed():
+def test_deb_sources_nightly_signed():
     out = _deb_sources("nightly", NIGHTLY_BASE, NIGHTLY_SUB)
+    assert "Signed-By: /usr/share/keyrings/amdrocm.gpg" in out
+    assert "Trusted:" not in out
+
+
+def test_deb_sources_dev_trusted_not_signed():
+    out = _deb_sources("dev", DEV_BASE, NIGHTLY_SUB)
     assert "Trusted: yes" in out
     assert "Signed-By:" not in out
 
@@ -1321,10 +1371,10 @@ def test_deb_sources_nightly_trusted_not_signed():
 # --- rpm spec rendering -------------------------------------------------------
 
 
-def _spec(stream: str, base: str, sub: str = "") -> str:
+def _spec(stream: str, base: str, sub: str = "", os_profile: str = "rhel10") -> str:
     extra = [
         "--os-profile",
-        "rhel10",
+        os_profile,
         "--stream",
         stream,
         "--repo-base-url",
@@ -1333,7 +1383,7 @@ def _spec(stream: str, base: str, sub: str = "") -> str:
     if sub:
         extra += ["--repo-sub-folder", sub]
     args = _args(*extra)
-    ctx = brp.build_context(args, brp.OS_PROFILES["rhel10"])
+    ctx = brp.build_context(args, brp.OS_PROFILES[os_profile])
     version, release = brp.rpm_version_release(
         stream, args.rocm_version, args.version_suffix, ctx["dist_tag"]
     )
@@ -1373,10 +1423,13 @@ def test_spec_release_line_is_exact(stream, sub, expected):
     assert expected in lines, [line for line in lines if line.startswith("Release:")]
 
 
-def test_spec_signed_installs_key_nightly_does_not():
-    signed = _spec("stable", STABLE_BASE)
-    assert "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm" in signed
-    unsigned = _spec("nightly", NIGHTLY_BASE, NIGHTLY_SUB)
+def test_spec_signed_installs_key_dev_does_not():
+    for signed in (
+        _spec("stable", STABLE_BASE),
+        _spec("nightly", NIGHTLY_BASE, NIGHTLY_SUB),
+    ):
+        assert "/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm" in signed
+    unsigned = _spec("dev", DEV_BASE, NIGHTLY_SUB)
     assert "RPM-GPG-KEY-amdrocm" not in unsigned
 
 
@@ -1395,11 +1448,12 @@ def test_spec_conflicts_with_the_legacy_installer_on_every_stream(stream, sub):
     assert f"Conflicts: {brp.LEGACY_INSTALLER_PACKAGE}" in _spec(stream, base, sub)
 
 
+@pytest.mark.parametrize("os_profile", ["rhel10", "azl3"])
 @pytest.mark.parametrize(
     "stream,sub",
     ALL_STREAMS,
 )
-def test_spec_install_scriptlet_only_prints(stream, sub):
+def test_spec_install_scriptlet_only_prints(stream, sub, os_profile):
     # The package ships the key as a file and points gpgkey= at it; it must not
     # try to import it into the rpm keyring from a scriptlet.
     #
@@ -1420,7 +1474,7 @@ def test_spec_install_scriptlet_only_prints(stream, sub):
     # check would have been the stronger guard while there was no scriptlet at
     # all; now that one exists, the trap is someone extending it.
     base = _base_for(stream)
-    out = _spec(stream, base, sub)
+    out = _spec(stream, base, sub, os_profile)
 
     def _statements(text: str) -> list[str]:
         """Non-comment, non-blank lines -- what the spec actually executes."""
@@ -1432,14 +1486,37 @@ def test_spec_install_scriptlet_only_prints(stream, sub):
 
     # Across the whole spec, so a scriptlet added later -- %pre, %posttrans --
     # is covered too, not just the %post below. Comments are excluded because
-    # the spec documents this hazard by name.
-    assert not [s for s in _statements(out) if "rpm --import" in s]
+    # the spec documents this hazard by name, and so is a plain message telling
+    # the user to run it (the azl3 hint), which executes nothing.
+    message = re.compile(r'echo "[^"`$;&|]*"\Z')
+    assert not [
+        s for s in _statements(out) if "rpm --import" in s and not message.match(s)
+    ]
 
     body = out.split("\n%post\n", 1)[1].split("\n%files", 1)[0]
     statements = _statements(body)
     assert statements, "expected the %post scriptlet to print something"
     # Messages only: nothing that could reach the rpm database or the network.
     assert all(s.startswith("echo ") for s in statements), statements
+
+
+@pytest.mark.parametrize(
+    "os_profile", ["rhel8", "rhel9", "rhel10", "sles15", "sles16", "azl3"]
+)
+@pytest.mark.parametrize("stream,sub", ALL_STREAMS)
+def test_spec_tells_azl3_users_to_import_the_key_on_signed_streams(
+    stream, sub, os_profile
+):
+    # tdnf checks a package's signature before importing the gpgkey= key, so
+    # the first ROCm package install from a signed stream fails. dnf and zypper
+    # import first.
+    out = _spec(stream, _base_for(stream), sub, os_profile)
+    hint = (
+        'echo "Before installing ROCm packages, run '
+        "'sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm'.\""
+    )
+    expected = os_profile == "azl3" and brp.is_signed(stream)
+    assert (hint in out.splitlines()) is expected
 
 
 def test_spec_files_sets_root_ownership_before_listing_anything():
@@ -1549,6 +1626,7 @@ def test_install_maps_keyring_only_when_signed():
     keyring = PurePosixPath(brp.DEB_KEYRING_PATH)
     assert f"{keyring.name} {keyring.parent}/" in out_signed
 
+    # nightly is a per-build stream and signed, so it maps the keyring too.
     args_n = _args(
         "--stream",
         "nightly",
@@ -1561,9 +1639,23 @@ def test_install_maps_keyring_only_when_signed():
         "template/repo/deb/install.j2",
         brp.build_context(args_n, brp.OS_PROFILES["ubuntu2404"]),
     )
+    assert f"{keyring.name} {keyring.parent}/" in out_nightly
+
+    args_d = _args(
+        "--stream",
+        "dev",
+        "--repo-base-url",
+        DEV_BASE,
+        "--repo-sub-folder",
+        NIGHTLY_SUB,
+    )
+    out_dev = _render(
+        "template/repo/deb/install.j2",
+        brp.build_context(args_d, brp.OS_PROFILES["ubuntu2404"]),
+    )
     # No keyring file or directory is mapped for an unsigned stream.
-    assert "amdrocm.gpg" not in out_nightly
-    assert "/usr/share/keyrings/" not in out_nightly
+    assert "amdrocm.gpg" not in out_dev
+    assert "/usr/share/keyrings/" not in out_dev
 
 
 # --- list-profiles --------------------------------------------------------

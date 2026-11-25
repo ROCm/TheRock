@@ -41,7 +41,7 @@ drwxr-xr-x root/root         0 2026-08-11 16:15 ./usr/share/doc/amd-repo-setup/
 -rw-r--r-- root/root       177 2026-08-11 16:15 ./usr/share/doc/amd-repo-setup/changelog.gz
 """
 
-DEB_UNSIGNED_LISTING = _DEB_LISTING.format(stem="amdrocm-nightly")
+DEB_UNSIGNED_LISTING = _DEB_LISTING.format(stem="amdrocm-dev")
 
 DEB_RC_LISTING = (
     _DEB_LISTING.format(stem="amdrocm-stablerc")
@@ -103,9 +103,9 @@ class TestKeyPath:
 
 class TestExpectedPaths:
     def test_unsigned_expects_only_the_repo_file(self):
-        # Unsigned means the per-build stream, so the filename says nightly.
-        assert irp.expected_paths("ubuntu2404", "nightly") == {
-            PurePosixPath("/etc/apt/sources.list.d/amdrocm-nightly.sources")
+        # dev is unsigned, so it ships only its repo file.
+        assert irp.expected_paths("ubuntu2404", "dev") == {
+            PurePosixPath("/etc/apt/sources.list.d/amdrocm-dev.sources")
         }
 
     def test_signed_expects_the_key_too(self):
@@ -120,6 +120,16 @@ class TestExpectedPaths:
             PurePosixPath("/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm"),
         }
 
+    def test_nightly_expects_the_key(self):
+        # nightly is a per-build stream and is signed.
+        assert irp.expected_paths("ubuntu2404", "nightly") == {
+            PurePosixPath("/etc/apt/sources.list.d/amdrocm-nightly.sources"),
+            PurePosixPath("/usr/share/keyrings/amdrocm.gpg"),
+        }
+        assert PurePosixPath("/usr/share/keyrings/amdrocm.gpg") not in (
+            irp.forbidden_paths("ubuntu2404", "nightly")
+        )
+
     @pytest.mark.parametrize("os_profile", sorted(irp.OS_PROFILES))
     @pytest.mark.parametrize("stream", irp.STREAMS)
     def test_paths_are_posix_on_every_platform(self, os_profile, stream):
@@ -131,36 +141,6 @@ class TestExpectedPaths:
         for path in irp.expected_paths(os_profile, stream):
             assert "\\" not in str(path)
             assert str(path).startswith("/")
-
-
-class TestStreamShapes:
-    """The inspector mirrors the builder's private shape names.
-
-    It compares them against the public ``stream_shape()`` return value, so a
-    rename there would silently stop matching. These assert the spellings agree
-    and that an unhandled shape is rejected rather than built with the wrong
-    arguments.
-    """
-
-    def test_shape_constants_match_the_builder(self):
-        import build_repo_setup_package as brp
-
-        assert irp._SHAPE_FLAT == brp._FLAT
-        assert irp._SHAPE_BUILD_ID == brp._BUILD_ID
-
-    @pytest.mark.parametrize("stream", irp.STREAMS)
-    def test_every_known_stream_has_a_handled_shape(self, stream):
-        assert irp.shape_of(stream) in (irp._SHAPE_FLAT, irp._SHAPE_BUILD_ID)
-
-    def test_unhandled_shape_raises_and_names_the_stream(self, monkeypatch):
-        monkeypatch.setattr(irp, "stream_shape", lambda _: "some_new_shape")
-        with pytest.raises(RuntimeError, match="does not know how to check"):
-            irp.shape_of("weekly")
-
-    def test_flat_streams_are_signed_and_build_id_are_not(self):
-        assert irp.is_signed_stream("stable")
-        assert irp.is_signed_stream("rc")
-        assert not irp.is_signed_stream("nightly")
 
 
 class TestRcStream:
@@ -219,9 +199,7 @@ class TestForbiddenPaths:
         assert PurePosixPath("/etc/pki/rpm-gpg/RPM-GPG-KEY-rocm") in forbidden
 
     def test_unsigned_also_forbids_the_current_key_path(self):
-        assert irp.key_path("ubuntu2404") in irp.forbidden_paths(
-            "ubuntu2404", "nightly"
-        )
+        assert irp.key_path("ubuntu2404") in irp.forbidden_paths("ubuntu2404", "dev")
 
     def test_signed_does_not_forbid_the_current_key_path(self):
         assert irp.key_path("ubuntu2404") not in irp.forbidden_paths(
@@ -233,7 +211,7 @@ class TestParseDebContents:
     def test_paths_are_absolute_and_owners_captured(self):
         entries = dict(irp.parse_deb_contents(DEB_UNSIGNED_LISTING))
         assert (
-            entries[PurePosixPath("/etc/apt/sources.list.d/amdrocm-nightly.sources")]
+            entries[PurePosixPath("/etc/apt/sources.list.d/amdrocm-dev.sources")]
             == "root/root"
         )
 
@@ -288,7 +266,7 @@ class TestCheckPayload:
         )
 
     def test_real_unsigned_deb_passes(self):
-        assert self._check(DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly") == []
+        assert self._check(DEB_UNSIGNED_LISTING, "ubuntu2404", "dev") == []
 
     def test_real_signed_deb_passes(self):
         assert self._check(DEB_SIGNED_LISTING, "ubuntu2404", "stable") == []
@@ -301,21 +279,19 @@ class TestCheckPayload:
 
     def test_missing_expected_file_is_reported_by_name(self):
         listing = "drwxr-xr-x root/root 0 2026-08-11 16:15 ./etc/apt/\n"
-        problems = self._check(listing, "ubuntu2404", "nightly")
-        assert any(
-            "/etc/apt/sources.list.d/amdrocm-nightly.sources" in p for p in problems
-        )
+        problems = self._check(listing, "ubuntu2404", "dev")
+        assert any("/etc/apt/sources.list.d/amdrocm-dev.sources" in p for p in problems)
         assert any(p.startswith("missing expected file") for p in problems)
 
     def test_wrong_owner_is_reported(self):
         listing = DEB_UNSIGNED_LISTING.replace(
             "root/root       150", "tester/tester   150"
         )
-        problems = self._check(listing, "ubuntu2404", "nightly")
+        problems = self._check(listing, "ubuntu2404", "dev")
         assert any("owned by tester/tester" in p for p in problems)
 
     def test_key_on_an_unsigned_build_is_rejected(self):
-        problems = self._check(DEB_SIGNED_LISTING, "ubuntu2404", "nightly")
+        problems = self._check(DEB_SIGNED_LISTING, "ubuntu2404", "dev")
         assert any("/usr/share/keyrings/amdrocm.gpg" in p for p in problems)
 
     def test_superseded_deb_keyring_name_is_rejected(self):
@@ -401,7 +377,7 @@ class TestMain:
         return run
 
     def test_matching_deb_passes(self, run_main, capsys):
-        rc = run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly")
+        rc = run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "ubuntu2404", "dev")
         assert rc == 0
         assert run_main.reads == [(run_main.dir / DEB_FILE, "deb")]
         assert capsys.readouterr().out.startswith("ok")
@@ -414,7 +390,7 @@ class TestMain:
         assert run_main.reads == [(run_main.dir / RPM_FILE, "rpm")]
 
     def test_package_for_another_stream_fails(self, run_main, capsys):
-        """A nightly package checked as stable lacks stable's repo file and key."""
+        """A dev package checked as stable lacks stable's repo file and key."""
         rc = run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "ubuntu2404", "stable")
         out = capsys.readouterr().out
         assert rc == 1
@@ -427,20 +403,20 @@ class TestMain:
         listing = DEB_UNSIGNED_LISTING.replace(
             "root/root       150", "tester/tester   150"
         )
-        rc = run_main([DEB_FILE], listing, "ubuntu2404", "nightly")
+        rc = run_main([DEB_FILE], listing, "ubuntu2404", "dev")
         assert rc == 1
         assert "owned by tester/tester" in capsys.readouterr().out
 
     def test_the_profile_selects_the_package_type(self, run_main):
         """An rpm profile looks for an .rpm, so a lone .deb is not picked up."""
         with pytest.raises(RuntimeError, match=r"expected exactly one \.rpm.*found 0"):
-            run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "rhel10", "nightly")
+            run_main([DEB_FILE], DEB_UNSIGNED_LISTING, "rhel10", "dev")
         assert run_main.reads == []
 
     def test_two_packages_fail_before_reading_either(self, run_main):
         files = [DEB_FILE, "amd-repo-setup_10.0.1_all.deb"]
         with pytest.raises(RuntimeError, match="found 2"):
-            run_main(files, DEB_UNSIGNED_LISTING, "ubuntu2404", "nightly")
+            run_main(files, DEB_UNSIGNED_LISTING, "ubuntu2404", "dev")
         assert run_main.reads == []
 
 
@@ -451,13 +427,13 @@ class TestParseArgs:
         "--os-profile",
         "ubuntu2404",
         "--stream",
-        "nightly",
+        "dev",
     ]
 
     def test_valid_arguments(self):
         args = irp.parse_args(self.VALID)
         assert args.package_dir == Path("out")
-        assert (args.os_profile, args.stream) == ("ubuntu2404", "nightly")
+        assert (args.os_profile, args.stream) == ("ubuntu2404", "dev")
 
     @pytest.mark.parametrize("option", ["--package-dir", "--os-profile", "--stream"])
     def test_every_argument_is_required(self, option):

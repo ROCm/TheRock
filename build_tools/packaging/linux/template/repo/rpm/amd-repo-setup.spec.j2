@@ -36,6 +36,9 @@ install -m 644 %{_sourcedir}/{{ rpm_gpg_key_file }} %{buildroot}{{ rpm_gpg_key_p
 %post
 echo "AMD ROCm repository configured."
 echo "Run '{{ rpm_refresh_cmd }}' to refresh package lists."
+{% if import_key_hint %}
+echo "Before installing ROCm packages, run 'sudo rpm --import {{ rpm_gpg_key_path }}'."
+{% endif %}
 
 %files
 %defattr(-, root, root, -)

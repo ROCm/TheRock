@@ -18,10 +18,12 @@ upload_package_repo.py.
 
 Expected: get-repo-url → per_family or multi_arch install URLs; invalid release_type or
 layout → ValueError. get-gpg-url derives a default gpg_key_url= for workflow outputs:
-signed lines (prerelease/release) get a URL, dev/nightly/ci get empty when --release-type
-is set. That policy does not override install tests — native_linux_package_install_test.py
-and test_native_linux_packages_install.yml use any gpg_key_url / GPG_KEY_URL input as-is,
-regardless of release_type (if omitted, install runs without GPG verification).
+prerelease/release get a URL, dev/nightly/ci get empty when --release-type is set
+(nightly is signed, but its key is not derived from a package URL; amd-repo-setup gets
+it from get_public_repo_gpg_key_url). That policy does not override install tests —
+native_linux_package_install_test.py and test_native_linux_packages_install.yml use any
+gpg_key_url / GPG_KEY_URL input as-is, regardless of release_type (if omitted, install
+runs without GPG verification).
 
 Subcommands: get-base-url, get-gpg-url, get-repo-sub-folder, get-repo-url, extract-gfx-arch,
 get-container-image, get-repo-setup-params. Run with -h for examples.
@@ -226,7 +228,7 @@ def get_gpg_key_url_from_release_type(
         HTTPS URL to ``rocm.gpg`` for the release host and layout.
 
     Raises:
-        ValueError: If ``release_type`` is unsigned or unknown.
+        ValueError: If ``release_type`` has no key URL here, or is unknown.
 
     Examples:
         prerelease + per_family
@@ -255,7 +257,9 @@ def get_gpg_key_url_from_release_type(
         return "https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
     if rt == "release":
         return "https://repo.amd.com/rocm/packages/gpg/rocm.gpg"
-    raise ValueError(f"Unknown or unsigned release_type: {release_type!r}")
+    raise ValueError(
+        f"Unknown release_type, or no GPG key URL for it: {release_type!r}"
+    )
 
 
 def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
@@ -270,12 +274,14 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
 
     Returns:
         ``True`` if ``get-gpg-url`` should derive from ``--from-url``; ``False`` if it
-        should emit empty ``gpg_key_url=`` for unsigned lines (``dev``, ``nightly``,
-        ``ci``, empty string).
+        should emit empty ``gpg_key_url=`` (``dev``, ``nightly``, ``ci``, empty
+        string).
 
     Notes:
         ``None`` means always derive from the package URL (backward compatible).
-        Signed lines: ``prerelease``, ``prereleases``, ``release``, ``stable``.
+        Derived lines: ``prerelease``, ``prereleases``, ``release``, ``stable``.
+        Nightly is signed, but its key does not sit where ``get_gpg_key_url``
+        looks, so the install tests don't check nightly signatures yet.
     """
     if release_type is None:
         return True
@@ -286,10 +292,10 @@ def gpg_key_url_needed_for_release_type(release_type: str | None) -> bool:
 def cmd_gpg_key_url(args: argparse.Namespace) -> int:
     """CLI: ``get-gpg-url`` → writes ``gpg_key_url=`` (or empty) to ``$GITHUB_OUTPUT``.
 
-    When ``--release-type`` is unsigned (dev/nightly/ci), emits empty output so workflows
-    need not pass GPG for typical unsigned repos. Omit ``--release-type`` to always
-    derive from ``--from-url``. Explicit ``gpg_key_url`` on the install workflow or CLI
-    bypasses this helper entirely.
+    When ``--release-type`` is dev/nightly/ci, emits empty output, so the install runs
+    without GPG verification (see gpg_key_url_needed_for_release_type). Omit
+    ``--release-type`` to always derive from ``--from-url``. Explicit ``gpg_key_url``
+    on the install workflow or CLI bypasses this helper entirely.
     """
     if not gpg_key_url_needed_for_release_type(args.release_type):
         gha_set_output({"gpg_key_url": ""})
@@ -355,11 +361,12 @@ def get_repo_url_per_family(
 
     Args:
         release_type: ``prerelease`` / ``prereleases``, ``release`` / ``stable``,
-            or unsigned lines ``dev``, ``nightly``, ``ci`` (aliases normalized).
+            or per-build lines ``dev``, ``nightly``, ``ci`` (aliases normalized).
         native_package_type: ``deb`` or ``rpm``.
         repo_base_url: Scheme + host (e.g. ``https://sample-cdn.example``).
         os_profile: OS profile slug (e.g. ``ubuntu2404``, ``rhel10``).
-        repo_sub_folder: ``YYYYMMDD-<id>`` for dev/nightly; empty for signed lines.
+        repo_sub_folder: ``YYYYMMDD-<id>`` for dev/nightly; empty for
+            prerelease/release.
 
     Returns:
         HTTPS URL pointing at the apt/dnf repo root (RPM URLs include ``/x86_64/``).
@@ -395,12 +402,14 @@ def get_repo_url_multi_arch(
     """Build a current multi-arch native Linux package repo URL.
 
     Args:
-        release_type: ``prerelease``, ``release`` / ``stable``, or unsigned
+        release_type: ``prerelease``, ``release`` / ``stable``, or per-build
             ``dev`` / ``nightly`` / ``ci`` (aliases normalized).
         native_package_type: ``deb`` or ``rpm``.
         repo_base_url: Scheme + host.
-        os_profile: OS profile for signed lines (e.g. ``ubuntu2604``, ``rhel10``).
-        repo_sub_folder: ``YYYYMMDD-<id>`` for unsigned lines; ignored for signed.
+        os_profile: OS profile for prerelease/release lines (e.g. ``ubuntu2604``,
+            ``rhel10``).
+        repo_sub_folder: ``YYYYMMDD-<id>`` for per-build lines; ignored for
+            prerelease/release.
 
     Returns:
         HTTPS URL pointing at the apt/dnf repo root.
@@ -452,7 +461,8 @@ def get_repo_url(
         native_package_type: ``deb`` or ``rpm``.
         repo_base_url: Scheme + host.
         os_profile: OS profile slug (e.g. ``ubuntu2404``, ``rhel10``).
-        repo_sub_folder: ``YYYYMMDD-<id>`` for unsigned lines; empty for signed.
+        repo_sub_folder: ``YYYYMMDD-<id>`` for per-build lines; empty for
+            prerelease/release.
         layout: ``per_family`` (default) or ``multi_arch`` (aliases accepted).
 
     Returns:
@@ -509,21 +519,24 @@ def cmd_repo_url(args: argparse.Namespace) -> int:
 # here has no public stream, and callers skip the package for it.
 #
 # Only the stream name and where it is served are recorded here; its shape,
-# signing and repo id belong to build_repo_setup_package. The key is at
-# <root>/gpg/packages.gpg, outside the packages base, so its URL is built here
-# and passed to the builder whole.
+# signing and repo id belong to build_repo_setup_package. The signing key sits
+# outside the packages base, at a path that differs by stream, so its URL is
+# recorded here and passed to the builder whole.
 _STREAM_ROOTS = {
     "release": {
         "stream": "stable",
         "root": "https://stable.repo.amd.com/rocm",
+        "gpg_key_url": "https://stable.repo.amd.com/rocm/gpg/packages.gpg",
     },
     "prerelease": {
         "stream": "rc",
         "root": "https://rc.repo.amd.com/rocm",
+        "gpg_key_url": "https://rc.repo.amd.com/rocm/gpg/packages.gpg",
     },
     "nightly": {
         "stream": "nightly",
         "root": "https://nightly.repo.amd.com/rocm",
+        "gpg_key_url": "https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg",
     },
     "dev": {
         "stream": "dev",
@@ -569,10 +582,10 @@ def get_public_repo_gpg_key_url(release_type: str, *, signed: bool) -> str:
     even though it has a base URL. ``signed`` comes from
     ``build_repo_setup_package.is_signed(stream)``, which owns that rule.
     """
-    root = get_public_repo_stream_root(release_type)
-    if not root or not signed:
+    entry = _STREAM_ROOTS.get(release_type.strip().lower())
+    if not entry or not signed:
         return ""
-    return f"{root}/gpg/packages.gpg"
+    return entry.get("gpg_key_url", "")
 
 
 # --- nightly sub-folder ---
@@ -845,7 +858,8 @@ def main(argv: list[str] | None = None) -> int:
         "get-gpg-url",
         help=(
             "Derive gpg_key_url= for GITHUB_OUTPUT from --from-url. With --release-type, "
-            "only signed lines get a non-empty URL; dev/nightly/ci emit gpg_key_url=. "
+            "only prerelease/release lines get a non-empty URL; dev/nightly/ci "
+            "emit gpg_key_url=. "
             "Does not affect install when gpg_key_url is passed explicitly in the workflow."
         ),
     )
@@ -865,8 +879,8 @@ def main(argv: list[str] | None = None) -> int:
         type=str,
         default=None,
         help=(
-            "If set, emit non-empty GPG URL only for signed lines (prerelease/release/stable); "
-            "for dev/nightly/ci print gpg_key_url= (typical unsigned repos). If omitted, "
+            "If set, emit non-empty GPG URL only for prerelease/release/stable; "
+            "for dev/nightly/ci print gpg_key_url=. If omitted, "
             "always derive from --from-url. Install tests still honor an explicit gpg_key_url "
             "workflow input regardless of this flag."
         ),

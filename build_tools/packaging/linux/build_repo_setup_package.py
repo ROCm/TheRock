@@ -58,12 +58,13 @@ python build_repo_setup_package.py \
     --os-profile ubuntu2404 \
     --stream stable \
     --repo-base-url https://stable.repo.amd.com/rocm/core/packages \
+    --gpg-key-url https://stable.repo.amd.com/rocm/gpg/packages.gpg \
     --rocm-version 10.0.0 \
     --dest-dir ./output
 ```
 
 The same build for a per-build stream, which pins the repository to one build
-folder and ships no signing key (its package doesn't check signatures):
+folder. Nightly is signed with its own key:
 
 ```
 python build_repo_setup_package.py \
@@ -71,6 +72,7 @@ python build_repo_setup_package.py \
     --stream nightly \
     --repo-base-url https://nightly.repo.amd.com/rocm/core/packages \
     --repo-sub-folder 20260716-12345 \
+    --gpg-key-url https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg \
     --rocm-version 10.0.0~20260716 \
     --dest-dir ./output
 ```
@@ -181,11 +183,21 @@ REPO_VERIFY_BACKOFF_SEC = 3
 # that URL, which retrying cannot change.
 RETRYABLE_HTTP_STATUS = frozenset({408, 429})
 
-# Primary-key fingerprint of the AMD ROCm signing key. The key is fetched over
-# the network at build time and embedded as the package's trust anchor, so its
-# identity is pinned here and verified after fetch. Rotating the repository
-# signing key requires updating this value.
-EXPECTED_KEY_FINGERPRINT = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
+# The signed streams, each with the primary-key fingerprint of its signing key.
+# A stream listed here publishes InRelease/Release.gpg and repomd.xml.asc, so its
+# package ships the key and turns signature checks on; a stream absent here is
+# unsigned, and its package ships no key and trusts the repo. The key is fetched
+# over the network at build time and embedded as the package's trust anchor, so
+# its identity is pinned here and verified after fetch. Rotating a stream's
+# signing key requires updating its value.
+#
+# stable and rc share the AMD ROCm key; nightly has its own.
+_ROCM_KEY_FINGERPRINT = "D0F004A0025A1145C7807FCD0701EAC4D5E02107"
+SIGNING_KEY_FINGERPRINTS = {
+    "stable": _ROCM_KEY_FINGERPRINT,
+    "rc": _ROCM_KEY_FINGERPRINT,
+    "nightly": "D9F214268303204E0029B8AB7515E2D780D8952B",
+}
 
 # Accepted input shapes. rocm_version is rendered into the package version
 # fields and changelog, and repo_sub_folder into the repository URL, so they are
@@ -215,16 +227,14 @@ _VERSION_SUFFIX_RE = re.compile(r"^[0-9][0-9A-Za-z.+]*\Z")
 
 # The RFC0012 streams, each served from <stream>.repo.amd.com.
 #
-# A stream has one of two shapes, and everything else follows from the shape:
+# A stream has one of two shapes, and the repository URL follows from the shape:
 #
 #   flat      one repository per distro, holding every retained version.
-#             Signed, so the package ships the key and enables gpgcheck.
 #   build_id  the same tree with a <YYYYMMDD-runid> segment naming a single
-#             build. Unsigned, so the package ships no key and trusts the repo.
+#             build.
 #
-# Signedness is not an independent axis: the flat streams are the ones that
-# publish InRelease/Release.gpg and repomd.xml.asc, and the build_id streams
-# publish none of them. Branch on the shape, never on the stream name.
+# Signing is separate from the shape (see SIGNING_KEY_FINGERPRINTS): nightly is
+# a build_id stream and is signed, dev is not.
 _FLAT = "flat"
 _BUILD_ID = "build_id"
 
@@ -367,8 +377,8 @@ OS_PROFILES = {
 # field rather than in CI. A dual-served layout cannot tell a right mapping from
 # a wrong one.
 #
-# The signing key is not under <base> at all -- it sits beside core/, two
-# levels up -- so its URL is passed in whole rather than derived here. That
+# The signing key is not under <base> at all, and where it sits differs by
+# stream, so its URL is passed in whole rather than derived here. That
 # also keeps the key's location a property of the publisher rather than an
 # assumption baked into this tool.
 
@@ -406,11 +416,15 @@ def stream_shape(stream: str) -> str:
 def is_signed(stream: str) -> bool:
     """Whether this stream's public repository is signed.
 
-    Signedness follows the shape: flat streams publish ``InRelease`` /
-    ``Release.gpg`` (deb) and ``repomd.xml.asc`` (rpm); build_id streams publish
-    none of them and are consumed with ``trusted=yes`` / ``gpgcheck=0``.
+    Signed streams publish ``InRelease`` / ``Release.gpg`` (deb) and
+    ``repomd.xml.asc`` (rpm); unsigned ones publish none of them and are
+    consumed with ``trusted=yes`` / ``gpgcheck=0``. See SIGNING_KEY_FINGERPRINTS.
+
+    Raises:
+        ValueError: If the stream is unknown.
     """
-    return stream_shape(stream) == _FLAT
+    stream_shape(stream)  # reject unknown streams
+    return stream in SIGNING_KEY_FINGERPRINTS
 
 
 def repo_baseurl(
@@ -703,14 +717,15 @@ def _primary_fingerprints(listing: str) -> list[str]:
     return primaries
 
 
-def _extract_pinned_key(armored: bytes) -> bytes:
-    """Return the pinned AMD ROCm key, armored, from a fetched key file.
+def _extract_pinned_key(armored: bytes, fingerprint: str) -> bytes:
+    """Return the pinned key, armored, from a fetched key file.
 
-    The file must hold exactly one primary key, the pinned one. Checking only
-    the first key would let a file with other keys appended pass, and every
-    key in the embedded file is trusted on the user's machine. The key is
-    returned as gpg re-exports it, which keeps the primary key and its valid
-    subkeys (the packages are signed by a subkey) and drops anything else.
+    The file must hold exactly one primary key, the one with ``fingerprint``.
+    Checking only the first key would let a file with other keys appended
+    pass, and every key in the embedded file is trusted on the user's machine.
+    The key is returned as gpg re-exports it, which keeps the primary key and
+    its valid subkeys (the packages are signed by a subkey) and drops anything
+    else.
     ``import-export`` writes no keyring, so no gpg daemon is started.
     """
     with tempfile.TemporaryDirectory() as home:
@@ -722,10 +737,10 @@ def _extract_pinned_key(armored: bytes) -> bytes:
             stderr=subprocess.PIPE,
         ).stdout.decode(errors="replace")
         primaries = _primary_fingerprints(listing)
-        if primaries != [EXPECTED_KEY_FINGERPRINT]:
+        if primaries != [fingerprint]:
             raise ValueError(
                 f"fetched signing key must be exactly the pinned key "
-                f"{EXPECTED_KEY_FINGERPRINT}; found {primaries or 'no key'}"
+                f"{fingerprint}; found {primaries or 'no key'}"
             )
         return _run_gpg(
             [
@@ -752,8 +767,8 @@ def load_signing_key(args: argparse.Namespace) -> bytes:
     source tree.
 
     Two guards apply to the fetch only: the https requirement
-    (``_require_https``, including after redirects) and the pinned key (the
-    file must hold only that key, and only it is embedded). They exist to
+    (``_require_https``, including after redirects) and the stream's pinned key
+    (the file must hold only that key, and only it is embedded). They exist to
     detect a tampered or misconfigured repository, which is a remote input. A key passed with ``--gpg-key-file`` is a local file the
     caller has already chosen, so it is embedded as provided and neither guard
     runs; callers supplying their own key are responsible for it being the
@@ -766,7 +781,9 @@ def load_signing_key(args: argparse.Namespace) -> bytes:
     """
     if args.gpg_key_file:
         return args.gpg_key_file.read_bytes()
-    return _extract_pinned_key(_fetch_signing_key(args.gpg_key_url))
+    return _extract_pinned_key(
+        _fetch_signing_key(args.gpg_key_url), SIGNING_KEY_FINGERPRINTS[args.stream]
+    )
 
 
 def dearmor_key(armored: bytes) -> bytes:
@@ -866,6 +883,11 @@ def build_context(args: argparse.Namespace, profile: dict) -> dict:
         # Declared for every stream: amdgpu-install configures a ROCm
         # repository whichever stream this package points at.
         "legacy_installer_package": LEGACY_INSTALLER_PACKAGE,
+        # tdnf checks a package's signature before importing the key named by
+        # gpgkey=, so the first ROCm package install from a signed stream fails
+        # and a retry succeeds. The package cannot import the key itself (see the spec's
+        # %post), so it tells the user how to.
+        "import_key_hint": signed and profile["family"] == "azl",
     }
 
 
@@ -1092,10 +1114,10 @@ def parse_args(argv=None) -> argparse.Namespace:
         help=(
             "URL of the armored signing key to embed, e.g. https://"
             "stable.repo.amd.com/rocm/gpg/packages.gpg. Given whole rather "
-            "than derived: the key is not under --repo-base-url (packages sit "
-            "at <root>/core/packages/ and the key beside core/), and where it "
-            "sits is the publisher's choice, not this tool's. The fetch is "
-            "https-only and the file must hold only the pinned key. "
+            "than derived: the key is not under --repo-base-url, its path "
+            "differs by stream, and where it sits is the publisher's choice, "
+            "not this tool's. The fetch is https-only and the file must hold "
+            "only the key pinned for the stream. "
             "Required for a signed stream unless --gpg-key-file is given"
         ),
     )

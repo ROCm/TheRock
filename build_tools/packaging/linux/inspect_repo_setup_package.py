@@ -10,11 +10,11 @@ files the package is supposed to install, at the right paths, owned by root,
 and none of the files it must not ship.
 
 What a package installs depends on its stream as well as its OS profile: the
-installed repository filename carries the stream, and the two layout shapes
-install different files:
+installed repository filename carries the stream, and signed and unsigned
+streams install different files:
 
-  flat     (stable, rc)   the repository file and the signing key
-  build_id (nightly, dev) the repository file only
+  signed   (stable, rc, nightly)  the repository file and the signing key
+  unsigned (dev)                  the repository file only
 
 Checking a package against the stream it was built for therefore also confirms
 that it configures that stream: a package built for another stream installs a
@@ -50,21 +50,9 @@ from build_repo_setup_package import (
     OS_PROFILES,
     RPM_GPG_KEY_PATH,
     STREAMS,
+    is_signed,
     repo_id,
-    stream_shape,
 )
-
-# The layout shapes this inspector knows how to check. A flat stream is signed
-# and ships its key; a per-build stream ships none and doesn't check
-# signatures. Streams come from the builder's own table, so one added there is
-# accepted here without another edit -- but one whose shape is not handled here
-# would be checked against the wrong files, so an unknown shape raises.
-#
-# These mirror build_repo_setup_package's private _FLAT / _BUILD_ID. They are compared
-# against the public stream_shape() return value, and a test asserts the two
-# spellings still agree.
-_SHAPE_FLAT = "flat"
-_SHAPE_BUILD_ID = "build_id"
 
 # Everything the package installs is owned by root, whatever user builds it.
 _EXPECTED_OWNER = "root/root"
@@ -99,26 +87,10 @@ def key_path(os_profile: str) -> PurePosixPath:
     return PurePosixPath(RPM_GPG_KEY_PATH)
 
 
-def shape_of(stream: str) -> str:
-    """Return a stream's layout shape, rejecting one this inspector cannot check."""
-    shape = stream_shape(stream)
-    if shape not in (_SHAPE_FLAT, _SHAPE_BUILD_ID):
-        raise RuntimeError(
-            f"stream {stream!r} has shape {shape!r}, which this inspector does "
-            f"not know how to check"
-        )
-    return shape
-
-
-def is_signed_stream(stream: str) -> bool:
-    """Whether a stream's package ships a signing key. Follows the shape."""
-    return shape_of(stream) == _SHAPE_FLAT
-
-
 def expected_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
     """Return the paths a build of this profile and stream must install."""
     paths = {repo_file_path(os_profile, stream)}
-    if is_signed_stream(stream):
+    if is_signed(stream):
         paths.add(key_path(os_profile))
     return paths
 
@@ -126,7 +98,7 @@ def expected_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
 def forbidden_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
     """Return the paths a build of this profile and stream must not install."""
     paths = set(_SUPERSEDED_KEY_PATHS)
-    if not is_signed_stream(stream):
+    if not is_signed(stream):
         # An unsigned stream ships no key at all: its package doesn't check
         # signatures, so a key here would be inert at best and misleading at worst.
         paths.add(key_path(os_profile))

@@ -2711,7 +2711,7 @@ class RepoSetupPackageContractTest(unittest.TestCase):
         cases = {
             "release": ("stable", "amdrocm-stable", True),
             "prerelease": ("rc", "amdrocm-stablerc", True),
-            "nightly": ("nightly", "amdrocm-nightly", False),
+            "nightly": ("nightly", "amdrocm-nightly", True),
         }
         for release_type, (stream, repo_id, signed) in cases.items():
             with self.subTest(release_type=release_type):
@@ -3067,43 +3067,37 @@ class AssertRepoConfiguredTest(unittest.TestCase):
             )
         )
 
-    def test_deb_nightly_needs_no_keyring(self):
+    def test_deb_dev_needs_no_keyring(self):
         with tempfile.TemporaryDirectory() as d:
-            sources = Path(d) / "amdrocm-nightly.sources"
+            sources = Path(d) / "amdrocm-dev.sources"
             sources.write_text("URIs: https://x/rocm/deb/\nTrusted: yes\n")
             self.assertTrue(
-                self._check(
-                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
-                )
+                self._check("ubuntu2404", "dev", sources, "/nonexistent/amdrocm.gpg")
             )
 
     def test_structurally_invalid_repo_file_fails(self):
         # A repo file missing the expected deb822 marker (URIs:) is rejected,
         # independent of whether the host string contains "rocm".
         with tempfile.TemporaryDirectory() as d:
-            sources = Path(d) / "amdrocm-nightly.sources"
+            sources = Path(d) / "amdrocm-dev.sources"
             sources.write_text("not a valid deb822 sources file\n")
             self.assertFalse(
-                self._check(
-                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
-                )
+                self._check("ubuntu2404", "dev", sources, "/nonexistent/amdrocm.gpg")
             )
 
     def test_marker_only_in_a_comment_fails(self):
         with tempfile.TemporaryDirectory() as d:
-            sources = Path(d) / "amdrocm-nightly.sources"
+            sources = Path(d) / "amdrocm-dev.sources"
             sources.write_text("# URIs: https://x/\nTypes: deb\n")
             self.assertFalse(
-                self._check(
-                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
-                )
+                self._check("ubuntu2404", "dev", sources, "/nonexistent/amdrocm.gpg")
             )
 
     def test_mirror_host_without_rocm_still_passes(self):
         # deb822 with a rocm-less mirror host is valid: the marker check must
         # not reject it just because the URL lacks "rocm".
         with tempfile.TemporaryDirectory() as d:
-            sources = Path(d) / "amdrocm-nightly.sources"
+            sources = Path(d) / "amdrocm-dev.sources"
             sources.write_text(
                 "Types: deb\n"
                 "URIs: https://mirror.example.com/rocm/core/packages/ubuntu2404/20260716-1/\n"
@@ -3111,9 +3105,7 @@ class AssertRepoConfiguredTest(unittest.TestCase):
                 "Trusted: yes\n"
             )
             self.assertTrue(
-                self._check(
-                    "ubuntu2404", "nightly", sources, "/nonexistent/amdrocm.gpg"
-                )
+                self._check("ubuntu2404", "dev", sources, "/nonexistent/amdrocm.gpg")
             )
 
     def test_rpm_signed_requires_repo_file_and_key(self):

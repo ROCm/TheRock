@@ -198,10 +198,10 @@ class GpgKeyUrlNeededForReleaseTypeTest(unittest.TestCase):
                 self.assertTrue(
                     get_url_repo_params.gpg_key_url_needed_for_release_type(signed)
                 )
-        for unsigned in ("dev", "nightly", "ci", ""):
-            with self.subTest(release_type=unsigned):
+        for no_key in ("dev", "nightly", "ci", ""):
+            with self.subTest(release_type=no_key):
                 self.assertFalse(
-                    get_url_repo_params.gpg_key_url_needed_for_release_type(unsigned)
+                    get_url_repo_params.gpg_key_url_needed_for_release_type(no_key)
                 )
 
 
@@ -470,6 +470,7 @@ class GetPublicRepoBaseUrlTest(unittest.TestCase):
         for release_type, key_url in (
             ("release", "https://stable.repo.amd.com/rocm/gpg/packages.gpg"),
             ("prerelease", "https://rc.repo.amd.com/rocm/gpg/packages.gpg"),
+            ("nightly", "https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg"),
         ):
             with self.subTest(release_type=release_type):
                 base = get_url_repo_params.get_public_repo_base_url(release_type)
@@ -481,13 +482,25 @@ class GetPublicRepoBaseUrlTest(unittest.TestCase):
                 self.assertFalse(base.startswith(key))
 
     def test_unsigned_stream_has_no_key_url(self):
-        # nightly serves no InRelease, no Release.gpg and no repomd.xml.asc, and
-        # its gpg/packages.gpg is a 404, so it must not advertise a key.
-        self.assertNotEqual(get_url_repo_params.get_public_repo_base_url("nightly"), "")
+        # dev serves no InRelease, no Release.gpg and no repomd.xml.asc, so it
+        # must not advertise a key.
+        self.assertNotEqual(get_url_repo_params.get_public_repo_base_url("dev"), "")
         self.assertEqual(
-            get_url_repo_params.get_public_repo_gpg_key_url("nightly", signed=False),
+            get_url_repo_params.get_public_repo_gpg_key_url("dev", signed=False),
             "",
         )
+
+    def test_key_url_exactly_for_signed_streams(self):
+        # The builder decides which streams are signed; this table says where
+        # their keys are. A signed stream without a key URL would fail its build.
+        for release_type in get_url_repo_params.get_public_repo_release_types():
+            stream = get_url_repo_params.get_public_repo_stream(release_type)
+            signed = build_repo_setup_package.is_signed(stream)
+            with self.subTest(release_type=release_type):
+                key = get_url_repo_params.get_public_repo_gpg_key_url(
+                    release_type, signed=signed
+                )
+                self.assertEqual(bool(key), signed)
 
     def test_line_without_a_stream_has_no_key_url_even_if_signed(self):
         self.assertEqual(
@@ -622,7 +635,7 @@ class GetRepoSetupParamsTest(unittest.TestCase):
             argv += ["--build-date", build_date]
         return _run_main_with_output(argv)
 
-    def test_nightly_is_unsigned_with_a_dated_build_folder(self):
+    def test_nightly_is_signed_with_a_dated_build_folder(self):
         code, output = self._run("rpm", "nightly")
         self.assertEqual(code, 0)
         out = _outputs(output)
@@ -641,7 +654,9 @@ class GetRepoSetupParamsTest(unittest.TestCase):
         self.assertEqual(
             out["repo_base_url"], "https://nightly.repo.amd.com/rocm/core/packages"
         )
-        self.assertEqual(out["gpg_key_url"], "")
+        self.assertEqual(
+            out["gpg_key_url"], "https://nightly.repo.amd.com/rocm/core/gpg/nightly.gpg"
+        )
         # The date is the current UTC date; assert the structure, not the value.
         self.assertRegex(out["repo_sub_folder"], r"^\d{8}-12345$")
         # The run id keeps each build's package file distinct.
