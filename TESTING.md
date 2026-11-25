@@ -351,12 +351,18 @@ test discovery and coverage configured in [`pyproject.toml`](/pyproject.toml).
 The explicit `testpaths` list selects unit tests and excludes suites that need
 build artifacts or other integration-test environments.
 
-To run the tests:
+To run the tests from the repository root:
 
 ```bash
 python -m pip install -r requirements-test.txt
 pytest
 ```
+
+> [!TIP]
+>
+> - Use `pytest -n auto` to run with parallel workers based on physical CPU cores
+>   using [pytest-xdist](https://pytest-xdist.readthedocs.io/).
+> - Add `--durations=20` to report the slowest tests.
 
 Note that simple unit tests do not fully replace integration testing using real
 build tools, packages, or remote APIs.

@@ -46,7 +46,7 @@ class WantsMultiGpuTest(unittest.TestCase):
     def test_small_never_takes_one(self):
         # It blocks pull requests, so it stays on the 1-GPU runner.
         for day in [SUNDAY, TUESDAY]:
-            with self.subTest(day=day):
+            with self.subTest(day=day.isoformat()):
                 self.assertFalse(matrix_script.wants_multi_gpu("small", day))
 
     def test_medium_takes_one_a_day_a_week(self):
@@ -55,7 +55,7 @@ class WantsMultiGpuTest(unittest.TestCase):
 
     def test_large_always_takes_one(self):
         for day in [SUNDAY, TUESDAY]:
-            with self.subTest(day=day):
+            with self.subTest(day=day.isoformat()):
                 self.assertTrue(matrix_script.wants_multi_gpu("large", day))
 
     def test_the_weekly_day_is_the_one_named(self):
