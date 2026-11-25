@@ -60,7 +60,7 @@ jobs:
       }}
     # TODO: Consider running on a Linux runner with --platform=windows to
     #   avoid Windows runner setup overhead (setup-python ~51s).
-    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_large || 'aws-windows-scale-rocm-prod-mix' }}
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_large || 'az-windows-scale-rocm-default-prod' }}
     defaults:
       run:
         shell: bash

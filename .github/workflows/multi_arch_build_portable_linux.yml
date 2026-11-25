@@ -58,15 +58,15 @@ on:
           prebuilt_stages, no artifacts exist for these stages afterwards.
       build_runs_on_large:
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
         description: "Build runner label for CPU-intensive stages (selected by configure script with weighted distribution)"
       build_runs_on_small:
         type: string
-        default: "aws-linux-scale-rocm-small"
+        default: "az-linux-scale-rocm-small-prod"
         description: "Build runner label for low-CPU stages (storage-libs, media-libs, dctools-core, debug-tools, profiler-apps, cv-libs)"
       build_runs_on_medium:
         type: string
-        default: "aws-linux-scale-rocm-medium"
+        default: "az-linux-scale-rocm-medium-prod"
         description: "Build runner label for medium-CPU stages (runtime-tests)"
       release_type:
         description: "Release type used for artifact storage and package versioning."

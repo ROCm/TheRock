@@ -48,7 +48,7 @@ on:
       build_runs_on:
         description: "Linux runner label for the build job (also used for Windows tarballs)"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
   workflow_call:
     inputs:
       artifact_run_id:
@@ -86,7 +86,7 @@ on:
       build_runs_on:
         description: "Linux runner label for the build job (also used for Windows tarballs)"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
     outputs:
       tarball_urls:
         description: Tarball URLs keyed by family
