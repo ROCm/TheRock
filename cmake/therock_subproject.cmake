@@ -742,6 +742,12 @@ function(therock_cmake_subproject_activate target_name)
     if(_additional_source_input_fprint)
       cmake_path(RELATIVE_PATH _additional_source_input BASE_DIRECTORY "${THEROCK_SOURCE_DIR}"
         OUTPUT_VARIABLE _additional_source_input_relative)
+      # RELATIVE_PATH is empty when the input is on another Windows drive than
+      # the source directory; hash the absolute path then, so different inputs
+      # keep different hashes.
+      if(_additional_source_input_relative STREQUAL "")
+        set(_additional_source_input_relative "${_additional_source_input}")
+      endif()
       # Hash the path and identity separately to preserve their boundaries,
       # including when a marker contains newlines or CMake list separators.
       string(SHA256 _additional_source_input_path_hash "${_additional_source_input_relative}")

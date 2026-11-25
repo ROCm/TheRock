@@ -2,7 +2,11 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Test the shared/ctest input that monorepo sub-projects get automatically."""
+"""Test the shared/ctest input that monorepo sub-projects get automatically.
+
+monorepo_lib is inside the rocm-libraries superrepo. standalone_lib is in a
+separate checkout with the same layout, so it must not get the input.
+"""
 
 import unittest
 from pathlib import Path
@@ -29,6 +33,14 @@ class SuperrepoTestInputsTest(FingerprintTestCase):
         write(self.superrepo / "shared/other/input.txt", "other\n")
         self.git("init", "-q")
         self.commit("initial")
+        self.standalone = self.root / "standalone"
+        write(
+            self.standalone / "projects/lib/CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.25)\nproject(lib NONE)\n",
+        )
+        self.run_command("git", "-C", self.standalone, "init", "-q")
+        self.run_command("git", "-C", self.standalone, "add", "--all")
+        self.run_command("git", "-C", self.standalone, "commit", "-qm", "initial")
         write(
             self.root / "harness/CMakeLists.txt",
             f"""
@@ -41,8 +53,16 @@ class SuperrepoTestInputsTest(FingerprintTestCase):
               DISABLE_AMDGPU_TARGETS NO_MERGE_COMPILE_COMMANDS
             )
             therock_cmake_subproject_activate(monorepo_lib)
-            get_target_property(_fprint monorepo_lib THEROCK_FPRINT)
-            file(WRITE "${{CMAKE_BINARY_DIR}}/monorepo_lib.fprint" "${{_fprint}}")
+            therock_cmake_subproject_declare(standalone_lib
+              EXTERNAL_SOURCE_DIR "{(self.standalone / "projects/lib").as_posix()}"
+              BINARY_DIR "${{CMAKE_BINARY_DIR}}/standalone_lib"
+              DISABLE_AMDGPU_TARGETS NO_MERGE_COMPILE_COMMANDS
+            )
+            therock_cmake_subproject_activate(standalone_lib)
+            foreach(_name monorepo_lib standalone_lib)
+              get_target_property(_fprint ${{_name}} THEROCK_FPRINT)
+              file(WRITE "${{CMAKE_BINARY_DIR}}/${{_name}}.fprint" "${{_fprint}}")
+            endforeach()
             """,
         )
 
@@ -53,7 +73,7 @@ class SuperrepoTestInputsTest(FingerprintTestCase):
         self.git("add", "--all")
         self.git("commit", "-qm", message)
 
-    def fingerprint(self, *, testing: bool) -> str:
+    def fingerprint(self, *, testing: bool, name: str = "monorepo_lib") -> str:
         self.run_command(
             "cmake",
             "-S",
@@ -65,7 +85,7 @@ class SuperrepoTestInputsTest(FingerprintTestCase):
             "-DCMAKE_BUILD_TYPE=Release",
             "-DTHEROCK_BUILD_TESTING:BOOL=" + ("ON" if testing else "OFF"),
         )
-        return (self.build / "monorepo_lib.fprint").read_text(encoding="utf-8").strip()
+        return (self.build / f"{name}.fprint").read_text(encoding="utf-8").strip()
 
     def edit_and_commit(self, relative: str) -> None:
         write(self.superrepo / relative, "changed\n")
@@ -83,6 +103,14 @@ class SuperrepoTestInputsTest(FingerprintTestCase):
         baseline = self.fingerprint(testing=False)
         self.edit_and_commit("shared/ctest/categories.txt")
         self.assertEqual(baseline, self.fingerprint(testing=False))
+
+    def test_shared_ctest_is_ignored_outside_the_superrepo(self) -> None:
+        baseline = self.fingerprint(testing=True, name="standalone_lib")
+        self.assertRegex(baseline, r"^[0-9a-f]{64}$")
+        self.edit_and_commit("shared/ctest/categories.txt")
+        self.assertEqual(
+            baseline, self.fingerprint(testing=True, name="standalone_lib")
+        )
 
     def test_missing_shared_ctest_directory_is_not_an_error(self) -> None:
         self.git("rm", "-rq", "shared/ctest")
