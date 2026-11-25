@@ -1,0 +1,125 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Install each distro's published amd-repo-setup package and check the
+# repository it configures resolves. Runs after publish, because the package
+# points at the published repository. Each distro runs in the image its
+# package was built in.
+
+name: Test amd-repo-setup Install
+
+on:
+  workflow_call:
+    inputs:
+      os_profiles:
+        description: "JSON list of OS profiles to test (from the native build)"
+        type: string
+        required: true
+      images:
+        description: "JSON map of OS profile to container image (from the native build)"
+        type: string
+        required: true
+      pkg_type:
+        description: "Package type (deb or rpm)"
+        type: string
+        required: true
+      release_type:
+        description: "Release type of the run that uploaded the packages"
+        type: string
+        required: true
+      artifact_run_id:
+        description: "Workflow run id that uploaded the packages"
+        type: string
+        required: true
+      repository:
+        description: "Repository to checkout. Defaults to github.repository."
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the triggering ref."
+        type: string
+        default: ""
+      quartz_tracking_id:
+        description: >-
+          Leave empty. Internal Quartz tracking id, set automatically by the
+          top-level orchestrator to link this run to its release lineage. Do not
+          set it manually.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  test_repo_setup_install:
+    name: amd-repo-setup install (${{ matrix.os_profile }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os_profile: ${{ fromJSON(inputs.os_profiles) }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    container:
+      # get_url_repo_params.py manages image references for each OS profile.
+      # zizmor cannot inspect the dynamically selected image.
+      image: ${{ fromJSON(inputs.images)[matrix.os_profile] }} # zizmor: ignore[unpinned-images]
+    env:
+      OS_PROFILE: ${{ matrix.os_profile }}
+      PKG_TYPE: ${{ inputs.pkg_type }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+    steps:
+      - name: Checkout
+        timeout-minutes: 15
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      # Source older than this test (an older `ref`) has no fetch script. Skip it
+      # then, the same way the native build skips source that predates the package.
+      - name: Check the source supports this test
+        id: supported
+        run: |
+          if [ -f build_tools/packaging/linux/fetch_repo_setup_package.py ]; then
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::This source predates the amd-repo-setup install test, so it is skipped."
+          fi
+
+      - name: Setup Python
+        if: steps.supported.outputs.supported == 'true'
+        run: |
+          bash build_tools/packaging/linux/setup_python_cmd.sh \
+            --os-profile "${OS_PROFILE}" \
+            --install-runtime \
+            --output-format github
+
+      - name: Install Python dependencies
+        if: steps.supported.outputs.supported == 'true'
+        run: |
+          $PYTHON_CMD -m venv /tmp/test-venv
+          /tmp/test-venv/bin/python -m pip install --upgrade pip
+          /tmp/test-venv/bin/python -m pip install -r build_tools/packaging/linux/tests/requirements.txt
+          echo "PYTHON_CMD=/tmp/test-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Download amd-repo-setup
+        if: steps.supported.outputs.supported == 'true'
+        run: |
+          $PYTHON_CMD build_tools/packaging/linux/fetch_repo_setup_package.py \
+            --run-id "${ARTIFACT_RUN_ID}" \
+            --release-type "${RELEASE_TYPE}" \
+            --os-profile "${OS_PROFILE}" \
+            --pkg-type "${PKG_TYPE}" \
+            --dest-dir /tmp/repo-setup-package
+
+      # Install the package, check the repository file it drops, and refresh that
+      # repository's metadata, which fails if the repository isn't served.
+      - name: Install amd-repo-setup and check its repository
+        if: steps.supported.outputs.supported == 'true'
+        env:
+          REPO_SETUP_PACKAGE_DIR: /tmp/repo-setup-package
+          REPO_CONFIG_ONLY: "true"
+        run: |
+          $PYTHON_CMD -m pytest build_tools/packaging/linux/native_linux_package_install_test.py -vv --tb=long -s

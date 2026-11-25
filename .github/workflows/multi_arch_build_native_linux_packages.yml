@@ -78,6 +78,12 @@ on:
       repo_setup_package_built:
         description: "Whether this run built amd-repo-setup packages, so publish must find them"
         value: ${{ jobs.resolve_repo_setup_params.outputs.repo_base_url != '' }}
+      repo_setup_os_profiles:
+        description: "JSON list of the OS profiles amd-repo-setup was built for"
+        value: ${{ jobs.resolve_repo_setup_params.outputs.os_profiles }}
+      repo_setup_images:
+        description: "JSON map of each OS profile to the image its package was built in"
+        value: ${{ jobs.resolve_repo_setup_params.outputs.images }}
 
 permissions:
   contents: read
