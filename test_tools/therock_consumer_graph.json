@@ -176,6 +176,7 @@
       "hipdnn_integration_tests",
       "hipdnn_samples",
       "hipkernelprovider",
+      "miopen",
       "miopenprovider"
     ]
   },
@@ -258,9 +259,7 @@
     ]
   },
   "mirage": {
-    "consumers": [
-      "miopen"
-    ]
+    "consumers": []
   },
   "mxdatagenerator": {
     "consumers": [
@@ -336,7 +335,6 @@
   },
   "rocjitsu": {
     "consumers": [
-      "miopen",
       "rccl-translate",
       "rocjitsu-hotswap"
     ]

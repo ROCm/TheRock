@@ -124,6 +124,7 @@ Internal release types map to public streams as follows:
 | Bucket pattern                      | Contents                                                 | Object prefixes                                                        |
 | ----------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `therock-repo-amd-<stream>-core`    | ROCm Core Python packages, tarballs, and native packages | `v5/rocm/core/{whl-next,tarball,tarball-asan,packages,packages-asan}/` |
+| `therock-repo-amd-<stream>-core`    | amd-repo-setup packages                                  | `v5/amd-repo-setup/`                                                   |
 | `therock-repo-amd-<stream>-pytorch` | PyTorch Python packages                                  | `v5/rocm/pytorch/whl-next/`                                            |
 | `therock-repo-amd-<stream>-jax`     | JAX Python packages                                      | `v5/rocm/jax/whl-next/`                                                |
 

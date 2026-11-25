@@ -53,6 +53,19 @@ MULTI_GPU_RUNNER_KEYS = [
     "test-runs-on-4gpu-labels",
 ]
 
+# Apptainer runner pools (e.g. Crusoe), joined to the pool on the left only by
+# component tests (fetch_test_configurations.py), which set Apptainer container
+# options. Older TheRock checkouts read the same config file and do not read
+# these keys.
+APPTAINER_POOL_KEYS = {
+    "test-runs-on-labels": "test-runs-on-apptainer-labels",
+    "test-runs-on-multi-gpu-labels": "test-runs-on-multi-gpu-apptainer-labels",
+}
+# Optional {"labels": [...], "repositories": [...]}: runners still being
+# onboarded (e.g. a new CSP), drawn only by jobs of these repositories, where
+# their runner manager watches for jobs. Absent means no restriction.
+ONBOARDING_RUNNERS_KEY = "onboarding-runners"
+
 
 def _log(*args, **kwargs):
     print(*args, **kwargs)
@@ -183,13 +196,22 @@ def select_build_runner(
 
     platform_config = build_runner_labels[platform]
 
-    # Sanitizer builds are memory-intensive; keep them on dedicated runners
-    if "san" in build_variant:
+    # Sanitizer builds are memory-intensive; large stages use a dedicated
+    # sanitizer runner pool. Small/medium stages use their normal pools since
+    # they don't require the extra memory headroom.
+    if "san" in build_variant and size not in ("small", "medium", "native_package"):
         labels_config = platform_config.get("sanitizer", platform_config["default"])
         context_name = f"build-runner ({platform}, {build_variant})"
     elif triggers and "submodule_bump" in triggers and "bump" in platform_config:
         labels_config = platform_config["bump"]
         context_name = f"build-runner-bump ({platform})"
+    elif size == "native_package":
+        # Native package jobs (deb/rpm) need medium runners for sanitizer builds
+        # due to artifact extraction disk pressure (see TheRock#10095). All other
+        # variants use small.
+        resolved = "medium" if "san" in build_variant else "small"
+        labels_config = platform_config.get(resolved, platform_config["default"])
+        context_name = f"build-runner-native-package ({platform}, →{resolved})"
     elif size in ("small", "medium"):
         labels_config = platform_config.get(size, platform_config["default"])
         context_name = f"build-runner-{size} ({platform})"
@@ -265,6 +287,13 @@ amdgpu_family_info_matrix dictionary fields:
     "multi_gpu_pool" in fetch_test_configurations.py. Pools never fall back to one another: a
     family without the named pool skips those components, so 2-GPU-capable jobs stay off the
     scarce 8-GPU nodes and jobs needing 8 GPUs never land on a 2-GPU node.
+- test-runs-on-apptainer-labels / test-runs-on-multi-gpu-apptainer-labels: (optional) Apptainer
+    runner pools (e.g. Crusoe), same format as test-runs-on-labels. Only component tests draw
+    them, joined to test-runs-on-labels / test-runs-on-multi-gpu-labels; they get Apptainer
+    container options. Python and package tests, and older TheRock, ignore them.
+- onboarding-runners: (optional) {"labels": [...], "repositories": [...]}: runners still being
+    onboarded. For jobs of other repositories, those labels are removed from every *-labels pool.
+    Delete it to open the runners to every repository.
 - test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
 - test-runs-on-wsl: (optional, linux only) GitHub runner label for WSL-hosted GPU runners. With the
     ci:run-wsl label, the Linux build is also tested there, for components listing "wsl" in their platform.
@@ -908,7 +937,53 @@ def get_all_families_for_trigger_types(trigger_types: list[str]) -> dict:
                 runners["test-runs-on-sandbox"] = ""
                 runners["test-runs-on-sandbox-labels"] = []
 
+    _withhold_onboarding_runners(result, os.environ.get("GITHUB_REPOSITORY"))
     return result
+
+
+def _withhold_onboarding_runners(families: dict, repository: str | None) -> None:
+    """Drop each platform's onboarding-runners labels from its pools, in place,
+    unless `repository` is one that may use them."""
+    for family_config in families.values():
+        for runners in family_config.values():
+            if not isinstance(runners, dict):
+                continue
+            onboarding = runners.get(ONBOARDING_RUNNERS_KEY)
+            if not onboarding or repository in onboarding.get("repositories", []):
+                continue
+            withheld = set(onboarding.get("labels", []))
+            for key, pool in list(runners.items()):
+                if key.endswith("-labels") and isinstance(pool, list):
+                    kept = [e for e in pool if e.get("label") not in withheld]
+                    if kept:
+                        runners[key] = kept
+                    else:
+                        del runners[key]
+
+
+def pool_with_apptainer(runners: dict, pool_key: str) -> list[dict] | None:
+    """The `pool_key` label pool, widened by its Apptainer pool when present.
+
+    Only an existing pool is widened: an Apptainer pool alone would replace the
+    family's default runner.
+
+    `pool` is the Docker list for `pool_key`, not yet joined with Apptainer.
+    For gfx950 Linux and pool_key "test-runs-on-labels" it is:
+
+        [{"label": "linux-gfx950-1gpu-ccs-ossci-rocm", "weight": 1.0, "count": 9}]
+
+    `extra` is the matching Apptainer list (see APPTAINER_POOL_KEYS), e.g.:
+
+        [{"label": "linux-gfx950-1gpu-crusoe-rocm", "weight": 1.0, "count": 3}]
+
+    Both present returns pool + extra. "test-runs-on-multi-gpu-labels" is the
+    same shape: OSSCI count 2, then Crusoe count 4. A missing key is None.
+    """
+    pool = runners.get(pool_key)
+    extra = runners.get(APPTAINER_POOL_KEYS.get(pool_key, ""))
+    if pool and extra:
+        return [*pool, *extra]
+    return pool
 
 
 def get_build_runner_labels():

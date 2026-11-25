@@ -14,7 +14,7 @@ installed repository filename carries the stream, and the two layout shapes
 install different files:
 
   flat     (stable, rc)   the repository file and the signing key
-  build_id (nightly)      the repository file only
+  build_id (nightly, dev) the repository file only
 
 Checking a package against the stream it was built for therefore also confirms
 that it configures that stream: a package built for another stream installs a
@@ -55,10 +55,10 @@ from build_repo_setup_package import (
 )
 
 # The layout shapes this inspector knows how to check. A flat stream is signed
-# and ships its key; a per-build stream is unsigned and ships none. Streams come
-# from the builder's own table, so one added there is accepted here without
-# another edit -- but one whose shape is not handled here would be checked
-# against the wrong files, so an unknown shape raises.
+# and ships its key; a per-build stream ships none and doesn't check
+# signatures. Streams come from the builder's own table, so one added there is
+# accepted here without another edit -- but one whose shape is not handled here
+# would be checked against the wrong files, so an unknown shape raises.
 #
 # These mirror build_repo_setup_package's private _FLAT / _BUILD_ID. They are compared
 # against the public stream_shape() return value, and a test asserts the two
@@ -127,8 +127,8 @@ def forbidden_paths(os_profile: str, stream: str) -> set[PurePosixPath]:
     """Return the paths a build of this profile and stream must not install."""
     paths = set(_SUPERSEDED_KEY_PATHS)
     if not is_signed_stream(stream):
-        # An unsigned stream ships no key at all: the repository it configures is
-        # unsigned, so a key here would be inert at best and misleading at worst.
+        # An unsigned stream ships no key at all: its package doesn't check
+        # signatures, so a key here would be inert at best and misleading at worst.
         paths.add(key_path(os_profile))
     return paths
 
