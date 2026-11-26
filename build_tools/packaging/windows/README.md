@@ -29,7 +29,7 @@ msiexec /i amdrocm-runtime.msi /qn /l*v "%TEMP%\rocm-install.log"
 **Silent install to a custom directory:**
 
 ```bat
-msiexec /i amdrocm-runtime.msi /qn TARGETDIR="D:\ROCm\"
+msiexec /i amdrocm-runtime.msi /qn INSTALLFOLDER="D:\ROCm\"
 ```
 
 **Silent install with long-path support disabled:**
@@ -56,7 +56,7 @@ msiexec /i amdrocm-runtime.msi /qn LEGACY_SYSTEM32_INSTALL=1
 The machine PATH entry is added **only when installing to the default location**
 (`C:\Program Files\AMD\ROCm\...`), which is admin-write-only. Installing to a
 custom location (via `--install-root` at generation time, or a different
-`INSTALLFOLDER` / `TARGETDIR` at install time) **skips** the PATH entry, because
+`INSTALLFOLDER` at install time) **skips** the PATH entry, because
 putting a potentially user-writable directory on the machine-wide PATH is a
 binary-planting risk. In that case, locate ROCm via the SDK-discovery registry
 key below instead of relying on PATH.
