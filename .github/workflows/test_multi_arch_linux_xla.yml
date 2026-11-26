@@ -75,7 +75,7 @@ on:
       rocm_version:
         description: "Version pin for the rocm[libraries,devel] wheel (e.g. '10.2.0a20260929')."
         type: string
-        default: "7.14.0.dev0"
+        required: true
       therock_repo:
         description: "Repository to checkout. Defaults to github.repository."
         type: string
@@ -147,7 +147,6 @@ jobs:
       QUARTZ_REPORTING_WORKFLOW: test_multi_arch_linux_xla.yml
       QUARTZ_WORKFLOW_POSTFIX: "- test XLA (partial)"
       TEST_AMDGPU_FAMILY: ${{ inputs.test_amdgpu_family }}
-      RBE_SINGLE_GPU_POOL: "linux_x64_gpu"
       ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
       ROCM_PACKAGE_INDEX_URL: ${{ inputs.rocm_package_index_url }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
@@ -162,7 +161,6 @@ jobs:
         --config=rocm_ci_hermetic
         --config=rocm_rbe_dev
         --config=rocm_rbe_dynamic
-        --repo_env=TF_ROCM_RBE_DOCKER_IMAGE="ghcr.io/rocm/jax-build-ubu24.rocmless@sha256:68854ed30b800d3e8c390f6e651721e2bead58830da1c59e1b828354eb8f077f"
         --repo_env=ROCM_PATH="${ROCM_PATH}"
         --repo_env=TF_ROCM_AMDGPU_TARGETS="${ROCM_AMD_GPU_TARGETS}"
         --test_filter="${XLA_TEST_FILTER}"

@@ -80,8 +80,7 @@ on:
         default: "medium"
       trigger_xla_tests:
         description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests. Set by
-          the caller for exactly one representative matrix cell.
+          Run also the XLA test suite.
         type: boolean
         default: false
       repository:
@@ -179,7 +178,7 @@ on:
         default: medium
       trigger_xla_tests:
         description: >-
-          Also run the XLA bazel suite alongside this cell's JAX tests.
+          Run also the XLA test suite.
         type: boolean
         default: false
       repository:
