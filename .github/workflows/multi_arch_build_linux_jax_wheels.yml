@@ -411,7 +411,7 @@ jobs:
       rocm_package_find_links_url: ${{ inputs.rocm_package_find_links_url }}
       rocm_version: ${{ inputs.rocm_version }}
       therock_repo: ${{ inputs.repository || github.repository }}
-      therock_ref: ${{ inputs.ref || '' }}
+      therock_ref: ${{ inputs.ref }}
       # XLA and JAX release branches share the same name (e.g. rocm-jaxlib-vX.Y.Z).
       xla_ref: ${{ inputs.jax_ref }}
       test_runs_on: "linux-gfx950-1gpu-ccs-ossci-rocm"
