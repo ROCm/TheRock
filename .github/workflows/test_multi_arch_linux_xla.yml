@@ -230,7 +230,7 @@ jobs:
             --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
-      - name: Ensure gfx950 arch is installed
+      - name: Ensure gfx950 packages are installed
         run: |
           if ! pip show "rocm-sdk-device-${ROCM_AMD_GPU_TARGETS}" > /dev/null; then
             echo "::error::ROCm ${ROCM_VERSION} has no rocm-sdk-device-${ROCM_AMD_GPU_TARGETS} wheel. XLA tests need a ROCm build that includes ${TEST_AMDGPU_FAMILY}."
