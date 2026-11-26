@@ -225,10 +225,14 @@ def get_product_release_bucket_config(
     )
 
 
-def get_release_package_index_url(release_type: str) -> str:
-    """Return the aggregate pip index URL for a final release stream."""
+def get_release_package_index_url(release_type: str, index: str = "whl-next") -> str:
+    """Return the aggregate pip index URL for a final release stream.
+
+    ``index`` selects the aggregate index, e.g. ``whl-next-asan`` for ASAN
+    builds (default: ``whl-next``).
+    """
     stream = get_release_stream(release_type)
-    return f"https://{stream}.repo.amd.com/rocm/whl-next/"
+    return f"https://{stream}.repo.amd.com/rocm/{index}/"
 
 
 def get_artifacts_bucket_config_for_workflow_run(

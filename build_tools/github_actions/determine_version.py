@@ -20,7 +20,7 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 
 # TODO: Rename to something more like "forward rocm to version to pytorch build"?
 #       This overlaps with compute_package_version used for rocm python packages
-#       Maybe unify with write_torch_versions.py too? These should also work
+#       Maybe unify with write_pytorch_versions.py too? These should also work
 #       together and follow a similar style.
 # TODO: Or share with JAX builds? Could use a different name in that case too.
 

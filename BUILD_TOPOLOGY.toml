@@ -658,10 +658,18 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "fftw3", "rand", "rocprofiler-sdk"]
 source_paths = ["rocfft", "hipfft"]
 
+# NOTE: libhipcxx must be declared before prim (prim requires it). Features are
+# emitted in this file's order within an artifact group, and therock_add_feature
+# requires dependencies to be defined first.
+[artifacts.libhipcxx]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+
 [artifacts.prim]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "rand"]
+artifact_deps = ["core-runtime", "core-hip", "rand", "libhipcxx"]
 source_paths = ["rocprim", "hipcub", "rocthrust", "primbench", "hipccl", "hipccl3"]
 
 [artifacts.sparse]
@@ -698,11 +706,6 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
 
-[artifacts.libhipcxx]
-artifact_group = "math-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
-
 [artifacts.hipthreads]
 # target-neutral: libhipthreads.a is a static archive of device bitcode that is
 # identical across per-arch shards. Built for all targets once.
@@ -718,16 +721,16 @@ source_paths = ["mxdatagenerator"]
 
 # --- ML Libraries (per-arch) ---
 
-[artifacts.miopen]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
-split_databases = ["miopen"]
-
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
+
+[artifacts.miopen]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "hipdnn", "rand", "rocprofiler-sdk"]
+split_databases = ["miopen"]
 
 [artifacts.hipdnn-integration-tests]
 artifact_group = "ml-libs"
@@ -821,14 +824,14 @@ disable_platforms = ["windows"]
 [artifacts.aqlprofile]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime"]
+artifact_deps = ["core-hip", "core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-register is in base
+artifact_deps = ["core-hip", "core-runtime", "base", "aqlprofile", "elfio"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

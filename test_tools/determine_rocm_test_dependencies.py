@@ -92,6 +92,10 @@ _EXTERNAL_SUBTREE_ALIASES = {
     "projects/rocprim": ["hipccl"],
     "projects/hipcub": ["hipccl"],
     "projects/rocthrust": ["hipccl"],
+    # The unified hipCCL superbuild itself (projects/hipccl/hipccl3). hipccl is
+    # a valid graph node, so edits here select the rocprim/hipcub/rocthrust test
+    # jobs via _CI_TEST_SELECTOR_ALIASES["hipccl"].
+    "projects/hipccl": ["hipccl"],
     "shared/mxdatagenerator": [
         "hipblas",
         "hipblaslt",
@@ -132,6 +136,9 @@ _EXTERNAL_SUBTREE_ALIASES = {
 _EXTERNAL_ONLY_NAMESPACES = ("shared/", "dnn-providers/", "emulation/")
 
 _CI_TEST_SELECTOR_ALIASES = {
+    # The cuDNN sample corpus is the only CI for hipDNN's cuDNN compatibility
+    # layer, so every hipDNN change selects it alongside hipDNN's own tests.
+    "hipdnn": ["hipdnn", "hipdnn-cudnn-samples"],
     "hipdnn_integration_tests": ["hipdnn-integration-tests"],
     "hipdnn_samples": ["hipdnn-samples"],
     "miopen": ["miopen", "miopen-dbsync"],

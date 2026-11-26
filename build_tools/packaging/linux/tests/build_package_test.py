@@ -102,6 +102,7 @@ from packaging_utils import (  # noqa: E402
     is_gfxarch_package,
     is_key_defined,
     update_package_name,
+    version_to_str,
     PackageCollisionError,
     validate_package_roots,
     expand_kpack_meta_dependencies,
@@ -142,6 +143,7 @@ def _args(tmp: Path, **overrides: object) -> Namespace:
         "pkg_names": None,
         "clean_build": False,
         "build_variant": "",
+        "deb_compression": "xz",
     }
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -769,6 +771,32 @@ class CreateVersionedDebPackageTest(BuildPackageTestCase):
         self.assertIn("override_dh_makeshlibs:", rules)
         self.assertIn("dh_makeshlibs -X.co", rules)
 
+        for args in ("-Zxz", "-Zzstd -z9"):
+            with self.subTest(deb_compression_args=args):
+                cfg = replace(device_cfg, deb_compression_args=args)
+                deb_package.create_versioned_deb_package(pkg_name=PKG_FFT, config=cfg)
+                rules = _read_rules_file(pkg_name=PKG_FFT, config=cfg)
+                self.assertIn(f"dh_builddeb -- {args} --root-owner-group", rules)
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "os.sched_getaffinity is Linux-only and DEB packaging only runs on Linux.",
+    )
+    def test_deb_compression_args(self) -> None:
+        """Explicit choice wins; auto/invalid use zstd at <= 4 CPUs, else xz."""
+        for choice, cpus, expected in [
+            ("xz", 2, "-Zxz"),
+            ("zstd", 64, "-Zzstd -z9"),
+            ("auto", 4, "-Zzstd -z9"),
+            ("auto", 5, "-Zxz"),
+            ("gzip", 2, "-Zzstd -z9"),
+        ]:
+            with (
+                self.subTest(choice=choice, cpus=cpus),
+                patch("os.sched_getaffinity", return_value=set(range(cpus))),
+            ):
+                self.assertEqual(deb_package.get_deb_compression_args(choice), expected)
+
     @patch.object(deb_package, "move_packages_to_destination", return_value=[])
     @patch.object(deb_package, "package_with_dpkg_build")
     def test_fft_meta_generates_control_file(
@@ -1030,6 +1058,36 @@ class UpdatePackageNameAsanSuffixTest(BuildPackageTestCase):
             "amdrocm-core", replace(cfg, versioned_pkg=True, gfx_arch=TEST_GFX_TARGET)
         )
         self.assertEqual(updated, f"amdrocm-core7.1-{TEST_GFX_TARGET}")
+
+
+class VersionToStrTest(unittest.TestCase):
+    """``version_to_str`` must ignore deb/rpm package version suffixes."""
+
+    def test_numeric_versions(self) -> None:
+        for version, expected in (
+            ("7.10.0", "71000"),
+            ("10.1.0", "100100"),
+            ("7.1", "70100"),
+            ("7.1.1.1", "70101"),
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(version_to_str(version), expected)
+
+    def test_package_version_suffixes_ignored(self) -> None:
+        for version in (
+            "7.10.0~dev20251203",
+            "7.10.0~20251203gf689a8e",
+            "7.10.0~pre2",
+            "7.10.0~rc2",
+            "7.10.0~20251021",
+            "7.10.0~20260811.bkc.20260814",
+        ):
+            with self.subTest(version=version):
+                self.assertEqual(version_to_str(version), "71000")
+
+    def test_non_numeric_version_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            version_to_str("abc.1.0")
 
 
 # ---------------------------------------------------------------------------

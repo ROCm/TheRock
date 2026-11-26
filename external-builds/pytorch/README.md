@@ -204,6 +204,20 @@ mix/match build steps.
     --output-dir %HOME%/tmp/pyout
   ```
 
+> [!NOTE]
+> With a ROCm SDK that installs libhipcxx under `include/hipccl` (hipCCL 3.1 and
+> later), the torchaudio and torchvision steps add that directory to `CPATH`.
+> Building torchaudio, torchvision or another extension with `hipcc` outside
+> `build_prod_wheels.py` needs `CPATH=<rocm>/include/hipccl` too, or rocThrust's
+> headers fail with `Could not find libhipcxx!`.
+
+On Windows, these two build steps also append `-DNOMINMAX` to
+`HIPCC_COMPILE_FLAGS_APPEND`, preserving existing flags. This temporarily prevents
+Windows headers pulled in by libhipcxx from defining `min`/`max` macros that break
+hipCUB and rocPRIM during HIP host compilation. See
+[issue #10275](https://github.com/ROCm/TheRock/issues/10275); remove this workaround
+once the supported SDK/PyTorch versions provide the protection upstream.
+
 ## Running/testing PyTorch
 
 ### Prerequisites
@@ -321,6 +335,37 @@ per-target device wheels were promoted independently. See the discussion on
 [#3332](https://github.com/ROCm/TheRock/issues/3332) for details.
 
 ## Advanced build instructions
+
+### Building torch with AddressSanitizer
+
+`--build-variant` selects the sanitizer. A variant that contains `asan`
+builds the torch wheel with AddressSanitizer. That includes `asan`,
+`asan-debug`, `host-asan`, and `host-asan-debug`. `release` does not. Any
+other name is an error. It is Linux
+x86_64 only. Install an AddressSanitizer build of the `rocm` packages first
+(the same `rocm[libraries,devel]` packages as a normal build, from an ASAN
+index or find-links page). The variant does not choose the GPU list or the
+ROCm version; pass those the same way as a normal build.
+
+Triton, torchaudio, torchvision, and apex are not built. An explicit
+`--build-triton`, `--build-pytorch-audio`, `--build-pytorch-vision`, or
+`--build-apex` is an error. `--no-build-*` is accepted.
+
+```bash
+python build_prod_wheels.py build \
+  --install-rocm \
+  --find-links "<asan-rocm-find-links>" \
+  --rocm-extras device-gfx1100 \
+  --pytorch-rocm-arch gfx1100 \
+  --build-variant asan \
+  --output-dir "$HOME/tmp/pyout"
+```
+
+The wheel-build import check preloads the ROCm ASan runtime and then
+`libhsa-runtime64.so.1` before `import torch`. That preload is only for the
+check. A later `pytorch_smoke_test.py` run on a GPU machine needs the same
+two libraries on `LD_PRELOAD`, in that order, and `torch/lib` on
+`LD_LIBRARY_PATH`.
 
 ### Other ways to install the rocm packages
 

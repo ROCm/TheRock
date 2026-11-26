@@ -13,11 +13,18 @@ paths are documented in [native_packaging.md](native_packaging.md).
 `amd-repo-setup` is generated per OS profile and per stream. Every profile writes a
 single repo definition and, for signed streams, the repository signing key:
 
-| OS profile        | Package manager | Repo definition                                    | Signing key                            |
-| ----------------- | --------------- | -------------------------------------------------- | -------------------------------------- |
-| `ubuntu2404`      | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
-| `rhel8`, `rhel10` | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
-| `sles16`          | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| OS profile                               | Package manager | Repo definition                                    | Signing key                            |
+| ---------------------------------------- | --------------- | -------------------------------------------------- | -------------------------------------- |
+| `ubuntu2204`, `ubuntu2404`, `ubuntu2604` | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
+| `debian12`, `debian13`                   | `apt`           | `/etc/apt/sources.list.d/amdrocm-<stream>.sources` | `/usr/share/keyrings/amdrocm.gpg`      |
+| `rhel8`, `rhel9`, `rhel10`               | `dnf` / `yum`   | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| `sles15`, `sles16`                       | `zypper`        | `/etc/zypp/repos.d/amdrocm-<stream>.repo`          | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+| `azl3`                                   | `tdnf`          | `/etc/yum.repos.d/amdrocm-<stream>.repo`           | `/etc/pki/rpm-gpg/RPM-GPG-KEY-amdrocm` |
+
+On minimal Azure Linux container images, install `ca-certificates` before
+refreshing (`sudo tdnf install ca-certificates`). Those images ship only
+`ca-certificates-base`, which does not trust the repository's TLS certificate.
+Full Azure Linux installs already have it.
 
 The filename and the rpm section id both identify the stream. The stem is
 `amdrocm-<stream>` for every stream except `rc`, whose file is
@@ -43,6 +50,7 @@ repository serves x86_64 (`amd64`) packages only.
 | `stable`  | `https://stable.repo.amd.com/rocm/core/packages`  | yes    | `amdrocm-stable.{sources,repo}`   |
 | `rc`      | `https://rc.repo.amd.com/rocm/core/packages`      | yes    | `amdrocm-stablerc.{sources,repo}` |
 | `nightly` | `https://nightly.repo.amd.com/rocm/core/packages` | no     | `amdrocm-nightly.{sources,repo}`  |
+| `dev`     | `https://dev.repo.amd.com/rocm/core/packages`     | no     | `amdrocm-dev.{sources,repo}`      |
 
 `rc` is the release-candidate stream for the next GA release. Its package carries
 the prerelease version of the ROCm packages it serves (`10.1.0~pre3` on deb,
@@ -63,6 +71,7 @@ identifier appears in the path:
 | `stable`  | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
 | `rc`      | `<base>/<os-profile>/`           | `<base>/<os-profile>/x86_64/`           |
 | `nightly` | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
+| `dev`     | `<base>/<os-profile>/<date-id>/` | `<base>/<os-profile>/<date-id>/x86_64/` |
 
 The signing key is at `<stream-root>/gpg/packages.gpg` — for example
 `https://stable.repo.amd.com/rocm/gpg/packages.gpg`. Note that this is *not*
@@ -70,19 +79,17 @@ under the repository base: packages live under `<stream-root>/core/packages/`
 while the key sits beside `core/`, so the two are supplied separately when
 building the package.
 
-> **Nightly is unsigned and expires.** The nightly repository publishes no
-> signatures, so the nightly `amd-repo-setup` disables signature verification
+> **Nightly and dev packages don't check signatures yet, and they expire.** Dev
+> repositories are unsigned. Nightly repositories are now signed, but the
+> `amd-repo-setup` package for both still disables signature verification
 > (`gpgcheck=0` / apt `Trusted: yes`) and ships no key.
 >
-> More importantly, a nightly repo file names **one specific build**. Nightly
-> retention prunes old builds, so a nightly `amd-repo-setup` stops resolving once
-> the build it points at is removed — `apt update` or `dnf makecache` then fails
-> against it — and the package must be rebuilt to follow the stream. Use
-> `stable` for anything beyond short-lived testing.
-
-Two further streams exist on `repo.amd.com` but no `amd-repo-setup` is built for
-them: `weekly` is not yet serving content, and `dev` is intended for developer
-testing rather than end users.
+> More importantly, a nightly or dev repo file names **one specific build**.
+> Retention prunes old builds, so the package stops resolving once the build it
+> points at is removed — `apt update` or `dnf makecache` then fails against it —
+> and the package must be rebuilt to follow the stream. Use `stable` for anything
+> beyond short-lived testing. `dev` is intended for developer testing rather than
+> end users.
 
 ## Relationship to `amdgpu-install`
 
@@ -141,8 +148,9 @@ that repository configuration too.
 stream. Use Python 3.10 or newer with the `jinja2` Python package, plus the
 native packaging tools for the target format:
 
-- deb (`ubuntu2404`): `debhelper`, `dpkg-dev`, `build-essential`
-- rpm (`rhel8`, `rhel10`, `sles16`): `rpm-build`
+- deb (`ubuntu2204`, `ubuntu2404`, `ubuntu2604`, `debian12`, `debian13`):
+  `debhelper`, `dpkg-dev`, `build-essential`
+- rpm (`rhel8`, `rhel9`, `rhel10`, `sles15`, `sles16`, `azl3`): `rpm-build`
 
 Some rpm base images ship no system `python3` at all — UBI 8, for example — so
 Python may need installing first. `setup_python_cmd.sh --install-runtime` does
@@ -153,7 +161,7 @@ fetches it over the network (see below), so `gpg` and `ca-certificates` must be
 present.
 
 `setup_repo_build_deps.sh` installs that set for a given profile, picking `apt`,
-`zypper` or `dnf` to match:
+`zypper`, or `dnf` (`tdnf` where dnf is missing) to match:
 
 ```bash
 bash build_tools/packaging/linux/setup_repo_build_deps.sh --os-profile ubuntu2404
@@ -197,7 +205,7 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
 ```
 
 The nightly stream is pinned to a single build; pass its identifier. No key is
-needed, since the nightly repository is unsigned:
+needed, since the nightly package doesn't check signatures yet:
 
 ```bash
 python3 build_tools/packaging/linux/build_repo_setup_package.py \
@@ -224,8 +232,10 @@ python3 build_tools/packaging/linux/build_repo_setup_package.py \
     --verify-repo-url
 ```
 
-`--verify-repo-url` has no effect for the nightly stream: its build folder is
-published by the same run that builds the package, so it does not exist yet.
+`--verify-repo-url` checks that the repository is reachable before building. It
+applies to stable and rc, whose repository already exists. It is skipped for
+nightly and dev: their package points at the build folder of the release run that
+builds it, and that run publishes the folder only afterwards.
 
 ### Package naming
 
@@ -270,9 +280,11 @@ See `build_repo_setup_package.py --help` for the full option list.
 
 ## Installing and using the repository
 
-`amd-repo-setup` is not yet published to a public download URL, so build it for
-your distro first using the previous section. Then install the resulting file,
-refresh the package manager's metadata, and install ROCm packages.
+Release runs (dev, nightly and prerelease) build and publish `amd-repo-setup`
+by default, but there is no public
+download URL for it yet, so build it for your distro first using the previous
+section. Then install the resulting file, refresh the package manager's
+metadata, and install ROCm packages.
 
 The examples below assume `--dest-dir ./repo-setup-package-out`. The built filename
 carries the package version, so the glob below is what selects it.
@@ -338,13 +350,17 @@ moving from a signed stream to `nightly`, `apt-get update` can no longer
 refresh the old repository, whose signing key was removed.
 
 On RHEL, `dnf install` switches directly, reporting a move to a lower-versioned
-stream as a downgrade. On SLES, pass `--oldpackage`: without it, `zypper` skips a
-lower-versioned package with "Nothing to do" and still exits 0.
+stream as a downgrade. On SLES, pass `--oldpackage` (without it, `zypper` skips a
+lower-versioned package with "Nothing to do" and exits 0) and `--no-gpg-checks`,
+since the package file is unsigned.
 
 ```bash
 sudo dnf install ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
-sudo zypper install --oldpackage --allow-unsigned-rpm ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
+sudo zypper --no-gpg-checks install --oldpackage ./repo-setup-package-out/amd-repo-setup-*.noarch.rpm
 ```
+
+Same-day `dev` builds can sort in either order on rpm, since the version carries
+the git hash after the date, so moving to a newer one may need the commands above.
 
 Refresh the package manager metadata afterwards, exactly as after a first
 install. Switching changes where packages are installed from; ROCm packages that

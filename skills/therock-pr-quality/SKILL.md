@@ -1,6 +1,6 @@
 ---
 name: therock-pr-quality
-description: TheRock build-repo supplements to the ROCm PR quality base skill. Use for TheRock PR author, review, or pre-merge gating where the change touches the superbuild, submodules/patches, artifact descriptors, or reusable CI workflows. Adds and tightens base rules; never relaxes a base MUST.
+description: TheRock supplements to the ROCm PR quality base skill. Build-repo rules apply to PRs touching the superbuild, submodules, artifact descriptors, or reusable CI. Review mode (review.md) applies to every TheRock PR, including self-review; use it for "review PR #N" or a TheRock PR URL. Adds and tightens base rules.
 argument-hint: '[author | review | pre-merge] [PR URL | branch:<name> | local]'
 extends: rocm-pr-quality
 allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
@@ -10,9 +10,12 @@ allowed-tools: Bash, Read, Grep, Glob, Task, WebFetch
 
 ## Dependency (mandatory — do this first)
 
-Read and apply the `rocm-pr-quality` base skill before anything below. It lives in this same repo at
-`skills/rocm-pr-quality/` (`SKILL.md` + `reference.md`). The supplements here only **ADD** rules or
-**TIGHTEN** thresholds; they never relax a base MUST-rule. On any conflict, the base MUST-rule wins.
+Read and apply the `rocm-pr-quality` base skill before anything below. It lives in this same repo:
+[`SKILL.md`](../rocm-pr-quality/SKILL.md) and [`reference.md`](../rocm-pr-quality/reference.md). The
+`extends` and `argument-hint` keys above are repo conventions that not every agent runtime
+interprets, which is why this section tells you to load the base explicitly. The supplements here
+only **ADD** rules or **TIGHTEN** thresholds; they never relax a base MUST-rule. On any conflict,
+the base MUST-rule wins.
 
 This overlay is for the *build-repo* concerns that the library overlays (e.g. `hipblaslt-pr-quality`)
 do not cover: the superbuild itself, submodules and patches, artifact descriptors, and the reusable
@@ -33,13 +36,24 @@ Apply this overlay (in addition to the base) when a PR touches any of:
 - Reusable CI: `.github/workflows/**` (especially reusable `workflow_call` workflows and their
   callers) and `build_tools/github_actions/**`.
 
-Changes outside these areas follow the base bar only.
+Changes outside these areas follow the base bar only. Review mode (below) is the exception: it
+applies to every TheRock PR.
+
+______________________________________________________________________
+
+## Review mode
+
+For `review` (base Action 2), also read and apply [`review.md`](review.md). Unlike the supplements
+below, it applies to every TheRock PR, and it works for self-review before requesting review as well
+as for reviewing someone else's PR. It adds a non-destructive review setup, de-duplication against
+existing review threads, a title and description accuracy check, verification discipline, a
+file-ordered findings layout, and a whole-PR design pass.
 
 ______________________________________________________________________
 
 ## Canonical TheRock references
 
-Consult and cite these when reviewing build-repo PRs:
+Consult and cite these when reviewing TheRock PRs:
 
 - Build system overview: `docs/development/build_system.md`.
 - Testing strategy: [`TESTING.md`](../../TESTING.md), the repo-root `TESTING.md` the base skill
@@ -52,7 +66,11 @@ Consult and cite these when reviewing build-repo PRs:
   [cmake](../../docs/development/style_guides/cmake_style_guide.md),
   [bash](../../docs/development/style_guides/bash_style_guide.md),
   [github_actions](../../docs/development/style_guides/github_actions_style_guide.md).
-- Formatting: `.pre-commit-config.yaml` (run `pre-commit run --all-files`).
+- Formatting: `.pre-commit-config.yaml`. When authoring, run `pre-commit run --files <changed files>`
+  (the hooks can rewrite files; commit the result). When reviewing, do not modify the PR's checkout
+  (the base review contract is read-only): run the hooks in a throwaway checkout of the PR head, or
+  read the PR's own pre-commit check result, and report any formatter diff as a finding. Avoid
+  `--all-files`, which can rewrite files the PR never touched.
 
 Cite the specific guide section for a style finding.
 
@@ -125,8 +143,12 @@ On top of the base classes, tag TheRock PRs with:
 
 ### Adds — reusable CI workflow wiring
 
-- When a reusable (`workflow_call`) workflow's interface changes, **all callers** are updated in the
-  same PR; a caller left on the old interface is `BLOCKING`.
+- When a reusable (`workflow_call`) workflow's interface changes, inspect **every caller**. Callers
+  are updated in the same PR only where the change breaks them or changes their intended behavior
+  (a removed or renamed input, a changed output, a new required input); a caller left on a breaking
+  interface is `BLOCKING`. An added optional input with a behavior-preserving default needs no caller
+  edit. Callers outside this repo, or pinned to a version, cannot be edited here: state the migration
+  obligation in the PR instead.
 - Reusable-workflow inputs are read via `inputs.*`, not `github.event.inputs.*` (that only exists for
   `workflow_dispatch`); flag the mismatch.
 - `runs-on` for self-hosted/specialized runners is pinned to the intended label set, not a generic
@@ -136,6 +158,16 @@ On top of the base classes, tag TheRock PRs with:
 - No complex inline `bash` embedded in YAML — non-trivial logic belongs in a script under
   `build_tools/` (per the GitHub Actions style guide), where it is testable and lintable.
 - Any script a workflow calls has its runtime dependencies declared/available on the runner.
+
+### Adds — CI labels on TheRock PRs
+
+Apply the base "CI labels (quality policy)" (`reference.md`), choosing and checking labels with the
+`pr-ci-labels` skill (its reference has the TheRock label conventions). On top of that:
+
+- **Never narrow a submodule-bump PR.** Bumps carry `ci:run-all-archs` and `ci:asan` because a bump
+  is the first place many GPU families see the new code. A narrowing label on a bump is `BLOCKING`.
+- **Never narrow a `reusable-ci` change past the workflows it edits.** The run has to exercise the
+  edited workflow on the platforms and families that call it; narrowing below that is `BLOCKING`.
 
 ### Adds — dependency / subproject additions
 
@@ -151,6 +183,9 @@ root `CMakeLists.txt`, `cmake/**`, `.gitmodules`, `artifact-*.toml`, `BUILD_TOPO
 reusable workflows under `.github/workflows/`. Overlap with the base branch on any of these since the
 PR diverged → **mandatory** rebase + re-run (base default is strong-recommend), because these break
 combinations that neither PR's own CI can see.
+
+The helper implements this list: run it with `--profile therock` so overlap on these files is
+reported as `BLOCKING`. The default `base` profile has no high-coupling list and will not flag it.
 
 ______________________________________________________________________
 

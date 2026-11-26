@@ -2,23 +2,90 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Fetches sources from a specified branch/set of projects.
-# This script is available for users, but it is primarily the mechanism
-# the CI uses to get to a clean state.
-#
-# Stage-aware fetching:
-#   Use --stage <stage_name> to fetch only submodules needed for a build stage.
-#   This uses BUILD_TOPOLOGY.toml to determine which submodules are required.
-#
-# Legacy flag-based fetching:
-#   Use --include-* flags to control which project groups to fetch.
-#   This is the original behavior and is still supported.
+"""
+Fetches sources from a specified branch/set of projects.
+This script is available for users, but it is primarily the mechanism
+the CI uses to get to a clean state.
+
+Source selection:
+    --stage selects source sets from BUILD_TOPOLOGY.toml and applicable
+    BRANCH_CONFIG.json artifact-group entries, filtered for the current platform.
+    --source-sets adds explicitly requested source sets; --skip-submodules removes
+    named submodules. Source sets can also include pinned external Git sources.
+    Without --stage, the --include-* flags select project groups, augmented by
+    branch-wide and explicitly requested source sets.
+
+Checkout and preparation:
+    Selected submodules use their indexed gitlink commits and normal paths from
+    .gitmodules. --depth and --jobs control fetching; --reference-dir or
+    THEROCK_GIT_MIRROR_DIR supplies optional local reference repositories.
+    DVC files are pulled before TheRock patches are applied. --dvc-projects auto
+    (the default) covers rocm-libraries and, on Windows, rocm-systems, restricted
+    to the selected submodules. Explicit project names override these platform
+    defaults, still limited to selected submodules. auto must be used alone.
+    --dvc-projects="" skips DVC pulls.
+    Each requested DVC project pulls all its pointer files, not just files needed
+    by that stage.
+
+Examples (run from the TheRock checkout):
+    # Discover supported stages and source sets without fetching:
+    python build_tools/fetch_sources.py --list-stages
+    python build_tools/fetch_sources.py --list-source-sets
+
+    # Fetch the sources needed for a CI stage:
+    python build_tools/fetch_sources.py --stage math-libs --depth 1 --jobs 12
+
+    # Add a source set to a stage's normal selection:
+    python build_tools/fetch_sources.py --stage cv-libs --source-sets rocm-systems
+
+    # Fetch the default project groups without stage filtering:
+    python build_tools/fetch_sources.py
+
+Component-repository CI overrides:
+    --external-repo-config defaults to EXTERNAL_REPO_CONFIG and accepts the JSON
+    emitted as config_json by
+    github_actions/detect_external_repo_config.py. The source fields are:
+
+        {
+          "repository": "ROCm/rocm-systems",
+          "ref": "0123456789abcdef0123456789abcdef01234567",
+          "submodule_path": "rocm-systems"
+        }
+
+    ref is the full commit SHA selected for the CI run, and submodule_path must
+    match an entry in .gitmodules. repository is identifying metadata and does
+    not select a remote. Other caller build/test options in the
+    JSON are not interpreted here. For example, after saving the JSON above as
+    external-repo-config.json, set the environment variable in Bash:
+
+        export EXTERNAL_REPO_CONFIG="$(cat external-repo-config.json)"
+        python build_tools/fetch_sources.py --stage math-libs --depth 1 --jobs 12
+
+    The override stages the requested gitlink with git update-index. Normal
+    git submodule update fetches selected sources using their existing remotes,
+    and the overridden checkout's HEAD is verified against ref. An override does
+    not cause an otherwise unneeded submodule to be fetched. The
+    overridden repository bypasses TheRock patches; other selected repositories
+    retain normal patch processing. --remote and --no-update-submodules cannot
+    be combined with an external override. Symbolic refs and explicit PR refspec
+    fetching are not supported; the submodule remote must expose the SHA.
+
+Git state and manifests:
+    Overrides are intended for disposable CI checkouts: they leave staged
+    gitlink changes. TheRock HEAD and tracked .gitmodules stay unchanged. Do not
+    use this to preserve local work.
+    Pass the same EXTERNAL_REPO_CONFIG to generate_therock_manifest.py, which
+    otherwise reads committed gitlinks rather than the modified index. Its
+    manifest describes intended pins even for submodules omitted by this stage;
+    this script verifies only the overridden checkout actually selected here.
+"""
 
 import argparse
 import concurrent.futures
 import hashlib
 from pathlib import Path
 import platform
+import re
 import shlex
 import subprocess
 import sys
@@ -26,6 +93,9 @@ from typing import List
 import os
 
 import fetch_dvc_artifacts
+from _therock_utils.external_repo_config import (
+    parse_and_validate_external_repo_config,
+)
 from _therock_utils.git_mirrors import MIRROR_DIR_ENV, url_to_mirror_relpath
 from _therock_utils.branch_config import (
     get_source_sets_for_artifact_groups,
@@ -497,8 +567,65 @@ def _fetch_one_external_git_source(
     run_command(["git", "reset", "--hard", source.commit], cwd=source_dir)
 
 
+def apply_external_repo_override(config: dict) -> str:
+    """Stage the external commit pin without changing submodule remotes.
+
+    Intended for disposable CI checkouts: the gitlink change stays in the index,
+    while HEAD remains the original TheRock commit. Only submodule_path and ref
+    control checkout; repository is metadata, not a remote override. Normal
+    submodule initialization uses .gitmodules. Manifest generation receives
+    the same EXTERNAL_REPO_CONFIG to describe the effective source identity.
+    """
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", config["ref"]):
+        raise ValueError("EXTERNAL_REPO_CONFIG 'ref' must be a full commit SHA")
+    output = subprocess.check_output(
+        [
+            "git",
+            "config",
+            "--file",
+            ".gitmodules",
+            "--get-regexp",
+            r"^submodule\..*\.path$",
+        ],
+        cwd=THEROCK_DIR,
+        text=True,
+    )
+    matches = [
+        key.removeprefix("submodule.").removesuffix(".path")
+        for key, path in (line.split(maxsplit=1) for line in output.splitlines())
+        if path == config["submodule_path"]
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"External path {config['submodule_path']!r} must match one submodule"
+        )
+    name = matches[0]
+    path = config["submodule_path"]
+    log("=== External source override (EXTERNAL_REPO_CONFIG) ===")
+    log(f"Submodule path: {path}")
+    log(f"Requested commit: {config['ref']}")
+    run_command(
+        ["git", "update-index", "--no-skip-worktree", "--", path], cwd=THEROCK_DIR
+    )
+    run_command(
+        ["git", "update-index", "--cacheinfo", f"160000,{config['ref']},{path}"],
+        cwd=THEROCK_DIR,
+    )
+    return name
+
+
 def run(args):
     projects, external_sources = get_enabled_sources(args)
+    external_config = args.external_repo_config
+    external_name = None
+    if external_config:
+        if args.remote or not args.update_submodules:
+            raise ValueError(
+                "External source overrides require pinned submodule updates"
+            )
+        external_name = apply_external_repo_override(external_config)
+        if external_name not in projects:
+            log(f"Not fetching {external_name}: not selected for this invocation")
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
         get_submodule_path(project) for project in projects
     ]
@@ -532,8 +659,19 @@ def run(args):
                     cwd=THEROCK_DIR,
                 )
         fetch_external_git_sources(args, external_sources)
-    if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects, jobs=args.jobs)
+        if external_name in projects:
+            source_dir = THEROCK_DIR / external_config["submodule_path"]
+            actual = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=source_dir, text=True
+            ).strip()
+            if actual.lower() != external_config["ref"].lower():
+                raise RuntimeError(f"External source checkout mismatch: {actual}")
+            log(f"Verified external source checkout: {source_dir} at {actual}")
+    dvc_projects = get_dvc_projects(
+        projects, args.dvc_projects, is_windows=is_windows()
+    )
+    if dvc_projects:
+        pull_large_files(dvc_projects, jobs=args.jobs)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -550,23 +688,34 @@ def run(args):
     remove_smrev_files(args, projects)
 
     if args.apply_patches:
-        apply_patches(args, projects)
+        # Leave the overridden source at the requested commit without TheRock
+        # patches. Other selected sources retain normal patch processing.
+        # See patches/README.md#using-patches-from-rocm-libraries-rocm-systems-and-other-repositories
+        apply_patches(args, [name for name in projects if name != external_name])
 
 
-def pull_large_files(dvc_projects, projects, jobs=None):
+def get_dvc_projects(
+    selected_projects: list[str],
+    requested_projects: list[str],
+    *,
+    is_windows: bool,
+) -> list[str]:
+    """Filter platform defaults or requested DVC projects to selected submodules."""
+    if requested_projects == ["auto"]:
+        requested_projects = ["rocm-libraries"]
+        if is_windows:
+            requested_projects.append("rocm-systems")
+    return [project for project in requested_projects if project in selected_projects]
+
+
+def pull_large_files(dvc_projects, jobs=None):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
     pull_jobs = jobs if jobs is not None else fetch_dvc_artifacts.DEFAULT_JOBS
     for project in dvc_projects:
-        # For submodules in TheRock's topology, use get_submodule_path
-        if project in projects:
-            submodule_path = get_submodule_path(project)
-            project_dir = THEROCK_DIR / submodule_path
-        # For external repositories (e.g., external-rocm-systems),
-        # use the path directly since they're checked out relative to THEROCK_DIR
-        else:
-            project_dir = THEROCK_DIR / project
+        submodule_path = get_submodule_path(project)
+        project_dir = THEROCK_DIR / submodule_path
 
         dvc_config_file = project_dir / ".dvc" / "config"
         if not dvc_config_file.exists():
@@ -723,6 +872,20 @@ def main(argv):
         prog="fetch_sources",
         description="Fetch sources for TheRock build. Use --stage for stage-aware "
         "fetching or --include-* flags for legacy mode.",
+        epilog=(
+            "Component CI can set EXTERNAL_REPO_CONFIG to JSON containing repository, "
+            "ref (full commit SHA), and submodule_path. The override changes the "
+            "index in a disposable checkout; stage selection still controls fetching. "
+            "See this script's module documentation for examples and manifest handling."
+        ),
+    )
+
+    parser.add_argument(
+        "--external-repo-config",
+        type=parse_and_validate_external_repo_config,
+        default=os.getenv("EXTERNAL_REPO_CONFIG"),
+        help="JSON source override containing repository, ref, and submodule_path. "
+        "Defaults to EXTERNAL_REPO_CONFIG.",
     )
 
     # Stage-aware fetching (preferred for CI)
@@ -861,8 +1024,7 @@ def main(argv):
         default=[],
         help=(
             "Submodule names to skip (e.g., 'rocm-libraries rocm-systems'). "
-            "These will not be fetched regardless of stage or source set configuration. "
-            "Useful for external repo builds where the submodule is checked out separately."
+            "These will not be fetched regardless of stage or source set configuration."
         ),
     )
     parser.add_argument(
@@ -897,20 +1059,14 @@ def main(argv):
         default=["amd-mesa"],
     )
     parser.add_argument(
-        # projects that use DVC to manage large files
         "--dvc-projects",
-        nargs="+",
-        type=str,
-        default=(
-            [
-                "rocm-libraries",
-                "rocm-systems",
-            ]
-            if is_windows()
-            else [
-                "rocm-libraries",
-            ]
-        ),
+        nargs="*",
+        choices=["auto", "rocm-libraries", "rocm-systems", ""],
+        metavar="PROJECT",
+        default=["auto"],
+        help="DVC projects to pull: auto (default, platform-aware), or "
+        "rocm-libraries and/or rocm-systems. Limited to selected submodules. "
+        "auto must be used alone; an empty value skips DVC pulls.",
     )
     parser.add_argument(
         "--debug-tools",
@@ -934,6 +1090,9 @@ def main(argv):
         ],
     )
     args = parser.parse_args(argv)
+
+    if "auto" in args.dvc_projects and args.dvc_projects != ["auto"]:
+        parser.error("--dvc-projects: auto must be used alone")
 
     # Handle --list-stages
     if args.list_stages:

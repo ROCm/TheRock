@@ -162,8 +162,8 @@ class IndexGenerationS3Test(unittest.TestCase):
         )
 
         html = self._uploaded_html()
-        self.assertIn("<title>Windows Installers</title>", html)
-        self.assertIn("<h1>Windows Installers</h1>", html)
+        self.assertIn(f"<title>Windows Installers: {windows_prefix}/</title>", html)
+        self.assertIn(f"<h1>Windows Installers: {windows_prefix}/</h1>", html)
         self.assertIn("roc-optiq-1.1.0.0-win64.msi", html)
         self.assertNotIn("ignored.tar.gz", html)
         self.assertNotIn('id="filter"', html)
@@ -329,6 +329,91 @@ class IndexGenerationS3Test(unittest.TestCase):
         html = self._uploaded_html()
         self.assertIn("<title>Windows Installer&#x27;s Index</title>", html)
         self.assertIn('li.textContent = "No installer\'s available.";', html)
+
+    def test_default_page_title_names_the_prefix(self) -> None:
+        """Product-local indexes are titled with the path they list."""
+        index_generation_s3.generate_tarball_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=f"/{self.prefix}/",
+            upload=True,
+            allow_empty=True,
+        )
+
+        html = self._uploaded_html()
+        self.assertIn(f"<title>Tarball index: {self.prefix}/</title>", html)
+        self.assertIn(f"<h1>Tarball index: {self.prefix}/</h1>", html)
+
+    def test_default_page_title_at_top_level_has_no_prefix(self) -> None:
+        """A top-level index keeps the plain title instead of ending in ': /'."""
+        index_generation_s3.generate_tarball_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix="",
+            upload=True,
+            allow_empty=True,
+        )
+
+        self.assertIn("<title>Tarball index</title>", self._uploaded_html())
+
+    def test_directory_index_default_page_title_names_the_prefix(self) -> None:
+        """Directory indexes are titled with the path they list."""
+        windows_prefix = "v5/rocm/extras/rocoptiq/windows-installers"
+        self.paginator.paginate.return_value = [
+            {"CommonPrefixes": [{"Prefix": f"{windows_prefix}/win11/"}]}
+        ]
+
+        index_generation_s3.generate_directory_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=windows_prefix,
+            upload=True,
+        )
+
+        self.assertIn(
+            f"<title>Directory index: {windows_prefix}/</title>",
+            self._uploaded_html(),
+        )
+
+    def test_explicit_page_title_replaces_default(self) -> None:
+        """A caller-supplied title, e.g. a product name, is used as-is."""
+        index_generation_s3.generate_tarball_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=self.prefix,
+            upload=True,
+            allow_empty=True,
+            page_title="RVS tarballs",
+        )
+
+        html = self._uploaded_html()
+        self.assertIn("<title>RVS tarballs</title>", html)
+        self.assertNotIn("Tarball index", html)
+
+    def test_cli_page_title_is_passed_through(self) -> None:
+        """--page-title sets the title of the generated index."""
+        with mock.patch.object(
+            index_generation_s3.boto3, "client", return_value=self.s3_client
+        ), mock.patch.object(
+            index_generation_s3, "generate_tarball_index_s3"
+        ) as generate:
+            index_generation_s3.main(
+                [
+                    "--directory",
+                    self.prefix,
+                    "--page-title",
+                    "RVS tarballs",
+                    "--upload",
+                ]
+            )
+
+        generate.assert_called_once_with(
+            s3_client=self.s3_client,
+            bucket_name="therock-dev-tarball",
+            prefix=self.prefix,
+            upload=True,
+            page_title="RVS tarballs",
+        )
 
 
 if __name__ == "__main__":

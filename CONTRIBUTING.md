@@ -381,6 +381,11 @@ request as a draft:
 > intended to be used for testing, please mark it as a draft to limit
 > review request notifications.
 
+Multi-Arch CI skips builds and tests on draft pull requests. Marking a pull
+request ready for review starts a full run, and adding the `ci:run-on-draft`
+label runs CI while the pull request stays a draft. See
+[Draft pull requests](docs/development/ci_behavior_manipulation.md#draft-pull-requests).
+
 #### Requesting a code review
 
 When you are ready for a review, please:
