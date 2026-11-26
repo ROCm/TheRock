@@ -5,6 +5,7 @@
 # ROCm/TheRock-PR-Bot.
 # Refs:
 #   https://github.com/ROCm/TheRock-PR-Bot/tree/main/docs/ROCM_PR_BOT_FAQ.md
+
 name: ROCm PR Bot Scan
 
 on:
@@ -52,7 +53,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_run' ||
       github.event.workflow_run.event == 'pull_request'
-    uses: ROCm/TheRock-PR-Bot/.github/workflows/rocm-pr-bot.yml@32048e50b56623a5e411f22e25533575a8422262
+    uses: ROCm/TheRock-PR-Bot/.github/workflows/rocm-pr-bot.yml@8805d30ed760184dfd31ff174f37abc427c6db5a
     secrets:
       ROCM_PR_BOT_APPID: ${{ secrets.ROCM_PR_BOT_APPID }}
       ROCM_PRBOT_KEY: ${{ secrets.ROCM_PRBOT_KEY }}
