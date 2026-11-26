@@ -115,9 +115,7 @@ jobs:
   test_xla:
     name: Test XLA | ${{ inputs.test_amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
-    # fromJSON turns the string input into the number timeout-minutes needs. The
-    # fallback covers pull_request, where there is no inputs context at all.
-    timeout-minutes: ${{ fromJSON(inputs.test_timeout_minutes || '240') }}
+    timeout-minutes: ${{ fromJSON(inputs.test_timeout_minutes) }}
 
     outputs:
       summary: ${{ steps.summary.outputs.summary }}
