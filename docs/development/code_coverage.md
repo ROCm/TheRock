@@ -59,3 +59,178 @@ the project itself:
   needs libdl and libpthread, which the compiler driver doesn't link. On the
   manylinux_2_28 build image (glibc 2.28) they are separate from libc, so link
   `${CMAKE_DL_LIBS}` and `Threads::Threads` when coverage is on.
+
+## Producing a report locally
+
+Set `LLVM_PROFILE_FILE` with `%p`/`%m` substitutions to keep per-process files
+distinct, run the tests, then call `merge_coverage_report.py`:
+
+```bash
+export LLVM_PROFILE_FILE="$PWD/coverage-report/profraw/%p-%m.profraw"
+ctest --test-dir build/ml-libs/hipDNN/build
+
+python build_tools/github_actions/merge_coverage_report.py \
+  --profraw-dir coverage-report/profraw \
+  --rocm-dir build/dist/rocm \
+  --object-globs "lib/libhipdnn_backend.so*" \
+  --summary-output coverage-report/coverage_summary.txt \
+  --html-output coverage-report/html
+```
+
+`llvm-profdata` and `llvm-cov` must match the compiler that built the objects;
+the script uses the copies under `<rocm-dir>/lib/llvm/bin` (or
+`--llvm-bin-dir`), falling back to `PATH` with a warning. Only the HTML reads
+source files; lcov and the text table work from coverage mappings alone. Use
+`--path-equivalence <from>,<to>` if the source tree has moved since the build.
+
+## Coverage CI
+
+```mermaid
+graph TD
+    dispatch[Dispatch with projects_to_test] --> matrix[setup_coverage_matrix]
+    matrix --> compilerRuntime[Build compiler-runtime]
+    compilerRuntime --> mathLibs[Build instrumented math-libs]
+    mathLibs --> report[Per project: configure, test, report]
+    report --> codecov[Codecov]
+```
+
+`multi_arch_ci_coverage_linux.yml` is the entry point: it computes the matrix,
+builds the instrumented stack, then fans out to
+`multi_arch_ci_coverage_report.yml` per project per GPU family.
+`COVERAGE_PROJECTS` in `build_tools/github_actions/configure_coverage_ci.py`
+lists the projects it runs for, by TheRock subproject name, with the binaries
+each report covers. The rest follows from the name: the
+`<PROJECT>_ENABLE_COVERAGE` option that instruments the project, its tests in
+`fetch_test_configurations.py`, and its Codecov flag.
+
+### Dispatching a run
+
+Start from the Actions tab or `gh` CLI, or let the rocm-libraries nightly
+call it via a cross-repo reusable `uses:` workflow call. There is no cron trigger.
+
+Set `projects_to_test`; other inputs use sensible defaults. Each run tests the
+instrumented stack it builds, so it doesn't depend on any other run. Running
+coverage separately keeps failures off the nightly's status. Automatic nightly
+dispatch is a follow-up.
+
+To instrument whole groups as well, set `coverage_rocm_libraries_all`,
+`coverage_rocm_systems_all` or `coverage_all`. Each passes the matching option
+from [Enabling a whole group](#enabling-a-whole-group). Reports still cover
+only `projects_to_test`, but see
+[What scopes a report to one project](#what-scopes-a-report-to-one-project).
+`coverage_rocm_libraries_all` and `coverage_all` also pass
+`-DHIPCCL_ENABLE_COVERAGE=OFF`, since hipCCL's instrumented build doesn't link
+yet. The rocm-systems projects are in `comm-libs`, which this workflow does not
+build yet; see [Adding a stage](#adding-a-stage).
+
+### The instrumented build
+
+`setup_coverage_matrix` runs `configure_coverage_ci.py`, emitting the matrix
+and `coverage_cmake_options`. A selection naming a project that is not in
+`COVERAGE_PROJECTS` fails immediately.
+
+`build_compiler_runtime` always runs first — every other stage pulls its
+inbound artifacts from it. It is a regular, non-instrumented build.
+`build_instrumented_math_libs` fans out over GPU families. Report jobs wait for
+the whole fan-out, so with several families one failed build skips every
+family's report; the default is a single family until multi-arch lands.
+
+`coverage_cmake_options` holds the selected projects' CMake options, such as
+`-DHIPDNN_ENABLE_COVERAGE=ON`, and any group options. It is passed to the
+math-libs build's `extra_cmake_options` input, which appends it to that stage's
+configure line only; TheRock then passes each option to its subproject as
+described in
+[Enabling coverage for a local build](#enabling-coverage-for-a-local-build).
+Everything else builds normally. Artifacts publish under `release_type: ci`.
+
+### Test execution
+
+Per shard, `test_code_coverage_component.yml` does three things:
+
+1. **Install this run's stack.** The report workflow passes its own run id as
+   `generic_run_id`, so `install_rocm_code_coverage_build.py` installs the
+   instrumented artifacts as built.
+1. **Set `LLVM_PROFILE_FILE`** to a per-shard path (`%p`/`%m`) so concurrent
+   processes don't overwrite each other.
+1. **Run tests and upload profraw** under `always()` — a failing shard still
+   exercised code.
+
+Coverage runs use each component's normal `timeout_minutes` from
+`fetch_test_configurations.py`; nothing extends it for instrumented builds.
+Instrumented tests run slower, so a component close to its limit may time out.
+
+#### What scopes a report to one project
+
+`object_globs` limits what `llvm-cov` reports on, but not which counters reach
+the merged profile. Every project the build instrumented writes profiles when
+the tests load it. Inline and template code is `linkonce_odr` and lands in
+every binary that uses it, so an instrumented dependency's counters for that
+code merge into the report, and no `-object` filter can remove them. This
+matters most for header-only libraries such as rocPRIM. For exact numbers, run
+one project at a time with the group inputs off.
+
+### Artifacts
+
+| Artifact     | Where                               | Purpose                       |
+| ------------ | ----------------------------------- | ----------------------------- |
+| Instrumented | CI bucket, this run                 | Stack under test + LLVM tools |
+| Profraw      | GitHub Actions artifacts, per shard | Raw profiles for aggregation  |
+
+Profraw names include the project, GPU family, and shard index.
+
+### Report generation
+
+`aggregate_coverage` runs under `if: !cancelled()` so partial reports survive
+shard failures. It downloads profraw artifacts, reinstalls the run's artifacts
+(LLVM tools must match the compiler that produced the profiles), then runs
+`merge_coverage_report.py`. Two conditions are fatal: no profraw files (tests
+didn't run or the wrong library was loaded) and no matching objects
+(`object_globs` doesn't match the project's install layout).
+
+The `coverage-report-<project>-<family>` artifact:
+
+| File                   | What it is                 |
+| ---------------------- | -------------------------- |
+| `coverage.info`        | lcov for Codecov           |
+| `coverage_summary.txt` | per-file table with totals |
+| `html/index.html`      | browsable annotated report |
+
+Totals are also written to the job summary page. The HTML step runs
+`fetch_sources.py` and remaps paths with `--path-equivalence`; it is
+`continue-on-error` (losing it costs only the annotated view). Codecov is
+skipped, not failed, when `CODECOV_TOKEN` is absent, and an upload error doesn't
+fail the job either; both leave a warning on the run.
+
+## Selecting projects to run
+
+`projects_to_test` takes comma-separated names from `COVERAGE_PROJECTS`,
+case-insensitive. Empty selects all of them. Only `hipDNN` is listed so far;
+see [Adding a project](#adding-a-project).
+
+## Adding a project
+
+1. Implement `<PROJECT>_ENABLE_COVERAGE` upstream as described above. Keep the
+   project's old option name as a deprecated alias for a while.
+1. Bump the submodule in TheRock.
+1. Add the subproject to `THEROCK_COVERAGE_ROCM_LIBRARIES_PROJECTS` or
+   `THEROCK_COVERAGE_ROCM_SYSTEMS_PROJECTS` in `CMakeLists.txt`.
+1. Verify that a local instrumented build produces a non-empty report; see
+   [Producing a report locally](#producing-a-report-locally).
+1. To run it in coverage CI, add its subproject name and the globs for its
+   instrumented binaries to `COVERAGE_PROJECTS` in
+   `build_tools/github_actions/configure_coverage_ci.py`. The globs must match
+   what the project actually installs — a miss fails the report job rather than
+   publishing zero. The project also needs tests in
+   `fetch_test_configurations.py` and an entry in `COMPONENT_MAP` in
+   `build_tools/install_rocm_code_coverage_build.py`, since each test shard
+   passes `--replace-<project>` to that script.
+
+## Adding a stage
+
+Coverage CI builds only `compiler-runtime` and `math-libs`, so every project in
+`COVERAGE_PROJECTS` must be in `math-libs`; a unit test checks this. Covering a
+project from another stage, such as `rccl` in `comm-libs`, needs a build job for
+that stage in `multi_arch_ci_coverage_linux.yml` that also receives
+`coverage_cmake_options`. A stage needs its inbound artifacts built first: check
+its `artifact_group_deps` in `BUILD_TOPOLOGY.toml`, since a missing inbound
+artifact won't surface until deep in the build.

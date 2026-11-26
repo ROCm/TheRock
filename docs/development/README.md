@@ -32,6 +32,7 @@
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [Cherry-picking commits to release branches](cherry_picking_to_release_branches.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
+- [Coverage CI](code_coverage.md#coverage-ci)
 - [Stage Reuse](stage_reuse.md)
 - [CCache Troubleshooting](ccache_troubleshooting.md)
 - [WSL ROCDXG CI Stage](wsl_rocdxg.md)
