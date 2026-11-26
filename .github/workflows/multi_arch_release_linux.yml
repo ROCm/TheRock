@@ -205,6 +205,9 @@ jobs:
       BUILD_RELEASE_TYPE: ${{ inputs.release_type }}
       BUILD_VARIANT: ${{ inputs.build_variant }}
       BUILD_DATE: ${{ inputs.build_date }}
+      # Publish fails if the native builds made amd-repo-setup packages but none
+      # are found. An environment variable, so older source's script ignores it.
+      REPO_SETUP_PACKAGES_EXPECTED: ${{ needs.build_native_deb_packages.outputs.repo_setup_package_built == 'true' || needs.build_native_rpm_packages.outputs.repo_setup_package_built == 'true' }}
 
     steps:
       - name: Checkout
