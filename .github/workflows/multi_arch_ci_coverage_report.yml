@@ -65,6 +65,10 @@ on:
         description: "Branch, tag, or SHA to checkout. Defaults to the triggering ref."
         type: string
         default: ""
+    secrets:
+      CODECOV_TOKEN:
+        description: "Codecov upload token. Without it, the report is not uploaded to Codecov."
+        required: false
 
 permissions:
   contents: read
@@ -81,6 +85,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
@@ -88,6 +93,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ROCm/therock-ci-config
           ref: main
           path: ci-config
@@ -128,7 +134,6 @@ jobs:
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components || '[]') }}
     uses: ./.github/workflows/test_code_coverage_component.yml
-    secrets: inherit
     with:
       # Self-contained: this run's artifacts are both the base install and the
       # instrumented replacement.
@@ -172,6 +177,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 15
         with:
+          persist-credentials: false
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
 
