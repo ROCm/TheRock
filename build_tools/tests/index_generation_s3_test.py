@@ -169,6 +169,48 @@ class IndexGenerationS3Test(unittest.TestCase):
         self.assertNotIn('id="filter"', html)
         self.assertNotIn("Combined (all GFX)", html)
 
+    def test_native_package_index_lists_debs_and_rpms(self) -> None:
+        """The native package helper lists both .deb and .rpm files, with no filter."""
+        setup_prefix = "v5/amd-repo-setup/ubuntu2404"
+        deb_name = "amd-repo-setup_10.3.0~20261112-123~ubuntu2404_all.deb"
+        rpm_name = "amd-repo-setup-10.3.0~20261112-123.nightly.el10.noarch.rpm"
+        self._set_contents(
+            [
+                {
+                    "Key": f"{setup_prefix}/{name}",
+                    "LastModified": datetime(2026, 11, 12, tzinfo=timezone.utc),
+                }
+                for name in (deb_name, rpm_name, "index.html", "notes.txt")
+            ]
+        )
+
+        index_generation_s3.generate_native_package_index_s3(
+            s3_client=self.s3_client,
+            bucket_name=self.bucket_name,
+            prefix=setup_prefix,
+            upload=True,
+        )
+
+        html = self._uploaded_html()
+        self.assertIn(f"<title>Package index: {setup_prefix}/</title>", html)
+        self.assertIn(f'"name": "{deb_name}"', html)
+        self.assertIn(f'"name": "{rpm_name}"', html)
+        self.assertNotIn('"name": "index.html"', html)
+        self.assertNotIn("notes.txt", html)
+        self.assertNotIn('id="filter"', html)
+
+    def test_native_package_index_empty_prefix_names_all_suffixes(self) -> None:
+        """The empty-prefix error names every suffix that would have matched."""
+        with self.assertRaises(FileNotFoundError) as raised:
+            index_generation_s3.generate_native_package_index_s3(
+                s3_client=self.s3_client,
+                bucket_name=self.bucket_name,
+                prefix=self.prefix,
+                upload=True,
+            )
+        self.assertIn("No .deb/.rpm files found", str(raised.exception))
+        self.s3_client.put_object.assert_not_called()
+
     def test_index_supports_custom_empty_message(self) -> None:
         """The Windows installer helper accepts a caller-supplied empty_message."""
         windows_prefix = "v5/rocm/extras/rocoptiq/windows-installers/win11"
