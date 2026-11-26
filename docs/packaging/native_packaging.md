@@ -57,6 +57,12 @@ By default, RUNPATH in binaries and libraries is converted to RPATH during
 packaging. This ensures proper library loading behavior. To keep RUNPATH
 instead, use the `--runpath-pkg` option.
 
+## Cleanup
+
+By default, the packaging build/staging directory and the artifacts
+directory are removed after packaging completes. To keep both around, e.g.
+to debug a failed packaging run, use the `--no-clean-build` option.
+
 ## Fields in package.json
 
 Mandatory fields for a package entry in package.json.

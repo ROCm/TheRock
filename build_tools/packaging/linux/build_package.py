@@ -382,29 +382,35 @@ def cleanup_build_directory(config: PackageConfig):
         logger.debug(f"Cleaned up build directory: {build_dir}")
 
 
-def cleanup_packaging_environment(config: PackageConfig):
+def cleanup_packaging_environment(config: PackageConfig, clean_artifacts: bool = False):
     """Clean the packaging environment (build directories and pycache).
 
     This is called at the start and end of the packaging run to ensure
     a clean environment. Unlike cleanup_build_directory(), this also
-    removes Python cache files.
+    removes Python cache files. Set clean_artifacts=True to also remove
+    the artifacts directory (only once packaging is done reading it).
+    Disabled entirely via config.clean_build=False (--no-clean-build), to
+    keep both directories around for debugging a failed packaging run.
 
     Parameters:
     config: Configuration object containing package metadata
+    clean_artifacts: Also remove the artifacts directory
 
     Returns: None
     """
     logger.debug("cleanup_packaging_environment")
+    if not config.clean_build:
+        return
+
     PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
     remove_dir(PYCACHE_DIR)
 
     # NOTE: Remove only the build directory
     # Make sure the destination directory is not removed
     remove_dir(Path(config.dest_dir) / config.pkg_type)
-    # TBD:
-    # Currently RPATH packages are created by modifying the artifacts dir
-    # So artifacts dir clean up is required
-    # remove_dir(artifacts_dir)
+
+    if clean_artifacts:
+        remove_dir(Path(config.artifacts_dir))
 
 
 def parse_input_package_list(pkg_name, artifact_dir):
@@ -539,6 +545,7 @@ def create_package_config(args: argparse.Namespace) -> PackageConfig:
         gfxarch_list=tuple(gfxarch_list),
         build_variant=args.build_variant,
         deb_compression_args=deb_compression_args,
+        clean_build=args.clean_build,
     )
 
 
@@ -626,7 +633,7 @@ def run(args: argparse.Namespace):
                 logger.error(f"Failed to build any variants for {pkg_name}")
 
     # Clean the build directories
-    cleanup_packaging_environment(config)
+    cleanup_packaging_environment(config, clean_artifacts=True)
 
     if built_pkglist:
         logger.info(f"Built packages: {built_pkglist}")
@@ -726,8 +733,14 @@ def main(argv: list[str]):
 
     p.add_argument(
         "--clean-build",
-        action="store_true",
-        help="Clean the packaging environment",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Clean the packaging build/staging directory and the artifacts "
+            "directory before/after packaging (default: enabled). Pass "
+            "--no-clean-build to keep both around, e.g. to debug a failed "
+            "packaging run."
+        ),
     )
 
     p.add_argument(
