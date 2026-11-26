@@ -123,9 +123,6 @@ PYTEST_TIMEOUT_SECONDS = 900  # 15 minutes per test function
 # cannot catch (e.g. hanging during import or in C extensions).
 # TODO: investigate the root cause and narrow the exclusions.
 EXCLUDED_TEST_MODULES: list[str] = [
-    "inductor/test_max_autotune",
-    "inductor/test_torchinductor_opinfo_properties",
-    "inductor/test_compiled_autograd",
 ]
 
 # Inductor config: mirrors upstream test_inductor_shard() in .ci/pytorch/test.sh.
