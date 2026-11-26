@@ -8,11 +8,12 @@ product-local package directories:
 
     <product>/<index>/<normalized-package>/<filename>
 
-where <index> is ``whl`` or ``whl-next``. Release stream (dev/nightly/
-prerelease) is selected by the target bucket, never encoded in the path. This
-module computes the per-file destination keys the release publishers use when
-run with ``--structured``; the generator in ``manage_structured.py`` later
-discovers and indexes those directories.
+where <index> is ``whl``, ``whl-next``, or ``whl-next-asan`` (shared by all
+ASAN build variants). Release stream (dev/nightly/prerelease) is selected by
+the target bucket, never encoded in the path. This module computes the per-file
+destination keys the release publishers use when run with ``--structured``; the
+generator in ``manage_structured.py`` later discovers and indexes those
+directories.
 
 pep503_normalize + package-name extraction here intentionally mirror
 manage_structured.py so producer output round-trips through its
@@ -23,7 +24,7 @@ shared import would drag this module into that deployment.
 
 import dataclasses
 from pathlib import Path
-from re import sub
+from re import fullmatch, sub
 
 from _therock_utils.storage_location import StorageLocation
 from packaging.utils import (
@@ -37,9 +38,27 @@ from packaging.utils import (
 # Distribution artifacts placed into package directories.
 ACCEPTED_FILE_EXTENSIONS = (".whl", ".tar.gz", ".zip")
 
-# Valid aggregate index names (the second path segment).
+# Aggregate index names the release promotion tools accept (the second path
+# segment). Publishers resolve their index via python_package_publishing.py.
 INDEX_NAMES = ("whl", "whl-next")
 DEFAULT_INDEX = "whl-next"
+
+# Index segments are single lowercase path segments (e.g. ``whl-next-asan``).
+_INDEX_SEGMENT_PATTERN = r"[a-z0-9][a-z0-9._-]*"
+
+
+def validate_index(index: str) -> str:
+    """Return ``index`` if it is a safe index path segment.
+
+    Raises:
+        ValueError: if ``index`` is not a single lowercase path segment.
+    """
+    if not fullmatch(_INDEX_SEGMENT_PATTERN, index):
+        raise ValueError(
+            f"index={index!r} is invalid, must match {_INDEX_SEGMENT_PATTERN!r}"
+        )
+    return index
+
 
 # repo.amd.com release streams and the per-product bucket naming scheme:
 # therock-repo-amd-<stream>-<product>. Centralized here (rather than
@@ -119,10 +138,9 @@ def structured_key(product: str, index: str, filename: str) -> str:
     ``<stream>.repo.amd.com/rocm/<product>/<index>/...`` with no rewrite.
 
     Raises:
-        ValueError: if ``index`` is not a valid aggregate index name.
+        ValueError: if ``index`` is not a safe index path segment.
     """
-    if index not in INDEX_NAMES:
-        raise ValueError(f"index={index!r} is invalid, must be one of {INDEX_NAMES}")
+    validate_index(index)
     package = package_name_from_filename(filename)
     return f"v5/rocm/{product}/{index}/{package}/{filename}"
 
@@ -191,7 +209,7 @@ def plan_key_copies(
         source_bucket: Bucket the source keys live in.
         dest_bucket: Destination bucket name.
         product: Product segment (e.g. ``core``).
-        index: Index segment (``whl`` or ``whl-next``).
+        index: Index segment (e.g. ``whl-next``).
 
     Returns:
         Planned copies for accepted artifacts, sorted by source key. Only the

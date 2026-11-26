@@ -141,7 +141,7 @@ class UninstallDebPackagesTest(unittest.TestCase):
         t = native_linux_package_uninstall_test.NativeLinuxPackageUninstallTest(
             os_profile="ubuntu2404",
             gfx_arch=["gfx94x", "gfx1100"],
-            rocm_version="7.13",
+            rocm_version="10.3",
         )
         with _suppress_script_output():
             self.assertTrue(t.uninstall_packages())
@@ -151,10 +151,12 @@ class UninstallDebPackagesTest(unittest.TestCase):
         self.assertEqual(
             remove_cmd[4:],
             [
-                "amdrocm-core-sdk7.13-gfx1100",
-                "amdrocm7.13-gfx1100",
-                "amdrocm-core-sdk7.13-gfx94x",
-                "amdrocm7.13-gfx94x",
+                "amdrocm-hpc-sdk10.3-gfx1100",
+                "amdrocm-core-sdk10.3-gfx1100",
+                "amdrocm10.3-gfx1100",
+                "amdrocm-hpc-sdk10.3-gfx94x",
+                "amdrocm-core-sdk10.3-gfx94x",
+                "amdrocm10.3-gfx94x",
             ],
         )
 

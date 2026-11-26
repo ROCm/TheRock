@@ -16,6 +16,11 @@ on:
         description: "ROCm version to append to the package (8.0.0, 8.0.1rc1, ...)"
         required: true
         type: string
+      build_date:
+        description: "Build date (YYYYMMDD) for the run's dated package folders; empty means today"
+        required: false
+        type: string
+        default: ""
       native_package_type:
         description: "Package type (deb or rpm)"
         required: true
@@ -54,7 +59,7 @@ on:
         description: "Runner label for the build job"
         type: string
         required: false
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
       enable_pre_upload_build_verify:
         description: >-
           After build_package.py, verify Created Packages listed in
@@ -70,6 +75,9 @@ on:
       package_repository_url:
         description: "Public repository URL for package installation"
         value: ${{ jobs.build_native_packages.outputs.package_repository_url }}
+      repo_setup_package_built:
+        description: "Whether this run built amd-repo-setup packages, so publish must find them"
+        value: ${{ jobs.resolve_repo_setup_params.outputs.repo_base_url != '' }}
 
 permissions:
   contents: read
@@ -80,18 +88,18 @@ jobs:
   # Resolve the parameters used to build and upload the amd-repo-setup package:
   # the OS-profile build matrix for this package type, each profile's container
   # image, and the repo.amd.com stream the build line configures, with its
-  # tier, packages base URL, signing-key URL and build sub-folder.
+  # packages base URL, signing-key URL, build sub-folder and version suffix.
   #
   # The build line and the stream are different vocabularies: prerelease
   # configures rc. release_type stays the workflow input because it also selects
   # the artifact bucket; the stream is derived from it.
   resolve_repo_setup_params:
     name: Resolve amd-repo-setup parameters
-    # nightly and prerelease are the lines that upload the package. release
+    # dev, nightly and prerelease are the lines that upload the package. release
     # configures a stream too, but has no artifacts bucket to upload into.
     # Sanitizer variants skip: the resolved repository URL serves neither ASAN
     # packages (promoted under packages-asan) nor TSAN ones (not promoted).
-    if: inputs.enable_repo_setup_package && contains(fromJSON('["nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
+    if: inputs.enable_repo_setup_package && contains(fromJSON('["dev", "nightly", "prerelease"]'), inputs.release_type) && !contains(inputs.build_variant, 'asan') && !contains(inputs.build_variant, 'tsan')
     runs-on: ${{ github.repository_owner == 'ROCm' && inputs.build_runs_on || 'ubuntu-26.04' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:a13e8370a2d1d33a910e47669cdf075dbe9554685e78592f22935ec7c7c35e39
@@ -102,14 +110,17 @@ jobs:
       NATIVE_PACKAGE_TYPE: ${{ inputs.native_package_type }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_DATE: ${{ inputs.build_date }}
     outputs:
       os_profiles: ${{ steps.derive.outputs.os_profiles }}
       images: ${{ steps.derive.outputs.images }}
       stream: ${{ steps.derive.outputs.stream }}
-      tier: ${{ steps.derive.outputs.tier }}
       repo_base_url: ${{ steps.derive.outputs.repo_base_url }}
       gpg_key_url: ${{ steps.derive.outputs.gpg_key_url }}
       repo_sub_folder: ${{ steps.derive.outputs.repo_sub_folder }}
+      version_suffix: ${{ steps.derive.outputs.version_suffix }}
+      # Only older source outputs a tier; see the upload step.
+      tier: ${{ steps.derive.outputs.tier }}
     steps:
       - name: "Quartz - started - build amd-repo-setup"
         continue-on-error: true
@@ -138,13 +149,23 @@ jobs:
       - name: Install Python requirements
         run: pip install jinja2==3.1.6
 
+      # Source older than amd-repo-setup (an older `ref`) has no setup-package
+      # scripts. Skip it then: the outputs stay empty, the stage job skips and
+      # the release carries on. This only checks that the code exists, so a
+      # broken script still fails.
       - name: Derive amd-repo-setup parameters
         id: derive
         run: |
+          if [ ! -f build_tools/packaging/linux/build_repo_setup_package.py ] ||
+             ! grep -q get-repo-setup-params build_tools/packaging/linux/get_url_repo_params.py 2>/dev/null; then
+            echo "::notice::This source predates amd-repo-setup, so the package is skipped."
+            exit 0
+          fi
           python ./build_tools/packaging/linux/get_url_repo_params.py get-repo-setup-params \
             --pkg-type "${NATIVE_PACKAGE_TYPE}" \
             --release-type "${RELEASE_TYPE}" \
-            --run-id "${ARTIFACT_RUN_ID}"
+            --run-id "${ARTIFACT_RUN_ID}" \
+            ${BUILD_DATE:+--build-date "${BUILD_DATE}"}
 
   build_native_packages:
     permissions:
@@ -262,6 +283,15 @@ jobs:
             --package-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --release-type "${RELEASE_TYPE}"
 
+      # Checksums are authoritative only after repository metadata exists.
+      # Failure blocks upload. DEB requires MD5 and SHA256; RPM requires SHA256
+      # or stronger.
+      - name: Verify package repository checksums
+        run: |
+          python ./build_tools/packaging/linux/verify_package_repo_checksums.py \
+            --pkg-type "${NATIVE_PACKAGE_TYPE}" \
+            --package-dir "${{ env.PACKAGE_DIST_DIR }}"
+
       - name: Configure AWS credentials for artifact uploads
         uses: ./.github/actions/configure_aws_artifacts_credentials
         with:
@@ -322,10 +352,11 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OS_PROFILE: ${{ matrix.os_profile }}
       STREAM: ${{ needs.resolve_repo_setup_params.outputs.stream }}
-      TIER: ${{ needs.resolve_repo_setup_params.outputs.tier }}
       REPO_BASE_URL: ${{ needs.resolve_repo_setup_params.outputs.repo_base_url }}
       GPG_KEY_URL: ${{ needs.resolve_repo_setup_params.outputs.gpg_key_url }}
       REPO_SUB_FOLDER: ${{ needs.resolve_repo_setup_params.outputs.repo_sub_folder }}
+      VERSION_SUFFIX: ${{ needs.resolve_repo_setup_params.outputs.version_suffix }}
+      TIER: ${{ needs.resolve_repo_setup_params.outputs.tier }}
     steps:
       - name: Checkout
         timeout-minutes: 15
@@ -363,13 +394,15 @@ jobs:
         run: |
           # The build sub-folder is empty except on a per-build stream, which is
           # the only kind the builder accepts one for. The key URL is empty on an
-          # unsigned stream, where the builder needs none.
+          # unsigned stream, where the builder needs none. The version suffix (the
+          # run id on a per-build stream) gives each build its own file name.
           $PYTHON_CMD build_tools/packaging/linux/build_repo_setup_package.py \
             --os-profile "${OS_PROFILE}" \
             --stream "${STREAM}" \
             --repo-base-url "${REPO_BASE_URL}" \
             --gpg-key-url "${GPG_KEY_URL}" \
             --repo-sub-folder "${REPO_SUB_FOLDER}" \
+            ${VERSION_SUFFIX:+--version-suffix "${VERSION_SUFFIX}"} \
             --rocm-version "${ROCM_VERSION}" \
             --dest-dir repo-setup-package-out \
             --verify-repo-url
@@ -391,12 +424,14 @@ jobs:
         with:
           release_type: ${{ inputs.release_type }}
 
+      # Older source (an older `ref`) requires --tier, so pass it when the
+      # resolve step outputs one.
       - name: Upload amd-repo-setup
         id: upload-repo-setup-package
         run: |
           $PYTHON_CMD build_tools/packaging/linux/upload_repo_setup_package.py \
             --dest-dir repo-setup-package-out \
-            --tier "${TIER}" \
+            ${TIER:+--tier "${TIER}"} \
             --run-id "${ARTIFACT_RUN_ID}" \
             --os-profile "${OS_PROFILE}" \
             --pkg-type "${NATIVE_PACKAGE_TYPE}"
@@ -405,7 +440,8 @@ jobs:
   # their start, so this runs only when that job ran.
   notify_quartz_completed:
     name: "Quartz - completed - build amd-repo-setup"
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' }}
+    # Not for older source, whose resolve job succeeds without resolving a stream.
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' && (needs.resolve_repo_setup_params.result != 'success' || needs.resolve_repo_setup_params.outputs.repo_base_url != '') }}
     needs: [resolve_repo_setup_params, stage_repo_setup_package]
     runs-on: ubuntu-26.04
     timeout-minutes: 10

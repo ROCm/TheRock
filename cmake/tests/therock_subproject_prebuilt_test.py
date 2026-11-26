@@ -265,32 +265,29 @@ class PrebuiltRuntimeDepsTest(unittest.TestCase):
                 )
 
     @unittest.skipUnless(BASELINE_SUPPORTED, "BASELINE requires Linux x86-64")
-    def test_wrapper_coverage_follows_the_selected_fftw_build_route(self) -> None:
+    def test_wrapper_coverage_reports_openmpi_deferred_and_fftw3_direct(self) -> None:
         """Reports actual independent builds without downloading their sources.
 
-        FFTW's native CMake branch receives target flags; only its autotools
-        branch needs deferral. OpenMPI always uses an independent build.
+        FFTW's build is unified onto upstream's own CMake on every platform,
+        so it always receives target flags directly and is never deferred.
+        OpenMPI always uses an independent (autotools) build and is always
+        deferred.
         """
-        for autotools in ("OFF", "ON"):
-            for policy in ("OFF", "BASELINE"):
-                with self.subTest(autotools=autotools, policy=policy):
-                    output = self._configure_main_project(
-                        prebuilt=False,
-                        hardening_policy=policy,
-                        cmake_args=(
-                            "-DCOVERAGE_TEST_WRAPPERS=ON",
-                            f"-DTHEROCK_FLAG_FFTW3_AUTOTOOLS_BUILD={autotools}",
-                        ),
+        for policy in ("OFF", "BASELINE"):
+            with self.subTest(policy=policy):
+                output = self._configure_main_project(
+                    prebuilt=False,
+                    hardening_policy=policy,
+                    cmake_args=("-DCOVERAGE_TEST_WRAPPERS=ON",),
+                )
+                for project in ("therock-fftw3", "therock-fftw3f"):
+                    self.assertNotIn(
+                        f"Hardening coverage for subproject {project} ", output
                     )
-                    for project in ("therock-fftw3", "therock-fftw3f"):
-                        self.assertEqual(
-                            f"Hardening coverage for subproject {project} " in output,
-                            policy == "BASELINE" and autotools == "ON",
-                        )
-                    self.assertEqual(
-                        "Hardening coverage for subproject therock-openmpi " in output,
-                        policy == "BASELINE",
-                    )
+                self.assertEqual(
+                    "Hardening coverage for subproject therock-openmpi " in output,
+                    policy == "BASELINE",
+                )
 
     @unittest.skipUnless(BASELINE_SUPPORTED, "BASELINE requires Linux x86-64")
     def test_compiler_exclusion_and_prebuilt_provenance_are_reported(self) -> None:

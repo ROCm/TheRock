@@ -68,6 +68,7 @@ from native_linux_package_test_common import (
     is_rocm_related_package_name,
     is_sles,
     major_minor_rocm_version_from_input,
+    print_hpc_sdk_hint,
     run_streaming,
 )
 from packaging_utils import normalize_target_list
@@ -209,6 +210,7 @@ class NativeLinuxPackageUninstallTest:
             if return_code != 0:
                 print("\n" + "=" * 80)
                 print(f"[FAIL] Failed to remove packages (exit code: {return_code})")
+                print_hpc_sdk_hint(packages_to_remove)
                 return False
 
             print("\n" + "=" * 80)

@@ -72,6 +72,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
+
+# Driver builds link liblzma into comgr, which uses the static MSVC runtime.
+set(driver_msvc_runtime_args)
+if(WIN32 AND THEROCK_FLAG_WINDOWS_DRIVER_BUILD)
+  list(APPEND driver_msvc_runtime_args
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+  )
+endif()
+
 # xz/liblzma provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -108,6 +118,7 @@ add_custom_target(
       -DSKIP_INSTALL_FILES=ON
       # Set versioning to generic to override with a private map
       -DXZ_SYMBOL_VERSIONING=generic
+      ${driver_msvc_runtime_args}
 
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
@@ -128,7 +139,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LIBLZMA_IMPORTED_LOCATION "lib/liblzma.so")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(LIBLZMA_TYPE "STATIC")
-  set(LIBLZMA_IMPORTED_LOCATION "lib/liblzmastatic.lib")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/lzma.lib")
+  set(LIBLZMA_CFLAGS "-DLZMA_API_STATIC")
 else()
   message(FATAL_ERROR "Unrecognized system type")
 endif()

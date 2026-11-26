@@ -10,19 +10,35 @@ approve or block on their own and never post to GitHub or Jira without your expl
 
 ## PR-quality skills
 
-| Skill                                        | Use it when                                                                                                                                                                                                                                                                      |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`rocm-pr-quality/`](rocm-pr-quality/)       | Authoring, reviewing, or pre-merge gating **any** ROCm-library PR. This is the library-agnostic base — always start here. See [`SKILL.md`](rocm-pr-quality/SKILL.md) and the detailed rubric in [`reference.md`](rocm-pr-quality/reference.md).                                  |
-| [`therock-pr-quality/`](therock-pr-quality/) | A PR touches **TheRock build repo**: the superbuild / `cmake/` / `THEROCK_ENABLE_*` options, submodules and patches, `artifact-*.toml` / `BUILD_TOPOLOGY.toml`, or reusable CI workflows. Extends the base — read the base first. See [`SKILL.md`](therock-pr-quality/SKILL.md). |
+| Skill                                        | Use it when                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`rocm-pr-quality/`](rocm-pr-quality/)       | Authoring, reviewing, or pre-merge gating **any** ROCm-library PR. This is the library-agnostic base — always start here. See [`SKILL.md`](rocm-pr-quality/SKILL.md) and the detailed rubric in [`reference.md`](rocm-pr-quality/reference.md).                                                                                                                                             |
+| [`therock-pr-quality/`](therock-pr-quality/) | A PR touches **TheRock build repo**: the superbuild / `cmake/` / `THEROCK_ENABLE_*` options, submodules and patches, `artifact-*.toml` / `BUILD_TOPOLOGY.toml`, or reusable CI workflows. Extends the base — read the base first. See [`SKILL.md`](therock-pr-quality/SKILL.md). For reviewing any TheRock PR, including self-review, also see [`review.md`](therock-pr-quality/review.md). |
 
-Each skill exposes three actions you invoke in one sentence:
+Each skill exposes four actions you invoke in one sentence:
 
 - **Author assist** — "help me write a PR worth reviewing."
 - **Review assist** — "help me review this PR well."
 - **Pre-merge gate** — "is it actually safe to press merge right now?"
+- **Check attestation** — "has this PR been reviewed by the skill?"
 
 Component repositories add their own thin overlays on top (for example, `hipblaslt-pr-quality` in
 `rocm-libraries`). Overlays may tighten but never weaken the base rules.
+
+The base skill also carries a writing guide,
+[`prose-style-context.md`](rocm-pr-quality/prose-style-context.md), for PR descriptions, review
+comments, and handoffs. The author and review actions apply it when they draft or critique a
+description.
+
+## PR labeling skills
+
+| Skill                            | Use it when                                                                                                                                                                                                                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`pr-ci-labels/`](pr-ci-labels/) | Choosing the CI labels a PR should carry (the smallest set that safely tests the change), or checking a PR's labels and which labels its CI runs used. Standalone; the PR-quality skills can call it. See [`SKILL.md`](pr-ci-labels/SKILL.md) and the label rules in [`reference.md`](pr-ci-labels/reference.md). |
+
+The label list itself stays in TheRock's
+[`ci_behavior_manipulation.md`](../docs/development/ci_behavior_manipulation.md); the skill reads it
+rather than keeping a copy.
 
 ## Related automated check
 

@@ -28,6 +28,7 @@ import compute_rocm_package_version as crpv  # noqa: E402
 STABLE_BASE = "https://stable.repo.amd.com/rocm/core/packages"
 RC_BASE = "https://rc.repo.amd.com/rocm/core/packages"
 NIGHTLY_BASE = "https://nightly.repo.amd.com/rocm/core/packages"
+DEV_BASE = "https://dev.repo.amd.com/rocm/core/packages"
 # The signing key, supplied whole. It sits beside core/ rather than under
 # STABLE_BASE, which is why it is a separate input rather than derived from it.
 STABLE_KEY_URL = "https://stable.repo.amd.com/rocm/gpg/packages.gpg"
@@ -106,6 +107,7 @@ _STREAM_BASES = {
     "stable": STABLE_BASE,
     "rc": RC_BASE,
     "nightly": NIGHTLY_BASE,
+    "dev": DEV_BASE,
 }
 
 
@@ -749,13 +751,23 @@ CI_DATE = "20261013"
 
 # The release type whose packages each stream's repository serves, and so the
 # one CI computes --rocm-version for. A new stream needs an entry here.
-_RELEASE_TYPES = {"stable": "release", "rc": "prerelease", "nightly": "nightly"}
+_RELEASE_TYPES = {
+    "stable": "release",
+    "rc": "prerelease",
+    "nightly": "nightly",
+    "dev": "dev",
+}
+# dev rpm versions carry the commit; pinned so they don't depend on the checkout.
+CI_SHA = "1f23855f"
 
 
 def _ci_version(stream, pkg_type, base=CI_ROCM_VERSION, date=CI_DATE, candidate="3"):
     """Return the --rocm-version CI passes when it builds ``stream``."""
     release_type = _RELEASE_TYPES[stream]
-    with mock.patch.object(crpv, "get_current_date", return_value=date):
+    with (
+        mock.patch.object(crpv, "get_current_date", return_value=date),
+        mock.patch.object(crpv, "get_git_sha", return_value=CI_SHA),
+    ):
         return crpv.compute_version(
             package_type=pkg_type,
             release_type=release_type,
@@ -792,6 +804,8 @@ def test_ci_passes_the_version_of_the_rocm_packages():
     assert _ci_version("rc", "rpm") == "10.1.0~rc3"
     assert _ci_version("nightly", "deb") == "10.1.0~20261013"
     assert _ci_version("nightly", "rpm") == "10.1.0~20261013"
+    assert _ci_version("dev", "deb") == "10.1.0~dev20261013"
+    assert _ci_version("dev", "rpm") == f"10.1.0~20261013g{CI_SHA}"
 
 
 @pytest.mark.parametrize(
@@ -800,6 +814,11 @@ def test_ci_passes_the_version_of_the_rocm_packages():
         ("stable", "10.1.0-1~ubuntu2404", "10.1.0-1.stable.el8"),
         ("rc", "10.1.0~pre3-1~ubuntu2404", "10.1.0~rc3-1.rc.el8"),
         ("nightly", "10.1.0~20261013-1~ubuntu2404", "10.1.0~20261013-1.nightly.el8"),
+        (
+            "dev",
+            "10.1.0~dev20261013-1~ubuntu2404",
+            f"10.1.0~20261013g{CI_SHA}-1.dev.el8",
+        ),
     ],
 )
 def test_every_stream_carries_the_version_it_is_given(stream, deb, rpm):
@@ -824,11 +843,8 @@ def test_rpm_release_carries_the_stream_whatever_the_version():
 # The profile has to reach the package version, because one package is built per
 # profile and their contents differ -- each embeds its own repository URL.
 #
-# These two tests pass explicit profile names rather than iterating OS_PROFILES.
-# OS_PROFILES currently holds exactly one deb profile, so a loop over it would
-# compare a one-element set against itself and pass no matter what deb_version
-# did with the argument -- including ignoring it. Naming a second debian-family
-# profile keeps the assertion honest before that profile is added for real.
+# These two tests pass explicit profile names rather than iterating OS_PROFILES,
+# so they test deb_version itself and don't depend on which profiles are listed.
 
 
 @pytest.mark.parametrize(
@@ -862,10 +878,7 @@ def test_every_rpm_profile_has_a_dist_tag():
 def test_rpm_profiles_never_share_a_package_version():
     tags = [p["dist_tag"] for p in brp.OS_PROFILES.values() if p["pkg_type"] == "rpm"]
     assert len(tags) == len(set(tags))
-    # Include a second SUSE profile: the collision only becomes reachable once
-    # one exists, and it must be distinguishable before then.
-    all_tags = tags + [".sles15"]
-    assert len({_rpm("stable", dist=t) for t in all_tags}) == len(all_tags)
+    assert len({_rpm("stable", dist=t) for t in tags}) == len(tags)
 
 
 def test_version_suffix_reaches_both_package_types():
@@ -947,6 +960,7 @@ _CI_PAIRS = [
     pytest.param(("rc", {}), ("rc", {"candidate": "4"}), id="next-candidate"),
     pytest.param(("nightly", {}), ("nightly", {"date": "20261014"}), id="next-nightly"),
     pytest.param(("stable", {}), ("nightly", {"base": "10.2.0"}), id="next-release"),
+    pytest.param(("dev", {}), ("dev", {"date": "20261014"}), id="next-dev"),
 ]
 
 
@@ -973,13 +987,13 @@ def test_rpm_repo_setup_packages_sort_like_their_rocm_packages(a, b):
 
 
 @_needs_dpkg
-@pytest.mark.parametrize("stream", ["rc", "nightly"])
+@pytest.mark.parametrize("stream", ["rc", "nightly", "dev"])
 def test_deb_stable_outranks_the_other_streams_at_its_rocm_version(stream):
     assert _deb_cmp(_ci_deb(stream), _ci_deb("stable")) == -1
 
 
 @_needs_rpm
-@pytest.mark.parametrize("stream", ["rc", "nightly"])
+@pytest.mark.parametrize("stream", ["rc", "nightly", "dev"])
 def test_rpm_stable_outranks_the_other_streams_at_its_rocm_version(stream):
     assert _rpm_cmp(_ci_rpm(stream), _ci_rpm("stable")) == -1
 
@@ -999,6 +1013,15 @@ def test_rpm_stable_outranks_the_other_streams_at_its_rocm_version(stream):
 )
 def test_deb_versions_sort_in_release_order(lower, higher, why):
     assert _deb_cmp(_deb(**lower), _deb(**higher)) == -1, why
+
+
+@_needs_dpkg
+def test_deb_same_day_dev_builds_sort_by_run():
+    # dev publishes several builds a day at one version; CI passes the run ID as
+    # the suffix, so a later run is an upgrade.
+    version = _ci_version("dev", "deb")
+    earlier, later = _deb(version, "43000000001"), _deb(version, "43000000002")
+    assert _deb_cmp(earlier, later) == -1
 
 
 # The rpm %changelog date must stay English on any build machine. strftime and
@@ -1043,7 +1066,7 @@ def test_rpm_changelog_date_is_english_under_a_foreign_locale():
 
 def test_stream_rejects_unknown():
     with pytest.raises(SystemExit):
-        _args("--stream", "dev")
+        _args("--stream", "weekly")
 
 
 def test_repo_base_url_required():
@@ -1451,8 +1474,9 @@ def test_control_conflicts_with_the_legacy_installer_on_every_stream(stream):
     # case. Declared for every stream, since that package configures a
     # ROCm repository regardless of which stream this one points at.
     extra = ["--stream", stream]
-    if stream == "nightly":
-        extra += ["--repo-base-url", NIGHTLY_BASE, "--repo-sub-folder", NIGHTLY_SUB]
+    if brp.stream_shape(stream) == brp._BUILD_ID:
+        base, sub = _base_for(stream), _sub_for(stream)
+        extra += ["--repo-base-url", base, "--repo-sub-folder", sub]
     ctx = brp.build_context(_args(*extra), brp.OS_PROFILES["ubuntu2404"])
     out = _render("template/repo/deb/control.j2", ctx)
     assert f"Conflicts: {brp.LEGACY_INSTALLER_PACKAGE}" in out
@@ -1546,17 +1570,30 @@ def test_install_maps_keyring_only_when_signed():
 
 
 def test_list_profiles_rpm():
-    assert brp.list_profiles("rpm") == ["rhel8", "rhel10", "sles16"]
+    assert brp.list_profiles("rpm") == [
+        "rhel8",
+        "rhel10",
+        "sles16",
+        "rhel9",
+        "sles15",
+        "azl3",
+    ]
 
 
 def test_list_profiles_deb():
-    assert brp.list_profiles("deb") == ["ubuntu2404"]
+    assert brp.list_profiles("deb") == [
+        "ubuntu2404",
+        "ubuntu2204",
+        "ubuntu2604",
+        "debian12",
+        "debian13",
+    ]
 
 
 def test_list_profiles_cli_emits_json(capsys):
     brp.run_list_profiles(["--pkg-type", "rpm"])
     out = capsys.readouterr().out
-    assert json.loads(out) == ["rhel8", "rhel10", "sles16"]
+    assert json.loads(out) == ["rhel8", "rhel10", "sles16", "rhel9", "sles15", "azl3"]
 
 
 def test_list_profiles_cli_rejects_invalid_pkg_type(capsys):
@@ -1567,7 +1604,13 @@ def test_list_profiles_cli_rejects_invalid_pkg_type(capsys):
 def test_main_dispatches_list_profiles(capsys):
     brp.main(["list-profiles", "--pkg-type", "deb"])
     out = capsys.readouterr().out
-    assert json.loads(out) == ["ubuntu2404"]
+    assert json.loads(out) == [
+        "ubuntu2404",
+        "ubuntu2204",
+        "ubuntu2604",
+        "debian12",
+        "debian13",
+    ]
 
 
 # --- dest-dir normalization -----------------------------------------------
@@ -1619,6 +1662,7 @@ EXPECTED_REPO_FILE_STEMS = {
     "stable": "amdrocm-stable",
     "rc": "amdrocm-stablerc",
     "nightly": "amdrocm-nightly",
+    "dev": "amdrocm-dev",
 }
 
 

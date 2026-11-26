@@ -25,7 +25,8 @@ def _try_offload_arch(therock_build_dir: str, file_ending: str):
         lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
         logging.info(f"DEBUG offload-arch:{lines}")
         if lines:
-            last = lines[-1]
+            # Keep "gfx950" from a target ID such as "gfx950:sramecc+:xnack-"
+            last = lines[-1].split(":")[0]
             if last.startswith("gfx"):
                 if result.returncode != 0:
                     logging.warning(

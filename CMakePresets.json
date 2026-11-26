@@ -39,9 +39,10 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
+        "miopen-hipconv_SANITIZER": "OFF",
         "THEROCK_FLAG_STAMP_LIBRARY_GIT_VERSIONS": "ON"
       },
-      "description": "Hidden base for full ASAN variants. Sets all sanitizer flags and per-subproject overrides. Variants inherit this and only set CMAKE_BUILD_TYPE (and optionally debug flags)."
+      "description": "Hidden base for full ASAN variants. Sets all sanitizer flags and per-subproject overrides. Variants inherit this and only set CMAKE_BUILD_TYPE (and optionally debug flags). miopen-hipconv_SANITIZER (matching the <comp_name>_SANITIZER convention above) disables ASAN on MIOpen's statically-linked hipconv kernel-launcher code only; ml-libs/CMakeLists.txt translates it into hipconv's own HIPCONV_DISABLE_ASAN option. Its dense per-arch template instantiation under ASAN's stack instrumentation pushes libMIOpen.so's link past the 2GB PC-relative relocation limit; the rest of MIOpen keeps full ASAN coverage."
     },
     {
       "name": "linux-host-asan-base",

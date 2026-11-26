@@ -28,7 +28,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       repository:
@@ -67,7 +67,7 @@ on:
         type: string
         required: true
       rocm_package_find_links_url:
-        description: "URL for pip --find-links to install ROCm packages for the JAX manylinux build."
+        description: "URL for pip --find-links to install ROCm packages for the JAX build."
         type: string
         default: ""
       repository:
@@ -134,11 +134,11 @@ jobs:
     needs: setup_matrix
     # The build and the tests for this cell are both shown under this name.
     name: Release | py ${{ matrix.python_version }} | JAX ${{ matrix.jax_label }}
+    if: ${{ needs.setup_matrix.outputs.jax_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.setup_matrix.outputs.jax_matrix) }}
-
     permissions:
       id-token: write
       contents: read
@@ -150,6 +150,7 @@ jobs:
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}
       rocm_jax_ref: ${{ matrix.rocm_jax_ref }}
+      build_image: ${{ matrix.build_image }}
       wheel_type: ${{ matrix.wheel_type }}
       publish: ${{ matrix.publish }}
       gfx_arch: ${{ matrix.gfx_arch }}

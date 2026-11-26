@@ -52,7 +52,7 @@ from typing import Iterator, TextIO
 
 DEFAULT_FORMAT = "[%(asctime)s][%(levelname)-8s]: %(message)s"
 DEFAULT_DATE_FORMAT = "%y-%m-%d %H:%M:%S"
-CI_FORMAT = "[%(levelname)-8s] %(name)s: %(message)s"
+CI_FORMAT = "[%(asctime)s][%(levelname)-8s] %(name)s: %(message)s"
 
 # Environment variables
 ENV_LOG_ENABLED = "THEROCK_LOG_ENABLED"
@@ -159,7 +159,7 @@ def configure_logging(
 
     # Select format
     fmt = CI_FORMAT if ci_mode else DEFAULT_FORMAT
-    datefmt = None if ci_mode else DEFAULT_DATE_FORMAT
+    datefmt = DEFAULT_DATE_FORMAT
 
     # Configure root logger
     root = logging.getLogger()

@@ -164,6 +164,10 @@ a ROCm package version from
 `https://nightly.repo.amd.com/rocm/whl-next/`. Framework builds and tests then
 install that version from the index.
 
+Automatic selection uses the `[job_paths]` lists in
+[`build_tools/github_actions/skip-ci-config.toml`](../../build_tools/github_actions/skip-ci-config.toml)
+to identify affected job groups.
+
 > [!IMPORTANT]
 > Published ROCm dependencies give framework packages a `+rocm...` suffix
 > rather than a `+devrocm...` suffix. These packages should

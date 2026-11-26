@@ -37,18 +37,16 @@ def _do_path(args: argparse.Namespace):
         sys.exit(1)
 
 
-def _do_init(args: argparse.Namespace):
+def _do_init(args: argparse.Namespace) -> None:
     from . import _devel
 
     try:
-        # The function `_devel.get_devel_root()` calls into `_expand_devel_contents`
-        # if contents for development were not yet unpacked.
-        root_path = _devel.get_devel_root()
+        root_path = _devel.get_devel_root(force_initialize=True)
     except ModuleNotFoundError as e:
         print(f"ERROR running init: {e}", file=sys.stderr)
         sys.exit(1)
     if not args.quiet:
-        print(f"Devel contents expanded to '{root_path}'")
+        print(f"Devel links initialized in '{root_path}'")
 
 
 def _do_test(args: argparse.Namespace):
@@ -69,8 +67,7 @@ def _do_test(args: argparse.Namespace):
     else:
         print("NOTE: Skipping libraries tests (not installed for this arch)")
 
-    # The devel platform package may not exist yet since it is populated on-demand,
-    # so check that the pure package exists.
+    # The pure package is the stable signal that rocm-sdk-devel is installed.
     if importlib.util.find_spec("rocm_sdk_devel") is not None:
         ALL_TEST_MODULES.append("rocm_sdk.tests.devel_test")
 
@@ -106,7 +103,7 @@ def _do_targets(args: argparse.Namespace):
     print(dist_info_struct["dist_amdgpu_targets"])
 
 
-def main(argv: list[str] | None = None):
+def main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv[1:]
     p = argparse.ArgumentParser(
@@ -154,7 +151,7 @@ def main(argv: list[str] | None = None):
     init_p = sub_p.add_parser(
         "init",
         help=(
-            "Expand devel contents to initialize rocm[devel] and link device "
+            "Initialize rocm[devel] links and link device "
             "files from installed rocm-sdk-device-* wheels into the devel tree "
             "(re-run after installing or removing a device wheel to refresh)"
         ),

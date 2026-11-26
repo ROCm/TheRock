@@ -10,6 +10,8 @@ Table of Contents
     - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
+    - [No single-use module-level constants](#no-single-use-module-level-constants)
+    - [Use single backticks for code in comments and docstrings](#use-single-backticks-for-code-in-comments-and-docstrings)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -19,6 +21,7 @@ Table of Contents
     - [No duplicate code](#no-duplicate-code)
   - [Error handling and reliability](#error-handling-and-reliability)
     - [Distinguish between different error conditions](#distinguish-between-different-error-conditions)
+    - [Keep process exits at the CLI boundary](#keep-process-exits-at-the-cli-boundary)
     - [Validate that operations actually succeeded](#validate-that-operations-actually-succeeded)
     - [Fail-fast behavior](#fail-fast-behavior)
     - [No timeouts on basic binutils](#no-timeouts-on-basic-binutils)
@@ -284,6 +287,93 @@ original_size = binary_path.stat().st_size + 8000000  # Estimate original size
 print(f"Stripped {original_size - new_size} bytes")
 ```
 
+#### No single-use module-level constants
+
+**Don't hoist a literal into a module-level constant when it is used only once.**
+
+Name a value at the narrowest scope that covers all of its uses:
+
+- Used once: inline the literal. If the value is not self-explanatory, add a
+  comment or name it with a local variable (see
+  [No magic numbers](#no-magic-numbers)).
+- Used two or more times within one function: a local variable in that function.
+- Used across functions, or a genuine configuration knob someone might tune: a
+  module-level constant.
+
+Extracting a literal that is referenced exactly once adds indirection: the
+reader has to jump to the definition to see the value. A local variable keeps a
+repeated value consistent without moving it away from the code that uses it.
+
+This is distinct from hoisting for performance. Compiling a regex once at module
+level (see [Performance best practices](#performance-best-practices)) is correct
+because it avoids recompilation. Extract on the second use or for a real
+performance win, not on the first.
+
+✅ **Preferred:**
+
+```python
+# Used once: inline.
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / "job_summary.md"
+
+
+# Used twice in one function: local variable.
+def publish_job_summary(content: str, output_dir: Path, mirror_dir: Path) -> None:
+    summary_file_name = "job_summary.md"
+    (output_dir / summary_file_name).write_text(content)
+    (mirror_dir / summary_file_name).write_text(content)
+```
+
+❌ **Avoid:**
+
+```python
+JOB_SUMMARY_FILE_NAME = "job_summary.md"  # Only used once, below
+
+
+def job_summary_mirror_path() -> Path | None:
+    runner_temp = os.getenv("RUNNER_TEMP")
+    if not runner_temp:
+        return None
+    return Path(runner_temp) / JOB_SUMMARY_FILE_NAME
+```
+
+#### Use single backticks for code in comments and docstrings
+
+**Mark code symbols, flags, and values with single backticks, not double.**
+
+Both forms appear in existing Python code today. This guide standardizes on
+single backticks because they match the Markdown used everywhere else in the
+repo (docs, PR descriptions, review comments). Double backticks are
+reStructuredText literal syntax, which only matters when a documentation
+generator such as Sphinx processes the docstrings. TheRock does not run one, so
+the extra backticks are only noise.
+
+This applies to new and modified code. Do not churn existing comments solely to
+convert double backticks.
+
+✅ **Preferred:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under `$RUNNER_TEMP`.
+
+    Returns `None` when the env var is unset. Pass `mirror=False` to skip.
+    """
+```
+
+❌ **Avoid:**
+
+```python
+def mirror_path() -> Path | None:
+    """Resolve the mirror under ``$RUNNER_TEMP``.
+
+    Returns ``None`` when the env var is unset. Pass ``mirror=False`` to skip.
+    """
+```
+
 ### Script structure and organization
 
 #### Use `__main__` guard
@@ -529,17 +619,8 @@ Benefits:
 - Reduces cognitive load
 - Makes code reviews more effective
 
-Guidelines:
-
-- Classes should be < 200 lines (ideally)
-- Methods should be < 30 lines (ideally)
-- If a class has 7+ responsibilities, split it
-
-When to split:
-
-- God objects doing everything → multiple focused classes
-- 100+ line methods → extract helper methods
-- Duplicate code → extract to shared function
+Split functions or classes when they mix independent responsibilities, repeat
+logic, or contain operations that need to be understood or tested separately.
 
 #### No duplicate code
 
@@ -645,6 +726,62 @@ Key points:
 - Return False only for legitimate "not found" cases
 - Use `from e` to preserve exception chain
 
+#### Keep process exits at the CLI boundary
+
+Reusable functions should raise specific exceptions for failures, not call
+`sys.exit()` or raise `SystemExit`. This includes helpers in scripts: another
+script or a test may import and call them. Let callers decide whether to retry,
+add context, or stop.
+
+[`sys.exit()`](https://docs.python.org/3/library/sys.html#sys.exit) raises
+`SystemExit`, which is not caught by `except Exception` and normally terminates
+the process. Cleanup such as `finally` blocks still runs, but callers should
+not need to catch a process-exit exception to handle an ordinary failure.
+
+At the CLI boundary, let unexpected exceptions propagate with their traceback.
+Catch specific expected errors only when a concise diagnostic is more useful,
+print it to stderr, and return a nonzero status from `main()`. Use
+`sys.exit(main(...))` in the `__main__` guard to convert that status into a
+process exit. `argparse` exits for help and invalid CLI arguments are appropriate
+at this boundary; keep argument parsing out of reusable helpers.
+
+✅ **Preferred:**
+
+```python
+def read_manifest(path: Path) -> dict[str, object]:
+    # FileNotFoundError and JSONDecodeError remain available to callers.
+    with path.open() as f:
+        return json.load(f)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Read an artifact manifest")
+    parser.add_argument("manifest", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        manifest = read_manifest(args.manifest)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Cannot read manifest {args.manifest}: {e}", file=sys.stderr)
+        return 1
+    print(manifest)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+```
+
+❌ **Avoid:**
+
+```python
+def read_manifest(path: Path) -> dict[str, object]:
+    try:
+        with path.open() as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        sys.exit(f"Cannot read manifest {path}: {e}")
+```
+
 #### Validate that operations actually succeeded
 
 **Don't just assume that an operation succeeded, check that it did.**
@@ -688,6 +825,10 @@ What to validate:
 #### Fail-fast behavior
 
 **Always fail immediately on errors. Never silently continue or produce incomplete results.**
+
+Failing fast means reporting a failure where it occurs, usually by raising an
+exception. It does not mean terminating the process from a helper; see
+[Keep process exits at the CLI boundary](#keep-process-exits-at-the-cli-boundary).
 
 Benefits:
 
@@ -968,6 +1109,8 @@ Before submitting code, verify:
 - [ ] No `from __future__ import annotations`
 - [ ] Complex type signatures extracted to NamedTuple/dataclass
 - [ ] No magic numbers or fake estimates
+- [ ] Named values scoped to their uses (inline once, local within one function, module constant across functions)
+- [ ] Single backticks, not double, for code in comments and docstrings
 - [ ] Tuples only for simple pairs, dataclasses for structured data
 - [ ] All imports at top of file (except documented circular dependencies)
 - [ ] No timeouts on binutils operations
@@ -975,8 +1118,8 @@ Before submitting code, verify:
 - [ ] Output validation after critical operations
 - [ ] No duplicate code
 - [ ] Specific exception handling (not broad `except Exception`)
-- [ ] Methods < 30 lines (or have a good reason)
-- [ ] Classes < 200 lines (or split into focused components)
+- [ ] Functions and classes have focused responsibilities
+- [ ] Reusable functions raise exceptions; process exits stay at the CLI boundary
 - [ ] Using `pathlib.Path` for filesystem operations
 - [ ] Scripts work from any directory (no CWD assumptions)
 - [ ] CLI scripts use `argparse`

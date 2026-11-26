@@ -149,7 +149,10 @@ def create_list(
     # Define filters: always include "common", plus specific AMDGPU families
     filters = ["common"]
     filters += amdgpu_family
-    filters += [platform.lower()] if platform else []
+    if platform:
+        platform_filter = platform.lower()
+        filters.append(platform_filter)
+        filters += [f"{platform_filter}-{family.lower()}" for family in amdgpu_family]
 
     # Load skip_tests from generic.py and (pytorch_<version> or "all" pytorch versions)
     dict_skip_tests = import_skip_tests(pytorch_version)

@@ -8,87 +8,6 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-set(_miopen_enabled OFF)
-if(THEROCK_ENABLE_MIOPEN)
-  therock_check_subproject_targets(_miopen_enabled MIOpen)
-endif()
-set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
-
-if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
-  # MIOpen's CK use is gated on both the per-arch CK availability
-  # (math-libs/CMakeLists.txt) and the user-facing
-  # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
-  # someone build CK for other consumers while keeping it out of MIOpen.
-  set(_miopen_use_ck OFF)
-  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
-    set(_miopen_use_ck ON)
-  endif()
-
-  set(optional_miopen_build_deps)
-  if(_miopen_use_ck)
-    list(APPEND optional_miopen_build_deps composable_kernel)
-  endif()
-
-  if(MSVC)
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
-  else()
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
-  endif()
-
-  therock_cmake_subproject_declare(MIOpen
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DROCM_PATH=
-      -DROCM_DIR=
-      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
-      -DMIOPEN_USE_MLIR=OFF # TODO: enable
-      -DMIOPEN_TEST_DISCRETE=OFF
-      "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      rocm-cmake
-      therock-eigen
-      therock-frugally-deep
-      therock-googletest
-      therock-nlohmann-json
-      therock-FunctionalPlus
-      ${optional_miopen_build_deps}
-    RUNTIME_DEPS
-      hipBLAS-common
-      hip-clr
-      hipBLAS
-      hipBLASLt
-      rocm-half
-      rocBLAS
-      rocRAND
-      ${THEROCK_BUNDLED_BZIP2}
-      ${THEROCK_BUNDLED_SQLITE3}
-      ${optional_profiler_deps}
-  )
-  therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
-  therock_cmake_subproject_activate(MIOpen)
-
-  therock_provide_artifact(miopen
-    DESCRIPTOR artifact-miopen.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-      test
-    SUBPROJECT_DEPS
-      MIOpen
-  )
-endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
-
 if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
   # hipDNN
@@ -148,6 +67,104 @@ if(THEROCK_ENABLE_HIPDNN)
       hipDNN
   )
 endif(THEROCK_ENABLE_HIPDNN)
+
+set(_miopen_enabled OFF)
+if(THEROCK_ENABLE_MIOPEN)
+  therock_check_subproject_targets(_miopen_enabled MIOpen)
+endif()
+set(_miopen_enabled ${_miopen_enabled} PARENT_SCOPE)
+
+if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
+  # MIOpen's CK use is gated on both the per-arch CK availability
+  # (math-libs/CMakeLists.txt) and the user-facing
+  # THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL opt-out, which lets
+  # someone build CK for other consumers while keeping it out of MIOpen.
+  set(_miopen_use_ck OFF)
+  if(_ck_enabled AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_miopen_use_ck ON)
+  endif()
+
+  set(optional_miopen_build_deps)
+  if(_miopen_use_ck)
+    list(APPEND optional_miopen_build_deps composable_kernel)
+  endif()
+
+  # MIOpen's configure needs hipdnn_frontend when the wrapper is on. hipDNN must
+  # be declared before MIOpen, so its block is above this one.
+  if(THEROCK_FLAG_MIOPEN_ENABLE_HIPDNN_WRAPPER)
+    list(APPEND optional_miopen_build_deps hipDNN)
+  endif()
+
+  if(MSVC)
+    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
+  else()
+    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
+  endif()
+
+  # Translate the generic <comp_name>_SANITIZER preset convention (e.g.
+  # amd-llvm_SANITIZER) into hipconv's own HIPCONV_DISABLE_ASAN option (see
+  # projects/miopen/src/hipconv/CMakeLists.txt): hipconv is a subdirectory of
+  # the MIOpen subproject, not a subproject of its own, so it can't use
+  # therock_sanitizer_configure()'s per-subproject override directly.
+  set(_HIPCONV_DISABLE_ASAN OFF)
+  if("${miopen-hipconv_SANITIZER}" STREQUAL "OFF")
+    set(_HIPCONV_DISABLE_ASAN ON)
+  endif()
+
+  therock_cmake_subproject_declare(MIOpen
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
+      -DMIOPEN_USE_MLIR=OFF # TODO: enable
+      -DMIOPEN_TEST_DISCRETE=OFF
+      "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
+      "-DHIPCONV_DISABLE_ASAN=${_HIPCONV_DISABLE_ASAN}"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-eigen
+      therock-frugally-deep
+      therock-googletest
+      therock-nlohmann-json
+      therock-FunctionalPlus
+      ${optional_miopen_build_deps}
+    RUNTIME_DEPS
+      hipBLAS-common
+      hip-clr
+      hipBLAS
+      hipBLASLt
+      rocm-half
+      rocBLAS
+      rocRAND
+      ${THEROCK_BUNDLED_BZIP2}
+      ${THEROCK_BUNDLED_SQLITE3}
+      ${optional_profiler_deps}
+  )
+  therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
+  therock_cmake_subproject_activate(MIOpen)
+
+  therock_provide_artifact(miopen
+    DESCRIPTOR artifact-miopen.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      MIOpen
+  )
+endif(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
 
 if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   ##############################################################################
@@ -240,6 +257,7 @@ if(THEROCK_ENABLE_MIOPENPROVIDER AND _miopen_enabled)
     DESCRIPTOR artifact-miopenprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS
@@ -288,6 +306,7 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
     DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
+      doc
       lib
       test
     SUBPROJECT_DEPS

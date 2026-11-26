@@ -35,7 +35,7 @@ class ComponentDefaults:
 
 # Component extends chain (each component skips files claimed by predecessors):
 #
-#   lib → run → dbg → dev → doc → test
+#   lib → run → dbg → dev → sys → doc → test
 #
 # Artifact TOML descriptors should list components in this order so that
 # the file layout mirrors the processing priority.
@@ -63,7 +63,7 @@ ComponentDefaults(
 # WARNING: 'run' has no default includes, so a bare entry like
 #   [components.run."some/stage"]
 # acts as a catch-all that claims ALL files not matched by 'lib'. This prevents
-# later components (dbg, dev, doc, test) from claiming files in that stage dir.
+# later components (dbg, dev, sys, doc, test) from claiming files in that stage dir.
 # Always use explicit includes on run, or omit it for stage dirs where dev/test
 # content is expected.
 ComponentDefaults("run", extends=["lib"])
@@ -96,8 +96,23 @@ ComponentDefaults(
     extends=["dbg"],
 )
 
+# Sys components collect system-level configuration files that must be
+# installed into OS-managed directories outside the ROCm prefix (ldconfig
+# drop-ins, OpenCL ICD registrations, systemd units). Installers copy these
+# into the corresponding system paths. Documentation under usr/ is left for
+# 'doc', which follows 'sys' in the extends chain.
+ComponentDefaults(
+    "sys",
+    includes=[
+        "**/etc/**",
+        "**/usr/**",
+    ],
+    excludes=["**/share/doc/**"],
+    extends=["dev"],
+)
+
 # Doc components collect documentation files (typically under share/doc/).
-ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["dev"])
+ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["sys"])
 
 # Test components are last in the extends chain. Descriptors that want specific
 # files in test (instead of run) must exclude those files from run.
