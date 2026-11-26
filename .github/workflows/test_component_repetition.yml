@@ -5,13 +5,292 @@ name: Test Component Repetition
 
 on:
   workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        description: "Comma-separated pilot families: gfx120X-all, gfx110X-all, gfx1151."
+        type: string
+        required: true
+      platform:
+        description: "linux, windows, or linux,windows. Empty selects both."
+        type: string
+        default: ""
+      amdgpu_targets:
+        description: "Optional comma-separated GPU targets within one selected family."
+        type: string
+        default: ""
+      test_labels:
+        description: "Comma-separated component labels (e.g., test:rocblas,test:hipblas)."
+        type: string
+        required: true
+      ci_config_ref:
+        description: "Custom CI-config branch, tag, or SHA mapping dedicated triage runners."
+        type: string
+        required: true
+        default: main
+      repetitions:
+        description: "Independent executions per component (1–100; matrix limit applies)."
+        type: number
+        default: 20
+      build_variant:
+        description: "Artifact build variant supported by the pilot."
+        type: choice
+        options:
+          - release
+        default: release
+      test_type:
+        description: "Test tier controlling coverage and duration."
+        type: choice
+        options:
+          - quick
+          - standard
+          - comprehensive
+          - full
+        default: comprehensive
 
 permissions:
   contents: read
 
+# Keep campaigns from overlapping on the dedicated triage hardware.
+concurrency:
+  group: component-test-repetition
+  cancel-in-progress: false
+
+env:
+  TEST_TYPE: ${{ inputs.test_type }}
+
 jobs:
-  placeholder:
+  configure:
+    name: Configure component repetitions
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      artifact_run_id: ${{ steps.configure.outputs.artifact_run_id }}
+      enabled_targets: ${{ steps.configure.outputs.enabled_targets }}
+      linux_gfx120x: ${{ steps.configure.outputs.linux_gfx120x }}
+      linux_gfx110x: ${{ steps.configure.outputs.linux_gfx110x }}
+      linux_gfx1151: ${{ steps.configure.outputs.linux_gfx1151 }}
+      windows_gfx120x: ${{ steps.configure.outputs.windows_gfx120x }}
+      windows_gfx110x: ${{ steps.configure.outputs.windows_gfx110x }}
+      windows_gfx1151: ${{ steps.configure.outputs.windows_gfx1151 }}
     steps:
-      - run: echo "Placeholder—component tests are not implemented yet."
+      - name: Checkout TheRock
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout custom CI config
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ROCm/therock-ci-config
+          ref: ${{ inputs.ci_config_ref }}
+          path: ci-config
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install configuration dependencies
+        run: python -m pip install PyYAML==6.0.2
+      - name: Resolve baseline, components, and repetitions
+        id: configure
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+          PLATFORMS: ${{ inputs.platform }}
+          TEST_LABELS: ${{ inputs.test_labels }}
+          REPETITIONS: ${{ inputs.repetitions }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          CI_CONFIG_PATH: ${{ github.workspace }}/ci-config
+        run: python build_tools/github_actions/configure_test_component_repetition.py
+      - name: Preserve expected executions and baseline
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: component-repetition-manifest-${{ github.run_attempt }}
+          path: component-repetition/manifest.json
+          if-no-files-found: error
+
+  linux_gfx120x:
+    name: repeat-linux-gfx120x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx120x') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx120x || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx120X-all
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: linux
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  linux_gfx110x:
+    name: repeat-linux-gfx110x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx110x') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx110x || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx110X-all
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: linux
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  linux_gfx1151:
+    name: repeat-linux-gfx1151-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx1151') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx1151 || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx1151
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: linux
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  windows_gfx120x:
+    name: repeat-windows-gfx120x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx120x') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx120x || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx120X-all
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: windows
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  windows_gfx110x:
+    name: repeat-windows-gfx110x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx110x') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx110x || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx110X-all
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: windows
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  windows_gfx1151:
+    name: repeat-windows-gfx1151-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    needs: configure
+    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx1151') }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx1151 || '{"include":[]}') }}
+    uses: ./.github/workflows/test_component.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: gfx1151
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: windows
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+      build_variant: ${{ inputs.build_variant }}
+
+  summarize:
+    name: Summarize component repetitions
+    if: ${{ always() }}
+    needs: [configure, linux_gfx120x, linux_gfx110x, linux_gfx1151, windows_gfx120x, windows_gfx110x, windows_gfx1151]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout TheRock
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Download expected executions
+        if: ${{ needs.configure.result == 'success' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: component-repetition-manifest-${{ github.run_attempt }}
+          path: component-repetition
+      - name: Summarize current run attempt
+        if: ${{ always() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONFIGURATION_RESULT: ${{ needs.configure.result }}
+        run: python build_tools/github_actions/summarize_component_test_repetition.py
+      - name: Preserve repetition report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: component-repetition-report-${{ github.run_attempt }}
+          path: |
+            component-repetition/report.json
+            component-repetition/report.md
+          if-no-files-found: error
