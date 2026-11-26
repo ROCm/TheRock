@@ -515,13 +515,16 @@ made from the old files can be reused. Typical reads are:
 ```cmake
 therock_cmake_subproject_declare(therock-example
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/example"
-  # Builds the shared sha256 sources.
   ADDITIONAL_SOURCE_INPUTS
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
     ${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}
+    # Builds the shared sha256 sources.
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
   # Other subproject arguments...
 )
 ```
+
+List one entry per line. Put a comment above each directory saying why the
+sub-project reads it.
 
 Each entry is a directory. Relative paths are resolved against the directory of
 the `CMakeLists.txt` that declares the sub-project; prefer the
@@ -530,10 +533,10 @@ from Git or a `.smrev` file, so a directory outside Git needs a `.smrev` file.
 The path is hashed with the identity, so pointing at a different directory
 changes the fingerprint.
 
-If an input is missing or has no valid identity, configure continues but prints
-`Fingerprint invalid: ...`, and the sub-project has no fingerprint. Sub-projects
-that depend on it then have no fingerprint either, so treat this message as an
-error in the declaration.
+If an input is missing or has no valid identity, the sub-project has no
+fingerprint, and neither do sub-projects that depend on it. Configure continues;
+with `-DTHEROCK_VERBOSE=ON` it prints
+`FPRINT invalid: cannot resolve additional source input '...'`.
 
 Declare a directory under the same condition as the read. For example, hip-clr
 declares `shared/amdgpu-windows-interop` inside `if(WIN32)`. The rocm-systems
@@ -555,9 +558,9 @@ Some reads need no declaration:
 dependency or change the build order.
 
 To check a declaration, configure with `-DTHEROCK_VERBOSE=ON` and note the
-`FPRINT` line printed after `Including subproject <name>`. Commit a change to a file inside the
-declared directory, reconfigure, and check that the `FPRINT` line changed. The
-artifact fingerprints in `build/artifacts/*.fprint` change in the same way, but
-they are not written for target-specific artifacts when
-the `KPACK_SPLIT_ARTIFACTS` flag is on, which is the default. Fingerprints are computed when CMake
-configures, so a change to an input needs a reconfigure.
+`FPRINT` line printed after `Including subproject <name>`. Commit a change to a
+file inside the declared directory, reconfigure, and check that the `FPRINT`
+line changed. The artifact fingerprints in `build/artifacts/*.fprint` change in
+the same way, but they are not written for target-specific artifacts when the
+`KPACK_SPLIT_ARTIFACTS` flag is on, which is the default. Fingerprints are
+computed when CMake configures, so a change to an input needs a reconfigure.

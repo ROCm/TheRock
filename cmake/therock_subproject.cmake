@@ -754,10 +754,9 @@ function(therock_cmake_subproject_activate target_name)
         "SOURCE_DEP_V1=${_additional_source_input_path_hash}:${_additional_source_input_identity_hash}")
     else()
       set(_fprint_is_valid FALSE)
-      message(STATUS
-        "Fingerprint invalid: cannot determine a valid source identity for "
-        "additional source input '${_additional_source_input}'. "
-        "Fingerprint-based cache reuse is unavailable for this subproject.")
+      if(THEROCK_VERBOSE)
+        message(STATUS "  FPRINT invalid: cannot resolve additional source input '${_additional_source_input}'")
+      endif()
     endif()
   endforeach()
   if(_fprint_file_globs)

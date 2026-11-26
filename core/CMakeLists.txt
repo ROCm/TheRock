@@ -75,12 +75,12 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
 
     therock_cmake_subproject_declare(amdsmi
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
-      # Built from the monorepo when no installed libamdcuid is found, and
-      # libamdcuid builds the shared sha256 sources. The WSL backend (enabled
-      # below) includes the libhsakmt headers from rocr-runtime.
       ADDITIONAL_SOURCE_INPUTS
+        # Built from the monorepo when no installed libamdcuid is found.
         "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/cuid"
+        # libamdcuid builds the shared sha256 sources.
         "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
+        # The WSL backend (enabled below) includes the libhsakmt headers.
         "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/libhsakmt/include"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
       USE_DIST_AMDGPU_TARGETS
@@ -225,7 +225,9 @@ if(_therock_enable_hsa_runtime)
     therock_cmake_subproject_declare(hrx
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/optional-sources/hrx"
-      ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile/src/core/include"
+      ADDITIONAL_SOURCE_INPUTS
+        # The aqlprofile core headers.
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile/src/core/include"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hrx"
       BACKGROUND_BUILD
       COMPILER_TOOLCHAIN
@@ -284,12 +286,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
   ##############################################################################
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
-  # CLR reads HIP's VERSION, cmake, include and bin (passed as HIP_COMMON_DIR),
-  # the hrr headers (hipamd/src/hrr) and the shared api-headers.
   set(HIP_CLR_ADDITIONAL_SOURCE_INPUTS
+    # HIP's VERSION, cmake, include and bin (passed as HIP_COMMON_DIR).
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
+    # The hrr headers (hipamd/src/hrr).
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr/include"
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/api-headers/include")
+    # The shared api-headers.
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/runtimes/api-headers/include"
+  )
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
@@ -434,7 +438,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
     therock_cmake_subproject_declare(hipInfo
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "hipInfo"
-      ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/samples"
+      ADDITIONAL_SOURCE_INPUTS
+        # hipInfo.cpp and the common headers from hip-tests/samples.
+        "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/samples"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
       COMPILER_TOOLCHAIN
@@ -678,7 +684,10 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_CORE_HIPTESTS AND _hip_tests_enabled
   therock_cmake_subproject_declare(hip-tests
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
-    ADDITIONAL_SOURCE_INPUTS "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
+    ADDITIONAL_SOURCE_INPUTS
+      # catch/ is the CMake root; the build also reads files elsewhere in
+      # hip-tests.
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN
