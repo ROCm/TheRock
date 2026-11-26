@@ -6,9 +6,11 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 THEROCK_ROOT = Path(__file__).resolve().parents[2]
@@ -29,7 +31,8 @@ def cmake_project_setup(project_name: str) -> str:
         set(THEROCK_SOURCE_DIR "{THEROCK_ROOT.as_posix()}")
         set(THEROCK_BINARY_DIR "${{CMAKE_BINARY_DIR}}")
         list(APPEND CMAKE_MODULE_PATH "${{THEROCK_SOURCE_DIR}}/cmake")
-        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        # Use the interpreter running the tests for speed
+        set(Python3_EXECUTABLE "{Path(sys.executable).as_posix()}")
         set(ROCM_BUILD_FLAGS_STATE_FILE "${{CMAKE_BINARY_DIR}}/flags.cmake")
         file(WRITE "${{ROCM_BUILD_FLAGS_STATE_FILE}}" "# no flags\\n")
         include(therock_globals)
@@ -45,6 +48,8 @@ class FingerprintTestCase(unittest.TestCase):
 
     required_tools: tuple[str, ...] = ()
     command_timeout_seconds = 180
+    # Fixture created by the first test of the class, copied by later tests.
+    fixture_template: Path | None = None
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -90,3 +95,19 @@ class FingerprintTestCase(unittest.TestCase):
             f"Command failed: {args}\n{result.stdout}\n{result.stderr}",
         )
         return result
+
+    def reuse_fixture(self, create: Callable[[], None]) -> None:
+        """Run `create` in `self.root` once per class; later tests copy its result.
+
+        Creating Git fixtures starts many processes, which is slow on Windows.
+        Each test still gets its own copy, so tests cannot affect each other.
+        """
+        cls = type(self)
+        if cls.fixture_template is not None:
+            shutil.copytree(cls.fixture_template, self.root, dirs_exist_ok=True)
+            return
+        create()
+        template = tempfile.TemporaryDirectory(prefix="therock-fingerprint-")
+        cls.addClassCleanup(template.cleanup)
+        shutil.copytree(self.root, template.name, dirs_exist_ok=True)
+        cls.fixture_template = Path(template.name)

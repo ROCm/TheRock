@@ -47,17 +47,7 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.whole_repo = self.sources / "whole-repo"
         self.monorepo = self.sources / "monorepo"
         self.subdir_input = self.monorepo / "inputs/first"
-
-        write(self.consumer / "cmake-root/CMakeLists.txt", MINIMAL_PROJECT)
-        write(self.consumer / "sibling/input.txt", "sibling\n")
-        write(self.whole_repo / "input.txt", "whole\n")
-        write(self.subdir_input / "input.txt", "same content\n")
-        write(self.monorepo / "inputs/second/input.txt", "same content\n")
-        write(self.harness / "downstream/CMakeLists.txt", MINIMAL_PROJECT)
-        write(self.harness / "control/CMakeLists.txt", MINIMAL_PROJECT)
-        for repository in (self.consumer, self.whole_repo, self.monorepo):
-            self.git(repository, "init", "-q")
-            self.commit(repository, "initial")
+        self.reuse_fixture(self.create_sources)
 
         write(
             self.harness / "CMakeLists.txt",
@@ -107,6 +97,18 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
             endforeach()
             """,
         )
+
+    def create_sources(self) -> None:
+        write(self.consumer / "cmake-root/CMakeLists.txt", MINIMAL_PROJECT)
+        write(self.consumer / "sibling/input.txt", "sibling\n")
+        write(self.whole_repo / "input.txt", "whole\n")
+        write(self.subdir_input / "input.txt", "same content\n")
+        write(self.monorepo / "inputs/second/input.txt", "same content\n")
+        write(self.harness / "downstream/CMakeLists.txt", MINIMAL_PROJECT)
+        write(self.harness / "control/CMakeLists.txt", MINIMAL_PROJECT)
+        for repository in (self.consumer, self.whole_repo, self.monorepo):
+            self.git(repository, "init", "-q")
+            self.commit(repository, "initial")
 
     def git(self, repository: Path, *args: str) -> str:
         return self.run_command("git", "-C", repository, *args).stdout.strip()

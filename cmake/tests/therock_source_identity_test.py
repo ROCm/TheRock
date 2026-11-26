@@ -20,11 +20,7 @@ class SourceIdentityTest(FingerprintTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.repo = self.root / "checkout"
-        self.repo.mkdir()
-        self.git("init", "-q")
-        write(self.repo / "main/input.txt", "main\n")
-        write(self.repo / "outside.txt", "outside\n")
-        self.commit("initial")
+        self.reuse_fixture(self.create_checkout)
         self.harness = self.root / "harness"
         self.build = self.root / "build"
         self.result = self.root / "result.txt"
@@ -38,6 +34,13 @@ class SourceIdentityTest(FingerprintTestCase):
             file(WRITE "${{RESULT}}" "${{identity}}")
             """,
         )
+
+    def create_checkout(self) -> None:
+        self.repo.mkdir()
+        self.git("init", "-q")
+        write(self.repo / "main/input.txt", "main\n")
+        write(self.repo / "outside.txt", "outside\n")
+        self.commit("initial")
 
     def git(self, *args: str | Path) -> str:
         return self.run_command("git", "-C", self.repo, *args).stdout.strip()
