@@ -337,7 +337,9 @@ jobs:
           # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
           if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-              --repo-hashtag nightly \
+              --gitrepo-origin "https://github.com/mdnaveedh/audio.git" \ 
+              --repo-hashtag "5f137339e23b05374989d3f79aefcb49e6156f70" \
+              --require-related-commit \
               --no-commit-hipify
             ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --repo-hashtag nightly \
@@ -364,6 +366,8 @@ jobs:
           # AddressSanitizer variants set PYTORCH_BUILD_TORCH_ONLY and skip these.
           if [[ "${PYTORCH_BUILD_TORCH_ONLY}" != true ]]; then
             ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --gitrepo-origin "https://github.com/mdnaveedh/audio.git" \
+              --repo-hashtag "5f137339e23b05374989d3f79aefcb49e6156f70" \
               --require-related-commit \
               --no-commit-hipify
             ./external-builds/pytorch/pytorch_vision_repo.py checkout \
