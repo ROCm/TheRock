@@ -107,6 +107,9 @@ therock_cmake_subproject_declare(client
 
 
 def test_source_directories_do_not_become_subproject_edges(tmp_path: Path) -> None:
+    # ADDITIONAL_SOURCE_INPUTS sits between BUILD_DEPS and RUNTIME_DEPS.
+    # If the parser did not know the keyword, its directories would be
+    # read as more qBUILD_DEPS and turn into graph edges.
     _write(
         tmp_path / "CMakeLists.txt",
         """

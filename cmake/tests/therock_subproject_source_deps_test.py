@@ -15,6 +15,12 @@ Fixture subprojects:
 The inputs are a whole separate checkout (whole-repo) and a directory inside a
 larger checkout (monorepo/inputs/first).
 
+Each test configures the fixture before and after a change and compares the
+three fingerprints. A change to a declared input must change the input's users,
+`consumer` and `downstream` (which includes its dependency's fingerprint), and
+leave `control` alone. A fingerprint is invalid (empty) when an input has no
+valid identity; `downstream` is then invalid too.
+
 These tests cover the mechanism with fixture subprojects; they do not check
 which inputs TheRock's real subprojects declare.
 """
@@ -171,6 +177,7 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         )
 
     def test_repeat_and_relative_inputs_are_stable(self) -> None:
+        """Reconfiguring or using relative input paths keeps fingerprints."""
         baseline = self.configure()
         self.assert_valid(baseline)
         self.assertEqual(baseline, self.configure())
@@ -190,11 +197,18 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         )
 
     def test_primary_scope_includes_directories_beside_cmake_lists(self) -> None:
+        """A commit beside `cmake-root` changes the consumer.
+
+        The consumer's CMake lists are in `consumer/cmake-root`, but its source
+        directory is all of `consumer`, so `consumer/sibling` is covered without
+        being declared.
+        """
         baseline = self.configure()
         self.edit_and_commit(self.consumer, "sibling/input.txt")
         self.assert_changed(baseline, self.configure(), INPUT_USERS)
 
     def test_subdirectory_input_change_and_revert(self) -> None:
+        """A commit in an input changes its users; a revert restores them."""
         baseline = self.configure()
         self.edit_and_commit(self.monorepo, "inputs/first/input.txt")
         changed = self.configure()
@@ -204,6 +218,7 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assertEqual(baseline, self.configure())
 
     def test_input_path_is_part_of_the_fingerprint(self) -> None:
+        """Inputs with the same contents but different paths differ."""
         # inputs/first and inputs/second have identical trees, so only the
         # declared path tells them apart.
         self.assertEqual(
@@ -215,6 +230,7 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assert_changed(first, second, INPUT_USERS)
 
     def test_empty_input_list_adds_nothing(self) -> None:
+        """An empty input list adds nothing, so other commits change nothing."""
         # As with THEROCK_ROCM_*_TEST_INPUTS when tests are not built, the
         # declaration names a list variable that is empty.
         baseline = self.configure(())
@@ -223,12 +239,18 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assertEqual(baseline, self.configure(()))
 
     def test_input_declared_twice_counts_once(self) -> None:
+        """Naming a directory twice is the same as naming it once."""
         once = self.configure((self.whole_repo,))
         # The same directory, absolute and relative to the declaring directory.
         relative = Path("../sources with spaces/whole-repo")
         self.assertEqual(once, self.configure((self.whole_repo, relative)))
 
     def test_dirty_and_staged_inputs_invalidate_consumers(self) -> None:
+        """Uncommitted edits in an input make its users invalid until reverted.
+
+        The input's Git tree no longer describes the files on disk, staged or
+        not.
+        """
         baseline = self.configure()
         write(self.whole_repo / "input.txt", "dirty\n")
         self.assert_valid(self.configure(), invalid=INPUT_USERS)
@@ -245,6 +267,11 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assertEqual(baseline, self.configure())
 
     def test_missing_directory_is_invalid_even_with_a_stale_marker(self) -> None:
+        """A declared input that does not exist makes its users invalid.
+
+        A leftover `.smrev` file for the missing directory must not count as its
+        identity.
+        """
         self.configure()
         # Make the declared path absent without deleting read-only Git objects
         # on Windows. TemporaryDirectory cleanup owns the moved repository.
@@ -253,6 +280,11 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assert_valid(self.configure(), invalid=INPUT_USERS)
 
     def test_non_git_input_requires_a_marker(self) -> None:
+        """A directory outside Git needs a `.smrev` file to be valid.
+
+        Without the file there is no identity; with it, the file's contents are
+        the identity, so changing them changes the fingerprints.
+        """
         directory = self.root / "unversioned"
         directory.mkdir()
         self.assert_valid(self.configure((directory,)), invalid=INPUT_USERS)
@@ -263,16 +295,27 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
         self.assert_changed(baseline, self.configure((directory,)), INPUT_USERS)
 
     def test_file_input_is_rejected_as_not_a_directory(self) -> None:
+        """A declared input that is a file, not a directory, is invalid."""
         self.assert_valid(
             self.configure((self.whole_repo / "input.txt",)), invalid=INPUT_USERS
         )
 
     def test_inputs_apply_when_primary_source_is_file_hashed(self) -> None:
+        """Inputs still count when the consumer's sources are hashed by file.
+
+        `FPRINT_SOURCE_HASH` replaces the Git identity of the consumer's own
+        directory, but not of its declared inputs.
+        """
         baseline = self.configure(hash_primary=True)
         self.edit_and_commit(self.whole_repo, "input.txt")
         self.assert_changed(baseline, self.configure(hash_primary=True), INPUT_USERS)
 
     def test_inputs_apply_to_prebuilt_fingerprints(self) -> None:
+        """Inputs still count when the consumer is imported as prebuilt.
+
+        A commit in an input changes the prebuilt fingerprints, and an
+        uncommitted edit makes them invalid.
+        """
         baseline = self.configure(prebuilt=True)
         self.edit_and_commit(self.whole_repo, "input.txt")
         self.assert_changed(baseline, self.configure(prebuilt=True), INPUT_USERS)
