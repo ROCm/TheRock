@@ -118,7 +118,7 @@ CI_JAX_REFS = {
     ],
 }
 
-# The one (python_version, jax_ref) matrix cell that also carries the XLA
+# The one (python_version, jax_ref) matrix cell that also carries the XLA run
 # as xla is a pythong agnostic cpp library we do not need to run it for each
 # python version.
 XLA_TEST_PYTHON_VERSION = "3.12"
