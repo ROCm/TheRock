@@ -5,8 +5,8 @@ from typing import List, Optional
 import importlib
 import os
 from pathlib import Path
-import platform
 import re
+import sys
 
 from ._dist_info import __version__
 
@@ -31,7 +31,7 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
     paths: list[Path] = []
     missing_extras: set[str] = set()
-    is_windows = platform.system() == "Windows"
+    is_windows = sys.platform == "win32"
     for shortname in shortnames:
         try:
             lib_entry = _dist_info.ALL_LIBRARIES[shortname]
@@ -100,7 +100,7 @@ def _ensure_windows_dll_search_dirs(lib_path: Path):
     no RPATH equivalent, so the sysdeps bin directory must be added to the DLL
     search path before the dependent library is loaded.
     """
-    if platform.system() != "Windows":
+    if sys.platform != "win32":
         return
     # lib_path is <root>/bin/<name>.dll; sysdeps DLLs live in the sibling
     # <root>/lib/rocm_sysdeps/bin.
