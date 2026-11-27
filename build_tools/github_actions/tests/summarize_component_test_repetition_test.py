@@ -134,7 +134,7 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
             {"steps": [dict(name="Setup", conclusion="success")]},
             {"name": placeholder["name"].replace("windows", "linux")},
             {"name": "repeat-windows-gfx120x-1-rocblas"},
-            {"name": placeholder["name"].replace("gfx120x", "gfx950")},
+            {"name": placeholder["name"].replace("gfx120x", "bad family")},
             {"name": placeholder["name"] + " / unexpected child"},
         ):
             with self.subTest(overrides=overrides):
@@ -191,6 +191,36 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
             "Platforms omitted because the selected tests have no configured tests there: windows.",
             summary.render_report(report),
         )
+
+    def test_any_family_key_is_matched_against_manifest(self):
+        for key in ("gfx94x", "gfx950", "gfx1234-strict"):
+            with self.subTest(key=key):
+                self.execution["sample_id"] = f"repeat-linux-{key}-1-rocblas"
+                self.execution["family"] = key
+                job = self.job(
+                    name=f"linux {key} / {self.execution['sample_id']}"
+                    f" / Test rocblas (shard 1/2) ({key})"
+                )
+                report = self.report([job])
+                self.assertEqual(report["counts"], {"passed": 1})
+                self.assertFalse(report["incomplete"])
+                self.assertEqual(report["unexpected_jobs"], [])
+
+                extra = self.job(
+                    id=456, name=job["name"].replace("-1-rocblas", "-2-rocblas")
+                )
+                report = self.report([job, extra])
+                self.assertEqual(report["unexpected_jobs"], [extra])
+                self.assertTrue(report["incomplete"])
+
+    def test_report_explains_family_platform_omissions(self):
+        self.manifest["omitted_targets"] = [
+            {"family_key": "gfx94x", "platform": "windows"}
+        ]
+        report = self.report([self.job()])
+        report["run_attempt"] = 1
+        self.assertFalse(report["incomplete"])
+        self.assertIn("gfx94x/windows", summary.render_report(report))
 
     def test_pagination_reads_all_pages_of_current_attempt(self):
         pages = [{"jobs": [{"id": p * 100 + i} for i in range(100)]} for p in range(11)]

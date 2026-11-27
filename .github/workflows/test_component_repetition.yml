@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_families:
-        description: "Comma-separated pilot families: gfx120X-all, gfx110X-all, gfx1151."
+        description: "Comma-separated AMDGPU family keys or canonical names from the shared GPU configuration."
         type: string
         required: true
       platform:

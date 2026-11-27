@@ -16,16 +16,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
     load_external_runner_config,
 )
-from fetch_package_targets import determine_package_targets
 from github_actions_api import gha_set_output
-
-# Each selected family/platform has its own repetition matrix so it can
-# execute serially without serializing the other triage targets.
-REPETITION_FAMILIES = {
-    "gfx120x": "gfx120X-all",
-    "gfx110x": "gfx110X-all",
-    "gfx1151": "gfx1151",
-}
 
 
 def _csv_values(value: str) -> list[str]:
@@ -83,7 +74,7 @@ def fetch_repetition_components(
 
 
 def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
-    """Resolve a bounded pilot using the existing package and test helpers.
+    """Resolve selected GPU families using the shared family and test configuration.
 
     Required environment: AMDGPU_FAMILIES, TEST_LABELS, CI_CONFIG_PATH.
     Optional: PLATFORMS (empty selects supported platforms), REPETITIONS (20), AMDGPU_TARGETS,
@@ -104,19 +95,26 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
         raise ValueError("REPETITIONS must be between 1 and 100")
     if environment.get("BUILD_VARIANT", "release") != "release":
         raise ValueError(
-            "The repetition pilot currently supports release artifacts only"
+            "Component repetition currently supports release artifacts only"
         )
     families = _csv_values(environment.get("AMDGPU_FAMILIES", ""))
     if not families:
         raise ValueError("Select at least one AMDGPU family")
+    all_families = get_all_families_for_trigger_types([])
+    all_families.update(get_all_families_for_trigger_types(["explicit_only"]))
+    aliases = {}
+    for key, family_config in all_families.items():
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
+            raise ValueError(f"Invalid configured AMDGPU family key: {key}")
+        aliases[key.lower()] = key
+        for platform in ("linux", "windows"):
+            if info := family_config.get(platform):
+                aliases[info["family"].lower()] = key
     keys = []
     for family in families:
-        key = family.lower().split("-")[0]
-        if key not in REPETITION_FAMILIES or family.lower() not in (
-            key,
-            REPETITION_FAMILIES[key].lower(),
-        ):
-            raise ValueError(f"Unsupported pilot family: {family}")
+        key = aliases.get(family.lower())
+        if key is None:
+            raise ValueError(f"Unknown AMDGPU family: {family}")
         if key not in keys:
             keys.append(key)
     if environment.get("AMDGPU_TARGETS") and len(keys) != 1:
@@ -153,14 +151,14 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
         raise ValueError(
             f"Selected tests ({', '.join(labels)}) have no configured tests for "
             f"platform(s): {', '.join(omitted_platforms)}. "
-            f"Supported pilot platforms: {supported}. "
+            f"Supported platforms: {supported}. "
             "Leave PLATFORMS empty to select supported platforms automatically."
         )
     platforms = [p for p in platforms if p in supported_platforms]
     if not platforms:
         raise ValueError(
             f"Selected tests ({', '.join(labels)}) have no configured tests "
-            "on the pilot platforms (linux, windows)"
+            "on the supported platforms (linux, windows)"
         )
 
     config_path = Path(environment.get("CI_CONFIG_PATH", ""))
@@ -180,22 +178,22 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
     matrices = {
         f"{platform}_{key}": {"include": []}
         for platform in ("linux", "windows")
-        for key in REPETITION_FAMILIES
+        for key in keys
     }
     expected = []
     targets = []
-    all_families = get_all_families_for_trigger_types(
-        ["presubmit", "postsubmit", "nightly"]
-    )
+    omitted_targets = []
     for platform in platforms:
-        package_targets = determine_package_targets(
-            {"AMDGPU_FAMILIES": ",".join(keys), "THEROCK_PACKAGE_PLATFORM": platform}
-        )
-        resolved = {target["amdgpu_family"]: target for target in package_targets}
         for key in keys:
-            family = REPETITION_FAMILIES[key]
-            if family not in resolved:
-                raise ValueError(f"No package target for {family}/{platform}")
+            family_info = all_families[key].get(platform)
+            if not family_info:
+                if requested_platforms:
+                    raise ValueError(
+                        f"AMDGPU family {key} is not configured for {platform}"
+                    )
+                omitted_targets.append({"family_key": key, "platform": platform})
+                continue
+            family = family_info["family"]
             configured = (
                 external.get("runner_labels", {}).get(key, {}).get(platform, {})
             )
@@ -213,7 +211,7 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
                 )
             gpu_targets = _csv_values(environment.get("AMDGPU_TARGETS", ""))
             if gpu_targets and not set(gpu_targets).issubset(
-                all_families[key][platform].get("fetch-gfx-targets", [])
+                family_info.get("fetch-gfx-targets", [])
             ):
                 raise ValueError(
                     f"AMDGPU_TARGETS are not configured for {family}/{platform}"
@@ -236,7 +234,12 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
                 "component": components,
             }
             targets.append(
-                {"family": family, "platform": platform, "components": components}
+                {
+                    "family": family,
+                    "family_key": key,
+                    "platform": platform,
+                    "components": components,
+                }
             )
             for component in components:
                 # Artifacts belong to rockrel, while the test harness checkout
@@ -283,6 +286,11 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
                                 ),
                             }
                         )
+    configured_keys = {target["family_key"] for target in targets}
+    if missing := [key for key in keys if key not in configured_keys]:
+        raise ValueError(
+            f"No supported family/platform selection for: {', '.join(missing)}"
+        )
     return matrices, {
         "schema_version": 1,
         "repository": environment.get("GITHUB_REPOSITORY", ""),
@@ -292,6 +300,7 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
         "build_variant": "release",
         "test_labels": labels,
         "omitted_platforms": omitted_platforms,
+        "omitted_targets": omitted_targets,
         "amdgpu_targets": environment.get("AMDGPU_TARGETS", ""),
         "repetitions": repetitions,
         "targets": targets,
@@ -334,10 +343,10 @@ def write_repetition_outputs(environment: dict[str, str], manifest_path: Path) -
         "include": [
             {
                 "family": target["family"],
-                "family_key": target["family"].lower().split("-")[0],
+                "family_key": target["family_key"],
                 "platform": target["platform"],
                 "repetition_matrix": matrices[
-                    f"{target['platform']}_{target['family'].lower().split('-')[0]}"
+                    f"{target['platform']}_{target['family_key']}"
                 ],
             }
             for target in manifest["targets"]

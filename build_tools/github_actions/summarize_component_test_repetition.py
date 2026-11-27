@@ -59,7 +59,7 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
         # Ignore only skipped, empty placeholders for targets absent from the
         # manifest; skipped requested executions must still be accounted for.
         placeholder = re.fullmatch(
-            r"(repeat-(?:linux|windows)-(?:gfx120x|gfx110x|gfx1151))"
+            r"(repeat-(?:linux|windows)-[A-Za-z0-9_-]+)"
             r"-\$\{\{ matrix\.iteration \}\}-\$\{\{ matrix\.component\.job_name \}\}",
             job["name"],
         )
@@ -76,7 +76,7 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
         # Reusable-workflow jobs are named "<caller name> / <child job name>".
         # The caller name contains the target, iteration, and component identity.
         match = re.search(
-            r"(?:^| / )(repeat-(?:linux|windows)-(?:gfx120x|gfx110x|gfx1151)"
+            r"(?:^| / )(repeat-(?:linux|windows)-[A-Za-z0-9_-]+"
             r"-\d+-[A-Za-z0-9_-]+) / Test .*?\(shard (\d+)/(\d+)\)",
             job["name"],
         )
@@ -134,6 +134,7 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
         "ci_config_sha": manifest.get("ci_config_sha"),
         "test_type": manifest.get("test_type"),
         "omitted_platforms": manifest.get("omitted_platforms", []),
+        "omitted_targets": manifest.get("omitted_targets", []),
         "repetitions": manifest.get("repetitions"),
         "counts": dict(Counter(result["outcome"] for result in results)),
         "results": results,
@@ -166,6 +167,18 @@ def render_report(report: dict, *, include_details: bool = True) -> str:
             [
                 "Platforms omitted because the selected tests have no configured tests there: "
                 + ", ".join(report["omitted_platforms"])
+                + ".",
+                "",
+            ]
+        )
+    if report.get("omitted_targets"):
+        lines.extend(
+            [
+                "Family/platform combinations omitted because the GPU family is not configured there: "
+                + ", ".join(
+                    f"{target['family_key']}/{target['platform']}"
+                    for target in report["omitted_targets"]
+                )
                 + ".",
                 "",
             ]

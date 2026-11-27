@@ -33,11 +33,16 @@ class ComponentRepetitionPlanTest(unittest.TestCase):
         self.env.pop("TEST_TYPE", None)
         self.env.pop("AMDGPU_TARGETS", None)
         self.env["BUILD_VARIANT"] = "release"
+        self.families = {
+            "gfx120x": "gfx120X-all",
+            "gfx110x": "gfx110X-all",
+            "gfx1151": "gfx1151",
+        }
         self.runners = {
             key: {
                 p: {"test-runs-on": f"triage-{p}-{key}"} for p in ("linux", "windows")
             }
-            for key in config.REPETITION_FAMILIES
+            for key in self.families
         }
         self.external = {"runner_labels": self.runners}
         self.component = dict(
@@ -265,7 +270,7 @@ def load_config(version, config_path):
             with self.subTest(platforms=platforms):
                 self.assertRaisesRegex(
                     ValueError,
-                    r"test:amdsmi.*platform\(s\): windows.*Supported pilot platforms: linux",
+                    r"test:amdsmi.*platform\(s\): windows.*Supported platforms: linux",
                     self.plan,
                     TEST_LABELS="test:amdsmi",
                     PLATFORMS=platforms,
@@ -279,7 +284,7 @@ def load_config(version, config_path):
         ):
             self.assertRaisesRegex(
                 ValueError,
-                "no configured tests on the pilot platforms",
+                "no configured tests on the supported platforms",
                 self.plan,
                 TEST_LABELS="test:amdsmi",
                 PLATFORMS="",
@@ -302,6 +307,90 @@ def load_config(version, config_path):
                     platforms,
                 )
                 self.assertEqual(manifest["omitted_platforms"], omitted)
+
+    def test_shared_gfx94x_family_and_canonical_alias_select_linux(self):
+        self.runners["gfx94x"] = {
+            "linux": {
+                "test-runs-on": "triage-linux-gfx94x",
+                "test-runs-on-labels": [{"label": "triage-linux-gfx94x", "count": 1}],
+            }
+        }
+        self.write_custom_config()
+        self.components.side_effect = self.real_fetch
+        matrices, manifest = self.plan(
+            AMDGPU_FAMILIES="gfx94x,GFX94X-DCGPU",
+            AMDGPU_TARGETS="gfx942",
+            TEST_LABELS="test:amdsmi",
+            PLATFORMS="",
+        )
+        self.assertEqual(len(manifest["targets"]), 1)
+        target = manifest["targets"][0]
+        self.assertEqual(
+            (target["family_key"], target["family"], target["platform"]),
+            ("gfx94x", "gfx94X-dcgpu", "linux"),
+        )
+        self.assertEqual(
+            matrices["linux_gfx94x"]["component"][0]["test_runner"],
+            "triage-linux-gfx94x",
+        )
+        self.assertEqual(
+            {row["sample_id"] for row in manifest["expected"]},
+            {"repeat-linux-gfx94x-1-amdsmi", "repeat-linux-gfx94x-2-amdsmi"},
+        )
+
+        self.components.side_effect = None
+        self.assertRaisesRegex(
+            ValueError,
+            "AMDGPU family gfx94x is not configured for windows",
+            self.plan,
+            AMDGPU_FAMILIES="gfx94x",
+            PLATFORMS="windows",
+        )
+
+    def test_new_configured_family_needs_no_repetition_allowlist(self):
+        key = "gfx1234-strict"
+        family = "gfx1234-strict"
+        shared = {key: {"linux": {"family": family, "fetch-gfx-targets": ["gfx1234"]}}}
+        self.mock(config, "get_all_families_for_trigger_types", shared)
+        self.runners[key] = {"linux": {"test-runs-on": "triage-new-family"}}
+        self.components.return_value = [
+            dict(self.component, test_runner="triage-new-family")
+        ]
+        matrices, manifest = self.plan(
+            AMDGPU_FAMILIES=family.upper(),
+            AMDGPU_TARGETS="gfx1234",
+            PLATFORMS="",
+        )
+        self.assertEqual(list(matrices), [f"linux_{key}", f"windows_{key}"])
+        self.assertEqual(manifest["targets"][0]["family_key"], key)
+        self.assertEqual(
+            manifest["omitted_targets"],
+            [{"family_key": key, "platform": "windows"}],
+        )
+        self.assertEqual(
+            {row["sample_id"] for row in manifest["expected"]},
+            {
+                "repeat-linux-gfx1234-strict-1-rocblas",
+                "repeat-linux-gfx1234-strict-2-rocblas",
+            },
+        )
+
+    def test_unknown_family_and_unusable_family_selection_fail(self):
+        self.assertRaisesRegex(
+            ValueError, "Unknown AMDGPU family", self.plan, AMDGPU_FAMILIES="gfx999999"
+        )
+        self.components.assert_not_called()
+        with patch.dict(
+            test_config.test_matrix,
+            rocblas=dict(test_config.test_matrix["rocblas"], platform=["windows"]),
+        ):
+            self.assertRaisesRegex(
+                ValueError,
+                "No supported family/platform selection for: gfx94x",
+                self.plan,
+                AMDGPU_FAMILIES="gfx94x",
+                PLATFORMS="",
+            )
 
     def test_selected_target_output_preserves_each_nested_matrix(self):
         def components(*, family, platform, environment):
@@ -340,7 +429,7 @@ def load_config(version, config_path):
             {
                 (platform, key)
                 for platform in ("linux", "windows")
-                for key in config.REPETITION_FAMILIES
+                for key in self.families
             },
         )
         samples = set()
@@ -353,9 +442,7 @@ def load_config(version, config_path):
                 component["test_runner"],
                 f"triage-{target['platform']}-{target['family_key']}",
             )
-            self.assertEqual(
-                target["family"], config.REPETITION_FAMILIES[target["family_key"]]
-            )
+            self.assertEqual(target["family"], self.families[target["family_key"]])
             for iteration in matrix["iteration"]:
                 samples.add(
                     f"repeat-{target['platform']}-{target['family_key']}"
