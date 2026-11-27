@@ -22,6 +22,24 @@ extracted from ``AMDGPU_FAMILIES`` via ``extract_gpu_arch()``).  This applies to
 ``pytest_args``, ``pytest_markers``, ``exclude_markers``, and
 ``execution_settings.environment``.
 
+A category may also set ``min_executed_tests``: the fewest test cases that must
+actually run (pass, fail or error; skips and xfails do not count). A GPU category
+whose tests all skip, for example because each is marked for a GPU architecture
+other than the runner's, exits 0 under pytest; with this floor the job fails
+instead. The value is a single count for all GPU families, or a table keyed by
+the family in ``AMDGPU_FAMILIES``. In a table, ``default`` covers the families
+not listed; without it, an unlisted family has no floor (0 tests is expected
+there)::
+
+    min_executed_tests:
+      gfx94X-dcgpu: 1
+      gfx950-dcgpu: 250
+
+Each key must be ``default`` or a family from ``amdgpu_family_matrix.py``. Any
+other key fails the job on every runner, since a misspelled family never equals
+``AMDGPU_FAMILIES`` and would silently drop its floor. The count comes from
+pytest's JUnit XML report, which merges every pytest-xdist worker.
+
 Environment variables used:
 TEST_COMPONENT: Job name of the component to test (e.g. "tensilelite").
 TEST_TYPE: Test category to run; must be a category defined in
@@ -46,12 +64,18 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import xml.etree.ElementTree as ElementTree
 from importlib.util import find_spec
 from pathlib import Path
 import yaml
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from amdgpu_family_matrix import is_asan
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix,
+    amdgpu_family_info_matrix_explicit_only,
+    is_asan,
+)
 from configure_asan_env import get_asan_runtime_path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -275,6 +299,82 @@ def run_pytest(
     return subprocess.run(cmd, cwd=str(cwd), env=env, check=False).returncode
 
 
+def count_executed_tests(junit_xml: Path) -> int:
+    """Test cases in a pytest JUnit XML report that ran: passed, failed or errored.
+
+    pytest records a skipped test, and an expected failure (`xfail`), as a
+    `testcase` with a `skipped` child; those do not count.
+    """
+    root = ElementTree.parse(junit_xml).getroot()
+    return sum(1 for case in root.iter("testcase") if case.find("skipped") is None)
+
+
+def read_min_executed_tests(
+    category_config: dict, category: str, amdgpu_families: str | None
+) -> int | None:
+    """The category's `min_executed_tests` floor on this family, or None.
+
+    The value is a single count for all families, or a table keyed by family (the
+    `AMDGPU_FAMILIES` string, e.g. `gfx94X-dcgpu`) in which `default` covers the
+    families not listed. Exits the job on a bad key or value. Returns None when
+    neither this family nor `default` has an entry.
+    """
+    floors = category_config.get("min_executed_tests")
+    if floors is None:
+        return None
+    is_table = isinstance(floors, dict)
+    if not is_table:
+        floors = {"default": floors}
+    known_families = {
+        info["family"]
+        for matrix in (
+            amdgpu_family_info_matrix,
+            amdgpu_family_info_matrix_explicit_only,
+        )
+        for platforms in matrix.values()
+        for info in platforms.values()
+    }
+    for family, minimum in floors.items():
+        # Checked on every runner, not only the family named: a misspelled family
+        # (`gfx94x-dcgpu`) or a target (`gfx942`) would never match AMDGPU_FAMILIES.
+        if family != "default" and family not in known_families:
+            _fail(
+                f"Category '{category}': min_executed_tests key {family!r} must be "
+                f"'default' or a GPU family from amdgpu_family_matrix.py, such as "
+                f"gfx94X-dcgpu (not a target such as gfx942)"
+            )
+        # bool is an int subclass; `true` is a typo, not a floor of 1.
+        if isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 0:
+            entry = f"min_executed_tests.{family}" if is_table else "min_executed_tests"
+            _fail(
+                f"Category '{category}': {entry} must be a non-negative integer, "
+                f"got {minimum!r}"
+            )
+    return floors.get(amdgpu_families, floors.get("default"))
+
+
+def check_min_executed_tests(
+    junit_xml: Path, minimum: int, category: str, amdgpu_families: str | None
+) -> None:
+    """Fail the job when fewer than `minimum` test cases in the JUnit report ran."""
+    if not junit_xml.is_file():
+        _fail(
+            f"Category '{category}' requires at least {minimum} executed tests, "
+            f"but pytest wrote no JUnit report to {junit_xml}. A --junit-xml or "
+            "-p no:junitxml in the category's pytest_args overrides the runner's."
+        )
+    executed = count_executed_tests(junit_xml)
+    logging.info(f"Executed tests (not skipped): {executed}, minimum {minimum}")
+    if executed < minimum:
+        _fail(
+            f"Category '{category}' ran {executed} tests on "
+            f"AMDGPU_FAMILIES={amdgpu_families}, below its min_executed_tests of "
+            f"{minimum}; the rest of the selected tests were skipped. Check the "
+            "tests' GPU architecture marks against this family, or lower its "
+            "floor in test_categories.yaml."
+        )
+
+
 def build_environment(rocm_path, component_name):
     """
     Replicate the install-tree environment used by the legacy test_tensilelite.py
@@ -404,7 +504,14 @@ if __name__ == "__main__":
         "parallel_workers", exec_settings.get("parallel_workers", 1)
     )
 
+    min_executed_tests = read_min_executed_tests(
+        category_config, TEST_TYPE, AMDGPU_FAMILIES
+    )
     junit_dir = os.getenv("JUNIT_XML_DIR")
+    if not junit_dir and min_executed_tests is not None:
+        # The floor is checked from the JUnit report, so write one to a temporary
+        # directory when JUNIT_XML_DIR is unset.
+        junit_dir = tempfile.mkdtemp(prefix="pytest_runner_junit_")
     junit_xml = (
         str(Path(junit_dir) / f"{TEST_COMPONENT_NAME}.xml") if junit_dir else None
     )
@@ -419,15 +526,19 @@ if __name__ == "__main__":
         env[key] = value
         logging.info(f"Set environment variable: {key}={value}")
 
-    sys.exit(
-        run_pytest(
-            test_paths,
-            marker_expr,
-            pytest_args,
-            junit_xml,
-            timeout,
-            num_workers,
-            component_path,
-            env,
-        )
+    returncode = run_pytest(
+        test_paths,
+        marker_expr,
+        pytest_args,
+        junit_xml,
+        timeout,
+        num_workers,
+        component_path,
+        env,
     )
+    # A failed run already fails the job; the floor only matters when pytest exits 0.
+    if returncode == 0 and min_executed_tests is not None:
+        check_min_executed_tests(
+            Path(junit_xml), min_executed_tests, TEST_TYPE, AMDGPU_FAMILIES
+        )
+    sys.exit(returncode)
