@@ -54,6 +54,7 @@ import copy
 import json
 import re
 import subprocess
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -210,13 +211,15 @@ class AnalysisResult:
             name: {"consumers": sorted(consumers[name])} for name in sorted(consumers)
         }
 
-    def build_subtree_map(self) -> dict[str, list[str]]:
-        """Map each external-repo source subtree to the graph key(s) built from it.
+    def _attributed_sources(self) -> Iterator[tuple[str, str, str]]:
+        """Yield ``(graph key, source root name, root-relative subtree)`` per source dir.
 
-        EXTERNAL_SOURCE_DIR is made relative to the rocm-libraries / rocm-systems
-        roots to yield a ``category/name`` subtree (e.g. ``projects/clr``); one
-        subtree may back several keys. Sources outside those roots, or that did not
-        resolve (see ``_resolve_source_dir_section``), get no entry.
+        Each resolved EXTERNAL_SOURCE_DIR is attributed to the external monorepo
+        root containing it, and made relative to that root to yield a
+        ``category/name`` subtree (e.g. ``projects/clr``). A subproject with
+        several (conditional) source dirs fans into each. Sources outside every
+        root, or that did not resolve (see ``_resolve_source_dir_section``), yield
+        nothing.
         """
         # Default source roots (THEROCK_ROCM_{LIBRARIES,SYSTEMS}_SOURCE_DIR); the
         # parser assumes the default layout and does not honor a cache override.
@@ -224,10 +227,8 @@ class AnalysisResult:
             self.repository_root / "rocm-libraries",
             self.repository_root / "rocm-systems",
         )
-        subtree_to_keys: dict[str, set[str]] = {}
         for subproject in self.subprojects.values():
             key = subproject.name.lower()
-            # A subproject with several (conditional) source dirs fans into each.
             for source_dir in subproject.external_source_dirs:
                 source_path = Path(source_dir)
                 for root in roots:
@@ -237,11 +238,37 @@ class AnalysisResult:
                         relative = source_path.relative_to(root)
                     except ValueError:
                         continue
-                    subtree_to_keys.setdefault(relative.as_posix(), set()).add(key)
+                    yield key, root.name, relative.as_posix()
                     break
+
+    def build_subtree_map(self) -> dict[str, list[str]]:
+        """Map each external-repo source subtree to the graph key(s) built from it.
+
+        One subtree may back several keys. Sources outside the rocm-libraries /
+        rocm-systems roots, or that did not resolve, get no entry.
+        """
+        subtree_to_keys: dict[str, set[str]] = {}
+        for key, _root_name, subtree in self._attributed_sources():
+            subtree_to_keys.setdefault(subtree, set()).add(key)
         return {
             subtree: sorted(keys) for subtree, keys in sorted(subtree_to_keys.items())
         }
+
+    def build_superrepo_map(self) -> dict[str, list[str]]:
+        """Map each graph key to the external monorepo(s) its sources live in.
+
+        Values are lists because a subproject attributed to several roots
+        reports each; today every subproject resolves to exactly one.
+
+        A key is absent when it has no statically resolvable source under either
+        root (third-party, separately-submoduled such as amd-llvm/rocgdb/
+        libhipcxx, and ``therock_enable_external_source()`` cases). Absent is
+        *unknown*, not *unaffected* -- callers must not treat it as safe to skip.
+        """
+        key_to_roots: dict[str, set[str]] = {}
+        for key, root_name, _subtree in self._attributed_sources():
+            key_to_roots.setdefault(key, set()).add(root_name)
+        return {key: sorted(roots) for key, roots in sorted(key_to_roots.items())}
 
     def dangling_dependencies(self) -> dict[str, list[str]]:
         """Return dependencies that do not name any discovered subproject."""
