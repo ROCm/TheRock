@@ -14,6 +14,8 @@ include = [
   "bin/simple_*",
   "bin/perf_*",
   "bin/hipRTC_gemm*",
+  # Installed CMake consumers are compiled against the fetched SDK in CI.
+  "share/rocwmma/tests/package_consumer/**",
   # Tests
   "bin/*_test*",
   "bin/*-validate*",
