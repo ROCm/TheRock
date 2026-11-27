@@ -44,7 +44,7 @@ on:
         type: string
         default: "pytorch/pytorch"
       test_configs:
-        description: Space-separated test configs to run (e.g. "default", "default distributed", "default distributed inductor")
+        description: Space-separated test configs to run (e.g. "default", "default distributed", "default distributed inductor"). "slow" runs only the slow tests.
         type: string
         default: "default distributed inductor"
       tests_to_include:
@@ -378,6 +378,8 @@ jobs:
 
       - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
+        # Other configs keep the 360-minute job default.
+        timeout-minutes: ${{ matrix.test_config == 'slow' && 240 || 360 }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py \
             --test-config "${MATRIX_TEST_CONFIG}" \
