@@ -215,17 +215,18 @@ class _S3IndexGenerator:
 class ArtifactIndexGenerator(_S3IndexGenerator):
     """Builds an index.html listing the files (not subfolders) under a prefix.
 
-    For example, it lists every .tar.gz tarball or every .msi Windows
-    installer directly under a prefix. The file suffix to match, the page
-    title, and whether to show the GPU-family filter are all configurable,
-    so the same class is reused for different artifact types.
+    For example, it lists every .tar.gz tarball, every .msi Windows
+    installer, or every .deb and .rpm package directly under a prefix. The
+    file suffixes to match, the page title, and whether to show the
+    GPU-family filter are all configurable, so the same class is reused for
+    different artifact types.
     """
 
     def __init__(
         self,
         s3_client: botocore.client.BaseClient,
         bucket_name: str,
-        artifact_suffix: str,
+        artifact_suffixes: tuple[str, ...],
         show_filter: bool,
         base_title: str = "Artifact index",
     ) -> None:
@@ -233,9 +234,10 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         Args:
             s3_client: boto3 S3 client used to list and upload objects.
             bucket_name: Name of the S3 bucket to read from and write to.
-            artifact_suffix: File ending that marks a file as a match, e.g.
-                ".tar.gz" or ".msi". Only files ending in this suffix are
-                listed; everything else under the prefix is ignored.
+            artifact_suffixes: File endings that mark a file as a match, e.g.
+                (".tar.gz",) or (".deb", ".rpm"). Only files ending in one of
+                these suffixes are listed; everything else under the prefix
+                is ignored.
             show_filter: Whether to show the GPU-family dropdown filter on
                 the page. Set to False for artifact types (like Windows
                 installers) that aren't split by GPU family.
@@ -243,7 +245,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
                 title, e.g. "Tarball index". See `_resolve_page_title()`.
         """
         super().__init__(s3_client, bucket_name)
-        self.artifact_suffix = artifact_suffix
+        self.artifact_suffixes = artifact_suffixes
         self.show_filter = show_filter
         self.base_title = base_title
 
@@ -294,7 +296,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         for page in page_iterator:
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if key.endswith(self.artifact_suffix):
+                if key.endswith(self.artifact_suffixes):
                     # Only append the filename without the full path.
                     files.append(
                         (
@@ -305,7 +307,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
 
         if not files and not allow_empty:
             raise FileNotFoundError(
-                f"No {self.artifact_suffix} files found in bucket {self.bucket_name} "
+                f"No {'/'.join(self.artifact_suffixes)} files found in bucket {self.bucket_name} "
                 f"under prefix '{prefix}'."
             )
 
@@ -330,7 +332,7 @@ class ArtifactIndexGenerator(_S3IndexGenerator):
         log.info(
             "Found %d %s files in bucket '%s'.",
             len(files),
-            self.artifact_suffix,
+            "/".join(self.artifact_suffixes),
             self.bucket_name,
         )
 
@@ -512,7 +514,7 @@ def generate_tarball_index_s3(
     return ArtifactIndexGenerator(
         s3_client,
         bucket_name,
-        artifact_suffix=".tar.gz",
+        artifact_suffixes=(".tar.gz",),
         show_filter=True,
         base_title="Tarball index",
     ).generate(
@@ -537,9 +539,34 @@ def generate_windows_installer_index_s3(
     return ArtifactIndexGenerator(
         s3_client,
         bucket_name,
-        artifact_suffix=".msi",
+        artifact_suffixes=(".msi",),
         show_filter=False,
         base_title="Windows Installers",
+    ).generate(
+        prefix,
+        upload=upload,
+        allow_empty=allow_empty,
+        page_title=page_title,
+        empty_message=empty_message,
+    )
+
+
+def generate_native_package_index_s3(
+    s3_client: botocore.client.BaseClient,
+    bucket_name: str,
+    prefix: str,
+    upload: bool = False,
+    allow_empty: bool = False,
+    page_title: str | None = None,
+    empty_message: str = "No packages available.",
+) -> str:
+    """Generate index.html listing .deb and .rpm packages at s3://bucket_name/prefix."""
+    return ArtifactIndexGenerator(
+        s3_client,
+        bucket_name,
+        artifact_suffixes=(".deb", ".rpm"),
+        show_filter=False,
+        base_title="Package index",
     ).generate(
         prefix,
         upload=upload,
@@ -594,6 +621,11 @@ examples:
     ./index_generation_s3.py --bucket therock-repo-amd-stable-staging-extras-rocoptiq \\
         --directory v5/rocm/extras/rocoptiq/windows-installers/win11 \\
         --windows-installer-index --upload
+
+  Generate index.html for native packages (.deb and .rpm) under a prefix:
+    ./index_generation_s3.py --bucket therock-repo-amd-nightly-core \\
+        --directory v5/amd-repo-setup/ubuntu2404 \\
+        --native-package-index --upload
 """,
     )
     parser.add_argument(
@@ -641,6 +673,14 @@ examples:
             ".tar.gz tarballs (default: list tarballs)."
         ),
     )
+    index_type_group.add_argument(
+        "--native-package-index",
+        action="store_true",
+        help=(
+            "List .deb and .rpm packages under --directory instead of "
+            ".tar.gz tarballs (default: list tarballs)."
+        ),
+    )
     args = parser.parse_args(argv)
     s3 = boto3.client("s3", region_name=args.region)
     if args.directory_index:
@@ -653,6 +693,14 @@ examples:
         )
     elif args.windows_installer_index:
         generate_windows_installer_index_s3(
+            s3_client=s3,
+            bucket_name=args.bucket,
+            prefix=args.directory,
+            upload=args.upload,
+            page_title=args.page_title,
+        )
+    elif args.native_package_index:
+        generate_native_package_index_s3(
             s3_client=s3,
             bucket_name=args.bucket,
             prefix=args.directory,
