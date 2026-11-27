@@ -100,6 +100,7 @@ class PackageConfig:
     gfxarch_list: tuple = field(default_factory=tuple)
     build_variant: str = ""
     deb_compression_args: str = "-Zxz"
+    clean_build: bool = True
 
 
 def read_package_json_file():
