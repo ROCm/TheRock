@@ -9,6 +9,9 @@ exclude = [
   # patterns claim every .so/.dll, so without this it would ship as a runtime
   # library.
   "bin/miopen_wrapper_tests/**",
+  # Test-only golden vectors for the LGBM forest parity gates. They install
+  # next to the model assets, so the lib include above would claim them.
+  "share/miopen/db/lgbm_*_golden.json",
 ]
 [components.run."ml-libs/MIOpen/stage"]
 exclude = [
@@ -16,6 +19,8 @@ exclude = [
   # Same folder as in lib. This entry has no include, so it would take whatever
   # lib skips.
   "bin/miopen_wrapper_tests/**",
+  # Same files as in lib, for the same reason.
+  "share/miopen/db/lgbm_*_golden.json",
 ]
 [components.dbg."ml-libs/MIOpen/stage"]
 [components.dev."ml-libs/MIOpen/stage"]
@@ -24,4 +29,5 @@ exclude = [
 include = [
   "bin/miopen_gtest*",
   "bin/miopen_wrapper_tests/**",
+  "share/miopen/db/lgbm_*_golden.json",
 ]
