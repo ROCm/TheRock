@@ -6,6 +6,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import importlib.metadata
 import os
 from pathlib import Path
 import platform
@@ -28,6 +29,11 @@ libraries_mod = importlib.import_module(libraries_mod_name)
 utils.assert_is_physical_package(libraries_mod)
 
 so_paths = utils.get_module_shared_libraries(libraries_mod)
+# Device wheels overlay files into the libraries module. Each file's digest
+# must come from its owning distribution, not necessarily rocm-sdk-libraries.
+library_distributions = importlib.metadata.packages_distributions().get(
+    libraries_mod_name, []
+)
 
 CONSOLE_SCRIPT_TESTS = []
 
@@ -95,16 +101,25 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # co-location behind amdhip64's preload does not make it resolvable.
                 preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack');"
 
+                expected_sha256 = utils.get_record_sha256(
+                    library_distributions, so_path
+                )
+
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = (
                     extra_setup
                     + preload_command
-                    + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                    + " import ctypes; import sys; from pathlib import Path;"
+                    + " from rocm_sdk.tests.utils import assert_loaded_library;"
+                    + " library = ctypes.CDLL(sys.argv[1]);"
+                    + " assert_loaded_library(library, Path(sys.argv[1]), sys.argv[2])"
                 )
 
-                subprocess.check_call([sys.executable, "-c", command, str(so_path)])
+                subprocess.check_call(
+                    [sys.executable, "-c", command, str(so_path), expected_sha256]
+                )
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
