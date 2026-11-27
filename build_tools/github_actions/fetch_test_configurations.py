@@ -1058,6 +1058,10 @@ test_matrix = {
     # hipDNN install/consumption tests
     "hipdnn_install": {
         "job_name": "hipdnn_install",
+        # Exercises hipDNN's CMake install/find_package surface, so it belongs to
+        # the hipdnn component; without this it matches no selector and runs only
+        # under PROJECTS_TO_TEST=*.
+        "base_project": "hipdnn",
         "timeout_minutes": 30,
         "additional_requirements_files": [
             _get_script_path("requirements-test-ninja.txt"),
@@ -1297,6 +1301,11 @@ test_matrix = {
     # libhipcxx amdclang++ tests (formerly libhipcxx_hipcc)
     "libhipcxx_amdclang": {
         "job_name": "libhipcxx_amdclang",
+        # libhipcxx has no same-named job: it runs only as the amdclang/hiprtc
+        # pair, so both declare the component as their base_project. Without it
+        # a libhipcxx change selects the "libhipcxx" key, matches neither job,
+        # and libhipcxx's own tests are skipped.
+        "base_project": "libhipcxx",
         # --libhipcxx --tests also pulls prim_dev (rocThrust/hipCUB/rocPRIM
         # headers and configs) for the c2h tests.
         "fetch_artifact_args": "--libhipcxx --tests",
@@ -1321,6 +1330,8 @@ test_matrix = {
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
         "job_name": "libhipcxx_hiprtc",
+        # See libhipcxx_amdclang above.
+        "base_project": "libhipcxx",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
         "additional_requirements_files": [
@@ -1368,6 +1379,9 @@ test_matrix = {
     # hipthreads example apps (build + run consumer samples against the artifact).
     "hipthreads_examples": {
         "job_name": "hipthreads_examples",
+        # Consumer samples for hipthreads; selected with the base component
+        # rather than on its own, which it has no selector for.
+        "base_project": "hipthreads",
         # --prim pulls rocThrust/rocPrim (roc::rocthrust); --rand pulls hipRAND
         # (the InOneWeekend example includes <hiprand/hiprand.hpp>).
         "fetch_artifact_args": "--hipthreads --prim --rand --tests",
