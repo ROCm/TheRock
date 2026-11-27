@@ -19,7 +19,8 @@ Tests:
     as its first member.
   - Package coverage: every artifact/component present in the fetched
     archives should be covered by a Linux package definition in
-    build_tools/packaging/linux/package.json.
+    build_tools/packaging/linux/package.json, checked per Artifact_Subdir
+    so one subdir's gap cannot hide behind its siblings (see #9049).
 
 Usage:
     THEROCK_ARTIFACTS_DIR=/path/to/archives \\
@@ -30,12 +31,13 @@ THEROCK_ARTIFACTS_DIR should point to a directory containing artifact archives
 """
 
 import dataclasses
+import functools
 import json
 import logging
 import os
 import sys
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -58,14 +60,19 @@ PACKAGE_JSON_PATH = REPO_ROOT / "build_tools" / "packaging" / "linux" / "package
 # Components intentionally excluded from packaging coverage checks.
 IGNORED_COMPONENTS = {"dbg"}
 
-# (artifact_name, component) pairs known to be intentionally uncovered by
-# package.json today. Entries here should generally be temporary — either
-# the artifact is new/experimental and not yet meant for distribution, or
-# it's a test-only artifact that isn't shipped. Remove an entry once real
-# package.json coverage is added for that artifact/component.
+# Entries known to be intentionally uncovered by package.json today. Two
+# arities are accepted:
+#   (artifact, component)          -> the artifact/component is not
+#       distributed at all (new/experimental artifact, test-only project).
+#   (artifact, subdir, component)  -> one Artifact_Subdir is uncovered while
+#       its siblings are packaged. Prefer this form for multi-subdir
+#       artifacts: a 2-tuple suppresses every subdir and can mask a future
+#       origami-shaped gap (#9049).
+# Entries should be temporary — remove once real package.json coverage is
+# added. All values lowercase.
 
-KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
-    ("base", "test"),
+KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, ...]] = {
+    ("base", "rocprofiler-register", "test"),  # install-test binary, not shipped
     ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
     ("fftw3", "doc"),
     ("fftw3", "run"),
@@ -85,7 +92,32 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("support", "dev"),
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),
+    # --- #9049 first-run triage ---
+    # Per-subproject LICENSE files under share/doc/<subproject>/; packages
+    # carry their own top-level licence metadata.
+    # TODO(#NNNN): confirm attribution policy with packaging.
+    ("base", "half", "doc"),  # share/doc/half/LICENSE.txt
+    ("base", "rocm-cmake", "doc"),  # share/doc/rocm-cmake/LICENSE
+    ("blas", "hipblas-common", "doc"),  # share/doc/hipblas-common/LICENSE.md
+    ("rccl", "rccl-tests", "doc"),  # share/doc/rccl-tests/LICENSE.txt
+    # Packaging smoke-test binary, not shipped to users.
+    ("profiler-hub", "profiler-hub-install-test", "test"),  # bin/test_profiler-hub
 }
+
+# Trailing prefix segments that are build-layout noise, not a subproject name.
+_PREFIX_LEAF_IGNORE = {"stage", "dist", "build"}
+
+
+def subdir_from_prefix(prefix: str) -> str:
+    """Short subproject name for a manifest prefix, used for reporting and
+    KNOWN_UNCOVERED_COMPONENTS keys.
+
+    e.g. "math-libs/BLAS/origami/stage" -> "origami"
+    """
+    parts = list(PurePosixPath(prefix.strip().strip("/")).parts)
+    while parts and parts[-1] in _PREFIX_LEAF_IGNORE:
+        parts.pop()
+    return parts[-1] if parts else ""
 
 
 def is_windows_platform() -> bool:
@@ -103,18 +135,18 @@ def artifacts_dir() -> Path:
     return path
 
 
-def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
+def list_archive_files(archive_path: Path) -> list[tuple[str, str]]:
     """List the flattened file paths in an artifact archive.
 
     Reads artifact_manifest.txt (must be the first tar member) to get basedir
     prefixes, then strips those prefixes from each file member to produce
-    the flattened output path.
+    the flattened output path. The matching prefix is kept so coverage can be
+    checked per manifest line, the same way packaging_utils.py does (#9049).
 
     Returns:
-        (manifest_prefixes, flattened_file_paths)
+        [(manifest_prefix, flattened_path), ...]
     """
-    prefixes: list[str] = []
-    flattened: list[str] = []
+    entries: list[tuple[str, str]] = []
 
     with open_archive_for_read(archive_path) as tf:
         # Extract prefixes from the artifact manifest.
@@ -147,10 +179,10 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
                 if name.startswith(prefix_slash):
                     flattened_path = name[len(prefix_slash) :]
                     if flattened_path:
-                        flattened.append(flattened_path)
+                        entries.append((prefix, flattened_path))
                     break
 
-    return prefixes, flattened
+    return entries
 
 
 def discover_archives(artifacts_dir: Path) -> list[Path]:
@@ -168,7 +200,14 @@ class ArchiveInfo:
     artifact_name: str
     component: str
     filename: str
-    flattened_paths: set[str]
+    # manifest prefix line -> flattened paths it contributes to THIS archive.
+    # Prefixes that ship nothing for this component are absent, so they are
+    # never flagged.
+    prefix_paths: dict[str, set[str]]
+
+    @functools.cached_property
+    def flattened_paths(self) -> set[str]:
+        return set().union(*self.prefix_paths.values())
 
 
 @dataclasses.dataclass
@@ -207,60 +246,109 @@ def _clean_components(components) -> list[str]:
     return [c for c in components if c not in IGNORED_COMPONENTS]
 
 
-def build_packaged_components(package_data: list) -> dict[str, set[str]]:
-    """Map each packaged artifact name (lowercased) to the components it ships.
+@dataclasses.dataclass
+class PackageCoverage:
+    """Components declared by package.json."""
 
-    Handles both the nested ``Artifact_Subdir`` structure and the older flat
-    structure, mirroring build_tools/packaging/linux/package.json.
+    # Flat (non-Artifact_Subdir) entries: artifact -> {components}.
+    flat: dict[str, set[str]]
+    # artifact -> [(Name lowercased, {components})] for Artifact_Subdir entries.
+    subdirs: dict[str, list[tuple[str, set[str]]]]
 
-    Returns:
-        { artifact_name_lower: {component, ...} }
+    def matching_subdirs(self, artifact: str, prefix: str) -> list[set[str]]:
+        """Components of every Artifact_Subdir entry whose Name the packager
+        would match against this manifest line.
+
+        Mirrors packaging_utils.py: (Name + "/") in manifest_line.
+        """
+        line = prefix.lower()
+        return [
+            comps
+            for name, comps in self.subdirs.get(artifact, [])
+            if (name + "/") in line
+        ]
+
+
+def build_packaged_components(package_data: list) -> PackageCoverage:
+    """Collect package.json coverage for both the nested ``Artifact_Subdir``
+    structure and the older flat structure.
+
+    Raises:
+        ValueError: if an Artifact_Subdir entry has no "Name" (the packager
+            would treat it as matching every manifest line).
     """
-    packaged: dict[str, set[str]] = defaultdict(set)
+    flat: dict[str, set[str]] = defaultdict(set)
+    subdirs: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
 
-    all_packages = []
     for item in package_data:
-        if "Artifactory" in item:
-            all_packages.extend(item["Artifactory"])
+        for pkg in item.get("Artifactory", []):
+            artifact = (pkg.get("Artifact") or "").lower()
+            if "Artifact_Subdir" in pkg:
+                for subdir in pkg["Artifact_Subdir"]:
+                    name = (subdir.get("Name") or "").lower()
+                    if not name:
+                        raise ValueError(
+                            f"package.json: Artifact_Subdir entry under "
+                            f"Artifact={artifact!r} has no 'Name'"
+                        )
+                    components = _clean_components(subdir.get("Components", ["run"]))
+                    subdirs[artifact].append((name, set(components)))
+            else:
+                # Old flat structure without Artifact_Subdir.
+                key = artifact or (pkg.get("Name") or "").lower()
+                flat[key].update(_clean_components(pkg.get("Components", ["run"])))
 
-    for pkg in all_packages:
-        artifact = pkg.get("Artifact")
+    return PackageCoverage(flat=dict(flat), subdirs=dict(subdirs))
 
-        if "Artifact_Subdir" in pkg:
-            # Nested structure: each subdir has its own Name + Components.
-            for subdir in pkg["Artifact_Subdir"]:
-                subdir_name = (subdir.get("Name") or "").lower()
-                components = _clean_components(subdir.get("Components", ["run"]))
-                for component in components:
-                    packaged[subdir_name].add(component)
-                    # Also attribute components to the top-level Artifact
-                    # (e.g. "host-blas") so either name resolves.
-                    if artifact:
-                        packaged[artifact.lower()].add(component)
-        else:
-            # Old flat structure without Artifact_Subdir.
-            pkg_name = pkg.get("Name", artifact)
-            key = (artifact or pkg_name or "").lower()
-            for component in _clean_components(pkg.get("Components", ["run"])):
-                packaged[key].add(component)
 
-    return packaged
+def _is_known_uncovered(artifact: str, subdir: str, component: str) -> bool:
+    return (artifact, component) in KNOWN_UNCOVERED_COMPONENTS or (
+        artifact,
+        subdir,
+        component,
+    ) in KNOWN_UNCOVERED_COMPONENTS
 
 
 def find_uncovered_components(
-    archive_index: list["ArchiveInfo"], packaged: dict[str, set[str]]
-) -> list[tuple[str, str, str]]:
-    """Return (artifact_name, component, filename) not covered by any package."""
-    uncovered = []
+    archive_index: list["ArchiveInfo"], coverage: PackageCoverage
+) -> list[str]:
+    """Describe each artifact/subdir/component not covered by any package.
+
+    Subdir-declared artifacts are checked per manifest line, so one subdir's
+    gap cannot hide behind a sibling's entry (#9049).
+    """
+    uncovered: list[str] = []
     for info in archive_index:
         if info.component in IGNORED_COMPONENTS:
             continue
-        if (info.artifact_name.lower(), info.component) in KNOWN_UNCOVERED_COMPONENTS:
+        artifact = info.artifact_name.lower()
+
+        if artifact not in coverage.subdirs:
+            if info.component not in coverage.flat.get(artifact, set()):
+                if not _is_known_uncovered(artifact, "*", info.component):
+                    uncovered.append(
+                        f"{info.artifact_name} [{info.component}] "
+                        f"({info.filename}): no package.json entry"
+                    )
             continue
-        covered = info.component in packaged.get(info.artifact_name.lower(), set())
-        if not covered:
-            uncovered.append((info.artifact_name, info.component, info.filename))
-    return uncovered
+
+        for prefix in info.prefix_paths:
+            subdir = subdir_from_prefix(prefix).lower()
+            if _is_known_uncovered(artifact, subdir, info.component):
+                continue
+            matches = coverage.matching_subdirs(artifact, prefix)
+            if any(info.component in comps for comps in matches):
+                continue
+            reason = (
+                f"matching Artifact_Subdir does not list {info.component!r}"
+                if matches
+                else f"no Artifact_Subdir Name matches {prefix!r}"
+            )
+            uncovered.append(
+                f"{info.artifact_name}/{subdir} [{info.component}] "
+                f"({info.filename}): {reason}"
+            )
+    return sorted(uncovered)
 
 
 @pytest.fixture(scope="session")
@@ -283,18 +371,22 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
 
         logger.info("Listing %s ...", archive_name)
         try:
-            _prefixes, flattened_paths = list_archive_files(archive_path)
+            entries = list_archive_files(archive_path)
         except Exception:
             logger.exception("Failed to read %s", archive_name)
             skipped.append(archive_name)
             continue
+
+        prefix_paths: dict[str, set[str]] = defaultdict(set)
+        for prefix, fpath in entries:
+            prefix_paths[prefix].add(fpath)
 
         index.append(
             ArchiveInfo(
                 artifact_name=an.name,
                 component=an.component,
                 filename=archive_name,
-                flattened_paths=set(flattened_paths),
+                prefix_paths=dict(prefix_paths),
             )
         )
 
@@ -445,28 +537,26 @@ class TestArtifactStructure:
 
         Cross-references the fetched artifact archives (their name + component,
         derived from the filename) against the Linux packaging definitions in
-        build_tools/packaging/linux/package.json. Any artifact component present
-        in the archives but missing from package.json fails the test.
+        build_tools/packaging/linux/package.json. Coverage resolves per
+        Artifact_Subdir so one subdir's gap cannot hide behind its siblings
+        (see https://github.com/ROCm/TheRock/issues/9049).
         """
-        packaged = build_packaged_components(load_package_data())
-        uncovered = find_uncovered_components(archive_index, packaged)
+        coverage = build_packaged_components(load_package_data())
+        uncovered = find_uncovered_components(archive_index, coverage)
 
-        for artifact_name, component, filename in uncovered:
-            logger.error(
-                "MISSING package coverage: %s [%s] (%s)",
-                artifact_name,
-                component,
-                filename,
-            )
+        for line in uncovered:
+            logger.error("MISSING package coverage: %s", line)
 
         if uncovered:
-            summary = "\n".join(
-                f"  {name} [{component}] ({filename})"
-                for name, component, filename in sorted(uncovered)
-            )
+            summary = "\n".join(f"  {line}" for line in uncovered)
             pytest.fail(
                 f"Found {len(uncovered)} artifact component(s) not covered by "
-                f"package.json:\n{summary}"
+                f"package.json (see https://github.com/ROCm/TheRock/issues/9049):"
+                f"\n{summary}\n"
+                f"Fix: add the component to the matching Artifact_Subdir in "
+                f"build_tools/packaging/linux/package.json, or add a triaged "
+                f"(artifact, subdir, component) entry to "
+                f"KNOWN_UNCOVERED_COMPONENTS with a tracking issue."
             )
 
         logger.info(
