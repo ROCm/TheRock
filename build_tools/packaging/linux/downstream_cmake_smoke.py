@@ -2,33 +2,20 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Configure a throwaway CMake project against an installed ROCm prefix.
+"""Run examples/cpp-sdk-user against an installed ROCm prefix.
 
-Phase 1 of https://github.com/ROCm/TheRock/issues/9056. Call this after the
-native DEB/RPM install in ``test_native_linux_packages_install.yml``. It does
-not install packages and does not compile or run a HIP program.
+The install includes ``amdrocm`` and ``amdrocm-hpc-sdk``, so every
+``THEROCK_ENABLE_*`` option stays at the project's default of ON. A missing
+config fails inside ``find_package``. This launcher does not scan the prefix
+or pass those flags.
 
-The generated project calls ``find_package(hip CONFIG REQUIRED)`` and
-``find_package(hipblaslt CONFIG REQUIRED)``. hipBLASLt's installed config
-calls ``find_dependency(origami)`` and searches only beside its own CMake
-directory, so a missing origami ``dev`` component fails here.
+The host file ``hip-host-test.cpp`` includes the installed HIP headers. Those
+headers need a compiler newer than RHEL 8's GCC 8, so the host compile uses
+the prefix Clang unless ``--cxx-compiler`` is set.
 
-Exit codes:
-    0: both ``find_package`` calls configured.
-    1: the prefix is missing, ``cmake`` is missing, the temporary project
-       would be written inside the prefix, or configure returned non-zero.
-    2: ``argparse`` usage error (missing prefix argument).
-
-This module has no skip path. The workflow runs the step when
-``install_prefix`` is set. That input defaults to ``/opt/rocm/core``.
-Unit tests live in
-``build_tools/packaging/linux/tests/downstream_cmake_smoke_test.py`` and run
-from ``.github/workflows/unit_tests.yml``.
-
-Example::
-
-    python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-        --install-prefix /opt/rocm/core
+The example enables the HIP language. Without ``--hip-architecture``, CMake
+looks for a GPU on the machine at configure time. Pass a device target such as
+``gfx942`` so the run does not depend on the runner having a GPU.
 """
 
 import argparse
@@ -38,330 +25,196 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 
-CMAKE_MINIMUM_VERSION = "3.21"
-# Bounds a hung configure in CI. cmake is not a binutils tool.
-CONFIGURE_TIMEOUT_SEC = 120
-# find_package(hip CONFIG) still requires HIP_PLATFORM.
-# https://github.com/ROCm/TheRock/issues/68
-HIP_PLATFORM = "amd"
-# hipblaslt's config finds origami. hipblas and rocblas are not required here.
-SMOKE_PACKAGES = ("hip", "hipblaslt")
 
-_CLI_EXAMPLES_EPILOG = """
-examples:
-  # Installed native prefix (workflow default is /opt/rocm/core)
-  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-      --install-prefix /opt/rocm/core
+def _repo_root() -> Path | None:
+    """Return the checkout root when this file lives under ``build_tools/``.
 
-  # Prefix from the install-test environment
-  INSTALL_PREFIX=/opt/rocm/core \\
-      python3 build_tools/packaging/linux/downstream_cmake_smoke.py
-
-  # Newer cmake than the distro package, for example on RHEL 8
-  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-      --install-prefix /opt/rocm/core \\
-      --cmake-executable /tmp/test-venv/bin/cmake
-
-  # Distro g++. Omit --cxx-compiler to let CMake search PATH.
-  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-      --install-prefix /opt/rocm/core \\
-      --cxx-compiler g++
-
-  # Clang, or the ROCm compiler installed under the prefix
-  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-      --install-prefix /opt/rocm/core \\
-      --cxx-compiler clang++
-  python3 build_tools/packaging/linux/downstream_cmake_smoke.py \\
-      --install-prefix /opt/rocm/core \\
-      --cxx-compiler /opt/rocm/core/bin/amdclang++
-"""
-
-
-@dataclass(frozen=True)
-class ConfigureResult:
-    """Stdout, stderr, and status from one ``cmake`` configure."""
-
-    returncode: int
-    stdout: str
-    stderr: str
-
-
-ConfigureRunner = Callable[[list[str]], ConfigureResult]
-
-
-def render_cmake_lists() -> str:
-    """Return the configure-only consumer project.
-
-    ``LANGUAGES CXX`` is required. ``hip-config`` calls
-    ``find_dependency(Threads)``, and CMake's ``FindThreads`` errors when
-    neither C nor CXX is enabled. The step still does not add a HIP target
-    or compile a program. ``message(STATUS)`` prints ``hip_VERSION`` and
-    ``hipblaslt_VERSION`` on cmake stdout after each ``find_package``.
+    ``build_tools/packaging/linux/<this file>`` is four levels below the
+    checkout. A copy placed somewhere shallower, such as ``/tmp``, has no
+    checkout root; callers then pass ``--source-dir`` and ``--driver``.
 
     Returns:
-        ``CMakeLists.txt`` text.
+        The checkout root, or None when this file is not inside one.
     """
-    lines = [
-        f"cmake_minimum_required(VERSION {CMAKE_MINIMUM_VERSION})",
-        "project(install_smoke_test LANGUAGES CXX)",
-        "",
-    ]
-    for package_name in SMOKE_PACKAGES:
-        lines.append(f"find_package({package_name} CONFIG REQUIRED)")
-        lines.append(
-            f'message(STATUS "{package_name}_VERSION=${{{package_name}_VERSION}}")'
-        )
-    lines.append("")
-    return "\n".join(lines)
+    try:
+        return Path(__file__).resolve().parents[3]
+    except IndexError:
+        return None
 
 
-def build_configure_command(
-    *,
-    cmake_executable: str,
-    source_dir: Path,
-    build_dir: Path,
-    install_prefix: Path,
-    cxx_compiler: str | None = None,
-) -> list[str]:
-    """Build the list-form ``cmake`` configure command.
+REPO_ROOT = _repo_root()
+
+
+def _cmake_path(path: Path | str) -> str:
+    """Render ``path`` with the forward slashes cmake accepts.
+
+    ``pathlib.Path`` uses backslashes when this file is imported on Windows.
+    The packaging unit test compares these command strings on that runner.
+    """
+    return Path(path).as_posix()
+
+
+def _resolve_executable(command: str) -> str | None:
+    """Return the path of an executable, or None when it cannot be run.
 
     Args:
-        cmake_executable: ``cmake`` name or absolute path.
-        source_dir: Directory that contains ``CMakeLists.txt``.
-        build_dir: Out-of-source build directory.
-        install_prefix: Resolved ROCm prefix passed as ``CMAKE_PREFIX_PATH``.
-        cxx_compiler: Resolved compiler for ``CMAKE_CXX_COMPILER``. Unset
-            leaves the compiler choice to CMake.
+        command: Path to an executable file, or a name looked up on ``PATH``.
 
     Returns:
-        argv for one configure invocation. No generator flag, so CMake uses
-        Unix Makefiles and ``make`` must be on PATH when CXX is enabled. The
-        step does not build, so Ninja is not required.
+        The executable path, or None when nothing runnable matches.
     """
-    command = [
-        cmake_executable,
-        "-S",
-        str(source_dir),
-        "-B",
-        str(build_dir),
-        f"-DCMAKE_PREFIX_PATH={install_prefix}",
-        f"-DHIP_PLATFORM={HIP_PLATFORM}",
-    ]
-    if cxx_compiler:
-        command.append(f"-DCMAKE_CXX_COMPILER={cxx_compiler}")
-    return command
+    candidate = Path(command)
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return shutil.which(command)
 
 
-def path_is_inside(child: Path, parent: Path) -> bool:
-    """Return whether ``child`` is ``parent`` or a path under it.
+def host_cxx_compiler(prefix: Path, override: str | None = None) -> str | None:
+    """Choose the compiler that builds ``hip-host-test``.
 
-    Both paths are resolved, so a symlink prefix and its real directory
-    compare as the same tree.
-    """
-    try:
-        child.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True
+    The installed HIP headers use ``__builtin_bit_cast``. RHEL 8's system
+    GCC 8 does not provide that builtin, so the default host compiler is
+    the Clang shipped in the prefix. ``--cxx-compiler`` replaces that
+    default. When the prefix has no Clang, cmake chooses the compiler.
 
+    Args:
+        prefix: Installed ROCm prefix.
+        override: Compiler from ``--cxx-compiler``, when the caller set one.
 
-def _resolve_executable(executable: str) -> str | None:
-    """Return an executable path, or None when it cannot be run.
-
-    An absolute path is accepted only when that file exists and is executable.
-    Any other value is looked up on ``PATH``.
-    """
-    candidate = Path(executable)
-    if candidate.is_absolute():
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
-        return None
-    return shutil.which(executable)
-
-
-def _resolve_cmake(cmake_executable: str) -> str | None:
-    """Return the ``cmake`` binary, or None when it cannot be run."""
-    return _resolve_executable(cmake_executable)
-
-
-def _resolve_cxx_compiler(cxx_compiler: str) -> str | None:
-    """Return the C++ compiler, or None when it cannot be run."""
-    return _resolve_executable(cxx_compiler)
-
-
-def _captured_text(value: str | bytes | None) -> str:
-    """Normalize a captured subprocess stream to text."""
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode(errors="replace")
-    return value
-
-
-def _run_cmake(command: list[str]) -> ConfigureResult:
-    """Run configure and capture both streams.
-
-    A timeout or a missing binary is a failed configure (return code 1),
-    not a skipped test. ``message(STATUS)`` lines arrive on stdout.
-    """
-    try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=CONFIGURE_TIMEOUT_SEC,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return ConfigureResult(
-            returncode=1,
-            stdout=_captured_text(exc.stdout),
-            stderr=_captured_text(exc.stderr)
-            or f"cmake timed out after {CONFIGURE_TIMEOUT_SEC} seconds",
-        )
-    except FileNotFoundError as exc:
-        return ConfigureResult(returncode=1, stdout="", stderr=str(exc))
-    return ConfigureResult(
-        returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
-    )
-
-
-def _print_failure(
-    command: list[str], install_prefix: Path, result: ConfigureResult
-) -> None:
-    """Print the configure command, prefix, and captured CMake output."""
-    print("[FAIL] Downstream find_package smoke test failed", file=sys.stderr)
-    print(f"Prefix: {install_prefix}", file=sys.stderr)
-    print(f"Command: {shlex.join(command)}", file=sys.stderr)
-    if result.stdout:
-        print(result.stdout, file=sys.stderr)
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-
-
-def _print_versions(stdout: str) -> None:
-    """Print ``hip_VERSION`` and ``hipblaslt_VERSION`` status lines from stdout."""
-    for line in stdout.splitlines():
-        if any(f"{package_name}_VERSION=" in line for package_name in SMOKE_PACKAGES):
-            print(line)
-
-
-@contextmanager
-def _project_root(work_dir: Path | None) -> Iterator[Path]:
-    """Yield the directory that holds the generated CMake project.
-
-    When ``work_dir`` is unset, this is a temporary directory and it is
-    removed when the context exits. A caller-supplied directory is created
-    if needed and left in place so tests can inspect it.
-    """
-    if work_dir is None:
-        with tempfile.TemporaryDirectory(
-            prefix="rocm-install-smoke-"
-        ) as temporary_name:
-            yield Path(temporary_name)
-        return
-    project_root = Path(work_dir)
-    project_root.mkdir(parents=True, exist_ok=True)
-    yield project_root
-
-
-def _write_project(project_root: Path) -> tuple[Path, Path]:
-    """Write ``src/CMakeLists.txt`` and return the source and build directories.
+    Returns:
+        A compiler path, or None to leave the choice to cmake.
 
     Raises:
-        RuntimeError: The lists file is missing or empty after the write.
+        ValueError: ``override`` is set and is not a runnable compiler.
     """
-    source_dir = project_root / "src"
-    build_dir = project_root / "build"
-    source_dir.mkdir(parents=True, exist_ok=True)
-    build_dir.mkdir(parents=True, exist_ok=True)
-    cmake_lists = source_dir / "CMakeLists.txt"
-    cmake_lists.write_text(render_cmake_lists(), encoding="utf-8")
-    if not cmake_lists.is_file() or cmake_lists.stat().st_size == 0:
-        raise RuntimeError(f"Failed to write smoke project: {cmake_lists}")
-    return source_dir, build_dir
+    if override:
+        found = _resolve_executable(override)
+        if not found:
+            raise ValueError(f"C++ compiler not found: {override}")
+        return found
+    clangxx = prefix / "lib" / "llvm" / "bin" / "clang++"
+    if clangxx.is_file():
+        return _cmake_path(clangxx)
+    return None
 
 
-def run_smoke(
-    install_prefix: Path,
+def build_command(
     *,
-    cmake_executable: str = "cmake",
+    cmake: str,
+    source_dir: Path,
+    binary_dir: Path,
+    driver: Path,
+    prefix: Path,
+    generator: str,
     cxx_compiler: str | None = None,
-    work_dir: Path | None = None,
-    run_configure: ConfigureRunner | None = None,
-) -> int:
-    """Configure the smoke project against ``install_prefix``.
+    hip_architecture: str | None = None,
+) -> list[str]:
+    """Build the ``cmake -E env`` invocation of the existing driver.
+
+    ``CMAKE_PREFIX_PATH`` is an environment variable, matching
+    ``examples/CMakeLists.txt``. ``THEROCK_ENABLE_*`` stays at the project
+    default, so this command does not pass those flags.
+
+    The example enables the HIP language. Without ``CMAKE_HIP_ARCHITECTURES``,
+    CMake looks for a GPU on the machine at configure time. The driver
+    forwards that variable to the example when it is defined here.
 
     Args:
-        install_prefix: ROCm prefix. Symlinks are resolved before configure.
-        cmake_executable: ``cmake`` name or path. Resolved with ``shutil.which``.
-        cxx_compiler: Compiler name or path for ``CMAKE_CXX_COMPILER``. Unset
-            lets CMake search ``PATH``. ``g++`` selects the distro C++ compiler
-            and ``clang++`` selects Clang.
-        work_dir: Project directory. Unset uses a temporary directory that is
-            removed before this function returns.
-        run_configure: Test seam. Production callers leave this unset so
-            ``_run_cmake`` runs.
+        cmake: cmake executable.
+        source_dir: ``examples/cpp-sdk-user``.
+        binary_dir: Build directory outside the install prefix.
+        driver: ``examples/clean_configure_test_project.cmake``.
+        prefix: Installed ROCm prefix.
+        generator: CMake generator. The install job uses ``Unix Makefiles``.
+        cxx_compiler: Host C++ compiler. None leaves the choice to cmake.
+        hip_architecture: Device target for ``CMAKE_HIP_ARCHITECTURES``, such
+            as ``gfx942``. None leaves CMake to detect a GPU.
 
     Returns:
-        0 on success, 1 on a missing prefix, a missing ``cmake``, a missing
-        requested compiler, a project directory inside the prefix, or a
-        non-zero configure.
+        The argv list, with no shell quoting.
     """
-    prefix = Path(install_prefix).resolve()
-    if not prefix.is_dir():
-        print(f"[FAIL] Install prefix is not a directory: {prefix}", file=sys.stderr)
-        return 1
-
-    resolved_cmake = _resolve_cmake(cmake_executable)
-    if resolved_cmake is None:
-        print(
-            f"[FAIL] cmake executable not found: {cmake_executable}",
-            file=sys.stderr,
-        )
-        return 1
-
-    resolved_cxx = None
+    child = [
+        cmake,
+        f"-DSOURCE_DIR={_cmake_path(source_dir)}",
+        f"-DBINARY_DIR={_cmake_path(binary_dir)}",
+        f"-DGENERATOR={generator}",
+    ]
     if cxx_compiler:
-        resolved_cxx = _resolve_cxx_compiler(cxx_compiler)
-        if resolved_cxx is None:
-            print(
-                f"[FAIL] C++ compiler not found: {cxx_compiler}",
-                file=sys.stderr,
-            )
-            return 1
+        child.append(f"-DCMAKE_CXX_COMPILER={_cmake_path(cxx_compiler)}")
+    if hip_architecture:
+        child.append(f"-DCMAKE_HIP_ARCHITECTURES={hip_architecture}")
+    child.extend(["-P", _cmake_path(driver)])
+    return [
+        cmake,
+        "-E",
+        "env",
+        f"CMAKE_PREFIX_PATH={_cmake_path(prefix)}",
+        "--",
+        *child,
+    ]
 
-    with _project_root(work_dir) as project_root:
-        if path_is_inside(project_root, prefix):
-            print(
-                "[FAIL] Smoke project directory is inside the install prefix: "
-                f"{project_root}",
-                file=sys.stderr,
-            )
-            return 1
-        source_dir, build_dir = _write_project(project_root)
-        command = build_configure_command(
-            cmake_executable=resolved_cmake,
-            source_dir=source_dir,
-            build_dir=build_dir,
-            install_prefix=prefix,
-            cxx_compiler=resolved_cxx,
+
+def _inside_prefix(path: Path, prefix: Path) -> bool:
+    """Return True when ``path`` is ``prefix`` or a directory inside it.
+
+    Args:
+        path: Candidate build directory. It does not need to exist yet.
+        prefix: Installed ROCm prefix.
+
+    Returns:
+        True when resolving ``path`` stays under ``prefix``.
+    """
+    return path.resolve().is_relative_to(prefix.resolve())
+
+
+def validate_layout(
+    prefix: Path,
+    binary_dir: Path,
+    source_dir: Path | None,
+    driver: Path | None,
+) -> None:
+    """Fail closed before cmake if the prefix or project paths are unusable.
+
+    Args:
+        prefix: Installed ROCm prefix. Must be an existing directory.
+        binary_dir: Build directory. Must not be inside ``prefix``.
+        source_dir: ``examples/cpp-sdk-user``, containing ``CMakeLists.txt``.
+        driver: ``clean_configure_test_project.cmake``.
+
+    Raises:
+        ValueError: A path is missing, or the build directory is inside the
+            install prefix.
+    """
+    if not prefix.is_dir():
+        raise ValueError(f"Install prefix does not exist: {prefix}")
+    if source_dir is None or not (source_dir / "CMakeLists.txt").is_file():
+        raise ValueError(f"cpp-sdk-user project not found: {source_dir}")
+    if driver is None or not driver.is_file():
+        raise ValueError(f"CMake driver not found: {driver}")
+    if _inside_prefix(binary_dir, prefix):
+        raise ValueError(
+            f"Build directory must not be inside the install prefix: {binary_dir}"
         )
-        configure = run_configure or _run_cmake
-        result = configure(command)
-        if result.returncode != 0:
-            _print_failure(command, prefix, result)
-            return 1
-        print(f"[PASS] Downstream find_package smoke test passed for {prefix}")
-        _print_versions(result.stdout)
-        return 0
+
+
+def resolve_cmake(cmake: str) -> str:
+    """Return a usable cmake path.
+
+    Args:
+        cmake: Absolute path, or a name looked up on ``PATH``.
+
+    Returns:
+        The executable path.
+
+    Raises:
+        ValueError: No executable exists at that path and ``PATH`` has no match.
+    """
+    found = _resolve_executable(cmake)
+    if not found:
+        raise ValueError(f"cmake executable not found: {cmake}")
+    return found
 
 
 def _nonempty_path(value: str) -> Path:
@@ -372,74 +225,124 @@ def _nonempty_path(value: str) -> Path:
     return Path(stripped)
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    """Parse CLI arguments. ``INSTALL_PREFIX`` supplies the default prefix.
+def _nonempty_text(value: str) -> str:
+    """Return a CLI text argument with whitespace trimmed, rejecting a blank."""
+    stripped = value.strip()
+    if not stripped:
+        raise argparse.ArgumentTypeError("value must not be empty")
+    return stripped
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse launcher arguments.
 
     Args:
-        argv: Argument list, typically ``sys.argv[1:]``.
+        argv: Argument vector without the program name. None reads ``sys.argv``.
 
     Returns:
-        Parsed arguments. ``argparse`` exits with status 2 when the prefix
-        was neither passed nor set in the environment.
+        The parsed namespace. ``--prefix`` is required.
     """
-    env_prefix = os.environ.get("INSTALL_PREFIX", "").strip()
     parser = argparse.ArgumentParser(
-        description=(
-            "Configure a downstream find_package() smoke project against an "
-            "installed ROCm prefix. Run this after packages are installed."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=_CLI_EXAMPLES_EPILOG,
+        description="Run examples/cpp-sdk-user against an installed ROCm prefix."
     )
     parser.add_argument(
-        "--install-prefix",
+        "--prefix",
+        required=True,
         type=_nonempty_path,
-        default=Path(env_prefix) if env_prefix else None,
-        help=(
-            "ROCm install prefix. Defaults to the INSTALL_PREFIX environment "
-            "variable."
-        ),
+        help="Installed ROCm prefix.",
     )
     parser.add_argument(
-        "--cmake-executable",
-        default="cmake",
-        help=(
-            "cmake binary name or absolute path. Defaults to cmake on PATH. "
-            "Use this when the distro cmake is older than the installed "
-            "ROCm configs require."
-        ),
+        "--binary-dir",
+        type=Path,
+        help="Build directory. Must be outside --prefix. Defaults to a temp dir.",
     )
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        default=None if REPO_ROOT is None else REPO_ROOT / "examples" / "cpp-sdk-user",
+        help="examples/cpp-sdk-user source directory.",
+    )
+    parser.add_argument(
+        "--driver",
+        type=Path,
+        default=(
+            None
+            if REPO_ROOT is None
+            else REPO_ROOT / "examples" / "clean_configure_test_project.cmake"
+        ),
+        help="clean_configure_test_project.cmake driver.",
+    )
+    parser.add_argument("--generator", default="Unix Makefiles")
+    parser.add_argument("--cmake", default="cmake", help="cmake executable.")
     parser.add_argument(
         "--cxx-compiler",
-        default=None,
         help=(
-            "C++ compiler passed as -DCMAKE_CXX_COMPILER. Omit to let CMake "
-            "search PATH. Pass g++ for the distro C++ compiler or clang++ for "
-            "Clang. An absolute path is accepted, for example "
-            "/opt/rocm/core/bin/amdclang++. make must still be on PATH."
+            "Host C++ compiler for hip-host-test. Omit to use the prefix "
+            "Clang, which can compile the HIP headers on RHEL 8."
         ),
     )
-    args = parser.parse_args(argv)
-    if args.install_prefix is None:
-        parser.error("Install prefix is required (--install-prefix or INSTALL_PREFIX)")
-    return args
+    parser.add_argument(
+        "--hip-architecture",
+        type=_nonempty_text,
+        help=(
+            "Device target for CMAKE_HIP_ARCHITECTURES, such as gfx942. Use a "
+            "device target, not a family such as gfx94X. Omit to let CMake "
+            "detect a GPU, which needs one on the machine."
+        ),
+    )
+    return parser.parse_args(argv)
 
 
-def main(argv: list[str]) -> int:
-    """CLI entry point.
+def main(argv: list[str] | None = None) -> int:
+    """Run cpp-sdk-user against the installed prefix.
 
     Args:
-        argv: Argument list, typically ``sys.argv[1:]``.
+        argv: Argument vector without the program name. None reads ``sys.argv``.
 
     Returns:
-        Process exit code. Usage errors exit through ``argparse``.
+        Zero when the existing CMake driver passes. One when the prefix, the
+        project path, cmake, or an explicit compiler is unusable, or when cmake
+        cannot be started. The driver's own exit code when CMake runs and
+        fails.
     """
     args = parse_args(argv)
-    return run_smoke(
-        args.install_prefix,
-        cmake_executable=args.cmake_executable,
-        cxx_compiler=args.cxx_compiler,
+    binary_dir = args.binary_dir
+    if binary_dir is None:
+        binary_dir = Path(tempfile.mkdtemp(prefix="cpp-sdk-user-"))
+    source_dir = args.source_dir
+    driver = args.driver
+    try:
+        validate_layout(args.prefix, binary_dir, source_dir, driver)
+        if source_dir is None or driver is None:
+            raise ValueError(f"cpp-sdk-user project not found: {source_dir}")
+        cmake = resolve_cmake(args.cmake)
+        cxx_compiler = host_cxx_compiler(args.prefix, args.cxx_compiler)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Installed cpp-sdk-user prefix: {args.prefix}", flush=True)
+    if cxx_compiler:
+        print(f"CMAKE_CXX_COMPILER={cxx_compiler}", flush=True)
+    if args.hip_architecture:
+        print(f"CMAKE_HIP_ARCHITECTURES={args.hip_architecture}", flush=True)
+    command = build_command(
+        cmake=cmake,
+        source_dir=source_dir,
+        binary_dir=binary_dir,
+        driver=driver,
+        prefix=args.prefix,
+        generator=args.generator,
+        cxx_compiler=cxx_compiler,
+        hip_architecture=args.hip_architecture,
     )
+    print("Running:", shlex.join(command), flush=True)
+    try:
+        completed = subprocess.run(command)
+    except OSError as exc:
+        print(f"error: could not run cmake: {exc}", file=sys.stderr)
+        return 1
+    return completed.returncode
 
 
 if __name__ == "__main__":
