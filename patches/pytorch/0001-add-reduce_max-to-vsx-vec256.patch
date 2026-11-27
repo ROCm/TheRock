@@ -1,0 +1,61 @@
+diff --git a/aten/src/ATen/cpu/vec/vec256/vsx/vec256_double_vsx.h b/aten/src/ATen/cpu/vec/vec256/vsx/vec256_double_vsx.h
+index 2c90f2dcde..5603938942 100644
+--- a/aten/src/ATen/cpu/vec/vec256/vsx/vec256_double_vsx.h
++++ b/aten/src/ATen/cpu/vec/vec256/vsx/vec256_double_vsx.h
+@@ -199,6 +199,24 @@ class Vectorized<double> {
+           ptr, tmp_values, std::min(count, size()) * sizeof(value_type));
+     }
+   }
++
++  // Propagates NaN, matching maximum() and torch.max.
++  // Uses VSX vec_max for pairwise reduction, then checks for NaN.
++  double reduce_max() const {
++    // Reduce the two 2-wide halves into one
++    vfloat64 v = vec_max(_vec0, _vec1);
++    // Reduce 2 -> 1: rotate by 1 element and max
++    vfloat64 v1 = vec_sld(v, v, 8);
++    v = vec_max(v, v1);
++    // Check for NaN in the original vectors: NaN != NaN
++    vbool64 nan0 = vec_cmpeq(_vec0, _vec0);
++    vbool64 nan1 = vec_cmpeq(_vec1, _vec1);
++    if (!vec_all_eq(nan0, (vbool64)vec_splats((unsigned long long)-1)) ||
++        !vec_all_eq(nan1, (vbool64)vec_splats((unsigned long long)-1))) {
++      return std::numeric_limits<double>::quiet_NaN();
++    }
++    return vec_extract(v, 0);
++  }
+   const double& operator[](int idx) const = delete;
+   double& operator[](int idx) = delete;
+   Vectorized<double> map(double (*const f)(double)) const {
+diff --git a/aten/src/ATen/cpu/vec/vec256/vsx/vec256_float_vsx.h b/aten/src/ATen/cpu/vec/vec256/vsx/vec256_float_vsx.h
+index 68d250d69a..ea0e9ffca5 100644
+--- a/aten/src/ATen/cpu/vec/vec256/vsx/vec256_float_vsx.h
++++ b/aten/src/ATen/cpu/vec/vec256/vsx/vec256_float_vsx.h
+@@ -214,6 +214,27 @@ class Vectorized<float> {
+     }
+   }
+ 
++  // Propagates NaN, matching maximum() and torch.max.
++  // Uses VSX vec_max for pairwise reduction, then checks for NaN.
++  float reduce_max() const {
++    // Reduce the two 4-wide halves into one
++    vfloat32 v = vec_max(_vec0, _vec1);
++    // Reduce 4 -> 2: rotate by 2 elements and max
++    vfloat32 v1 = vec_sld(v, v, 8);
++    v = vec_max(v, v1);
++    // Reduce 2 -> 1: rotate by 1 element and max
++    v1 = vec_sld(v, v, 4);
++    v = vec_max(v, v1);
++    // Check for NaN in the original vectors: NaN != NaN
++    vbool32 nan0 = vec_cmpeq(_vec0, _vec0);
++    vbool32 nan1 = vec_cmpeq(_vec1, _vec1);
++    if (!vec_all_eq(nan0, (vbool32)vec_splats((unsigned int)-1)) ||
++        !vec_all_eq(nan1, (vbool32)vec_splats((unsigned int)-1))) {
++      return std::numeric_limits<float>::quiet_NaN();
++    }
++    return vec_extract(v, 0);
++  }
++
+   const float& operator[](int idx) const = delete;
+   float& operator[](int idx) = delete;
+ 
