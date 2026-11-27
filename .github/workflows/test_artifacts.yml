@@ -48,6 +48,15 @@ on:
         description: "Whether tests should run (true when any runner is available)"
         type: boolean
         default: true
+      test_scope:
+        description: >-
+          Run all tests for this invocation, only per-family tests, or CPU
+          tests of generic artifacts. Family scope requires a GPU family.
+          For generic scope, leave GPU family, targets, and runner empty,
+          and leave sanity_check_only_for_family disabled.
+        type: choice
+        options: [all, family, generic]
+        default: all
       sanity_check_only_for_family:
         description: >-
           When true, only run sanity check tests and skip all component tests.
@@ -134,6 +143,10 @@ on:
       tests_enabled:
         type: boolean
         default: true
+      test_scope:
+        description: "Test selection scope: all, family, or generic."
+        type: string
+        default: all
       sanity_check_only_for_family:
         type: boolean
         default: false
@@ -141,6 +154,10 @@ on:
         type: string
       test_labels:
         type: string
+      generic_test_label_overrides:
+        description: "JSON array of eligible family label overrides for generic scope. Null entries use test_labels."
+        type: string
+        default: ""
       changed_projects:
         type: string
         default: ""
@@ -171,7 +188,7 @@ on:
 permissions:
   contents: read
 
-run-name: Test Artifacts (${{ inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
+run-name: Test Artifacts (${{ inputs.test_scope == 'generic' && 'generic' || inputs.amdgpu_families }}, ${{ inputs.release_type }}, ${{ inputs.test_type }}, ${{ inputs.build_variant }}, ${{ inputs.test_runs_on }})
 
 jobs:
   configure_test_matrix:
@@ -182,6 +199,7 @@ jobs:
       sanity_component: ${{ steps.configure.outputs.sanity_component }}
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
+      artifact_family: ${{ steps.configure.outputs.artifact_family }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: "Quartz - started - test ROCm artifacts"
@@ -232,13 +250,18 @@ jobs:
 
       - name: "Configuring CI options"
         id: configure
+        shell: python
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           # include/exclude_family match these (family overrides included); empty = static matrix.
           AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           TEST_TYPE: ${{ inputs.test_type }}
+          TEST_SCOPE: ${{ inputs.test_scope }}
+          SANITY_CHECK_ONLY_FOR_FAMILY: ${{ inputs.sanity_check_only_for_family }}
           TEST_LABELS: ${{ inputs.test_labels }}
+          GENERIC_TEST_LABEL_OVERRIDES: ${{ inputs.generic_test_label_overrides }}
+          TEST_PLATFORM: ${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
           PROJECTS_TO_TEST: ${{ steps.test_deps.outputs.projects_to_test }}
           SKIP_STAGES: ${{ inputs.skip_stages }}
           CI_CONFIG_PATH: ci-config
@@ -248,13 +271,27 @@ jobs:
           TEST_RUNS_ON: ${{ inputs.test_runs_on }}
           TEST_RUNS_ON_CPU: ${{ inputs.test_runs_on_cpu }}
         run: |
-          python ./build_tools/github_actions/fetch_test_configurations.py \
-            --platform=${{ (contains(inputs.test_runs_on, 'windows') || contains(inputs.test_runs_on_cpu, 'windows')) && 'windows' || contains(inputs.test_runs_on, 'wsl') && 'wsl' || 'linux' }}
+          import os
+          import subprocess
+          import sys
+
+          generator = [sys.executable, "./build_tools/github_actions/fetch_test_configurations.py"]
+          args = ["--platform", os.environ["TEST_PLATFORM"]]
+          scope = os.environ["TEST_SCOPE"]
+          if scope == "generic" and os.environ["SANITY_CHECK_ONLY_FOR_FAMILY"].lower() == "true":
+              sys.exit("test_scope=generic cannot be combined with sanity_check_only_for_family.")
+          if scope != "all":
+              # Legacy generators silently ignore unrecognized arguments.
+              help_text = subprocess.check_output([*generator, "--help"], text=True)
+              if "--test-scope" not in help_text:
+                  sys.exit(f"The selected TheRock ref does not support test_scope={scope!r}. Use all or a newer ref.")
+              args.extend(["--test-scope", scope])
+          subprocess.run([*generator, *args], check=True)
 
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix
-    if: ${{ fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
+    if: ${{ inputs.test_scope != 'generic' && fromJSON(needs.configure_test_matrix.outputs.sanity_component).test_runner != '' }}
     uses: './.github/workflows/test_component.yml'
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
@@ -299,7 +336,8 @@ jobs:
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
+      # Older generators in scope=all do not emit artifact_family.
+      amdgpu_families: ${{ needs.configure_test_matrix.outputs.artifact_family || inputs.amdgpu_families }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # Route to the appropriate runner:
       #   1. For user-triggered workflow_dispatch, honor test_runs_on input if provided.
