@@ -341,7 +341,12 @@ class TestCliInputParsing(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(
                 set(json.loads(proc.stdout.strip())),
-                {"tensilelite", "tensilelite-common", "hipblaslt"},
+                {
+                    "tensilelite",
+                    "tensilelite-common",
+                    "hipblaslt",
+                    "hipblaslt-rocjitsu-race",
+                },
             )
             # Clean stderr is part of the assertion: the regression was a
             # warning plus an empty selection, not a non-zero exit.
@@ -375,6 +380,7 @@ class TestCliInputParsing(_FixtureTestCase):
                 "shared/mxdatagenerator": {
                     "hipblas",
                     "hipblaslt",
+                    "hipblaslt-rocjitsu-race",
                     "rocblas",
                     "rocroller",
                     "tensilelite",
