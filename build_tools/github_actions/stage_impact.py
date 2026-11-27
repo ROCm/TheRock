@@ -447,3 +447,35 @@ def analyze_artifact_impact_from_projects(
     reusable_artifacts = all_stage_artifacts - rebuild_artifacts
 
     return sorted(rebuild_artifacts), sorted(reusable_artifacts)
+
+
+def stages_owned_by_projects(
+    changed_projects: Sequence[str],
+    topology: Optional[BuildTopology] = None,
+) -> Set[str]:
+    """Build stages that compile the artifacts the given projects own.
+
+    Producing stages only, not their dependency closure: a changed project
+    invalidates the stage that compiles it, while the stages it builds on top
+    of are unaffected. "projects/rpp" resolves to the rpp artifact and so to
+    cv-libs; it does not drag in compiler-runtime.
+
+    Projects with no artifact of their own resolve to nothing, so a caller must
+    treat an empty result as "no stage is known to be invalidated" rather than
+    "no stage is invalidated".
+    """
+    if topology is None:
+        from _therock_utils.build_topology import get_topology
+
+        topology = get_topology()
+
+    rebuild_artifacts, _ = analyze_artifact_impact_from_projects(
+        changed_projects, topology
+    )
+    return {
+        stage
+        for stage in (
+            topology.get_stage_for_artifact(artifact) for artifact in rebuild_artifacts
+        )
+        if stage
+    }

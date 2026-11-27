@@ -50,6 +50,7 @@ Outputs (written to GITHUB_OUTPUT):
     windows_build_config  : JSON object with build config, or "" if skipped
     enable_build_jobs     : "true" or "false"
     test_type             : "quick", "standard", "comprehensive", or "full"
+    changed_projects      : Comma-separated project scope, or "" for every project
 """
 
 import enum
@@ -66,7 +67,12 @@ _BUILD_TOOLS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BUILD_TOOLS_DIR))
 sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.build_topology import get_topology
-from _therock_utils.external_repo_config import parse_external_repo
+from _therock_utils.external_repo_config import (
+    REPOS_CONFIG_PATH,
+    load_repos_config,
+    parse_external_repo,
+    subtree_prefixes,
+)
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 from amdgpu_family_matrix import (
@@ -79,6 +85,8 @@ from amdgpu_family_matrix import (
     select_build_runner,
 )
 from configure_ci_path_filters import (
+    EXTERNAL_REPO_CONFIG_DIR,
+    determine_changed_projects,
     get_changed_files_for_external_repo,
     get_jobs_for_changes,
     get_git_commit_hash,
@@ -98,7 +106,7 @@ from github_actions_api import (
     str2bool,
 )
 from get_latest_python_package_version import get_latest_python_package_version
-from stage_impact import analyze_artifact_impact_from_projects
+from stage_impact import stages_owned_by_projects
 from stage_reuse_decision import (
     AutoStageReuse,
     StageReuseMode,
@@ -145,6 +153,46 @@ def _parse_prebuilt_stages(raw: str) -> list[str]:
     if "all" in stages:
         return _get_all_build_stages()
     return stages
+
+
+def _drop_stages_owned_by_changed_projects(
+    prebuilt_stages: list[str],
+    changed_projects: list[str],
+    repo_projects: list[str],
+) -> list[str]:
+    """Remove prebuilt stages that a changed project compiles into.
+
+    A caller's prebuilt_stages list names the stages its repository never
+    affects, so copying them from a baseline is safe. That premise breaks for a
+    monorepo whose projects span several stages: rocm-libraries owns RPP in
+    cv-libs and everything else in math-libs/ml-libs, so a run that changes RPP
+    must not copy cv-libs or it ships an RPP that does not match the run.
+
+    Callers used to special-case this in their own workflow YAML, keyed on a
+    changed_projects value they computed themselves. Deciding it here puts it on
+    the same changed_projects every other scoping decision reads, and keeps the
+    caller's prebuilt_stages a plain static list.
+
+    An empty changed_projects means the scope could not be narrowed, not that
+    nothing changed, so it cannot be read as "no stage was invalidated" -- a
+    diff touching RPP and one unattributable path lands here, and honoring the
+    caller's list would copy cv-libs and ship the wrong RPP. repo_projects, the
+    whole registry of projects the caller owns, is the sound upper bound on what
+    such a run may have changed, so it stands in for the scope.
+    """
+    owned = stages_owned_by_projects(changed_projects or repo_projects)
+    dropped = [stage for stage in prebuilt_stages if stage in owned]
+    if dropped:
+        logging.info(
+            "[STAGE-REUSE] rebuilding %s: owned by %s",
+            ", ".join(dropped),
+            (
+                f"changed projects {', '.join(changed_projects)}"
+                if changed_projects
+                else "the calling repo, whose scope could not be narrowed"
+            ),
+        )
+    return [stage for stage in prebuilt_stages if stage not in owned]
 
 
 def _resolve_skipped_stages(build_stages: list[str]) -> list[str]:
@@ -949,6 +997,9 @@ class CIOutputs:
     # and PR test:* labels.
     linux_test_labels: list[str] = field(default_factory=list)
     windows_test_labels: list[str] = field(default_factory=list)
+    # Project paths this run is scoped to, for external repo runs. Empty means
+    # downstream test selection covers every project.
+    changed_projects: list[str] = field(default_factory=list)
 
     @staticmethod
     def skipped() -> "CIOutputs":
@@ -964,8 +1015,9 @@ class CIOutputs:
 def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     """Skip-CI patterns from the calling repo's TOML config, if any.
 
-    Resolved once per run and shared by skip-CI evaluation and test-depth
-    selection, both of which must agree on which paths are docs-only noise.
+    Resolved once per run and shared by skip-CI evaluation, test-depth selection
+    and project scoping, all of which must agree on which paths are docs-only
+    noise.
     """
     if not ci_inputs.external_repo:
         return None
@@ -973,6 +1025,44 @@ def load_external_repo_skip_patterns(ci_inputs: CIInputs) -> list[str] | None:
     if not skip_ci_config:
         return None
     return load_skip_ci_patterns_for_external_repo(skip_ci_config)
+
+
+def resolve_repo_projects(ci_inputs: CIInputs) -> list[str]:
+    """Every project the calling repository owns.
+
+    The upper bound on what one of its runs can change, so it stands in for
+    changed_projects wherever a run could not be narrowed. setup_multi_arch.yml
+    sparse-checks out the caller's .github directory, which carries this subtree
+    registry alongside the skip-CI config.
+    """
+    if not ci_inputs.external_repo:
+        return []
+    return sorted(
+        subtree_prefixes(
+            load_repos_config(Path(EXTERNAL_REPO_CONFIG_DIR) / REPOS_CONFIG_PATH)
+        )
+    )
+
+
+def resolve_changed_projects(
+    ci_inputs: CIInputs,
+    git_context: GitContext,
+    external_skip_patterns: list[str] | None,
+    repo_projects: list[str],
+) -> list[str]:
+    """Project scope for this run, derived from the calling repo's diff.
+
+    External repos used to compute this themselves and pass it in. Deriving it
+    here instead keeps breadth and depth decisions on the same diff and the same
+    skip-CI patterns, both already resolved for this run. An explicitly supplied
+    changed_projects input still wins, so a caller can pin the scope.
+    """
+    if not ci_inputs.external_repo or ci_inputs.changed_projects:
+        return ci_inputs.changed_projects
+
+    return determine_changed_projects(
+        git_context.external_changed_files, set(repo_projects), external_skip_patterns
+    )
 
 
 def should_skip_ci(
@@ -1503,10 +1593,9 @@ def _determine_test_type(
     # Confined is the operative word. A diff that edits CI plumbing *and*
     # library source is not eligible: it falls through to Priority 5 and keeps
     # "standard" depth, because the source change still needs real testing.
-    # (Such a diff does widen the run to every project, since the CI edit
-    # cannot be attributed to a subset -- but that breadth is decided by the
-    # calling repo's configure_external_repo_ci.py, and widening breadth is
-    # not a reason to shrink depth.)
+    # determine_changed_projects() reads the same diff and the same patterns,
+    # so such a run keeps full breadth too: CI plumbing in the diff always
+    # means every project, and only being *confined* to it makes that quick.
     #
     # This check must precede the submodule check below because
     # from_external_repo() synthesizes changed_files=[repo_name] and
@@ -1579,6 +1668,7 @@ def decide_jobs(
     git_context: GitContext,
     targets: TargetSelection,
     external_skip_patterns: list[str] | None = None,
+    repo_projects: list[str] | None = None,
 ) -> JobDecisions:
     """Determine which job groups to run, skip, or satisfy with prebuilt files.
     ``targets`` (the per-platform family selection from ``select_targets()``)
@@ -1691,7 +1781,11 @@ def decide_jobs(
         stage_decisions = {}
         explicit_prebuilt_stages: list[str] = []
         if ci_inputs.prebuilt_stages:
-            explicit_prebuilt_stages = _parse_prebuilt_stages(ci_inputs.prebuilt_stages)
+            explicit_prebuilt_stages = _drop_stages_owned_by_changed_projects(
+                _parse_prebuilt_stages(ci_inputs.prebuilt_stages),
+                ci_inputs.changed_projects,
+                repo_projects or [],
+            )
             for stage in explicit_prebuilt_stages:
                 stage_decisions[stage] = JobAction.PREBUILT
 
@@ -1747,23 +1841,19 @@ def decide_jobs(
         for stage in skipped_stages:
             stage_decisions[stage] = JobAction.SKIP
 
-    # For external repos, use changed_projects to determine artifact-level reuse.
-    # This handles the case where SKIP_PATH_FILTERS=true disables the normal
-    # changed-file analysis.
+    # Artifact-level reuse keys on the changed files alone. changed_projects
+    # names the projects a run is *scoped* to, which is a test-selection answer:
+    # it says nothing about the artifacts that consume them, so narrowing the
+    # rebuild set to it marks every consumer reusable. A rocPRIM-only scope
+    # would rebuild prim and copy rocBLAS, shipping a rocBLAS built against the
+    # old rocPRIM. Stage-level reuse is coarse enough to stay safe here; making
+    # it artifact-granular is TheRock#3399.
     rebuild_artifacts: list[str] = (
         list(auto_stage_reuse.rebuild_artifacts) if auto_stage_reuse else []
     )
     reusable_artifacts: list[str] = (
         list(auto_stage_reuse.reusable_artifacts) if auto_stage_reuse else []
     )
-    if (
-        stage_reuse_mode is not StageReuseMode.OFF
-        and ci_inputs.changed_projects
-        and not rebuild_artifacts
-    ):
-        rebuild_artifacts, reusable_artifacts = analyze_artifact_impact_from_projects(
-            ci_inputs.changed_projects
-        )
 
     build_rocm = BuildRocmDecision(
         action=JobAction.RUN,
@@ -2473,6 +2563,7 @@ def write_outputs(
         "test_type": test_type,
         "linux_test_labels": outputs.linux_test_labels,
         "windows_test_labels": outputs.windows_test_labels,
+        "changed_projects": ",".join(outputs.changed_projects),
     }
     gha_set_output(output_vars)
 
@@ -2522,6 +2613,17 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         return CIOutputs.skipped()
     print("Result: CI will run")
 
+    print("\n=== Scoping the run to changed projects ===")
+    # The caller's full project registry backs both the narrowing itself and the
+    # prebuilt-stage fallback for when narrowing fails.
+    repo_projects = resolve_repo_projects(ci_inputs)
+    ci_inputs = replace(
+        ci_inputs,
+        changed_projects=resolve_changed_projects(
+            ci_inputs, git_context, external_skip_patterns, repo_projects
+        ),
+    )
+
     print("\n=== Selecting GPU target families ===")
     targets = select_targets(ci_inputs)
     targets.log()
@@ -2534,6 +2636,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         git_context=git_context,
         targets=targets,
         external_skip_patterns=external_skip_patterns,
+        repo_projects=repo_projects,
     )
     jobs.log()
 
@@ -2552,6 +2655,7 @@ def configure(ci_inputs: CIInputs, git_context: GitContext) -> CIOutputs:
         jobs=jobs,
         linux_test_labels=ci_inputs.linux_test_labels,
         windows_test_labels=ci_inputs.windows_test_labels,
+        changed_projects=ci_inputs.changed_projects,
     )
 
 
