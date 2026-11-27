@@ -221,6 +221,41 @@ def load_config(version, config_path):
     return Config()
 """)
 
+    def test_real_windows_hip_variants_preserve_backends_and_sample_identity(self):
+        self.write_custom_config()
+        self.components.side_effect = self.real_fetch
+        matrices, manifest = self.plan(
+            TEST_LABELS="test:hip-tests", PLATFORMS="", TEST_TYPE="quick"
+        )
+        components = matrices["windows_gfx120x"]["component"]
+        self.assertEqual(
+            [(c["job_name"], c["gpu_enable_pal"]) for c in components],
+            [("hip-tests (PAL)", "1"), ("hip-tests (ROCR)", "0")],
+        )
+        for component in components:
+            self.assertEqual(component["shard_arr"], [1])
+            self.assertEqual(component["test_runner"], "triage-windows-gfx120x")
+        self.assertEqual(
+            {row["sample_id"] for row in manifest["expected"]},
+            {
+                f"repeat-{platform}-gfx120x-{iteration}-{component}"
+                for platform, component in (
+                    ("linux", "hip-tests"),
+                    ("windows", "hip-tests (PAL)"),
+                    ("windows", "hip-tests (ROCR)"),
+                )
+                for iteration in (1, 2)
+            },
+        )
+
+    def test_component_names_cannot_contain_workflow_separators(self):
+        for name in ("", " ", "hip / tests", "hip\ntests", "hip\rtests"):
+            with self.subTest(name=name):
+                self.components.return_value = [dict(self.component, job_name=name)]
+                self.assertRaisesRegex(
+                    ValueError, "Unsupported component job name", self.plan
+                )
+
     def test_real_configuration_helper_preserves_selected_tier_runner_and_shards(self):
         self.write_custom_config()
         self.components.side_effect = self.real_fetch

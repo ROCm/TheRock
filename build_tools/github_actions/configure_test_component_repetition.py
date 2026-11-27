@@ -247,7 +247,9 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
                 # for the foreign run ID and fails before tests can execute.
                 component["fetch_artifact_args"] += " --run-github-repo ROCm/rockrel"
                 name = component["job_name"]
-                if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+                # Preserve configured names such as `hip-tests (PAL)`. Slashes
+                # and newlines would break reusable-workflow job-name parsing.
+                if not name.strip() or not re.fullmatch(r"[^/\r\n]+", name):
                     raise ValueError(f"Unsupported component job name: {name}")
                 runner = component.get("multi_gpu_runner") or component.get(
                     "test_runner"

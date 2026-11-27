@@ -75,9 +75,11 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
             continue
         # Reusable-workflow jobs are named "<caller name> / <child job name>".
         # The caller name contains the target, iteration, and component identity.
+        # Component names can include spaces and parentheses (Windows HIP
+        # backends); the workflow separator delimits the complete sample ID.
         match = re.search(
             r"(?:^| / )(repeat-(?:linux|windows)-[A-Za-z0-9_-]+"
-            r"-\d+-[A-Za-z0-9_-]+) / Test .*?\(shard (\d+)/(\d+)\)",
+            r"-\d+-[^/\r\n]+) / Test .*?\(shard (\d+)/(\d+)\)",
             job["name"],
         )
         if match:

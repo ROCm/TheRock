@@ -192,6 +192,51 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
             summary.render_report(report),
         )
 
+    def test_windows_hip_variants_are_reported_separately(self):
+        expected = []
+        jobs = []
+        for backend in ("PAL", "ROCR"):
+            component = f"hip-tests ({backend})"
+            for iteration in (1, 2):
+                sample = f"repeat-windows-gfx120x-{iteration}-{component}"
+                for shard in (1, 2):
+                    expected.append(
+                        dict(
+                            self.execution,
+                            sample_id=sample,
+                            platform="windows",
+                            component=component,
+                            iteration=iteration,
+                            shard=shard,
+                        )
+                    )
+                    jobs.append(
+                        self.job(
+                            test="failure" if backend == "ROCR" else "success",
+                            id=len(jobs) + 1,
+                            name=f"windows gfx120X-all / {sample}"
+                            f" / Test {component} (shard {shard}/2) (gfx120X-all)",
+                        )
+                    )
+        self.manifest["expected"] = expected
+        report = self.report(jobs)
+        self.assertEqual(report["counts"], {"passed": 4, "test_failure": 4})
+        self.assertEqual(report["unexpected_jobs"], [])
+        self.assertFalse(report["incomplete"])
+        report["run_attempt"] = 1
+        markdown = summary.render_report(report)
+        self.assertIn(
+            "| windows | gfx120X-all | hip-tests (PAL) | 4 | 4 | 0 |", markdown
+        )
+        self.assertIn(
+            "| windows | gfx120X-all | hip-tests (ROCR) | 4 | 0 | 4 |", markdown
+        )
+
+        extra = dict(jobs[0], id=999, name=jobs[0]["name"].replace("(PAL)", "(OTHER)"))
+        report = self.report([*jobs, extra])
+        self.assertEqual(report["unexpected_jobs"], [extra])
+        self.assertTrue(report["incomplete"])
+
     def test_any_family_key_is_matched_against_manifest(self):
         for key in ("gfx94x", "gfx950", "gfx1234-strict"):
             with self.subTest(key=key):
