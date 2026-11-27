@@ -29,7 +29,7 @@ The following labels may be added to a pull request to modify CI behavior:
 | `ci:run-all-archs`         | Build and test all possible architectures                                                                                                                                                         |
 | `ci:exactly`               | Build and test only the architectures named by the `ci:gfx...` labels, dropping the defaults. See [Running exactly the architectures you label](#running-exactly-the-architectures-you-label).    |
 | `ci:asan`                  | Enable ASAN CI builds and tests. ASAN CI is skipped by default on PRs unless this label is present.                                                                                               |
-| `ci:host-asan`             | Alias for `ci:asan`. Enable ASAN CI builds and tests.                                                                                                                                             |
+| `ci:host-asan`             | Selects the host-asan variant (not full ASAN) when the calling workflow opts in via this label. See [host-asan pull requests](#host-asan-pull-requests).                                                                                    |
 | `ci:run-multi-gpu`         | Opt-in to running multi-GPU tests.                                                                                                                                                                |
 | `ci:run-wsl`               | Also test the Linux build on the WSL GPU runner (`test-runs-on-wsl`), as non-blocking `Test <family> (WSL)` jobs for WSL-capable components (hip-tests, rocrtst). Adds to native tests.           |
 | `ci:cpu-test-only`         | Run only CPU tests (skip GPU tests). Useful for changes that don't require GPU testing.                                                                                                           |
@@ -114,6 +114,33 @@ TheRock's own workflows set the inputs as follows:
   passes `pull_request_opt_in_label: "ci:asan"` and an empty opt-out label.
   Because the opt-in check runs before the `asan` variant check, a pull request
   with only `ci:host-asan` is skipped by this workflow. Add `ci:asan` to run it.
+
+#### host-asan pull requests
+
+For callers that set `pull_request_opt_in_label: "ci:host-asan"` (for example
+rocm-systems; TheRock's own `multi_arch_ci_asan.yml` opts in via `ci:asan` and
+does not), host-asan tests only run on gfx90a, which is otherwise gated behind
+the `ci:gfx90a` label. When a pull request runs the `asan` workflow with
+`ci:host-asan` and without `ci:asan`, the configure step implies gfx90a for both
+build and test, as if `ci:gfx90a` were present, and logs that it did so. Nothing
+is implied when:
+
+- `ci:gfx90a`, `ci:build:gfx90a` or `ci:test:gfx90a` is already present.
+- `ci:exactly` is present (only the labeled architectures run).
+- `ci:asan` is also present (full ASAN, which does not imply gfx90a).
+- The event is not a pull request (push, schedule and dispatch are unchanged).
+
+Interactions with other labels:
+
+- `ci:host-asan` with `ci:test:gfx90a` but without `ci:build:gfx90a` or
+  `ci:gfx90a` is a configuration error ("requires a corresponding build
+  label"); the explicit test label is not completed by the implication.
+- `ci:run-all-archs` selects all families and gfx90a tests run, because the
+  implication still adds gfx90a to the test list.
+- `ci:cpu-test-only` builds gfx90a but runs no tests.
+
+Workflows that call the `asan` workflow must enable `run_rocm_tests` for these
+pull requests, otherwise only the build runs.
 
 #### Build/Test-specific architecture labels
 
