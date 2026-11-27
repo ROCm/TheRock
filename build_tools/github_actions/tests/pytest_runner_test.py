@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -459,6 +460,123 @@ class RunPytestTest(unittest.TestCase):
         _, cmd = self._run(timeout=300, num_workers=16)
         self.assertNotIn("--timeout=300", cmd)
         self.assertNotIn("--numprocesses=16", cmd)
+
+
+class MinExecutedTestsTest(unittest.TestCase):
+    """`min_executed_tests`, per GPU family, checked on a real pytest JUnit report."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._dir = Path(self._tmp.name)
+
+    def _junit_for(self, test_source):
+        """Run pytest on `test_source` and return the JUnit report it wrote."""
+        (self._dir / "test_sample.py").write_text(test_source)
+        junit_xml = self._dir / "report.xml"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                f"--junit-xml={junit_xml}",
+                str(self._dir / "test_sample.py"),
+            ],
+            cwd=self._dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        # 0: no test failed; 1: some failed, as the mixed sample intends. Anything
+        # else (usage error, internal error) means the sample itself did not run.
+        self.assertIn(result.returncode, (0, 1), result.stdout + result.stderr)
+        return junit_xml
+
+    def test_skips_and_xfails_do_not_count(self):
+        junit_xml = self._junit_for(
+            "import pytest\n"
+            "def test_passes(): pass\n"
+            "def test_fails(): assert False\n"
+            "@pytest.mark.skip(reason='not this GPU')\n"
+            "def test_skipped(): pass\n"
+            "@pytest.mark.xfail(reason='known bug')\n"
+            "def test_expected_failure(): assert False\n"
+        )
+        self.assertEqual(pytest_runner.count_executed_tests(junit_xml), 2)
+
+    def test_all_skipped_run_is_below_the_floor(self):
+        # The case the floor exists for: pytest exits 0 with every test skipped.
+        junit_xml = self._junit_for(
+            "import pytest\n"
+            "pytestmark = pytest.mark.skip(reason='needs gfx950')\n"
+            "def test_a(): pass\n"
+            "def test_b(): pass\n"
+        )
+        with self.assertRaises(SystemExit):
+            pytest_runner.check_min_executed_tests(
+                junit_xml, 1, "standard", "gfx94X-dcgpu"
+            )
+
+    def test_floor_met(self):
+        junit_xml = self._junit_for("def test_a(): pass\ndef test_b(): pass\n")
+        self.assertIsNone(
+            pytest_runner.check_min_executed_tests(
+                junit_xml, 2, "standard", "gfx94X-dcgpu"
+            )
+        )
+
+    def test_missing_report_is_an_error(self):
+        with self.assertRaises(SystemExit):
+            pytest_runner.check_min_executed_tests(
+                self._dir / "absent.xml", 1, "standard", "gfx94X-dcgpu"
+            )
+
+    def _floor(self, value, amdgpu_families):
+        """The floor for `amdgpu_families` (None: AMDGPU_FAMILIES is unset)."""
+        config = {} if value is None else {"min_executed_tests": value}
+        return pytest_runner.read_min_executed_tests(
+            config, "standard", amdgpu_families
+        )
+
+    def test_floor_is_optional(self):
+        self.assertIsNone(self._floor(None, "gfx94X-dcgpu"))
+
+    def test_integer_applies_to_every_family(self):
+        self.assertEqual(self._floor(3, "gfx110X-all"), 3)
+        self.assertEqual(self._floor(3, None), 3)
+
+    def test_family_table(self):
+        # gfx1151 is both a target and the name of its own family.
+        table = {
+            "gfx94X-dcgpu": 1,
+            "gfx950-dcgpu": 250,
+            "gfx1151": 2,
+            "gfx1250-strict": 50,
+        }
+        self.assertEqual(self._floor(table, "gfx950-dcgpu"), 250)
+        self.assertEqual(self._floor(table, "gfx1151"), 2)
+        self.assertEqual(self._floor(table, "gfx1250-strict"), 50)
+        # Without `default`, a family the table does not list gets no floor.
+        self.assertIsNone(self._floor(table, "gfx110X-all"))
+        self.assertIsNone(self._floor(table, "gfx120X-all"))
+
+    def test_default_covers_unlisted_families(self):
+        table = {"gfx950-dcgpu": 250, "default": 1}
+        self.assertEqual(self._floor(table, "gfx110X-all"), 1)
+        self.assertEqual(self._floor(table, "gfx950-dcgpu"), 250)
+
+    def test_bad_values_and_keys_are_rejected(self):
+        bad_values = [True, -1, "3", 1.5, {"gfx950-dcgpu": True}]
+        # A misspelled family, and a target (gfx942, whose family is gfx94X-dcgpu)
+        # where a family belongs.
+        bad_keys = [{"gfx94x-dcgpu": 1}, {"gfx942": 1}]
+        for value in bad_values + bad_keys:
+            # Rejected on every runner, not only on the family it names.
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                self._floor(value, "gfx110X-all")
 
 
 if __name__ == "__main__":
