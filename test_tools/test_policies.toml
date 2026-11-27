@@ -125,3 +125,19 @@ test_include = ["hipfft", "rocfft", "rocprim"]
 
 [component.rocsparse]
 test_include = ["rocblas", "rocprim", "rocsolver"]
+
+# --- Emulation tools ---------------------------------------------------------
+# miopen build-depends on rocjitsu/mirage (ml-libs/CMakeLists.txt) only so the
+# miopen-dbsync job can consume them as prebuilt artifacts. That edge orders the
+# build; it does not mean an emulator change should select the MIOpen jobs. A
+# rocm-systems selective build for an emulator-only change builds just the
+# emulation stage, so MIOpen jobs selected through the edge fail with missing
+# artifacts (ROCm/rocm-systems#16477). Walk self only, and keep the consumers
+# that were selected before the miopen edge existed.
+
+[component.rocjitsu]
+level = 5
+test_include = ["rccl-translate", "rocjitsu-hotswap"]
+
+[component.mirage]
+level = 5

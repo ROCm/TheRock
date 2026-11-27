@@ -7,7 +7,8 @@ These tests target the CURRENT design (committed consumer graph + hand-maintaine
 ``test_policies.toml`` + hop-distance selection), NOT the superseded dynamic
 build-stage-cut / BUILD_TOPOLOGY-override design.
 
-Every test is hermetic: it builds a self-contained ``--therock-dir`` on disk
+Every test except those in ``TestRealCommittedPolicies`` is hermetic: it builds a
+self-contained ``--therock-dir`` on disk
 carrying
 
   * ``test_tools/therock_consumer_graph.json`` — the committed consumer graph the
@@ -16,9 +17,11 @@ carrying
     (``[component.<name>]`` tables with ``level`` / ``test_include`` /
     ``test_exclude``).
 
-No test depends on the repo's real committed graph/policy. The fixture graph
-below is small and purpose-built to exercise each selection rule, including the
-amdsmi -> rdc cross-stage regression case and the finding-#8 (no build/ dir) case.
+``TestRealCommittedPolicies`` is the exception: it runs the tool against the repo's
+real committed graph and policy, to guard the shipped policy entries (a fixture
+cannot notice a deleted entry). The fixture graph below is small and
+purpose-built to exercise each selection rule, including the amdsmi -> rdc
+cross-stage regression case and the finding-#8 (no build/ dir) case.
 """
 
 import io
@@ -1012,6 +1015,38 @@ class TestRealCommittedPolicies(unittest.TestCase):
         self.assertTrue(self._DEBUGGER_TESTS.issubset(selected))
         self.assertNotIn("rocgdb", selected)
         self.assertNotIn("rocr-debug-agent-tests", selected)
+
+    # Regression for ROCm/rocm-systems#16477: miopen build-depends on rocjitsu/mirage so
+    # miopen-dbsync can use them as artifacts, which adds consumer-graph edges to miopen. An
+    # emulator-only change must not select the MIOpen jobs through those edges: a rocm-systems
+    # selective build for it builds only the emulation stage, so they fail with missing
+    # artifacts. These run against the committed graph and policy, so deleting the
+    # [component.rocjitsu] / [component.mirage] policy entries fails them.
+    _MIOPEN_JOBS = {"miopen", "miopen-dbsync"}
+
+    def test_rocjitsu_change_does_not_select_miopen_jobs(self) -> None:
+        selected = self._select_for_external_project("emulation/rocjitsu")
+        self.assertEqual(selected & self._MIOPEN_JOBS, set())
+        self.assertIn("rocjitsu", selected)
+
+    def test_mirage_change_does_not_select_miopen_jobs(self) -> None:
+        selected = self._select_for_external_project("emulation/mirage")
+        self.assertEqual(selected & self._MIOPEN_JOBS, set())
+        self.assertIn("mirage", selected)
+
+    def test_shared_isa_change_does_not_select_miopen_jobs(self) -> None:
+        # shared/machine-readable-isa is aliased to rocjitsu.
+        selected = self._select_for_external_project("shared/machine-readable-isa")
+        self.assertEqual(selected & self._MIOPEN_JOBS, set())
+        self.assertIn("rocjitsu", selected)
+
+    def test_miopen_jobs_still_selected_when_miopen_changes_with_rocjitsu(self) -> None:
+        # The emulator policy limits what rocjitsu selects; it must not hide MIOpen
+        # when MIOpen itself changed.
+        selected = self._select_for_external_project(
+            "emulation/rocjitsu,projects/miopen"
+        )
+        self.assertTrue(self._MIOPEN_JOBS.issubset(selected))
 
 
 # ---------------------------------------------------------------------------
