@@ -2,15 +2,18 @@
 # SPDX-License-Identifier: MIT
 
 from pathlib import Path
+import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from configure_ci_path_filters import (
+    get_changed_files_for_external_repo,
     get_ci_workflow_filenames,
     get_jobs_for_changes,
     get_git_commit_hash,
@@ -283,6 +286,64 @@ class TestGetGitModifiedPaths(unittest.TestCase):
 
         with self.assertRaises(subprocess.CalledProcessError):
             get_git_modified_paths(base_sha)
+
+
+class TestGetChangedFilesForExternalRepoRenames(unittest.TestCase):
+    """A rename out of a source path into a skippable one must not hide the source."""
+
+    @patch("configure_ci_path_filters.subprocess.run")
+    def test_rename_into_docs_reports_old_source_path(self, mock_run):
+        rename = {
+            "filename": "docs/a.md",
+            "previous_filename": "projects/rocprim/a.cpp",
+            "status": "renamed",
+        }
+        mock_run.return_value = Mock(stdout=json.dumps([rename]))
+        paths = get_changed_files_for_external_repo(
+            {
+                "repository": "ROCm/rocm-libraries",
+                "event_name": "pull_request",
+                "pr_number": 1,
+                "base_sha": "base",
+                "head_sha": "head",
+            }
+        )
+        self.assertEqual(set(paths), {"docs/a.md", "projects/rocprim/a.cpp"})
+        # The new path alone is docs-only; the old source path makes CI run.
+        self.assertTrue(is_ci_run_required(paths, skip_patterns=["docs/*"]))
+
+
+class TestGetGitModifiedPathsRenames(unittest.TestCase):
+    def test_rename_lists_old_and_new_path(self):
+        # Ignore the developer's git config and any inherited GIT_* variables.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, env, clear=True
+        ):
+            git = [
+                "git",
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "commit.gpgsign=false",
+            ]
+
+            def run(*args):
+                subprocess.run([*git, *args], cwd=tmp, check=True, capture_output=True)
+
+            run("init", "-q")
+            (Path(tmp) / "src").mkdir()
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "src" / "a.cpp").write_text("int f() { return 1; }\n" * 20)
+            run("add", ".")
+            run("commit", "-q", "-m", "add")
+            run("mv", "src/a.cpp", "docs/a.md")
+            run("commit", "-q", "-m", "move")
+            paths = get_git_modified_paths("HEAD^", cwd=tmp)
+        self.assertEqual(set(paths), {"src/a.cpp", "docs/a.md"})
 
 
 class TestGetGitCommitHash(unittest.TestCase):
