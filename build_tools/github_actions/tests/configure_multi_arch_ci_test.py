@@ -409,6 +409,106 @@ class TestCIInputsFromEnviron(unittest.TestCase):
                 )
                 self.assertFalse(inputs.is_draft_pr)
 
+    def _run_pull_request_with_live_state(
+        self, payload_pr: dict, live_pr: dict | Exception
+    ) -> tuple[cm.CIInputs, object]:
+        """Run from_environ for a pull_request event with a mocked live lookup.
+
+        Returns the parsed inputs and the mock, so tests can check the call.
+        """
+        mock_kwargs = (
+            {"side_effect": live_pr}
+            if isinstance(live_pr, Exception)
+            else {"return_value": live_pr}
+        )
+        with patch.object(cm, "gha_query_pull_request", **mock_kwargs) as query:
+            inputs = _run_from_environ(
+                event_name="pull_request",
+                event_payload={
+                    "number": 42,
+                    "pull_request": {"number": 42, **payload_pr},
+                },
+                extra_env={"GITHUB_REPOSITORY": "ROCm/rocm-libraries"},
+            )
+        return inputs, query
+
+    def test_pull_request_live_draft_state_overrides_stale_payload(self):
+        """A late synchronize run whose payload still says draft must build.
+
+        GitHub can start the run for a push made while the pull request was a
+        draft after the ready_for_review run that followed it. Its payload
+        still has draft=true; trusting it skipped CI on a ready pull request,
+        cancelled the real run, and left a green summary.
+        """
+        inputs, query = self._run_pull_request_with_live_state(
+            payload_pr={"draft": True, "labels": []},
+            live_pr={"number": 42, "draft": False, "labels": []},
+        )
+        query.assert_called_once_with("ROCm/rocm-libraries", 42)
+        self.assertFalse(inputs.is_draft_pr)
+        self.assertFalse(inputs.is_skipped_as_draft)
+        git = cm.GitContext(changed_files=["CMakeLists.txt"])
+        self.assertFalse(cm.should_skip_ci(inputs, git))
+
+    def test_pull_request_live_draft_state_still_skips_real_drafts(self):
+        """A pull request that is still a draft keeps skipping."""
+        inputs, _ = self._run_pull_request_with_live_state(
+            payload_pr={"draft": True, "labels": []},
+            live_pr={"draft": True, "labels": []},
+        )
+        self.assertTrue(inputs.is_draft_pr)
+        self.assertTrue(inputs.is_skipped_as_draft)
+
+    def test_pull_request_live_labels_override_stale_payload(self):
+        """Labels added after the event fired are honored.
+
+        ci:run-on-draft added right after a push must not be lost to the push
+        run's older payload, and the derived test label lists follow suit.
+        """
+        inputs, _ = self._run_pull_request_with_live_state(
+            payload_pr={"draft": True, "labels": [{"name": "test:rocprim"}]},
+            live_pr={
+                "draft": True,
+                "labels": [{"name": "test:rocprim"}, {"name": "ci:run-on-draft"}],
+            },
+        )
+        self.assertEqual(inputs.pr_labels, ["test:rocprim", "ci:run-on-draft"])
+        self.assertIn("ci:run-on-draft", inputs.linux_test_labels)
+        self.assertFalse(inputs.is_skipped_as_draft)
+
+    def test_pull_request_lookup_failure_falls_back_to_payload(self):
+        """An API error keeps the payload values instead of failing setup."""
+        inputs, query = self._run_pull_request_with_live_state(
+            payload_pr={"draft": True, "labels": [{"name": "ci:gfx950"}]},
+            live_pr=cm.GitHubAPIError("HTTP 502 error"),
+        )
+        query.assert_called_once()
+        self.assertTrue(inputs.is_draft_pr)
+        self.assertEqual(inputs.pr_labels, ["ci:gfx950"])
+
+    def test_pull_request_without_number_uses_payload(self):
+        """Without a pull request number there is nothing to look up."""
+        with patch.object(cm, "gha_query_pull_request") as query:
+            inputs = _run_from_environ(
+                event_name="pull_request",
+                event_payload={"pull_request": {"draft": True}},
+                extra_env={"GITHUB_REPOSITORY": "ROCm/TheRock"},
+            )
+        query.assert_not_called()
+        self.assertTrue(inputs.is_draft_pr)
+
+    def test_non_pull_request_events_never_query_pull_request(self):
+        """push, schedule and workflow_dispatch runs make no pull request lookup."""
+        for event_name in ("push", "schedule", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                with patch.object(cm, "gha_query_pull_request") as query:
+                    _run_from_environ(
+                        event_name=event_name,
+                        event_payload={"number": 42, "pull_request": {"number": 42}},
+                        extra_env={"GITHUB_REPOSITORY": "ROCm/TheRock"},
+                    )
+                query.assert_not_called()
+
     def test_pull_request_test_labels_extracted_to_test_labels(self):
         """PR test:* and ci:* labels are merged into linux/windows_test_labels."""
         inputs = _run_from_environ(
@@ -3386,6 +3486,18 @@ class TestFormatSummary(unittest.TestCase):
         self.assertIn("draft", result)
         self.assertIn("ci:run-on-draft", result)
 
+    def test_skip_summary_mentions_failing_check_only_when_it_fails(self):
+        """The failing-summary note appears only when the summary will fail."""
+        inputs = self._inputs(event_name="pull_request", is_draft_pr=True)
+        failing = format_summary(
+            inputs,
+            cm.CIOutputs.skipped(summary_failure_reason=cm.DRAFT_SKIP_SUMMARY_FAILURE),
+        )
+        passing = format_summary(inputs, cm.CIOutputs.skipped())
+
+        self.assertIn("fails", failing)
+        self.assertNotIn("fails", passing)
+
 
 class TestWriteOutputs(unittest.TestCase):
     """Test writing CI configuration to GitHub Actions output files."""
@@ -3439,7 +3551,19 @@ class TestWriteOutputs(unittest.TestCase):
         # Some outputs should still be emitted even when CI is skipped, so other
         # workflow steps can use them.
         self.assertIn("enable_build_jobs=false", github_output)
+        self.assertIn("summary_failure_reason=\n", github_output)
         self.assertTrue(step_summary.startswith("## Multi-Arch CI Configuration"))
+
+    def test_draft_skip_writes_summary_failure_reason(self):
+        """The reason reaches GITHUB_OUTPUT for setup_multi_arch.yml to export."""
+        outputs = cm.CIOutputs.skipped(
+            summary_failure_reason=cm.DRAFT_SKIP_SUMMARY_FAILURE
+        )
+        github_output, _ = self._write_outputs(outputs)
+
+        self.assertIn(
+            f"summary_failure_reason={cm.DRAFT_SKIP_SUMMARY_FAILURE}\n", github_output
+        )
 
     def test_platform_outputs_follow_selected_stages(self):
         """Linux-only stages must not launch Windows artifact consumers.
@@ -3545,6 +3669,103 @@ class TestConfigurePipeline(unittest.TestCase):
         outputs = cm.configure(inputs, cm.GitContext())
         self.assertFalse(outputs.is_ci_enabled)
         self.assertIsNone(outputs.builds.linux)
+        self.assertEqual(outputs.summary_failure_reason, "")
+
+    def _pull_request_inputs(self, **kwargs) -> cm.CIInputs:
+        defaults = dict(
+            run_id="12345",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="HEAD^",
+            build_variant="release",
+        )
+        defaults.update(kwargs)
+        return cm.CIInputs(**defaults)
+
+    def test_draft_skip_sets_summary_failure_reason(self):
+        """A draft skip asks the summary job to fail.
+
+        Otherwise the run reports success after building and testing nothing,
+        which satisfies a required check.
+        """
+        inputs = self._pull_request_inputs(is_draft_pr=True)
+        outputs = cm.configure(inputs, cm.GitContext(changed_files=["CMakeLists.txt"]))
+        self.assertFalse(outputs.is_ci_enabled)
+        self.assertEqual(outputs.summary_failure_reason, cm.DRAFT_SKIP_SUMMARY_FAILURE)
+
+    def test_draft_summary_failure_message_is_shell_safe(self):
+        """Callers splice the message into single-quoted shell strings."""
+        self.assertNotIn("'", cm.DRAFT_SKIP_SUMMARY_FAILURE)
+        self.assertNotIn("\n", cm.DRAFT_SKIP_SUMMARY_FAILURE)
+
+    def test_other_skips_leave_summary_passing(self):
+        """Only the draft skip fails the summary; other skips still pass."""
+        cases = {
+            "ci:skip": self._pull_request_inputs(pr_labels=["ci:skip"]),
+            "ci:skip on a draft": self._pull_request_inputs(
+                is_draft_pr=True, pr_labels=["ci:skip"]
+            ),
+            "opt-out label": self._pull_request_inputs(
+                pr_labels=["ci:no-host-asan"],
+                pull_request_opt_out_label="ci:no-host-asan",
+            ),
+        }
+        for name, inputs in cases.items():
+            with self.subTest(name=name):
+                outputs = cm.configure(
+                    inputs, cm.GitContext(changed_files=["CMakeLists.txt"])
+                )
+                self.assertFalse(outputs.is_ci_enabled)
+                self.assertEqual(outputs.summary_failure_reason, "")
+
+    @patch("configure_multi_arch_ci.is_ci_run_required", return_value=False)
+    def test_path_filter_skip_leaves_summary_passing(self, mock_filter):
+        """A docs-only pull request skips with a passing summary, draft or not."""
+        for is_draft_pr in (False, True):
+            with self.subTest(is_draft_pr=is_draft_pr):
+                inputs = self._pull_request_inputs(is_draft_pr=is_draft_pr)
+                outputs = cm.configure(
+                    inputs, cm.GitContext(changed_files=["README.md"])
+                )
+                self.assertFalse(outputs.is_ci_enabled)
+                self.assertEqual(outputs.summary_failure_reason, "")
+
+    def test_asan_draft_without_opt_in_label_leaves_summary_passing(self):
+        """An ASAN run on a draft without ci:asan would skip once ready too.
+
+        Failing it would put a red ASAN summary on every draft pull request
+        for a run that is never expected to build.
+        """
+        inputs = self._pull_request_inputs(
+            is_draft_pr=True,
+            build_variant="asan",
+            pull_request_opt_in_label="ci:asan",
+        )
+        outputs = cm.configure(inputs, cm.GitContext(changed_files=["CMakeLists.txt"]))
+        self.assertFalse(outputs.is_ci_enabled)
+        self.assertEqual(outputs.summary_failure_reason, "")
+
+    def test_asan_draft_with_opt_in_label_fails_summary(self):
+        """With ci:asan the ASAN run would build once ready, so the draft skip fails."""
+        inputs = self._pull_request_inputs(
+            is_draft_pr=True,
+            build_variant="asan",
+            pr_labels=["ci:asan"],
+            pull_request_opt_in_label="ci:asan",
+        )
+        outputs = cm.configure(inputs, cm.GitContext(changed_files=["CMakeLists.txt"]))
+        self.assertFalse(outputs.is_ci_enabled)
+        self.assertEqual(outputs.summary_failure_reason, cm.DRAFT_SKIP_SUMMARY_FAILURE)
+
+    def test_draft_with_run_on_draft_label_runs_without_summary_failure(self):
+        """ci:run-on-draft runs CI on a draft, so nothing forces a failure."""
+        inputs = self._pull_request_inputs(
+            is_draft_pr=True, pr_labels=["ci:run-on-draft"]
+        )
+        self.assertFalse(inputs.is_skipped_as_draft)
+        self.assertFalse(
+            cm.should_skip_ci(inputs, cm.GitContext(changed_files=["CMakeLists.txt"]))
+        )
 
     @patch(
         "configure_multi_arch_ci.get_latest_python_package_version",

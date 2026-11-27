@@ -220,7 +220,7 @@ class CiLabelAnalysisTest(unittest.TestCase):
         # testing anything, so A stays the baseline and B's code is uncovered.
         runs = [
             {**_ci_run(SHA_A, "2026-11-01T10:00:00Z"), "tested": True},
-            _ci_run(SHA_B, "2026-11-01T12:00:00Z"),
+            _ci_run(SHA_B, "2026-11-01T12:00:00Z", tested=False),
         ]
         report = cl.analyze_ci_labels(
             runs,
@@ -252,7 +252,7 @@ class CiLabelAnalysisTest(unittest.TestCase):
         self.assertEqual(report["verdict"], "go")
 
     def test_code_with_no_tested_run_and_ci_skip_is_hold(self):
-        runs = [_ci_run(SHA_A, "2026-11-01T10:00:00Z")]
+        runs = [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=False)]
         report = cl.analyze_ci_labels(
             runs,
             [_label("labeled", "ci:skip", "2026-11-01T09:00:00Z")],
@@ -361,6 +361,75 @@ class CiLabelAnalysisTest(unittest.TestCase):
         )
         self.assertEqual(report["verdict"], "go")
 
+    def test_full_rerun_uses_labels_present_when_setup_ran_again(self):
+        # Created at 10:00, Re-run all jobs at 14:00 after ci:gfx950 was added at 12:00.
+        # Setup ran again at 14:00 and read ci:gfx950.
+        run = {
+            **_ci_run(SHA_A, "2026-11-01T10:00:00Z"),
+            "run_started_at": "2026-11-01T14:00:00Z",
+            "run_attempt": 2,
+            "setup_started_at": "2026-11-01T14:00:20Z",
+        }
+        report = cl.analyze_ci_labels(
+            [run],
+            [_label("labeled", "ci:gfx950", "2026-11-01T12:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["runs"][0]["labels"], ["ci:gfx950"])
+        self.assertEqual(report["label_changes_since"], [])
+        self.assertEqual(report["verdict"], "go")
+
+    def test_partial_rerun_keeps_labels_from_the_original_setup(self):
+        # Re-run failed jobs at 14:00 kept the 10:00 setup, which never saw the
+        # ci:run-all-archs label added at 12:00, so the run cannot be credited with it.
+        run = {
+            **_ci_run(SHA_A, "2026-11-01T10:00:00Z"),
+            "run_started_at": "2026-11-01T14:00:00Z",
+            "run_attempt": 2,
+            "setup_started_at": "2026-11-01T10:00:20Z",
+        }
+        report = cl.analyze_ci_labels(
+            [run],
+            [_label("labeled", "ci:run-all-archs", "2026-11-01T12:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["runs"][0]["labels"], [])
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("ci:run-all-archs", report["reason"])
+
+    def test_rerun_without_setup_time_makes_labels_between_attempts_uncertain(self):
+        # The setup job could not be read, so setup may be from either attempt.
+        run = {
+            **_ci_run(SHA_A, "2026-11-01T10:00:00Z"),
+            "run_started_at": "2026-11-01T14:00:00Z",
+            "run_attempt": 2,
+        }
+        report = cl.analyze_ci_labels(
+            [run],
+            [_label("labeled", "ci:run-all-archs", "2026-11-01T12:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["runs"][0]["uncertain_labels"], ["ci:run-all-archs"])
+        self.assertEqual(report["verdict"], "caution")
+        self.assertIn("may not have used", report["reason"])
+
+    def test_job_evidence_counts_even_if_replayed_labels_say_ci_skip(self):
+        # Replayed labels are an estimate; a run with a successful build job built.
+        report = cl.analyze_ci_labels(
+            [_ci_run(SHA_A, "2026-11-01T10:00:00Z", tested=True)],
+            [_label("labeled", "ci:skip", "2026-11-01T09:00:00Z")],
+            _commits(SHA_A),
+            {},
+            SKIP_PATTERNS,
+        )
+        self.assertEqual(report["last_passing_run"]["head_sha"], SHA_A)
+
 
 class GhApiPagesTest(unittest.TestCase):
     def test_failed_page_is_none_not_empty(self):
@@ -422,9 +491,11 @@ class CiLabelFetchTest(unittest.TestCase):
                         "id": 7,
                         "name": "TheRock Multi-Arch CI",
                         "head_sha": SHA_A,
-                        # A re-run: run_started_at is later, but labels come from created_at.
+                        # Created under ci:skip, then Re-run all jobs after the label was
+                        # removed. Setup ran again at 14:00, so the re-run built.
                         "created_at": "2026-11-01T10:00:00Z",
                         "run_started_at": "2026-11-01T14:00:00Z",
+                        "run_attempt": 2,
                         "status": "completed",
                         "conclusion": "success",
                         "html_url": "https://example.invalid/7",
@@ -445,7 +516,11 @@ class CiLabelFetchTest(unittest.TestCase):
             },
             "repos/o/r/actions/runs/7/jobs?filter=latest&per_page=30&page=1": {
                 "jobs": [
-                    {"name": "setup / setup", "conclusion": "success"},
+                    {
+                        "name": "setup / setup",
+                        "conclusion": "success",
+                        "started_at": "2026-11-01T14:00:10Z",
+                    },
                     {
                         "name": "Linux::release / Build Multi-Arch Stages / math-libs",
                         "conclusion": "success",
@@ -459,6 +534,11 @@ class CiLabelFetchTest(unittest.TestCase):
         events = [
             {
                 "event": "labeled",
+                "label": {"name": "ci:skip"},
+                "created_at": "2026-11-01T09:00:00Z",
+            },
+            {
+                "event": "unlabeled",
                 "label": {"name": "ci:skip"},
                 "created_at": "2026-11-01T12:00:00Z",
             },
@@ -484,6 +564,7 @@ class CiLabelFetchTest(unittest.TestCase):
         pages.assert_called_once_with("repos/o/r/issues/5/events")
         self.assertEqual([r["id"] for r in report["runs"]], [7])
         self.assertEqual(report["runs"][0]["labels"], [])
+        self.assertEqual(report["runs"][0]["setup_started_at"], "2026-11-01T14:00:10Z")
         self.assertTrue(report["runs"][0]["tested"])
         self.assertEqual(report["verdict"], "go")
         self.assertEqual(report["skip_method"], "skip-ci patterns")
@@ -531,6 +612,37 @@ class RunBuiltOrTestedTest(unittest.TestCase):
 
     def test_unreadable_jobs_are_unknown(self):
         self.assertIsNone(self._call([None]))
+
+    def test_setup_start_time_is_read_from_the_jobs(self):
+        # A setup job kept by Re-run failed jobs reports its original start time.
+        page = {
+            "jobs": [
+                {
+                    "name": "setup / setup",
+                    "conclusion": "success",
+                    "started_at": "2026-11-24T07:18:34Z",
+                },
+                {
+                    "name": "Linux::release / Build Multi-Arch Stages / math-libs",
+                    "conclusion": "success",
+                },
+            ]
+        }
+        responses = {
+            "repos/o/r/actions/runs/1/jobs?filter=latest&per_page=30&page=1": page
+        }
+        with mock.patch.object(cl, "gh_api_json", side_effect=responses.get):
+            self.assertEqual(cl.read_run_jobs("o/r", 1), (True, "2026-11-24T07:18:34Z"))
+
+    def test_missing_setup_job_gives_no_start_time(self):
+        page = _jobs(
+            ("Linux::release / Build Multi-Arch Stages / math-libs", "success")
+        )
+        responses = {
+            "repos/o/r/actions/runs/1/jobs?filter=latest&per_page=30&page=1": page
+        }
+        with mock.patch.object(cl, "gh_api_json", side_effect=responses.get):
+            self.assertEqual(cl.read_run_jobs("o/r", 1), (True, None))
 
 
 class FetchCommitFilesTest(unittest.TestCase):

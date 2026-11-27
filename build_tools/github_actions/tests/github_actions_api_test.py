@@ -22,6 +22,7 @@ from github_actions_api import (
     gha_job_summary_mirror_path,
     gha_load_github_event,
     gha_query_prs_for_commit,
+    gha_query_pull_request,
     gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
@@ -810,6 +811,35 @@ class GhaQueryPrsForCommitTest(unittest.TestCase):
             result = gha_query_prs_for_commit("ROCm/TheRock", "b" * 40)
 
         self.assertEqual(result, [])
+
+
+class GhaQueryPullRequestTest(unittest.TestCase):
+    """Tests for gha_query_pull_request."""
+
+    def test_returns_pull_request(self):
+        pr = {"number": 42, "draft": False, "labels": [{"name": "ci:gfx950"}]}
+
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=pr,
+        ) as send_request:
+            result = gha_query_pull_request("ROCm/rocm-libraries", 42)
+
+        self.assertEqual(result, pr)
+        send_request.assert_called_once_with(
+            "https://api.github.com/repos/ROCm/rocm-libraries/pulls/42",
+            timeout_seconds=30,
+            method="GET",
+            body=None,
+        )
+
+    def test_non_object_response_raises(self):
+        with mock.patch(
+            "github_actions_api._default_github_api.send_request",
+            return_value=[],
+        ):
+            with self.assertRaises(GitHubAPIError):
+                gha_query_pull_request("ROCm/TheRock", 42)
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):

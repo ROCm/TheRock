@@ -36,7 +36,7 @@ def format_summary(
     lines.append("")
 
     if not outputs.is_ci_enabled:
-        return _format_skipped_ci(lines, ci_inputs)
+        return _format_skipped_ci(lines, ci_inputs, outputs)
 
     if not outputs.jobs:
         return "\n".join(lines)
@@ -97,11 +97,13 @@ def format_summary(
     return "\n".join(lines)
 
 
-def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
+def _format_skipped_ci(
+    lines: list[str], ci_inputs: CIInputs, outputs: CIOutputs
+) -> str:
     # Determine skip reason (same priority order as should_skip_ci).
     if "ci:skip" in ci_inputs.pr_labels:
         reason = "`ci:skip` PR label"
-    elif ci_inputs.is_draft_pr and RUN_ON_DRAFT_LABEL not in ci_inputs.pr_labels:
+    elif ci_inputs.is_skipped_as_draft:
         reason = (
             "this pull request is a draft. Add the "
             f"`{RUN_ON_DRAFT_LABEL}` label or mark the pull request ready for "
@@ -111,6 +113,13 @@ def _format_skipped_ci(lines: list[str], ci_inputs: CIInputs) -> str:
         reason = "no CI-relevant files changed"
 
     lines.append(f"CI was **skipped**: {reason}. See logs for details.")
+    if outputs.summary_failure_reason:
+        lines.append("")
+        lines.append(
+            "The workflow's summary check **fails** on purpose, so a run that "
+            "built and tested nothing never passes a required check. It clears "
+            "once a run builds and tests."
+        )
     return "\n".join(lines)
 
 

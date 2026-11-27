@@ -55,6 +55,32 @@ ONE_SKIPPED = {
     "windows_build_and_test": {"result": "skipped", "outputs": {}},
 }
 
+DRAFT_SKIP_REASON = "Builds and tests were skipped because the pull request is a draft."
+
+# Shape of a Multi-Arch CI run that skipped because the pull request is a
+# draft: setup passes and reports why, the build jobs are skipped.
+DRAFT_SKIP = {
+    "setup": {
+        "result": "success",
+        "outputs": {
+            "enable_build_jobs": "false",
+            "summary_failure_reason": DRAFT_SKIP_REASON,
+        },
+    },
+    "linux_build_and_test": {"result": "skipped", "outputs": {}},
+    "windows_build_and_test": {"result": "skipped", "outputs": {}},
+}
+
+# A skip for any other reason (ci:skip, docs-only change) sets an empty reason.
+OTHER_SKIP = {
+    "setup": {
+        "result": "success",
+        "outputs": {"enable_build_jobs": "false", "summary_failure_reason": ""},
+    },
+    "linux_build_and_test": {"result": "skipped", "outputs": {}},
+    "windows_build_and_test": {"result": "skipped", "outputs": {}},
+}
+
 
 # ---------------------------------------------------------------------------
 # parse_needs_json
@@ -99,6 +125,19 @@ class TestParseNeedsJson:
     def test_non_dict_job_raises(self):
         with pytest.raises(AssertionError, match="JSON object for job"):
             parse_needs_json(json.dumps({"build": "not a dict"}))
+
+    def test_summary_failure_reason_parsed(self):
+        jobs = parse_needs_json(json.dumps(DRAFT_SKIP))
+        by_name = {j.name: j for j in jobs}
+        assert by_name["setup"].summary_failure_reason == DRAFT_SKIP_REASON
+        assert by_name["linux_build_and_test"].summary_failure_reason == ""
+
+    def test_blank_summary_failure_reason_is_empty(self):
+        needs = {
+            "setup": {"result": "success", "outputs": {"summary_failure_reason": "  "}}
+        }
+        jobs = parse_needs_json(json.dumps(needs))
+        assert jobs[0].summary_failure_reason == ""
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +287,41 @@ class TestMain:
         rc = main(["--needs-json", json.dumps(FAILURE_WITH_CONTINUE_ON_ERROR)])
         assert rc == 0
         assert "succeeded" in capsys.readouterr().out
+
+    def test_summary_failure_reason_returns_one(self, capsys):
+        """A draft-skip run fails even though no job failed."""
+        rc = main(["--needs-json", json.dumps(DRAFT_SKIP)])
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert DRAFT_SKIP_REASON in out
+        assert f"::error::{DRAFT_SKIP_REASON}" in out
+        assert "succeeded" not in out
+
+    def test_skip_without_failure_reason_returns_zero(self, capsys):
+        """Skips for other reasons keep the summary passing."""
+        rc = main(["--needs-json", json.dumps(OTHER_SKIP)])
+        assert rc == 0
+        assert "succeeded" in capsys.readouterr().out
+
+    def test_summary_failure_reason_with_job_failure_returns_one(self, capsys):
+        """Both the failed job and the requested failure are reported."""
+        needs = {**ONE_FAILURE, "setup": DRAFT_SKIP["setup"]}
+        rc = main(["--needs-json", json.dumps(needs)])
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert DRAFT_SKIP_REASON in out
+        assert "linux_build_and_test" in out
+
+    def test_multiline_failure_reason_annotation_is_one_line(self, capsys):
+        needs = {
+            "setup": {
+                "result": "success",
+                "outputs": {"summary_failure_reason": "first line\nsecond line"},
+            }
+        }
+        rc = main(["--needs-json", json.dumps(needs)])
+        assert rc == 1
+        assert "::error::first line second line\n" in capsys.readouterr().out
 
     def test_failure_with_api_prints_urls(self, capsys):
         api_response = {
