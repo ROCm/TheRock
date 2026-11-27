@@ -4,6 +4,7 @@
 
 """Unit tests for configure_asan_env.py"""
 
+import contextlib
 import os
 import platform
 import stat
@@ -240,6 +241,18 @@ class TestFailFast(unittest.TestCase):
                 ):
                     resolve_asan_env(artifacts)
 
+    @requires_posix
+    def test_missing_suppressions_file_raises(self):
+        """LSan only reads the file once it finds a leak, then reports the
+        missing file instead of the leak."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            with _IsolatedPath(_artifact_bin(artifacts)):
+                with self.assertRaisesRegex(AsanEnvironmentError, "suppressions"):
+                    resolve_asan_env(
+                        artifacts, lsan_suppressions=Path(tmp) / "absent.supp"
+                    )
+
     def test_missing_compiler_on_path_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             bin_dir = _make_python_install(Path(tmp), clang=False)
@@ -354,7 +367,35 @@ class TestMain(unittest.TestCase):
             self.assertEqual(written["ASAN_OPTIONS"], STATIC_ASAN_ENV["ASAN_OPTIONS"])
             self.assertIn("ASAN_RUNTIME_PATH", written)
             self.assertIn("ASAN_SYMBOLIZER_PATH", written)
-            self.assertIn("LSAN_OPTIONS", written)
+            self.assertEqual(written["HSA_XNACK"], "1")
+            self.assertEqual(
+                written["LSAN_OPTIONS"], f"suppressions={LSAN_SUPPRESSIONS}"
+            )
+
+    @requires_posix
+    def test_options_reach_github_env(self):
+        """The host-ASAN workflow in rocm-libraries passes both options."""
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = _make_artifacts(Path(tmp))
+            (Path(tmp) / "custom.supp").write_text("")
+            with contextlib.chdir(tmp):
+                written = self._run_main(
+                    [
+                        "--artifacts-dir",
+                        str(artifacts),
+                        "--hsa-xnack",
+                        "0",
+                        "--lsan-suppressions",
+                        "custom.supp",
+                    ],
+                    Path(tmp),
+                )
+
+            self.assertEqual(written["HSA_XNACK"], "0")
+            self.assertEqual(
+                written["LSAN_OPTIONS"],
+                f"suppressions={(Path(tmp) / 'custom.supp').resolve()}",
+            )
 
     @requires_posix
     def test_artifacts_dir_is_optional(self):
