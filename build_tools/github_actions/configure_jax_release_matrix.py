@@ -118,6 +118,11 @@ CI_JAX_REFS = {
     ],
 }
 
+# TheRock build variants a JAX release accepts. An ASAN release builds only
+# the CI ref and Python, untested, against its own ASAN ROCm packages.
+ASAN_BUILD_VARIANTS = ("asan", "asan-debug", "host-asan", "host-asan-debug")
+BUILD_VARIANTS = ("release", *ASAN_BUILD_VARIANTS)
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -195,23 +200,27 @@ def generate_jax_matrix_for_release_type(
     platform: str,
     python_versions: list[str] | None = None,
     jax_refs: list[str] | None = None,
+    build_variant: str = "release",
 ) -> list[dict[str, str | bool]]:
     if release_type not in RELEASE_TYPES:
         raise ValueError(f"Unknown release_type: {release_type!r}")
     if platform not in ["linux"]:
         raise ValueError(f"Unknown platform: {platform!r}")
+    if build_variant not in BUILD_VARIANTS:
+        raise ValueError(f"Unknown build_variant: {build_variant!r}")
 
     # JAX is not supported for BKC releases today, so return an empty matrix.
     # See https://github.com/ROCm/rockrel/issues/88 for context.
     if release_type in ("dev-bkc", "nightly-bkc"):
         return []
 
+    defaults_type = "ci" if build_variant in ASAN_BUILD_VARIANTS else release_type
     versions = python_versions or _default_python_versions(
-        release_type=release_type,
+        release_type=defaults_type,
         platform=platform,
     )
     refs = jax_refs or _default_jax_refs(
-        release_type=release_type,
+        release_type=defaults_type,
         platform=platform,
     )
 
@@ -259,6 +268,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=RELEASE_TYPES,
         help="Release type selecting default JAX/Python matrix (default: dev)",
     )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=BUILD_VARIANTS,
+        help="TheRock build variant of the release (default: release)",
+    )
     args = parser.parse_args(argv)
 
     python_versions = _split_values(args.python_versions) or None
@@ -269,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
         platform=args.platform,
         python_versions=python_versions,
         jax_refs=jax_refs,
+        build_variant=args.build_variant,
     )
     gha_set_output({"jax_matrix": json.dumps(matrix)})
     return 0

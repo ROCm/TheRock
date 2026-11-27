@@ -43,6 +43,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds one untested host-ASAN row."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -82,6 +86,10 @@ on:
         description: "Single Python version to build (empty for full matrix)"
         type: string
         default: ""
+      build_variant:
+        description: "Build variant (release, asan, asan-debug, host-asan, host-asan-debug). A variant containing asan builds one untested host-ASAN row."
+        type: string
+        default: "release"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -102,6 +110,7 @@ jobs:
     env:
       PYTHON_VERSION: ${{ inputs.python_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
+      BUILD_VARIANT: ${{ inputs.build_variant }}
 
     steps:
       - name: "Quartz - started - release JAX wheels"
@@ -128,7 +137,8 @@ jobs:
         run: |
           python ./build_tools/github_actions/configure_jax_release_matrix.py \
             --release-type="${RELEASE_TYPE}" \
-            --python-versions="${PYTHON_VERSION}"
+            --python-versions="${PYTHON_VERSION}" \
+            --build-variant="${BUILD_VARIANT}"
 
   build_jax_wheels:
     needs: setup_matrix
@@ -145,7 +155,8 @@ jobs:
     uses: ./.github/workflows/multi_arch_build_linux_jax_wheels.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
-      test_amdgpu_family: ${{ inputs.test_amdgpu_family }}
+      test_amdgpu_family: ${{ !contains(inputs.build_variant, 'asan') && inputs.test_amdgpu_family || '' }}
+      build_variant: ${{ inputs.build_variant }}
       python_version: ${{ matrix.python_version }}
       jax_ref: ${{ matrix.jax_ref }}
       jax_repository: ${{ matrix.jax_repository }}

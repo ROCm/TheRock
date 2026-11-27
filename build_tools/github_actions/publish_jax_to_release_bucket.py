@@ -18,6 +18,13 @@ from _therock_utils.s3_buckets import (
     get_release_package_index_url,
 )
 from _therock_utils.python_package_paths import plan_local_uploads
+from _therock_utils.python_package_publishing import (
+    BUILD_VARIANTS,
+    DEFAULT_INDEX_TYPE,
+    INDEX_TYPES,
+    build_variant_index_suffix,
+    get_python_index,
+)
 from _therock_utils.storage_backend import create_storage_backend
 from _therock_utils.storage_location import StorageLocation
 from github_actions.github_actions_api import gha_set_output
@@ -72,11 +79,19 @@ def main(argv: list[str]) -> None:
         "prefix.",
     )
     parser.add_argument(
-        "--python-index",
-        default="whl-next",
-        choices=["whl", "whl-next"],
-        help="Product-local index name for structured publishing (default: "
-        "whl-next). Selects the v5/rocm/jax/<index>/ path segment.",
+        "--index-type",
+        default=DEFAULT_INDEX_TYPE,
+        choices=INDEX_TYPES,
+        help=f"Python index type for structured publishing (default: "
+        f"{DEFAULT_INDEX_TYPE}). Combined with --build-variant to select the "
+        "v5/rocm/jax/<index>/ path segment, e.g. whl-next or whl-next-asan.",
+    )
+    parser.add_argument(
+        "--build-variant",
+        default="release",
+        choices=BUILD_VARIANTS,
+        help="Build variant (default: release). ASAN builds publish to the "
+        "whl-next-asan index and require --structured.",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print plan without uploading"
@@ -86,12 +101,28 @@ def main(argv: list[str]) -> None:
     if not args.source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {args.source_dir}")
 
+    # Resolve the index before uploading, so an unsupported combination fails
+    # without uploading anything.
+    try:
+        index_suffix = build_variant_index_suffix(args.build_variant)
+        python_index = get_python_index(args.index_type, index_suffix)
+    except ValueError as e:
+        parser.error(str(e))
+    # Variant wheels would mix with standard wheels in v4/whl.
+    if index_suffix and not args.structured:
+        parser.error(
+            f"--build-variant={args.build_variant} requires --structured "
+            f"(published to {python_index})"
+        )
+
     backend = create_storage_backend(dry_run=args.dry_run)
 
     if args.structured:
         bucket = get_product_release_bucket_config(args.release_type, "jax")
-        _publish_structured(args.source_dir, bucket.name, args.python_index, backend)
-        package_index_url = get_release_package_index_url(args.release_type)
+        _publish_structured(args.source_dir, bucket.name, python_index, backend)
+        package_index_url = get_release_package_index_url(
+            args.release_type, python_index
+        )
     else:
         bucket = get_release_bucket_config(args.release_type, "python")
         dest = StorageLocation(bucket.name, "v4/whl")

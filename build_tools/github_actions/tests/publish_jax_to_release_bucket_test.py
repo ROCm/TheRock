@@ -4,6 +4,7 @@
 
 """Unit tests for publish_jax_to_release_bucket.py."""
 
+import io
 import os
 import sys
 import tempfile
@@ -178,28 +179,69 @@ class TestPublishJaxToReleaseBucket(unittest.TestCase):
         )
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
-    def test_structured_whl_next(self, mock_upload_files):
-        self._touch("jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl")
-        mock_upload_files.return_value = 1
-        main(
-            [
-                "--source-dir",
-                os.fspath(self.source_dir),
-                "--release-type",
-                "dev",
-                "--structured",
-                "--python-index",
-                "whl-next",
-                "--dry-run",
-            ]
-        )
+    @mock.patch("github_actions.publish_jax_to_release_bucket.gha_set_output")
+    def test_structured_index_from_build_variant(
+        self, mock_set_output, mock_upload_files
+    ):
+        for build_variant, expected_index in [
+            ("release", "whl-next"),
+            ("asan-debug", "whl-next-asan"),
+            ("host-asan", "whl-next-asan"),
+        ]:
+            with self.subTest(build_variant=build_variant):
+                mock_upload_files.reset_mock()
+                mock_set_output.reset_mock()
+                self._touch("jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl")
+                mock_upload_files.return_value = 1
+                main(
+                    [
+                        "--source-dir",
+                        os.fspath(self.source_dir),
+                        "--release-type",
+                        "dev",
+                        "--structured",
+                        "--build-variant",
+                        build_variant,
+                        "--dry-run",
+                    ]
+                )
 
-        (uploads,) = mock_upload_files.call_args.args
-        _source, dest = uploads[0]
-        self.assertEqual(
-            dest.relative_path,
-            "v5/rocm/jax/whl-next/jaxlib/jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl",
-        )
+                (uploads,) = mock_upload_files.call_args.args
+                _source, dest = uploads[0]
+                self.assertEqual(
+                    dest.relative_path,
+                    f"v5/rocm/jax/{expected_index}/jaxlib/"
+                    "jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl",
+                )
+                mock_set_output.assert_called_once_with(
+                    {
+                        "package_index_url": "https://dev.repo.amd.com/rocm/"
+                        f"{expected_index}/"
+                    }
+                )
+
+    def test_asan_requires_structured(self):
+        self._touch("jaxlib-0.4.35-cp312-cp312-linux_x86_64.whl")
+        with (
+            mock.patch("sys.stderr", new_callable=io.StringIO) as stderr,
+            mock.patch(
+                "_therock_utils.storage_backend.S3StorageBackend.upload_directory"
+            ) as mock_upload_dir,
+            self.assertRaises(SystemExit),
+        ):
+            main(
+                [
+                    "--source-dir",
+                    os.fspath(self.source_dir),
+                    "--release-type",
+                    "dev",
+                    "--build-variant",
+                    "asan",
+                    "--dry-run",
+                ]
+            )
+        self.assertIn("requires --structured", stderr.getvalue())
+        mock_upload_dir.assert_not_called()
 
     @mock.patch("_therock_utils.storage_backend.S3StorageBackend.upload_files")
     def test_structured_raises_when_no_wheels(self, mock_upload_files):
