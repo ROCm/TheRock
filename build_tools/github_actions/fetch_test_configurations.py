@@ -1259,15 +1259,13 @@ test_matrix = {
         "total_shards_dict": {"linux": 1},
         "exclude_family": {
             # rocprofiler-compute supports gfx908, gfx90a, gfx942, gfx950,
-            # gfx115X and gfx1250 (see TheRock#2892)
+            # gfx115X, gfx120X and gfx1250 (see TheRock#2892)
             "linux": [
                 "gfx1030",
                 "gfx1100",
                 "gfx1101",
                 "gfx1102",
                 "gfx1103",
-                "gfx1200",
-                "gfx1201",
                 # GPU tests do not honor ROCR_VISIBLE_DEVICES and utilizes other gpus during test runs. excluding
                 "gfx125X-dcgpu",
             ],
