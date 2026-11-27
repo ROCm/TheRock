@@ -61,6 +61,18 @@ if(_rocalution_enabled AND THEROCK_ENABLE_ROCALUTION)
   set(_rocalution_available ON)
 endif()
 
+# _blas_enabled (math-libs/CMakeLists.txt) is OFF when rocBLAS was filtered out
+# for the selected gfx targets; the whole BLAS group (incl. sparse/solver) is
+# then not built.
+set(_blas_available OFF)
+set(_sparse_available OFF)
+set(_solver_available OFF)
+if(_blas_enabled)
+  set(_blas_available ${THEROCK_ENABLE_BLAS})
+  set(_sparse_available ${THEROCK_ENABLE_SPARSE})
+  set(_solver_available ${THEROCK_ENABLE_SOLVER})
+endif()
+
 # Examples are configured against the installed ROCm prefix. The
 # cpp-sdk-user project requires HIP (LANGUAGES CXX HIP), so skip when
 # HIP is not enabled (e.g. in early multi-arch CI stages) or when
@@ -74,7 +86,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/cpp-sdk-user"
           "-DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}/cpp-sdk-user"
           "-DGENERATOR=${CMAKE_GENERATOR}"
-          "-DTHEROCK_ENABLE_BLAS=${THEROCK_ENABLE_BLAS}"
+          "-DTHEROCK_ENABLE_BLAS=${_blas_available}"
           "-DTHEROCK_ENABLE_FFT=${_fft_available}"
           "-DTHEROCK_ENABLE_HIP=${THEROCK_ENABLE_HIP_RUNTIME}"
           "-DTHEROCK_ENABLE_HIPDNN=${THEROCK_ENABLE_HIPDNN}"
@@ -87,8 +99,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND "${THEROCK_SANITIZER}" STREQUAL "")
           "-DTHEROCK_ENABLE_ROCWMMA=${THEROCK_ENABLE_ROCWMMA}"
           "-DTHEROCK_ENABLE_ROCALUTION=${_rocalution_available}"
           "-DTHEROCK_ENABLE_LIBHIPCXX=${THEROCK_ENABLE_LIBHIPCXX}"
-          "-DTHEROCK_ENABLE_SOLVER=${THEROCK_ENABLE_SOLVER}"
-          "-DTHEROCK_ENABLE_SPARSE=${THEROCK_ENABLE_SPARSE}"
+          "-DTHEROCK_ENABLE_SOLVER=${_solver_available}"
+          "-DTHEROCK_ENABLE_SPARSE=${_sparse_available}"
           ${HIP_CMAKE_ARGS}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/clean_configure_test_project.cmake"
   )
