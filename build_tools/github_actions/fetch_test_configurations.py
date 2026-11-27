@@ -982,6 +982,10 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
+        # Suppress per-test kpack debug logging (test_component.yml defaults it to
+        # "1" for diagnostics, which floods rccl-UnitTests output and pushes the
+        # job against its timeout).
+        "rocm_kpack_debug": "0",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
