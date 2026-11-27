@@ -122,17 +122,6 @@ jobs:
       # Only older source outputs a tier; see the upload step.
       tier: ${{ steps.derive.outputs.tier }}
     steps:
-      - name: "Quartz - started - build amd-repo-setup"
-        continue-on-error: true
-        if: ${{ vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
-        with:
-          run_phase: started
-          reporting_workflow: multi_arch_build_native_linux_packages.yml
-          workflow_inputs: ${{ toJSON(inputs) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
       - name: Checking out repository
         timeout-minutes: 15
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -310,19 +299,6 @@ jobs:
         if: always()
         run: python build_tools/github_actions/capture_job_summary.py
 
-      - name: "Quartz - completed ${{ env.QUARTZ_WORKFLOW_POSTFIX }}"
-        continue-on-error: true
-        if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
-        uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
-        with:
-          run_phase: completed
-          run_conclusion: ${{ job.status }}
-          reporting_workflow: ${{ env.QUARTZ_REPORTING_WORKFLOW }}
-          workflow_inputs: ${{ toJSON(inputs) }}
-          workflow_step_outputs: ${{ toJSON(steps) }}
-          gh_app_client_id: ${{ secrets.GH_APP_HAULY_CID }}
-          gh_app_private_key: ${{ secrets.GH_APP_HAULY_PRIVATE_KEY }}
-
   # Build the amd-repo-setup package for each OS profile of this package type,
   # check its contents and upload it to this run's artifacts bucket, under
   # amd-repo-setup/<os_profile>/.
@@ -436,20 +412,20 @@ jobs:
             --os-profile "${OS_PROFILE}" \
             --pkg-type "${NATIVE_PACKAGE_TYPE}"
 
-  # Report the amd-repo-setup jobs' result to Quartz. resolve_repo_setup_params reports
-  # their start, so this runs only when that job ran.
+  # Report the result of the whole workflow to Quartz: the native packages and,
+  # when enabled, the amd-repo-setup packages must all be built and uploaded for
+  # the run to count as a success. build_native_packages reports the start.
   notify_quartz_completed:
-    name: "Quartz - completed - build amd-repo-setup"
-    # Not for older source, whose resolve job succeeds without resolving a stream.
-    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' && needs.resolve_repo_setup_params.result != 'skipped' && (needs.resolve_repo_setup_params.result != 'success' || needs.resolve_repo_setup_params.outputs.repo_base_url != '') }}
-    needs: [resolve_repo_setup_params, stage_repo_setup_package]
+    name: "Quartz - completed - build rpm/deb packages"
+    if: ${{ always() && vars.NOTIFY_QUARTZ_ENABLED == 'true' }}
+    needs: [build_native_packages, resolve_repo_setup_params, stage_repo_setup_package]
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read
     steps:
-      - name: "Quartz - completed - build amd-repo-setup"
+      - name: "Quartz - completed - build rpm/deb packages"
         uses: ROCm/Quartz/.github/actions/notify_quartz@2d3d15630651544b1469f71da25da9b73ffa8667 # notify_quartz/v1.1.3
         with:
           run_phase: completed
