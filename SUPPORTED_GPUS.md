@@ -126,5 +126,4 @@ Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/develo
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
-| CDNA2        | gfx90a      | ✅            |               |               |
 | CDNA         | gfx908      | ✅            |               |               |
