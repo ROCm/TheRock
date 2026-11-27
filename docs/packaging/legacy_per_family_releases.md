@@ -379,6 +379,13 @@ instructions in the AMD ROCm documentation.
 
 ### Installing JAX Python packages
 
+Current multi-arch installs, including the `jax[rocm*]` extras added in JAX
+0.12.1, are in
+[RELEASES.md](/RELEASES.md#installing-multi-arch-jax-python-packages) and the
+[JAX README](/external-builds/jax/README.md#installing). The commands in this
+section are for the historical per-family wheels below. Those wheels do not
+pull ROCm in.
+
 Using the index pages [listed above](#installing-rocm-python-packages), you can
 also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 
