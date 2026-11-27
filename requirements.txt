@@ -1,5 +1,6 @@
 CppHeaderParser>=2.7.4
 build>=1.2.2
+installer==0.7.0
 meson>=1.7.0
 packaging==25.0
 pre-commit>=4.3.0
@@ -11,6 +12,7 @@ zlib-ng>=1.0.0
 # but it still a dependency in some environments (issue#3311)
 setuptools>=80.9.0,<82.0.0
 tomli==2.2.1; python_version <= '3.10'
+wheel==0.46.2
 pytest-cmake==0.13.0
 mako>=1.1.3
 jinja2>=3.0.0

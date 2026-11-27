@@ -81,6 +81,7 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
         "rocwmma",
         "test",
     ),  # rocWMMA ships via amdrocm-math-common (dev/lib); tests not distributed.
+    ("rocshmem4py", "lib"),  # Python-index-only; not shipped in RPM/DEB packages.
     ("rocrtst", "lib"),
     ("support", "dev"),
     ("support", "doc"),
