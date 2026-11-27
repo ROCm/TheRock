@@ -7,6 +7,9 @@ so test selection stays on the standard CTest category labels. Two independent
 sources are staged into the test artifact: the wheels, which this installs, and
 the co-located rocke package, which this puts on PYTHONPATH. Without at least
 one, the rocKE CTest entries fail with ModuleNotFoundError.
+
+HKP_TEST_GROUP (set by fetch_test_configurations.py) narrows the run to one of
+the groups in hipkernelprovider_test_groups.py; unset runs every test.
 """
 
 import logging
@@ -19,6 +22,7 @@ from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_RUNNER = SCRIPT_DIR / "test_runner.py"
+TEST_GROUPS = SCRIPT_DIR / "hipkernelprovider_test_groups.py"
 
 
 def fail(message) -> NoReturn:
@@ -57,6 +61,14 @@ logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 if not THEROCK_BIN_DIR:
     fail("THEROCK_BIN_DIR environment variable is required but not set.")
+
+HKP_TEST_GROUP = os.getenv("HKP_TEST_GROUP", "")
+if HKP_TEST_GROUP:
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from hipkernelprovider_test_groups import GROUPS
+
+    if HKP_TEST_GROUP not in GROUPS:
+        fail(f"HKP_TEST_GROUP={HKP_TEST_GROUP!r} is not one of {list(GROUPS)}.")
 
 test_dir = Path(THEROCK_BIN_DIR) / "hip_kernel_provider"
 wheel_dir = test_dir / "wheels"
@@ -103,4 +115,6 @@ elif not wheels:
 
 # Subprocess rather than import: test_runner.py validates the environment and
 # calls sys.exit() at module scope.
+if HKP_TEST_GROUP:
+    run_forwarding_exit_code([sys.executable, str(TEST_GROUPS), HKP_TEST_GROUP])
 run_forwarding_exit_code([sys.executable, str(TEST_RUNNER)])
