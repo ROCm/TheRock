@@ -54,13 +54,109 @@ permissions:
   contents: read
 
 jobs:
-  copy_prebuilt_stages:
-    name: Copy Prebuilt Stages
+  # Experimental fingerprint-based artifact reuse (opt-in via the ci:reuse-fprint
+  # label; RFC0017). Runs before any stage build: it configures the tree so CMake
+  # emits THEROCK_FPRINT sidecars, looks them up in the committed static
+  # artifact-cache index, and maps cached restore groups onto the existing
+  # artifact-level reuse levers -- reusable_artifacts (copied from one baseline
+  # run) and rebuild_artifacts (everything else still builds). Reuse is per
+  # artifact, not per stage: a cached amd-llvm is restored while the rest of its
+  # stage keeps building. Skipped (and thus a no-op) unless the label is present
+  # and this is a non-release (ci) build.
+  fingerprint_reuse:
+    name: Fingerprint Artifact Reuse (experimental)
     if: >-
       ${{
         fromJSON(inputs.build_config).build_rocm == true &&
-        fromJSON(inputs.build_config).prebuilt_stages != '' &&
-        fromJSON(inputs.build_config).baseline_run_id != ''
+        fromJSON(inputs.build_config).reuse_fprint == true &&
+        inputs.release_type == 'ci'
+      }}
+    runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:f1f9dd9b20404c239f01a02ffec61d6c2e80abcafe7fdac854f06169828e53ce # 2026-10-30
+    env:
+      BUILD_DIR: build
+    outputs:
+      reusable_artifacts: ${{ steps.reuse.outputs.reusable_artifacts }}
+      rebuild_artifacts: ${{ steps.reuse.outputs.rebuild_artifacts }}
+      baseline_run_id: ${{ steps.reuse.outputs.baseline_run_id }}
+    steps:
+      - name: Checkout TheRock
+        timeout-minutes: 10
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Fetch submodules with fetch_sources.py
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          ./build_tools/fetch_sources.py --jobs 12 --depth 1
+
+      - name: Configure (emit THEROCK_FPRINT sidecars)
+        # Configure-only pass: produces build/artifacts/*.fprint for artifacts
+        # whose dependencies expose THEROCK_FPRINT at configure time. Best-effort:
+        # if configure cannot complete, the lookup below finds no sidecars and the
+        # job is a safe no-op (the build falls back to the normal path).
+        continue-on-error: true
+        run: | # zizmor: ignore[template-injection]
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            ${{ fromJSON(inputs.build_config).build_variant_cmake_preset && format('--preset={0}', fromJSON(inputs.build_config).build_variant_cmake_preset) }} \
+            ${{ inputs.external_repo_config != '' && fromJSON(inputs.external_repo_config).extra_cmake_options || '' }}
+
+      - name: Look up fingerprints in the static cache index
+        continue-on-error: true
+        run: |
+          if ls "${BUILD_DIR}"/artifacts/*.fprint >/dev/null 2>&1; then
+            python build_tools/artifact_cache/artifact_cache.py lookup \
+              --fingerprints-dir "${BUILD_DIR}/artifacts" \
+              --platform linux \
+              --index build_tools/artifact_cache/prototype_artifact_cache_index.json \
+              --output "${BUILD_DIR}/reuse_plan.json"
+          else
+            echo "No .fprint sidecars produced; skipping lookup (safe no-op)."
+          fi
+
+      - name: Map plan to reusable / rebuild artifacts
+        id: reuse
+        # reuse_artifacts.py writes reusable_artifacts / rebuild_artifacts /
+        # baseline_run_id to $GITHUB_OUTPUT. A missing plan (no lookup) yields
+        # empty outputs -> normal full build.
+        run: |
+          python build_tools/artifact_cache/reuse_artifacts.py \
+            --plan "${BUILD_DIR}/reuse_plan.json"
+
+  copy_prebuilt_stages:
+    name: Copy Prebuilt Stages
+    # fingerprint_reuse (experimental) may supply baseline_run_id + artifact-level
+    # reusable_artifacts dynamically; when it is skipped its outputs are empty and
+    # we fall back to the build_config values, so existing behavior is unchanged.
+    # !cancelled() lets this job run even though fingerprint_reuse may be skipped.
+    needs: [fingerprint_reuse]
+    if: >-
+      ${{
+        !cancelled() &&
+        fromJSON(inputs.build_config).build_rocm == true &&
+        (needs.fingerprint_reuse.outputs.baseline_run_id || fromJSON(inputs.build_config).baseline_run_id) != '' &&
+        (
+          fromJSON(inputs.build_config).prebuilt_stages != '' ||
+          (needs.fingerprint_reuse.outputs.reusable_artifacts || fromJSON(inputs.build_config).reusable_artifacts) != ''
+        )
       }}
     runs-on: ${{ fromJSON(inputs.build_config).build_runs_on_small }}
     permissions:
@@ -90,10 +186,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TYPE: ${{ inputs.release_type }}
-          BUILD_CONFIG_BASELINE_RUN_ID: ${{ fromJSON(inputs.build_config).baseline_run_id }}
+          BUILD_CONFIG_BASELINE_RUN_ID: ${{ needs.fingerprint_reuse.outputs.baseline_run_id || fromJSON(inputs.build_config).baseline_run_id }}
           BUILD_CONFIG_BASELINE_REPOSITORY: ${{ fromJSON(inputs.build_config).baseline_repository }}
           BUILD_CONFIG_PREBUILT_STAGES: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
-          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ fromJSON(inputs.build_config).reusable_artifacts }}
+          BUILD_CONFIG_REUSABLE_ARTIFACTS: ${{ needs.fingerprint_reuse.outputs.reusable_artifacts || fromJSON(inputs.build_config).reusable_artifacts }}
           BUILD_CONFIG_DIST_AMDGPU_FAMILIES: ${{ fromJSON(inputs.build_config).dist_amdgpu_families }}
         run: |
           python build_tools/artifact_manager.py copy \
@@ -106,7 +202,7 @@ jobs:
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
-    needs: copy_prebuilt_stages
+    needs: [copy_prebuilt_stages, fingerprint_reuse]
     if: >-
       ${{
         !failure() &&
@@ -123,7 +219,7 @@ jobs:
       build_variant_cmake_preset: ${{ fromJSON(inputs.build_config).build_variant_cmake_preset }}
       build_variant_suffix: ${{ fromJSON(inputs.build_config).build_variant_suffix }}
       prebuilt_stages: ${{ fromJSON(inputs.build_config).prebuilt_stages }}
-      rebuild_artifacts: ${{ fromJSON(inputs.build_config).rebuild_artifacts }}
+      rebuild_artifacts: ${{ needs.fingerprint_reuse.outputs.rebuild_artifacts || fromJSON(inputs.build_config).rebuild_artifacts }}
       skip_stages: ${{ fromJSON(inputs.build_config).skip_stages }}
       build_runs_on_large: ${{ fromJSON(inputs.build_config).build_runs_on_large }}
       build_runs_on_small: ${{ fromJSON(inputs.build_config).build_runs_on_small }}

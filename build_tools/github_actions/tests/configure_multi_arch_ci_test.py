@@ -3832,6 +3832,8 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
         # Linux-only for now, so Windows CI workflows do not consume them.
         # WSL tests the Linux build, so wsl_per_family_info is Linux-only too.
         # Tarballs are release-only.
+        # reuse_fprint (ci:reuse-fprint, experimental RFC0017) only gates the
+        # Linux fingerprint_reuse job; Windows CI does not consume it.
         unused_fields = {
             "build_native_linux",
             "build_jax",
@@ -3839,6 +3841,7 @@ class TestBuildConfigWorkflowContract(unittest.TestCase):
             "wsl_per_family_info",
             "build_runs_on_tarballs",
             "build_runs_on_native_package",
+            "reuse_fprint",
         }
         self.assertEqual(
             yaml_fields,
