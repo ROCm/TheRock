@@ -304,6 +304,40 @@ class ApplyComponentOverridesTest(unittest.TestCase):
         self.assertEqual(env["OPAL_PREFIX"], "/rocm")
         self.assertNotIn("HIP_MEM_POOL_USE_VM", env)
 
+    def test_hip_tests_sets_level_and_runtime_paths(self):
+        # HIP_TEST_LEVEL must follow TEST_TYPE, and discovery needs the HIP
+        # runtime on PATH (Windows DLLs) and LD_LIBRARY_PATH (Linux .so).
+        env = {}
+        test_dir, _ = test_runner.apply_component_overrides(
+            "hip-tests",
+            "quick",
+            Path("/rocm"),
+            Path("/therock"),
+            "/rocm/bin/default",
+            env,
+            1,
+        )
+        self.assertEqual(test_dir, os.path.join("/rocm", "share", "hip", "catch_tests"))
+        self.assertEqual(env["HIP_TEST_LEVEL"], "quick")
+        self.assertEqual(
+            env["PATH"].split(os.pathsep)[:2],
+            [os.path.join("/rocm", "bin"), os.path.join("/rocm", "lib")],
+        )
+        self.assertEqual(
+            env["LD_LIBRARY_PATH"],
+            os.path.join("/rocm", "lib"),
+        )
+
+    def test_prepend_env_paths_uses_os_pathsep(self):
+        # A hardcoded ":" splits Windows PATH entries on the drive-letter colon.
+        existing = f"C:{os.sep}Windows{os.sep}System32"
+        env = {"PATH": existing}
+        test_runner._prepend_env_paths(env, Path("/rocm"), {"PATH": [["bin"]]})
+        self.assertEqual(
+            env["PATH"],
+            os.pathsep.join([os.path.join("/rocm", "bin"), existing]),
+        )
+
 
 class ValidTestCategoriesTest(unittest.TestCase):
     """Tests for VALID_TEST_CATEGORIES and category validation."""
