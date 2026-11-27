@@ -1,0 +1,32 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# DO NOT MERGE. Runs the coverage workflows end to end on this draft pull
+# request, since workflow_dispatch only works once a workflow is on the default
+# branch. Turns on all three coverage groups, so the run also covers the group
+# options and the hipCCL override.
+
+name: Coverage E2E Trial
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage
+    uses: ./.github/workflows/multi_arch_ci_coverage_linux.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      coverage_rocm_libraries_all: true
+      coverage_rocm_systems_all: true
+      coverage_all: true
+    permissions:
+      contents: read
+      id-token: write
