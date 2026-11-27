@@ -118,6 +118,11 @@ CI_JAX_REFS = {
     ],
 }
 
+# XLA tests do not depend on the Python version or the JAX build, so they run
+# in exactly one release matrix cell.
+XLA_TEST_PYTHON_VERSION = "3.12"
+XLA_TEST_JAX_REF = "rocm-jaxlib-v0.11.2"
+
 
 def _split_values(raw: str) -> list[str]:
     """Split comma, semicolon, or whitespace-separated workflow input values."""
@@ -183,6 +188,9 @@ def generate_jax_matrix(
                     # Whether the release build uploads and then tests the
                     # wheels; CI uploads to run-scoped artifacts either way.
                     "publish": ref_cfg.get("publish", True),
+                    "trigger_xla_tests": (
+                        py == XLA_TEST_PYTHON_VERSION and ref == XLA_TEST_JAX_REF
+                    ),
                 }
             )
 

@@ -84,6 +84,13 @@ on:
           time, with the whole end-to-end set.
         type: string
         default: "small"
+      trigger_xla_tests:
+        description: >-
+          Not used on the CI path. Declared because every generated matrix row
+          key must be a workflow_call input here too. The XLA job lives in
+          multi_arch_build_linux_jax_wheels.yml.
+        type: boolean
+        default: false
     outputs:
       package_find_links_url:
         description: "pip --find-links URL for CI-uploaded JAX wheels."
