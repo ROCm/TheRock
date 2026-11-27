@@ -110,8 +110,53 @@ class ResolveJaxVersionTest(unittest.TestCase):
                 [
                     "ml_wheel_version_suffix=.dev20261002+rocm7.14.0a20261002",
                     "wheels=jax,jaxlib,jax-rocm-plugin,jax-rocm-pjrt",
+                    "bazel_options=",
+                    "python_index=whl-next",
                 ],
             )
+
+    def test_main_writes_the_debug_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "github_output"
+            with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": os.fspath(output)}):
+                m.main(
+                    [
+                        "--wheel-type",
+                        "release",
+                        "--rocm-version",
+                        ROCM_VERSION,
+                        "--jax-source-dir",
+                        os.fspath(self.checkout),
+                        "--variant",
+                        "debug",
+                    ]
+                )
+            self.assertEqual(
+                output.read_text().splitlines(),
+                [
+                    "ml_wheel_version_suffix=+rocm7.14.0a20261002.debug",
+                    "wheels=jax-rocm-plugin,jax-rocm-pjrt",
+                    "bazel_options=--bazel_options=--config=debug_symbols",
+                    "python_index=whl-next-debug",
+                ],
+            )
+
+    def test_tip_debug_keeps_the_dev_date(self):
+        debug = m.ml_wheel_version_suffix(
+            "nightly", ROCM_VERSION, self.checkout, "debug"
+        )
+        self.assertEqual(debug, ".dev20261002+rocm7.14.0a20261002.debug")
+        self.assertTrue(Version(f"0.12.0{debug}").is_prerelease)
+
+    def test_debug_label_sorts_above_release_so_it_needs_its_own_index(self):
+        # A pin without a local label takes the highest one, so on one index
+        # `jax-rocm10-plugin==0.12.0` would install the debug wheel.
+        release = m.ml_wheel_version_suffix("release", ROCM_VERSION, self.checkout)
+        debug = m.ml_wheel_version_suffix(
+            "release", ROCM_VERSION, self.checkout, "debug"
+        )
+        self.assertGreater(Version(f"0.12.0{debug}"), Version(f"0.12.0{release}"))
+        self.assertNotEqual(m.VARIANTS["debug"]["python_index"], "whl-next")
 
 
 if __name__ == "__main__":

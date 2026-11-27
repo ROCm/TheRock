@@ -24,6 +24,9 @@ The date rides in ML_WHEEL_VERSION_SUFFIX with ML_WHEEL_TYPE left at release:
 XLA's own "nightly" type drops the suffix, and its "custom" type spells the
 local label differently from build/build.py's copy glob.
 
+`--variant debug` adds JAX's `debug_symbols` config, a `.debug` local-label
+marker (`0.11.2+rocm7.14.0a20261002.debug`) and the `whl-next-debug` index.
+
 Example:
 
     python resolve_jax_version.py --wheel-type nightly \\
@@ -33,6 +36,8 @@ writes these step outputs to GITHUB_OUTPUT:
 
     ml_wheel_version_suffix=.dev20261002+rocm7.14.0a20261002
     wheels=jax,jaxlib,jax-rocm-plugin,jax-rocm-pjrt
+    bazel_options=
+    python_index=whl-next
 """
 
 import argparse
@@ -52,6 +57,16 @@ WHEELS = {
     "nightly": ("jax", "jaxlib", "jax-rocm-plugin", "jax-rocm-pjrt"),
 }
 
+# Extra build/build.py options, local-label marker and publish index per variant.
+VARIANTS = {
+    "release": {"bazel_options": "", "marker": "", "python_index": "whl-next"},
+    "debug": {
+        "bazel_options": "--bazel_options=--config=debug_symbols",
+        "marker": ".debug",
+        "python_index": "whl-next-debug",
+    },
+}
+
 
 def commit_date(jax_source_dir: Path) -> str:
     """Returns the UTC committer date of the checkout's HEAD as YYYYMMDD."""
@@ -68,10 +83,10 @@ def commit_date(jax_source_dir: Path) -> str:
 
 
 def ml_wheel_version_suffix(
-    wheel_type: str, rocm_version: str, jax_source_dir: Path
+    wheel_type: str, rocm_version: str, jax_source_dir: Path, variant: str = "release"
 ) -> str:
-    """Returns the ML_WHEEL_VERSION_SUFFIX for this wheel type."""
-    rocm_suffix = derive_version_suffix(rocm_version)
+    """Returns the ML_WHEEL_VERSION_SUFFIX for this wheel type and variant."""
+    rocm_suffix = derive_version_suffix(rocm_version) + VARIANTS[variant]["marker"]
     if wheel_type == "nightly":
         return f".dev{commit_date(jax_source_dir)}{rocm_suffix}"
     return rocm_suffix
@@ -98,15 +113,23 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="JAX checkout being built",
     )
+    parser.add_argument(
+        "--variant",
+        choices=sorted(VARIANTS),
+        default="release",
+        help="release, or debug for the same wheels with debug symbols",
+    )
     args = parser.parse_args(argv)
 
     suffix = ml_wheel_version_suffix(
-        args.wheel_type, args.rocm_version, args.jax_source_dir
+        args.wheel_type, args.rocm_version, args.jax_source_dir, args.variant
     )
     gha_set_output(
         {
             "ml_wheel_version_suffix": suffix,
             "wheels": ",".join(WHEELS[args.wheel_type]),
+            "bazel_options": VARIANTS[args.variant]["bazel_options"],
+            "python_index": VARIANTS[args.variant]["python_index"],
         }
     )
 
