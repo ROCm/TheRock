@@ -1,0 +1,3072 @@
+From 1bfee9905a77c3cfad2e377da298dab55e62285c Mon Sep 17 00:00:00 2001
+From: Strahinja Stamenkovic <strahinja.stamenkovic@amd.com>
+Date: Thu, 26 Nov 2026 07:28:41 +0000
+Subject: [PATCH] Fix MSVC complex helpers in C-translated LAPACK
+
+The f2c-style headers in lapack-netlib/SRC/*.c carry an `_MSC_VER`
+branch (taken by MSVC and clang-cl) with hand-written complex helpers.
+Several are wrong and silently corrupt results on Windows:
+
+- zpow_ui multiplied real and imaginary parts element-wise instead of
+  doing complex multiplication (and inverted element-wise for n < 0).
+  ZLAHQR uses it for its Wilkinson shift, so on real-valued input with
+  complex-conjugate eigenvalues the shift collapses, ZLADIV divides by
+  zero and ZLAHQR/ZHSEQR/ZGEEV return INFO > 0 with NaN eigenvalues.
+  ZHGEQZ (ZGGES/ZGGEV) and ZLAESY use it the same way.
+- The inline zdotu_/cdotu_ computed Im = xi*yi + xr*yi instead of
+  xi*yr + xr*yi (both stride branches), affecting xLATRS/xLATBS/xLATPS,
+  xSPTRI, xSYTRI(_ROOK) and xTRSYL in both precisions.
+- The inline cdotc_ strided branch used yi where yr belongs.
+
+Use _Cmulcc/_Cbuild (already used by z_div in the same header) for
+zpow_ui, with a scaled complex reciprocal and an unsigned long long
+exponent magnitude for n < 0, and correct the dot-product imaginary
+parts. Only files that call these helpers are changed.
+
+Upstream: https://github.com/OpenMathLib/OpenBLAS/pull/6286
+Drop this patch once the OpenBLAS pin includes that change.
+
+Fixes ROCM-34127 (complex128 torch.linalg.eig fails with error code 2
+on Windows TheRock PyTorch wheels).
+---
+ lapack-netlib/SRC/cgbcon.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/cgesvj.c      | 10 +++++-----
+ lapack-netlib/SRC/cgsvj0.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/cgsvj1.c      | 10 +++++-----
+ lapack-netlib/SRC/chetd2.c      | 10 +++++-----
+ lapack-netlib/SRC/chetri.c      | 10 +++++-----
+ lapack-netlib/SRC/chetri_rook.c | 10 +++++-----
+ lapack-netlib/SRC/chpgst.c      | 10 +++++-----
+ lapack-netlib/SRC/chptrd.c      | 10 +++++-----
+ lapack-netlib/SRC/chptri.c      | 10 +++++-----
+ lapack-netlib/SRC/claic1.c      | 10 +++++-----
+ lapack-netlib/SRC/clapll.c      | 10 +++++-----
+ lapack-netlib/SRC/clarfy.c      | 10 +++++-----
+ lapack-netlib/SRC/clatbs.c      | 10 +++++-----
+ lapack-netlib/SRC/clatdf.c      | 10 +++++-----
+ lapack-netlib/SRC/clatps.c      | 10 +++++-----
+ lapack-netlib/SRC/clatrd.c      | 10 +++++-----
+ lapack-netlib/SRC/clatrs.c      | 10 +++++-----
+ lapack-netlib/SRC/clauu2.c      | 10 +++++-----
+ lapack-netlib/SRC/cpotf2.c      | 10 +++++-----
+ lapack-netlib/SRC/cpptrf.c      | 10 +++++-----
+ lapack-netlib/SRC/cpptri.c      | 10 +++++-----
+ lapack-netlib/SRC/csptri.c      | 10 +++++-----
+ lapack-netlib/SRC/csytri.c      | 10 +++++-----
+ lapack-netlib/SRC/csytri_rook.c | 10 +++++-----
+ lapack-netlib/SRC/ctgsna.c      | 10 +++++-----
+ lapack-netlib/SRC/ctrsna.c      | 10 +++++-----
+ lapack-netlib/SRC/ctrsyl.c      | 10 +++++-----
+ lapack-netlib/SRC/zgbcon.c      | 10 +++++-----
+ lapack-netlib/SRC/zgesvj.c      | 10 +++++-----
+ lapack-netlib/SRC/zgsvj0.c      | 10 +++++-----
+ lapack-netlib/SRC/zgsvj1.c      | 10 +++++-----
+ lapack-netlib/SRC/zhetd2.c      | 10 +++++-----
+ lapack-netlib/SRC/zhetri.c      | 10 +++++-----
+ lapack-netlib/SRC/zhetri_rook.c | 10 +++++-----
+ lapack-netlib/SRC/zhgeqz.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/zhpgst.c      | 10 +++++-----
+ lapack-netlib/SRC/zhptrd.c      | 10 +++++-----
+ lapack-netlib/SRC/zhptri.c      | 10 +++++-----
+ lapack-netlib/SRC/zlaesy.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/zlahqr.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/zlaic1.c      | 10 +++++-----
+ lapack-netlib/SRC/zlapll.c      | 10 +++++-----
+ lapack-netlib/SRC/zlarfy.c      | 10 +++++-----
+ lapack-netlib/SRC/zlatbs.c      | 10 +++++-----
+ lapack-netlib/SRC/zlatdf.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/zlatps.c      | 10 +++++-----
+ lapack-netlib/SRC/zlatrd.c      | 10 +++++-----
+ lapack-netlib/SRC/zlatrs.c      | 10 +++++-----
+ lapack-netlib/SRC/zlauu2.c      | 10 +++++-----
+ lapack-netlib/SRC/zpotf2.c      | 10 +++++-----
+ lapack-netlib/SRC/zpptrf.c      | 10 +++++-----
+ lapack-netlib/SRC/zpptri.c      | 10 +++++-----
+ lapack-netlib/SRC/zsptri.c      | 10 +++++-----
+ lapack-netlib/SRC/zsytri.c      | 10 +++++-----
+ lapack-netlib/SRC/zsytri_rook.c | 10 +++++-----
+ lapack-netlib/SRC/ztgsna.c      | 10 +++++-----
+ lapack-netlib/SRC/ztrsna.c      | 10 +++++-----
+ lapack-netlib/SRC/ztrsyl.c      | 10 +++++-----
+ 59 files changed, 391 insertions(+), 337 deletions(-)
+
+diff --git a/lapack-netlib/SRC/cgbcon.c b/lapack-netlib/SRC/cgbcon.c
+index 3243e34..130c48d 100644
+--- a/lapack-netlib/SRC/cgbcon.c
++++ b/lapack-netlib/SRC/cgbcon.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -395,7 +404,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -458,14 +467,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -493,14 +502,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cgesvj.c b/lapack-netlib/SRC/cgesvj.c
+index 84f1b73..47eb17f 100644
+--- a/lapack-netlib/SRC/cgesvj.c
++++ b/lapack-netlib/SRC/cgesvj.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cgsvj0.c b/lapack-netlib/SRC/cgsvj0.c
+index c42f309..8124c4b 100644
+--- a/lapack-netlib/SRC/cgsvj0.c
++++ b/lapack-netlib/SRC/cgsvj0.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cgsvj1.c b/lapack-netlib/SRC/cgsvj1.c
+index bd0b392..a6bc9f5 100644
+--- a/lapack-netlib/SRC/cgsvj1.c
++++ b/lapack-netlib/SRC/cgsvj1.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chetd2.c b/lapack-netlib/SRC/chetd2.c
+index 3f7e270..12bb70c 100644
+--- a/lapack-netlib/SRC/chetd2.c
++++ b/lapack-netlib/SRC/chetd2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chetri.c b/lapack-netlib/SRC/chetri.c
+index 7f233bc..13e685f 100644
+--- a/lapack-netlib/SRC/chetri.c
++++ b/lapack-netlib/SRC/chetri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chetri_rook.c b/lapack-netlib/SRC/chetri_rook.c
+index e14ded6..347692a 100644
+--- a/lapack-netlib/SRC/chetri_rook.c
++++ b/lapack-netlib/SRC/chetri_rook.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chpgst.c b/lapack-netlib/SRC/chpgst.c
+index 97d5a86..cc901d4 100644
+--- a/lapack-netlib/SRC/chpgst.c
++++ b/lapack-netlib/SRC/chpgst.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chptrd.c b/lapack-netlib/SRC/chptrd.c
+index 0452308..07bbcfb 100644
+--- a/lapack-netlib/SRC/chptrd.c
++++ b/lapack-netlib/SRC/chptrd.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/chptri.c b/lapack-netlib/SRC/chptri.c
+index 778775d..b885743 100644
+--- a/lapack-netlib/SRC/chptri.c
++++ b/lapack-netlib/SRC/chptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/claic1.c b/lapack-netlib/SRC/claic1.c
+index b2e3d00..1d9b53c 100644
+--- a/lapack-netlib/SRC/claic1.c
++++ b/lapack-netlib/SRC/claic1.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clapll.c b/lapack-netlib/SRC/clapll.c
+index 074c278..8e4d496 100644
+--- a/lapack-netlib/SRC/clapll.c
++++ b/lapack-netlib/SRC/clapll.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clarfy.c b/lapack-netlib/SRC/clarfy.c
+index 45279b1..709c84d 100644
+--- a/lapack-netlib/SRC/clarfy.c
++++ b/lapack-netlib/SRC/clarfy.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clatbs.c b/lapack-netlib/SRC/clatbs.c
+index db77cee..a894936 100644
+--- a/lapack-netlib/SRC/clatbs.c
++++ b/lapack-netlib/SRC/clatbs.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clatdf.c b/lapack-netlib/SRC/clatdf.c
+index b439b08..ee9f9d1 100644
+--- a/lapack-netlib/SRC/clatdf.c
++++ b/lapack-netlib/SRC/clatdf.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clatps.c b/lapack-netlib/SRC/clatps.c
+index b7e263a..d5941f9 100644
+--- a/lapack-netlib/SRC/clatps.c
++++ b/lapack-netlib/SRC/clatps.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clatrd.c b/lapack-netlib/SRC/clatrd.c
+index 4a88576..399e65f 100644
+--- a/lapack-netlib/SRC/clatrd.c
++++ b/lapack-netlib/SRC/clatrd.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clatrs.c b/lapack-netlib/SRC/clatrs.c
+index 4064dd9..038d20a 100644
+--- a/lapack-netlib/SRC/clatrs.c
++++ b/lapack-netlib/SRC/clatrs.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/clauu2.c b/lapack-netlib/SRC/clauu2.c
+index 856a51c..0b71559 100644
+--- a/lapack-netlib/SRC/clauu2.c
++++ b/lapack-netlib/SRC/clauu2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cpotf2.c b/lapack-netlib/SRC/cpotf2.c
+index 453f16e..526423e 100644
+--- a/lapack-netlib/SRC/cpotf2.c
++++ b/lapack-netlib/SRC/cpotf2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cpptrf.c b/lapack-netlib/SRC/cpptrf.c
+index 8919b13..ed027d2 100644
+--- a/lapack-netlib/SRC/cpptrf.c
++++ b/lapack-netlib/SRC/cpptrf.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/cpptri.c b/lapack-netlib/SRC/cpptri.c
+index a83bd4f..172623f 100644
+--- a/lapack-netlib/SRC/cpptri.c
++++ b/lapack-netlib/SRC/cpptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/csptri.c b/lapack-netlib/SRC/csptri.c
+index e904ae0..c28afbb 100644
+--- a/lapack-netlib/SRC/csptri.c
++++ b/lapack-netlib/SRC/csptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/csytri.c b/lapack-netlib/SRC/csytri.c
+index b9edb93..c4678f3 100644
+--- a/lapack-netlib/SRC/csytri.c
++++ b/lapack-netlib/SRC/csytri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/csytri_rook.c b/lapack-netlib/SRC/csytri_rook.c
+index 8d529a7..08d1871 100644
+--- a/lapack-netlib/SRC/csytri_rook.c
++++ b/lapack-netlib/SRC/csytri_rook.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ctgsna.c b/lapack-netlib/SRC/ctgsna.c
+index 0098bba..616845e 100644
+--- a/lapack-netlib/SRC/ctgsna.c
++++ b/lapack-netlib/SRC/ctgsna.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ctrsna.c b/lapack-netlib/SRC/ctrsna.c
+index 4f1e7fc..116e120 100644
+--- a/lapack-netlib/SRC/ctrsna.c
++++ b/lapack-netlib/SRC/ctrsna.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ctrsyl.c b/lapack-netlib/SRC/ctrsyl.c
+index 4461e2e..f080a81 100644
+--- a/lapack-netlib/SRC/ctrsyl.c
++++ b/lapack-netlib/SRC/ctrsyl.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zgbcon.c b/lapack-netlib/SRC/zgbcon.c
+index 7061821..ef2bcfd 100644
+--- a/lapack-netlib/SRC/zgbcon.c
++++ b/lapack-netlib/SRC/zgbcon.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zgesvj.c b/lapack-netlib/SRC/zgesvj.c
+index 0bbd845..6e81208 100644
+--- a/lapack-netlib/SRC/zgesvj.c
++++ b/lapack-netlib/SRC/zgesvj.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zgsvj0.c b/lapack-netlib/SRC/zgsvj0.c
+index 5a868a4..87605ee 100644
+--- a/lapack-netlib/SRC/zgsvj0.c
++++ b/lapack-netlib/SRC/zgsvj0.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zgsvj1.c b/lapack-netlib/SRC/zgsvj1.c
+index a32fae6..aa993e3 100644
+--- a/lapack-netlib/SRC/zgsvj1.c
++++ b/lapack-netlib/SRC/zgsvj1.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhetd2.c b/lapack-netlib/SRC/zhetd2.c
+index 9257ee6..1690aa6 100644
+--- a/lapack-netlib/SRC/zhetd2.c
++++ b/lapack-netlib/SRC/zhetd2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhetri.c b/lapack-netlib/SRC/zhetri.c
+index 9f4ea92..77e2195 100644
+--- a/lapack-netlib/SRC/zhetri.c
++++ b/lapack-netlib/SRC/zhetri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhetri_rook.c b/lapack-netlib/SRC/zhetri_rook.c
+index 1b01c8f..56dec39 100644
+--- a/lapack-netlib/SRC/zhetri_rook.c
++++ b/lapack-netlib/SRC/zhetri_rook.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhgeqz.c b/lapack-netlib/SRC/zhgeqz.c
+index 544fa7d..832f541 100644
+--- a/lapack-netlib/SRC/zhgeqz.c
++++ b/lapack-netlib/SRC/zhgeqz.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhpgst.c b/lapack-netlib/SRC/zhpgst.c
+index 51d65da..0084c16 100644
+--- a/lapack-netlib/SRC/zhpgst.c
++++ b/lapack-netlib/SRC/zhpgst.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhptrd.c b/lapack-netlib/SRC/zhptrd.c
+index e4c4217..72198c6 100644
+--- a/lapack-netlib/SRC/zhptrd.c
++++ b/lapack-netlib/SRC/zhptrd.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zhptri.c b/lapack-netlib/SRC/zhptri.c
+index e1f89ee..5f99b83 100644
+--- a/lapack-netlib/SRC/zhptri.c
++++ b/lapack-netlib/SRC/zhptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlaesy.c b/lapack-netlib/SRC/zlaesy.c
+index 9b753e6..1872d4f 100644
+--- a/lapack-netlib/SRC/zlaesy.c
++++ b/lapack-netlib/SRC/zlaesy.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlahqr.c b/lapack-netlib/SRC/zlahqr.c
+index a926e67..1b85da8 100644
+--- a/lapack-netlib/SRC/zlahqr.c
++++ b/lapack-netlib/SRC/zlahqr.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlaic1.c b/lapack-netlib/SRC/zlaic1.c
+index 95531f9..8dabee2 100644
+--- a/lapack-netlib/SRC/zlaic1.c
++++ b/lapack-netlib/SRC/zlaic1.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlapll.c b/lapack-netlib/SRC/zlapll.c
+index e1fe0e8..fd4dcd0 100644
+--- a/lapack-netlib/SRC/zlapll.c
++++ b/lapack-netlib/SRC/zlapll.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlarfy.c b/lapack-netlib/SRC/zlarfy.c
+index dc9ba62..064a501 100644
+--- a/lapack-netlib/SRC/zlarfy.c
++++ b/lapack-netlib/SRC/zlarfy.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlatbs.c b/lapack-netlib/SRC/zlatbs.c
+index ccc6458..1b74540 100644
+--- a/lapack-netlib/SRC/zlatbs.c
++++ b/lapack-netlib/SRC/zlatbs.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlatdf.c b/lapack-netlib/SRC/zlatdf.c
+index 22b80ea..19039a4 100644
+--- a/lapack-netlib/SRC/zlatdf.c
++++ b/lapack-netlib/SRC/zlatdf.c
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
+ static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
+ 	if(n != 0) {
+-		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
+-		for(u = n; ; ) {
+-			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
+-			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
++			if(u & 01) pow = _Cmulcc(pow, x);
++			if(u >>= 1) x = _Cmulcc(x, x);
+ 			else break;
+ 		}
+ 	}
+-	_Dcomplex p = {pow._Val[0], pow._Val[1]};
+-	return p;
++	return pow;
+ }
+ #else
+ static _Complex double zpow_ui(_Complex double x, integer n) {
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlatps.c b/lapack-netlib/SRC/zlatps.c
+index 4f77604..b6346cf 100644
+--- a/lapack-netlib/SRC/zlatps.c
++++ b/lapack-netlib/SRC/zlatps.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlatrd.c b/lapack-netlib/SRC/zlatrd.c
+index 3628a7b..7f46553 100644
+--- a/lapack-netlib/SRC/zlatrd.c
++++ b/lapack-netlib/SRC/zlatrd.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlatrs.c b/lapack-netlib/SRC/zlatrs.c
+index ad95c05..b723f30 100644
+--- a/lapack-netlib/SRC/zlatrs.c
++++ b/lapack-netlib/SRC/zlatrs.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zlauu2.c b/lapack-netlib/SRC/zlauu2.c
+index 260e004..6b5a519 100644
+--- a/lapack-netlib/SRC/zlauu2.c
++++ b/lapack-netlib/SRC/zlauu2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zpotf2.c b/lapack-netlib/SRC/zpotf2.c
+index d251b47..aad045f 100644
+--- a/lapack-netlib/SRC/zpotf2.c
++++ b/lapack-netlib/SRC/zpotf2.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zpptrf.c b/lapack-netlib/SRC/zpptrf.c
+index 8ca4151..9ef53db 100644
+--- a/lapack-netlib/SRC/zpptrf.c
++++ b/lapack-netlib/SRC/zpptrf.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zpptri.c b/lapack-netlib/SRC/zpptri.c
+index c292eee..6aec5dd 100644
+--- a/lapack-netlib/SRC/zpptri.c
++++ b/lapack-netlib/SRC/zpptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zsptri.c b/lapack-netlib/SRC/zsptri.c
+index 4c27aa1..f3d763d 100644
+--- a/lapack-netlib/SRC/zsptri.c
++++ b/lapack-netlib/SRC/zsptri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zsytri.c b/lapack-netlib/SRC/zsytri.c
+index d945611..46d1c10 100644
+--- a/lapack-netlib/SRC/zsytri.c
++++ b/lapack-netlib/SRC/zsytri.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/zsytri_rook.c b/lapack-netlib/SRC/zsytri_rook.c
+index 872d07f..e91626b 100644
+--- a/lapack-netlib/SRC/zsytri_rook.c
++++ b/lapack-netlib/SRC/zsytri_rook.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ztgsna.c b/lapack-netlib/SRC/ztgsna.c
+index d51cbbf..0fbc46a 100644
+--- a/lapack-netlib/SRC/ztgsna.c
++++ b/lapack-netlib/SRC/ztgsna.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ztrsna.c b/lapack-netlib/SRC/ztrsna.c
+index bbf2a16..1a8cb2f 100644
+--- a/lapack-netlib/SRC/ztrsna.c
++++ b/lapack-netlib/SRC/ztrsna.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+diff --git a/lapack-netlib/SRC/ztrsyl.c b/lapack-netlib/SRC/ztrsyl.c
+index 18a6e9e..9dbae57 100644
+--- a/lapack-netlib/SRC/ztrsyl.c
++++ b/lapack-netlib/SRC/ztrsyl.c
+@@ -281,7 +281,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] -= Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -344,14 +344,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
+ 				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1]
++			zdotc._Val[1] += Cf(&x[i])._Val[1] * Cf(&y[i])._Val[0]
+ 				+ Cf(&x[i])._Val[0] * Cf(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
+ 				- Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[0]
+ 				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
+ 		}
+ 	}
+@@ -379,14 +379,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
+ 				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1]
++			zdotc._Val[1] += Cd(&x[i])._Val[1] * Cd(&y[i])._Val[0]
+ 				+ Cd(&x[i])._Val[0] * Cd(&y[i])._Val[1];
+ 		}
+ 	} else {
+ 		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
+ 			zdotc._Val[0] += Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[0]
+ 				- Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1];
+-			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[1]
++			zdotc._Val[1] += Cd(&x[i*incx])._Val[1] * Cd(&y[i*incy])._Val[0]
+ 				+ Cd(&x[i*incx])._Val[0] * Cd(&y[i*incy])._Val[1];
+ 		}
+ 	}
+-- 
+2.53.0
+
