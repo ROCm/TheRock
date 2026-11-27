@@ -365,8 +365,9 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
     ##############################################################################
 
     # hrr-playback replays archives that the HRR capture code in amdhip64
-    # writes. The HRR test suites are not built here: they are not installable
-    # yet, and the integration suite needs an amdhip64 with capture compiled in.
+    # writes. Only the CPU-only HRR suites are built and installed (to
+    # share/hrr/test); the integration suite needs a GPU or simulator and an
+    # amdhip64 with capture compiled in.
     therock_cmake_subproject_declare(hrr
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hrr"
@@ -378,8 +379,11 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND _hip_clr_enabled)
         amd-hip
       CMAKE_ARGS
         "-DHRR_BUILD_PLAYBACK=ON"
-        "-DHRR_BUILD_TESTS=OFF"
+        "-DHRR_BUILD_TESTS=${THEROCK_BUILD_TESTING}"
+        "-DHRR_INSTALL_TESTS=${THEROCK_BUILD_TESTING}"
         "-DHIP_PLATFORM=amd"
+      BUILD_DEPS
+        therock-catch2
       RUNTIME_DEPS
         hip-clr
     )

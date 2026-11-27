@@ -75,6 +75,12 @@ class TestRetrieveArtifactsByRunId(unittest.TestCase):
         argv = self._run_main(["--hrr"])
         self.assertIn("core-hrr_run", argv)
         self.assertNotIn("core-hrr_lib", argv)
+        self.assertNotIn("core-hrr_test", argv)
+
+    def test_hrr_flag_with_tests_includes_hrr_test(self):
+        argv = self._run_main(["--hrr", "--tests"])
+        self.assertIn("core-hrr_run", argv)
+        self.assertIn("core-hrr_test", argv)
 
     def test_base_only_includes_rocjitsu_hotswap(self):
         argv = self._run_main(["--base-only"])

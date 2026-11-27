@@ -533,6 +533,8 @@ def retrieve_artifacts_by_run_id(args):
         if args.hrr:
             # core-hrr has no _lib component; hrr-playback is in _run.
             argv.append("core-hrr_run")
+            if args.tests:
+                argv.append("core-hrr_test")
         if args.miopen:
             extra_artifacts.append("miopen")
             # Contains bin/MIOpenDriver executable for tests.
