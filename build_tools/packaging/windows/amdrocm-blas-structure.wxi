@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Directory map -->
+    <Directory Id="amdrocm_blas_b" Name="bin" />
+    <Directory Id="amdrocm_blas_s" Name="share">
+      <Directory Id="amdrocm_blas_sd" Name="doc">
+        <Directory Id="amdrocm_blas_sdh" Name="hipblas" />
+        <Directory Id="amdrocm_blas_sdr" Name="rocblas" />
+      </Directory>
+    </Directory>
+</Include>

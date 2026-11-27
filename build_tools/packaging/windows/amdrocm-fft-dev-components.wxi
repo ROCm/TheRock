@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory include\hipfft -->
+  <ComponentGroup Id="cg_amdrocm_fft_dev_ih" Directory="amdrocm_fft_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/hipFFT/dist/include/hipfft/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib -->
+  <ComponentGroup Id="cg_amdrocm_fft_dev_l" Directory="amdrocm_fft_dev_l">
+    <Component Id="c_amdrocm_fft_dev_l_h.lib" Guid="*">
+      <File Id="f_amdrocm_fft_dev_l_h.lib" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/lib/hipfft.lib" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_fft_dev_l_hi.lib" Guid="*">
+      <File Id="f_amdrocm_fft_dev_l_hi.lib" Source="$(var.BuildRoot)/math-libs/hipFFT/dist/lib/hipfftw.lib" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipfft -->
+  <ComponentGroup Id="cg_amdrocm_fft_dev_lch" Directory="amdrocm_fft_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/hipFFT/dist/lib/cmake/hipfft/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\hipfft -->
+  <ComponentGroup Id="cg_amdrocm_fft_dev_sdh" Directory="amdrocm_fft_dev_sdh">
+    <Files Include="$(var.BuildRoot)/math-libs/hipFFT/dist/share/doc/hipfft/*.*" />
+  </ComponentGroup>
+
+</Include>

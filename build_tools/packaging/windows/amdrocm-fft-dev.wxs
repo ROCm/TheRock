@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+xmlns:dep="http://wixtoolset.org/schemas/v4/wxs/dependency"
+xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+<!-- Common settings -->
+<?include common.wxi ?>
+
+<!-- Package components -->
+<Fragment>
+  <?include amdrocm-fft-dev-components.wxi ?>
+</Fragment>
+
+<Package Name="amdrocm-fft-dev" Version="1.0.0.0" Manufacturer="Advanced Micro Devices, Inc." UpgradeCode="380529A3-A467-44E5-9EE5-C94565A9BFEB" Scope="perMachine">
+  <MediaTemplate EmbedCab="yes" />
+
+  <!-- Directory structure -->
+  <StandardDirectory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="AMD\$(var.ProductName)\$(var.ProductVersion)">
+    <?include amdrocm-fft-dev-structure.wxi ?>
+  </Directory>
+  </StandardDirectory>
+  <!-- Feature description -->
+  <Feature Id="amdrocm_fft_dev_files" Title="ROCm FFT Dev Package" Level="1" Display="expand">
+    <?include amdrocm-fft-dev-feature.wxi ?>
+  </Feature>
+  <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER"/>
+</Package>
+</Wix>

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_b" Directory="amdrocm_dnn_dev_b">
+    <Component Id="c_amdrocm_dnn_dev_b_hle.exe" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_b_hle.exe" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/bin/hipdnn_list_engines.exe" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_b_M.exe" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_b_M.exe" Source="$(var.BuildRoot)/ml-libs/MIOpen/dist/bin/MIOpenDriver.exe" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory bin\MIOpen -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_bM" Directory="amdrocm_dnn_dev_bM">
+    <Files Include="$(var.BuildRoot)/ml-libs/MIOpen/dist/bin/MIOpen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\flatbuffers -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_if" Directory="amdrocm_dnn_dev_if">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/flatbuffers/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\half -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ih" Directory="amdrocm_dnn_dev_ih">
+    <Files Include="$(var.BuildRoot)/ml-libs/MIOpen/dist/include/half/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\backend -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihb" Directory="amdrocm_dnn_dev_ihb">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/backend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\data_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihds" Directory="amdrocm_dnn_dev_ihds">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\flatbuffers_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfs" Directory="amdrocm_dnn_dev_ihfs">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/flatbuffers_sdk/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihf" Directory="amdrocm_dnn_dev_ihf">
+    <Component Id="c_amdrocm_dnn_dev_ihf_hf.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihf_hf.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend.hpp" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhf" Directory="amdrocm_dnn_dev_ihfhf">
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_E.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_E.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Error.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_G.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_G.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Graph.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_H.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_H.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Handle.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_L.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_L.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Logging.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_P.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_P.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/PluginPaths.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_T.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_T.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Types.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_U.hpp" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_U.hpp" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/Utilities.hpp" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_ihfhf_v.h" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihfhf_v.h" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/version.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\attributes -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfa" Directory="amdrocm_dnn_dev_ihfhfa">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/attributes/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\detail -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfd" Directory="amdrocm_dnn_dev_ihfhfd">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/detail/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\knob -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfk" Directory="amdrocm_dnn_dev_ihfhfk">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/knob/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\frontend\hipdnn_frontend\node -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihfhfn" Directory="amdrocm_dnn_dev_ihfhfn">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/frontend/hipdnn_frontend/node/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\plugin_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihps" Directory="amdrocm_dnn_dev_ihps">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/plugin_sdk/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshts" Directory="amdrocm_dnn_dev_ihtshts">
+    <Component Id="c_amdrocm_dnn_dev_ihtshts_v.h" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_ihtshts_v.h" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/data_sdk/hipdnn_data_sdk/version.h" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\constants -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsc" Directory="amdrocm_dnn_dev_ihtshtsc">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/constants/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hipdnn\test_sdk\hipdnn_test_sdk\utilities -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_ihtshtsu" Directory="amdrocm_dnn_dev_ihtshtsu">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/hipdnn/test_sdk/hipdnn_test_sdk/utilities/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\miopen -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_im" Directory="amdrocm_dnn_dev_im">
+    <Files Include="$(var.BuildRoot)/ml-libs/MIOpen/dist/include/miopen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\nlohmann -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_in" Directory="amdrocm_dnn_dev_in">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/include/nlohmann/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_l" Directory="amdrocm_dnn_dev_l">
+    <Component Id="c_amdrocm_dnn_dev_l_f.lib" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_l_f.lib" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/flatbuffers.lib" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_l_M.lib" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_l_M.lib" Source="$(var.BuildRoot)/ml-libs/MIOpen/dist/lib/MIOpen.lib" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\flatbuffers -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lcf" Directory="amdrocm_dnn_dev_lcf">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/flatbuffers/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_backend -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchb" Directory="amdrocm_dnn_dev_lchb">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_backend/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_data_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchds" Directory="amdrocm_dnn_dev_lchds">
+    <Component Id="c_amdrocm_dnn_dev_lchds_hds.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchds_hds.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_data_sdk/hipdnn_data_sdkConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchds_hidasd.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchds_hidasd.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_backend/hipdnn_backendConfigVersion.cmake" Name="hipdnn_data_sdkConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchds_hipdatsdk.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchds_hipdatsdk.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_data_sdk/hipdnn_data_sdkTargets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_flatbuffers_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchfs" Directory="amdrocm_dnn_dev_lchfs">
+    <Component Id="c_amdrocm_dnn_dev_lchfs_hfs.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchfs_hfs.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchfs_hiflsd.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchfs_hiflsd.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_backend/hipdnn_backendConfigVersion.cmake" Name="hipdnn_flatbuffers_sdkConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchfs_hipflasdk.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchfs_hipflasdk.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_sdkTargets.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchfs_hfvc.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchfs_hfvc.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_flatbuffers_sdk/hipdnn_flatbuffers_version_check.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_frontend -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchf" Directory="amdrocm_dnn_dev_lchf">
+    <Component Id="c_amdrocm_dnn_dev_lchf_hf.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchf_hf.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_frontend/hipdnn_frontendConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchf_hifr.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchf_hifr.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_backend/hipdnn_backendConfigVersion.cmake" Name="hipdnn_frontendConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchf_hipfro.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchf_hipfro.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_frontend/hipdnn_frontendTargets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_integration_tests -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchit" Directory="amdrocm_dnn_dev_lchit">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipdnn_integration_tests/dist/lib/cmake/hipdnn_integration_tests/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_plugin_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchps" Directory="amdrocm_dnn_dev_lchps">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_plugin_sdk/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hipdnn_test_sdk -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lchts" Directory="amdrocm_dnn_dev_lchts">
+    <Component Id="c_amdrocm_dnn_dev_lchts_hts.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchts_hts.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_test_sdk/hipdnn_test_sdkConfig.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchts_hitesd.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchts_hitesd.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_backend/hipdnn_backendConfigVersion.cmake" Name="hipdnn_test_sdkConfigVersion.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_dnn_dev_lchts_hiptessdk.cmake" Guid="*">
+      <File Id="f_amdrocm_dnn_dev_lchts_hiptessdk.cmake" Source="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/cmake/hipdnn_test_sdk/hipdnn_test_sdkTargets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\miopen -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lcm" Directory="amdrocm_dnn_dev_lcm">
+    <Files Include="$(var.BuildRoot)/ml-libs/MIOpen/dist/lib/cmake/miopen/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\pkgconfig -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_lp" Directory="amdrocm_dnn_dev_lp">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/lib/pkgconfig/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\cmake -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_sc" Directory="amdrocm_dnn_dev_sc">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/share/cmake/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\miopen-hip -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_sdmh" Directory="amdrocm_dnn_dev_sdmh">
+    <Files Include="$(var.BuildRoot)/ml-libs/MIOpen/dist/share/doc/miopen-hip/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\pkgconfig -->
+  <ComponentGroup Id="cg_amdrocm_dnn_dev_sp" Directory="amdrocm_dnn_dev_sp">
+    <Files Include="$(var.BuildRoot)/ml-libs/hipDNN/dist/share/pkgconfig/*.*" />
+  </ComponentGroup>
+
+</Include>

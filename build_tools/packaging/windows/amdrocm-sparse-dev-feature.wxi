@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_bh" />
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_ih" />
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_ir" />
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_l" />
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_lch" />
+  <ComponentGroupRef Id="cg_amdrocm_sparse_dev_lcr" />
+</Include>

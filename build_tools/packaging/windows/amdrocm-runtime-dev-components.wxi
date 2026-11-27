@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory cmake -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_c" Directory="amdrocm_runtime_dev_c">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/cmake/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\hip -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_ih" Directory="amdrocm_runtime_dev_ih">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/include/hip/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory include\rocm_kpack -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_irk" Directory="amdrocm_runtime_dev_irk">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/include/rocm_kpack/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hip-lang -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_lchl" Directory="amdrocm_runtime_dev_lchl">
+    <Component Id="c_amdrocm_runtime_dev_lchl_hlcv.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_lchl_hlcv.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip/hip-config-version.cmake" Name="hip-lang-config-version.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_lchl_hlc.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_lchl_hlc.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip-lang/hip-lang-config.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_lchl_hltr.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_lchl_hltr.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip-lang/hip-lang-targets-release.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_lchl_hlt.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_lchl_hlt.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip-lang/hip-lang-targets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hip -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_lch" Directory="amdrocm_runtime_dev_lch">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\hiprtc -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_licmhi" Directory="amdrocm_runtime_dev_licmhi">
+    <Component Id="c_amdrocm_runtime_dev_licmhi_hcv.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_licmhi_hcv.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hip/hip-config-version.cmake" Name="hiprtc-config-version.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_licmhi_hc.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_licmhi_hc.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hiprtc/hiprtc-config.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_licmhi_htr.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_licmhi_htr.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hiprtc/hiprtc-targets-release.cmake" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_dev_licmhi_ht.cmake" Guid="*">
+      <File Id="f_amdrocm_runtime_dev_licmhi_ht.cmake" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/hiprtc/hiprtc-targets.cmake" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\libhipcxx -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_lcl" Directory="amdrocm_runtime_dev_lcl">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/libhipcxx/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocm-core -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_lcrc" Directory="amdrocm_runtime_dev_lcrc">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/rocm-core/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory lib\cmake\rocm-kpack -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_lcrk" Directory="amdrocm_runtime_dev_lcrk">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/lib/cmake/rocm-kpack/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share\doc\rocm-core -->
+  <ComponentGroup Id="cg_amdrocm_runtime_dev_sdrc" Directory="amdrocm_runtime_dev_sdrc">
+    <Files Include="$(var.BuildRoot)/math-libs/libhipcxx/dist/share/doc/rocm-core/*.*" />
+  </ComponentGroup>
+
+</Include>

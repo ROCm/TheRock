@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<!-- Components -->
+
+  <!-- Contents of directory bin -->
+  <ComponentGroup Id="cg_amdrocm_runtime_b" Directory="amdrocm_runtime_b">
+    <Component Id="c_amdrocm_runtime_b_ac.dll" Guid="*">
+      <File Id="f_amdrocm_runtime_b_ac.dll" Source="$(var.BuildRoot)/compiler/amd-comgr/dist/bin/amd_comgr.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_b_a7.dll" Guid="*">
+      <File Id="f_amdrocm_runtime_b_a7.dll" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/bin/amdhip64_7.dll" KeyPath="yes" />
+    </Component>
+    <Component Id="c_amdrocm_runtime_b_rk.dll" Guid="*">
+      <File Id="f_amdrocm_runtime_b_rk.dll" Source="$(var.BuildRoot)/math-libs/libhipcxx/dist/bin/rocm_kpack.dll" KeyPath="yes" />
+    </Component>
+  </ComponentGroup>
+
+  <!-- Contents of directory include -->
+  <ComponentGroup Id="cg_amdrocm_runtime_i" Directory="amdrocm_runtime_i">
+    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/include/**/*.*" />
+  </ComponentGroup>
+
+  <!-- Contents of directory share -->
+  <ComponentGroup Id="cg_amdrocm_runtime_s" Directory="amdrocm_runtime_s">
+    <Files Include="$(var.BuildRoot)/compiler/amd-comgr/dist/share/**/*.*" />
+  </ComponentGroup>
+
+</Include>
