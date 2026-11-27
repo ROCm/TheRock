@@ -1,0 +1,46 @@
+From 3aa4181bc2793d370a871ef0c2089197cfe06fa2 Mon Sep 17 00:00:00 2001
+From: benrichard-amd <ben.richard@amd.com>
+Date: Fri, 27 Nov 2026 16:25:06 +0000
+Subject: [PATCH] rocjitsu: suppress GCC 15 -Werror=array-bounds on ppc64le
+ tests
+
+GCC 15's array-bounds analysis trips a false positive in libstdc++
+std::uninitialized_* inlining of rocjitsu's SIMD/vector code
+(util::native<T>) when building the tests (e.g. cdna5_instruction_test.cpp),
+failing the -Werror build. x86_64 does not hit it.
+
+rocjitsu already suppresses the sibling GCC 15 -Wmaybe-uninitialized false
+positive in the GCC>=15 block; add -Wno-error=array-bounds there but guarded
+to ppc64 targets only, so x86 keeps array-bounds fatal and the warning stays
+visible. Mirrors the rocprofiler-sdk -Wstack-exhausted patch (0007).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ emulation/rocjitsu/cmake/rj_configure_target.cmake | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/emulation/rocjitsu/cmake/rj_configure_target.cmake b/emulation/rocjitsu/cmake/rj_configure_target.cmake
+index 041295fc2dc..6a7e178b25f 100644
+--- a/emulation/rocjitsu/cmake/rj_configure_target.cmake
++++ b/emulation/rocjitsu/cmake/rj_configure_target.cmake
+@@ -92,6 +92,17 @@ function(rj_configure_target target)
+                     ${target}
+                     PRIVATE -Wno-error=maybe-uninitialized
+                 )
++                # ppc64le only: GCC 15's array-bounds analysis trips a
++                # false positive in libstdc++ std::uninitialized_* inlining
++                # of rocjitsu's SIMD/vector code (util::native<T>), which
++                # x86_64 does not hit. Demote from error on ppc64 targets
++                # only; the warning stays visible.
++                if(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
++                    target_compile_options(
++                        ${target}
++                        PRIVATE -Wno-error=array-bounds
++                    )
++                endif()
+             endif()
+         endif()
+     endif()
+-- 
+2.53.0
+
