@@ -167,19 +167,21 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
             self.assertIn(text, markdown)
 
     def test_nested_target_workflow_names_match_expected_samples(self):
-        job = self.job(name=f"linux gfx120X-all / {self.job()['name']}")
-        report = self.report([job])
-        self.assertEqual(report["counts"], {"passed": 1})
-        self.assertEqual(report["unexpected_jobs"], [])
-        self.assertFalse(report["incomplete"])
+        for prefix in ("linux gfx120X-all", "linux gfx120X-all / rocblas"):
+            with self.subTest(prefix=prefix):
+                job = self.job(name=f"{prefix} / {self.job()['name']}")
+                report = self.report([job])
+                self.assertEqual(report["counts"], {"passed": 1})
+                self.assertEqual(report["unexpected_jobs"], [])
+                self.assertFalse(report["incomplete"])
 
-        unexpected = self.job(
-            id=456,
-            name=job["name"].replace("gfx120x-1", "gfx120x-2"),
-        )
-        report = self.report([job, unexpected])
-        self.assertEqual(report["unexpected_jobs"], [unexpected])
-        self.assertTrue(report["incomplete"])
+                unexpected = self.job(
+                    id=456,
+                    name=job["name"].replace("gfx120x-1", "gfx120x-2"),
+                )
+                report = self.report([job, unexpected])
+                self.assertEqual(report["unexpected_jobs"], [unexpected])
+                self.assertTrue(report["incomplete"])
 
     def test_report_explains_automatically_omitted_platforms(self):
         self.manifest["omitted_platforms"] = ["windows"]
@@ -214,7 +216,7 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
                         self.job(
                             test="failure" if backend == "ROCR" else "success",
                             id=len(jobs) + 1,
-                            name=f"windows gfx120X-all / {sample}"
+                            name=f"windows gfx120X-all / {component} / {sample}"
                             f" / Test {component} (shard {shard}/2) (gfx120X-all)",
                         )
                     )

@@ -224,10 +224,6 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
             ]
             if not components:
                 raise ValueError(f"No selected components for {family}/{platform}")
-            if repetitions * len(components) > 256:
-                raise ValueError(
-                    f"{family}/{platform}: repetitions × components exceeds 256"
-                )
             target_key = f"{platform}_{key}"
             matrices[target_key] = {
                 "iteration": list(range(1, repetitions + 1)),
@@ -241,6 +237,12 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
                     "components": components,
                 }
             )
+            # Each component gets its own outer matrix entry. Repetitions run
+            # in a separate inner matrix (at most 100 entries per component).
+            if sum(len(target["components"]) for target in targets) > 256:
+                raise ValueError(
+                    "Selected family/platform/component combinations exceed 256"
+                )
             for component in components:
                 # Artifacts belong to rockrel, while the test harness checkout
                 # belongs to TheRock. The installer otherwise queries TheRock
@@ -347,11 +349,18 @@ def write_repetition_outputs(environment: dict[str, str], manifest_path: Path) -
                 "family": target["family"],
                 "family_key": target["family_key"],
                 "platform": target["platform"],
-                "repetition_matrix": matrices[
-                    f"{target['platform']}_{target['family_key']}"
-                ],
+                "component": component["job_name"],
+                # A separate workflow call for each component lets it advance
+                # through repetitions without waiting for other components.
+                "repetition_matrix": {
+                    "iteration": matrices[
+                        f"{target['platform']}_{target['family_key']}"
+                    ]["iteration"],
+                    "component": [component],
+                },
             }
             for target in manifest["targets"]
+            for component in target["components"]
         ]
     }
     outputs = {"target_matrix": json.dumps(target_matrix, separators=(",", ":"))}

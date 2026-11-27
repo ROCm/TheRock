@@ -110,12 +110,12 @@ jobs:
           if-no-files-found: error
 
   repeat:
-    name: ${{ matrix.platform }} ${{ matrix.family }}
+    name: ${{ matrix.platform }} ${{ matrix.family }} / ${{ matrix.component }}
     needs: configure
     strategy:
       fail-fast: false
-      # Only selected targets are expanded. Per-target serialization lives in
-      # the called workflow, allowing different targets to run concurrently.
+      # Each selected component/target starts independently. The called
+      # workflow serializes only that component's repetitions.
       matrix: ${{ fromJSON(needs.configure.outputs.target_matrix) }}
     uses: ./.github/workflows/test_component_repetition_target.yml
     # Maintainer-dispatched campaigns use the existing Quartz credentials.

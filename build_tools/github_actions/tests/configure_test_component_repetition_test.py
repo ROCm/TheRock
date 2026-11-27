@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import amdgpu_family_matrix
 import baseline_runs
@@ -139,9 +141,26 @@ class ComponentRepetitionPlanTest(unittest.TestCase):
                 matrix["component"][0]["test_runner"],
                 f"triage-{target.replace('_', '-')}",
             )
-        self.assertRaisesRegex(ValueError, "exceeds 256", self.plan, REPETITIONS="100")
-        _, manifest = self.plan(REPETITIONS="85")
-        self.assertEqual(len(manifest["expected"]), 510)
+        _, manifest = self.plan(REPETITIONS="100")
+        self.assertEqual(len(manifest["expected"]), 600)
+
+    def test_component_matrix_limit_is_across_all_targets(self):
+        def components(*, family, platform, environment):
+            return [
+                dict(
+                    self.component,
+                    job_name=f"component{i}",
+                    test_runner=f"triage-{platform}-gfx120x",
+                )
+                for i in range(129)
+            ]
+
+        self.components.side_effect = components
+        _, manifest = self.plan()
+        self.assertEqual(len(manifest["expected"]), 516)
+        self.assertRaisesRegex(
+            ValueError, "combinations exceed 256", self.plan, PLATFORMS=""
+        )
 
     def test_custom_routing_and_missing_configuration(self):
         for overrides, runner in (
@@ -430,7 +449,24 @@ def load_config(version, config_path):
     def test_selected_target_output_preserves_each_nested_matrix(self):
         def components(*, family, platform, environment):
             key = family.lower().split("-")[0]
-            return [dict(self.component, test_runner=f"triage-{platform}-{key}")]
+            if platform == "windows":
+                return [
+                    dict(
+                        self.component,
+                        job_name=f"hip-tests ({backend})",
+                        gpu_enable_pal=pal,
+                        test_runner=f"triage-{platform}-{key}",
+                    )
+                    for backend, pal in (("PAL", "1"), ("ROCR", "0"))
+                ]
+            return [
+                dict(
+                    self.component,
+                    job_name=name,
+                    test_runner=f"triage-{platform}-{key}",
+                )
+                for name in ("hip-tests", "amdsmi", "rocprofiler-systems")
+            ]
 
         self.components.side_effect = components
         self.mock(
@@ -459,6 +495,7 @@ def load_config(version, config_path):
             path,
         )
         targets = json.loads(outputs.call_args.args[0]["target_matrix"])["include"]
+        self.assertEqual(len(targets), 15)
         self.assertEqual(
             {(target["platform"], target["family_key"]) for target in targets},
             {
@@ -471,7 +508,14 @@ def load_config(version, config_path):
         for target in targets:
             matrix = target["repetition_matrix"]
             self.assertEqual(matrix["iteration"], [1, 2])
+            self.assertEqual(len(matrix["component"]), 1)
             component = matrix["component"][0]
+            self.assertEqual(target["component"], component["job_name"])
+            if target["platform"] == "windows":
+                self.assertEqual(
+                    component["gpu_enable_pal"],
+                    "1" if component["job_name"] == "hip-tests (PAL)" else "0",
+                )
             self.assertEqual(component["shard_arr"], [1, 2])
             self.assertEqual(
                 component["test_runner"],
@@ -485,6 +529,29 @@ def load_config(version, config_path):
                 )
         manifest = json.loads(path.read_text())
         self.assertEqual(samples, {row["sample_id"] for row in manifest["expected"]})
+        self.assertEqual(len(samples), 30)
+        self.assertEqual(len(manifest["expected"]), 60)
+        self.assertEqual(
+            len({(t["platform"], t["family_key"], t["component"]) for t in targets}),
+            len(targets),
+        )
+
+    def test_workflows_serialize_each_component_without_a_shared_barrier(self):
+        workflows = Path(__file__).resolve().parents[3] / ".github" / "workflows"
+        caller = yaml.safe_load(
+            (workflows / "test_component_repetition.yml").read_text()
+        )
+        repeat = caller["jobs"]["repeat"]
+        # All component sequences depend only on configuration, not each other.
+        self.assertEqual(repeat["needs"], "configure")
+        self.assertNotIn("max-parallel", repeat["strategy"])
+        self.assertFalse(repeat["strategy"]["fail-fast"])
+        callee = yaml.safe_load((workflows / Path(repeat["uses"]).name).read_text())[
+            "jobs"
+        ]["repeat"]
+        self.assertEqual(callee["strategy"]["max-parallel"], 1)
+        self.assertFalse(callee["strategy"]["fail-fast"])
+        self.assertEqual(callee["uses"], "./.github/workflows/test_component.yml")
 
 
 if __name__ == "__main__":

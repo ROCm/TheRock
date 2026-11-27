@@ -1,13 +1,13 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-name: Repeat component tests for selected target
+name: Repeat one component for selected target
 
 on:
   workflow_call:
     inputs:
       repetition_matrix:
-        description: "Resolved component and iteration matrix for this target."
+        description: "Resolved iteration matrix containing one component for this target."
         type: string
         required: true
       artifact_run_id:
@@ -41,8 +41,9 @@ permissions:
 jobs:
   repeat:
     name: repeat-${{ inputs.platform }}-${{ inputs.family_key }}-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    # Serialize samples within this target while other selected targets run
-    # independently. The component workflow still runs each sample's shards.
+    # Each call contains one component. Advance when its previous repetition
+    # completes, while other components and targets run independently.
+    # The component workflow still runs each repetition's shards in parallel.
     strategy:
       fail-fast: false
       max-parallel: 1
