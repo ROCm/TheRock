@@ -18,6 +18,8 @@ from _therock_utils.s3_buckets import (
     get_release_package_index_url,
     get_release_stream,
     get_release_bucket_config,
+    get_release_tarball_index_url,
+    parse_rocm_version_prefix,
 )
 
 
@@ -392,6 +394,96 @@ class TestGetArtifactsBucketConfigForWorkflowRun(unittest.TestCase):
         )
         self.mock_api.assert_not_called()
         self.assertEqual(config.name, "therock-ci-artifacts")
+
+
+class TestParseRocmVersionPrefix(unittest.TestCase):
+    def test_reads_the_major_and_minor_of_each_published_version_form(self):
+        cases = {
+            "10.1.0a20260901": (10, 1),
+            "10.0.0rc4": (10, 0),
+            "7.14.1": (7, 14),
+            "10.1.0.dev0+cf046a2": (10, 1),
+        }
+        for version, expected in cases.items():
+            with self.subTest(version=version):
+                self.assertEqual(parse_rocm_version_prefix(version), expected)
+
+    def test_rejects_a_version_without_a_major_minor_prefix(self):
+        for version in ("nonsense", "10", "10.1"):
+            with self.subTest(version=version):
+                with self.assertRaises(ValueError):
+                    parse_rocm_version_prefix(version)
+
+
+class TestGetReleaseTarballIndexUrl(unittest.TestCase):
+    """Resolving a version to the index that publishes its tarballs.
+
+    The cutoffs follow RELEASES.md: the repo.amd.com product layout starts at
+    ROCm 10.1 for nightly, dev and prerelease, and at ROCm 10.0 for stable.
+    """
+
+    def test_product_layout_index_without_a_version(self):
+        cases = {
+            "dev": "https://dev.repo.amd.com/rocm/core/tarball",
+            "nightly": "https://nightly.repo.amd.com/rocm/core/tarball",
+            "prerelease": "https://rc.repo.amd.com/rocm/core/tarball",
+            "release": "https://stable.repo.amd.com/rocm/core/tarball",
+        }
+        for release_type, expected in cases.items():
+            with self.subTest(release_type=release_type):
+                self.assertEqual(get_release_tarball_index_url(release_type), expected)
+
+    def test_versions_in_the_product_layout(self):
+        cases = {
+            ("dev", "10.1.0.dev0+cf046a2"): (
+                "https://dev.repo.amd.com/rocm/core/tarball"
+            ),
+            ("nightly", "10.1.0a20260901"): (
+                "https://nightly.repo.amd.com/rocm/core/tarball"
+            ),
+            ("prerelease", "10.1.0rc0"): "https://rc.repo.amd.com/rocm/core/tarball",
+            ("release", "10.0.0"): "https://stable.repo.amd.com/rocm/core/tarball",
+        }
+        for (release_type, version), expected in cases.items():
+            with self.subTest(release_type=release_type, version=version):
+                self.assertEqual(
+                    get_release_tarball_index_url(release_type, version), expected
+                )
+
+    def test_versions_still_served_from_a_legacy_index(self):
+        cases = {
+            ("prerelease", "10.0.0rc4"): (
+                "https://rocm.prereleases.amd.com/tarball-multi-arch"
+            ),
+            ("prerelease", "7.13.0rc2"): (
+                "https://rocm.prereleases.amd.com/tarball-multi-arch"
+            ),
+            ("release", "7.14.1"): "https://repo.amd.com/rocm/tarball-multi-arch",
+        }
+        for (release_type, version), expected in cases.items():
+            with self.subTest(release_type=release_type, version=version):
+                self.assertEqual(
+                    get_release_tarball_index_url(release_type, version), expected
+                )
+
+    def test_versions_only_in_a_frozen_legacy_index_are_refused(self):
+        for release_type, version in (
+            ("nightly", "7.15.0a20260728"),
+            ("dev", "7.15.0.dev0+deadbeef"),
+        ):
+            with self.subTest(release_type=release_type, version=version):
+                with self.assertRaises(ValueError) as raised:
+                    get_release_tarball_index_url(release_type, version)
+                self.assertIn(
+                    "docs/packaging/legacy_multi_arch_releases.md",
+                    str(raised.exception),
+                )
+
+    def test_release_types_without_a_published_tarball_index(self):
+        for release_type in ("dev-bkc", "nightly-bkc", "ci", "nonsense"):
+            with self.subTest(release_type=release_type):
+                with self.assertRaises(ValueError):
+                    get_release_tarball_index_url(release_type, "10.1.0")
 
 
 if __name__ == "__main__":
