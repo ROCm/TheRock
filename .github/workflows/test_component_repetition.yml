@@ -11,7 +11,7 @@ on:
         type: string
         required: true
       platform:
-        description: "linux, windows, or linux,windows. Empty selects both."
+        description: "linux, windows, or linux,windows. Empty selects platforms supported by the chosen tests."
         type: string
         default: ""
       amdgpu_targets:
@@ -68,13 +68,7 @@ jobs:
       actions: read
     outputs:
       artifact_run_id: ${{ steps.configure.outputs.artifact_run_id }}
-      enabled_targets: ${{ steps.configure.outputs.enabled_targets }}
-      linux_gfx120x: ${{ steps.configure.outputs.linux_gfx120x }}
-      linux_gfx110x: ${{ steps.configure.outputs.linux_gfx110x }}
-      linux_gfx1151: ${{ steps.configure.outputs.linux_gfx1151 }}
-      windows_gfx120x: ${{ steps.configure.outputs.windows_gfx120x }}
-      windows_gfx110x: ${{ steps.configure.outputs.windows_gfx110x }}
-      windows_gfx1151: ${{ steps.configure.outputs.windows_gfx1151 }}
+      target_matrix: ${{ steps.configure.outputs.target_matrix }}
     steps:
       - name: Checkout TheRock
         timeout-minutes: 5
@@ -115,140 +109,24 @@ jobs:
           path: component-repetition/manifest.json
           if-no-files-found: error
 
-  linux_gfx120x:
-    name: repeat-linux-gfx120x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+  repeat:
+    name: ${{ matrix.platform }} ${{ matrix.family }}
     needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx120x') }}
     strategy:
       fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx120x || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
+      # Only selected targets are expanded. Per-target serialization lives in
+      # the called workflow, allowing different targets to run concurrently.
+      matrix: ${{ fromJSON(needs.configure.outputs.target_matrix) }}
+    uses: ./.github/workflows/test_component_repetition_target.yml
+    # Maintainer-dispatched campaigns use the existing Quartz credentials.
     secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
+      repetition_matrix: ${{ toJSON(matrix.repetition_matrix) }}
       artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx120X-all
+      amdgpu_families: ${{ matrix.family }}
+      family_key: ${{ matrix.family_key }}
       amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: linux
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      build_variant: ${{ inputs.build_variant }}
-
-  linux_gfx110x:
-    name: repeat-linux-gfx110x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx110x') }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx110x || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx110X-all
-      amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: linux
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      build_variant: ${{ inputs.build_variant }}
-
-  linux_gfx1151:
-    name: repeat-linux-gfx1151-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'linux_gfx1151') }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.linux_gfx1151 || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx1151
-      amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: linux
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      build_variant: ${{ inputs.build_variant }}
-
-  windows_gfx120x:
-    name: repeat-windows-gfx120x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx120x') }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx120x || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx120X-all
-      amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: windows
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      build_variant: ${{ inputs.build_variant }}
-
-  windows_gfx110x:
-    name: repeat-windows-gfx110x-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx110x') }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx110x || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx110X-all
-      amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: windows
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-      build_variant: ${{ inputs.build_variant }}
-
-  windows_gfx1151:
-    name: repeat-windows-gfx1151-${{ matrix.iteration }}-${{ matrix.component.job_name }}
-    needs: configure
-    if: ${{ contains(fromJSON(needs.configure.outputs.enabled_targets || '[]'), 'windows_gfx1151') }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix: ${{ fromJSON(needs.configure.outputs.windows_gfx1151 || '{"include":[]}') }}
-    uses: ./.github/workflows/test_component.yml
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    with:
-      artifact_run_id: ${{ needs.configure.outputs.artifact_run_id }}
-      artifact_group: multi-arch-release
-      amdgpu_families: gfx1151
-      amdgpu_targets: ${{ inputs.amdgpu_targets }}
-      platform: windows
-      component: ${{ toJSON(matrix.component) }}
-      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
-      release_type: nightly
+      platform: ${{ matrix.platform }}
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
       build_variant: ${{ inputs.build_variant }}
@@ -256,7 +134,7 @@ jobs:
   summarize:
     name: Summarize component repetitions
     if: ${{ always() }}
-    needs: [configure, linux_gfx120x, linux_gfx110x, linux_gfx1151, windows_gfx120x, windows_gfx110x, windows_gfx1151]
+    needs: [configure, repeat]
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:

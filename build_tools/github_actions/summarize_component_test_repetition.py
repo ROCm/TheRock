@@ -55,6 +55,24 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
     observed = defaultdict(list)
     unexpected = []
     for job in jobs:
+        # Disabled caller jobs retain their unevaluated matrix expressions.
+        # Ignore only skipped, empty placeholders for targets absent from the
+        # manifest; skipped requested executions must still be accounted for.
+        placeholder = re.fullmatch(
+            r"(repeat-(?:linux|windows)-(?:gfx120x|gfx110x|gfx1151))"
+            r"-\$\{\{ matrix\.iteration \}\}-\$\{\{ matrix\.component\.job_name \}\}",
+            job["name"],
+        )
+        if (
+            placeholder
+            and job.get("conclusion") == "skipped"
+            and job.get("steps") == []
+            and not any(
+                execution["sample_id"].startswith(placeholder[1] + "-")
+                for execution in expected
+            )
+        ):
+            continue
         # Reusable-workflow jobs are named "<caller name> / <child job name>".
         # The caller name contains the target, iteration, and component identity.
         match = re.search(
@@ -115,6 +133,7 @@ def summarize_jobs(manifest: dict, jobs: list[dict]) -> dict:
         "therock_sha": manifest.get("therock_sha"),
         "ci_config_sha": manifest.get("ci_config_sha"),
         "test_type": manifest.get("test_type"),
+        "omitted_platforms": manifest.get("omitted_platforms", []),
         "repetitions": manifest.get("repetitions"),
         "counts": dict(Counter(result["outcome"] for result in results)),
         "results": results,
@@ -139,6 +158,15 @@ def render_report(report: dict, *, include_details: bool = True) -> str:
                 f"Baseline: [{baseline['run_id']}]({baseline['url']})",
                 f"TheRock SHA: `{report['therock_sha']}`",
                 f"CI-config SHA: `{report['ci_config_sha']}`",
+                "",
+            ]
+        )
+    if report.get("omitted_platforms"):
+        lines.extend(
+            [
+                "Platforms omitted because the selected tests have no configured tests there: "
+                + ", ".join(report["omitted_platforms"])
+                + ".",
                 "",
             ]
         )

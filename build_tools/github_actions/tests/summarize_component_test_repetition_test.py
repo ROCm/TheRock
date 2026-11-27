@@ -92,6 +92,61 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
                 self.assertEqual(len(report["unexpected_jobs"]), 1)
                 self.assertTrue(report["incomplete"])
 
+    def test_disabled_target_placeholders_do_not_make_report_incomplete(self):
+        placeholders = [
+            self.job(
+                test=None,
+                conclusion="skipped",
+                id=456 + index,
+                name=f"repeat-{target}-${{{{ matrix.iteration }}}}"
+                "-${{ matrix.component.job_name }}",
+            )
+            for index, target in enumerate(
+                (
+                    "linux-gfx110x",
+                    "linux-gfx1151",
+                    "windows-gfx110x",
+                    "windows-gfx120x",
+                    "windows-gfx1151",
+                )
+            )
+        ]
+        report = self.report([self.job(), *placeholders])
+        self.assertEqual(report["counts"], {"passed": 1})
+        self.assertEqual(report["unexpected_jobs"], [])
+        self.assertFalse(report["incomplete"])
+
+        report = self.report(placeholders)
+        self.assertEqual(report["counts"], {"missing": 1})
+        self.assertTrue(report["incomplete"])
+
+    def test_placeholder_filter_preserves_unexpected_executions(self):
+        placeholder = self.job(
+            test=None,
+            conclusion="skipped",
+            id=456,
+            name="repeat-windows-gfx120x-${{ matrix.iteration }}"
+            "-${{ matrix.component.job_name }}",
+        )
+        for overrides in (
+            {"conclusion": "cancelled"},
+            {"conclusion": "failure"},
+            {"steps": [dict(name="Setup", conclusion="success")]},
+            {"name": placeholder["name"].replace("windows", "linux")},
+            {"name": "repeat-windows-gfx120x-1-rocblas"},
+            {"name": placeholder["name"].replace("gfx120x", "gfx950")},
+            {"name": placeholder["name"] + " / unexpected child"},
+        ):
+            with self.subTest(overrides=overrides):
+                unexpected = placeholder | overrides
+                report = self.report([self.job(), unexpected])
+                self.assertEqual(report["unexpected_jobs"], [unexpected])
+                self.assertTrue(report["incomplete"])
+
+        report = self.report([self.job(test="skipped", conclusion="skipped")])
+        self.assertEqual(report["counts"], {"test_not_run": 1})
+        self.assertTrue(report["incomplete"])
+
     def test_iterations_shards_and_report_context(self):
         self.manifest["expected"] += [
             dict(self.execution, shard=2),
@@ -110,6 +165,32 @@ class ComponentRepetitionSummaryTest(unittest.TestCase):
             "individual tests and initial retry attempts are not measured",
         ):
             self.assertIn(text, markdown)
+
+    def test_nested_target_workflow_names_match_expected_samples(self):
+        job = self.job(name=f"linux gfx120X-all / {self.job()['name']}")
+        report = self.report([job])
+        self.assertEqual(report["counts"], {"passed": 1})
+        self.assertEqual(report["unexpected_jobs"], [])
+        self.assertFalse(report["incomplete"])
+
+        unexpected = self.job(
+            id=456,
+            name=job["name"].replace("gfx120x-1", "gfx120x-2"),
+        )
+        report = self.report([job, unexpected])
+        self.assertEqual(report["unexpected_jobs"], [unexpected])
+        self.assertTrue(report["incomplete"])
+
+    def test_report_explains_automatically_omitted_platforms(self):
+        self.manifest["omitted_platforms"] = ["windows"]
+        report = self.report([self.job()])
+        report["run_attempt"] = 1
+        self.assertEqual(report["omitted_platforms"], ["windows"])
+        self.assertFalse(report["incomplete"])
+        self.assertIn(
+            "Platforms omitted because the selected tests have no configured tests there: windows.",
+            summary.render_report(report),
+        )
 
     def test_pagination_reads_all_pages_of_current_attempt(self):
         pages = [{"jobs": [{"id": p * 100 + i} for i in range(100)]} for p in range(11)]

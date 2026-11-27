@@ -19,7 +19,7 @@ from amdgpu_family_matrix import (
 from fetch_package_targets import determine_package_targets
 from github_actions_api import gha_set_output
 
-# Each family/platform has a separate caller job so its repetition matrix can
+# Each selected family/platform has its own repetition matrix so it can
 # execute serially without serializing the other triage targets.
 REPETITION_FAMILIES = {
     "gfx120x": "gfx120X-all",
@@ -86,7 +86,7 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
     """Resolve a bounded pilot using the existing package and test helpers.
 
     Required environment: AMDGPU_FAMILIES, TEST_LABELS, CI_CONFIG_PATH.
-    Optional: PLATFORMS (empty means both), REPETITIONS (20), AMDGPU_TARGETS,
+    Optional: PLATFORMS (empty selects supported platforms), REPETITIONS (20), AMDGPU_TARGETS,
     BUILD_VARIANT (release), TEST_TYPE (comprehensive).
     CI_CONFIG_PATH must be a pinned triage checkout.
     """
@@ -121,7 +121,8 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
             keys.append(key)
     if environment.get("AMDGPU_TARGETS") and len(keys) != 1:
         raise ValueError("AMDGPU_TARGETS requires a single family")
-    platforms = _csv_values(environment.get("PLATFORMS", "")) or ["linux", "windows"]
+    requested_platforms = _csv_values(environment.get("PLATFORMS", ""))
+    platforms = requested_platforms or ["linux", "windows"]
     if any(p not in ("linux", "windows") for p in platforms):
         raise ValueError("PLATFORMS must contain linux and/or windows")
     labels = _parse_test_labels(environment.get("TEST_LABELS", ""))
@@ -131,6 +132,36 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
         for label in labels
     ):
         raise ValueError("TEST_LABELS must select known test: component labels")
+
+    selected_components = {
+        member
+        for label in labels
+        for member in TEST_LABEL_GROUPS.get(label[5:], [label[5:]])
+    }
+    supported_platforms = {
+        platform
+        for name, component in test_matrix.items()
+        if component.get("base_project", name) in selected_components
+        for platform in component["platform"]
+    }
+    omitted_platforms = [p for p in platforms if p not in supported_platforms]
+    if requested_platforms and omitted_platforms:
+        supported = (
+            ", ".join(p for p in ("linux", "windows") if p in supported_platforms)
+            or "none"
+        )
+        raise ValueError(
+            f"Selected tests ({', '.join(labels)}) have no configured tests for "
+            f"platform(s): {', '.join(omitted_platforms)}. "
+            f"Supported pilot platforms: {supported}. "
+            "Leave PLATFORMS empty to select supported platforms automatically."
+        )
+    platforms = [p for p in platforms if p in supported_platforms]
+    if not platforms:
+        raise ValueError(
+            f"Selected tests ({', '.join(labels)}) have no configured tests "
+            "on the pilot platforms (linux, windows)"
+        )
 
     config_path = Path(environment.get("CI_CONFIG_PATH", ""))
     if (
@@ -260,6 +291,7 @@ def create_repetition_plan(environment: dict[str, str]) -> tuple[dict, dict]:
         "test_type": test_type,
         "build_variant": "release",
         "test_labels": labels,
+        "omitted_platforms": omitted_platforms,
         "amdgpu_targets": environment.get("AMDGPU_TARGETS", ""),
         "repetitions": repetitions,
         "targets": targets,
@@ -298,9 +330,20 @@ def write_repetition_outputs(environment: dict[str, str], manifest_path: Path) -
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    outputs = {
-        key: json.dumps(value, separators=(",", ":")) for key, value in matrices.items()
+    target_matrix = {
+        "include": [
+            {
+                "family": target["family"],
+                "family_key": target["family"].lower().split("-")[0],
+                "platform": target["platform"],
+                "repetition_matrix": matrices[
+                    f"{target['platform']}_{target['family'].lower().split('-')[0]}"
+                ],
+            }
+            for target in manifest["targets"]
+        ]
     }
+    outputs = {"target_matrix": json.dumps(target_matrix, separators=(",", ":"))}
     # Actions limits all job outputs to approximately 1 MB, measured as UTF-16.
     if sum(len(value.encode("utf-16-le")) for value in outputs.values()) > 900_000:
         raise ValueError(
@@ -310,9 +353,6 @@ def write_repetition_outputs(environment: dict[str, str], manifest_path: Path) -
         {
             **outputs,
             "artifact_run_id": str(baseline["id"]),
-            "enabled_targets": json.dumps(
-                [key for key, matrix in matrices.items() if "component" in matrix]
-            ),
         }
     )
 

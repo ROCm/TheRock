@@ -13,6 +13,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import amdgpu_family_matrix
 import baseline_runs
 import configure_test_component_repetition as config
+import fetch_test_configurations as test_config
 
 
 class ComponentRepetitionPlanTest(unittest.TestCase):
@@ -184,7 +185,17 @@ class ComponentRepetitionPlanTest(unittest.TestCase):
         self.assertEqual(
             (manifest["baseline"]["run_id"], values["artifact_run_id"]), ("123", "123")
         )
-        self.assertEqual(json.loads(values["enabled_targets"]), ["linux_gfx120x"])
+        targets = json.loads(values["target_matrix"])["include"]
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(
+            (targets[0]["platform"], targets[0]["family"], targets[0]["family_key"]),
+            ("linux", "gfx120X-all", "gfx120x"),
+        )
+        self.assertEqual(targets[0]["repetition_matrix"]["iteration"], [1, 2])
+        self.assertEqual(
+            targets[0]["repetition_matrix"]["component"][0]["test_runner"],
+            "triage-linux-gfx120x",
+        )
         runs.return_value = []
         self.assertRaisesRegex(
             ValueError,
@@ -194,18 +205,19 @@ class ComponentRepetitionPlanTest(unittest.TestCase):
             path,
         )
 
-    def test_real_configuration_helper_preserves_selected_tier_runner_and_shards(self):
+    def write_custom_config(self):
         # The subprocess reads this minimal custom CI API.
-        (self.path / "ci_config_api.py").write_text(
-            f"""class Config:
+        (self.path / "ci_config_api.py").write_text(f"""class Config:
     build_runners = {{}}
     _raw = {{}}
     def get_gpu_runner_labels(self):
         return {self.runners!r}
 def load_config(version, config_path):
     return Config()
-"""
-        )
+""")
+
+    def test_real_configuration_helper_preserves_selected_tier_runner_and_shards(self):
+        self.write_custom_config()
         self.components.side_effect = self.real_fetch
         for tier in (None, "quick", "standard", "full"):
             with self.subTest(tier=tier):
@@ -221,6 +233,136 @@ def load_config(version, config_path):
                     (component["test_type"], manifest["test_type"]),
                     (tier or "comprehensive",) * 2,
                 )
+
+    def test_empty_platform_selects_only_linux_for_real_amdsmi_configuration(self):
+        for runners in self.runners.values():
+            runners.pop("windows")
+        self.write_custom_config()
+        self.components.side_effect = self.real_fetch
+        matrices, manifest = self.plan(
+            AMDGPU_FAMILIES="gfx120x,gfx110x",
+            TEST_LABELS="test:amdsmi",
+            PLATFORMS="",
+            REPETITIONS="20",
+        )
+        self.assertEqual(
+            {(t["platform"], t["family"]) for t in manifest["targets"]},
+            {("linux", "gfx120X-all"), ("linux", "gfx110X-all")},
+        )
+        self.assertEqual(len(manifest["expected"]), 40)
+        self.assertEqual({row["platform"] for row in manifest["expected"]}, {"linux"})
+        self.assertEqual({row["component"] for row in manifest["expected"]}, {"amdsmi"})
+        self.assertEqual(manifest["omitted_platforms"], ["windows"])
+        self.assertEqual(matrices["windows_gfx120x"], {"include": []})
+        self.assertEqual(matrices["windows_gfx110x"], {"include": []})
+        self.assertEqual(
+            [call.kwargs["platform"] for call in self.components.call_args_list],
+            ["linux", "linux"],
+        )
+
+    def test_explicit_unsupported_platform_explains_component_support(self):
+        for platforms in ("windows", "linux,windows"):
+            with self.subTest(platforms=platforms):
+                self.assertRaisesRegex(
+                    ValueError,
+                    r"test:amdsmi.*platform\(s\): windows.*Supported pilot platforms: linux",
+                    self.plan,
+                    TEST_LABELS="test:amdsmi",
+                    PLATFORMS=platforms,
+                )
+        self.components.assert_not_called()
+
+    def test_empty_platform_does_not_accept_no_supported_pilot_platform(self):
+        with patch.dict(
+            test_config.test_matrix,
+            amdsmi=dict(test_config.test_matrix["amdsmi"], platform=["wsl"]),
+        ):
+            self.assertRaisesRegex(
+                ValueError,
+                "no configured tests on the pilot platforms",
+                self.plan,
+                TEST_LABELS="test:amdsmi",
+                PLATFORMS="",
+            )
+
+    def test_empty_platform_expands_label_groups_and_mixed_component_support(self):
+        def components(*, family, platform, environment):
+            key = family.lower().split("-")[0]
+            return [dict(self.component, test_runner=f"triage-{platform}-{key}")]
+
+        self.components.side_effect = components
+        for labels, platforms, omitted in (
+            ("test:tensilelite", {"linux"}, ["windows"]),
+            ("test:amdsmi,test:rocblas", {"linux", "windows"}, []),
+        ):
+            with self.subTest(labels=labels):
+                _, manifest = self.plan(TEST_LABELS=labels, PLATFORMS="")
+                self.assertEqual(
+                    {target["platform"] for target in manifest["targets"]},
+                    platforms,
+                )
+                self.assertEqual(manifest["omitted_platforms"], omitted)
+
+    def test_selected_target_output_preserves_each_nested_matrix(self):
+        def components(*, family, platform, environment):
+            key = family.lower().split("-")[0]
+            return [dict(self.component, test_runner=f"triage-{platform}-{key}")]
+
+        self.components.side_effect = components
+        self.mock(
+            baseline_runs,
+            "query_successful_workflow_runs",
+            [
+                dict(
+                    id=123,
+                    event="schedule",
+                    status="completed",
+                    conclusion="success",
+                    head_sha="b" * 40,
+                    html_url="https://example/run/123",
+                    created_at="2026-11-26T00:00:00Z",
+                )
+            ],
+        )
+        outputs = self.mock(config, "gha_set_output", None)
+        path = self.path / "manifest.json"
+        config.write_repetition_outputs(
+            dict(
+                self.env,
+                AMDGPU_FAMILIES="gfx120X-all,gfx110X-all,gfx1151",
+                PLATFORMS="",
+            ),
+            path,
+        )
+        targets = json.loads(outputs.call_args.args[0]["target_matrix"])["include"]
+        self.assertEqual(
+            {(target["platform"], target["family_key"]) for target in targets},
+            {
+                (platform, key)
+                for platform in ("linux", "windows")
+                for key in config.REPETITION_FAMILIES
+            },
+        )
+        samples = set()
+        for target in targets:
+            matrix = target["repetition_matrix"]
+            self.assertEqual(matrix["iteration"], [1, 2])
+            component = matrix["component"][0]
+            self.assertEqual(component["shard_arr"], [1, 2])
+            self.assertEqual(
+                component["test_runner"],
+                f"triage-{target['platform']}-{target['family_key']}",
+            )
+            self.assertEqual(
+                target["family"], config.REPETITION_FAMILIES[target["family_key"]]
+            )
+            for iteration in matrix["iteration"]:
+                samples.add(
+                    f"repeat-{target['platform']}-{target['family_key']}"
+                    f"-{iteration}-{component['job_name']}"
+                )
+        manifest = json.loads(path.read_text())
+        self.assertEqual(samples, {row["sample_id"] for row in manifest["expected"]})
 
 
 if __name__ == "__main__":

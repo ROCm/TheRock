@@ -1,0 +1,64 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Repeat component tests for selected target
+
+on:
+  workflow_call:
+    inputs:
+      repetition_matrix:
+        description: "Resolved component and iteration matrix for this target."
+        type: string
+        required: true
+      artifact_run_id:
+        type: string
+        required: true
+      amdgpu_families:
+        type: string
+        required: true
+      family_key:
+        type: string
+        required: true
+      amdgpu_targets:
+        type: string
+        default: ""
+      platform:
+        type: string
+        required: true
+      repository:
+        type: string
+        required: true
+      ref:
+        type: string
+        required: true
+      build_variant:
+        type: string
+        default: release
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    name: repeat-${{ inputs.platform }}-${{ inputs.family_key }}-${{ matrix.iteration }}-${{ matrix.component.job_name }}
+    # Serialize samples within this target while other selected targets run
+    # independently. The component workflow still runs each sample's shards.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(inputs.repetition_matrix) }}
+    uses: ./.github/workflows/test_component.yml
+    # Inherit the maintainer-dispatched campaign's credentials for Quartz.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_group: multi-arch-release
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
+      platform: ${{ inputs.platform }}
+      component: ${{ toJSON(matrix.component) }}
+      test_runs_on: ${{ matrix.component.multi_gpu_runner || matrix.component.test_runner }}
+      release_type: nightly
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+      build_variant: ${{ inputs.build_variant }}
