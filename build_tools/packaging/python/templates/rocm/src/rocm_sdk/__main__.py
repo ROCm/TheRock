@@ -45,8 +45,16 @@ def _do_init(args: argparse.Namespace) -> None:
     except ModuleNotFoundError as e:
         print(f"ERROR running init: {e}", file=sys.stderr)
         sys.exit(1)
+    icd_vendors_dir = _devel.register_opencl_icd(root_path)
     if not args.quiet:
         print(f"Devel links initialized in '{root_path}'")
+        if icd_vendors_dir is not None:
+            print(
+                "OpenCL ICD registered. A pip install cannot write to "
+                "/etc/OpenCL/vendors, so point the loader at it with:\n"
+                "  export OCL_ICD_VENDORS="
+                f"{_devel.opencl_icd_vendors_env_value(icd_vendors_dir)}"
+            )
 
 
 def _do_test(args: argparse.Namespace):
