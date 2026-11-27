@@ -45,7 +45,7 @@ on:
           - standard
           - comprehensive
           - full
-        default: comprehensive
+        default: quick
 
 permissions:
   contents: read
