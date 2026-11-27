@@ -49,6 +49,7 @@ therock_cmake_subproject_declare(therock-fftw3
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*.cmake" "${CMAKE_CURRENT_LIST_DIR}/*.cmake.in"
   CMAKE_ARGS
     ${_fftw3_common_cmake_args}
 )
@@ -65,6 +66,7 @@ therock_cmake_subproject_declare(therock-fftw3f
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*.cmake" "${CMAKE_CURRENT_LIST_DIR}/*.cmake.in"
   CMAKE_ARGS
     -DENABLE_FLOAT=ON
     ${_fftw3_common_cmake_args}
