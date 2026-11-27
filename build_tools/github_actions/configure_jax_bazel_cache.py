@@ -51,9 +51,18 @@ REMOTE_CACHE_URL = "grpcs://actinolite.cluster.engflow.com"
 # container.
 TOKEN_FILE = Path("/data/engflow-cache.jwt")
 
-# Release types that may use the cache. Only CI for now: release builds need a
-# cache of their own, as nightly has for ccache in setup_ccache.py.
-SHARED_CACHE_RELEASE_TYPES = frozenset({"ci"})
+# EngFlow cache silo per release type that may use the cache. CI keeps the
+# default silo; each release stream reads and writes only its own, as PyTorch
+# keeps one sccache bucket per stream. Unlisted release types build locally.
+CACHE_SILOS = {
+    "ci": "",
+    "dev": "jax-release-dev",
+    "nightly": "jax-release-nightly",
+    "prerelease": "jax-release-prerelease",
+}
+
+# Repositories whose release runs on main may write their stream's silo.
+RELEASE_WRITER_REPOSITORIES = frozenset({"ROCm/TheRock", "ROCm/rockrel"})
 
 DEFAULT_PROBE_TIMEOUT_SECONDS = 10
 DEFAULT_REMOTE_TIMEOUT_SECONDS = 60
@@ -81,14 +90,21 @@ def resolve_cache_url(cache_url: str, release_type: str) -> str:
     only repoints where the cache is, so infrastructure can move it without a
     code change.
     """
-    if release_type not in SHARED_CACHE_RELEASE_TYPES:
+    if release_type not in CACHE_SILOS:
         return ""
     return cache_url or REMOTE_CACHE_URL
 
 
-def upload_allowed(event_name: str, ref: str) -> bool:
-    """Only pushes to main write; pull requests and dispatches only read."""
-    return event_name == "push" and ref == "refs/heads/main"
+def upload_allowed(
+    event_name: str, ref: str, release_type: str = "ci", repository: str = ""
+) -> bool:
+    """CI writes from pushes to main; a release stream from release runs on main
+    in TheRock or rockrel. Pull requests and other refs only read."""
+    if ref != "refs/heads/main" or release_type not in CACHE_SILOS:
+        return False
+    if release_type == "ci":
+        return event_name == "push"
+    return repository in RELEASE_WRITER_REPOSITORIES
 
 
 def endpoint_address(url: str) -> tuple[str, int]:
@@ -150,16 +166,23 @@ def credential_helper_response(token: str) -> dict:
     }
 
 
-def bazel_cache_options(url: str, helper: Path, allow_upload: bool) -> list[str]:
+def bazel_cache_options(
+    url: str, helper: Path, allow_upload: bool, silo: str = ""
+) -> list[str]:
     """Returns the `--bazel_options=...` arguments for a usable cache."""
     host, _ = endpoint_address(url)
-    return [
+    options = [
         f"--bazel_options=--remote_cache={url}",
         # Scoped to the cache host, so downloads from other hosts never see it.
         f"--bazel_options=--credential_helper={host}={helper}",
         f"--bazel_options=--remote_timeout={DEFAULT_REMOTE_TIMEOUT_SECONDS}",
         f"--bazel_options=--remote_upload_local_results={str(allow_upload).lower()}",
     ]
+    if silo:
+        options.append(
+            f"--bazel_options=--remote_default_exec_properties=cache-silo-key={silo}"
+        )
+    return options
 
 
 def main(argv: list[str] | None = None):
@@ -195,6 +218,12 @@ def main(argv: list[str] | None = None):
         help="Git ref the run is for, e.g. refs/heads/main.",
     )
     parser.add_argument(
+        "--repository",
+        default=os.environ.get("GITHUB_REPOSITORY", ""),
+        help="Repository the run is in; release runs write only from TheRock "
+        "or rockrel.",
+    )
+    parser.add_argument(
         "--probe-timeout",
         type=float,
         default=DEFAULT_PROBE_TIMEOUT_SECONDS,
@@ -213,14 +242,20 @@ def main(argv: list[str] | None = None):
         _log(f"No cache token at {TOKEN_FILE}")
         return
 
-    allow_upload = upload_allowed(args.event_name, args.ref)
+    allow_upload = upload_allowed(
+        args.event_name, args.ref, args.release_type, args.repository
+    )
+    silo = CACHE_SILOS[args.release_type]
     _log(
-        f"Cache mode: url={url} release_type={args.release_type} upload={allow_upload}"
+        f"Cache mode: url={url} release_type={args.release_type} "
+        f"silo={silo or '(default)'} upload={allow_upload}"
     )
     check_token(TOKEN_FILE)
     probe_cache(url, args.probe_timeout)
 
-    print(" ".join(bazel_cache_options(url, Path(__file__).resolve(), allow_upload)))
+    print(
+        " ".join(bazel_cache_options(url, Path(__file__).resolve(), allow_upload, silo))
+    )
 
 
 if __name__ == "__main__":

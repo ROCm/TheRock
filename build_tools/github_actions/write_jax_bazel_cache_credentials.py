@@ -9,9 +9,11 @@ Two EngFlow-issued JWTs exist, and EngFlow enforces each one's role:
 - The `cache-reader` token sits on the runner, where every job can read it —
   including pull requests from forks, which is safe because it cannot write.
   This copies it.
-- The `cache-writer` token is never on a runner. Only ordinary pushes to `main`
-  in ROCm/TheRock assume `WRITER_ROLE` through GitHub OIDC (`--plan` names the
-  role for the workflow) and fetch it from AWS Secrets Manager.
+- The `cache-writer` token is never on a runner. Only pushes to `main` in
+  ROCm/TheRock and release runs on `main` in TheRock or rockrel assume
+  `WRITER_ROLE` through GitHub OIDC (`--plan` names the role for the workflow)
+  and fetch it from AWS Secrets Manager. Each release stream writes only its own
+  cache silo (configure_jax_bazel_cache.py).
 
 GitHub Actions secrets are not used: they are invisible to fork PRs and would be
 a third credential path next to the runner-local files and OIDC roles the other
@@ -22,7 +24,8 @@ publishes as artifacts. A missing reader token is not an error: the wheel build
 runs without a remote cache. A token that is present but empty is, and so is a
 writer token that cannot be fetched.
 
-Used by `.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml`.
+Used by `.github/workflows/multi_arch_build_linux_jax_wheels_ci.yml` and
+`.github/workflows/multi_arch_build_linux_jax_wheels.yml`.
 """
 
 import argparse
@@ -65,9 +68,13 @@ def _restrict_private(path: Path, is_dir: bool) -> None:
         _log(f"Could not chmod {path}: {e}")
 
 
-def uses_writer_token(event_name: str, ref: str, repository: str) -> bool:
-    """Only the pushes to main that upload get the writer; forks never do."""
-    return repository == WRITER_REPOSITORY and upload_allowed(event_name, ref)
+def uses_writer_token(
+    event_name: str, ref: str, repository: str, release_type: str = "ci"
+) -> bool:
+    """Only the runs that upload get the writer; forks never do."""
+    if release_type == "ci" and repository != WRITER_REPOSITORY:
+        return False
+    return upload_allowed(event_name, ref, release_type, repository)
 
 
 def _fresh_dest_dir(dest_dir: Path) -> Path:
@@ -159,9 +166,16 @@ def main(argv: list[str] | None = None) -> None:
         default=os.environ.get("GITHUB_REPOSITORY", ""),
         help="Repository the run is in; forks never get the writer token.",
     )
+    parser.add_argument(
+        "--release-type",
+        default=os.environ.get("RELEASE_TYPE", "ci"),
+        help="Release type of the build; release streams write their own silo.",
+    )
     args = parser.parse_args(argv)
 
-    writer = uses_writer_token(args.event_name, args.ref, args.repository)
+    writer = uses_writer_token(
+        args.event_name, args.ref, args.repository, args.release_type
+    )
     if args.plan:
         gha_set_output(
             {
