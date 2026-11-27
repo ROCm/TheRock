@@ -316,6 +316,7 @@ if(THEROCK_ENABLE_PROFILER_HUB)
       ${_profiler_hub_build_deps}
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_SQLITE3}
+      ${THEROCK_BUNDLED_ZLIB}
     INSTALL_RPATH_DIRS
       lib/rocm_sysdeps/lib
       lib/llvm/lib
