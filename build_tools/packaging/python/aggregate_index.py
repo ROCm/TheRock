@@ -4,9 +4,10 @@
 
 """ROCm aggregate Python Simple API index tooling.
 
-Validates and generates the routed aggregate Simple API index for:
+Validates and generates the routed aggregate Simple API index for one of:
 
     /rocm/whl-next/
+    /rocm/whl-next-asan/
 
 The generator is storage-independent. It consumes a checked-in ownership
 manifest and can optionally validate a local directory tree mirroring the
@@ -25,6 +26,9 @@ The required routed baseline writes:
     <output>/rocm/whl-next/index.html
     <output>/rocm-whl-next-routes.json
     <output>/validation.json
+
+Other indexes use their own root and route filenames, but share
+``validation.json``, so use one output directory per index.
 
 The aggregate root links to canonical package subdirectories under the
 aggregate namespace, such as ``torch/``. The generated route table maps those
@@ -91,8 +95,12 @@ from yaml.nodes import MappingNode
 MANIFEST_SCHEMA_VERSION = 3
 ROUTES_SCHEMA_VERSION = 2
 VALIDATION_SCHEMA_VERSION = 2
-SUPPORTED_PUBLIC_BASE = "/rocm/whl-next"
-ROUTES_FILENAME = "rocm-whl-next-routes.json"
+SUPPORTED_PUBLIC_BASES = frozenset({"/rocm/whl-next", "/rocm/whl-next-asan"})
+# An owner path's last segment must name the same layout as its index's
+# public_base: /rocm/whl-next accepts "pytorch/whl-next" and /rocm/whl-next-asan
+# accepts "pytorch/whl-next-asan". Shared owner paths are accepted by every
+# index, so third-party dependencies are not republished per build variant.
+SHARED_OWNER_PATHS = frozenset({"third-party/whl-next"})
 VALIDATION_FILENAME = "validation.json"
 
 _PUBLIC_PATH_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -662,8 +670,10 @@ def write_generated_outputs(
         validation_report,
     )
 
-    aggregate_root_path = output_dir / "rocm" / "whl-next" / "index.html"
-    route_table_path = output_dir / ROUTES_FILENAME
+    aggregate_root_path = (
+        output_dir / validated.public_base.removeprefix("/") / "index.html"
+    )
+    route_table_path = output_dir / routes_filename(validated.public_base)
     validation_report_path = output_dir / VALIDATION_FILENAME
     _write_text_atomic(aggregate_root_path, aggregate_root_html)
     _write_text_atomic(route_table_path, _json_dumps(route_table.to_json()))
@@ -674,6 +684,11 @@ def write_generated_outputs(
         validation_report=validation_report_path,
         unpublished_package_count=validation_report.unpublished_package_count,
     )
+
+
+def routes_filename(public_base: str) -> str:
+    """``/rocm/whl-next-asan`` -> ``rocm-whl-next-asan-routes.json``."""
+    return public_base.removeprefix("/").replace("/", "-") + "-routes.json"
 
 
 def render_aggregate_root(validated: ValidatedIndexContent) -> str:
@@ -803,9 +818,7 @@ def parse_ownership_manifest(
     streams = _parse_stream_config(manifest["streams"], f"{context}.streams")
     index_items = _require_list(manifest["python_indexes"], f"{context}.python_indexes")
     if len(index_items) != 1:
-        raise ManifestError(
-            f"{context}.python_indexes must contain exactly one /rocm/whl-next index"
-        )
+        raise ManifestError(f"{context}.python_indexes must contain exactly one index")
 
     python_indexes = [
         _parse_python_index(item, f"{context}.python_indexes[{i}]", streams)
@@ -888,11 +901,12 @@ def _parse_python_index(
 
     public_base = _require_str(index["public_base"], f"{context}.public_base")
     _validate_public_base(public_base, f"{context}.public_base")
-    if public_base != SUPPORTED_PUBLIC_BASE:
+    if public_base not in SUPPORTED_PUBLIC_BASES:
+        supported = ", ".join(repr(base) for base in sorted(SUPPORTED_PUBLIC_BASES))
         raise ManifestError(
-            f"{context}.public_base must be {SUPPORTED_PUBLIC_BASE!r}, "
-            f"got {public_base!r}"
+            f"{context}.public_base must be one of {supported}, got {public_base!r}"
         )
+    index_layout = public_base.rsplit("/", 1)[1]
 
     package_items = _require_mapping(index["packages"], f"{context}.packages")
     if not package_items:
@@ -931,6 +945,15 @@ def _parse_python_index(
         _validate_owner_path(
             owner_path, f"{context}.packages.{package_name}.owner_path"
         )
+        if (
+            owner_path not in SHARED_OWNER_PATHS
+            and owner_path.rsplit("/", 1)[-1] != index_layout
+        ):
+            raise ManifestError(
+                f"{context}.packages.{package_name}.owner_path {owner_path!r} "
+                f"is not allowed for {public_base}; owner paths must end in "
+                f"/{index_layout} or be one of: {', '.join(sorted(SHARED_OWNER_PATHS))}"
+            )
         streams = _parse_package_streams(
             package_config,
             stream_config,
