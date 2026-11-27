@@ -72,7 +72,7 @@ The machine is ready for production when:
    `test_runs_on`
 
 1. **GPU detection failures**: Verify ROCm driver installation and GPU visibility
-   (`rocm-smi`)
+   (`amd-smi`)
 
 1. **Permission errors**: Ensure runner has appropriate permissions for ROCm device
    access

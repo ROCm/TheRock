@@ -1838,7 +1838,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm essential utilities and system management components",
-    "Description_Long": "Core ROCm platform utilities and system components. Includes rocm-smi (system management interface CLI), rocm-core (base runtime components), rocminfo (device capability query tool), and rocprofiler-register (profiler registration utilities). Provides essential tools for GPU discovery, monitoring, and platform initialization with runtime libraries, development files, and documentation.",
+    "Description_Long": "Core ROCm platform utilities and system components. Includes rocm-core (base runtime components), rocminfo (device capability query tool), and rocprofiler-register (profiler registration utilities). Provides essential tools for GPU discovery, monitoring, and platform initialization with runtime libraries, development files, and documentation.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",

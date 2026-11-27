@@ -235,7 +235,7 @@ source_sets = []  # No submodules - uses vendored/in-tree deps
 description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
-# rocm-systems provides rocm-core, rocm-smi-lib, and rocprofiler-register.
+# rocm-systems provides rocm-core and rocprofiler-register.
 source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-runtime]
@@ -522,7 +522,7 @@ artifact_group = "base"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"  # Part of core, enabled by default
-source_paths = ["rocm-core", "rocm-smi-lib", "rocprofiler-register"]
+source_paths = ["rocm-core", "rocprofiler-register"]
 
 # --- Compiler Artifacts ---
 

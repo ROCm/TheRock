@@ -201,10 +201,6 @@ def rocm_info():
     _exec("bin/rocminfo", init_devel=False)
 
 
-def rocm_smi():
-    _exec("bin/rocm-smi", init_devel=False)
-
-
 def roccoremerge():
     _exec("bin/roccoremerge")
 
