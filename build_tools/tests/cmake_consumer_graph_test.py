@@ -106,6 +106,29 @@ therock_cmake_subproject_declare(client
         RepositoryAnalyzer(tmp_path, tracked_cmake_files=tracked).analyze()
 
 
+def test_source_directories_do_not_become_subproject_edges(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "CMakeLists.txt",
+        """
+therock_cmake_subproject_declare(builder)
+therock_cmake_subproject_declare(runtime)
+therock_cmake_subproject_declare(client
+  BUILD_DEPS builder
+  ADDITIONAL_SOURCE_INPUTS compiler/spirv-llvm-translator headers/hsa
+  RUNTIME_DEPS runtime)
+""",
+    )
+    result = RepositoryAnalyzer(
+        tmp_path, tracked_cmake_files={Path("CMakeLists.txt")}
+    ).analyze()
+    assert result.subprojects["client"].build_deps == {"builder"}
+    assert result.subprojects["client"].runtime_deps == {"runtime"}
+    graph = result.build_consumer_graph()
+    assert set(graph) == {"builder", "runtime", "client"}
+    assert graph["builder"]["consumers"] == ["client"]
+    assert graph["runtime"]["consumers"] == ["client"]
+
+
 def test_graph_comparison_edge_direction() -> None:
     generated = {
         "a": {"consumers": ["b", "c"]},
