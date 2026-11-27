@@ -893,6 +893,16 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "add_link_options(\"LINKER:/Brepro\")\n")
   endif()
 
+  # Keep std::mutex compatible with msvcp140.dll older than 14.40. Since VS 2022
+  # 17.10 the MSVC STL constructs std::mutex constexpr, which crashes in
+  # msvcp140!mtx_do_lock if an older msvcp140.dll is already loaded in the
+  # process (e.g. one shipped by security software), including from DLL static
+  # initializers. See https://github.com/microsoft/STL/issues/4730 and
+  # https://github.com/ROCm/TheRock/issues/9305.
+  if(WIN32)
+    string(APPEND _init_contents "add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)\n")
+  endif()
+
   if(_dep_provider_file)
     string(APPEND _init_contents "include(${_dep_provider_file})\n")
   endif()
