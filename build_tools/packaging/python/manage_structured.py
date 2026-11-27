@@ -35,6 +35,10 @@ Example usage:
     python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket \
         --package numpy --upload
 
+    # Regenerate only the product root index from package directory names:
+    python manage_structured.py v5/rocm/core/whl --bucket my-python-bucket \
+        --root-only --upload
+
 The bucket may also be supplied via the `S3_BUCKET_PY` environment variable;
 an explicit `--bucket` takes precedence.
 """
@@ -59,7 +63,6 @@ from packaging.utils import (
     parse_wheel_filename,
 )
 
-
 # File extensions surfaced in the generated index. Anything else in a package
 # directory (logs, READMEs, PEP 658 .metadata sidecars) is ignored.
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
@@ -70,6 +73,10 @@ _MULTIPART_CHECKSUM_RE = re.compile(r"^[A-Za-z0-9+/=]+=-[0-9]+$")
 
 # Metadata fetch concurrency for S3 HEAD requests.
 _METADATA_MAX_WORKERS = 6
+
+# A valid PEP 503-normalized project name: lowercase alphanumeric runs joined
+# by single dashes (e.g. "torch", "rocm-sdk-core", "amd-torch-device-gfx1170").
+_NORMALIZED_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def _package_name_from_filename(filename: str) -> str:
@@ -366,6 +373,63 @@ def list_keys(
     return keys
 
 
+def list_package_dirs(
+    client: botocore.client.BaseClient,
+    bucket_name: str,
+    root: str,
+) -> list[PackageDir]:
+    """List package directories directly below a product root.
+
+    S3's delimiter-based listing returns immediate child prefixes without
+    enumerating the objects inside each package directory. A directory is
+    listed whenever any object exists below it, so unlike `discover_packages`
+    this does not require the directory to contain an accepted artifact.
+    Objects directly under the root (e.g. the root index.html) are ignored.
+
+    Returns:
+        Package directories sorted by name, each with an empty file list.
+
+    Raises:
+        ValueError: if S3 returns a malformed prefix, or a directory name that
+            is not a valid PEP 503-normalized project name.
+    """
+    root = root.rstrip("/")
+    list_prefix = f"{root}/"
+    packages: list[PackageDir] = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(
+        Bucket=bucket_name, Prefix=list_prefix, Delimiter="/"
+    ):
+        for common_prefix in page.get("CommonPrefixes", []):
+            package_prefix = common_prefix["Prefix"]
+            if not package_prefix.startswith(
+                list_prefix
+            ) or not package_prefix.endswith("/"):
+                raise ValueError(
+                    f"Malformed package directory prefix: {package_prefix!r}"
+                )
+            package_name = package_prefix[len(list_prefix) : -1]
+            if not package_name or "/" in package_name:
+                raise ValueError(
+                    f"Malformed package directory prefix: {package_prefix!r}"
+                )
+            normalized = pep503_normalize(package_name)
+            if normalized != package_name:
+                raise ValueError(
+                    f"Package directory name is not normalized: {package_name!r} "
+                    f"(expected {normalized!r}) in prefix {package_prefix!r}"
+                )
+            # Without an artifact to parse, the name is rendered into the root
+            # page as-is and must be a safe, valid project name.
+            if not _NORMALIZED_NAME_RE.fullmatch(package_name):
+                raise ValueError(
+                    f"Invalid package directory name: {package_name!r} "
+                    f"in prefix {package_prefix!r}"
+                )
+            packages.append(PackageDir(name=package_name, files=[]))
+    return sorted(packages, key=lambda package: package.name)
+
+
 def fetch_metadata(
     client: botocore.client.BaseClient,
     bucket_name: str,
@@ -478,6 +542,7 @@ def generate_structured_index(
     package: str | None = None,
     upload: bool = True,
     skip_checksum: bool = True,
+    root_only: bool = False,
 ) -> int:
     """Regenerate structured product-local indexes for a product root.
 
@@ -491,10 +556,30 @@ def generate_structured_index(
         upload: If True, upload to S3; otherwise save pages to local disk.
         skip_checksum: If True (default), omit the #sha256 fragment from
             artifact links. Pass False (via --include-checksums) to include.
+        root_only: If True, regenerate only the product-local root index from
+            package directory names. This mode does not list package contents
+            or fetch artifact metadata.
 
     Returns:
         Number of package directories processed.
     """
+    if package is not None and root_only:
+        raise ValueError("package and root_only modes are mutually exclusive")
+
+    if root_only:
+        packages = list_package_dirs(client, bucket_name, root)
+        pages = [
+            IndexPage(
+                key=f"{root.rstrip('/')}/index.html",
+                html=render_root_page(packages),
+            )
+        ]
+        if upload:
+            upload_pages(client, bucket_name, pages)
+        else:
+            save_pages(pages)
+        return len(packages)
+
     keys = list_keys(client, bucket_name, root, package)
     packages = discover_packages(keys, root=root, package=package)
 
@@ -522,13 +607,22 @@ def create_parser() -> argparse.ArgumentParser:
         "v5/rocm/core/whl-next",
     )
     parser.add_argument("--bucket", type=str, help="S3 bucket name")
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
         "--package",
         type=str,
         default=None,
         help=(
             "Regenerate only this package directory and skip the product root "
             "index (used for targeted single-package regeneration)."
+        ),
+    )
+    mode_group.add_argument(
+        "--root-only",
+        action="store_true",
+        help=(
+            "Regenerate only the product root index from package directory "
+            "names without listing artifacts or fetching metadata."
         ),
     )
     parser.add_argument(
@@ -560,6 +654,7 @@ def main() -> None:
         bucket_name=bucket_name,
         root=args.prefix,
         package=args.package,
+        root_only=args.root_only,
         upload=args.upload,
         skip_checksum=not args.include_checksums,
     )
