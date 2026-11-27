@@ -1,0 +1,317 @@
+Rfc0020 driver packaging · MD
+---
+author: Saad Rahim (saadrahim)
+created: 2026-10-05
+modified: 2026-10-05
+status: draft
+---
+ 
+# AMD driver software packaging
+ 
+## Overview
+ 
+[RFC0012](./RFC0012-Repo-Structure.md) reserves a top-level folder on
+every stream subdomain of `repo.amd.com`, sibling to `rocm/`, for AMD
+driver software. RFC0012 fixes *where* it sits and which stream
+contract it inherits; this RFC defines *what goes in it and how it is
+laid out*. Same split RFC0012 uses with
+[RFC0021](./RFC0021-Repository-Package.md) for the tier packages.
+ 
+The folder is named **`drivers/`** — RFC0012 reserved it as `amdgpu/`;
+see *Naming*.
+ 
+| Family | Contents | This RFC |
+| :----- | :------- | :------- |
+| Compute driver | `amdgpu` kernel (DKMS) driver | full |
+| Virtualization | MXGPU SR-IOV host driver (`gim-dkms`) | full |
+| Operator family | GPU Operator, device plugin, metrics exporter, node labeller | full |
+| Graphics stack | display, OpenGL, Vulkan-Pro user-mode | placement only |
+ 
+These share a namespace because they are all **driver lifecycle**
+concerns, versioned against the driver rather than the ROCm Core SDK
+major. The namespace is additionally intended to hold NIC, fabric, and
+related platform drivers — see *Planned scope*.
+ 
+## Motivation
+ 
+Three migrations and one new publication target converge on this
+folder:
+ 
+- **Compute driver** and **MXGPU** are migrating off `repo.radeon.com`,
+  whose `<product>/<version>/<distro>/` layout puts the version in the
+  path — see *Why flat*.
+- **Graphics stack** is a sibling `graphics/` folder there today, on an
+  independent cadence.
+- **Operator family** publishes charts from `rocm.github.io/gpu-operator`
+  and has no native-package or image home on `repo.amd.com` at all.
+ 
+Settled individually these would produce four layouts in one namespace.
+This RFC fixes the layout once.
+ 
+### Why one namespace
+ 
+Sibling top-level `graphics/` and `operator/` folders were rejected:
+splitting driver lifecycle across namespaces makes one provisioning
+operation span three folders with three version stories.
+ 
+Publishing the operator family under `rocm/` was rejected: it would
+become an Expansion in RFC0012 terms and inherit per-ROCm-major pinning
+and the central Python index obligations, neither of which applies.
+ 
+A product subdomain (`operator.repo.amd.com`) is unavailable — under
+RFC0012 the subdomain *is* the stream selector and that set is closed.
+ 
+### Naming
+ 
+`amdgpu` is the kernel module name (`amdgpu.ko`, `amdgpu-dkms`). As a
+namespace it under-describes the folder: the graphics stack is not the
+`amdgpu` module, the GPU Operator is not an `amdgpu` artifact, and the
+namespace is planned to hold NIC drivers, which are not GPUs.
+ 
+The rename lands before any content is published under the reserved
+path, while it is still free. `amdgpu` remains the kernel driver
+package name.
+ 
+### Planned scope: platform drivers
+ 
+The namespace is scoped to **AMD driver software**, not GPU driver
+software. NIC, fabric, and related platform drivers are expected here,
+per the unified-delivery requirement that an administrator install GPU
+driver, NIC driver, and ROCm through uniform package-manager commands
+from one repository. Today only the GPU half is satisfiable; the naming
+and layout are chosen so the rest is a content change, not a structural
+one.
+ 
+Their package naming, pinning, partner-certification rules, and owning
+organization are **not** settled here — separate RFC. This RFC commits
+only to the namespace holding them.
+ 
+## Scope
+ 
+**In scope:** layout, artifact classes, and migration for the compute
+driver, MXGPU, and the operator family.
+ 
+**Placement only — graphics stack.** This RFC places graphics in
+`drivers/` and asserts it inherits the structural rules below. It does
+**not** define graphics requirements; cadence, packaging, component
+breakdown, version lines, and support matrix belong to the graphics
+organization in a separate RFC. Read packaging specifics below as
+applying to the compute driver.
+ 
+**Not in scope:** ROCm Core SDK, expansions, extras, and third-party AI
+forks (under `rocm/`, per RFC0012); `amdgpu-install` (being retired —
+the `Conflicts:` rule in RFC0021 stands); AMDVLK (frozen, archival);
+AMF (no migration).
+ 
+## Inherited from RFC0012
+ 
+Not restated here: stream subdomains and the closed stream set,
+identical tree across streams, no cross-stream pathing, per-stream
+retention, repo setup via the tier packages in the singleton
+`amdrepos/` folder, GPG keys from `amdrepos/gpg/`, build variant
+separation, and the RFC0009 distro identifier set.
+ 
+## Structure
+ 
+`drivers/` and `rocm/` are parallel namespaces, each with its own
+`packages/` folder — two separate package repositories, not one
+referenced twice:
+ 
+```
+<stream>.repo.amd.com/
+  |
+  +-- rocm/                  # ROCm Core SDK, expansions      (RFC0012)
+  |     core/packages/       #   ROCm native packages
+  |     whl/  whl-next/
+  |
+  +-- drivers/               # AMD driver software           (this RFC)
+        packages/<distro>/   #   driver native packages (.deb / .rpm)
+        charts/              #   Helm repo: index.yaml + archives
+        containers/          #   image reference manifest (no binaries)
+```
+ 
+They never hold the same package. The separation is what lets a node
+take a driver upgrade without touching ROCm, and the reverse.
+ 
+Only `packages/` is a package-manager repository. `charts/` is a Helm
+repository; `containers/` holds references only.
+ 
+### Flat package repository
+ 
+`drivers/packages/` is **flat**, matching the rule RFC0012 states for
+`rocm/core/packages/`.
+ 
+**"Flat" constrains the version axis only** — it does not mean no
+subdirectories. Two axes:
+ 
+| Axis | In the path? | Expressed as |
+| :--- | :----------- | :----------- |
+| Distro / OS version | **yes** | one subfolder per RFC0009 distro ID |
+| Package version | **no** | package name + version metadata |
+| Build variant | separable | sibling folder, distinct index, or disabled-by-default stanza |
+ 
+```
+<stream>.repo.amd.com/drivers/packages/
+  ubuntu2204/   ubuntu2404/   debian12/   rhel8/
+  rhel9/        rhel10/       sles15/     azl3/
+```
+ 
+Each distro folder is internally flat. A node configures exactly one
+and never edits it again.
+ 
+Normative:
+ 
+- **No version in the path** — no `<version>/` or date-stamped
+  subfolders inside a distro folder.
+- **All retained versions co-resident** in each distro folder, so
+  `dnf --showduplicates` / `apt-cache policy` list every one.
+- **Retention is pruning** of old versions, not deletion of folders.
+- **Upgrade and downgrade are package-manager operations only** — no
+  repository reconfiguration, no structure change.
+- **The distro folder is stable** for the life of that OS version's
+  support.
+- **Variant separation** — standard is the default; a package manager
+  pointed at the standard repository never resolves a variant
+  accidentally.
+ 
+RFC0012 permits realizing the distro axis as a `deb/` + `rpm/` grouping
+carrying the OS profile in the index instead. Per-distro folders are
+the expected realization and what the examples assume; what is
+normative is that a node resolves exactly one distro profile, stable
+across versions.
+ 
+#### Why flat
+ 
+On `repo.radeon.com` both axes are in the path, so each version is a
+different repository:
+ 
+```
+repo.radeon.com/amdgpu/30.10/ubuntu/   <-- configured repo
+repo.radeon.com/amdgpu/30.20/ubuntu/   <-- a DIFFERENT repo
+                       ^^^^^  ^^^^^^
+                       version  distro
+```
+ 
+Moving a fleet between versions means rewriting every node's sources
+file; rolling back means rewriting it again. Here only the distro axis
+is in the path:
+ 
+```
+# configured once at provisioning
+https://stable.repo.amd.com/drivers/packages/ubuntu2404/
+ 
+$ dnf --showduplicates list amdgpu-dkms
+$ dnf install amdgpu-dkms-30.20      # upgrade
+$ dnf downgrade amdgpu-dkms-30.10    # and back
+```
+ 
+### Version-line reconciliation
+ 
+The compute driver carries two concurrent version lines on
+`repo.radeon.com` (ROCm-aligned and Radeon Software for Linux). A flat
+tree cannot host two unrelated sequences under one package name without
+ordering ambiguity.
+ 
+**Requirement:** one monotonic sequence per package name. Where both
+lines stay visible they become distinct package names. Naming is left
+to the implementation; the ambiguity must be resolved before cutover.
+ 
+`latest/` has no equivalent — in a flat repository "latest" is what the
+package manager resolves by default.
+ 
+### MXGPU
+ 
+Publishes into `drivers/packages/<distro>/` under the compute driver's
+rules. Three differences:
+ 
+- **Host side only** — ships `gim-dkms` (GPU-IOV Module), which runs on
+  the hypervisor. Guests run the ordinary GPU driver already in this
+  namespace, so MXGPU adds a package, not a guest tree.
+- **Third version line** (`9.3.0.K` as of 2026-10), independent of both
+  driver lines. Distinct package name, so the rule above is already
+  satisfied.
+- **Distro identifier conversion** — the existing tree keys Debian by
+  codename (`jammy/`, `noble/`) and carries both `el9/` and `rhel9/`.
+  Migration maps these to RFC0009 identifiers and collapses the
+  duplication.
+ 
+### Helm charts and container images
+ 
+RFC0012 defines no artifact class for Helm charts or OCI images; the
+operator family ships both, so they are defined here.
+ 
+**`drivers/charts/`** — a Helm chart repository per stream, added like
+any other:
+ 
+```
+$ helm repo add amd-drivers https://stable.repo.amd.com/drivers/charts/
+$ helm install gpu-operator amd-drivers/gpu-operator-charts
+```
+ 
+Canonical location for GPU Operator charts; `rocm.github.io/gpu-operator`
+migrates here behind a redirect. Chart versions use the chart's own
+`version` / `appVersion` and are not required to track the ROCm or
+driver schemes. Each chart declares its supported driver and Kubernetes
+ranges in metadata.
+ 
+**`drivers/containers/`** — the image reference manifest per stream,
+listing the fully qualified names and tags that the same stream's
+charts resolve to, so an image set is inspectable and pinnable without
+installing a chart. Images live in an OCI registry, not in the tree.
+ 
+- Backing registry is an implementation decision; images must have a
+  lifecycle matching the stream's retention window.
+- **Stream mapping is by tag, not by registry.** One registry serves
+  every stream, preserving RFC0012's rule that a stream subdomain
+  serves only its own artifacts.
+ 
+## Stream coverage
+ 
+| Family | Streams |
+| :----- | :------ |
+| Compute driver | all streams RFC0012 defines |
+| Operator family | `nightly`, `weekly`, `rc`, `stable` — **not `dev`** |
+| MXGPU | `rc`, `stable` |
+| Graphics stack | out of scope (graphics RFC) |
+ 
+The operator family skips `dev` because per-commit churn has no
+consumer for a cluster-deployed component and the image build cost is
+prohibitive. MXGPU cadence is set by the virtualization organization
+and does not track ROCm promotion gates. `ltsrc` / `lts` deferred with
+the rest of the LTS work.
+ 
+## Relationship to ROCm
+ 
+Driver, operator, and ROCm Core SDK version independently — a node may
+run a driver and operator from `stable` while containers scheduled onto
+it carry any supported ROCm version. Compatibility is expressed as
+declared ranges in package and chart metadata, not as a shared version
+number and not by folder co-location.
+ 
+## Migration
+ 
+1. `drivers/` opens on `stable` and `rc`, per RFC0012's v1 set.
+2. Compute driver packages migrate from `repo.radeon.com`. Legacy paths
+   are hard-deprecated — frozen, redirected, nothing deleted.
+3. MXGPU migrates from `repo.radeon.com/mxgpu/`, same treatment, with
+   codenames converted to RFC0009 identifiers. Operator charts migrate
+   from `rocm.github.io/gpu-operator` into `drivers/charts/`.
+4. Remaining stream subdomains follow RFC0012's v2 set.
+5. Historical `repo.radeon.com` content lands under
+   `archives.repo.amd.com`, per RFC0012.
+ 
+Graphics stack migration follows the same pattern; timing and
+sequencing are set by the graphics organization's RFC.
+ 
+## Open questions
+ 
+- **NIC and fabric packaging rules** — namespace is committed to
+  holding them; naming, pinning, partner certification, and ownership
+  need their own RFC and cross-org sign-off.
+- **Registry selection** for operator images, and whether existing
+  image references are retagged or only new builds adopt the scheme.
+- **Compatibility-manifest ownership** — which group owns the declared
+  driver / operator / ROCm ranges, given overlap with the system BOM
+  compatibility data.
+- **Graphics requirements RFC** — cadence, version lines, and whether
+  graphics adopts the stream model are unowned by this document.
