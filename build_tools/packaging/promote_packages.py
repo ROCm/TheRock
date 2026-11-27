@@ -129,6 +129,7 @@ DEV_VERSION_RE = re.compile(
     r"""
     (?P<git>(?<=\+)git[0-9a-f]+\.)  # torch-family: 2.12.0+git1a2b3c4d.rocm10.0.0 (build_prod_wheels.py)
     | (?<=[+.])dev(?=rocm)          # torch-family local: +devrocm10.2.0...
+    | (?P<variant>\.dev\d+\+[0-9a-f]{7,40}\.)(?=[a-z])  # ROCm variant: 10.3.0.dev0+<sha>.asan -> 10.3.0+asan
     | \.dev\d+[.+-][0-9a-f]{7,40}   # ROCm: 10.2.0.dev0+<sha>, .dev0.<sha> (local), .dev0-<sha> (version.py)
     | (?P<rocm>rocm\d+\.\d+\.\d+)a\d+  # nightly ROCm: +rocm10.2.0a20261006 -> +rocm10.2.0
     | (?<=\d)a\d+(?=\+)             # base-version alpha: 1.2.3a0+... -> 1.2.3+...
@@ -142,6 +143,11 @@ SRC_VERSION_PATTERNS = {
     "dev": r"rc\d*",
 }
 
+# Prerelease markers are only matched right after a release number (`10.3.0rc1`,
+# `rocm10.3.0a20261111`), so letters elsewhere are left alone, e.g. a build
+# variant (`+asan` -> not `+sn`) or a git sha (`+git669b31ac`).
+_RELEASE_PREFIX = r"(?P<release>\d+(?:\.\d+)+)"
+
 
 def strip_dev_markers(text: str, keep_git: bool = False) -> str:
     """Strip dev build markers (`DEV_VERSION_RE`) from a version string or file line.
@@ -154,8 +160,28 @@ def strip_dev_markers(text: str, keep_git: bool = False) -> str:
     `compute_new_version_str`, because `rc\\d*` is unsafe on raw file lines.
     """
     return DEV_VERSION_RE.sub(
-        lambda m: m["rocm"] or ((m["git"] or "") if keep_git else ""), text
+        lambda m: m["rocm"]
+        or ("+" if m["variant"] else "")
+        or ((m["git"] or "") if keep_git else ""),
+        text,
     )
+
+
+def split_rocm_build_variant(rocm_version: str) -> tuple[str, str | None]:
+    """Split a build variant off a torch-embedded ROCm version.
+
+    `10.3.0rc1.asan` -> (`10.3.0rc1`, `asan`); `10.3.0rc1` -> (`10.3.0rc1`, None).
+    Files spell the variant as `+asan` (pins, `_rocm_init.py`), `-asan`
+    (`version.py`) or `.asan` (normalized), so promotion only rewrites the base.
+    """
+    # ROCm `10.3.0rc1+asan` is embedded in torch as `+rocm10.3.0rc1.asan`.
+    m = re.fullmatch(
+        _RELEASE_PREFIX + r"(?P<pre>(?:a|rc)\d+)?\.(?P<variant>[a-z][a-z0-9]*)",
+        rocm_version,
+    )
+    if not m:
+        return rocm_version, None
+    return m["release"] + (m["pre"] or ""), m["variant"]
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -507,7 +533,9 @@ def compute_new_version_str(
         new_version_str = strip_dev_markers(new_version_str, keep_git)
     replacement = "" if dest_version == "release" else dest_version
     new_version_str = re.sub(
-        SRC_VERSION_PATTERNS[src_version_type], replacement, new_version_str
+        _RELEASE_PREFIX + SRC_VERSION_PATTERNS[src_version_type],
+        lambda m: m["release"] + replacement,
+        new_version_str,
     )
     return None if new_version_str == version_str else new_version_str
 
@@ -1047,8 +1075,13 @@ def wheel_change_extra_files(
         if "rocm" not in str(new_version)
         else str(new_version).split("rocm")[-1]
     )
-    float_rocm_dependency_patch = dest_version == "release" and is_torch_package_name(
-        package_name_no_version
+    # Variant builds: only rewrite the base, and keep variant pins exact.
+    old_rocm_version, rocm_build_variant = split_rocm_build_variant(old_rocm_version)
+    new_rocm_version, _ = split_rocm_build_variant(new_rocm_version)
+    float_rocm_dependency_patch = (
+        dest_version == "release"
+        and is_torch_package_name(package_name_no_version)
+        and rocm_build_variant is None
     )
 
     print("    Changing ROCm-specific files that contain the version")
@@ -1190,7 +1223,9 @@ def promote_wheel(
         return True
 
     # Dev ROCm wheels carry their sha in the local part (`10.2.0.dev0+<sha>`), so dev rewrites the full version.
-    if original_version.local and src_version_type != "dev":  # torch packages
+    # Only torch-family local parts carry the ROCm prerelease (`+rocm10.3.0rc1`);
+    # ROCm build variants like `+asan` keep it in the public version.
+    if "rocm" in (original_version.local or "") and src_version_type != "dev":
         new_local_version = compute_new_version_str(
             str(original_version.local), src_version_type, dest_version
         )
@@ -1200,7 +1235,7 @@ def promote_wheel(
             )
             return False
         new_base_version = str(original_version.public)
-    else:  # rocm packages, and every dev wheel
+    else:  # rocm packages (incl. build variants like +asan), and every dev wheel
         # dev's `(?<=\+)git[0-9a-f]+\.` pattern would also strip triton's git<sha>, this is to prevent that
         # triton-3.8.0+git669b31ac.devrocm10.2.0.dev0.<sha> -> triton-3.8.0+git669b31ac.rocm10.2.0
         keep_git = canonicalize_name(original_wheel.name) == "triton"
