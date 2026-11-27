@@ -141,14 +141,17 @@ wheel package versions include a build variant suffix to distinguish them from
 standard builds. The suffix is appended to the local version segment following
 [PEP 440](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers).
 
-The build variant name is sanitized by removing dashes before appending:
+The build variant name is normalized into a PEP 440 local version label before
+appending: `-`, `_` and `.` separators all normalize to `.`, and the label is
+lowercased. See
+[local version segments](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-segments).
 
-| Build variant | Sanitized suffix |
-| ------------- | ---------------- |
-| `asan`        | `asan`           |
-| `host-asan`   | `hostasan`       |
-| `asan-debug`  | `asandebug`      |
-| `tsan`        | `tsan`           |
+| Build variant | Normalized suffix |
+| ------------- | ----------------- |
+| `asan`        | `asan`            |
+| `host-asan`   | `host.asan`       |
+| `asan-debug`  | `asan.debug`      |
+| `tsan`        | `tsan`            |
 
 Example versions with ASAN variant:
 
