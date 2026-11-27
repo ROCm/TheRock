@@ -84,16 +84,16 @@ class ROCmLibrariesTest(unittest.TestCase):
                     extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
 
                 # For Windows compatibility, we first preload libraries (DLLs)
-                # that are not co-located. Specifically this is for
-                # the "libraries" like hipfft, rocblas, etc. which are siblings
-                # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
-                # in '_rocm_sdk_core/bin'
+                # that are not co-located. Specifically we have:
+                #   * '_rocm_sdk_libraries_gfx####/bin' (hipfft, rocblas, etc.)
+                #   * '_rocm_sdk_core/bin' (core/base libraries)
+                # Specific details worth highlighting:
+                #   * kpack is the rocke-client engine's runtime dep (DT_NEEDED),
+                #     co-location behind amdhip64's preload does not make it resolvable
+                #   * hipSOLVER depends on OpenBLAS
                 # TODO(#996): track deps in libraries then have the preloader
                 #   recursively get deps instead of hardcoding like this.
-                # kpack is the rocke-client engine's runtime dep (DT_NEEDED), also in
-                # _rocm_sdk_core/bin; like amd_comgr it must be preloaded by name --
-                # co-location behind amdhip64's preload does not make it resolvable.
-                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack');"
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc', 'rocm_kpack', 'rocm-openblas');"
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
