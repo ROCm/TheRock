@@ -98,6 +98,7 @@ jobs:
           pip install -r requirements-test.txt
 
       - name: Fetch artifact archives (no extract)
+        id: fetch
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -119,3 +120,27 @@ jobs:
         run: |
           python -m pytest tests/test_artifact_structure.py \
             -v --log-cli-level=info --timeout=300
+
+      - name: Validate sysdeps libraries
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' && inputs.platform == 'linux' }}
+        shell: bash
+        run: |
+          # readelf (binutils), and RPM's elfdeps for the RPM provides/requires
+          # checks.
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y -qq --no-install-recommends binutils rpm
+          # The RPM checks are skipped without elfdeps; never let CI skip them.
+          test -x /usr/lib/rpm/elfdeps || { echo "::error::RPM elfdeps not installed"; exit 1; }
+          # Flatten the sysdeps artifacts into one install-like tree.
+          shopt -s nullglob
+          archives=("${THEROCK_ARTIFACTS_DIR}"/sysdeps*_{dev,lib,run}_generic.tar.{zst,xz})
+          if (( ${#archives[@]} == 0 )); then
+            echo "::error::No sysdeps artifact archives found in ${THEROCK_ARTIFACTS_DIR}"
+            exit 1
+          fi
+          sysdeps_dir="${OUTPUT_ROOT}/sysdeps"
+          python ./build_tools/fileset_tool.py artifact-flatten -o "${sysdeps_dir}" \
+            "${archives[@]}"
+          THEROCK_SYSDEPS_LIB_DIR="${sysdeps_dir}/lib/rocm_sysdeps/lib" \
+            python -m pytest tests/test_sysdeps_libraries.py -v --timeout=300
