@@ -374,6 +374,7 @@ class IsExternalRepoCIOnlyChangeTest(unittest.TestCase):
         """One path per EXTERNAL_REPO_CI_PATTERNS family, each alone."""
         for path in (
             ".github/workflows/therock-multi-arch-ci.yml",
+            ".github/actions/ci-env/action.yml",
             ".github/scripts/therock_ref.py",
             ".github/scripts/get_changed_projects.py",
             ".github/repos-config.json",

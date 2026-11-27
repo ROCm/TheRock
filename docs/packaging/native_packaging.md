@@ -87,6 +87,7 @@ Optional Fields
   field is specified, the Components field will be used instead.
 - DisablePackaging: Disables the creation of the package.
 - Disable_DWZ: Skip DWZ processing. Applies to Debian packages.
+- Install_Etc: Installs the package's `etc/` files at the system `/etc` (as regular package files) instead of under the install prefix. Enabled case by case; currently only amdrocm-opencl.
 - Provides: Indicates that a package provides the functionality of another package.
 - Replaces: Indicates that a package replaces another package.
 

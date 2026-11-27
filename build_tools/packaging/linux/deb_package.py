@@ -165,6 +165,16 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
+        # For opted-in packages, etc/ files install at the system /etc rather
+        # than the prefix.
+        if is_etc_install_enabled(pkg_info) and stage_etc_files(
+            sourcedir_list,
+            package_dir / "etc",
+            build_config.rocm_version,
+            build_config.version_suffix,
+        ):
+            remove_dir(dest_dir / "etc")
+
         # Generate install file after copying, so we can check for hidden files
         generate_install_file(pkg_info, deb_dir, build_config, dest_dir)
 
@@ -259,6 +269,10 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
             else:
                 has_regular_files = True
 
+    # etc/ files staged at the package root for the system /etc (stage_etc_files)
+    package_dir = Path(deb_dir).parent
+    has_etc_files = (package_dir / "etc").exists()
+
     env = Environment(
         loader=FileSystemLoader(str(SCRIPT_DIR)),
         autoescape=select_autoescape(
@@ -273,6 +287,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=Non
         "path": config.install_prefix,
         "has_hidden_files": has_hidden_files,
         "has_regular_files": has_regular_files,
+        "has_etc_files": has_etc_files,
     }
 
     with install_file.open("w", encoding="utf-8") as f:
@@ -443,6 +458,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     binaries = json_pkg_config["binaries"]
     core_symlinks = is_key_defined(json_pkg_config, "core_symlinks")
     llvm_symlinks = is_key_defined(json_pkg_config, "llvm_symlinks")
+    enable_ldconfig = is_key_defined(json_pkg_config, "enable_ldconfig")
 
     unsupported_scripts = set(scripts) - EXEC_SCRIPTS
     if unsupported_scripts:
@@ -470,6 +486,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
         "binaries": binaries,
         "core_symlinks": core_symlinks,
         "llvm_symlinks": llvm_symlinks,
+        "enable_ldconfig": enable_ldconfig,
     }
 
     deb_dir = Path(deb_dir)

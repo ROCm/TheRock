@@ -53,12 +53,19 @@ test_include = ["hipinfo", "rocrtst", "rocgdb"]
 # COMPILER_TOOLCHAIN edges, so no hand-list is needed.
 level = 3
 
+# --- Self-only components -----------------------------------------------------
+
+[component.amdsmi]
+# Limit to "self only" and extend with a few particularly sensitive users.
+# amdsmi is a monitoring/management library: many graph consumers link it
+# but exercise similar parts of its API surface, so testing them provides little signal
+# for the test time it costs.
+level = 5
+test_include = ["rccl", "rdc"]
+
 # --- Test-only / non-derivable inclusions -------------------------------------
 # Couplings the graph cannot express (test-only targets, or edges not declared as
 # build/runtime deps).
-
-[component.amdsmi]
-test_include = ["hip-tests"]
 
 [component.rocprofiler-sdk]
 test_include = ["hipfft", "rocfft", "rocprofiler-systems-examples"]

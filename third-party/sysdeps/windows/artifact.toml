@@ -7,6 +7,10 @@ include = [
 ]
 [components.lib."third-party/sysdeps/windows/bzip2/build/stage"]
 
+# liblzma
+[components.lib."third-party/sysdeps/windows/liblzma/build/stage"]
+[components.dev."third-party/sysdeps/windows/liblzma/build/stage"]
+
 # sqlite3
 [components.lib."third-party/sysdeps/windows/sqlite3/build/stage"]
 [components.dev."third-party/sysdeps/windows/sqlite3/build/stage"]

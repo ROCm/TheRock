@@ -656,6 +656,32 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     print(f"-- Appended {flagname}+={append}")
 
 
+def add_libhipcxx_include_path(env: dict[str, str]) -> None:
+    """Puts libhipcxx's header directory on CPATH for builds that call hipcc directly.
+
+    libhipcxx installs under <rocm>/include/hipccl and is normally reached through
+    the libhipcxx::libhipcxx CMake target. rocThrust's headers need it, so a
+    direct hipcc build that includes them (torchaudio, torchvision) must see it too.
+    """
+    include_dir = Path(env["ROCM_PATH"]) / "include" / "hipccl"
+    if not include_dir.is_dir():
+        print(f"-- {include_dir} not found; not adding libhipcxx to CPATH")
+        return
+    existing = env.get("CPATH") or os.environ.get("CPATH", "")
+    env["CPATH"] = os.pathsep.join(p for p in (str(include_dir), existing) if p)
+    print(f"-- CPATH={env['CPATH']}")
+
+
+def add_windows_hipcc_nominmax(env: dict[str, str]) -> None:
+    # Temporary workaround until libhipcxx/PyTorch protect HIP extensions from
+    # Windows min/max macros: https://github.com/ROCm/TheRock/issues/10275
+    # hipcc applies this to compilation, including the HIP host pass.
+    flagname = "HIPCC_COMPILE_FLAGS_APPEND"
+    existing = env.get(flagname, os.environ.get(flagname, ""))
+    env[flagname] = f"{existing} -DNOMINMAX".strip()
+    print(f"-- {flagname}={env[flagname]}")
+
+
 def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     for path in possible_paths:
         if (path / file_name).exists():
@@ -1407,8 +1433,10 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
+    add_libhipcxx_include_path(env)
 
     if is_windows:
+        add_windows_hipcc_nominmax(env)
         env.update(
             {
                 "DISTUTILS_USE_SDK": "1",
@@ -1451,8 +1479,10 @@ def do_build_pytorch_vision(
             "TORCHVISION_USE_VIDEO_CODEC": "0",
         }
     )
+    add_libhipcxx_include_path(env)
 
     if is_windows:
+        add_windows_hipcc_nominmax(env)
         env.update(
             {
                 "DISTUTILS_USE_SDK": "1",

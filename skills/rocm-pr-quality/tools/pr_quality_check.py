@@ -339,6 +339,12 @@ def gh_api_json(path: str):
         return None
 
 
+def repo_from_pr_url(url: str) -> str | None:
+    """`owner/name` from a PR URL, or None."""
+    m = PR_URL_RE.match(url or "")
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
 def resolve_repo(repo: str | None) -> str | None:
     if repo:
         return repo
@@ -794,6 +800,8 @@ def main() -> None:
 
     prof = PROFILES[args.profile]
     data = gh_pr_json(args.pr, args.repo)
+    # Prefer the PR's own repository over the checkout gh would otherwise infer.
+    args.repo = args.repo or repo_from_pr_url(data.get("url", ""))
     if args.check_attestation:
         sys.exit(run_attestation_check(data, args.json))
     cross_refs = cross_reference_numbers(args.pr, args.repo)

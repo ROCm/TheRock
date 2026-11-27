@@ -204,6 +204,20 @@ mix/match build steps.
     --output-dir %HOME%/tmp/pyout
   ```
 
+> [!NOTE]
+> With a ROCm SDK that installs libhipcxx under `include/hipccl` (hipCCL 3.1 and
+> later), the torchaudio and torchvision steps add that directory to `CPATH`.
+> Building torchaudio, torchvision or another extension with `hipcc` outside
+> `build_prod_wheels.py` needs `CPATH=<rocm>/include/hipccl` too, or rocThrust's
+> headers fail with `Could not find libhipcxx!`.
+
+On Windows, these two build steps also append `-DNOMINMAX` to
+`HIPCC_COMPILE_FLAGS_APPEND`, preserving existing flags. This temporarily prevents
+Windows headers pulled in by libhipcxx from defining `min`/`max` macros that break
+hipCUB and rocPRIM during HIP host compilation. See
+[issue #10275](https://github.com/ROCm/TheRock/issues/10275); remove this workaround
+once the supported SDK/PyTorch versions provide the protection upstream.
+
 ## Running/testing PyTorch
 
 ### Prerequisites

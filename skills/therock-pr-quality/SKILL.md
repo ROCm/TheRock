@@ -159,6 +159,16 @@ On top of the base classes, tag TheRock PRs with:
   `build_tools/` (per the GitHub Actions style guide), where it is testable and lintable.
 - Any script a workflow calls has its runtime dependencies declared/available on the runner.
 
+### Adds — CI labels on TheRock PRs
+
+Apply the base "CI labels (quality policy)" (`reference.md`), choosing and checking labels with the
+`pr-ci-labels` skill (its reference has the TheRock label conventions). On top of that:
+
+- **Never narrow a submodule-bump PR.** Bumps carry `ci:run-all-archs` and `ci:asan` because a bump
+  is the first place many GPU families see the new code. A narrowing label on a bump is `BLOCKING`.
+- **Never narrow a `reusable-ci` change past the workflows it edits.** The run has to exercise the
+  edited workflow on the platforms and families that call it; narrowing below that is `BLOCKING`.
+
 ### Adds — dependency / subproject additions
 
 A `dependency-add` PR must state: the **build-time and binary-size** impact (with a before/after

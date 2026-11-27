@@ -751,6 +751,8 @@ def get_changed_files_for_external_repo(
 EXTERNAL_REPO_CI_PATTERNS = [
     # Workflows in the calling repo that invoke TheRock's reusable workflows.
     ".github/workflows/therock*",
+    # Pins the TheRock ref, Docker image and runner labels.
+    ".github/actions/ci-env/*",
     # Project discovery and shared CI helper scripts.
     ".github/scripts/therock*",
     ".github/scripts/get_changed_projects.py",

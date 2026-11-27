@@ -99,7 +99,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "aws-windows-scale-rocm-prod-mix"
+        default: "az-windows-scale-rocm-default-prod"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the
@@ -202,7 +202,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "aws-windows-scale-rocm-prod-mix"
+        default: "az-windows-scale-rocm-default-prod"
       quartz_tracking_id:
         description: >-
           Leave empty. Internal Quartz tracking id, set automatically by the

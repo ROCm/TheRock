@@ -99,7 +99,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.
@@ -211,7 +211,7 @@ on:
       build_runs_on:
         description: "Build runner label (selected by configure script with weighted distribution)"
         type: string
-        default: "aws-linux-scale-rocm-prod"
+        default: "az-linux-scale-rocm-default-prod"
       run_full_pytorch_tests:
         description: >-
           Dispatch the full PyTorch test suite after a successful build.

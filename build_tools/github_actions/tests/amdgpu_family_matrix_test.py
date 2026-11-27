@@ -458,6 +458,80 @@ class TestExternalConfig(unittest.TestCase):
                 self.assertEqual(runners["family"], "gfx94X-dcgpu")
                 self.assertIn("release", runners["build_variants"])
 
+    def test_onboarding_runners_are_drawn_only_by_listed_repositories(self):
+        """Other callers read the same config, but no manager may watch their jobs."""
+        ossci = {"label": "ossci-1gpu", "count": 9}
+        crusoe = {"label": "crusoe-1gpu", "count": 3}
+        crusoe_8gpu = {"label": "crusoe-8gpu", "count": 4}
+        cases = [
+            (["ROCm/TheRock"], "ROCm/TheRock", True),
+            (["ROCm/TheRock"], "ROCm/rocm-libraries", False),
+            (["ROCm/TheRock"], "ROCm/rockrel", False),
+            (["ROCm/TheRock", "ROCm/rocm-libraries"], "ROCm/rocm-libraries", True),
+            (None, "ROCm/rockrel", True),
+        ]
+        for repositories, repository, drawn in cases:
+            linux = {
+                "test-runs-on": "ossci-1gpu",
+                # Docker CSPs join the shared pool, Apptainer ones their own.
+                "test-runs-on-labels": [ossci, crusoe],
+                "test-runs-on-multi-gpu-apptainer-labels": [crusoe_8gpu],
+            }
+            if repositories is not None:
+                linux["onboarding-runners"] = {
+                    "labels": ["crusoe-1gpu", "crusoe-8gpu"],
+                    "repositories": repositories,
+                }
+            fake_config = {"runner_labels": {"gfx950": {"linux": linux}}}
+            os.environ["GITHUB_REPOSITORY"] = repository
+            with self.subTest(
+                repositories=repositories, repository=repository
+            ), mock.patch.object(
+                amdgpu_family_matrix,
+                "load_external_runner_config",
+                return_value=fake_config,
+            ):
+                runners = get_all_families_for_trigger_types([])["gfx950"]["linux"]
+                if drawn:
+                    self.assertEqual(runners["test-runs-on-labels"], [ossci, crusoe])
+                    self.assertEqual(
+                        runners["test-runs-on-multi-gpu-apptainer-labels"],
+                        [crusoe_8gpu],
+                    )
+                else:
+                    self.assertEqual(runners["test-runs-on-labels"], [ossci])
+                    self.assertNotIn("test-runs-on-multi-gpu-apptainer-labels", runners)
+
+    def test_pool_with_apptainer(self):
+        ossci = [{"label": "ossci-1gpu", "count": 9}]
+        crusoe = [{"label": "crusoe-1gpu", "count": 3}]
+        cases = [
+            ({"test-runs-on-labels": ossci}, ossci),
+            (
+                {
+                    "test-runs-on-labels": ossci,
+                    "test-runs-on-apptainer-labels": crusoe,
+                },
+                ossci + crusoe,
+            ),
+            # Never a pool of Apptainer runners alone.
+            ({"test-runs-on-apptainer-labels": crusoe}, None),
+        ]
+        for runners, expected in cases:
+            with self.subTest(runners=runners):
+                self.assertEqual(
+                    amdgpu_family_matrix.pool_with_apptainer(
+                        runners, "test-runs-on-labels"
+                    ),
+                    expected,
+                )
+        self.assertEqual(
+            amdgpu_family_matrix.pool_with_apptainer(
+                {"test-runs-on-2gpu-labels": ossci}, "test-runs-on-2gpu-labels"
+            ),
+            ossci,
+        )
+
     def test_v1_external_config_extracts_runner_labels(self):
         """V1 config format (gpu_families) is handled for backward compatibility."""
         # V1 format has gpu_families organized by trigger type
@@ -562,14 +636,19 @@ class TestBuildRunnerSelection(unittest.TestCase):
             # (platform, variant, size, expected_runner_label)
             ("linux", "release", "large", "aws-linux-scale-rocm-prod"),
             ("windows", "release", "large", "aws-windows-scale-rocm-prod-mix"),
-            # Sanitizer builds always use the large runner regardless of requested size
-            ("linux", "asan", "small", "aws-linux-scale-rocm-large"),
-            ("linux", "tsan", "medium", "aws-linux-scale-rocm-large"),
+            # Sanitizer large stages use the dedicated sanitizer pool;
+            # small/medium stages fall through to their normal pools
+            ("linux", "asan", "small", "aws-linux-scale-rocm-small"),
+            ("linux", "tsan", "medium", "aws-linux-scale-rocm-medium"),
             ("linux", "release", "small", "aws-linux-scale-rocm-small"),
             # Windows has no small/medium pool — falls back to the Windows default
             ("windows", "release", "small", "aws-windows-scale-rocm-prod-mix"),
             ("linux", "release", "medium", "aws-linux-scale-rocm-medium"),
             ("windows", "release", "medium", "aws-windows-scale-rocm-prod-mix"),
+            # native_package: medium for sanitizer, small otherwise
+            ("linux", "release", "native_package", "aws-linux-scale-rocm-small"),
+            ("linux", "asan", "native_package", "aws-linux-scale-rocm-medium"),
+            ("linux", "tsan", "native_package", "aws-linux-scale-rocm-medium"),
         ]
         with patch("random.SystemRandom.random", return_value=0.5):
             for platform, variant, size, expected in cases:
