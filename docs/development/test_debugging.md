@@ -11,8 +11,28 @@ run tests locally, at which point they can enable additional logging and perform
 other debugging. See also (TODO: link) for instructions on how to bootstrap
 your local build from CI artifacts.
 
-TODO: some way to opt in for additional logging as parpt of a CI workflow? We
-could add a `debug` boolean option to workflow_dispatch for try-jobs.
+### Re-running failed test jobs with debug logging
+
+Test jobs can collect additional logging without a rebuild by re-running them
+from the GitHub Actions UI with the "Enable debug logging" checkbox selected
+(see
+[Re-running workflows and jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)).
+The re-run jobs test against the artifacts that the original run already built.
+
+When debug logging is enabled, GitHub sets `runner.debug` to `1` and the test
+workflows
+([`test_component.yml`](/.github/workflows/test_component.yml) and
+[`test_code_coverage_component.yml`](/.github/workflows/test_code_coverage_component.yml))
+set `THEROCK_CI_DEBUG=1`.
+[`test_runner.py`](/build_tools/github_actions/test_executable_scripts/test_runner.py)
+then turns on these debug options:
+
+| Environment variable | Effect                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ROCM_KPACK_DEBUG=1` | kpack loader diagnostics. Enabled by default, but components with verbose test logs opt out with `"rocm_kpack_debug": "0"` in their test matrix entry. |
+
+`THEROCK_CI_DEBUG` overrides these per-component opt-outs. Future CI debug
+options can key off the same flag.
 
 ## Per-project debugging guides
 
