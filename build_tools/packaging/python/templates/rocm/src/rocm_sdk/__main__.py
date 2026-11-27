@@ -27,7 +27,10 @@ def _do_path(args: argparse.Namespace):
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
     if args.cmake:
-        print(root_path / "lib" / "cmake")
+        prefixes = [root_path / "lib" / "cmake"]
+        if args.sysdeps:
+            prefixes.append(root_path / "lib" / "rocm_sysdeps")
+        print(";".join(str(prefix) for prefix in prefixes))
     elif args.bin:
         print(root_path / "bin")
     elif args.root:
@@ -131,6 +134,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Print the ROCm development package root directory",
     )
+    path_p.add_argument(
+        "--sysdeps",
+        action="store_true",
+        help="Include bundled system dependencies in the CMake prefix list (requires --cmake)",
+    )
     path_p.set_defaults(func=_do_path)
 
     # 'test' subcommand.
@@ -164,6 +172,8 @@ def main(argv: list[str] | None = None) -> None:
     init_p.set_defaults(func=_do_init)
 
     args = p.parse_args(argv)
+    if getattr(args, "sysdeps", False) and not args.cmake:
+        path_p.error("--sysdeps requires --cmake")
     args.func(args)
 
 
