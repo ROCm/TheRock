@@ -341,7 +341,12 @@ class TestCliInputParsing(_FixtureTestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(
                 set(json.loads(proc.stdout.strip())),
-                {"tensilelite", "tensilelite-common", "hipblaslt"},
+                {
+                    "tensilelite",
+                    "tensilelite-common",
+                    "tensilelite-rocjitsu",
+                    "hipblaslt",
+                },
             )
             # Clean stderr is part of the assertion: the regression was a
             # warning plus an empty selection, not a non-zero exit.
@@ -379,6 +384,7 @@ class TestCliInputParsing(_FixtureTestCase):
                     "rocroller",
                     "tensilelite",
                     "tensilelite-common",
+                    "tensilelite-rocjitsu",
                 },
                 # origami/stinkytofu intentionally list only the literal
                 # alias-seed names: tensilelite is a synthetic node with
@@ -387,8 +393,17 @@ class TestCliInputParsing(_FixtureTestCase):
                 # hand-duplicating them here. This --level 5 (self-only) check
                 # only exercises alias expansion, so it sees just the literal
                 # alias contents plus the CI selector fan-out of tensilelite.
-                "shared/origami": {"origami", "tensilelite", "tensilelite-common"},
-                "shared/stinkytofu": {"tensilelite", "tensilelite-common"},
+                "shared/origami": {
+                    "origami",
+                    "tensilelite",
+                    "tensilelite-common",
+                    "tensilelite-rocjitsu",
+                },
+                "shared/stinkytofu": {
+                    "tensilelite",
+                    "tensilelite-common",
+                    "tensilelite-rocjitsu",
+                },
                 "shared/tensile": {"hipblas", "rocblas"},
             }
             for changed_project, expected in cases.items():
@@ -632,6 +647,7 @@ class TestCliInputParsing(_FixtureTestCase):
             self.assertIn("hipblaslt", projects)
             self.assertNotIn("tensilelite", projects)
             self.assertNotIn("tensilelite-common", projects)
+            self.assertNotIn("tensilelite-rocjitsu", projects)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
