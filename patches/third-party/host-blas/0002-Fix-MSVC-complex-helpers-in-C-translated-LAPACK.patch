@@ -1,4 +1,4 @@
-From 0d6b1f1628834ecadd3767726911af94d1962bf5 Mon Sep 17 00:00:00 2001
+From 1bfee9905a77c3cfad2e377da298dab55e62285c Mon Sep 17 00:00:00 2001
 From: Strahinja Stamenkovic <strahinja.stamenkovic@amd.com>
 Date: Thu, 26 Nov 2026 07:28:41 +0000
 Subject: [PATCH] Fix MSVC complex helpers in C-translated LAPACK
@@ -19,8 +19,9 @@ Several are wrong and silently corrupt results on Windows:
 - The inline cdotc_ strided branch used yi where yr belongs.
 
 Use _Cmulcc/_Cbuild (already used by z_div in the same header) for
-zpow_ui, and correct the dot-product imaginary parts. Only files that
-call these helpers are changed.
+zpow_ui, with a scaled complex reciprocal and an unsigned long long
+exponent magnitude for n < 0, and correct the dot-product imaginary
+parts. Only files that call these helpers are changed.
 
 Upstream: https://github.com/OpenMathLib/OpenBLAS/pull/6286
 Drop this patch once the OpenBLAS pin includes that change.
@@ -28,9 +29,9 @@ Drop this patch once the OpenBLAS pin includes that change.
 Fixes ROCM-34127 (complex128 torch.linalg.eig fails with error code 2
 on Windows TheRock PyTorch wheels).
 ---
- lapack-netlib/SRC/cgbcon.c      | 22 ++++++++++++----------
+ lapack-netlib/SRC/cgbcon.c      | 33 +++++++++++++++++++++------------
  lapack-netlib/SRC/cgesvj.c      | 10 +++++-----
- lapack-netlib/SRC/cgsvj0.c      | 22 ++++++++++++----------
+ lapack-netlib/SRC/cgsvj0.c      | 33 +++++++++++++++++++++------------
  lapack-netlib/SRC/cgsvj1.c      | 10 +++++-----
  lapack-netlib/SRC/chetd2.c      | 10 +++++-----
  lapack-netlib/SRC/chetri.c      | 10 +++++-----
@@ -63,17 +64,17 @@ on Windows TheRock PyTorch wheels).
  lapack-netlib/SRC/zhetd2.c      | 10 +++++-----
  lapack-netlib/SRC/zhetri.c      | 10 +++++-----
  lapack-netlib/SRC/zhetri_rook.c | 10 +++++-----
- lapack-netlib/SRC/zhgeqz.c      | 22 ++++++++++++----------
+ lapack-netlib/SRC/zhgeqz.c      | 33 +++++++++++++++++++++------------
  lapack-netlib/SRC/zhpgst.c      | 10 +++++-----
  lapack-netlib/SRC/zhptrd.c      | 10 +++++-----
  lapack-netlib/SRC/zhptri.c      | 10 +++++-----
- lapack-netlib/SRC/zlaesy.c      | 22 ++++++++++++----------
- lapack-netlib/SRC/zlahqr.c      | 22 ++++++++++++----------
+ lapack-netlib/SRC/zlaesy.c      | 33 +++++++++++++++++++++------------
+ lapack-netlib/SRC/zlahqr.c      | 33 +++++++++++++++++++++------------
  lapack-netlib/SRC/zlaic1.c      | 10 +++++-----
  lapack-netlib/SRC/zlapll.c      | 10 +++++-----
  lapack-netlib/SRC/zlarfy.c      | 10 +++++-----
  lapack-netlib/SRC/zlatbs.c      | 10 +++++-----
- lapack-netlib/SRC/zlatdf.c      | 22 ++++++++++++----------
+ lapack-netlib/SRC/zlatdf.c      | 33 +++++++++++++++++++++------------
  lapack-netlib/SRC/zlatps.c      | 10 +++++-----
  lapack-netlib/SRC/zlatrd.c      | 10 +++++-----
  lapack-netlib/SRC/zlatrs.c      | 10 +++++-----
@@ -87,24 +88,35 @@ on Windows TheRock PyTorch wheels).
  lapack-netlib/SRC/ztgsna.c      | 10 +++++-----
  lapack-netlib/SRC/ztrsna.c      | 10 +++++-----
  lapack-netlib/SRC/ztrsyl.c      | 10 +++++-----
- 59 files changed, 337 insertions(+), 325 deletions(-)
+ 59 files changed, 391 insertions(+), 337 deletions(-)
 
 diff --git a/lapack-netlib/SRC/cgbcon.c b/lapack-netlib/SRC/cgbcon.c
-index 3243e34..528050b 100644
+index 3243e34..130c48d 100644
 --- a/lapack-netlib/SRC/cgbcon.c
 +++ b/lapack-netlib/SRC/cgbcon.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -116,7 +128,7 @@ index 3243e34..528050b 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -395,7 +397,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -395,7 +404,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -125,7 +137,7 @@ index 3243e34..528050b 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -458,14 +460,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -458,14 +467,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -142,7 +154,7 @@ index 3243e34..528050b 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -493,14 +495,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -493,14 +502,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
@@ -207,21 +219,32 @@ index 84f1b73..47eb17f 100644
  		}
  	}
 diff --git a/lapack-netlib/SRC/cgsvj0.c b/lapack-netlib/SRC/cgsvj0.c
-index c42f309..c7c10cc 100644
+index c42f309..8124c4b 100644
 --- a/lapack-netlib/SRC/cgsvj0.c
 +++ b/lapack-netlib/SRC/cgsvj0.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -233,7 +256,7 @@ index c42f309..c7c10cc 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -394,7 +396,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -242,7 +265,7 @@ index c42f309..c7c10cc 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -457,14 +459,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -259,7 +282,7 @@ index c42f309..c7c10cc 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -492,14 +494,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
@@ -1781,21 +1804,32 @@ index 1b01c8f..56dec39 100644
  		}
  	}
 diff --git a/lapack-netlib/SRC/zhgeqz.c b/lapack-netlib/SRC/zhgeqz.c
-index 544fa7d..28b8aa7 100644
+index 544fa7d..832f541 100644
 --- a/lapack-netlib/SRC/zhgeqz.c
 +++ b/lapack-netlib/SRC/zhgeqz.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -1807,7 +1841,7 @@ index 544fa7d..28b8aa7 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -394,7 +396,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -1816,7 +1850,7 @@ index 544fa7d..28b8aa7 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -457,14 +459,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -1833,7 +1867,7 @@ index 544fa7d..28b8aa7 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -492,14 +494,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
@@ -1992,21 +2026,32 @@ index e1f89ee..5f99b83 100644
  		}
  	}
 diff --git a/lapack-netlib/SRC/zlaesy.c b/lapack-netlib/SRC/zlaesy.c
-index 9b753e6..f63352a 100644
+index 9b753e6..1872d4f 100644
 --- a/lapack-netlib/SRC/zlaesy.c
 +++ b/lapack-netlib/SRC/zlaesy.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -2018,7 +2063,7 @@ index 9b753e6..f63352a 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -394,7 +396,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -2027,7 +2072,7 @@ index 9b753e6..f63352a 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -457,14 +459,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -2044,7 +2089,7 @@ index 9b753e6..f63352a 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -492,14 +494,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
@@ -2062,21 +2107,32 @@ index 9b753e6..f63352a 100644
  		}
  	}
 diff --git a/lapack-netlib/SRC/zlahqr.c b/lapack-netlib/SRC/zlahqr.c
-index a926e67..48be7bb 100644
+index a926e67..1b85da8 100644
 --- a/lapack-netlib/SRC/zlahqr.c
 +++ b/lapack-netlib/SRC/zlahqr.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -2088,7 +2144,7 @@ index a926e67..48be7bb 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -394,7 +396,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -2097,7 +2153,7 @@ index a926e67..48be7bb 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -457,14 +459,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -2114,7 +2170,7 @@ index a926e67..48be7bb 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -492,14 +494,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
@@ -2320,21 +2376,32 @@ index ccc6458..1b74540 100644
  		}
  	}
 diff --git a/lapack-netlib/SRC/zlatdf.c b/lapack-netlib/SRC/zlatdf.c
-index 22b80ea..d2c42d5 100644
+index 22b80ea..19039a4 100644
 --- a/lapack-netlib/SRC/zlatdf.c
 +++ b/lapack-netlib/SRC/zlatdf.c
-@@ -323,15 +323,17 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+@@ -321,17 +321,26 @@ static _Complex float cpow_ui(_Complex float x, integer n) {
+ #endif
+ #ifdef _MSC_VER
  static _Dcomplex zpow_ui(_Dcomplex x, integer n) {
- 	_Dcomplex pow={1.0,0.0}; unsigned long int u;
+-	_Dcomplex pow={1.0,0.0}; unsigned long int u;
++	_Dcomplex pow={1.0,0.0}; unsigned long long u;
  	if(n != 0) {
 -		if(n < 0) n = -n, x._Val[0] = 1/x._Val[0], x._Val[1] =1/x._Val[1];
-+		if(n < 0) {
-+			double d = x._Val[0]*x._Val[0] + x._Val[1]*x._Val[1];
-+			n = -n; x = _Cbuild(x._Val[0]/d, -x._Val[1]/d);
-+		}
- 		for(u = n; ; ) {
+-		for(u = n; ; ) {
 -			if(u & 01) pow._Val[0] *= x._Val[0], pow._Val[1] *= x._Val[1];
 -			if(u >>= 1) x._Val[0] *= x._Val[0], x._Val[1] *= x._Val[1];
++		if(n < 0) { /* scaled complex reciprocal, avoids overflow/underflow */
++			double r, den;
++			if (fabs(x._Val[0]) >= fabs(x._Val[1])) {
++				r = x._Val[1] / x._Val[0]; den = x._Val[0] + x._Val[1] * r;
++				x = _Cbuild(1 / den, -r / den);
++			} else {
++				r = x._Val[0] / x._Val[1]; den = x._Val[1] + x._Val[0] * r;
++				x = _Cbuild(r / den, -1 / den);
++			}
++			u = 0ULL - (unsigned long long)n;
++		} else u = (unsigned long long)n;
++		for(; ; ) {
 +			if(u & 01) pow = _Cmulcc(pow, x);
 +			if(u >>= 1) x = _Cmulcc(x, x);
  			else break;
@@ -2346,7 +2413,7 @@ index 22b80ea..d2c42d5 100644
  }
  #else
  static _Complex double zpow_ui(_Complex double x, integer n) {
-@@ -394,7 +396,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -394,7 +403,7 @@ static inline void cdotc_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[0]
  				+ Cf(&x[i*incx])._Val[1] * Cf(&y[i*incy])._Val[1];
@@ -2355,7 +2422,7 @@ index 22b80ea..d2c42d5 100644
  				- Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -457,14 +459,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
+@@ -457,14 +466,14 @@ static inline void cdotu_(complex *z, integer *n_, complex *x, integer *incx_, c
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cf(&x[i])._Val[0] * Cf(&y[i])._Val[0]
  				- Cf(&x[i])._Val[1] * Cf(&y[i])._Val[1];
@@ -2372,7 +2439,7 @@ index 22b80ea..d2c42d5 100644
  				+ Cf(&x[i*incx])._Val[0] * Cf(&y[i*incy])._Val[1];
  		}
  	}
-@@ -492,14 +494,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
+@@ -492,14 +501,14 @@ static inline void zdotu_(doublecomplex *z, integer *n_, doublecomplex *x, integ
  		for (i=0;i<n;i++) { /* zdotc = zdotc + dconjg(x(i))* y(i) */
  			zdotc._Val[0] += Cd(&x[i])._Val[0] * Cd(&y[i])._Val[0]
  				- Cd(&x[i])._Val[1] * Cd(&y[i])._Val[1];
