@@ -147,21 +147,42 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
     message(WARNING "Configuring rocr-debug-agent with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}")
   endif()
 
-  # Make sure to pass -DENABLE_TESTS=OFF so we don't build
-  # rocr-debug-agent-tests alongside the library. The tests need to be built
-  # for each gfx level that is requested by the build.
+  # The tests are built in the same subproject as the library. The
+  # integration tests are HIP and are built as fat binaries for every test GPU
+  # target, so with testing enabled the subproject uses the HIP toolchain and
+  # the test GPU targets. The library itself has no device code. The unit
+  # tests need GoogleTest. Both tiers install under tests/, which only goes to
+  # the test component of the artifact.
+  if(THEROCK_BUILD_TESTING)
+    set(_rocr_debug_agent_gpu_targets USE_TEST_AMDGPU_TARGETS)
+    set(_rocr_debug_agent_toolchain amd-hip)
+    set(_rocr_debug_agent_test_build_deps therock-googletest)
+    set(_rocr_debug_agent_test_runtime_deps hip-clr)
+  else()
+    set(_rocr_debug_agent_gpu_targets USE_DIST_AMDGPU_TARGETS)
+    set(_rocr_debug_agent_toolchain amd-llvm)
+    set(_rocr_debug_agent_test_build_deps)
+    set(_rocr_debug_agent_test_runtime_deps)
+  endif()
+
   therock_cmake_subproject_declare(rocr-debug-agent
-    USE_DIST_AMDGPU_TARGETS
+    ${_rocr_debug_agent_gpu_targets}
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent"
+    INSTALL_RPATH_EXECUTABLE_DIR
+      "tests/rocm-debug-agent"
     CMAKE_ARGS
-      "-DENABLE_TESTS=OFF"
+      "-DENABLE_TESTS=${THEROCK_BUILD_TESTING}"
+      "-DHIP_PLATFORM=amd"
     COMPILER_TOOLCHAIN
-      amd-llvm
+      ${_rocr_debug_agent_toolchain}
+    BUILD_DEPS
+      ${_rocr_debug_agent_test_build_deps}
     RUNTIME_DEPS
       amd-dbgapi
       ROCR-Runtime
       ${THEROCK_BUNDLED_ELFUTILS}
+      ${_rocr_debug_agent_test_runtime_deps}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
@@ -170,6 +191,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
 
   therock_cmake_subproject_glob_c_sources(rocr-debug-agent SUBDIRS
     src
+    test
   )
 
   therock_cmake_subproject_provide_package(rocr-debug-agent rocr-debug-agent
@@ -191,72 +213,14 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       ${THEROCK_BUNDLED_ELFUTILS}
+      ${_rocr_debug_agent_test_runtime_deps}
       amd-dbgapi
       rocr-debug-agent
       ROCR-Runtime
   )
-endif()
-
-if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
-  ##############################################################################
-  # rocr-debug-agent-tests
-  #
-  # Validation tests for the rocr-debug-agent component. This is only built
-  # whenever -DTHEROCK_BUILD_TESTING=ON. If multiple GPU targets are specified,
-  # fat binaries are built containing support for all of those GPU targets.
-  ##############################################################################
-
-  if(THEROCK_USE_EXTERNAL_ROCR_DEBUG_AGENT AND THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR)
-    message(WARNING "Configuring rocr-debug-agent-tests with modified source directory: ${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test")
-  endif()
-
-  if(THEROCK_BUILD_TESTING)
-    therock_cmake_subproject_declare(rocr-debug-agent-tests
-      USE_TEST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${THEROCK_ROCR_DEBUG_AGENT_SOURCE_DIR}/test"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
-      INSTALL_RPATH_EXECUTABLE_DIR
-        "tests/rocm-debug-agent"
-      CMAKE_ARGS
-        "-DHIP_PLATFORM=amd"
-      COMPILER_TOOLCHAIN
-        amd-hip
-      BUILD_DEPS
-        therock-googletest
-      RUNTIME_DEPS
-        amd-dbgapi
-        hip-clr
-        rocr-debug-agent
-        ROCR-Runtime
-        ${THEROCK_BUNDLED_ELFUTILS}
-    )
-
-    therock_cmake_subproject_glob_c_sources(rocr-debug-agent-tests SUBDIRS
-      .
-    )
-
-    therock_cmake_subproject_provide_package(rocr-debug-agent-tests rocr-debug-agent-tests
-      lib/cmake/rocr-debug-agent-tests)
-    therock_cmake_subproject_activate(rocr-debug-agent-tests)
-
-    # The artifacts provided by rocr-debug-agent-tests.
-    therock_provide_artifact(rocr-debug-agent-tests
-      TARGET_NEUTRAL
-      DESCRIPTOR artifact-rocr-debug-agent-tests.toml
-      COMPONENTS
-        doc
-        test
-      SUBPROJECT_DEPS
-        ${THEROCK_BUNDLED_ELFUTILS}
-        amd-dbgapi
-        hip-clr
-        rocr-debug-agent
-        rocr-debug-agent-tests
-        ROCR-Runtime
-    )
-  endif()
 endif()
 
 if(THEROCK_ENABLE_ROCGDB)
