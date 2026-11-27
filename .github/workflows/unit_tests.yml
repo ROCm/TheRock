@@ -43,7 +43,7 @@ jobs:
     # The root pyproject.toml selects the unit-test suites.
     - name: Run unit tests
       run: |
-        python -m pytest -vv --durations=20 \
+        python -m pytest -n 4 -vv --durations=20 \
           --cov --cov-report=term-missing --cov-report=html
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require

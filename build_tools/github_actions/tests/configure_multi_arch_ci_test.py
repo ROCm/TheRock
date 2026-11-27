@@ -2405,7 +2405,7 @@ class TestExpandBuildConfigs(unittest.TestCase):
     @patch("configure_multi_arch_ci.get_latest_python_package_version")
     def test_no_package_inputs_when_package_builds_are_disabled(self, lookup):
         for package_action in (cm.JobAction.RUN, cm.JobAction.PREBUILT):
-            with self.subTest(package_action=package_action):
+            with self.subTest(package_action=package_action.value):
                 jobs = replace(
                     _jobs(build_pytorch=False, build_jax=False),
                     build_rocm_python=cm.JobGroupDecision(action=package_action),
