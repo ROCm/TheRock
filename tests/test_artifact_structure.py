@@ -85,6 +85,21 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("support", "dev"),
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),
+    # LTTng and TraceLogging (THEROCK_ENABLE_LTTNG, off by default): not
+    # distributed until the third-party license and policy review is done
+    # (lttng-tools' programs are GPL-2.0; lttng-ust, liblttng-ctl and
+    # userspace-rcu are LGPL-2.1). See https://github.com/ROCm/TheRock/pull/6750.
+    ("sysdeps-libxml2", "dev"),
+    ("sysdeps-libxml2", "lib"),
+    ("sysdeps-lttng-tools", "dev"),
+    ("sysdeps-lttng-tools", "lib"),
+    ("sysdeps-lttng-ust", "dev"),
+    ("sysdeps-lttng-ust", "lib"),
+    ("sysdeps-popt", "dev"),
+    ("sysdeps-popt", "lib"),
+    ("sysdeps-userspace-rcu", "dev"),
+    ("sysdeps-userspace-rcu", "lib"),
+    ("tracelogging", "dev"),
 }
 
 

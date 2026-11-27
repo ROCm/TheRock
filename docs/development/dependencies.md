@@ -52,8 +52,13 @@ project wide:
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_LIBMNL`
   - `THEROCK_BUNDLED_LIBNL`
+  - `THEROCK_BUNDLED_LIBXML2`
+  - `THEROCK_BUNDLED_LTTNG_TOOLS`
+  - `THEROCK_BUNDLED_LTTNG_UST`
   - `THEROCK_BUNDLED_NUMACTL`
+  - `THEROCK_BUNDLED_POPT`
   - `THEROCK_BUNDLED_SQLITE3`
+  - `THEROCK_BUNDLED_USERSPACE_RCU`
   - `THEROCK_BUNDLED_UTIL_LINUX`
   - `THEROCK_BUNDLED_ZLIB`
   - `THEROCK_BUNDLED_ZSTD`
@@ -166,6 +171,54 @@ Supported sub-libraries: `libnl` (core), `libnl-genl` (generic netlink)
 - Alternatives: `pkg_check_modules(LIBNL3_GENL REQUIRED IMPORTED_TARGET libnl-genl-3.0)`
 - Dependencies: Automatically links `libnl::libnl`
 
+## libxml2
+
+XML parsing, a dependency of LTTng-tools (session save and load). Built with the LTTng
+feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), without Python bindings, ICU, compression or
+readline; the `xmllint` and `xmlcatalog` tools are not shipped.
+
+- Canonical method: `pkg_check_modules(LIBXML2 REQUIRED IMPORTED_TARGET libxml-2.0)`
+- Import library: `PkgConfig::LIBXML2`
+
+## LTTng-tools
+
+The LTTng session daemon (`lttng-sessiond`), consumer daemon (`lttng-consumerd`), relay
+daemon (`lttng-relayd`), the `lttng` command and `liblttng-ctl`, which controls sessions.
+The out-of-process collector starts a private session daemon and records the runtimes'
+trace events with it, so the daemon matches the bundled LTTng-UST. Built with the LTTng
+feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), with its dependencies (LTTng-UST,
+userspace-rcu, popt, libxml2). User-space tracing only: kernel tracing (kmod) is not built.
+
+- Canonical method: `pkg_check_modules(LTTNG_CTL REQUIRED IMPORTED_TARGET lttng-ctl)`
+- Import library: `PkgConfig::LTTNG_CTL`
+- Programs: `lib/rocm_sysdeps/bin/lttng`, `lttng-sessiond`, `lttng-relayd`;
+  `lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd`. They find the bundled libraries
+  through their RPATH.
+- Note: the session daemon has build-time paths compiled in, which do not exist once
+  installed. Start it with
+  `--consumerd64-path=<rocm>/lib/rocm_sysdeps/lib/lttng/libexec/lttng-consumerd` (or set
+  `LTTNG_CONSUMERD64_BIN`) and with
+  `LTTNG_SESSION_CONFIG_XSD_PATH=<rocm>/lib/rocm_sysdeps/share/xml/lttng`: without the
+  session schema it exits at start ("XSD parsing failed").
+
+## LTTng-UST
+
+The LTTng userspace tracer, used by the HIP/HSA curated tracepoint providers.
+Optional and **off by default** — enable with `-DTHEROCK_ENABLE_LTTNG=ON`
+(which also builds its userspace-rcu dependency). Only the default C/C++
+libraries are built; the Java (JNI) and Python agents are not. When toggling
+this in an existing build tree, also pass `-DTHEROCK_RESET_FEATURES=ON` once so
+the cached artifact-feature flags pick up the group change (see the development
+guide).
+
+- Canonical method: `pkg_check_modules(LTTNG_UST REQUIRED IMPORTED_TARGET lttng-ust)`
+- Import library: `PkgConfig::LTTNG_UST`
+- Vars: `LTTNG_UST_INCLUDE_DIRS`
+- Alternatives: `pkg_check_modules(LTTNG_UST_CTL REQUIRED IMPORTED_TARGET lttng-ust-ctl)`
+  for the control (`liblttng-ust-ctl`) library.
+- Note: liblttng-ust links `-ldl`; consumers loading tracepoint providers at
+  runtime should add the `lib/rocm_sysdeps/lib` RPATH.
+
 ## MPFR
 
 - Canonical method: `find_package(mpfr)`
@@ -186,6 +239,14 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
 
+## popt
+
+Command-line option parsing, a dependency of LTTng-tools (the `lttng` command). Built with
+the LTTng feature group (`-DTHEROCK_ENABLE_LTTNG=ON`).
+
+- Canonical method: `pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)`
+- Import library: `PkgConfig::POPT`
+
 ## simde
 
 SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics.
@@ -201,6 +262,19 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 - Canonical method: `find_package(SQLite3)`
 - Import library: `SQLite::SQLite3`
 - Alternatives: none
+
+## TraceLogging
+
+The LTTng flavour of [TraceLogging](https://github.com/microsoft/tracelogging)
+(`TraceLoggingProvider.h` and the static `lttngh` library), with which the HIP
+and HSA runtimes write their API trace events through liblttng-ust. Built with
+the LTTng feature group (`-DTHEROCK_ENABLE_LTTNG=ON`), Linux only; on Windows
+the same header comes from the Windows SDK.
+
+- Canonical method: `find_package(tracelogging CONFIG)`
+- Import library: `tracelogging::tracelogging`
+- Dependencies: links liblttng-ust and liblttng-ust-tracepoint (see LTTng-UST
+  above); the package config finds them itself.
 
 ## util-linux
 
@@ -222,6 +296,19 @@ Note: `libmount` links `libblkid` transitively, so consumers that only use
 - Canonical method: `pkg_check_modules(LIBBLKID REQUIRED IMPORTED_TARGET blkid)`
 - Import library: `PkgConfig::LIBBLKID`
 - Alternatives: none
+
+## userspace-rcu
+
+Userspace RCU (liburcu), a dependency of LTTng-UST. Built as part of the same
+optional `-DTHEROCK_ENABLE_LTTNG=ON` feature group. lttng-ust resolves it via
+pkg-config (headers / static inlines only — there is no `DT_NEEDED` on liburcu),
+so it is not usually depended on directly.
+
+- Canonical method: `pkg_check_modules(URCU REQUIRED IMPORTED_TARGET liburcu)`
+- Import library: `PkgConfig::URCU`
+- Alternatives: the flavored variants ship their own `.pc` files
+  (`liburcu-bp`, `liburcu-cds`, `liburcu-mb`, `liburcu-memb`, `liburcu-qsbr`,
+  `liburcu-signal`).
 
 ## zlib
 
