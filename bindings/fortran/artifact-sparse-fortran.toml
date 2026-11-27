@@ -1,0 +1,25 @@
+[components.dev."bindings/fortran/rocsparse-fortran/stage"]
+include = [
+  "share/rocsparse/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/hipsparse-fortran/stage"]
+include = [
+  "share/hipsparse/fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/rocsparse-fortran/stage"]
+include = [
+  "bin/rocsparse_fortran_test_*",
+  "bin/rocsparse-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hipsparse-fortran/stage"]
+include = [
+  "bin/hipsparse_fortran_test_*",
+  "bin/hipsparse-fortran/**",
+]
+optional = true

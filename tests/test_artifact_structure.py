@@ -66,6 +66,10 @@ IGNORED_COMPONENTS = {"dbg"}
 
 KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("base", "test"),
+    ("blas-fortran", "dev"),  # new artifact, no packages yet.
+    ("blas-fortran", "test"),
+    ("fft-fortran", "dev"),  # new artifact, no packages yet.
+    ("fft-fortran", "test"),
     ("fftw3", "dev"),  # fftw3 is currently test-only; may be distributed later.
     ("fftw3", "doc"),
     ("fftw3", "run"),
@@ -75,6 +79,8 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
     ("hipthreads", "dev"),
     ("hipthreads", "test"),
     ("mirage", "dev"),  # new artifact, no packages yet.
+    ("rand-fortran", "dev"),  # new artifact, no packages yet.
+    ("rand-fortran", "test"),
     ("rocjitsu", "dev"),  # new artifact, no packages yet.
     ("rocprofiler-systems-examples", "test"),
     (
@@ -82,6 +88,12 @@ KNOWN_UNCOVERED_COMPONENTS: set[tuple[str, str]] = {
         "test",
     ),  # rocWMMA ships via amdrocm-math-common (dev/lib); tests not distributed.
     ("rocrtst", "lib"),
+    ("runtime-fortran", "dev"),  # new artifact, no packages yet.
+    ("runtime-fortran", "test"),
+    ("solver-fortran", "dev"),  # new artifact, no packages yet.
+    ("solver-fortran", "test"),
+    ("sparse-fortran", "dev"),  # new artifact, no packages yet.
+    ("sparse-fortran", "test"),
     ("support", "dev"),
     ("support", "doc"),
     ("sysdeps-util-linux", "dev"),

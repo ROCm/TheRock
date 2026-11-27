@@ -1,0 +1,25 @@
+[components.dev."bindings/fortran/hip-fortran/stage"]
+include = [
+  "share/hip/fortran/**",
+]
+optional = true
+
+[components.dev."bindings/fortran/roctx-fortran/stage"]
+include = [
+  "share/roctx/fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/hip-fortran/stage"]
+include = [
+  "bin/hip_fortran_test_*",
+  "bin/hip-fortran/**",
+]
+optional = true
+
+[components.test."bindings/fortran/roctx-fortran/stage"]
+include = [
+  "bin/roctx_fortran_test_*",
+  "bin/roctx-fortran/**",
+]
+optional = true
