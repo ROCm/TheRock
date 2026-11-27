@@ -21,9 +21,12 @@ The checkout process combines the following activities:
 * Clones the pytorch repository into `THIS_MAIN_REPO_NAME` with a requested `--repo-hashtag`
   tag (default to latest release).
 * Configures PyTorch submodules to be ignored for any local changes.
-* Runs `hipify` to prepare sources for AMD GPU and commits the result to the
-  main repo and any modified submodules.
+* Applies "base" patches, runs `hipify`, then applies "hipified" patches.
 * Records tag information for tracking upstream and hipify commits.
+
+Patches live in `patches/pytorch/<patchset>/<repo>/{base,hipified}` and are
+applied with `git am`. `--no-patch` skips them. `save-patches` writes local
+commits back into that tree.
 """
 import argparse
 from pathlib import Path
@@ -36,6 +39,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
 DEFAULT_HASHTAG = "nightly"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def main(cl_args: list[str]):
@@ -57,6 +61,9 @@ def main(cl_args: list[str]):
             default=DEFAULT_HASHTAG,
             help="Git repository ref/tag to checkout",
         )
+        repo_management.add_patch_options(
+            command_parser, default_patch_dir=DEFAULT_PATCHES_DIR
+        )
 
     p = argparse.ArgumentParser("pytorch_torch_repo.py")
     sub_p = p.add_subparsers(required=True)
@@ -68,12 +75,24 @@ def main(cl_args: list[str]):
         help="git repository url",
     )
     repo_management.add_checkout_options(checkout_p, default_hipify=True)
+    checkout_p.add_argument(
+        "--patch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply checked-in patches for the patchset",
+    )
     checkout_p.set_defaults(jobs=10)
     checkout_p.set_defaults(func=repo_management.do_checkout)
 
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")
     add_common(hipify_p)
     hipify_p.set_defaults(func=repo_management.do_hipify)
+
+    save_patches_p = sub_p.add_parser(
+        "save-patches", help="Save local commits as patch files"
+    )
+    add_common(save_patches_p)
+    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)
