@@ -551,7 +551,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         os.environ["TEST_TYPE"] = "quick"
         self.assertNotIn("miopen-dbsync", self._selected_names())
 
-    def _dbsync_job(self, families, gated_gpu, gfx_target):
+    def _dbsync_job(self, families, gated_gpu, gfx_target, family_test_type=None):
         """Run selection for miopen-dbsync on `families`; return its job or None."""
         os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
         os.environ["AMDGPU_FAMILIES"] = families
@@ -559,27 +559,104 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             # configure_multi_arch_ci blanked the GPU runner (e.g. tests_on_trigger).
             os.environ["TEST_RUNS_ON"] = ""
         target = families.split("-")[0].lower()
+        platform_info = {
+            "test-runs-on": "" if gated_gpu else "some-gpu-runner",
+            "fetch-gfx-targets": [gfx_target],
+        }
+        if family_test_type:
+            platform_info["test_type_for_family"] = family_test_type
         fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
-            target: {
-                "linux": {
-                    "test-runs-on": "" if gated_gpu else "some-gpu-runner",
-                    "fetch-gfx-targets": [gfx_target],
-                }
-            }
+            target: {"linux": platform_info}
         }
         fetch_test_configurations.run()
         jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
         return jobs[0] if jobs else None
 
-    def test_miopen_dbsync_include_family_covers_gfx942_gfx950_and_gfx90a(self):
+    def test_miopen_dbsync_include_family_covers_cdna_and_gfx1250(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
         self.assertEqual(
-            config["include_family"]["linux"], ["gfx942", "gfx950", "gfx90a"]
+            config["include_family"]["linux"],
+            ["gfx942", "gfx950", "gfx90a", "gfx125X-dcgpu"],
         )
 
-    def test_miopen_dbsync_declares_only_gfx90a_advisory(self):
+    def test_miopen_dbsync_declares_gfx90a_and_gfx1250_advisory(self):
         config = fetch_test_configurations.test_matrix["miopen-dbsync"]
-        self.assertEqual(config["expect_failure"], {"linux": ["gfx90a"]})
+        self.assertEqual(
+            config["expect_failure"], {"linux": ["gfx90a", "gfx125X-dcgpu"]}
+        )
+
+    def test_miopen_dbsync_gfx1250_scheduled_on_cpu_runner_when_gpu_gated(self):
+        os.environ["TEST_TYPE"] = "standard"
+        # gfx125X tests only on nightly, so the GPU runner is blanked on presubmit,
+        # and the family forces the quick tier. The job still runs, on the requested tier.
+        job = self._dbsync_job("gfx125X-dcgpu", True, "gfx1250", "quick")
+        self.assertIsNotNone(job)
+        self.assertTrue(job["linux_cpu_runner"])
+        self.assertTrue(job["test_runner"])
+        self.assertEqual(job["test_type"], "standard")
+
+    def test_miopen_dbsync_gfx1250_is_advisory(self):
+        job = self._dbsync_job("gfx125X-dcgpu", True, "gfx1250", "quick")
+        self.assertIs(job["expect_failure"], True)
+
+    def test_miopen_dbsync_gfx1250_still_excluded_when_quick_is_requested(self):
+        os.environ["TEST_TYPE"] = "quick"
+        self.assertIsNone(self._dbsync_job("gfx125X-dcgpu", True, "gfx1250", "quick"))
+
+    def test_family_test_type_still_forces_quick_for_other_components(self):
+        # Only components that set ignore_test_type_for_family keep the requested tier.
+        self._dbsync_job("gfx125X-dcgpu", True, "gfx1250", "quick")
+        os.environ["PROJECTS_TO_TEST"] = "hipfile"
+        fetch_test_configurations.run()
+        job = [j for j in self._get_components() if j["job_name"] == "hipfile"][0]
+        self.assertEqual(job["test_type"], "quick")
+
+    def test_ignore_test_type_for_family_only_on_cpu_runner_components(self):
+        for name, config in fetch_test_configurations.test_matrix.items():
+            if config.get("ignore_test_type_for_family"):
+                self.assertTrue(config.get("linux_cpu_runner"), name)
+
+    def _inject_on_quick_family(self, name, **extra):
+        """Inject a job on gfx125X-dcgpu, whose family forces quick; GPU runner available."""
+        os.environ["TEST_TYPE"] = "standard"
+        os.environ["AMDGPU_FAMILIES"] = "gfx125X-dcgpu"
+        self._inject_job(name, **extra)
+        fetch_test_configurations.get_all_families_for_trigger_types = lambda _: {
+            "gfx125x": {
+                "linux": {
+                    "test-runs-on": "some-gpu-runner",
+                    "test-runs-on-multi-gpu": "some-mgpu-runner",
+                    "fetch-gfx-targets": ["gfx1250"],
+                    "test_type_for_family": "quick",
+                }
+            }
+        }
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == name]
+        return jobs[0] if jobs else None
+
+    def test_ignore_test_type_for_family_needs_linux_cpu_runner(self):
+        job = self._inject_on_quick_family(
+            "gpu-opt-out", ignore_test_type_for_family=True
+        )
+        self.assertEqual(job["test_type"], "quick")
+
+    def test_ignore_test_type_for_family_keeps_all_shards(self):
+        extra = dict(linux_cpu_runner=True, total_shards_dict={"linux": 2})
+        forced = self._inject_on_quick_family("shard-follow", **extra)
+        self.assertEqual(forced["shard_arr"], [1])
+        opted_out = self._inject_on_quick_family(
+            "shard-opt-out", ignore_test_type_for_family=True, **extra
+        )
+        self.assertEqual(opted_out["shard_arr"], [1, 2])
+
+    def test_ignore_test_type_for_family_keeps_multi_gpu_job(self):
+        extra = dict(linux_cpu_runner=True, multi_gpu={"linux": ["gfx125X-dcgpu"]})
+        self.assertIsNone(self._inject_on_quick_family("mgpu-follow", **extra))
+        job = self._inject_on_quick_family(
+            "mgpu-opt-out", ignore_test_type_for_family=True, **extra
+        )
+        self.assertEqual(job["multi_gpu_runner"], "some-mgpu-runner")
 
     def test_miopen_dbsync_gfx90a_scheduled_on_cpu_runner_when_gpu_gated(self):
         job = self._dbsync_job("gfx90a", True, "gfx90a")
