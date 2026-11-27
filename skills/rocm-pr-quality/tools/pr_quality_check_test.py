@@ -4,9 +4,7 @@
 """Unit tests for the review-attestation digest in pr_quality_check.py.
 
 Run locally:
-    python -m unittest skills/rocm-pr-quality/tools/pr_quality_check_test.py -v
-    # or
-    pytest skills/rocm-pr-quality/tools/pr_quality_check_test.py
+    python -m pytest skills/rocm-pr-quality/tools/pr_quality_check_test.py
 """
 
 import hashlib
