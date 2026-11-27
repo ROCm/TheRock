@@ -9,6 +9,7 @@ the co-located rocke package, which this puts on PYTHONPATH. Without at least
 one, the rocKE CTest entries fail with ModuleNotFoundError.
 """
 
+import json
 import logging
 import os
 import shlex
@@ -19,6 +20,114 @@ from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEST_RUNNER = SCRIPT_DIR / "test_runner.py"
+
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
+from rocm_sdk_utils import locate_comgr, locate_artifact_pair
+
+
+def forward_compiler() -> None:
+    """Admit the tested artifact's coherent pair and forward owner evidence.
+
+    SDK provisioning remains available for SDK-default tests, but this installed
+    artifact lane must not silently test a wheel's HIP instead of artifact HIP.
+    """
+    try:
+        artifact_compiler, artifact_hip = locate_artifact_pair(Path(THEROCK_BIN_DIR))
+        override = os.environ.get("ROCKE_COMGR_LIB")
+        requested = locate_comgr(override=override) if override else artifact_compiler
+        if not requested.samefile(artifact_compiler):
+            raise RuntimeError(
+                "exact compiler override is not the tested HIP's companion; use a coherent artifact pair"
+            )
+        hip_override = os.environ.get("ROCKE_HIP_LIB")
+        if hip_override and not Path(hip_override).samefile(artifact_hip):
+            raise RuntimeError("HIP override differs from the tested artifact runtime")
+    except (OSError, RuntimeError) as e:
+        fail(f"rocKE compiler selection failed: {e}")
+    probe_env = os.environ.copy()
+    # This is an explicit artifact deployment choice, not a discovered SDK
+    # default masquerading as a caller override. Both old and new adapters use it.
+    probe_env["ROCKE_COMGR_LIB"] = str(requested)
+    probe_env["ROCKE_HIP_LIB"] = str(artifact_hip)
+    # Probe in a child so CTest owns its own compiler/runtime process lifetime.
+    # Query through the installed adapter to verify the selected compiler.
+    probe = """
+import json
+import os
+import sys
+from dataclasses import asdict
+from rocke.runtime.comgr import _resolve_lib, loaded_compiler_info, _library_for_symbol
+from rocke.runtime.hip_module import _resolve_hip
+from rocke.core.llvm_profile import _flavor_for_llvm
+_resolve_lib()
+info = loaded_compiler_info()
+if info is None or info.llvm_version is None:
+    raise RuntimeError("rocKE compiler could not be loaded and queried")
+override = os.environ.get("ROCKE_COMGR_LIB")
+if override and info.requested_comgr != override:
+    raise RuntimeError("rocKE did not load the requested ROCKE_COMGR_LIB override")
+selected = info.comgr_path
+if not selected:
+    raise RuntimeError("loaded COMGR has no usable physical module path")
+selected = os.path.realpath(selected)
+if not os.path.isfile(selected):
+    raise RuntimeError("loaded COMGR has no usable physical module path")
+if not os.path.samefile(selected, override):
+    raise RuntimeError("rocKE did not load the selected COMGR file")
+hip = _resolve_hip()
+selected_hip = _library_for_symbol(hip.hipGetDeviceCount)
+if not selected_hip or not os.path.samefile(selected_hip, os.environ['ROCKE_HIP_LIB']):
+    raise RuntimeError("rocKE did not load the tested artifact HIP runtime")
+print(json.dumps(dict(asdict(info), selected_comgr=selected,
+                      selected_hip=os.path.realpath(selected_hip),
+                      llvm_flavor=_flavor_for_llvm(info.llvm_version[0]), python=sys.executable)))
+"""
+    logging.info("Probing rocKE compiler with %s", sys.executable)
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=probe_env,
+            timeout=60,
+        )
+    except OSError as e:
+        fail(f"could not execute the rocKE compiler probe: {e}")
+    except subprocess.CalledProcessError as e:
+        fail(f"rocKE compiler setup failed: {e.stderr or e}")
+    except subprocess.TimeoutExpired as e:
+        fail(f"rocKE compiler/runtime admission timed out: {e}")
+    try:
+        info = json.loads(result.stdout)
+        selected = info["selected_comgr"]
+        if not isinstance(selected, str) or not selected or not info["llvm_version"]:
+            raise ValueError("missing loaded compiler path or version")
+        if not isinstance(info["selected_hip"], str) or not info["selected_hip"]:
+            raise ValueError("missing actual HIP path")
+        if info["llvm_flavor"] not in ("llvm20", "llvm22", "llvm23", "llvm24"):
+            raise ValueError("unknown compiler flavor")
+    except (ValueError, KeyError, TypeError) as e:
+        fail(f"invalid rocKE compiler probe output: {e}")
+    logging.info("Selected rocKE compiler: %s", info)
+    os.environ["ROCKE_COMGR_LIB"] = selected
+    os.environ["ROCKE_HIP_LIB"] = info["selected_hip"]
+    # Compiler-free native IR consumers receive this owner's queried profile.
+    if not os.environ.get("ROCKE_LLVM_FLAVOR"):
+        os.environ["ROCKE_LLVM_FLAVOR"] = info["llvm_flavor"]
+    # HIP-source tests invoke hipcc separately. Its SDK trampoline can select
+    # SDK clang while test_runner sets ROCM_PATH to the tested artifacts; on
+    # Windows that combination does not discover the artifact device libraries.
+    # amd-llvm_lib explicitly installs this directory on both platforms. Keep
+    # artifact HIP/COMGR unchanged and pass the declared bitcode path to clang.
+    device_libs = Path(THEROCK_BIN_DIR).resolve().parent / "lib/llvm/amdgcn/bitcode"
+    flag = f"--rocm-device-lib-path={device_libs}"
+    quoted = subprocess.list2cmdline([flag]) if os.name == "nt" else shlex.quote(flag)
+    existing = os.environ.get("HIPCC_COMPILE_FLAGS_APPEND", "").strip()
+    os.environ["HIPCC_COMPILE_FLAGS_APPEND"] = " ".join(
+        filter(None, [existing, quoted])
+    )
+    logging.info("HIP source compiler device libraries: %s", device_libs)
 
 
 def fail(message) -> NoReturn:
@@ -100,6 +209,15 @@ elif not wheels:
         f"Neither rocKE wheels nor a rocke package found under {test_dir}. "
         "Any rocKE CTest entry that runs will fail to import rocke."
     )
+
+# Native IR tests consume the admitted flavor, not an interpreter-prefix guess.
+# Declare the artifact's exact compiler/runtime pair for Python tests as well;
+# independently provisioned SDK-default tests are a separate acceptance lane.
+if (
+    any(Path(w).name.startswith("rocke-") for w in wheels)
+    or (test_dir / "rocke").is_dir()
+):
+    forward_compiler()
 
 # Subprocess rather than import: test_runner.py validates the environment and
 # calls sys.exit() at module scope.
