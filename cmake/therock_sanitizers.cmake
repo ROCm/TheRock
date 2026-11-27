@@ -47,7 +47,9 @@ function(therock_sanitizer_configure
       set(_sanitizer_string "thread")
     endif()
 
-    if(_sanitizer STREQUAL "HOST_ASAN")
+    # TSAN is host-only too, since the AMDGPU toolchain has no thread sanitizer. Plain
+    # -fsanitize=thread on a HIP compile runs into a link error in the device link.
+    if(_sanitizer STREQUAL "HOST_ASAN" OR _sanitizer STREQUAL "TSAN")
       # Scope to host arch only so HIP device -cc1 never sees -fsanitize=*.
       # Avoids: (1) -Woption-ignored on gfx942 without :xnack+ (MIOpen failure due to -Werror)
       #         (2) handleSanitizeOption dropping all device -I/-D with -fno-gpu-sanitize (Bug in Driver)
@@ -57,9 +59,9 @@ function(therock_sanitizer_configure
       # via CMake's native HIP language support, which reads CMAKE_HIP_FLAGS
       # (seeded from CMAKE_HIP_FLAGS_INIT), not CMAKE_CXX_FLAGS. Without this,
       # such .hip sources silently get zero sanitizer instrumentation.
-      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
-      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" -Xarch_host -fsanitize=address -Xarch_host -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
+      string(APPEND _stanza "string(APPEND CMAKE_HIP_FLAGS_INIT \" -Xarch_host -fsanitize=${_sanitizer_string} -Xarch_host -fno-omit-frame-pointer\")\n")
     else()
       # TODO: Support ASAN_STATIC/TSAN_STATIC to use static sanitizer linkage. Shared is almost always the right thing,
       # so make the sanitizer imply shared linkage.
@@ -103,16 +105,16 @@ function(therock_sanitizer_configure
     # they pass CMAKE_*_LINKER_FLAGS directly to their configure script. Those subprojects
     # are expected to handle sanitizer linker flags in their own pre_hook.
 
-    # Device-side instrumentation: applied for full ASAN and TSAN, not HOST_ASAN.
+    # Device-side instrumentation: applied for full ASAN only, not HOST_ASAN or TSAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
-    if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "TSAN")
+    if(_sanitizer STREQUAL "ASAN")
       string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx90a|gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
       string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "set(CMAKE_HIP_ARCHITECTURES \"\${GPU_TARGETS}\")\n")
       string(APPEND _stanza "message(STATUS \"Override ${_sanitizer} GPU_TARGETS = \${GPU_TARGETS}\")\n")
     else()
-      # HOST_ASAN.
-      string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
+      # HOST_ASAN and TSAN.
+      string(APPEND _stanza "message(STATUS \"${_sanitizer} enabled - GPU_TARGETS unchanged\")\n")
     endif()
 
     # Action at a distance: Signal that the sub-project should extend its build and install
