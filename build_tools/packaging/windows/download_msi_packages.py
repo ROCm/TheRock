@@ -10,14 +10,14 @@ then runs the tests against the output directory; a developer can do the same
 and re-run the tests repeatedly without re-downloading.
 
 The MSIs live at the public artifacts prefix ``{run_id}-windows/packages/msi/``
-and are named ``<output_stem>.msi`` per the generator's PACKAGES table, so no S3
-listing or credentials are needed (works from forks).
+and are named ``<output_stem>-<rocm_version>.msi`` per the generator's PACKAGES
+table, so no S3 listing or credentials are needed (works from forks).
 
 Example::
 
     python download_msi_packages.py \\
         --artifact-run-id 36648157930 --release-type nightly \\
-        --packages runtime --dest-dir ./msis
+        --rocm-version 10.2.0 --packages runtime --dest-dir ./msis
 """
 
 import argparse
@@ -55,12 +55,14 @@ def resolve_msi_prefix_url(
     return root.native_windows_packages("msi").https_url
 
 
-def download_msis(prefix_url: str, packages: list[str], dest_dir: Path) -> list[Path]:
+def download_msis(
+    prefix_url: str, packages: list[str], dest_dir: Path, rocm_version: str
+) -> list[Path]:
     """Download each package's MSI from the public prefix into ``dest_dir``."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[Path] = []
     for package in packages:
-        filename = expected_msi_filename(package)
+        filename = expected_msi_filename(package, rocm_version)
         url = f"{prefix_url.rstrip('/')}/{filename}"
         # Only allow HTTPS. urlretrieve would otherwise happily open file:// or
         # other schemes, which here could read a local path instead of the
@@ -107,6 +109,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Release type selecting the source artifacts bucket (e.g. ci, nightly).",
     )
     parser.add_argument(
+        "--rocm-version",
+        required=True,
+        help="User-facing ROCm version (e.g. '10.2.0'); included in the MSI filename.",
+    )
+    parser.add_argument(
         "--packages",
         default="runtime",
         help="Comma-separated packages to download (e.g. 'runtime,core').",
@@ -129,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
     prefix_url = resolve_msi_prefix_url(
         args.artifact_run_id, args.artifact_github_repo, args.release_type
     )
-    paths = download_msis(prefix_url, packages, args.dest_dir)
+    paths = download_msis(prefix_url, packages, args.dest_dir, args.rocm_version)
     print(f"Downloaded {len(paths)} MSI(s) to {args.dest_dir}")
 
 

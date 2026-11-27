@@ -88,11 +88,13 @@ def install_dir_for(
     return program_files / PRODUCT_SUBDIR / install_subdir_for(package, rocm_version)
 
 
-def collect_local_msis(packages: list[str], msi_dir: Path) -> list[Path]:
+def collect_local_msis(
+    packages: list[str], msi_dir: Path, rocm_version: str
+) -> list[Path]:
     """Return the expected MSI path for each package from a local directory."""
     found: list[Path] = []
     for package in packages:
-        path = msi_dir / expected_msi_filename(package)
+        path = msi_dir / expected_msi_filename(package, rocm_version)
         if not path.is_file():
             raise FileNotFoundError(
                 f"expected MSI for package {package!r} not found: {path}"
@@ -396,7 +398,7 @@ class WindowsPackageInstallTest:
             )
             return 2
         try:
-            msis = collect_local_msis(self.packages, self.msi_dir)
+            msis = collect_local_msis(self.packages, self.msi_dir, self.rocm_version)
             for package, msi_path in zip(self.packages, msis):
                 install_msi(msi_path, self.msi_dir / f"{package}-install.log")
             for package in self.packages:
