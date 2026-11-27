@@ -1,0 +1,134 @@
+From 7d35a7e2912df8acf6826be776d2550beb8b401e Mon Sep 17 00:00:00 2001
+From: Ethan Stewart <ethan.stewart@amd.com>
+Date: Wed, 23 Sep 2026 09:35:28 -0500
+Subject: [PATCH] [openmp] - Adjust linkage of hwloc to avoid hardcoding path
+ in openmp config
+
+---
+ openmp/cmake/modules/LibompHandleFlags.cmake |  1 -
+ openmp/runtime/CMakeLists.txt                |  9 +++-
+ openmp/runtime/cmake/config-ix.cmake         | 50 +++++++++++---------
+ openmp/runtime/src/CMakeLists.txt            |  7 ++-
+ 4 files changed, 41 insertions(+), 26 deletions(-)
+
+diff --git a/openmp/cmake/modules/LibompHandleFlags.cmake b/openmp/cmake/modules/LibompHandleFlags.cmake
+index 31200980a77b..207b6c1ed6d5 100644
+--- a/openmp/cmake/modules/LibompHandleFlags.cmake
++++ b/openmp/cmake/modules/LibompHandleFlags.cmake
+@@ -136,7 +136,6 @@ endfunction()
+ function(libomp_get_libflags libflags)
+   set(libflags_local)
+   libomp_append(libflags_local "${CMAKE_THREAD_LIBS_INIT}")
+-  libomp_append(libflags_local "${LIBOMP_HWLOC_LIBRARY}" LIBOMP_USE_HWLOC)
+   if(IA32)
+     libomp_append(libflags_local -lirc_pic LIBOMP_HAVE_IRC_PIC_LIBRARY)
+   endif()
+diff --git a/openmp/runtime/CMakeLists.txt b/openmp/runtime/CMakeLists.txt
+index abbf370d4970..f3688843a5a0 100644
+--- a/openmp/runtime/CMakeLists.txt
++++ b/openmp/runtime/CMakeLists.txt
+@@ -398,13 +398,18 @@ set(LIBOMP_TASKGRAPH_EXPERIMENTAL FALSE CACHE BOOL "Experimental OMP taskgraph (
+ 
+ # Error check hwloc support after config-ix has run
+ if(${LIBOMP_USE_HWLOC})
+-  set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INSTALL_DIR}/include)
++  if(TARGET hwloc::hwloc)
++    set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INCLUDE_DIR})
++  else()
++    set(LIBOMP_HWLOC_INCLUDE_DIR ${LIBOMP_HWLOC_INSTALL_DIR}/include)
++    set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INCLUDE_DIR})
++  endif()
+   check_include_file(hwloc.h LIBOMP_HAVE_HWLOC_H)
+   set(CMAKE_REQUIRED_INCLUDES)
+   if(NOT LIBOMP_HAVE_HWLOC_H)
+     libomp_error_say("Hwloc requested but not available")
+   else()
+-    include_directories(${LIBOMP_HWLOC_INSTALL_DIR}/include)
++    include_directories(${LIBOMP_HWLOC_INCLUDE_DIR})
+   endif()
+ endif()
+ 
+diff --git a/openmp/runtime/cmake/config-ix.cmake b/openmp/runtime/cmake/config-ix.cmake
+index 2a4bbd92d697..86e210968cd7 100644
+--- a/openmp/runtime/cmake/config-ix.cmake
++++ b/openmp/runtime/cmake/config-ix.cmake
+@@ -325,30 +325,36 @@ set(LIBOMP_HAVE_OMPT_SUPPORT ${LIBOMP_HAVE_OMPT_SUPPORT} PARENT_SCOPE)
+ 
+ # Check if HWLOC support is available
+ if(LIBOMP_USE_HWLOC)
+-  find_path(LIBOMP_HWLOC_INCLUDE_DIR NAMES hwloc.h HINTS ${LIBOMP_HWLOC_INSTALL_DIR} PATH_SUFFIXES include)
+-  set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INCLUDE_DIR})
+-  check_include_file(hwloc.h LIBOMP_HAVE_HWLOC_H)
+-  set(CMAKE_REQUIRED_INCLUDES)
+-  find_library(LIBOMP_HWLOC_LIBRARY
+-    NAMES hwloc libhwloc
+-    HINTS ${LIBOMP_HWLOC_INSTALL_DIR}/lib)
+-  if(LIBOMP_HWLOC_LIBRARY)
+-    # In case libhwloc is static, check_library_exists does not work on static libs
+-    get_filename_component(LIBOMP_HWLOC_LIBRARY_EXT ${LIBOMP_HWLOC_LIBRARY} EXT)
+-    string(COMPARE EQUAL ${LIBOMP_HWLOC_LIBRARY_EXT} ".a" LIBOMP_HWLOC_LIBRARY_IS_STATIC)
+-    if(LIBOMP_HWLOC_LIBRARY_IS_STATIC)
+-      set(LIBOMP_HAVE_LIBHWLOC TRUE)
+-    else()
+-    check_library_exists(${LIBOMP_HWLOC_LIBRARY} hwloc_topology_init
+-      ${LIBOMP_HWLOC_INSTALL_DIR}/lib LIBOMP_HAVE_LIBHWLOC)
+-    endif()
+-    get_filename_component(LIBOMP_HWLOC_LIBRARY_DIR ${LIBOMP_HWLOC_LIBRARY} PATH)
+-  endif()
+-  if(LIBOMP_HAVE_HWLOC_H AND LIBOMP_HAVE_LIBHWLOC AND LIBOMP_HWLOC_LIBRARY)
++  find_package(hwloc CONFIG QUIET)
++  if(hwloc_FOUND)
+     set(LIBOMP_HAVE_HWLOC TRUE)
++    get_target_property(LIBOMP_HWLOC_INCLUDE_DIR hwloc::hwloc INTERFACE_INCLUDE_DIRECTORIES)
+   else()
+-    set(LIBOMP_HAVE_HWLOC FALSE)
+-    libomp_say("Could not find hwloc")
++    find_path(LIBOMP_HWLOC_INCLUDE_DIR NAMES hwloc.h HINTS ${LIBOMP_HWLOC_INSTALL_DIR} PATH_SUFFIXES include)
++    set(CMAKE_REQUIRED_INCLUDES ${LIBOMP_HWLOC_INCLUDE_DIR})
++    check_include_file(hwloc.h LIBOMP_HAVE_HWLOC_H)
++    set(CMAKE_REQUIRED_INCLUDES)
++    find_library(LIBOMP_HWLOC_LIBRARY
++      NAMES hwloc libhwloc
++      HINTS ${LIBOMP_HWLOC_INSTALL_DIR}/lib)
++    if(LIBOMP_HWLOC_LIBRARY)
++      # In case libhwloc is static, check_library_exists does not work on static libs
++      get_filename_component(LIBOMP_HWLOC_LIBRARY_EXT ${LIBOMP_HWLOC_LIBRARY} EXT)
++      string(COMPARE EQUAL ${LIBOMP_HWLOC_LIBRARY_EXT} ".a" LIBOMP_HWLOC_LIBRARY_IS_STATIC)
++      if(LIBOMP_HWLOC_LIBRARY_IS_STATIC)
++        set(LIBOMP_HAVE_LIBHWLOC TRUE)
++      else()
++      check_library_exists(${LIBOMP_HWLOC_LIBRARY} hwloc_topology_init
++        ${LIBOMP_HWLOC_INSTALL_DIR}/lib LIBOMP_HAVE_LIBHWLOC)
++      endif()
++      get_filename_component(LIBOMP_HWLOC_LIBRARY_DIR ${LIBOMP_HWLOC_LIBRARY} PATH)
++    endif()
++    if(LIBOMP_HAVE_HWLOC_H AND LIBOMP_HAVE_LIBHWLOC AND LIBOMP_HWLOC_LIBRARY)
++      set(LIBOMP_HAVE_HWLOC TRUE)
++    else()
++      set(LIBOMP_HAVE_HWLOC FALSE)
++      libomp_say("Could not find hwloc")
++    endif()
+   endif()
+ endif()
+ 
+diff --git a/openmp/runtime/src/CMakeLists.txt b/openmp/runtime/src/CMakeLists.txt
+index 103b9b3aafe1..aa0025369ade 100644
+--- a/openmp/runtime/src/CMakeLists.txt
++++ b/openmp/runtime/src/CMakeLists.txt
+@@ -186,7 +186,12 @@ if(NOT OPENMP_ENABLE_LIBOMP_PROFILING)
+   add_library(omp ${LIBOMP_LIBRARY_KIND} $<TARGET_OBJECTS:obj.omp>)
+   set_property(TARGET omp PROPERTY FOLDER "OpenMP/Libraries")
+   # Linking command will include libraries in LIBOMP_CONFIGURED_LIBFLAGS
+-  target_link_libraries(omp ${LIBOMP_CONFIGURED_LIBFLAGS} ${LIBOMP_DL_LIBS})
++  target_link_libraries(omp PRIVATE ${LIBOMP_CONFIGURED_LIBFLAGS} ${LIBOMP_DL_LIBS})
++  # Do NOT put hwloc into LIBOMP_CONFIGURED_LIBFLAGS anymore.
++  if(LIBOMP_USE_HWLOC AND TARGET hwloc::hwloc)
++    target_link_libraries(omp PRIVATE "$<BUILD_INTERFACE:hwloc::hwloc>")
++    target_link_libraries(obj.omp PRIVATE "$<BUILD_INTERFACE:hwloc::hwloc>")
++  endif()
+ else()
+   add_llvm_library(omp ${LIBOMP_LIBRARY_KIND} $<TARGET_OBJECTS:obj.omp> PARTIAL_SOURCES_INTENDED
+     LINK_LIBS ${LIBOMP_CONFIGURED_LIBFLAGS} ${LIBOMP_DL_LIBS}
+-- 
+2.34.1
+
