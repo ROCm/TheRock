@@ -134,6 +134,7 @@ GTEST_ONLY_SHARDING_COMPONENTS = {
     "miopen",
     "hipdnn-integration-tests",
     "rocwmma",
+    "rccl",
 }
 
 # Per-component, per-GPU-family ctest exclusions (ctest --exclude-regex patterns).
