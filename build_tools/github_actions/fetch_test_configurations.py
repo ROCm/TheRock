@@ -615,14 +615,17 @@ test_matrix = {
     },
     # EXPERIMENT (not for merge): the whole hipBLASLt binary (like the gfx1250
     # hardware nightly) under rocjitsu, 7 shards (~16.6 test-hours), blocking.
-    # Skips the 46-min AlgoWorkspace test, TuningTune (hours each under
-    # emulation), the host memory estimate check (emulated device memory lives
-    # in host memory) and the stress category (size_t overflow GEMMs needing
-    # 4-16 GiB, ~4.7 min each; hipBLASLt runs them in no CI tier), the
-    # fast_check / sdc_hunt large-problem checks and RowUniformity Control
-    # (71 of them hit the 300 s per-test limit under rocjitsu; the hardware
-    # nightly runs all in 62 s). The launcher stops any test after 300 s and
-    # continues.
+    # Skips the 46-min AlgoWorkspace test; TuningTune and TuningOnline (they
+    # benchmark every candidate kernel: hours each under emulation, and
+    # TuningOnline_pre_checkin.AnExistingRowIsReplayedNotExplored ran past the
+    # 195-min suite limit in run 45961534629); the two host memory checks
+    # (rocjitsu keeps emulated device memory in the test process, so its peak
+    # resident memory is not the client's: peak_resident_memory_* failed in
+    # run 45961534629 and passes on gfx1250 hardware); the stress category
+    # (size_t overflow GEMMs needing 4-16 GiB, ~4.7 min each; hipBLASLt runs
+    # them in no CI tier); and the fast_check / sdc_hunt large-problem checks
+    # and RowUniformity Control (71 of them took over 300 s each under
+    # rocjitsu; the hardware nightly runs all in 62 s).
     "hipblaslt-rocjitsu": {
         "job_name": "hipblaslt-rocjitsu",
         "skip_stages": ["emulation"],
@@ -634,8 +637,9 @@ test_matrix = {
             "python ../share/hipblaslt/tensilelite/tensilelite/Tests/emulation/run_rocjitsu.py -- "
             "./hipblaslt-test "
             "--gtest_filter=-AlgoWorkspace.smoke_GemmInitializeRejectsUndersizedWorkspace:"
-            "*TuningTune*:"
+            "*TuningTune*:*TuningOnline*:"
             "MatmulMemory_pre_checkin.host_estimate_matches_what_a_unit_check_case_uses:"
+            "MatmulMemory_pre_checkin.peak_resident_memory_survives_the_estimate_check:"
             "*stress*:*fast_check*:*sdc_hunt*:RowUniformity_pre_checkin.Control_*"
         ),
         "platform": ["linux"],
