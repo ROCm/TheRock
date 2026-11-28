@@ -104,11 +104,13 @@ _amdgpu = {
         "AMD Radeon RX 5600 XT",
         "AMD Radeon RX 5600",
     ],
-    "gfx1011": [
+    "gfx1011": ["AMD Radeon Pro V520", "AMD Radeon Pro 5600M"],
+    "gfx1012": [
         "AMD Radeon RX 5500 XT",
         "AMD Radeon RX 5500",
+        "AMD Radeon RX 5300 XT",
+        "AMD Radeon Pro W5500",
     ],
-    "gfx1012": ["AMD Radeon RX 5300 XT", "AMD Radeon Pro W5500"],
     # Radeon VEGA
     "gfx906": [
         "AMD Radeon VII",
