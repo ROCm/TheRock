@@ -2027,6 +2027,14 @@ def _expand_build_config_for_platform(
                 test_runs_on = ""
                 print(f"  {family_name}: tests disabled ({reason})")
 
+        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
+        # This is useful for changes that don't require GPU testing (e.g., docs,
+        # build scripts, CPU-only components). Apply it before test_type_for_family
+        # below, which only lowers the tier for families whose GPU tests still run.
+        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
+            test_runs_on = ""
+            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
+
         # If test_type_for_family is set, force the test type for this family.
         # This overrides the global test_type, allowing families with limited
         # hardware to always run quick tests regardless of trigger type.
@@ -2039,13 +2047,6 @@ def _expand_build_config_for_platform(
                     f"  {family_name}: forcing test_type={family_test_type} "
                     f"(global={jobs.test_rocm.test_type})"
                 )
-
-        # ci:cpu-test-only label: disable GPU tests, only run CPU-only tests.
-        # This is useful for changes that don't require GPU testing (e.g., docs,
-        # build scripts, CPU-only components).
-        if "ci:cpu-test-only" in ci_inputs.pr_labels and test_runs_on:
-            test_runs_on = ""
-            print(f"  {family_name}: GPU tests disabled by 'ci:cpu-test-only' label")
 
         # CPU test runner for components that don't need GPU access (e.g.,
         # components with linux_cpu_runner: True). This allows CPU-only tests
