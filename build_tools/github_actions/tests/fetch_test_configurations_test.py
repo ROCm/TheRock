@@ -12,6 +12,7 @@ from unittest.mock import patch
 # Add repo root to PYTHONPATH
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+import configure_multi_arch_ci as cm
 import fetch_test_configurations
 
 
@@ -610,6 +611,52 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         fetch_test_configurations.run()
         job = [j for j in self._get_components() if j["job_name"] == "hipfile"][0]
         self.assertEqual(job["test_type"], "quick")
+
+    def _dbsync_job_after_configure(self, pr_labels):
+        """Run configure_multi_arch_ci for a PR, then select on its gfx125X entry.
+
+        Sets the env test_artifacts.yml builds from that entry, with TEST_TYPE
+        from family_info.test_type || inputs.test_type as multi_arch_ci_linux.yml does.
+        """
+        ci_inputs = cm.CIInputs(
+            run_id="1",
+            event_name="pull_request",
+            commit_ref="feature",
+            base_ref="main",
+            build_variant="release",
+            pr_labels=pr_labels,
+            built_rocm_version="10.2.0.dev0+abcdef",
+        )
+        outputs = cm.configure(ci_inputs, cm.GitContext.empty())
+        family = next(
+            f
+            for f in outputs.builds.linux.per_family_info
+            if f["amdgpu_family"] == "gfx125X-dcgpu"
+        )
+        os.environ["TEST_TYPE"] = (
+            family.get("test_type") or outputs.jobs.test_rocm.test_type
+        )
+        os.environ["TEST_LABELS"] = json.dumps(outputs.linux_test_labels)
+        os.environ["TEST_RUNS_ON"] = family["test-runs-on"]
+        os.environ["TEST_RUNS_ON_CPU"] = family["test-runs-on-cpu"]
+        os.environ["AMDGPU_FAMILIES"] = family["amdgpu_family"]
+        os.environ["AMDGPU_TARGETS"] = family["amdgpu_targets"]
+        os.environ["PROJECTS_TO_TEST"] = "miopen-dbsync"
+        fetch_test_configurations.run()
+        jobs = [j for j in self._get_components() if j["job_name"] == "miopen-dbsync"]
+        return jobs[0] if jobs else None
+
+    def test_miopen_dbsync_gfx1250_not_scheduled_where_gpu_tests_run(self):
+        # ci:gfx125X-dcgpu keeps the gfx1250 GPU runner, so configure passes quick.
+        labels = ["test_filter:standard", "ci:gfx125X-dcgpu"]
+        self.assertIsNone(self._dbsync_job_after_configure(labels))
+
+    def test_miopen_dbsync_gfx1250_cpu_test_only_keeps_requested_tier(self):
+        # ci:cpu-test-only drops the GPU runner, so the requested tier reaches the job.
+        labels = ["test_filter:standard", "ci:gfx125X-dcgpu", "ci:cpu-test-only"]
+        job = self._dbsync_job_after_configure(labels)
+        self.assertIsNotNone(job)
+        self.assertEqual(job["test_type"], "standard")
 
     def test_ignore_test_type_for_family_only_on_cpu_runner_components(self):
         for name, config in fetch_test_configurations.test_matrix.items():

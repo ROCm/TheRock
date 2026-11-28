@@ -977,8 +977,8 @@ test_matrix = {
         },
         # gfx125X sets test_type_for_family "quick" for its scarce GPU runners. This job uses
         # no GPU, so it keeps the requested tier where GPU tests are gated (presubmit,
-        # postsubmit, submodule bumps). Where gfx125X GPU tests run, the workflow already
-        # passes quick, so this job is not scheduled there.
+        # postsubmit, submodule bumps, ci:cpu-test-only). Where gfx125X GPU tests run, the
+        # workflow already passes quick, so this job is not scheduled there.
         "ignore_test_type_for_family": True,
         # gfx90a and gfx125X are advisory while dbsync under rocjitsu's cdna2 and gfx1250
         # emulation is qualified.
