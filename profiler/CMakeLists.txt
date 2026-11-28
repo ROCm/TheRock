@@ -246,7 +246,7 @@ if(THEROCK_ENABLE_ROCPROFILER_COMPUTE)
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     ADDITIONAL_SOURCE_INPUTS
-      # Includes shared/ctest in every build, not only with tests.
+      # Test category helpers (TestCategories.cmake).
       "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD

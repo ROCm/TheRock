@@ -516,7 +516,8 @@ made from the old files can be reused. Typical reads are:
 therock_cmake_subproject_declare(therock-example
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/example"
   ADDITIONAL_SOURCE_INPUTS
-    ${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}
+    # Test category helpers (TestCategories.cmake).
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
     # Builds the shared sha256 sources.
     "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
   # Other subproject arguments...
@@ -539,12 +540,11 @@ with `-DTHEROCK_VERBOSE=ON` it prints
 `FPRINT invalid: cannot resolve additional source input '...'`.
 
 Declare a directory under the same condition as the read. For example, hip-clr
-declares `shared/amdgpu-windows-interop` inside `if(WIN32)`. The rocm-systems
-and rocm-libraries test helpers in `shared/ctest` are usually included only when
-tests are built. Declare them with `${THEROCK_ROCM_SYSTEMS_TEST_INPUTS}` or
-`${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}`, which are empty unless
-`THEROCK_BUILD_TESTING` is on. If a project includes `shared/ctest` in every
-build, declare the path directly.
+declares `shared/amdgpu-windows-interop` inside `if(WIN32)`. The exception is
+the rocm-systems and rocm-libraries test helpers in `shared/ctest`: declare them
+without a condition, even if the project only includes them when tests are
+built. CI builds with tests, and in a build without tests the extra input at
+most causes an unneeded rebuild.
 
 Some reads need no declaration:
 

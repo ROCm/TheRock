@@ -31,7 +31,8 @@ if(THEROCK_ENABLE_RAND)
   therock_cmake_subproject_declare(rocRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand"
     ADDITIONAL_SOURCE_INPUTS
-      ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
       ${_primlibs_benchmark_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRAND"
     BACKGROUND_BUILD
@@ -67,7 +68,9 @@ if(THEROCK_ENABLE_RAND)
 
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -241,7 +244,8 @@ if(THEROCK_ENABLE_PRIM)
       therock_cmake_subproject_declare(hipCCL_tests
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipccl/hipccl3"
         ADDITIONAL_SOURCE_INPUTS
-          ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+          # Test category helpers (TestCategories.cmake).
+          "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
           ${_primlibs_benchmark_source_inputs}
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCCL_tests"
         BACKGROUND_BUILD
@@ -331,7 +335,8 @@ if(THEROCK_ENABLE_PRIM)
       therock_cmake_subproject_declare(rocPRIM_tests
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
         ADDITIONAL_SOURCE_INPUTS
-          ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+          # Test category helpers (TestCategories.cmake).
+          "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
           ${_primlibs_benchmark_source_inputs}
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
         BACKGROUND_BUILD
@@ -369,7 +374,8 @@ if(THEROCK_ENABLE_PRIM)
     therock_cmake_subproject_declare(hipCUB
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
       ADDITIONAL_SOURCE_INPUTS
-        ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+        # Test category helpers (TestCategories.cmake).
+        "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
         ${_primlibs_benchmark_source_inputs}
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
       BACKGROUND_BUILD
@@ -406,7 +412,8 @@ if(THEROCK_ENABLE_PRIM)
     therock_cmake_subproject_declare(rocThrust
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
       ADDITIONAL_SOURCE_INPUTS
-        ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+        # Test category helpers (TestCategories.cmake).
+        "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
         ${_primlibs_benchmark_source_inputs}
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
       BACKGROUND_BUILD
@@ -555,7 +562,9 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
 
   therock_cmake_subproject_declare(rocFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -593,7 +602,9 @@ if(THEROCK_ENABLE_FFT AND _fft_enabled)
 
   therock_cmake_subproject_declare(hipFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -682,7 +693,9 @@ if(THEROCK_ENABLE_ROCWMMA)
 
   therock_cmake_subproject_declare(rocWMMA
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocwmma"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -738,7 +751,9 @@ if(THEROCK_ENABLE_ROCALUTION AND _rocalution_enabled)
 
   therock_cmake_subproject_declare(rocALUTION
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocalution"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocALUTION"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -882,7 +897,9 @@ if(THEROCK_ENABLE_HIPTENSOR AND _ck_enabled)
 
   therock_cmake_subproject_declare(hipTensor
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
-    ADDITIONAL_SOURCE_INPUTS ${THEROCK_ROCM_LIBRARIES_TEST_INPUTS}
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipTensor"
     BACKGROUND_BUILD
     CMAKE_ARGS

@@ -231,8 +231,8 @@ class SourceDependencyFingerprintTest(FingerprintTestCase):
 
     def test_empty_input_list_adds_nothing(self) -> None:
         """An empty input list adds nothing, so other commits change nothing."""
-        # As with THEROCK_ROCM_*_TEST_INPUTS when tests are not built, the
-        # declaration names a list variable that is empty.
+        # As with `_primlibs_benchmark_source_inputs` when tests are not built,
+        # the declaration names a list variable that is empty.
         baseline = self.configure(())
         self.assert_valid(baseline)
         self.edit_and_commit(self.whole_repo, "input.txt")
