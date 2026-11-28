@@ -489,3 +489,78 @@ therock_cmake_subproject_provide_package(ROCR-Runtime hsa-runtime64 lib/cmake/hs
 # to `FetchContent_MakeAvailable()` for that facility.
 therock_cmake_subproject_activate(ROCR-Runtime)
 ```
+
+### Sources outside the sub-project directory
+
+Each sub-project has a fingerprint, computed at configure time, that build
+caching uses to decide whether the sub-project's outputs can be reused. Its
+source part is the Git tree of the sub-project's source directory
+(`EXTERNAL_SOURCE_DIR`, or `FPRINT_SOURCE_DIR` if given). Commits elsewhere in
+the same checkout, for example to another project in rocm-systems, do not change
+it. Uncommitted changes to tracked files in the directory make the fingerprint
+invalid. A sibling `.<dirname>.smrev` file, written by some source fetch steps,
+takes priority over Git.
+
+Because only that directory is fingerprinted, a sub-project that reads files
+outside it must declare those directories in `ADDITIONAL_SOURCE_INPUTS`.
+Otherwise a change there does not change the fingerprint, and a cached build
+made from the old files can be reused. Typical reads are:
+
+- CMake code that reaches outside the directory, for example `../` paths,
+  `include()` or `add_subdirectory()`.
+- Paths passed in `CMAKE_ARGS`, for example `-DHIP_COMMON_DIR=...`.
+- Sources or headers compiled from a shared directory, for example
+  `rocm-systems/shared/sha256`, including relative `#include "../..."` lines.
+
+```cmake
+therock_cmake_subproject_declare(therock-example
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/example"
+  ADDITIONAL_SOURCE_INPUTS
+    # Test category helpers (TestCategories.cmake).
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
+    # Builds the shared sha256 sources.
+    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/sha256"
+  # Other subproject arguments...
+)
+```
+
+List one entry per line. Put a comment above each directory saying why the
+sub-project reads it.
+
+Each entry is a directory. Relative paths are resolved against the directory of
+the `CMakeLists.txt` that declares the sub-project; prefer the
+`THEROCK_*_SOURCE_DIR` variables. Each directory gets its own source identity
+from Git or a `.smrev` file, so a directory outside Git needs a `.smrev` file.
+The path is hashed with the identity, so pointing at a different directory
+changes the fingerprint.
+
+If an input is missing or has no valid identity, the sub-project has no
+fingerprint, and neither do sub-projects that depend on it. Configure continues;
+with `-DTHEROCK_VERBOSE=ON` it prints
+`FPRINT invalid: cannot resolve additional source input '...'`.
+
+Declare a directory under the same condition as the read. For example, hip-clr
+declares `shared/amdgpu-windows-interop` inside `if(WIN32)`. The exception is
+the rocm-systems and rocm-libraries test helpers in `shared/ctest`: declare them
+without a condition, even if the project only includes them when tests are
+built. CI builds with tests, and in a build without tests the extra input at
+most causes an unneeded rebuild.
+
+Some reads need no declaration:
+
+- The staged or installed output of a `BUILD_DEPS` or `RUNTIME_DEPS`
+  sub-project. That sub-project's fingerprint is already part of this one.
+  Reading the other sub-project's source tree still needs a declaration.
+- `pre_hook_*.cmake` and `post_hook_*.cmake` files next to the declaration.
+  They are already fingerprinted.
+
+`ADDITIONAL_SOURCE_INPUTS` only affects the fingerprint. It does not add a
+dependency or change the build order.
+
+To check a declaration, configure with `-DTHEROCK_VERBOSE=ON` and note the
+`FPRINT` line printed after `Including subproject <name>`. Commit a change to a
+file inside the declared directory, reconfigure, and check that the `FPRINT`
+line changed. The artifact fingerprints in `build/artifacts/*.fprint` change in
+the same way, but they are not written for target-specific artifacts when the
+`KPACK_SPLIT_ARTIFACTS` flag is on, which is the default. Fingerprints are
+computed when CMake configures, so a change to an input needs a reconfigure.

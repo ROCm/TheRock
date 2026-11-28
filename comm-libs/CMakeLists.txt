@@ -32,11 +32,22 @@ if(THEROCK_ENABLE_RCCL AND _rccl_enabled)
   ##############################################################################
   set(_rccl_subproject_names)
 
+  # rccl's unit tests compile GIN SDMA policy headers from rccl-tests/src.
+  set(_rccl_additional_source_inputs)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _rccl_additional_source_inputs
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests/src")
+  endif()
+
   therock_cmake_subproject_declare(rccl
     # Build all GPU targets in a single target-neutral artifact as long as the
     # host code isn't fully target agnostic.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
+      ${_rccl_additional_source_inputs}
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
@@ -197,6 +208,9 @@ if(THEROCK_ENABLE_ROCSHMEM AND _rocshmem_enabled)
     # Build all GPU targets in a single target-neutral artifact as a workaround.
     USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD

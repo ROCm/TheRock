@@ -54,6 +54,9 @@ endif()
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller"
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -157,6 +160,12 @@ endif()
 
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
+  ADDITIONAL_SOURCE_INPUTS
+    # Test category helpers (TestCategories.cmake).
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
+    # TensileLite's Python bindings build stinkytofu from the monorepo. Origami,
+    # rocRoller and mxDataGenerator are separate subprojects found as packages.
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/stinkytofu"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
   DEFAULT_GPU_TARGETS
@@ -237,6 +246,11 @@ endif()
 
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
+  ADDITIONAL_SOURCE_INPUTS
+    # Test category helpers (TestCategories.cmake).
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
+    # Passed as Tensile_TEST_LOCAL_PATH below.
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -288,6 +302,9 @@ if(THEROCK_ENABLE_SPARSE)
 
   therock_cmake_subproject_declare(rocSPARSE
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse"
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -325,6 +342,9 @@ if(THEROCK_ENABLE_SPARSE)
 
   therock_cmake_subproject_declare(hipSPARSE
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparse"
+    ADDITIONAL_SOURCE_INPUTS
+      # Test category helpers (TestCategories.cmake).
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -369,6 +389,9 @@ if(THEROCK_ENABLE_SPARSE)
 
     therock_cmake_subproject_declare(hipSPARSELt
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparselt"
+      ADDITIONAL_SOURCE_INPUTS
+        # Test category helpers (TestCategories.cmake).
+        "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSELt"
       BACKGROUND_BUILD
       CMAKE_ARGS
@@ -430,6 +453,9 @@ if(THEROCK_ENABLE_SOLVER)
 
   therock_cmake_subproject_declare(rocSOLVER
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsolver"
+      ADDITIONAL_SOURCE_INPUTS
+        # Test category helpers (TestCategories.cmake).
+        "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocSOLVER"
       BACKGROUND_BUILD
       CMAKE_ARGS
@@ -479,6 +505,9 @@ if(THEROCK_ENABLE_SOLVER)
 
   therock_cmake_subproject_declare(hipSOLVER
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsolver"
+      ADDITIONAL_SOURCE_INPUTS
+        # Test category helpers (TestCategories.cmake).
+        "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSOLVER"
       BACKGROUND_BUILD
       CMAKE_ARGS
@@ -540,6 +569,9 @@ endif()
 
 therock_cmake_subproject_declare(hipBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas"
+  ADDITIONAL_SOURCE_INPUTS
+    # Test category helpers (TestCategories.cmake).
+    "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/ctest"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS"
   BACKGROUND_BUILD
   CMAKE_ARGS

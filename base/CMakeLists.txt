@@ -8,8 +8,16 @@ set(_optional_artifact_deps)
 # aux-overlay
 ################################################################################
 
+set(_aux_overlay_source_inputs)
+if(NOT WIN32)
+  # aux-overlay reads LLVM_VERSION_MAJOR from here to name the compiler configs.
+  list(APPEND _aux_overlay_source_inputs
+    "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules")
+endif()
+
 therock_cmake_subproject_declare(therock-aux-overlay
   FPRINT_SOURCE_HASH
+  ADDITIONAL_SOURCE_INPUTS ${_aux_overlay_source_inputs}
   FPRINT_FILE_GLOBS
     "${THEROCK_SOURCE_DIR}/cmake/ROCMBuildFlags.cmake"
   EXTRA_DEPENDS
