@@ -933,6 +933,28 @@ function(therock_cmake_subproject_activate target_name)
 
   list(APPEND _cmake_args "${${target_name}_CMAKE_ARGS}")
 
+  # Fingerprint the combined arguments in configure-command order, including
+  # per-project overrides. Match the command's unquoted list expansion. Hash
+  # each argument separately to retain argument boundaries and duplicates.
+  # Keep this outside the prebuilt branch so requested options still contribute
+  # when a stage is imported. Absolute paths remain significant, as elsewhere
+  # in this fingerprint implementation. An argument with a generator expression
+  # whose value is not known here makes the fingerprint invalid, because
+  # hashing its text would ignore the value it evaluates to.
+  set(_cmake_args_fprint "")
+  foreach(_cmake_arg ${_cmake_args})
+    _therock_cmake_subproject_find_unknown_genex(_unknown_genex "${_cmake_arg}")
+    if(_unknown_genex)
+      set(_fprint_is_valid FALSE)
+      if(THEROCK_VERBOSE)
+        message(STATUS "  FPRINT invalid: CMake argument '${_cmake_arg}' contains '${_unknown_genex}'")
+      endif()
+    endif()
+    string(SHA256 _cmake_arg_fprint "${_cmake_arg}")
+    string(APPEND _cmake_args_fprint "${_cmake_arg_fprint}")
+  endforeach()
+  list(APPEND _fprint_content "CMAKE_ARGS_V1=${_cmake_args_fprint}")
+
   # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
@@ -1648,6 +1670,33 @@ function(_therock_cmake_subproject_collect_runtime_deps
   endforeach()
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_transitive_deps}" "${_transitive_deps}" PARENT_SCOPE)
+endfunction()
+
+# Generator expressions are evaluated when CMake generates the configure
+# command, which happens after fingerprints are computed. A fingerprint can
+# therefore only account for expressions whose value depends on nothing but
+# their own text. Anything else (target properties, the configuration, compiler
+# or platform queries, ...) is treated as unknown.
+set(_THEROCK_TEXT_ONLY_GENEX_NAMES
+  BOOL IF NOT AND OR STREQUAL EQUAL IN_LIST LOWER_CASE UPPER_CASE JOIN
+  REMOVE_DUPLICATES FILTER SEMICOLON COMMA ANGLE-R 0 1
+  VERSION_LESS VERSION_GREATER VERSION_EQUAL VERSION_LESS_EQUAL
+  VERSION_GREATER_EQUAL
+)
+
+# Sets out_var to the first generator expression in arg (for example "$<CONFIG")
+# whose value is not known during configuration, or to an empty string.
+function(_therock_cmake_subproject_find_unknown_genex out_var arg)
+  string(REGEX MATCHALL "\\$<[A-Za-z0-9_-]+" _matches "${arg}")
+  set(_unknown)
+  foreach(_match IN LISTS _matches)
+    string(SUBSTRING "${_match}" 2 -1 _name)
+    if(NOT _name IN_LIST _THEROCK_TEXT_ONLY_GENEX_NAMES)
+      set(_unknown "${_match}")
+      break()
+    endif()
+  endforeach()
+  set("${out_var}" "${_unknown}" PARENT_SCOPE)
 endfunction()
 
 # Transforms a list to be absolute paths if not already.
